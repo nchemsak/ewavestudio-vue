@@ -198,7 +198,7 @@ const keyMap = Object.fromEntries(keyboardNotes.flatMap(k => k.sharp ? [[k.id, k
 function onKeyMouseDown(id) {
 	isMouseDown.value = true;
 	const note = keyMap[id];
-	if (note) playNote(note);
+	if (note && !isNoteActive(note)) playNote(note); // ✅ guard
 }
 function onKeyMouseUp(id) {
 	const note = keyMap[id];
@@ -207,14 +207,14 @@ function onKeyMouseUp(id) {
 function onKeyMouseEnter(id) {
 	if (!isMouseDown.value) return;
 	const note = keyMap[id];
-	if (note) playNote(note);
+	if (note && !isNoteActive(note)) playNote(note); // ✅ guard
 }
 
 onMounted(() => {
 	window.addEventListener('keydown', e => {
 		if (!['Tab', 'Enter', ' '].includes(e.key)) {
 			const note = keyMap[e.code];
-			if (note && !activeOscillators.has(note)) playNote(note);
+			if (note && !isNoteActive(note)) playNote(note); // ✅ guard
 		}
 	});
 	window.addEventListener('keyup', e => {
@@ -229,4 +229,13 @@ onBeforeUnmount(() => {
 	window.removeEventListener('mousedown', () => isMouseDown.value = true);
 	window.removeEventListener('mouseup', () => isMouseDown.value = false);
 });
+
+
+function isNoteActive(note) {
+	return activeOscillators.has(note);
+}
+
+
+
+
 </script>
