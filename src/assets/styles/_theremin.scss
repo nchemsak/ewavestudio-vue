@@ -1,0 +1,17 @@
+/* THEREMIN AND CANVAS STYLES */
+canvas {
+  /*  -webkit-box-shadow: 10px 11px 25px 0px rgba(0, 0, 0, 0.75);
+  -moz-box-shadow: 10px 11px 25px 0px rgba(0, 0, 0, 0.75);
+  box-shadow: 10px 11px 25px 0px rgba(0, 0, 0, 0.75);*/
+}
+
+#thereminCanvas {
+  width: 100%;
+  display: block;
+  margin: auto;
+  height: 100%;
+  position: absolute;
+  top: 0%;
+  left: 0%;
+
+}

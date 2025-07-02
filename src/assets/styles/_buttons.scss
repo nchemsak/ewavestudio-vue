@@ -1,0 +1,19 @@
+/* BLACK BUTTON STYLES */
+.list-item {
+  background: #000;
+  text-align: center;
+  height: 2.5em;
+  width: 4em;
+  vertical-align: middle;
+  line-height: 2.5em;
+  border-bottom: 1px solid #060606;
+  position: relative;
+  display: block;
+  text-decoration: none;
+  -webkit-box-shadow: -10px 13px 33px -10px rgba(0, 0, 0, 0.75);
+  -moz-box-shadow: -10px 13px 33px -10px rgba(0, 0, 0, 0.75);
+  box-shadow: -10px 13px 33px -10px rgba(0, 0, 0, 0.75);
+  -webkit-transition: all 0.25s linear;
+  transition: all 1s linear;
+}
+

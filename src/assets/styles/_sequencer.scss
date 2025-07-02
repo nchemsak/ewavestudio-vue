@@ -1,0 +1,710 @@
+/* SEQUENCER */
+.seqButtonStyle {
+  width: 20px;
+  background-color: transparent;
+  cursor: default;
+}
+
+.seqButtonStyle:hover {
+  background-color: transparent;
+  cursor: default;
+}
+
+.seqButtonStyle2 {
+  width: 20px;
+  background-color: transparent;
+}
+
+.seqButtonStyle2:hover {
+  background-color: transparent;
+}
+
+.seqGlyphStyle {
+  width: 5px;
+  height: 5px;
+  margin-bottom: 10px;
+  margin-right: 20px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.seqGlyphStyle2 {
+  width: 5px;
+  height: 5px;
+  margin-bottom: 10px;
+  margin-right: 20px;
+  text-align: center;
+}
+
+button#recordStop.seqButtonStyle:hover,
+button#downloadButton.seqButtonStyle:hover,
+button#downloadButton.seqButtonStyle2:hover {
+  background-color: transparent;
+}
+
+button#recordStop.seqButtonStyle:active,
+button#downloadButton.seqButtonStyle:active,
+button#downloadButton.seqButtonStyle2:active {
+  background-color: transparent;
+}
+
+button#recordStop.seqButtonStyle:focus,
+button#downloadButton.seqButtonStyle:focus,
+button#downloadButton.seqButtonStyle2:focus {
+  background-color: transparent;
+}
+
+input#audio_file {
+  color: red;
+  background-color: purple;
+}
+
+.arpPos {
+  font-size: 1.5em;
+  transform: rotate(-90deg);
+  border: 0px solid white;
+}
+
+.arpPos .pad {
+  width: 15px;
+  height: 15px;
+  margin-bottom: 0px;
+  display: inline-block;
+  margin-right: 2px;
+  cursor: pointer;
+  border: 0px solid white;
+  border-radius: 5px;
+}
+
+.arpPos .selected {
+  background-color: red;
+}
+
+.arpPos .playing {
+  background: tomato;
+}
+
+.row .white {
+  background: RGBA(204, 204, 204, 0.75);
+  margin-bottom: 2px;
+  border-radius: 5px 0px 0px 5px;
+  width: 50%;
+}
+
+.row .black {
+  background: RGBA(34, 34, 34, 0.75);
+  margin-bottom: 2px;
+  border-radius: 5px 0px 0px 5px;
+  width: 50%;
+}
+
+#seq {
+  -moz-user-select: -moz-none;
+  -ms-user-select: none;
+  -webkit-user-select: none;
+  user-select: none;
+  width: 100%;
+  padding-left: 0;
+}
+
+#seq ul li .key {
+  width: 28px;
+  height: 70px;
+}
+
+#seq ul li .upper-key {
+  height: 42px;
+  width: 11.2px;
+}
+
+#seq ul li:nth-child(7n-6) .upper-key,
+#seq ul li:nth-child(7n-2) .upper-key {
+  left: 21.84px;
+}
+
+#seq ul li:nth-child(7n-5) .upper-key {
+  left: 23.51px;
+}
+
+#seq ul li:nth-child(7n-4) .upper-key,
+#seq ul li:nth-child(7n-1) .upper-key {
+  left: 25.2px;
+}
+
+#seq ul li:nth-child(7n - 3) .upper-key,
+#seq ul li:nth-child(7n) .upper-key {
+  display: none;
+}
+
+#seq ul {
+  display: inline-block;
+  vertical-align: middle;
+  *vertical-align: auto;
+  *zoom: 1;
+  *display: inline;
+}
+
+#seq ul li {
+  box-sizing: border-box;
+  float: left;
+  position: relative;
+  border: red 1px solid;
+}
+
+#seq ul li .key {
+  cursor: pointer;
+}
+
+#seq ul li .key:active {
+  background: #f6ecdd;
+  box-shadow: gray 0px 1px 3px -1px;
+}
+
+div.key {
+  font-size: 2em;
+}
+
+#seq ul li .upper-key {
+  border-radius: 1.5px;
+  border: white 0.5px solid;
+  cursor: pointer;
+  background: #262626;
+  position: absolute;
+  top: 0;
+  z-index: 1;
+}
+
+#seq ul li .upper-key:hover {
+  background-color: tomato;
+}
+
+#seq ul li .key:hover {
+  background-color: tomato;
+}
+
+.nick {
+  background-color: tomato;
+}
+
+.nick2 {
+  background-color: tomato;
+}
+
+.close1 {
+  background-color: red;
+}
+
+.close2 {
+  background-color: orange;
+}
+
+.close3 {
+  background-color: pink;
+}
+
+.close4 {
+  background-color: yellow;
+}
+
+.close5 {
+  background-color: white;
+}
+
+.radio1 {
+  display: inline;
+  margin-left: 20px;
+}
+
+#seqVolume {
+  width: 65%;
+  float: left;
+  height: 30px;
+  background-color: black;
+}
+
+#liveVolume {
+  width: 65%;
+  float: left;
+  height: 30px;
+  background-color: black;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  width: 25px;
+  height: 25px;
+  -webkit-appearance: none;
+  border-radius: 8px;
+  -moz-border-radius: 8px;
+  -webkit-border-radius: 8px;
+  background: RGBA(95, 186, 255, 1);
+  background: -moz-linear-gradient(left, #5fbaff 0%, #4c94cc 50%, #264a66 100%);
+  background: -webkit-gradient(
+    linear,
+    left top,
+    right top,
+    color-stop(0%, #5fbaff),
+    color-stop(50%, #4c94cc),
+    color-stop(100%, #264a66)
+  );
+  background: -webkit-linear-gradient(left, #5fbaff 0%, #4c94cc 50%, #264a66 100%);
+  background: -o-linear-gradient(left, #5fbaff 0%, #4c94cc 50%, #264a66 100%);
+  background: -ms-linear-gradient(left, #5fbaff 0%, #4c94cc 50%, #264a66 100%);
+  background: linear-gradient(to right, #5fbaff 0%, #4c94cc 50%, #264a66 100%);
+}
+
+.seqOptin {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  outline: 0;
+  background-color: rgba(255, 255, 255, 0.2);
+  width: 75%;
+  display: inline;
+  border-radius: 3px;
+  font-size: 18px;
+  color: RGBA(95, 186, 255, 1);
+  -webkit-transition-duration: 0.25s;
+  transition-duration: 0.25s;
+  font-weight: 300;
+  background-color: none;
+}
+
+.seqOptin:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.seqOptin:focus {
+  width: 90%;
+  color: RGBA(95, 186, 255, 1);
+}
+
+.pad {
+  width: 25px;
+  height: 25px;
+  margin-bottom: 2px;
+  display: inline-block;
+  background: #dadada;
+  margin-right: 1px;
+  cursor: pointer;
+  border: 1px solid white;
+  border-radius: 3px;
+}
+
+.dark {
+  background-color: RGBA(248, 248, 248, 0.6);
+  border: 0px;
+}
+
+.selected {
+  background-color: RGBA(95, 186, 255, 1);
+  border: 0px;
+  box-shadow: inset 3px 3px 3px 0px rgba(0, 0, 0, 0.35);
+}
+
+.cymDiv.selected {
+  background-color: RGBA(95, 186, 255, 1);
+  background-image: url("../images/circleWave.gif");
+}
+
+.playing {
+  background: grey;
+  border: 0px;
+}
+
+.playing.selected {
+  background-color: maroon;
+}
+
+.noselect {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+button#play-pause {
+  border: none;
+  margin-left: 35px;
+  color: silver;
+}
+
+button#play-pause:hover {
+  background-color: darkgrey;
+  color: black;
+}
+
+button#play-pause:focus {
+  background-color: black;
+  color: silver;
+}
+
+.control {
+  margin: 10px 0;
+}
+
+.instrument-label {
+  display: inline-block;
+  vertical-align: top;
+  width: 4em;
+  text-align: left;
+  margin-right: 0.5em;
+  margin-top: 8px;
+  font-size: 0.7em;
+  padding-left: 5px;
+}
+
+.tempo-container {
+  margin: 0;
+}
+
+#tempo-input {
+  margin: 0 10px;
+  line-height: 30px;
+  border-radius: 3px;
+  font-size: 20px;
+  padding-left: 5px;
+  color: silver;
+  background-color: black;
+  width: 60px;
+  height: 30px;
+  vertical-align: middle;
+  text-align: center;
+  border: 0px solid white;
+}
+
+.space {
+  margin-left: 20px;
+}
+
+.tempo-btn {
+  margin: 0 5px;
+  color: white;
+  border: 0px;
+}
+
+.fontIncrease {
+  font-size: 1.2em;
+  font-family: "Raleway", sans-serif;
+}
+
+.col-xs-offset-1 {
+  margin-left: 5%;
+}
+
+h2 {
+  color: RGBA(204, 204, 204, 1);
+  margin-bottom: 20px;
+  margin-top: 0px;
+}
+
+#audioinput {
+  width: 200px;
+}
+
+#effect {
+  width: 200px;
+}
+
+img #controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  height: 20%;
+  width: 100%;
+}
+
+img #record {
+  height: 15vh;
+}
+
+img #record.recording {
+  background: white;
+  background: -webkit-radial-gradient(center, ellipse cover, #ff0000 0%, lightgrey 75%, lightgrey 100%, #7db9e8 100%);
+  background: -moz-radial-gradient(center, ellipse cover, #ff0000 0%, lightgrey 75%, lightgrey 100%, #7db9e8 100%);
+  background: radial-gradient(center, ellipse cover, #ff0000 0%, lightgrey 75%, lightgrey 100%, #7db9e8 100%);
+}
+
+#save:hover {
+  opacity: 0.5;
+  color: silver;
+  cursor: pointer;
+}
+
+.fa-circle:hover {
+  color: red;
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+.fa-circle {
+  color: darkred;
+}
+
+#wavedisplay {
+  width: 600px;
+  height: 100px;
+  margin-top: 20px;
+}
+
+.fa-play {
+  color: darkgreen;
+}
+
+.fa-play:hover {
+  color: lightgreen;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.fa-save:hover {
+  color: silver;
+  cursor: pointer;
+  opacity: 0.5;
+}
+
+.samplerPad.selected {
+  background-image: url("../images/circleWave.gif");
+  border: 0px;
+}
+
+.samplerPad.playing {
+  background: grey;
+  border: 0px;
+}
+
+.samplerPad {
+  background-image: url("../images/retroSpeaker.gif");
+}
+
+.optin9 {
+  background-color: rgba(255, 255, 255, 0.1);
+  width: 200px;
+  margin-left: 30px;
+  margin-bottom: 15px;
+  border-radius: 3px;
+  text-align: center;
+  font-size: 12px;
+  color: RGBA(95, 186, 255, 1);
+  transition-duration: 0.65s;
+  background: RGBA(47, 50, 56, 1);
+  background-image: url("../images/black-thread.png");
+}
+
+.optin9:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.optin9:focus {
+  color: RGBA(95, 186, 255, 1);
+}
+
+.seqOptin2 {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  outline: 0;
+  background-color: rgba(255, 255, 255, 0.2);
+  width: 75%;
+  display: inline;
+  border-radius: 3px;
+  font-size: 18px;
+  color: RGBA(95, 186, 255, 1);
+  -webkit-transition-duration: 0.25s;
+  transition-duration: 0.25s;
+  font-weight: 300;
+  background-color: none;
+  margin-bottom: 10px;
+}
+
+.seqOptin2:focus {
+  color: RGBA(95, 186, 255, 1);
+}
+
+.liveVolume {
+  width: 65%;
+  float: left;
+  height: 30px;
+  background-color: black;
+}
+
+.liveVolume2 {
+  width: 100%;
+  float: left;
+  height: 20px;
+  background-color: black;
+}
+
+#liveVolume2 {
+  width: 100%;
+  float: left;
+  height: 20px;
+  background-color: black;
+}
+
+.glitch {
+  color: white;
+  font-size: 2.9em;
+  position: relative;
+  width: 400px;
+  margin-right: 20px;
+  display: inline-block;
+}
+
+@keyframes noise-anim {
+  0% {
+    clip: rect(26px, 9999px, 46px, 0);
+  }
+  5% {
+    clip: rect(25px, 9999px, 62px, 0);
+  }
+  10% {
+    clip: rect(78px, 9999px, 16px, 0);
+  }
+  15% {
+    clip: rect(7px, 9999px, 45px, 0);
+  }
+  20% {
+    clip: rect(36px, 9999px, 49px, 0);
+  }
+  25% {
+    clip: rect(76px, 9999px, 8px, 0);
+  }
+  30% {
+    clip: rect(50px, 9999px, 89px, 0);
+  }
+  35% {
+    clip: rect(45px, 9999px, 73px, 0);
+  }
+  40% {
+    clip: rect(55px, 9999px, 39px, 0);
+  }
+  45% {
+    clip: rect(86px, 9999px, 1px, 0);
+  }
+  50% {
+    clip: rect(79px, 9999px, 1px, 0);
+  }
+  55% {
+    clip: rect(69px, 9999px, 92px, 0);
+  }
+  60% {
+    clip: rect(28px, 9999px, 46px, 0);
+  }
+  65% {
+    clip: rect(33px, 9999px, 41px, 0);
+  }
+  70% {
+    clip: rect(35px, 9999px, 81px, 0);
+  }
+  75% {
+    clip: rect(76px, 9999px, 4px, 0);
+  }
+  80% {
+    clip: rect(5px, 9999px, 48px, 0);
+  }
+  85% {
+    clip: rect(18px, 9999px, 65px, 0);
+  }
+  90% {
+    clip: rect(68px, 9999px, 42px, 0);
+  }
+  95% {
+    clip: rect(25px, 9999px, 52px, 0);
+  }
+  100% {
+    clip: rect(69px, 9999px, 89px, 0);
+  }
+}
+.glitch:after {
+  content: attr(data-text);
+  position: absolute;
+  left: 2px;
+  top: 0;
+  color: white;
+  overflow: hidden;
+  clip: rect(0, 900px, 0, 0);
+  animation: noise-anim 2s infinite linear alternate-reverse;
+}
+
+@keyframes noise-anim-2 {
+  0% {
+    clip: rect(94px, 9999px, 17px, 0);
+  }
+  5% {
+    clip: rect(9px, 9999px, 92px, 0);
+  }
+  10% {
+    clip: rect(99px, 9999px, 100px, 0);
+  }
+  15% {
+    clip: rect(43px, 9999px, 15px, 0);
+  }
+  20% {
+    clip: rect(50px, 9999px, 14px, 0);
+  }
+  25% {
+    clip: rect(71px, 9999px, 32px, 0);
+  }
+  30% {
+    clip: rect(31px, 9999px, 74px, 0);
+  }
+  35% {
+    clip: rect(23px, 9999px, 14px, 0);
+  }
+  40% {
+    clip: rect(86px, 9999px, 38px, 0);
+  }
+  45% {
+    clip: rect(48px, 9999px, 45px, 0);
+  }
+  50% {
+    clip: rect(81px, 9999px, 21px, 0);
+  }
+  55% {
+    clip: rect(76px, 9999px, 42px, 0);
+  }
+  60% {
+    clip: rect(86px, 9999px, 85px, 0);
+  }
+  65% {
+    clip: rect(86px, 9999px, 53px, 0);
+  }
+  70% {
+    clip: rect(38px, 9999px, 9px, 0);
+  }
+  75% {
+    clip: rect(61px, 9999px, 69px, 0);
+  }
+  80% {
+    clip: rect(96px, 9999px, 23px, 0);
+  }
+  85% {
+    clip: rect(98px, 9999px, 16px, 0);
+  }
+  90% {
+    clip: rect(69px, 9999px, 80px, 0);
+  }
+  95% {
+    clip: rect(86px, 9999px, 48px, 0);
+  }
+  100% {
+    clip: rect(6px, 9999px, 18px, 0);
+  }
+}
+.glitch:before {
+  content: attr(data-text);
+  position: absolute;
+  left: -2px;
+  text-shadow: 1px 0 grey;
+  top: 0;
+  color: white;
+  overflow: hidden;
+  clip: rect(0, 900px, 0, 0);
+  animation: noise-anim-2 3s infinite linear alternate-reverse;
+}
+

@@ -1,0 +1,24 @@
+/* Computer Keyboard STYLES */
+#piano {
+  text-align: center;
+  margin: 15px auto;
+  user-select: none;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 10px;
+}
+
+#piano ul.keyboard {
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  list-style-type: none;
+  position: relative;
+}
+
+#piano ul.keyboard li {
+  position: relative;
+  margin: 0 2px;
+}
+
