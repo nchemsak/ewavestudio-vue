@@ -321,10 +321,10 @@ header {
   overflow: scroll;
 }
 
-label {
+/* label {
   display: inline;
   margin-left: 12px;
-}
+} */
 
 aside {
   position: fixed;
@@ -1863,10 +1863,14 @@ img #record.recording {
   gap: 4px;
 }
 
-#custom-waveform-controls {
+/* #custom-waveform-controls {
   display: none;
+} */
+#custom-waveform-controls {
+  justify-content: center;
+  gap: 40px;
+  margin-top: 16px;
 }
-
 .slider-ticks {
   display: flex;
   justify-content: space-between;
@@ -2056,4 +2060,10 @@ input[type="range"]:active::-ms-thumb {
 
 .waveform-selector {
   justify-content: center;
+}
+
+
+.active-bank {
+  border: 2px solid #007bff;
+  background-color: #e9f2ff;
 }
