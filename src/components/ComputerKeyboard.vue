@@ -2,7 +2,7 @@
 	<div id="piano" class="p-3 computer-keyboard">
 		<!-- Volume Slider -->
 		<div class="mb-4">
-			<label for="volume" class="form-label">Volume</label>
+			<label for="volume" class="form-label">Volume</label><br />
 			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume"
 				v-model="volume" />
 			<div class="slider-percentage" id="label-volume">{{ volumeLabel }}</div>
@@ -17,8 +17,12 @@
 					<template v-if="wave !== 'custom'">
 						<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
 					</template>
+					<!-- Inside waveform-option for 'custom' -->
 					<template v-else>
-						<div class="custom-wave-box text-center px-3 py-2">Custom</div>
+						<div class="custom-wave-box text-center">
+							<canvas id="waveformPreview" width="27" height="27"
+								style="max-width: 27px; max-height: 27px;"></canvas>
+						</div>
 					</template>
 				</div>
 			</div>
@@ -40,11 +44,11 @@
 			<button type="button" class="btn btn-outline-secondary mt-3" @click="resetHarmonics">Reset
 				Harmonics</button>
 		</div>
-		<canvas id="waveformCanvas" width="600" height="150" class="mt-4"></canvas>
 
 
 		<!-- Waveform Mix Sliders -->
 		<div id="waveformMixSliders">
+			<h4>Waveform Mix</h4>
 			<div v-for="wave in waveformMixes" :key="wave.id" class="mb-3 slider-wrapper">
 				<label :for="`mix-${wave.id}`" class="form-label">{{ wave.label }}</label>
 				<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" :id="`mix-${wave.id}`"
@@ -56,7 +60,7 @@
 		<!-- Preset Banks -->
 		<div class="preset-banks">
 			<h4>Presets</h4>
-			<div class="d-flex gap-4">
+			<div class="d-flex flex-column gap-4">
 				<div v-for="(bank, index) in banks" :key="'bank-' + index" class="bank-card p-3 border rounded"
 					:class="{ 'active-bank': activeBankIndex === index }" style="width: 120px;">
 					<div class="mb-2">
@@ -158,6 +162,7 @@ const resetHarmonics = () => {
 };
 
 const noteFrequencies = {
+	
 	C4: 261.63, 'C#4': 277.18, D4: 293.66, 'D#4': 311.13, E4: 329.63,
 	F4: 349.23, 'F#4': 369.99, G4: 392.00, 'G#4': 415.30,
 	A4: 440.00, 'A#4': 466.16, B4: 493.88,
@@ -233,32 +238,46 @@ const keyMap = Object.fromEntries(keyboardNotes.flatMap(k => k.sharp ? [[k.id, k
 function onKeyMouseDown(id) {
 	isMouseDown.value = true;
 	const note = keyMap[id];
-	if (note && !isNoteActive(note)) playNote(note);
+	if (note && !isNoteActive(note)) {
+		playNote(note);
+		document.getElementById(id)?.classList.add('active');
+	}
 }
+
 function onKeyMouseUp(id) {
 	const note = keyMap[id];
 	if (note) stopNote(note);
+	document.getElementById(id)?.classList.remove('active');
 }
+
 function onKeyMouseEnter(id) {
 	if (!isMouseDown.value) return;
 	const note = keyMap[id];
-	if (note && !isNoteActive(note)) playNote(note);
+	if (note && !isNoteActive(note)) {
+		playNote(note);
+		document.getElementById(id)?.classList.add('active');
+	}
 }
+
 
 onMounted(() => {
 	window.addEventListener('keydown', e => {
 		if (isTyping.value) return;
-		if (e.ctrlKey || e.metaKey || e.altKey) return; // skip if using shortcut keys such as Ctrl + D
-		if (!['Tab', 'Enter', ' '].includes(e.key)) {
-			const note = keyMap[e.code];
-			if (note && !isNoteActive(note)) playNote(note);
+
+		// Avoid sticking notes for key combos
+		if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+		const note = keyMap[e.code];
+		if (note && !isNoteActive(note)) {
+			playNote(note);
+			document.getElementById(e.code)?.classList.add('active');
 		}
 	});
 
 	window.addEventListener('keyup', e => {
-		if (e.ctrlKey || e.metaKey || e.altKey) return; // skip if using shortcut keys such as Ctrl + D
 		const note = keyMap[e.code];
 		if (note) stopNote(note);
+		document.getElementById(e.code)?.classList.remove('active');
 	});
 
 	window.addEventListener('mousedown', () => isMouseDown.value = true);
@@ -275,21 +294,26 @@ function isNoteActive(note) {
 	return activeOscillators.has(note);
 }
 
-
-function drawWaveformFromReal(real) {
-	const canvas = document.getElementById('waveformCanvas');
+function drawWaveformFromReal(real, canvasId = 'waveformPreview') {
+	const canvas = document.getElementById(canvasId);
 	if (!canvas) return;
 
-	const ctx = canvas.getContext('2d');
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	const dpr = window.devicePixelRatio || 1;
+	const width = 27;
+	const height = 27;
+	canvas.width = width * dpr;
+	canvas.height = height * dpr;
+	canvas.style.width = width + 'px';
+	canvas.style.height = height + 'px';
 
-	const width = canvas.width;
-	const height = canvas.height;
+	const ctx = canvas.getContext('2d');
+	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
 	const midY = height / 2;
 	const samples = 512;
 	const waveform = new Array(samples).fill(0);
 
-	// Build waveform from real harmonics
+	// Build waveform from harmonics
 	for (let i = 1; i < real.length; i++) {
 		const amp = real[i];
 		for (let j = 0; j < samples; j++) {
@@ -302,17 +326,19 @@ function drawWaveformFromReal(real) {
 	const max = Math.max(...waveform.map(Math.abs)) || 1;
 	const normalized = waveform.map(v => v / max);
 
-	// Draw waveform
+	// Draw
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
 	ctx.beginPath();
 	ctx.moveTo(0, midY - normalized[0] * midY);
 	for (let x = 1; x < samples; x++) {
 		const y = midY - normalized[x] * midY;
 		ctx.lineTo((x / samples) * width, y);
 	}
-	ctx.strokeStyle = '#007bff';
-	ctx.lineWidth = 2;
+	ctx.strokeStyle = '#ffffff';
+	ctx.lineWidth = 1.5;
 	ctx.stroke();
 }
+
 
 // Re-render waveform whenever harmonics change
 watchEffect(() => {
@@ -322,6 +348,7 @@ watchEffect(() => {
 onMounted(() => {
 	drawWaveformFromReal(customReal.value);
 });
+
 
 function updateHarmonic(index, value) {
 	customReal.value[index] = parseFloat(value);

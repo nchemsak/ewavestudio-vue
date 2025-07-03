@@ -21,7 +21,7 @@ body {
   box-sizing: border-box;
 }
 
-/* html, */
+html,
 body {
   width: 100%;
   min-height: 100%; /* ensures it covers at least viewport */
@@ -1904,7 +1904,7 @@ input[type="range"]::-webkit-slider-runnable-track {
   transition:
     background-color 0.2s,
     border-color 0.2s;
-  display: flex;
+  /* display: flex; */
   align-items: center;
   justify-content: center;
   width: 64px;
@@ -1917,7 +1917,7 @@ input[type="range"]::-webkit-slider-runnable-track {
 }
 
 .waveform-option .text-center {
-  font-weight: 500;
+  font-weight: 400;
   font-size: 0.9rem;
 }
 
@@ -2066,9 +2066,8 @@ input[type="range"]:active::-ms-thumb {
   z-index: 100;
 }
 
-
 #waveformMixSliders {
-   position: fixed;
+  position: fixed;
   top: 100px; /* Distance from top of viewport */
   right: 0px; /* Distance from left of viewport */
   padding: 20px;
@@ -2077,4 +2076,37 @@ input[type="range"]:active::-ms-thumb {
   border-radius: 5px;
   box-shadow: 0 1px 0 rgba(9, 30, 66, 0.25);
   z-index: 100;
+}
+
+/* #waveformPreview {
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 0 2px rgba(0,0,0,0.2);
+} */
+
+.custom-wave-box {
+  padding-top: 12px;
+}
+
+/* .wave-label {
+  font-size: 0.75rem;
+  font-weight: 400;
+} */
+
+
+.key.active {
+  background-color: #f7c18b; /* orangish beige */
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.1s ease;
+}
+
+.upper-key.active {
+  background-color: #f2726f; /* reddish-orange */
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  transition: background-color 0.1s ease;
+}
+
+.keyboard .key,
+.keyboard .upper-key {
+  transition: background-color 0.1s ease, box-shadow 0.1s ease;
 }
