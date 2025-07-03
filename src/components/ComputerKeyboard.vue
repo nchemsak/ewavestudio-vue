@@ -92,6 +92,50 @@
 		<!-- Keyboard Interface -->
 		<div class="mt-5">
 			<ul class="keyboard">
+				<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
+
+					<!-- Mouse-only key -->
+					<template v-if="!note.id">
+						<div class="key mouse-only" :data-note="note.note" role="button" tabindex="0"
+							:aria-label="`Note ${note.note}`" @mousedown="playNote(note.note)"
+							@mouseup="stopNote(note.note)" @mouseleave="stopNote(note.note)"
+							@mouseenter="onMouseEnter(note.note)">
+							<span class="note">{{ note.note }}</span>
+						</div>
+
+						<div v-if="note.sharp" class="upper-key mouse-only" :data-note="note.sharp" role="button"
+							tabindex="0" :aria-label="`Note ${note.sharp}`" @mousedown="playNote(note.sharp)"
+							@mouseup="stopNote(note.sharp)" @mouseleave="stopNote(note.sharp)"
+							@mouseenter="onMouseEnter(note.sharp)">
+							<span><small>{{ note.sharp }}</small></span>
+						</div>
+					</template>
+
+					<!-- Keyboard and Mouse key -->
+					<template v-else>
+						<div class="key" :id="note.id" :data-note="note.note" role="button" tabindex="0"
+							:aria-label="`Key ${note.label}, note ${note.note}`" @mousedown="onKeyMouseDown(note.id)"
+							@mouseup="onKeyMouseUp(note.id)" @mouseleave="onKeyMouseUp(note.id)"
+							@mouseenter="onKeyMouseEnter(note.id)">
+							<span class="kbd">{{ note.label }}</span>
+							<span class="note">{{ note.note }}</span>
+						</div>
+
+						<div v-if="note.sharp" class="upper-key" :id="note.sharpId" :data-note="note.sharp"
+							role="button" tabindex="0" :aria-label="`Key ${note.sharpLabel}, note ${note.sharp}`"
+							@mousedown="onKeyMouseDown(note.sharpId)" @mouseup="onKeyMouseUp(note.sharpId)"
+							@mouseleave="onKeyMouseUp(note.sharpId)" @mouseenter="onKeyMouseEnter(note.sharpId)">
+							<span>{{ note.sharpLabel }}<br /><small>{{ note.sharp }}</small></span>
+						</div>
+					</template>
+
+				</li>
+			</ul>
+
+
+
+
+			<!-- <ul class="keyboard">
 				<li v-for="note in keyboardNotes" :key="note.id">
 					<div class="key" :id="note.id" :data-note="note.note" role="button" tabindex="0"
 						:aria-label="`Key ${note.label}, note ${note.note}`" @mousedown="onKeyMouseDown(note.id)"
@@ -106,7 +150,7 @@
 						<span>{{ note.sharpLabel }}<br /><small>{{ note.sharp }}</small></span>
 					</div>
 				</li>
-			</ul>
+			</ul> -->
 		</div>
 	</div>
 	<div class="text-center mt-4">
@@ -162,14 +206,31 @@ const resetHarmonics = () => {
 };
 
 const noteFrequencies = {
-	
-	C4: 261.63, 'C#4': 277.18, D4: 293.66, 'D#4': 311.13, E4: 329.63,
-	F4: 349.23, 'F#4': 369.99, G4: 392.00, 'G#4': 415.30,
-	A4: 440.00, 'A#4': 466.16, B4: 493.88,
-	C5: 523.25, 'C#5': 554.37, D5: 587.33, 'D#5': 622.25, E5: 659.25
+	G3: 196.00, 'G#3': 207.65,
+	A3: 220.00, 'A#3': 233.08,
+	B3: 246.94,
+	C4: 261.63, 'C#4': 277.18,
+	D4: 293.66, 'D#4': 311.13,
+	E4: 329.63,
+	F4: 349.23, 'F#4': 369.99,
+	G4: 392.00, 'G#4': 415.30,
+	A4: 440.00, 'A#4': 466.16,
+	B4: 493.88,
+	C5: 523.25, 'C#5': 554.37,
+	D5: 587.33, 'D#5': 622.25,
+	E5: 659.25,
+	F5: 698.46, 'F#5': 739.99,
+	G5: 783.99
 };
 
+
 const keyboardNotes = [
+	// Mouse-only lower keys (with sharps defined inline)
+	{ note: 'G3', sharp: 'G#3' },
+	{ note: 'A3', sharp: 'A#3' },
+	{ note: 'B3' },
+
+	// Keyboard and Mouse keys
 	{ id: 'KeyA', label: 'A', note: 'C4', sharp: 'C#4', sharpId: 'KeyW', sharpLabel: 'W' },
 	{ id: 'KeyS', label: 'S', note: 'D4', sharp: 'D#4', sharpId: 'KeyE', sharpLabel: 'E' },
 	{ id: 'KeyD', label: 'D', note: 'E4' },
@@ -179,8 +240,14 @@ const keyboardNotes = [
 	{ id: 'KeyJ', label: 'J', note: 'B4' },
 	{ id: 'KeyK', label: 'K', note: 'C5', sharp: 'C#5', sharpId: 'KeyO', sharpLabel: 'O' },
 	{ id: 'KeyL', label: 'L', note: 'D5', sharp: 'D#5', sharpId: 'KeyP', sharpLabel: 'P' },
-	{ id: 'Semicolon', label: ';', note: 'E5' }
+	{ id: 'Semicolon', label: ';', note: 'E5' },
+
+	// Mouse-only upper keys
+	{ note: 'F5', sharp: 'F#5' },
+	{ note: 'G5' }
 ];
+
+
 
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const activeOscillators = new Map();
@@ -400,4 +467,12 @@ function bankHasData(index) {
 	return bank && bank.data !== null;
 }
 const activeBankIndex = ref(null);
+
+
+function onMouseEnter(note) {
+	if (!isMouseDown.value) return;
+	if (!isNoteActive(note)) {
+		playNote(note);
+	}
+}
 </script>
