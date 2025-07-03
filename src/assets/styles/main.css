@@ -1,22 +1,17 @@
 /************************************************************************************
                                   GENERAL STYLES
 ************************************************************************************/
-* {
+/* * {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   -o-user-select: none;
   user-select: none;
-}
+} */
 
 body {
-  /* background-color: RGBA(47, 50, 56, 1); */
   color: lightgrey;
   background-image: url("../images/black-thread.png");
-
-  /* font-family: system-ui, sans-serif;
-  background: #fafafa;
-  color: #000; */
   background: linear-gradient(rgba(251, 139, 166, 0.7), rgba(224, 140, 194, 0.8), rgba(194, 139, 228, 0.9));
 }
 
@@ -26,7 +21,7 @@ body {
   box-sizing: border-box;
 }
 
-html,
+/* html, */
 body {
   width: 100%;
   min-height: 100%; /* ensures it covers at least viewport */
@@ -34,15 +29,7 @@ body {
 }
 
 body {
-  font-family: "Space Mono", monospace;
   font-family: "Raleway", sans-serif;
-  align-items: center;
-  -webkit-box-pack: center;
-  -webkit-justify-content: center;
-  -ms-flex-pack: center;
-  justify-content: center;
-  -webkit-transform: translate3d(0, 0, 0);
-  transform: translate3d(0, 0, 0);
 }
 
 /************************************************************************************
@@ -2062,8 +2049,32 @@ input[type="range"]:active::-ms-thumb {
   justify-content: center;
 }
 
-
 .active-bank {
   border: 2px solid #007bff;
   background-color: #e9f2ff;
+}
+
+.preset-banks {
+  position: fixed;
+  top: 100px; /* Distance from top of viewport */
+  left: 0px; /* Distance from left of viewport */
+  padding: 20px;
+  display: block;
+  background-color: white;
+  border-radius: 5px;
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.25);
+  z-index: 100;
+}
+
+
+#waveformMixSliders {
+   position: fixed;
+  top: 100px; /* Distance from top of viewport */
+  right: 0px; /* Distance from left of viewport */
+  padding: 20px;
+  display: block;
+  background-color: white;
+  border-radius: 5px;
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.25);
+  z-index: 100;
 }

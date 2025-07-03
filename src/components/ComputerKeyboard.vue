@@ -44,16 +44,17 @@
 
 
 		<!-- Waveform Mix Sliders -->
-		<div v-for="wave in waveformMixes" :key="wave.id" class="mb-3 slider-wrapper">
-			<label :for="`mix-${wave.id}`" class="form-label">{{ wave.label }}</label>
-			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" :id="`mix-${wave.id}`"
-				v-model="wave.value" />
-			<div class="slider-percentage" :id="`label-mix-${wave.id}`">{{ Math.round(wave.value * 100) }}%</div>
+		<div id="waveformMixSliders">
+			<div v-for="wave in waveformMixes" :key="wave.id" class="mb-3 slider-wrapper">
+				<label :for="`mix-${wave.id}`" class="form-label">{{ wave.label }}</label>
+				<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" :id="`mix-${wave.id}`"
+					v-model="wave.value" />
+				<div class="slider-percentage" :id="`label-mix-${wave.id}`">{{ Math.round(wave.value * 100) }}%</div>
+			</div>
 		</div>
 
-
 		<!-- Preset Banks -->
-		<div class="preset-banks mt-4">
+		<div class="preset-banks">
 			<h4>Presets</h4>
 			<div class="d-flex gap-4">
 				<div v-for="(bank, index) in banks" :key="'bank-' + index" class="bank-card p-3 border rounded"
@@ -232,7 +233,7 @@ const keyMap = Object.fromEntries(keyboardNotes.flatMap(k => k.sharp ? [[k.id, k
 function onKeyMouseDown(id) {
 	isMouseDown.value = true;
 	const note = keyMap[id];
-	if (note && !isNoteActive(note)) playNote(note); // ✅ guard
+	if (note && !isNoteActive(note)) playNote(note);
 }
 function onKeyMouseUp(id) {
 	const note = keyMap[id];
@@ -241,21 +242,25 @@ function onKeyMouseUp(id) {
 function onKeyMouseEnter(id) {
 	if (!isMouseDown.value) return;
 	const note = keyMap[id];
-	if (note && !isNoteActive(note)) playNote(note); // ✅ guard
+	if (note && !isNoteActive(note)) playNote(note);
 }
 
 onMounted(() => {
 	window.addEventListener('keydown', e => {
 		if (isTyping.value) return;
+		if (e.ctrlKey || e.metaKey || e.altKey) return; // skip if using shortcut keys such as Ctrl + D
 		if (!['Tab', 'Enter', ' '].includes(e.key)) {
 			const note = keyMap[e.code];
 			if (note && !isNoteActive(note)) playNote(note);
 		}
 	});
+
 	window.addEventListener('keyup', e => {
+		if (e.ctrlKey || e.metaKey || e.altKey) return; // skip if using shortcut keys such as Ctrl + D
 		const note = keyMap[e.code];
 		if (note) stopNote(note);
 	});
+
 	window.addEventListener('mousedown', () => isMouseDown.value = true);
 	window.addEventListener('mouseup', () => isMouseDown.value = false);
 });
