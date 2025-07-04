@@ -268,7 +268,6 @@ function playNote(note) {
 	const freq = noteFrequencies[note];
 	if (!freq) return;
 
-	// Highlight key if visible
 	const el = document.querySelector(`[data-note="${note}"]`);
 	if (el) el.classList.add('active');
 
@@ -278,51 +277,51 @@ function playNote(note) {
 	gainNode.connect(audioCtx.destination);
 
 	const oscillators = [];
+	const gains = {};
 	waveformMixes.value.forEach((wave) => {
 		if (wave.value > 0 && selectedWaves.value.includes(wave.id)) {
 			const osc = audioCtx.createOscillator();
 			if (wave.id === 'custom') {
 				const real = new Float32Array(customReal.value);
-				const imag = new Float32Array(customReal.value.length); // all zeros
+				const imag = new Float32Array(customReal.value.length);
 				osc.setPeriodicWave(audioCtx.createPeriodicWave(real, imag));
 			} else {
 				osc.type = wave.id;
 			}
-			osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
 			osc.frequency.setValueAtTime(freq * Math.pow(2, pitchBend.value / 12), audioCtx.currentTime);
 
-			const individualGain = audioCtx.createGain();
-			individualGain.gain.value = wave.value;
-			osc.connect(individualGain).connect(gainNode);
+			const g = audioCtx.createGain();
+			g.gain.value = wave.value;
+			osc.connect(g).connect(gainNode);
+			gains[wave.id] = g;
+
 			osc.start();
 			oscillators.push(osc);
 		}
 	});
-	let lfo = null;
-	if (modulationDepth.value > 0) {
+
+	let lfo = null, lfoGain = null;
+	if (modulationDepth.value > 0 && oscillators[0]) {
 		lfo = audioCtx.createOscillator();
-		lfo.type = 'sine';
 		lfo.frequency.value = 6;
-
-		const lfoGain = audioCtx.createGain();
+		lfoGain = audioCtx.createGain();
 		lfoGain.gain.value = modulationDepth.value * 10;
-
-		// Attach vibrato to first oscillator (or make more sophisticated if needed)
-		if (oscillators[0]) {
-			lfo.connect(lfoGain).connect(oscillators[0].frequency);
-			lfo.start();
-		}
+		lfo.connect(lfoGain).connect(oscillators[0].frequency);
+		lfo.start();
 	}
-
-
 
 	activeOscillators.set(note, {
 		oscillators,
 		gainNode,
-		lfo
+		gains,
+		baseFreq: freq,
+		lfo,
+		lfoGain
 	});
+
 	if (!activeNotes.value.includes(note)) activeNotes.value.push(note);
 }
+
 
 function stopNote(note) {
 	const active = activeOscillators.get(note);
@@ -333,7 +332,7 @@ function stopNote(note) {
 		active.gainNode.gain.linearRampToValueAtTime(0.0001, now + 0.05);
 		active.oscillators.forEach(osc => osc.stop(now + 0.05));
 		setTimeout(() => active.gainNode.disconnect(), 100);
-		if (active.lfo) active.lfo.stop(); // ✅ Move inside this block
+		if (active.lfo) active.lfo.stop();
 
 		activeOscillators.delete(note);
 		activeNotes.value = activeNotes.value.filter(n => n !== note);
@@ -355,26 +354,26 @@ function handleMIDIMessage(event) {
 
 	const noteName = midiToNoteName(data1);
 
-	// 🎹 Note On/Off
+	//  Note On/Off
 	if (status >= NOTE_ON && status < NOTE_ON + 16 && data2 > 0 && noteName) {
 		if (!isNoteActive(noteName)) playNote(noteName);
 	} else if ((status >= NOTE_OFF && status < NOTE_OFF + 16) || (status >= NOTE_ON && data2 === 0)) {
 		if (noteName) stopNote(noteName);
 	}
 
-	// 🎚️ Volume CC
+	// Volume CC
 	if (status >= CC && status < CC + 16 && data1 === 7) {
 		const normalized = data2 / 127;
 		volume.value = parseFloat(normalized.toFixed(2));
 	}
 
-	// 🎛️ Modulation Wheel (CC #1)
+	// Modulation Wheel (CC #1)
 	if (status >= CC && status < CC + 16 && data1 === 1) {
 		const modDepth = data2 / 127;
 		modulationDepth.value = modDepth;
 	}
 
-	// 🎯 Pitch Bend
+	// Pitch Bend
 	if (status >= PITCH_BEND && status < PITCH_BEND + 16) {
 		const lsb = data1;
 		const msb = data2;
@@ -383,9 +382,6 @@ function handleMIDIMessage(event) {
 		pitchBend.value = bendValue / 8192 * bendRange; // -2 to +2
 	}
 }
-
-
-
 
 function onKeyMouseDown(id) {
 	isMouseDown.value = true;
@@ -511,11 +507,6 @@ watchEffect(() => {
 	drawWaveformFromReal(customReal.value);
 });
 
-// onMounted(() => {
-// 	drawWaveformFromReal(customReal.value);
-// });
-
-
 function updateHarmonic(index, value) {
 	customReal.value[index] = parseFloat(value);
 	customReal.value = [...customReal.value]; // force Vue to detect update
@@ -580,5 +571,38 @@ function onMidiModeChange() {
 		audioCtx.resume().then(() => console.log('AudioContext resumed'));
 	}
 }
+
+// Smooth live updates for active notes without retriggering
+
+watch(volume, (val) => {
+	activeOscillators.forEach(({ gainNode }) => {
+		gainNode.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
+	});
+});
+
+watch(waveformMixes, () => {
+	activeOscillators.forEach(({ gains }) => {
+		if (!gains) return;
+		waveformMixes.value.forEach(w => {
+			const g = gains[w.id];
+			if (g) g.gain.setTargetAtTime(w.value, audioCtx.currentTime, 0.01);
+		});
+	});
+}, { deep: true });
+
+watch(pitchBend, (bend) => {
+	activeOscillators.forEach(({ oscillators, baseFreq }) => {
+		oscillators.forEach(osc => {
+			osc.frequency.setTargetAtTime(baseFreq * Math.pow(2, bend / 12), audioCtx.currentTime, 0.01);
+		});
+	});
+});
+
+watch(modulationDepth, (depth) => {
+	activeOscillators.forEach(({ lfoGain }) => {
+		if (lfoGain) lfoGain.gain.setTargetAtTime(depth * 10, audioCtx.currentTime, 0.01);
+	});
+});
+
 
 </script>
