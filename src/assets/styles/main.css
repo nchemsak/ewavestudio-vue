@@ -257,11 +257,10 @@ li {
 }
 
 /* Accessibility: Show focus outline when navigating with keyboard */
-.key:focus,
-.upper-key:focus {
+/* .key:focus-visible, .upper-key:focus-visible {
   outline: 2px solid #4caf50;
   outline-offset: 1px;
-}
+} */
 
 .tooltip {
   cursor: help;
@@ -2161,8 +2160,14 @@ input[type="range"]:active::-ms-thumb {
   background-color: #333;
 }
 
-:root {
-  --white-key-width: 40px;
-  --black-key-width: 24px;
-  --black-key-offset: 28px;
+.btn-group .btn.active {
+  background-color: #0d6efd;
+  color: white;
+  border-color: #0d6efd;
+}
+
+.disabled-slider {
+  background-color: #e0e0e0 !important;  /* light gray */
+  pointer-events: none;                 /* prevent interaction */
+  opacity: 0.6;                         /* slightly faded */
 }

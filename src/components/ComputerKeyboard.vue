@@ -49,11 +49,16 @@
 		<!-- Waveform Mix Sliders -->
 		<div id="waveformMixSliders">
 			<h4>Waveform Mix</h4>
-			<div v-for="wave in waveformMixes" :key="wave.id" class="mb-3 slider-wrapper">
-				<label :for="`mix-${wave.id}`" class="form-label">{{ wave.label }}</label>
-				<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" :id="`mix-${wave.id}`"
-					v-model="wave.value" />
-				<div class="slider-percentage" :id="`label-mix-${wave.id}`">{{ Math.round(wave.value * 100) }}%</div>
+			<div class="outer-slider-wrapper border p-3 border rounded">
+				<div v-for="wave in waveformMixes" :key="wave.id" class="mb-3 slider-wrapper">
+					<label :for="`mix-${wave.id}`" class="form-label">{{ wave.label }}</label>
+					<input type="range" min="0" max="1" step="0.01"
+						:class="['form-range styled-slider', { 'disabled-slider': !selectedWaves.includes(wave.id) }]"
+						:id="`mix-${wave.id}`" v-model="wave.value" :disabled="!selectedWaves.includes(wave.id)" />
+
+					<div class="slider-percentage" :id="`label-mix-${wave.id}`">{{ Math.round(wave.value * 100) }}%
+					</div>
+				</div>
 			</div>
 		</div>
 
@@ -134,23 +139,6 @@
 
 
 
-
-			<!-- <ul class="keyboard">
-				<li v-for="note in keyboardNotes" :key="note.id">
-					<div class="key" :id="note.id" :data-note="note.note" role="button" tabindex="0"
-						:aria-label="`Key ${note.label}, note ${note.note}`" @mousedown="onKeyMouseDown(note.id)"
-						@mouseup="onKeyMouseUp(note.id)" @mouseleave="onKeyMouseUp(note.id)"
-						@mouseenter="onKeyMouseEnter(note.id)">
-						<span class="kbd">{{ note.label }}</span><span class="note">{{ note.note }}</span>
-					</div>
-					<div v-if="note.sharp" class="upper-key" :id="note.sharpId" :data-note="note.sharp" role="button"
-						tabindex="0" :aria-label="`Key ${note.sharpLabel}, note ${note.sharp}`"
-						@mousedown="onKeyMouseDown(note.sharpId)" @mouseup="onKeyMouseUp(note.sharpId)"
-						@mouseleave="onKeyMouseUp(note.sharpId)" @mouseenter="onKeyMouseEnter(note.sharpId)">
-						<span>{{ note.sharpLabel }}<br /><small>{{ note.sharp }}</small></span>
-					</div>
-				</li>
-			</ul> -->
 		</div>
 	</div>
 	<div class="text-center mt-4">
