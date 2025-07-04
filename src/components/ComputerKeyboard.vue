@@ -231,7 +231,8 @@ function midiToNoteName(midiNote) {
 	return noteFrequencies[note] ? note : null;
 }
 
-
+const pitchBend = ref(0); // in semitones, -2 to +2 default
+const modulationDepth = ref(0); // 0.0 to 1.0
 
 const keyboardNotes = [
 	// Mouse-only lower keys (with sharps defined inline)
@@ -288,6 +289,8 @@ function playNote(note) {
 				osc.type = wave.id;
 			}
 			osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+			osc.frequency.setValueAtTime(freq * Math.pow(2, pitchBend.value / 12), audioCtx.currentTime);
+
 			const individualGain = audioCtx.createGain();
 			individualGain.gain.value = wave.value;
 			osc.connect(individualGain).connect(gainNode);
@@ -295,8 +298,29 @@ function playNote(note) {
 			oscillators.push(osc);
 		}
 	});
+	let lfo = null;
+	if (modulationDepth.value > 0) {
+		lfo = audioCtx.createOscillator();
+		lfo.type = 'sine';
+		lfo.frequency.value = 6;
 
-	activeOscillators.set(note, { oscillators, gainNode });
+		const lfoGain = audioCtx.createGain();
+		lfoGain.gain.value = modulationDepth.value * 10;
+
+		// Attach vibrato to first oscillator (or make more sophisticated if needed)
+		if (oscillators[0]) {
+			lfo.connect(lfoGain).connect(oscillators[0].frequency);
+			lfo.start();
+		}
+	}
+
+
+
+	activeOscillators.set(note, {
+		oscillators,
+		gainNode,
+		lfo
+	});
 	if (!activeNotes.value.includes(note)) activeNotes.value.push(note);
 }
 
@@ -309,9 +333,12 @@ function stopNote(note) {
 		active.gainNode.gain.linearRampToValueAtTime(0.0001, now + 0.05);
 		active.oscillators.forEach(osc => osc.stop(now + 0.05));
 		setTimeout(() => active.gainNode.disconnect(), 100);
+		if (active.lfo) active.lfo.stop(); // ✅ Move inside this block
+
 		activeOscillators.delete(note);
 		activeNotes.value = activeNotes.value.filter(n => n !== note);
 	}
+
 	// Remove visual highlight if exists
 	const el = document.querySelector(`[data-note="${note}"]`);
 	if (el) el.classList.remove('active');
@@ -321,22 +348,43 @@ const isMouseDown = ref(false);
 const keyMap = Object.fromEntries(keyboardNotes.flatMap(k => k.sharp ? [[k.id, k.note], [k.sharpId, k.sharp]] : [[k.id, k.note]]));
 
 function handleMIDIMessage(event) {
-	const [status, note, velocity] = event.data;
-	const NOTE_ON = 144, NOTE_OFF = 128;
+	const [status, data1, data2] = event.data;
+	const NOTE_ON = 0x90, NOTE_OFF = 0x80, CC = 0xB0, PITCH_BEND = 0xE0;
 
 	if (midiMode.value !== 'osc') return;
 
-	const noteName = midiToNoteName(note);
-	if (!noteName) return;
+	const noteName = midiToNoteName(data1);
 
-	if (status === NOTE_ON && velocity > 0) {
+	// 🎹 Note On/Off
+	if (status >= NOTE_ON && status < NOTE_ON + 16 && data2 > 0 && noteName) {
 		if (!isNoteActive(noteName)) playNote(noteName);
-	} else if (status === NOTE_OFF || (status === NOTE_ON && velocity === 0)) {
-		stopNote(noteName);
+	} else if ((status >= NOTE_OFF && status < NOTE_OFF + 16) || (status >= NOTE_ON && data2 === 0)) {
+		if (noteName) stopNote(noteName);
 	}
-	console.log('MIDI Note:', note, '→', noteName);
 
+	// 🎚️ Volume CC
+	if (status >= CC && status < CC + 16 && data1 === 7) {
+		const normalized = data2 / 127;
+		volume.value = parseFloat(normalized.toFixed(2));
+	}
+
+	// 🎛️ Modulation Wheel (CC #1)
+	if (status >= CC && status < CC + 16 && data1 === 1) {
+		const modDepth = data2 / 127;
+		modulationDepth.value = modDepth;
+	}
+
+	// 🎯 Pitch Bend
+	if (status >= PITCH_BEND && status < PITCH_BEND + 16) {
+		const lsb = data1;
+		const msb = data2;
+		const bendValue = ((msb << 7) | lsb) - 8192; // 14-bit signed
+		const bendRange = 2; // semitones
+		pitchBend.value = bendValue / 8192 * bendRange; // -2 to +2
+	}
 }
+
+
 
 
 function onKeyMouseDown(id) {
@@ -365,39 +413,39 @@ function onKeyMouseEnter(id) {
 
 
 onMounted(() => {
-  drawWaveformFromReal(customReal.value);
+	drawWaveformFromReal(customReal.value);
 
-  // Set up MIDI immediately
-  if (navigator.requestMIDIAccess) {
-    navigator.requestMIDIAccess().then((access) => {
-      for (let input of access.inputs.values()) {
-        input.addEventListener('midimessage', handleMIDIMessage);
-      }
-    }).catch(err => {
-      console.warn('MIDI Access failed:', err);
-    });
-  }
+	// Set up MIDI immediately
+	if (navigator.requestMIDIAccess) {
+		navigator.requestMIDIAccess().then((access) => {
+			for (let input of access.inputs.values()) {
+				input.addEventListener('midimessage', handleMIDIMessage);
+			}
+		}).catch(err => {
+			console.warn('MIDI Access failed:', err);
+		});
+	}
 
-  // Existing listeners
-  window.addEventListener('keydown', e => {
-    if (isTyping.value) return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+	// Existing listeners
+	window.addEventListener('keydown', e => {
+		if (isTyping.value) return;
+		if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-    const note = keyMap[e.code];
-    if (note && !isNoteActive(note)) {
-      playNote(note);
-      document.getElementById(e.code)?.classList.add('active');
-    }
-  });
+		const note = keyMap[e.code];
+		if (note && !isNoteActive(note)) {
+			playNote(note);
+			document.getElementById(e.code)?.classList.add('active');
+		}
+	});
 
-  window.addEventListener('keyup', e => {
-    const note = keyMap[e.code];
-    if (note) stopNote(note);
-    document.getElementById(e.code)?.classList.remove('active');
-  });
+	window.addEventListener('keyup', e => {
+		const note = keyMap[e.code];
+		if (note) stopNote(note);
+		document.getElementById(e.code)?.classList.remove('active');
+	});
 
-  window.addEventListener('mousedown', () => isMouseDown.value = true);
-  window.addEventListener('mouseup', () => isMouseDown.value = false);
+	window.addEventListener('mousedown', () => isMouseDown.value = true);
+	window.addEventListener('mouseup', () => isMouseDown.value = false);
 });
 
 
@@ -528,9 +576,9 @@ function onMouseEnter(note) {
 }
 
 function onMidiModeChange() {
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume().then(() => console.log('AudioContext resumed'));
-  }
+	if (audioCtx.state === 'suspended') {
+		audioCtx.resume().then(() => console.log('AudioContext resumed'));
+	}
 }
 
 </script>
