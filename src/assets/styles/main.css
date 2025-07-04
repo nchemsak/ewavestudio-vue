@@ -1836,7 +1836,10 @@ img #record.recording {
 }
 
 #custom-waveform-controls {
-  display: flex;
+  display: inline-block;
+  justify-content: center;
+  gap: 40px;
+  margin-top: 16px;
   justify-content: center;
   gap: 40px;
   margin-top: 16px;
@@ -1849,14 +1852,6 @@ img #record.recording {
   gap: 4px;
 }
 
-/* #custom-waveform-controls {
-  display: none;
-} */
-#custom-waveform-controls {
-  justify-content: center;
-  gap: 40px;
-  margin-top: 16px;
-}
 .slider-ticks {
   display: flex;
   justify-content: space-between;
@@ -2149,7 +2144,6 @@ input[type="range"]:active::-ms-thumb {
   z-index: 2;
 } */
 
-
 /* Optional: slight tint for mouse-only white keys */
 .key.mouse-only {
   background-color: #f0f0f0;
@@ -2167,7 +2161,13 @@ input[type="range"]:active::-ms-thumb {
 }
 
 .disabled-slider {
-  background-color: #e0e0e0 !important;  /* light gray */
-  pointer-events: none;                 /* prevent interaction */
-  opacity: 0.6;                         /* slightly faded */
+  background-color: #e0e0e0 !important; /* light gray */
+  pointer-events: none; /* prevent interaction */
+  opacity: 0.6; /* slightly faded */
+}
+.midiModeWrapper {
+  text-align: center;
+}
+#midiMode {
+  margin: 0 auto;
 }

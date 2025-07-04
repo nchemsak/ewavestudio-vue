@@ -157,6 +157,16 @@
 			</span>
 		</div>
 	</div>
+
+	<div class="mb-3 mt-3 midiModeWrapper">
+		<label for="midiMode" class="form-label">MIDI Mode:</label>
+		<select id="midiMode" v-model="midiMode" @change="onMidiModeChange" class="form-select w-auto">
+
+			<option disabled selected value="">Choose MIDI Mode</option>
+			<option value="osc">MIDI Keyboard (Synth)</option>
+			<option value="sample" disabled>Sampler (Coming Soon)</option>
+		</select>
+	</div>
 </template>
 
 <script setup>
@@ -194,6 +204,7 @@ const resetHarmonics = () => {
 };
 
 const noteFrequencies = {
+	F3: 174.61, 'F#3': 185.00,
 	G3: 196.00, 'G#3': 207.65,
 	A3: 220.00, 'A#3': 233.08,
 	B3: 246.94,
@@ -208,8 +219,18 @@ const noteFrequencies = {
 	D5: 587.33, 'D#5': 622.25,
 	E5: 659.25,
 	F5: 698.46, 'F#5': 739.99,
-	G5: 783.99
+	G5: 783.99, 'G#5': 830.61,
+	A5: 880.00, 'A#5': 932.33, B5: 987.77,
+	C6: 1046.50
 };
+
+function midiToNoteName(midiNote) {
+	const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+	const octave = Math.floor(midiNote / 12) - 1;
+	const note = noteNames[midiNote % 12] + octave;
+	return noteFrequencies[note] ? note : null;
+}
+
 
 
 const keyboardNotes = [
@@ -235,6 +256,7 @@ const keyboardNotes = [
 	{ note: 'G5' }
 ];
 
+const midiMode = ref(''); // starts blank. TODO: add 'sample' option
 
 
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -244,6 +266,10 @@ const activeNotes = ref([]);
 function playNote(note) {
 	const freq = noteFrequencies[note];
 	if (!freq) return;
+
+	// Highlight key if visible
+	const el = document.querySelector(`[data-note="${note}"]`);
+	if (el) el.classList.add('active');
 
 	const gainNode = audioCtx.createGain();
 	gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
@@ -277,6 +303,7 @@ function playNote(note) {
 function stopNote(note) {
 	const active = activeOscillators.get(note);
 	if (active) {
+		// Stop audio
 		const now = audioCtx.currentTime;
 		active.gainNode.gain.setValueAtTime(active.gainNode.gain.value, now);
 		active.gainNode.gain.linearRampToValueAtTime(0.0001, now + 0.05);
@@ -285,10 +312,32 @@ function stopNote(note) {
 		activeOscillators.delete(note);
 		activeNotes.value = activeNotes.value.filter(n => n !== note);
 	}
+	// Remove visual highlight if exists
+	const el = document.querySelector(`[data-note="${note}"]`);
+	if (el) el.classList.remove('active');
 }
 
 const isMouseDown = ref(false);
 const keyMap = Object.fromEntries(keyboardNotes.flatMap(k => k.sharp ? [[k.id, k.note], [k.sharpId, k.sharp]] : [[k.id, k.note]]));
+
+function handleMIDIMessage(event) {
+	const [status, note, velocity] = event.data;
+	const NOTE_ON = 144, NOTE_OFF = 128;
+
+	if (midiMode.value !== 'osc') return;
+
+	const noteName = midiToNoteName(note);
+	if (!noteName) return;
+
+	if (status === NOTE_ON && velocity > 0) {
+		if (!isNoteActive(noteName)) playNote(noteName);
+	} else if (status === NOTE_OFF || (status === NOTE_ON && velocity === 0)) {
+		stopNote(noteName);
+	}
+	console.log('MIDI Note:', note, '→', noteName);
+
+}
+
 
 function onKeyMouseDown(id) {
 	isMouseDown.value = true;
@@ -316,28 +365,42 @@ function onKeyMouseEnter(id) {
 
 
 onMounted(() => {
-	window.addEventListener('keydown', e => {
-		if (isTyping.value) return;
+  drawWaveformFromReal(customReal.value);
 
-		// Avoid sticking notes for key combos
-		if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Set up MIDI immediately
+  if (navigator.requestMIDIAccess) {
+    navigator.requestMIDIAccess().then((access) => {
+      for (let input of access.inputs.values()) {
+        input.addEventListener('midimessage', handleMIDIMessage);
+      }
+    }).catch(err => {
+      console.warn('MIDI Access failed:', err);
+    });
+  }
 
-		const note = keyMap[e.code];
-		if (note && !isNoteActive(note)) {
-			playNote(note);
-			document.getElementById(e.code)?.classList.add('active');
-		}
-	});
+  // Existing listeners
+  window.addEventListener('keydown', e => {
+    if (isTyping.value) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-	window.addEventListener('keyup', e => {
-		const note = keyMap[e.code];
-		if (note) stopNote(note);
-		document.getElementById(e.code)?.classList.remove('active');
-	});
+    const note = keyMap[e.code];
+    if (note && !isNoteActive(note)) {
+      playNote(note);
+      document.getElementById(e.code)?.classList.add('active');
+    }
+  });
 
-	window.addEventListener('mousedown', () => isMouseDown.value = true);
-	window.addEventListener('mouseup', () => isMouseDown.value = false);
+  window.addEventListener('keyup', e => {
+    const note = keyMap[e.code];
+    if (note) stopNote(note);
+    document.getElementById(e.code)?.classList.remove('active');
+  });
+
+  window.addEventListener('mousedown', () => isMouseDown.value = true);
+  window.addEventListener('mouseup', () => isMouseDown.value = false);
 });
+
+
 
 onBeforeUnmount(() => {
 	window.removeEventListener('mousedown', () => isMouseDown.value = true);
@@ -400,9 +463,9 @@ watchEffect(() => {
 	drawWaveformFromReal(customReal.value);
 });
 
-onMounted(() => {
-	drawWaveformFromReal(customReal.value);
-});
+// onMounted(() => {
+// 	drawWaveformFromReal(customReal.value);
+// });
 
 
 function updateHarmonic(index, value) {
@@ -463,4 +526,11 @@ function onMouseEnter(note) {
 		playNote(note);
 	}
 }
+
+function onMidiModeChange() {
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().then(() => console.log('AudioContext resumed'));
+  }
+}
+
 </script>
