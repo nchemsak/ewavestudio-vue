@@ -63,7 +63,7 @@
 		</div>
 
 		<!-- Preset Banks -->
-		<div class="preset-banks">
+		<!-- <div class="preset-banks">
 			<h4>Presets</h4>
 			<div class="d-flex flex-column gap-4">
 				<div v-for="(bank, index) in banks" :key="'bank-' + index" class="bank-card p-3 border rounded"
@@ -90,7 +90,7 @@
 				</div>
 
 			</div>
-		</div>
+		</div> -->
 
 
 
@@ -159,18 +159,31 @@
 	</div>
 
 	<div class="mb-3 mt-3 midiModeWrapper">
-		<label for="midiMode" class="form-label">MIDI Mode:</label>
+		<!-- <label for="midiMode" class="form-label">MIDI Mode:</label> -->
 		<select id="midiMode" v-model="midiMode" @change="onMidiModeChange" class="form-select w-auto">
 
-			<option disabled selected value="">Choose MIDI Mode</option>
+			<option disabled selected value="">MIDI Mode</option>
 			<option value="osc">MIDI Keyboard (Synth)</option>
 			<option value="sample" disabled>Sampler (Coming Soon)</option>
 		</select>
 	</div>
+	<FloatingWindow v-if="showPresets" @close="showPresets = false">
+		<template #title>Presets</template>
+		<PresetBankPanel :banks="banks" :activeBankIndex="activeBankIndex" :isTyping="isTyping" @save="saveToBank"
+			@load="loadFromBank" @clear="clearBank" @edit="startEditingBank" :bankHasData="bankHasData"
+			@update:isTyping="val => isTyping = val" />
+	</FloatingWindow>
+
+
 </template>
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, watchEffect } from 'vue';
+import FloatingWindow from './FloatingWindow.vue';
+import PresetBankPanel from './PresetBankPanel.vue';
+
+const showPresets = ref(true);
+
 
 
 const volume = ref(0.5);
