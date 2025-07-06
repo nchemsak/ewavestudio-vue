@@ -174,14 +174,45 @@
 			@update:isTyping="val => isTyping = val" />
 	</FloatingWindow>
 
+	<div class="mt-3 p-3 bg-light rounded">
+		<h5 class="mb-3">Unison Controls</h5>
+
+		<!-- Unison Count -->
+		<label class="form-label">Unison Voices</label>
+		<select class="form-select mb-3" v-model="unisonCount">
+			<option :value="1">1 (Mono)</option>
+			<option :value="3">3</option>
+			<option :value="5">5</option>
+		</select>
+
+		<!-- Detune Cents -->
+		<label class="form-label">Detune Amount (cents)</label>
+		<!-- <input type="range" min="0" max="50" step="1" v-model="detuneCents" :key="`detune-${detuneCents}`" class="
+			form-range mb-2" :disabled="unisonCount === 1"> -->
+		<input type="range" v-model="detuneCents" class="form-range detune-slider" min="0" max="50" step="1">
+
+		<div class="small text-muted">{{ detuneCents }} cents</div>
+
+		<!-- Stereo Spread -->
+		<label class="form-label mt-3">Stereo Spread</label>
+		<!-- <input type="range" min="0" max="1" step="0.01" v-model="stereoSpread" :key="`spread-${stereoSpread}`" class="
+			form-range" :disabled="unisonCount === 1"> -->
+		<input type="range" v-model="stereoSpread" class="form-range spread-slider" min="0" max="1" step="0.01">
+
+		<div class="small text-muted">{{ stereoSpread }}</div>
+	</div>
 
 </template>
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, watchEffect } from 'vue';
+import { nextTick } from 'vue';
 import FloatingWindow from './FloatingWindow.vue';
 import PresetBankPanel from './PresetBankPanel.vue';
 
+const unisonCount = ref(1);       // Options: 1, 3, 5
+const detuneCents = ref(0);       // Range: 0–50
+const stereoSpread = ref(0);       // Range: 0–1
 const showPresets = ref(true);
 
 
@@ -277,12 +308,19 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const activeOscillators = new Map();
 const activeNotes = ref([]);
 
+
+
 function playNote(note) {
 	const freq = noteFrequencies[note];
 	if (!freq) return;
 
 	const el = document.querySelector(`[data-note="${note}"]`);
 	if (el) el.classList.add('active');
+
+	// === Detune & Stereo Spread Settings ===
+	const UNISON_COUNT = unisonCount.value;
+	const DETUNE_CENTS = detuneCents.value;
+	const STEREO_SPREAD = stereoSpread.value;
 
 	const gainNode = audioCtx.createGain();
 	gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
@@ -291,25 +329,46 @@ function playNote(note) {
 
 	const oscillators = [];
 	const gains = {};
+
 	waveformMixes.value.forEach((wave) => {
 		if (wave.value > 0 && selectedWaves.value.includes(wave.id)) {
-			const osc = audioCtx.createOscillator();
-			if (wave.id === 'custom') {
-				const real = new Float32Array(customReal.value);
-				const imag = new Float32Array(customReal.value.length);
-				osc.setPeriodicWave(audioCtx.createPeriodicWave(real, imag));
-			} else {
-				osc.type = wave.id;
+			for (let u = 0; u < UNISON_COUNT; u++) {
+				const osc = audioCtx.createOscillator();
+
+				if (wave.id === 'custom') {
+					const real = new Float32Array(customReal.value);
+					const imag = new Float32Array(customReal.value.length);
+					osc.setPeriodicWave(audioCtx.createPeriodicWave(real, imag));
+				} else {
+					osc.type = wave.id;
+				}
+
+				// Detune logic
+				const detuneOffset = (UNISON_COUNT === 1)
+					? 0
+					: ((u - Math.floor(UNISON_COUNT / 2)) * DETUNE_CENTS);
+				osc.frequency.setValueAtTime(freq * Math.pow(2, pitchBend.value / 12), audioCtx.currentTime);
+				osc.detune.value = detuneOffset;
+
+				// Gain node per unison voice
+				const g = audioCtx.createGain();
+				g.gain.value = wave.value / UNISON_COUNT;
+
+				// Stereo panning
+				const p = audioCtx.createStereoPanner();
+				const panVal = (UNISON_COUNT === 1)
+					? 0
+					: ((u - Math.floor(UNISON_COUNT / 2)) / (UNISON_COUNT - 1)) * STEREO_SPREAD;
+				p.pan.value = panVal;
+
+				osc.connect(g).connect(p).connect(gainNode);
+				osc.start();
+				oscillators.push(osc);
+
 			}
-			osc.frequency.setValueAtTime(freq * Math.pow(2, pitchBend.value / 12), audioCtx.currentTime);
 
-			const g = audioCtx.createGain();
-			g.gain.value = wave.value;
-			osc.connect(g).connect(gainNode);
-			gains[wave.id] = g;
-
-			osc.start();
-			oscillators.push(osc);
+			// Optional: store gain per wave type (not per unison)
+			gains[wave.id] = wave.value;
 		}
 	});
 
@@ -334,6 +393,7 @@ function playNote(note) {
 
 	if (!activeNotes.value.includes(note)) activeNotes.value.push(note);
 }
+
 
 
 function stopNote(note) {
@@ -535,9 +595,13 @@ function saveToBank(index) {
 	banks.value[index].data = {
 		selectedWaves: [...selectedWaves.value],
 		waveformMixes: waveformMixes.value.map(w => ({ ...w })),
-		customReal: [...customReal.value]
+		customReal: [...customReal.value],
+		unisonCount: unisonCount.value,
+		detuneCents: detuneCents.value,
+		stereoSpread: stereoSpread.value
 	};
 	banks.value[index].timestamp = Date.now();
+	console.log('Saved data:', banks.value[index].data);
 }
 
 function loadFromBank(index) {
@@ -547,8 +611,23 @@ function loadFromBank(index) {
 	selectedWaves.value = [...data.selectedWaves];
 	waveformMixes.value = data.waveformMixes.map(w => ({ ...w }));
 	customReal.value = [...data.customReal];
+
+
+	unisonCount.value = Number(data.unisonCount ?? 1);
+	detuneCents.value = Number(data.detuneCents ?? 0);
+	stereoSpread.value = Number(data.stereoSpread ?? 0);
+
+
+	console.log('Loaded:', {
+		unison: unisonCount.value,
+		detune: detuneCents.value,
+		spread: stereoSpread.value
+	});
+
+	console.log('Bank raw data:', data);
 	activeBankIndex.value = index;
 }
+
 
 
 function renameBank(index) {
