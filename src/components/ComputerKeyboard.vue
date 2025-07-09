@@ -4,7 +4,7 @@
 		<div class="mb-4">
 			<label for="volume" class="form-label">Volume</label><br />
 			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume"
-				v-model="volume" />
+				v-model="volume" :aria-valuetext="`${Math.round(volume * 100)} percent`" />
 			<div class="slider-percentage" id="label-volume">{{ volumeLabel }}</div>
 		</div>
 
@@ -37,7 +37,8 @@
 					<div v-for="i in 8" :key="'real-' + i" class="mb-2">
 						<label>H{{ i }}</label>
 						<input type="range" min="-1" max="1" step="0.01" :value="customReal[i]"
-							@input="updateHarmonic(i, $event.target.value)" />
+							@input="updateHarmonic(i, $event.target.value)"
+							:aria-valuetext="`Harmonic ${i} amplitude: ${customReal[i]}`" />
 					</div>
 				</div>
 			</div><br />
@@ -54,7 +55,8 @@
 					<label :for="`mix-${wave.id}`" class="form-label">{{ wave.label }}</label>
 					<input type="range" min="0" max="1" step="0.01"
 						:class="['form-range styled-slider', { 'disabled-slider': !selectedWaves.includes(wave.id) }]"
-						:id="`mix-${wave.id}`" v-model="wave.value" :disabled="!selectedWaves.includes(wave.id)" />
+						:id="`mix-${wave.id}`" v-model="wave.value" :disabled="!selectedWaves.includes(wave.id)"
+						:aria-valuetext="`${Math.round(wave.value * 100)} percent mix for ${wave.label}`" />
 
 					<div class="slider-percentage" :id="`label-mix-${wave.id}`">{{ Math.round(wave.value * 100) }}%
 					</div>
@@ -189,7 +191,8 @@
 		<label class="form-label">Detune Amount (cents)</label>
 		<!-- <input type="range" min="0" max="50" step="1" v-model="detuneCents" :key="`detune-${detuneCents}`" class="
 			form-range mb-2" :disabled="unisonCount === 1"> -->
-		<input type="range" v-model="detuneCents" class="form-range detune-slider" min="0" max="50" step="1">
+		<input type="range" v-model="detuneCents" class="form-range detune-slider" min="0" max="50" step="1"
+			:aria-valuetext="`${detuneCents} cents detune`">
 
 		<div class="small text-muted">{{ detuneCents }} cents</div>
 
@@ -197,7 +200,8 @@
 		<label class="form-label mt-3">Stereo Spread</label>
 		<!-- <input type="range" min="0" max="1" step="0.01" v-model="stereoSpread" :key="`spread-${stereoSpread}`" class="
 			form-range" :disabled="unisonCount === 1"> -->
-		<input type="range" v-model="stereoSpread" class="form-range spread-slider" min="0" max="1" step="0.01">
+		<input type="range" v-model="stereoSpread" class="form-range spread-slider" min="0" max="1" step="0.01"
+			:aria-valuetext="`${Math.round(stereoSpread * 100)} percent stereo spread`">
 
 		<div class="small text-muted">{{ stereoSpread }}</div>
 	</div>
@@ -311,6 +315,7 @@ const activeNotes = ref([]);
 
 
 function playNote(note) {
+	const panners = [];
 	const freq = noteFrequencies[note];
 	if (!freq) return;
 
@@ -329,6 +334,8 @@ function playNote(note) {
 
 	const oscillators = [];
 	const gains = {};
+
+
 
 	waveformMixes.value.forEach((wave) => {
 		if (wave.value > 0 && selectedWaves.value.includes(wave.id)) {
@@ -360,7 +367,7 @@ function playNote(note) {
 					? 0
 					: ((u - Math.floor(UNISON_COUNT / 2)) / (UNISON_COUNT - 1)) * STEREO_SPREAD;
 				p.pan.value = panVal;
-
+				panners.push(p);
 				osc.connect(g).connect(p).connect(gainNode);
 				osc.start();
 				oscillators.push(osc);
@@ -388,7 +395,8 @@ function playNote(note) {
 		gains,
 		baseFreq: freq,
 		lfo,
-		lfoGain
+		lfoGain,
+		panners
 	});
 
 	if (!activeNotes.value.includes(note)) activeNotes.value.push(note);
@@ -695,6 +703,46 @@ watch(modulationDepth, (depth) => {
 		if (lfoGain) lfoGain.gain.setTargetAtTime(depth * 10, audioCtx.currentTime, 0.01);
 	});
 });
+
+
+// Real-time Detune Adjustment
+watch(detuneCents, (val) => {
+	activeOscillators.forEach(({ oscillators }) => {
+		const unison = unisonCount.value;
+		if (unison === 1) return;
+
+		let idx = 0;
+		for (const wave of selectedWaves.value) {
+			for (let u = 0; u < unison; u++) {
+				const detuneOffset = (u - Math.floor(unison / 2)) * val;
+				const osc = oscillators[idx++];
+				if (osc && osc.detune) {
+					osc.detune.setTargetAtTime(detuneOffset, audioCtx.currentTime, 0.01);
+				}
+			}
+		}
+	});
+});
+
+// Real-time Stereo Spread Adjustment
+watch(stereoSpread, (val) => {
+	activeOscillators.forEach(({ panners }) => {
+		const unison = unisonCount.value;
+		if (!panners || unison === 1) return;
+
+		let idx = 0;
+		for (const wave of selectedWaves.value) {
+			for (let u = 0; u < unison; u++) {
+				const panVal = ((u - Math.floor(unison / 2)) / (unison - 1 || 1)) * val;
+				const panner = panners[idx++];
+				if (panner) {
+					panner.pan.setTargetAtTime(panVal, audioCtx.currentTime, 0.01);
+				}
+			}
+		}
+	});
+});
+
 
 
 </script>
