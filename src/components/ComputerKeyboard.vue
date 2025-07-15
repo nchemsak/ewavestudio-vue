@@ -1,5 +1,5 @@
 <template>
-	<div id="piano" class="p-3 computer-keyboard">
+	<div id="darkWorkOne" class="p-3 computer-keyboard">
 		<!-- Volume Slider -->
 		<div class="mb-4">
 			<label for="volume" class="form-label">Volume</label><br />
@@ -97,7 +97,7 @@
 
 
 		<!-- Keyboard Interface -->
-		<div class="mt-5">
+		<div class="mt-5 keyboard-container">
 			<ul class="keyboard">
 				<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
 
