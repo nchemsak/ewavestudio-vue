@@ -27,12 +27,12 @@
 	list-style-type: none;
 	position: relative;
 	user-select: none;
-	gap: 0; // If using gap in flexbox layout
+	gap: 0;
 
 	.keyboard-key {
 		position: relative;
 		width: 40px;
-		// height: 168px;
+
 		height: 174px;
 		display: flex;
 		justify-content: center;
@@ -40,16 +40,13 @@
 		margin: 0;
 		padding: 0;
 
-		// left: 2px;
-		// right: 2px;
-		// border-top: 1px solid #eee;
 		&::before {
 			content: "";
 			position: absolute;
 			bottom: 0;
 			left: 0;
 			right: 0;
-			border-radius: 0 0 6px 6px; // match .key
+			border-radius: 0 0 6px 6px;
 			height: 6px;
 			background: linear-gradient(to bottom, #d8d4ca, #bab5aa);
 			background: linear-gradient(to bottom, #cfcac0, #aaa59a);
@@ -66,10 +63,10 @@
 			color: black;
 			border: 1px solid #dcd9d3;
 			border-radius: 8px;
-			border-radius: 0 0 6px 6px; // Round only the bottom
+			border-radius: 0 0 6px 6px;
 			box-shadow:
 				inset 0 -1px 1px rgba(0, 0, 0, 0.06),
-				0 4px 6px rgba(0, 0, 0, 0.2); // softens transition
+				0 4px 6px rgba(0, 0, 0, 0.2);
 			display: flex;
 			flex-direction: column;
 			justify-content: flex-end;
@@ -83,25 +80,11 @@
 			box-sizing: border-box;
 			position: relative;
 			z-index: 1;
-			// &::before {
-			// 	content: "";
-			// 	position: absolute;
-			// 	bottom: -5px;
-			// 	left: 0;
-			// 	right: 0;
-			// 	height: 6px;
-			// 	background: linear-gradient(to bottom, #d8d4ca, #bab5aa);
-			// 	border-radius: 0 0 4px 4px;
-			// 	box-shadow:
-			// 		inset 0 -1px 1px rgba(255, 255, 255, 0.3),
-			// 		0 2px 4px rgba(0, 0, 0, 0.4); // cast shadow
-			// 	z-index: -1;
-			// }
 
 			box-shadow:
 				inset 0 -1px 1px rgba(0, 0, 0, 0.06),
 				0 4px 6px rgba(0, 0, 0, 0.2),
-				0 2px 2px rgba(0, 0, 0, 0.3); // extra bottom/front edge
+				0 2px 2px rgba(0, 0, 0, 0.3);
 
 			&::before {
 				content: "";
@@ -134,7 +117,7 @@
 				box-shadow:
 					inset 0 -1px 1px rgba(0, 0, 0, 0.06),
 					0 4px 6px rgba(0, 0, 0, 0.2);
-				opacity: 1; // remove slight transparency
+				opacity: 1;
 				padding: 10px 0 6px;
 			}
 
@@ -156,7 +139,6 @@
 
 		.upper-key {
 			position: absolute;
-			top: 0;
 			top: -2px;
 			left: 60%;
 			width: 26px;
@@ -164,7 +146,7 @@
 
 			background: linear-gradient(to bottom, #2c2c2c 0%, #1b1b1b 80%, #101010 100%);
 			border: 1px solid #000;
-			border-radius: 6px;
+			border-radius: 0px 0px 6px 6px;
 			z-index: 10;
 			display: flex;
 			justify-content: center;
@@ -176,17 +158,11 @@
 				transform 0.1s ease,
 				background 0.1s ease;
 
-			// Simulate light hitting the key
 			box-shadow:
 				inset 1px 0 0 #3a3a3a,
-				// left inner bevel
 				inset -1px 0 0 #0a0a0a,
-				// right inner bevel
 				inset 0 2px 2px #444,
-				// top inner glow
-				0 4px 10px rgba(0, 0, 0, 0.7); // outer cast shadow
-
-			// Reflective vertical streak
+				0 4px 10px rgba(0, 0, 0, 0.7);
 
 			&::before {
 				content: "";

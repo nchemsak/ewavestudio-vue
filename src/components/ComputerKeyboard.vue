@@ -98,6 +98,15 @@
 
 		<!-- Keyboard Interface -->
 		<div class="mt-5 keyboard-container">
+			<!-- <canvas id="oscilloscope" width="600" height="200" class="waveform-visual"></canvas>
+			<canvas id="rainbow-visualizer" width="600" height="200" class="waveform-visual mt-3"></canvas> -->
+
+
+			<div class="visualizer-stack d-flex flex-column gap-3 mb-4">
+				<canvas id="oscilloscope" width="600" height="200" class="waveform-visual"></canvas>
+				<canvas id="rainbow-visualizer" width="600" height="350" class="waveform-visual mt-3"></canvas>
+			</div>
+
 			<ul class="keyboard">
 				<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
 
@@ -330,6 +339,8 @@ function playNote(note) {
 	const gainNode = audioCtx.createGain();
 	gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
 	gainNode.gain.linearRampToValueAtTime(volume.value, audioCtx.currentTime + 0.02);
+	gainNode.connect(analyser);
+
 	gainNode.connect(audioCtx.destination);
 
 	const oscillators = [];
@@ -523,6 +534,10 @@ onMounted(() => {
 
 	window.addEventListener('mousedown', () => isMouseDown.value = true);
 	window.addEventListener('mouseup', () => isMouseDown.value = false);
+	drawOscilloscope();
+	drawRainbowVisualizer();
+
+
 });
 
 
@@ -743,6 +758,107 @@ watch(stereoSpread, (val) => {
 	});
 });
 
+// Visualizer
+const analyser = audioCtx.createAnalyser();
+analyser.fftSize = 1024;
+
+const bufferLength = analyser.frequencyBinCount;
+const dataArray = new Uint8Array(bufferLength);
+function drawOscilloscope() {
+	const canvas = document.getElementById('oscilloscope');
+	if (!canvas) return;
+	const ctx = canvas.getContext('2d');
+	const width = canvas.width;
+	const height = canvas.height;
+
+	function draw() {
+		requestAnimationFrame(draw);
+		analyser.getByteTimeDomainData(dataArray);
+
+		ctx.fillStyle = '#121212';
+		ctx.fillRect(0, 0, width, height);
+
+		ctx.lineWidth = 2;
+		ctx.strokeStyle = 'rgba(0,255,255,0.8)';
+		ctx.beginPath();
+
+		const sliceWidth = width * 1.0 / bufferLength;
+		let x = 0;
+
+		for (let i = 0; i < bufferLength; i++) {
+			const v = dataArray[i] / 128.0; // 0 to 2
+			const y = v * height / 2;
+
+			if (i === 0) {
+				ctx.moveTo(x, y);
+			} else {
+				ctx.lineTo(x, y);
+			}
+			x += sliceWidth;
+		}
+		ctx.lineTo(canvas.width, canvas.height / 2);
+		ctx.stroke();
+	}
+	draw();
+}
+function drawRainbowVisualizer() {
+	const canvas = document.getElementById('rainbow-visualizer');
+	if (!canvas) return;
+	const ctx = canvas.getContext('2d');
+	const width = canvas.width;
+	const height = canvas.height;
+
+	const layers = 9; // More layers = thicker band
+	const spacing = 4.5; // px between each line
+	const baseY = height / 2;
+	const colors = [
+		'#24D7BF', '#54FACA', '#FCCF34',
+		'#FF9065', '#FF88A2', '#F45FA8',
+		'#B957C6', '#995CD1', '#3E48A7'
+
+	];
+	// analyser.fftSize = 1024;
+	analyser.fftSize = 2048;
+
+	const bufferLength = analyser.fftSize;
+	const dataArray = new Uint8Array(bufferLength);
+
+	function draw() {
+		requestAnimationFrame(draw);
+		analyser.getByteTimeDomainData(dataArray);
+
+		ctx.clearRect(0, 0, width, height);
+		ctx.fillRect(0, 0, width, height);
+
+		const sliceWidth = width / bufferLength;
+
+		for (let l = 0; l < layers; l++) {
+			const offsetY = baseY + (l - layers / 2) * spacing;
+			const amplitude = 10;
+
+			ctx.beginPath();
+			ctx.strokeStyle = colors[l % colors.length];
+			ctx.lineWidth = 3.5;
+			ctx.lineCap = 'round';
+			ctx.shadowColor = colors[l % colors.length];
+			ctx.shadowBlur = 12;
+			let x = 0;
+			for (let i = 0; i < bufferLength; i++) {
+				const v = dataArray[i] / 128.0;
+				const y = offsetY + (v - 1) * amplitude * spacing * 2;
+
+				if (i === 0) {
+					ctx.moveTo(x, y);
+				} else {
+					ctx.lineTo(x, y);
+				}
+				x += sliceWidth;
+			}
+			ctx.stroke();
+		}
+	}
+	draw();
+}
 
 
 </script>
