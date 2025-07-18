@@ -1780,6 +1780,11 @@ input[type="range"]::-webkit-slider-runnable-track {
   background-color: rgba(255, 167, 38, 0.2);
 }
 
+.waveform-option.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 input[type="range"] {
   width: 100%;
   background: transparent;

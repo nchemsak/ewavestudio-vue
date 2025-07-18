@@ -9,18 +9,54 @@
 		</div>
 
 		<!-- Waveform Selection -->
-		<div class="mb-4">
+		<!-- <div class="mb-4">
 			<label class="form-label d-block">Wave Shape:</label>
 			<div class="waveform-selector d-flex flex-wrap gap-3 mb-4">
 				<div v-for="wave in waveforms" :key="wave" class="waveform-option"
-					:class="{ selected: selectedWaves.includes(wave) }" :data-wave="wave" @click="toggleWave(wave)">
+					:class="{ selected: waveformType === wave }" @click="selectWave(wave)">
 					<template v-if="wave !== 'custom'">
 						<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
 					</template>
-					<!-- Inside waveform-option for 'custom' -->
-					<template v-else>
+<template v-else>
 						<div class="custom-wave-box text-center">
 							<canvas id="waveformPreview" width="27" height="27"
+								style="max-width: 27px; max-height: 27px;"></canvas>
+						</div>
+					</template>
+</div>
+</div>
+</div> -->
+
+		<div class="mb-4">
+			<label class="form-label d-block">Waveform Group 1:</label>
+			<div class="waveform-selector d-flex flex-wrap gap-3">
+				<div v-for="wave in waveforms" :key="wave + '-1'" class="waveform-option"
+					:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
+					@click="selectWave1(wave)">
+					<template v-if="wave !== 'custom'">
+						<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
+					</template>
+					<template v-else>
+						<div class="custom-wave-box text-center">
+							<canvas id="waveformPreview1" width="27" height="27"
+								style="max-width: 27px; max-height: 27px;"></canvas>
+						</div>
+					</template>
+				</div>
+			</div>
+		</div>
+		<div class="mb-4">
+			<label class="form-label d-block">Waveform Group 2:</label>
+			<div class="waveform-selector d-flex flex-wrap gap-3">
+				<div v-for="wave in waveforms" :key="wave + '-2'" class="waveform-option"
+					:class="{ selected: selectedWave2 === wave, disabled: selectedWave1 === wave }"
+					@click="selectWave2(wave)">
+					<template v-if="wave !== 'custom'">
+						<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
+					</template>
+					<template v-else>
+						<div class="custom-wave-box text-center">
+							<canvas id="waveformPreview2" width="27" height="27"
 								style="max-width: 27px; max-height: 27px;"></canvas>
 						</div>
 					</template>
@@ -29,8 +65,15 @@
 		</div>
 
 
+
+		<div class="wave-mix-slider mt-4">
+			<label class="form-label">Wave 1 <span class="mx-2">⇄</span> Wave 2</label>
+			<input type="range" class="form-range" min="0" max="1" step="0.01" v-model="waveMix" />
+		</div>
+
+
 		<!-- Custom Waveform Controls -->
-		<div v-if="selectedWaves.includes('custom')" id="custom-waveform-controls" class="mt-4">
+		<div v-if="waveformType === 'custom'" id="custom-waveform-controls" class="mt-4">
 			<h4>Custom Waveform Harmonics</h4>
 			<div class="d-flex gap-4 align-items-start">
 				<div>
@@ -46,62 +89,8 @@
 				Harmonics</button>
 		</div>
 
-
-		<!-- Waveform Mix Sliders -->
-		<div id="waveformMixSliders">
-			<h4>Waveform Mix</h4>
-			<div class="outer-slider-wrapper border p-3 border rounded">
-				<div v-for="wave in waveformMixes" :key="wave.id" class="mb-3 slider-wrapper">
-					<label :for="`mix-${wave.id}`" class="form-label">{{ wave.label }}</label>
-					<input type="range" min="0" max="1" step="0.01"
-						:class="['form-range styled-slider', { 'disabled-slider': !selectedWaves.includes(wave.id) }]"
-						:id="`mix-${wave.id}`" v-model="wave.value" :disabled="!selectedWaves.includes(wave.id)"
-						:aria-valuetext="`${Math.round(wave.value * 100)} percent mix for ${wave.label}`" />
-
-					<div class="slider-percentage" :id="`label-mix-${wave.id}`">{{ Math.round(wave.value * 100) }}%
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Preset Banks -->
-		<!-- <div class="preset-banks">
-			<h4>Presets</h4>
-			<div class="d-flex flex-column gap-4">
-				<div v-for="(bank, index) in banks" :key="'bank-' + index" class="bank-card p-3 border rounded"
-					:class="{ 'active-bank': activeBankIndex === index }" style="width: 120px;">
-					<div class="mb-2">
-						<div class="bank-name-wrapper" style="width: 100%;">
-							<input v-if="bank.editing" v-model="bank.name" @focus="isTyping = true"
-								@blur="() => { isTyping = false; bank.editing = false }"
-								@keydown.enter="() => { isTyping = false; bank.editing = false }"
-								class="form-control form-control-sm w-100" />
-							<span v-else @click="startEditingBank(index)" style="cursor: pointer;">
-								<strong>{{ bank.name }}</strong>
-								<i class="ms-1 bi bi-pencil-fill text-muted"></i>
-							</span>
-						</div>
-					</div>
-					<div class="d-flex flex-column gap-2">
-						<button class="btn btn-sm btn-primary" @click="saveToBank(index)">Save</button>
-						<button class="btn btn-sm btn-success" @click="loadFromBank(index)"
-							:disabled="!bankHasData(index)">Load</button>
-						<button class="btn btn-sm btn-danger" @click="clearBank(index)"
-							:disabled="!bankHasData(index)">Clear</button>
-					</div>
-				</div>
-
-			</div>
-		</div> -->
-
-
-
 		<!-- Keyboard Interface -->
 		<div class="mt-5 keyboard-container">
-			<!-- <canvas id="oscilloscope" width="600" height="200" class="waveform-visual"></canvas>
-			<canvas id="rainbow-visualizer" width="600" height="200" class="waveform-visual mt-3"></canvas> -->
-
-
 			<div class="visualizer-stack d-flex flex-column gap-3 mb-4">
 				<canvas id="oscilloscope" width="600" height="200" class="waveform-visual"></canvas>
 				<canvas id="rainbow-visualizer" width="600" height="350" class="waveform-visual mt-3"></canvas>
@@ -185,10 +174,10 @@
 			@update:isTyping="val => isTyping = val" />
 	</FloatingWindow>
 
-	<div class="mt-3 p-3 bg-light rounded">
+	<!-- <div class="mt-3 p-3 bg-light rounded">
 		<h5 class="mb-3">Unison Controls</h5>
 
-		<!-- Unison Count -->
+
 		<label class="form-label">Unison Voices</label>
 		<select class="form-select mb-3" v-model="unisonCount">
 			<option :value="1">1 (Mono)</option>
@@ -196,23 +185,47 @@
 			<option :value="5">5</option>
 		</select>
 
-		<!-- Detune Cents -->
+
 		<label class="form-label">Detune Amount (cents)</label>
-		<!-- <input type="range" min="0" max="50" step="1" v-model="detuneCents" :key="`detune-${detuneCents}`" class="
-			form-range mb-2" :disabled="unisonCount === 1"> -->
+
 		<input type="range" v-model="detuneCents" class="form-range detune-slider" min="0" max="50" step="1"
 			:aria-valuetext="`${detuneCents} cents detune`">
 
 		<div class="small text-muted">{{ detuneCents }} cents</div>
 
-		<!-- Stereo Spread -->
 		<label class="form-label mt-3">Stereo Spread</label>
-		<!-- <input type="range" min="0" max="1" step="0.01" v-model="stereoSpread" :key="`spread-${stereoSpread}`" class="
-			form-range" :disabled="unisonCount === 1"> -->
+
 		<input type="range" v-model="stereoSpread" class="form-range spread-slider" min="0" max="1" step="0.01"
 			:aria-valuetext="`${Math.round(stereoSpread * 100)} percent stereo spread`">
 
 		<div class="small text-muted">{{ stereoSpread }}</div>
+	</div> -->
+	<div class="unison-controls mt-4 row">
+		<!-- Group 1 Unison -->
+		<div class="col-md-6">
+			<h6>Unison Settings – Group 1</h6>
+			<label>Unison Count</label>
+			<input type="range" min="1" max="5" v-model="unisonCount1" />
+
+			<label>Detune (cents)</label>
+			<input type="range" min="0" max="50" step="1" v-model="detuneCents1" />
+
+			<label>Stereo Spread</label>
+			<input type="range" min="0" max="1" step="0.01" v-model="stereoSpread1" />
+		</div>
+
+		<!-- Group 2 Unison -->
+		<div class="col-md-6">
+			<h6>Unison Settings – Group 2</h6>
+			<label>Unison Count</label>
+			<input type="range" min="1" max="5" v-model="unisonCount2" />
+
+			<label>Detune (cents)</label>
+			<input type="range" min="0" max="50" step="1" v-model="detuneCents2" />
+
+			<label>Stereo Spread</label>
+			<input type="range" min="0" max="1" step="0.01" v-model="stereoSpread2" />
+		</div>
 	</div>
 
 </template>
@@ -237,20 +250,64 @@ watch(volume, (val) => {
 });
 
 const waveforms = ['sine', 'square', 'sawtooth', 'triangle', 'custom'];
-const selectedWaves = ref(['sine']);
-const toggleWave = (wave) => {
-	selectedWaves.value.includes(wave)
-		? selectedWaves.value = selectedWaves.value.filter(w => w !== wave)
-		: selectedWaves.value.push(wave);
+
+const selectedWave1 = ref('sine');
+const selectedWave2 = ref(null);
+
+const waveMix = ref(0.5); // 0 = all wave1, 1 = all wave2
+
+const unisonCount1 = ref(1);
+const detuneCents1 = ref(0);
+const stereoSpread1 = ref(0);
+
+const unisonCount2 = ref(1);
+const detuneCents2 = ref(0);
+const stereoSpread2 = ref(0);
+
+const selectWave1 = (wave) => {
+	if (selectedWave1.value === wave) {
+		selectedWave1.value = null; // toggle off
+	} else {
+		selectedWave1.value = wave;
+		if (selectedWave2.value === wave) {
+			selectedWave2.value = null;
+		}
+	}
 };
 
-const waveformMixes = ref([
-	{ id: 'sine', label: 'Sine', value: 0.5 },
-	{ id: 'square', label: 'Square', value: 0.5 },
-	{ id: 'sawtooth', label: 'Sawtooth', value: 0.5 },
-	{ id: 'triangle', label: 'Triangle', value: 0.5 },
-	{ id: 'custom', label: 'Custom', value: 0.5 }
-]);
+
+const selectWave2 = (wave) => {
+	if (selectedWave2.value === wave) {
+		selectedWave2.value = null; // toggle off
+	} else {
+		selectedWave2.value = wave;
+		if (selectedWave1.value === wave) {
+			selectedWave1.value = null;
+		}
+	}
+};
+
+
+
+
+const preloadImages = () => {
+	waveforms.forEach(w => {
+		if (w !== 'custom') {
+			const img = new Image();
+			img.src = `images/${w}1.png`;
+			img.onload = () => console.log(`${img.src} loaded`);
+		}
+	});
+};
+
+
+onMounted(preloadImages);
+
+
+const waveformType = ref('sine');
+const selectWave = (wave) => {
+	waveformType.value = wave;
+};
 
 const customReal = ref(new Array(9).fill(0));
 customReal.value[1] = 1; // set H1 as the default active harmonic
@@ -324,7 +381,7 @@ const activeNotes = ref([]);
 
 
 function playNote(note) {
-	const panners = [];
+
 	const freq = noteFrequencies[note];
 	if (!freq) return;
 
@@ -344,51 +401,98 @@ function playNote(note) {
 	gainNode.connect(audioCtx.destination);
 
 	const oscillators = [];
-	const gains = {};
+	const panners = [];
 
+	const waveGroups = [
+		{
+			wave: selectedWave1.value,
+			unison: unisonCount1.value,
+			detune: detuneCents1.value,
+			spread: stereoSpread1.value,
+			gainValue: 1 - waveMix.value,
+		},
+		{
+			wave: selectedWave2.value,
+			unison: unisonCount2.value,
+			detune: detuneCents2.value,
+			spread: stereoSpread2.value,
+			gainValue: waveMix.value,
+		}
+	];
 
+	const wave = waveformType.value;
 
-	waveformMixes.value.forEach((wave) => {
-		if (wave.value > 0 && selectedWaves.value.includes(wave.id)) {
-			for (let u = 0; u < UNISON_COUNT; u++) {
-				const osc = audioCtx.createOscillator();
+	for (const group of waveGroups) {
+		if (!group.wave) continue;
 
-				if (wave.id === 'custom') {
-					const real = new Float32Array(customReal.value);
-					const imag = new Float32Array(customReal.value.length);
-					osc.setPeriodicWave(audioCtx.createPeriodicWave(real, imag));
-				} else {
-					osc.type = wave.id;
-				}
+		for (let u = 0; u < group.unison; u++) {
+			const osc = audioCtx.createOscillator();
+			const gain = audioCtx.createGain();
+			const pan = audioCtx.createStereoPanner();
 
-				// Detune logic
-				const detuneOffset = (UNISON_COUNT === 1)
-					? 0
-					: ((u - Math.floor(UNISON_COUNT / 2)) * DETUNE_CENTS);
-				osc.frequency.setValueAtTime(freq * Math.pow(2, pitchBend.value / 12), audioCtx.currentTime);
-				osc.detune.value = detuneOffset;
-
-				// Gain node per unison voice
-				const g = audioCtx.createGain();
-				g.gain.value = wave.value / UNISON_COUNT;
-
-				// Stereo panning
-				const p = audioCtx.createStereoPanner();
-				const panVal = (UNISON_COUNT === 1)
-					? 0
-					: ((u - Math.floor(UNISON_COUNT / 2)) / (UNISON_COUNT - 1)) * STEREO_SPREAD;
-				p.pan.value = panVal;
-				panners.push(p);
-				osc.connect(g).connect(p).connect(gainNode);
-				osc.start();
-				oscillators.push(osc);
-
+			// Oscillator config
+			if (group.wave === 'custom') {
+				const real = new Float32Array(customReal.value);
+				const imag = new Float32Array(customReal.value.length);
+				osc.setPeriodicWave(audioCtx.createPeriodicWave(real, imag));
+			} else {
+				osc.type = group.wave;
 			}
 
-			// Optional: store gain per wave type (not per unison)
-			gains[wave.id] = wave.value;
+			const detuneOffset = (group.unison === 1)
+				? 0
+				: ((u - Math.floor(group.unison / 2)) * group.detune);
+			osc.frequency.setValueAtTime(freq * Math.pow(2, pitchBend.value / 12), audioCtx.currentTime);
+			osc.detune.value = detuneOffset;
+
+			// Panning
+			const panVal = (group.unison === 1)
+				? 0
+				: ((u - Math.floor(group.unison / 2)) / (group.unison - 1)) * group.spread;
+			pan.pan.value = panVal;
+
+			// Volume per group
+			gain.gain.value = (volume.value * group.gainValue) / (group.unison || 1);
+
+			osc.connect(gain).connect(pan).connect(gainNode);
+			osc.start();
+
+			oscillators.push(osc);
+			panners.push(pan);
 		}
-	});
+	}
+
+	// for (let u = 0; u < UNISON_COUNT; u++) {
+	// 	const osc = audioCtx.createOscillator();
+
+	// 	if (wave === 'custom') {
+	// 		const real = new Float32Array(customReal.value);
+	// 		const imag = new Float32Array(customReal.value.length);
+	// 		osc.setPeriodicWave(audioCtx.createPeriodicWave(real, imag));
+	// 	} else {
+	// 		osc.type = wave;
+	// 	}
+
+	// 	const detuneOffset = (UNISON_COUNT === 1)
+	// 		? 0
+	// 		: ((u - Math.floor(UNISON_COUNT / 2)) * DETUNE_CENTS);
+	// 	osc.frequency.setValueAtTime(freq * Math.pow(2, pitchBend.value / 12), audioCtx.currentTime);
+	// 	osc.detune.value = detuneOffset;
+
+	// 	const g = audioCtx.createGain();
+	// 	g.gain.value = volume.value / UNISON_COUNT;
+
+	// 	const p = audioCtx.createStereoPanner();
+	// 	const panVal = (UNISON_COUNT === 1)
+	// 		? 0
+	// 		: ((u - Math.floor(UNISON_COUNT / 2)) / (UNISON_COUNT - 1)) * STEREO_SPREAD;
+	// 	p.pan.value = panVal;
+	// 	panners.push(p);
+	// 	osc.connect(g).connect(p).connect(gainNode);
+	// 	osc.start();
+	// 	oscillators.push(osc);
+	// }
+
 
 	let lfo = null, lfoGain = null;
 	if (modulationDepth.value > 0 && oscillators[0]) {
@@ -402,12 +506,9 @@ function playNote(note) {
 
 	activeOscillators.set(note, {
 		oscillators,
+		panners,
 		gainNode,
-		gains,
-		baseFreq: freq,
-		lfo,
-		lfoGain,
-		panners
+		startedAt: audioCtx.currentTime
 	});
 
 	if (!activeNotes.value.includes(note)) activeNotes.value.push(note);
@@ -615,41 +716,47 @@ const banks = ref([
 ]);
 
 function saveToBank(index) {
-	banks.value[index].data = {
-		selectedWaves: [...selectedWaves.value],
-		waveformMixes: waveformMixes.value.map(w => ({ ...w })),
-		customReal: [...customReal.value],
-		unisonCount: unisonCount.value,
-		detuneCents: detuneCents.value,
-		stereoSpread: stereoSpread.value
-	};
+	banks.value[index].name = `Preset ${index + 1}`;
 	banks.value[index].timestamp = Date.now();
-	console.log('Saved data:', banks.value[index].data);
+
+	banks.value[index].data = {
+		selectedWave1: selectedWave1.value,
+		selectedWave2: selectedWave2.value,
+		waveMix: waveMix.value,
+
+		customReal: [...customReal.value],
+
+		unisonCount1: unisonCount1.value,
+		detuneCents1: detuneCents1.value,
+		stereoSpread1: stereoSpread1.value,
+
+		unisonCount2: unisonCount2.value,
+		detuneCents2: detuneCents2.value,
+		stereoSpread2: stereoSpread2.value
+	};
 }
+
 
 function loadFromBank(index) {
 	const data = banks.value[index].data;
 	if (!data) return;
 
-	selectedWaves.value = [...data.selectedWaves];
-	waveformMixes.value = data.waveformMixes.map(w => ({ ...w }));
-	customReal.value = [...data.customReal];
+	selectedWave1.value = data.selectedWave1 || null;
+	selectedWave2.value = data.selectedWave2 || null;
+	waveMix.value = Number.isFinite(data.waveMix) ? data.waveMix : 0.5;
 
+	customReal.value = data.customReal ? [...data.customReal] : [0, 0, 0, 0, 0];
+	drawWaveformFromReal();
 
-	unisonCount.value = Number(data.unisonCount ?? 1);
-	detuneCents.value = Number(data.detuneCents ?? 0);
-	stereoSpread.value = Number(data.stereoSpread ?? 0);
+	unisonCount1.value = data.unisonCount1 ?? 1;
+	detuneCents1.value = data.detuneCents1 ?? 0;
+	stereoSpread1.value = data.stereoSpread1 ?? 0;
 
-
-	console.log('Loaded:', {
-		unison: unisonCount.value,
-		detune: detuneCents.value,
-		spread: stereoSpread.value
-	});
-
-	console.log('Bank raw data:', data);
-	activeBankIndex.value = index;
+	unisonCount2.value = data.unisonCount2 ?? 1;
+	detuneCents2.value = data.detuneCents2 ?? 0;
+	stereoSpread2.value = data.stereoSpread2 ?? 0;
 }
+
 
 
 
@@ -695,15 +802,6 @@ watch(volume, (val) => {
 	});
 });
 
-watch(waveformMixes, () => {
-	activeOscillators.forEach(({ gains }) => {
-		if (!gains) return;
-		waveformMixes.value.forEach(w => {
-			const g = gains[w.id];
-			if (g) g.gain.setTargetAtTime(w.value, audioCtx.currentTime, 0.01);
-		});
-	});
-}, { deep: true });
 
 watch(pitchBend, (bend) => {
 	activeOscillators.forEach(({ oscillators, baseFreq }) => {
@@ -727,13 +825,11 @@ watch(detuneCents, (val) => {
 		if (unison === 1) return;
 
 		let idx = 0;
-		for (const wave of selectedWaves.value) {
-			for (let u = 0; u < unison; u++) {
-				const detuneOffset = (u - Math.floor(unison / 2)) * val;
-				const osc = oscillators[idx++];
-				if (osc && osc.detune) {
-					osc.detune.setTargetAtTime(detuneOffset, audioCtx.currentTime, 0.01);
-				}
+		for (let u = 0; u < unison; u++) {
+			const detuneOffset = (u - Math.floor(unison / 2)) * val;
+			const osc = oscillators[idx++];
+			if (osc && osc.detune) {
+				osc.detune.setTargetAtTime(detuneOffset, audioCtx.currentTime, 0.01);
 			}
 		}
 	});
@@ -746,15 +842,14 @@ watch(stereoSpread, (val) => {
 		if (!panners || unison === 1) return;
 
 		let idx = 0;
-		for (const wave of selectedWaves.value) {
-			for (let u = 0; u < unison; u++) {
-				const panVal = ((u - Math.floor(unison / 2)) / (unison - 1 || 1)) * val;
-				const panner = panners[idx++];
-				if (panner) {
-					panner.pan.setTargetAtTime(panVal, audioCtx.currentTime, 0.01);
-				}
+		for (let u = 0; u < unison; u++) {
+			const panVal = ((u - Math.floor(unison / 2)) / (unison - 1 || 1)) * val;
+			const panner = panners[idx++];
+			if (panner) {
+				panner.pan.setTargetAtTime(panVal, audioCtx.currentTime, 0.01);
 			}
 		}
+
 	});
 });
 
@@ -836,12 +931,13 @@ function drawRainbowVisualizer() {
 			const offsetY = baseY + (l - layers / 2) * spacing;
 			const amplitude = 10;
 
-			ctx.beginPath();
+
 			ctx.strokeStyle = colors[l % colors.length];
-			ctx.lineWidth = 3.5;
-			ctx.lineCap = 'round';
 			ctx.shadowColor = colors[l % colors.length];
 			ctx.shadowBlur = 12;
+			ctx.lineWidth = 3.5;
+			ctx.lineCap = 'round';
+			ctx.beginPath();
 			let x = 0;
 			for (let i = 0; i < bufferLength; i++) {
 				const v = dataArray[i] / 128.0;
