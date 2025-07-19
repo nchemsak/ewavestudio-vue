@@ -66,14 +66,25 @@
 
 
 
-		<div class="wave-mix-slider mt-4">
+		<!-- <div class="wave-mix-slider mt-4">
 			<label class="form-label">Wave 1 <span class="mx-2">⇄</span> Wave 2</label>
 			<input type="range" class="form-range" min="0" max="1" step="0.01" v-model="waveMix" />
+		</div> -->
+		<div class="mb-4" style="max-width: 400px; margin: 0 auto;">
+
+			<label for="waveMix" class="form-label">Wave Mix</label><br />
+			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="waveMix"
+				v-model="waveMix"
+				:aria-valuetext="`Wave 1: ${waveMixDisplay.wave1}%, Wave 2: ${waveMixDisplay.wave2}%`" />
+			<div class="slider-percentage">
+				Wave 1: {{ waveMixDisplay.wave1 }}% &nbsp; ⇄ &nbsp; Wave 2: {{ waveMixDisplay.wave2 }}%
+			</div>
 		</div>
 
 
+
 		<!-- Custom Waveform Controls -->
-		<div v-if="waveformType === 'custom'" id="custom-waveform-controls" class="mt-4">
+		<div v-if="selectedWave1 === 'custom' || selectedWave2 === 'custom'" id="custom-waveform-controls" class="mt-4">
 			<h4>Custom Waveform Harmonics</h4>
 			<div class="d-flex gap-4 align-items-start">
 				<div>
@@ -235,7 +246,12 @@ import { ref, watch, onMounted, onBeforeUnmount, watchEffect } from 'vue';
 import { nextTick } from 'vue';
 import FloatingWindow from './FloatingWindow.vue';
 import PresetBankPanel from './PresetBankPanel.vue';
+import { computed } from 'vue';
 
+const waveMixDisplay = computed(() => ({
+	wave1: Math.round((1 - waveMix.value) * 100),
+	wave2: Math.round(waveMix.value * 100)
+}));
 const unisonCount = ref(1);       // Options: 1, 3, 5
 const detuneCents = ref(0);       // Range: 0–50
 const stereoSpread = ref(0);       // Range: 0–1
@@ -381,7 +397,7 @@ const activeNotes = ref([]);
 
 
 function playNote(note) {
-
+	const groupGainNodes = [];
 	const freq = noteFrequencies[note];
 	if (!freq) return;
 
@@ -394,11 +410,13 @@ function playNote(note) {
 	const STEREO_SPREAD = stereoSpread.value;
 
 	const gainNode = audioCtx.createGain();
-	gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-	gainNode.gain.linearRampToValueAtTime(volume.value, audioCtx.currentTime + 0.02);
+	gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime); // silent start
 	gainNode.connect(analyser);
-
 	gainNode.connect(audioCtx.destination);
+
+	// Move this to *after* all connections are established
+	gainNode.gain.setTargetAtTime(volume.value, audioCtx.currentTime, 0.01);
+
 
 	const oscillators = [];
 	const panners = [];
@@ -424,7 +442,12 @@ function playNote(note) {
 
 	for (const group of waveGroups) {
 		if (!group.wave) continue;
+		const groupGainNode = audioCtx.createGain(); // Create a gain node for each group
+		groupGainNode.gain.value = Number.isFinite(group.gainValue) ? group.gainValue : 0;
 
+		groupGainNode.gain.value = group.gainValue;
+		groupGainNode.connect(gainNode);
+		groupGainNodes.push(groupGainNode);
 		for (let u = 0; u < group.unison; u++) {
 			const osc = audioCtx.createOscillator();
 			const gain = audioCtx.createGain();
@@ -435,6 +458,7 @@ function playNote(note) {
 				const real = new Float32Array(customReal.value);
 				const imag = new Float32Array(customReal.value.length);
 				osc.setPeriodicWave(audioCtx.createPeriodicWave(real, imag));
+				osc.isCustom = true;
 			} else {
 				osc.type = group.wave;
 			}
@@ -452,46 +476,18 @@ function playNote(note) {
 			pan.pan.value = panVal;
 
 			// Volume per group
-			gain.gain.value = (volume.value * group.gainValue) / (group.unison || 1);
+			// gain.gain.value = (volume.value * group.gainValue) / (group.unison || 1);
+			gain.gain.value = 1 / (group.unison || 1);
 
-			osc.connect(gain).connect(pan).connect(gainNode);
+
+
+			osc.connect(gain).connect(pan).connect(groupGainNode);
 			osc.start();
 
 			oscillators.push(osc);
 			panners.push(pan);
 		}
 	}
-
-	// for (let u = 0; u < UNISON_COUNT; u++) {
-	// 	const osc = audioCtx.createOscillator();
-
-	// 	if (wave === 'custom') {
-	// 		const real = new Float32Array(customReal.value);
-	// 		const imag = new Float32Array(customReal.value.length);
-	// 		osc.setPeriodicWave(audioCtx.createPeriodicWave(real, imag));
-	// 	} else {
-	// 		osc.type = wave;
-	// 	}
-
-	// 	const detuneOffset = (UNISON_COUNT === 1)
-	// 		? 0
-	// 		: ((u - Math.floor(UNISON_COUNT / 2)) * DETUNE_CENTS);
-	// 	osc.frequency.setValueAtTime(freq * Math.pow(2, pitchBend.value / 12), audioCtx.currentTime);
-	// 	osc.detune.value = detuneOffset;
-
-	// 	const g = audioCtx.createGain();
-	// 	g.gain.value = volume.value / UNISON_COUNT;
-
-	// 	const p = audioCtx.createStereoPanner();
-	// 	const panVal = (UNISON_COUNT === 1)
-	// 		? 0
-	// 		: ((u - Math.floor(UNISON_COUNT / 2)) / (UNISON_COUNT - 1)) * STEREO_SPREAD;
-	// 	p.pan.value = panVal;
-	// 	panners.push(p);
-	// 	osc.connect(g).connect(p).connect(gainNode);
-	// 	osc.start();
-	// 	oscillators.push(osc);
-	// }
 
 
 	let lfo = null, lfoGain = null;
@@ -508,6 +504,7 @@ function playNote(note) {
 		oscillators,
 		panners,
 		gainNode,
+		groupGainNodes,
 		startedAt: audioCtx.currentTime
 	});
 
@@ -603,7 +600,8 @@ function onKeyMouseEnter(id) {
 
 onMounted(() => {
 	drawWaveformFromReal(customReal.value);
-
+	drawWaveformFromReal(customReal.value, 'waveformPreview1');
+	drawWaveformFromReal(customReal.value, 'waveformPreview2');
 	// Set up MIDI immediately
 	if (navigator.requestMIDIAccess) {
 		navigator.requestMIDIAccess().then((access) => {
@@ -701,7 +699,8 @@ function drawWaveformFromReal(real, canvasId = 'waveformPreview') {
 
 // Re-render waveform whenever harmonics change
 watchEffect(() => {
-	drawWaveformFromReal(customReal.value);
+	drawWaveformFromReal(customReal.value, 'waveformPreview1');
+	drawWaveformFromReal(customReal.value, 'waveformPreview2');
 });
 
 function updateHarmonic(index, value) {
@@ -852,6 +851,31 @@ watch(stereoSpread, (val) => {
 
 	});
 });
+
+watch(waveMix, (val) => {
+	activeOscillators.forEach(({ groupGainNodes }) => {
+		if (groupGainNodes?.length === 2) {
+			groupGainNodes[0].gain.setTargetAtTime(1 - val, audioCtx.currentTime, 0.01);
+			groupGainNodes[1].gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
+		}
+	});
+});
+
+watch(customReal, (newReal) => {
+	const real = new Float32Array(newReal);
+	const imag = new Float32Array(real.length); // keep imaginary part zeroed
+
+	for (const { oscillators } of activeOscillators.values()) {
+		for (const osc of oscillators) {
+			if (osc.isCustom) {
+				const wave = audioCtx.createPeriodicWave(real, imag);
+				osc.setPeriodicWave(wave);
+			}
+		}
+	}
+});
+
+
 
 // Visualizer
 const analyser = audioCtx.createAnalyser();

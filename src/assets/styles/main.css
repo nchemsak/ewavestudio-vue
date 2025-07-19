@@ -2043,3 +2043,11 @@ input.spread-slider::-moz-range-thumb {
   overflow-x: auto;
   padding: 10px;
 }
+
+
+
+.waveform-visual {
+	border-radius: 8px;
+	background-color: #121212;
+	box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
