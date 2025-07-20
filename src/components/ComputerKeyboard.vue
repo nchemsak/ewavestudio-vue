@@ -3,7 +3,8 @@
 		<!-- Volume Slider -->
 		<div class="mb-4">
 			<label for="volume" class="form-label">Volume</label><br />
-			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume" v-model="volume" :aria-valuetext="`${Math.round(volume * 100)} percent`" />
+			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume"
+				v-model="volume" :aria-valuetext="`${Math.round(volume * 100)} percent`" />
 			<div class="slider-percentage" id="label-volume">{{ volumeLabel }}</div>
 		</div>
 
@@ -27,8 +28,14 @@
 		<!-- Keyboard Interface -->
 		<div class="mt-5 keyboard-container">
 			<div class="visualizer-stack d-flex flex-column gap-3 mb-4">
-				<canvas id="oscilloscope" width="600" height="200" class="waveform-visual"></canvas>
-				<canvas id="rainbow-visualizer" width="600" height="350" class="waveform-visual mt-3"></canvas>
+				<div class="row">
+					<div class="col-md-6">
+						<canvas id="oscilloscope" width="600" height="200" class="waveform-visual"></canvas>
+					</div>
+					<div class="col-md-6">
+						<canvas id="rainbow-visualizer" width="600" height="200" class="waveform-visual"></canvas>
+					</div>
+				</div>
 			</div>
 			<div class="row">
 				<div class="col-md-6">
