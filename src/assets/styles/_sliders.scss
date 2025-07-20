@@ -1,0 +1,53 @@
+.styled-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: #2a2a2a; /* dark track */
+    border-radius: 2px;
+    outline: none;
+    transition: background 0.3s;
+}
+
+/* Webkit Thumb */
+.styled-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ddd; /* light thumb */
+    cursor: pointer;
+    box-shadow: 0 0 2px rgba(255, 255, 255, 0.2);
+    transition:
+        background 0.3s,
+        transform 0.2s;
+}
+
+.styled-slider::-webkit-slider-thumb:hover {
+    background: #fff;
+    transform: scale(1.1);
+}
+
+/* Firefox */
+.styled-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 50%;
+    background: #ddd;
+    cursor: pointer;
+    box-shadow: 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+.styled-slider::-moz-range-track {
+    background: #2a2a2a;
+    height: 4px;
+    border-radius: 2px;
+}
+
+/* Progress fill before thumb (WebKit only) */
+.styled-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right, #fff 0%, #fff var(--val, 50%), #2a2a2a var(--val, 50%), #2a2a2a 100%);
+}

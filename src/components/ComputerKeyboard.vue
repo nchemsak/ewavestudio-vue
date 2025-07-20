@@ -3,85 +3,9 @@
 		<!-- Volume Slider -->
 		<div class="mb-4">
 			<label for="volume" class="form-label">Volume</label><br />
-			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume"
-				v-model="volume" :aria-valuetext="`${Math.round(volume * 100)} percent`" />
+			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume" v-model="volume" :aria-valuetext="`${Math.round(volume * 100)} percent`" />
 			<div class="slider-percentage" id="label-volume">{{ volumeLabel }}</div>
 		</div>
-
-		<!-- Waveform Selection -->
-		<!-- <div class="mb-4">
-			<label class="form-label d-block">Wave Shape:</label>
-			<div class="waveform-selector d-flex flex-wrap gap-3 mb-4">
-				<div v-for="wave in waveforms" :key="wave" class="waveform-option"
-					:class="{ selected: waveformType === wave }" @click="selectWave(wave)">
-					<template v-if="wave !== 'custom'">
-						<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
-					</template>
-<template v-else>
-						<div class="custom-wave-box text-center">
-							<canvas id="waveformPreview" width="27" height="27"
-								style="max-width: 27px; max-height: 27px;"></canvas>
-						</div>
-					</template>
-</div>
-</div>
-</div> -->
-
-		<div class="mb-4">
-			<label class="form-label d-block">Waveform Group 1:</label>
-			<div class="waveform-selector d-flex flex-wrap gap-3">
-				<div v-for="wave in waveforms" :key="wave + '-1'" class="waveform-option"
-					:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
-					@click="selectWave1(wave)">
-					<template v-if="wave !== 'custom'">
-						<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
-					</template>
-					<template v-else>
-						<div class="custom-wave-box text-center">
-							<canvas id="waveformPreview1" width="27" height="27"
-								style="max-width: 27px; max-height: 27px;"></canvas>
-						</div>
-					</template>
-				</div>
-			</div>
-		</div>
-		<div class="mb-4">
-			<label class="form-label d-block">Waveform Group 2:</label>
-			<div class="waveform-selector d-flex flex-wrap gap-3">
-				<div v-for="wave in waveforms" :key="wave + '-2'" class="waveform-option"
-					:class="{ selected: selectedWave2 === wave, disabled: selectedWave1 === wave }"
-					@click="selectWave2(wave)">
-					<template v-if="wave !== 'custom'">
-						<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
-					</template>
-					<template v-else>
-						<div class="custom-wave-box text-center">
-							<canvas id="waveformPreview2" width="27" height="27"
-								style="max-width: 27px; max-height: 27px;"></canvas>
-						</div>
-					</template>
-				</div>
-			</div>
-		</div>
-
-
-
-		<!-- <div class="wave-mix-slider mt-4">
-			<label class="form-label">Wave 1 <span class="mx-2">⇄</span> Wave 2</label>
-			<input type="range" class="form-range" min="0" max="1" step="0.01" v-model="waveMix" />
-		</div> -->
-		<div class="mb-4" style="max-width: 400px; margin: 0 auto;">
-
-			<label for="waveMix" class="form-label">Wave Mix</label><br />
-			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="waveMix"
-				v-model="waveMix"
-				:aria-valuetext="`Wave 1: ${waveMixDisplay.wave1}%, Wave 2: ${waveMixDisplay.wave2}%`" />
-			<div class="slider-percentage">
-				Wave 1: {{ waveMixDisplay.wave1 }}% &nbsp; ⇄ &nbsp; Wave 2: {{ waveMixDisplay.wave2 }}%
-			</div>
-		</div>
-
-
 
 		<!-- Custom Waveform Controls -->
 		<div v-if="selectedWave1 === 'custom' || selectedWave2 === 'custom'" id="custom-waveform-controls" class="mt-4">
@@ -106,7 +30,87 @@
 				<canvas id="oscilloscope" width="600" height="200" class="waveform-visual"></canvas>
 				<canvas id="rainbow-visualizer" width="600" height="350" class="waveform-visual mt-3"></canvas>
 			</div>
+			<div class="row">
+				<div class="col-md-6">
+					<div class="mb-4 waveformgroup">
+						<label class="form-label d-block">Waveform Group 1</label>
+						<div class="waveform-selector d-flex flex-wrap gap-3">
+							<div v-for="wave in waveforms" :key="wave + '-1'" class="waveform-option"
+								:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
+								@click="selectWave1(wave)">
+								<template v-if="wave !== 'custom'">
+									<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
+								</template>
+								<template v-else>
+									<div class="custom-wave-box text-center">
+										<canvas id="waveformPreview1" width="27" height="27"
+											style="max-width: 27px; max-height: 27px;"></canvas>
+									</div>
+								</template>
+							</div>
+						</div>
+						<div class="unison-controls">
+							<label>Unison Count</label>
+							<input type="range" class="styled-slider" min="1" max="5" v-model="unisonCount1" />
 
+							<label>Detune</label>
+							<input type="range" class="styled-slider" min="0" max="50" step="1"
+								v-model="detuneCents1" />
+
+							<label>Stereo Spread</label>
+							<input type="range" class="styled-slider" min="0" max="1" step="0.01"
+								v-model="stereoSpread1" />
+						</div>
+					</div>
+				</div>
+				<div class="col-md-6">
+					<div class="mb-4 waveformgroup">
+						<label class="form-label d-block">Waveform Group 2</label>
+						<div class="waveform-selector d-flex flex-wrap gap-3">
+							<div v-for="wave in waveforms" :key="wave + '-2'" class="waveform-option"
+								:class="{ selected: selectedWave2 === wave, disabled: selectedWave1 === wave }"
+								@click="selectWave2(wave)">
+								<template v-if="wave !== 'custom'">
+									<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
+								</template>
+								<template v-else>
+									<div class="custom-wave-box text-center">
+										<canvas id="waveformPreview2" width="27" height="27"
+											style="max-width: 27px; max-height: 27px;"></canvas>
+									</div>
+								</template>
+							</div>
+						</div>
+						<div class="unison-controls">
+							<label>Unison Count</label>
+							<input type="range" class="styled-slider" min="1" max="5" v-model="unisonCount2" />
+
+							<label>Detune</label>
+							<input type="range" class="styled-slider" min="0" max="50" step="1"
+								v-model="detuneCents2" />
+
+							<label>Stereo Spread</label>
+							<input type="range" class="styled-slider" min="0" max="1" step="0.01"
+								v-model="stereoSpread2" />
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-md-12">
+					<div class="mb-4" style="max-width: 400px; margin: 0 auto;">
+
+						<label for="waveMix" class="form-label">Wave Mix</label><br />
+						<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="waveMix"
+							v-model="waveMix"
+							:aria-valuetext="`Wave 1: ${waveMixDisplay.wave1}%, Wave 2: ${waveMixDisplay.wave2}%`" />
+						<div class="slider-percentage">
+							Wave 1: {{ waveMixDisplay.wave1 }}% &nbsp; ⇄ &nbsp; Wave 2: {{ waveMixDisplay.wave2 }}%
+						</div>
+					</div>
+				</div>
+
+			</div>
 			<ul class="keyboard">
 				<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
 
@@ -185,59 +189,8 @@
 			@update:isTyping="val => isTyping = val" />
 	</FloatingWindow>
 
-	<!-- <div class="mt-3 p-3 bg-light rounded">
-		<h5 class="mb-3">Unison Controls</h5>
 
 
-		<label class="form-label">Unison Voices</label>
-		<select class="form-select mb-3" v-model="unisonCount">
-			<option :value="1">1 (Mono)</option>
-			<option :value="3">3</option>
-			<option :value="5">5</option>
-		</select>
-
-
-		<label class="form-label">Detune Amount (cents)</label>
-
-		<input type="range" v-model="detuneCents" class="form-range detune-slider" min="0" max="50" step="1"
-			:aria-valuetext="`${detuneCents} cents detune`">
-
-		<div class="small text-muted">{{ detuneCents }} cents</div>
-
-		<label class="form-label mt-3">Stereo Spread</label>
-
-		<input type="range" v-model="stereoSpread" class="form-range spread-slider" min="0" max="1" step="0.01"
-			:aria-valuetext="`${Math.round(stereoSpread * 100)} percent stereo spread`">
-
-		<div class="small text-muted">{{ stereoSpread }}</div>
-	</div> -->
-	<div class="unison-controls mt-4 row">
-		<!-- Group 1 Unison -->
-		<div class="col-md-6">
-			<h6>Unison Settings – Group 1</h6>
-			<label>Unison Count</label>
-			<input type="range" min="1" max="5" v-model="unisonCount1" />
-
-			<label>Detune (cents)</label>
-			<input type="range" min="0" max="50" step="1" v-model="detuneCents1" />
-
-			<label>Stereo Spread</label>
-			<input type="range" min="0" max="1" step="0.01" v-model="stereoSpread1" />
-		</div>
-
-		<!-- Group 2 Unison -->
-		<div class="col-md-6">
-			<h6>Unison Settings – Group 2</h6>
-			<label>Unison Count</label>
-			<input type="range" min="1" max="5" v-model="unisonCount2" />
-
-			<label>Detune (cents)</label>
-			<input type="range" min="0" max="50" step="1" v-model="detuneCents2" />
-
-			<label>Stereo Spread</label>
-			<input type="range" min="0" max="1" step="0.01" v-model="stereoSpread2" />
-		</div>
-	</div>
 
 </template>
 
@@ -742,7 +695,8 @@ function loadFromBank(index) {
 
 	selectedWave1.value = data.selectedWave1 || null;
 	selectedWave2.value = data.selectedWave2 || null;
-	waveMix.value = Number.isFinite(data.waveMix) ? data.waveMix : 0.5;
+	waveMix.value = data?.waveMix ?? 0.5;
+
 
 	customReal.value = data.customReal ? [...data.customReal] : [0, 0, 0, 0, 0];
 	drawWaveformFromReal();
@@ -979,6 +933,13 @@ function drawRainbowVisualizer() {
 	}
 	draw();
 }
-
+// document.querySelectorAll('.styled-slider').forEach(slider => {
+//   const updateSlider = e => {
+//     const val = ((slider.value - slider.min) / (slider.max - slider.min)) * 100;
+//     slider.style.setProperty('--val', `${val}%`);
+//   };
+//   slider.addEventListener('input', updateSlider);
+//   updateSlider(); // initial
+// });
 
 </script>
