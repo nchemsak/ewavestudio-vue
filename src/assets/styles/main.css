@@ -1146,30 +1146,6 @@ div.key {
   background-color: black;
 }
 
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none !important;
-  width: 25px;
-  height: 25px;
-  -webkit-appearance: none;
-  border-radius: 8px;
-  -moz-border-radius: 8px;
-  -webkit-border-radius: 8px;
-  /* background: RGBA(95, 186, 255, 1);
-  background: -moz-linear-gradient(left, #5fbaff 0%, #4c94cc 50%, #264a66 100%);
-  background: -webkit-gradient(
-    linear,
-    left top,
-    right top,
-    color-stop(0%, #5fbaff),
-    color-stop(50%, #4c94cc),
-    color-stop(100%, #264a66)
-  );
-  background: -webkit-linear-gradient(left, #5fbaff 0%, #4c94cc 50%, #264a66 100%);
-  background: -o-linear-gradient(left, #5fbaff 0%, #4c94cc 50%, #264a66 100%);
-  background: -ms-linear-gradient(left, #5fbaff 0%, #4c94cc 50%, #264a66 100%);
-  background: linear-gradient(to right, #5fbaff 0%, #4c94cc 50%, #264a66 100%); */
-}
-
 .seqOptin {
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -1705,27 +1681,6 @@ img #record.recording {
   margin-top: 16px;
 }
 
-#real-sliders,
-#imag-sliders {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.slider-ticks {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75em;
-  margin-top: 2px;
-  padding: 0 5px;
-  color: #ccc;
-  max-width: 150px;
-}
-
-input[type="range"]::-webkit-slider-runnable-track {
-  background: repeating-linear-gradient(to right, #ddd, #ddd 1px, transparent 1px, transparent 20%);
-}
-
 /* .waveform-option {
 	cursor: pointer;
 	padding: 6px;
@@ -1750,7 +1705,7 @@ input[type="range"]::-webkit-slider-runnable-track {
 	background-color: rgba(255, 167, 38, 0.2);
 } */
 .waveformgroup label {
-  color:white;
+  color: white;
 }
 .waveformgroup {
   border: 1px solid grey;
@@ -1772,7 +1727,7 @@ input[type="range"]::-webkit-slider-runnable-track {
   justify-content: center;
   width: 64px;
   height: 64px;
-   background-color: rgba(49, 51, 54, 1);
+  background-color: rgba(49, 51, 54, 1);
 }
 
 .waveform-option img {
@@ -1793,7 +1748,8 @@ input[type="range"]::-webkit-slider-runnable-track {
 
 .waveform-option.disabled {
   opacity: 0.4;
-  pointer-events: none;
+  cursor: not-allowed;
+  filter: hue-rotate(0deg) saturate(500%) brightness(80%);
 }
 
 input[type="range"] {
@@ -1801,117 +1757,6 @@ input[type="range"] {
   background: transparent;
   margin: 0;
   padding: 0;
-}
-
-/* Style the track to show tick marks using a repeating gradient */
-input[type="range"]::-webkit-slider-runnable-track {
-  height: 6px;
-  background: repeating-linear-gradient(to right, #ddd, #ddd 1px, transparent 1px, transparent 20%);
-  border-radius: 3px;
-}
-
-input[type="range"]::-moz-range-track {
-  height: 6px;
-  background: repeating-linear-gradient(to right, #ddd, #ddd 1px, transparent 1px, transparent 20%);
-  border-radius: 3px;
-}
-
-input[type="range"]::-ms-track {
-  height: 6px;
-  background: transparent;
-  border-color: transparent;
-  color: transparent;
-}
-
-/* Optional: style the thumb (drag handle) */
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  height: 20px;
-  width: 20px;
-  /* background: #5c9ded; */
-  border-radius: 50%;
-  cursor: grab;
-  margin-top: -7px; /* Align thumb with track */
-}
-
-input[type="range"]::-moz-range-thumb {
-  height: 20px;
-  width: 20px;
-  /* background: #5c9ded; */
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-input[type="range"]::-ms-thumb {
-  height: 20px;
-  width: 20px;
-  /* background: #5c9ded; */
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.slider-wrapper {
-  max-width: 300px;
-  margin: 0 auto;
-  text-align: center;
-  position: relative;
-}
-
-.slider-percentage {
-  font-size: 0.8em;
-  margin-top: 4px;
-  color: white;
-}
-
-input[type="range"].styled-slider {
-  width: 100%;
-  height: 6px;
-  background: linear-gradient(to right, #333 0%, #666 100%);
-  border-radius: 4px;
-  outline: none;
-  margin: 0;
-  padding: 0;
-}
-
-input[type="range"].styled-slider::-webkit-slider-thumb {
-  height: 18px;
-  width: 18px;
-  margin-top: -6px;
-}
-
-input[type="range"].styled-slider::-moz-range-thumb {
-  height: 18px;
-  width: 18px;
-}
-#darkWorkOne .slider-wrapper {
-  max-width: 300px;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  cursor: grab;
-}
-
-input[type="range"]:active::-webkit-slider-thumb {
-  cursor: grabbing;
-}
-
-/* Firefox */
-input[type="range"]::-moz-range-thumb {
-  cursor: grab;
-}
-
-input[type="range"]:active::-moz-range-thumb {
-  cursor: grabbing;
-}
-
-input[type="range"]::-ms-thumb {
-  cursor: grab;
-}
-
-input[type="range"]:active::-ms-thumb {
-  cursor: grabbing;
 }
 
 .waveform-selector {
@@ -1927,18 +1772,6 @@ input[type="range"]:active::-ms-thumb {
   position: fixed;
   top: 100px; /* Distance from top of viewport */
   left: 0px; /* Distance from left of viewport */
-  padding: 20px;
-  display: block;
-  background-color: white;
-  border-radius: 5px;
-  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.25);
-  z-index: 100;
-}
-
-#waveformMixSliders {
-  position: fixed;
-  top: 100px; /* Distance from top of viewport */
-  right: 0px; /* Distance from left of viewport */
   padding: 20px;
   display: block;
   background-color: white;
@@ -1968,66 +1801,11 @@ input[type="range"]:active::-ms-thumb {
   /* border-color: #0d6efd; */
 }
 
-.disabled-slider {
-  background-color: #e0e0e0 !important; /* light gray */
-  pointer-events: none; /* prevent interaction */
-  opacity: 0.6; /* slightly faded */
-}
 .midiModeWrapper {
   text-align: center;
 }
 #midiMode {
   margin: 0 auto;
-}
-
-/* Target only the detune and stereo spread sliders */
-input.detune-slider,
-input.spread-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 0.5rem;
-  background: #ccc;
-  border-radius: 5px;
-  outline: none;
-  cursor: pointer;
-}
-
-/* WebKit slider track */
-input.detune-slider::-webkit-slider-runnable-track,
-input.spread-slider::-webkit-slider-runnable-track {
-  height: 0.5rem;
-  background: #ccc;
-  border-radius: 5px;
-}
-
-/* WebKit slider thumb */
-input.detune-slider::-webkit-slider-thumb,
-input.spread-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  height: 20px;
-  width: 20px;
-  border-radius: 50%;
-  background: #007bff;
-  margin-top: -8px; /* Centers thumb vertically */
-  cursor: pointer;
-}
-
-/* Firefox */
-input.detune-slider::-moz-range-track,
-input.spread-slider::-moz-range-track {
-  height: 0.5rem;
-  background: #ccc;
-  border-radius: 5px;
-}
-
-input.detune-slider::-moz-range-thumb,
-input.spread-slider::-moz-range-thumb {
-  height: 20px;
-  width: 20px;
-  border-radius: 50%;
-  background: #007bff;
-  cursor: pointer;
 }
 
 #active-notes-display {
@@ -2054,10 +1832,24 @@ input.spread-slider::-moz-range-thumb {
   padding: 10px;
 }
 
-
-
 .waveform-visual {
-	border-radius: 8px;
-	background-color: #121212;
-	box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  border-radius: 8px;
+  background-color: #121212;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.slider-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+  color: #ccc;
+}
+
+.slider-label-row span {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #888;
 }

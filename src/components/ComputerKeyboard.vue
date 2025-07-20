@@ -44,7 +44,9 @@
 						<div class="waveform-selector d-flex flex-wrap gap-3">
 							<div v-for="wave in waveforms" :key="wave + '-1'" class="waveform-option"
 								:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
-								@click="selectWave1(wave)">
+								@click="selectedWave2 !== wave && selectWave1(wave)">
+
+								<!-- @click="selectWave1(wave)"> -->
 								<template v-if="wave !== 'custom'">
 									<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
 								</template>
@@ -60,9 +62,13 @@
 							<label>Unison Count</label>
 							<input type="range" class="styled-slider" min="1" max="5" v-model="unisonCount1" />
 
-							<label>Detune</label>
+							<div class="slider-label-row">
+								<label>Detune</label>
+								<span>{{ detuneCents1 }} cents</span>
+							</div>
 							<input type="range" class="styled-slider" min="0" max="50" step="1"
 								v-model="detuneCents1" />
+
 
 							<label>Stereo Spread</label>
 							<input type="range" class="styled-slider" min="0" max="1" step="0.01"
@@ -76,7 +82,8 @@
 						<div class="waveform-selector d-flex flex-wrap gap-3">
 							<div v-for="wave in waveforms" :key="wave + '-2'" class="waveform-option"
 								:class="{ selected: selectedWave2 === wave, disabled: selectedWave1 === wave }"
-								@click="selectWave2(wave)">
+								@click="selectedWave1 !== wave && selectWave2(wave)">
+								<!-- @click="selectWave2(wave)"> -->
 								<template v-if="wave !== 'custom'">
 									<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
 								</template>
@@ -92,9 +99,13 @@
 							<label>Unison Count</label>
 							<input type="range" class="styled-slider" min="1" max="5" v-model="unisonCount2" />
 
-							<label>Detune</label>
+							<div class="slider-label-row">
+								<label>Detune</label>
+								<span>{{ detuneCents2 }} cents</span>
+							</div>
 							<input type="range" class="styled-slider" min="0" max="50" step="1"
 								v-model="detuneCents2" />
+
 
 							<label>Stereo Spread</label>
 							<input type="range" class="styled-slider" min="0" max="1" step="0.01"
@@ -112,7 +123,8 @@
 							v-model="waveMix"
 							:aria-valuetext="`Wave 1: ${waveMixDisplay.wave1}%, Wave 2: ${waveMixDisplay.wave2}%`" />
 						<div class="slider-percentage">
-							Wave 1: {{ waveMixDisplay.wave1 }}% &nbsp; ⇄ &nbsp; Wave 2: {{ waveMixDisplay.wave2 }}%
+							<span class="wave1percent">Wave 1: {{ waveMixDisplay.wave1 }}%</span>&nbsp; ⇄ &nbsp;<span
+								class="wave2percent">Wave 2: {{ waveMixDisplay.wave2 }}%</span>
 						</div>
 					</div>
 				</div>
@@ -202,6 +214,8 @@
 </template>
 
 <script setup>
+const isDisabled = (wave) => selectedWave2.value === wave;
+
 import { ref, watch, onMounted, onBeforeUnmount, watchEffect } from 'vue';
 import { nextTick } from 'vue';
 import FloatingWindow from './FloatingWindow.vue';
