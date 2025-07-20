@@ -52,8 +52,7 @@
 								</template>
 								<template v-else>
 									<div class="custom-wave-box text-center">
-										<canvas id="waveformPreview1" width="27" height="27"
-											style="max-width: 27px; max-height: 27px;"></canvas>
+										<canvas id="waveformPreview1"></canvas>
 									</div>
 								</template>
 							</div>
@@ -89,8 +88,7 @@
 								</template>
 								<template v-else>
 									<div class="custom-wave-box text-center">
-										<canvas id="waveformPreview2" width="27" height="27"
-											style="max-width: 27px; max-height: 27px;"></canvas>
+										<canvas id="waveformPreview2"></canvas>
 									</div>
 								</template>
 							</div>

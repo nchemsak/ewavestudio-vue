@@ -7,7 +7,7 @@
 		0 10px 25px rgba(0, 0, 0, 0.6);
 	display: inline-block;
 	position: relative;
-	max-width: 990px;
+	max-width: 740px;
 	color: white;
 	&::before {
 		content: "";
@@ -33,8 +33,9 @@
 
 	.keyboard-key {
 		position: relative;
-		width: 40px;
-
+		// width: 40px;
+		// this 100% will change the width of the key based on the width of .keyboard-container. If .keyboard-container is changed in width, this will auto update, but the black keys WILL NOT. You'll have to manually change those.
+		width: 100%;
 		height: 174px;
 		display: flex;
 		justify-content: center;
@@ -142,8 +143,8 @@
 		.upper-key {
 			position: absolute;
 			top: -2px;
-			left: 60%;
-			width: 26px;
+			left: 65%;
+			width: 30px;
 			height: 100px;
 
 			background: linear-gradient(to bottom, #2c2c2c 0%, #1b1b1b 80%, #101010 100%);
