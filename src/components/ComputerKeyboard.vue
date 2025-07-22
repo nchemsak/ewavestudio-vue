@@ -58,8 +58,11 @@
 							</div>
 						</div>
 						<div class="unison-controls">
-							<label>Unison Count</label>
-							<input type="range" class="styled-slider" min="1" max="5" v-model="unisonCount1" />
+							<div class="slider-label-row">
+								<label>Unison Count</label>
+								<span>{{ unisonCount1 }}</span>
+							</div>
+							<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount1" />
 
 							<div class="slider-label-row">
 								<label>Detune</label>
@@ -68,8 +71,10 @@
 							<input type="range" class="styled-slider" min="0" max="50" step="1"
 								v-model="detuneCents1" />
 
-
-							<label>Stereo Spread</label>
+							<div class="slider-label-row">
+								<label>Stereo Spread</label>
+								<span>{{ stereoSpread1 }} </span>
+							</div>
 							<input type="range" class="styled-slider" min="0" max="1" step="0.01"
 								v-model="stereoSpread1" />
 						</div>
@@ -94,8 +99,11 @@
 							</div>
 						</div>
 						<div class="unison-controls">
-							<label>Unison Count</label>
-							<input type="range" class="styled-slider" min="1" max="5" v-model="unisonCount2" />
+							<div class="slider-label-row">
+								<label>Unison Count</label>
+								<span>{{ unisonCount2 }}</span>
+							</div>
+							<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount2" />
 
 							<div class="slider-label-row">
 								<label>Detune</label>
@@ -105,7 +113,10 @@
 								v-model="detuneCents2" />
 
 
-							<label>Stereo Spread</label>
+							<div class="slider-label-row">
+								<label>Stereo Spread</label>
+								<span>{{ stereoSpread2 }} </span>
+							</div>
 							<input type="range" class="styled-slider" min="0" max="1" step="0.01"
 								v-model="stereoSpread2" />
 						</div>
@@ -224,9 +235,9 @@ const waveMixDisplay = computed(() => ({
 	wave1: Math.round((1 - waveMix.value) * 100),
 	wave2: Math.round(waveMix.value * 100)
 }));
-const unisonCount = ref(1);       // Options: 1, 3, 5
-const detuneCents = ref(0);       // Range: 0–50
-const stereoSpread = ref(0);       // Range: 0–1
+// const unisonCount = ref(1);       
+// const detuneCents = ref(0);       
+// const stereoSpread = ref(0);       
 const showPresets = ref(true);
 
 
@@ -377,9 +388,9 @@ function playNote(note) {
 	if (el) el.classList.add('active');
 
 	// === Detune & Stereo Spread Settings ===
-	const UNISON_COUNT = unisonCount.value;
-	const DETUNE_CENTS = detuneCents.value;
-	const STEREO_SPREAD = stereoSpread.value;
+	// const UNISON_COUNT = unisonCount.value;
+	// const DETUNE_CENTS = detuneCents.value;
+	// const STEREO_SPREAD = stereoSpread.value;
 
 	const gainNode = audioCtx.createGain();
 	gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime); // silent start
@@ -442,10 +453,19 @@ function playNote(note) {
 			osc.detune.value = detuneOffset;
 
 			// Panning
-			const panVal = (group.unison === 1)
-				? 0
-				: ((u - Math.floor(group.unison / 2)) / (group.unison - 1)) * group.spread;
+			let panVal = 0;
+
+			if (group.unison > 1 && Number.isFinite(group.spread)) {
+				panVal = ((u - Math.floor(group.unison / 2)) / (group.unison - 1)) * group.spread;
+			}
+
+			if (!Number.isFinite(panVal)) {
+				console.warn('Invalid panVal:', panVal, 'unison:', group.unison, 'spread:', group.spread);
+				panVal = 0;
+			}
+
 			pan.pan.value = panVal;
+
 
 			// Volume per group
 			// gain.gain.value = (volume.value * group.gainValue) / (group.unison || 1);
@@ -791,26 +811,79 @@ watch(modulationDepth, (depth) => {
 
 
 // Real-time Detune Adjustment
-watch(detuneCents, (val) => {
+// watch(detuneCents, (val) => {
+// 	activeOscillators.forEach(({ oscillators }) => {
+// 		const unison = unisonCount.value;
+// 		if (unison === 1) return;
+
+// 		let idx = 0;
+// 		for (let u = 0; u < unison; u++) {
+// 			const detuneOffset = (u - Math.floor(unison / 2)) * val;
+// 			const osc = oscillators[idx++];
+// 			if (osc && osc.detune) {
+// 				osc.detune.setTargetAtTime(detuneOffset, audioCtx.currentTime, 0.01);
+// 			}
+// 		}
+// 	});
+// });
+
+
+watch(detuneCents1, (val) => {
 	activeOscillators.forEach(({ oscillators }) => {
-		const unison = unisonCount.value;
+		const unison = unisonCount1.value;
 		if (unison === 1) return;
 
 		let idx = 0;
 		for (let u = 0; u < unison; u++) {
 			const detuneOffset = (u - Math.floor(unison / 2)) * val;
 			const osc = oscillators[idx++];
-			if (osc && osc.detune) {
+			if (osc?.detune) {
 				osc.detune.setTargetAtTime(detuneOffset, audioCtx.currentTime, 0.01);
 			}
 		}
 	});
 });
 
+watch(detuneCents2, (val) => {
+	activeOscillators.forEach(({ oscillators }) => {
+		const unison = unisonCount2.value;
+		if (unison === 1) return;
+
+		let idx = unisonCount1.value; // Start at offset
+		for (let u = 0; u < unison; u++) {
+			const detuneOffset = (u - Math.floor(unison / 2)) * val;
+			const osc = oscillators[idx++];
+			if (osc?.detune) {
+				osc.detune.setTargetAtTime(detuneOffset, audioCtx.currentTime, 0.01);
+			}
+		}
+	});
+});
+
+
+
 // Real-time Stereo Spread Adjustment
-watch(stereoSpread, (val) => {
+// watch(stereoSpread, (val) => {
+// 	activeOscillators.forEach(({ panners }) => {
+// 		const unison = unisonCount.value;
+// 		if (!panners || unison === 1) return;
+
+// 		let idx = 0;
+// 		for (let u = 0; u < unison; u++) {
+// 			const panVal = ((u - Math.floor(unison / 2)) / (unison - 1 || 1)) * val;
+// 			const panner = panners[idx++];
+// 			if (panner) {
+// 				panner.pan.setTargetAtTime(panVal, audioCtx.currentTime, 0.01);
+// 			}
+// 		}
+
+// 	});
+// });
+
+
+watch(stereoSpread1, (val) => {
 	activeOscillators.forEach(({ panners }) => {
-		const unison = unisonCount.value;
+		const unison = unisonCount1.value;
 		if (!panners || unison === 1) return;
 
 		let idx = 0;
@@ -821,9 +894,25 @@ watch(stereoSpread, (val) => {
 				panner.pan.setTargetAtTime(panVal, audioCtx.currentTime, 0.01);
 			}
 		}
-
 	});
 });
+
+watch(stereoSpread2, (val) => {
+	activeOscillators.forEach(({ panners }) => {
+		const unison = unisonCount2.value;
+		if (!panners || unison === 1) return;
+
+		let idx = unisonCount1.value;
+		for (let u = 0; u < unison; u++) {
+			const panVal = ((u - Math.floor(unison / 2)) / (unison - 1 || 1)) * val;
+			const panner = panners[idx++];
+			if (panner) {
+				panner.pan.setTargetAtTime(panVal, audioCtx.currentTime, 0.01);
+			}
+		}
+	});
+});
+
 
 watch(waveMix, (val) => {
 	activeOscillators.forEach(({ groupGainNodes }) => {
