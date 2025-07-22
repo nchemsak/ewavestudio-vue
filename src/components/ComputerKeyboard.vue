@@ -147,18 +147,12 @@
 
 					<div class="mt-5">
 						<h5>Effects</h5>
-
-
-
-
 						<div class="form-check mt-3">
 							<input class="form-check-input" type="checkbox" id="delayEnabled" v-model="delayEnabled">
 							<label class="form-check-label" for="delayEnabled">
 								Enable Delay
 							</label>
 						</div>
-
-
 						<div>
 							<label>Delay Time (ms)</label>
 							<input type="range" min="0" max="1000" step="10" v-model="delayTime" />
@@ -172,13 +166,9 @@
 							<input type="range" min="0" max="1" step="0.01" v-model="delayWetMix" />
 						</div>
 					</div>
-
-
 				</div>
 
 			</div>
-
-
 			<ul class="keyboard">
 				<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
 
@@ -290,9 +280,7 @@ const waveMixDisplay = computed(() => ({
 	wave1: Math.round((1 - waveMix.value) * 100),
 	wave2: Math.round(waveMix.value * 100)
 }));
-// const unisonCount = ref(1);       
-// const detuneCents = ref(0);       
-// const stereoSpread = ref(0);       
+
 const showPresets = ref(true);
 
 
@@ -344,9 +332,6 @@ const selectWave2 = (wave) => {
 		}
 	}
 };
-
-
-
 
 const preloadImages = () => {
 	waveforms.forEach(w => {
@@ -444,11 +429,6 @@ function playNote(note) {
 
 	const el = document.querySelector(`[data-note="${note}"]`);
 	if (el) el.classList.add('active');
-
-	// === Detune & Stereo Spread Settings ===
-	// const UNISON_COUNT = unisonCount.value;
-	// const DETUNE_CENTS = detuneCents.value;
-	// const STEREO_SPREAD = stereoSpread.value;
 
 	const gainNode = audioCtx.createGain();
 	gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime); // silent start
@@ -563,8 +543,6 @@ function playNote(note) {
 
 	if (!activeNotes.value.includes(note)) activeNotes.value.push(note);
 }
-
-
 
 function stopNote(note) {
 	const active = activeOscillators.get(note);
@@ -688,8 +666,6 @@ onMounted(() => {
 	window.addEventListener('mouseup', () => isMouseDown.value = false);
 	drawOscilloscope();
 	drawRainbowVisualizer();
-
-
 });
 
 
@@ -819,8 +795,6 @@ function loadFromBank(index) {
 	delayWetMix.value = data.delayWetMix ?? 0.5;
 	delayEnabled.value = data.delayEnabled ?? true;
 }
-
-
 
 
 function renameBank(index) {
@@ -998,9 +972,6 @@ watch(customReal, (newReal) => {
 });
 
 
-
-
-
 const bufferLength = analyser.frequencyBinCount;
 const dataArray = new Uint8Array(bufferLength);
 function drawOscilloscope() {
@@ -1056,7 +1027,6 @@ function drawRainbowVisualizer() {
 		'#B957C6', '#995CD1', '#3E48A7'
 
 	];
-	// analyser.fftSize = 1024;
 	analyser.fftSize = 2048;
 
 	const bufferLength = analyser.fftSize;
@@ -1101,7 +1071,7 @@ function drawRainbowVisualizer() {
 }
 
 
-//effects
+//EFFECTS
 
 
 
