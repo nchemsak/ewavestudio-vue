@@ -1,6 +1,6 @@
 <template>
 	<div id="darkWorkOne" class="p-3 computer-keyboard">
-	
+
 		<!-- Volume Slider -->
 		<div class="mb-4">
 			<label for="volume" class="form-label">Volume</label><br />
@@ -124,11 +124,7 @@
 					</div>
 				</div>
 			</div>
-				<div class="studio-wrap">
-			<img src="/images/left_speaker.png" class="speaker speakerLeft">
 
-			<img src="/images/right_speaker.png" class="speaker speakerRight">
-		</div>
 			<div class="row">
 				<div class="col-md-12">
 					<div class="mb-4" style="max-width: 400px; margin: 0 auto;">
@@ -215,6 +211,11 @@
 			<option value="osc">MIDI Keyboard (Synth)</option>
 			<option value="sample" disabled>Sampler (Coming Soon)</option>
 		</select>
+	</div>
+	<div class="studio-wrap">
+		<img src="/images/left_speaker.png" class="speaker speakerLeft">
+
+		<img src="/images/right_speaker.png" class="speaker speakerRight">
 	</div>
 	<FloatingWindow v-if="showPresets" @close="showPresets = false">
 		<template #title>Presets</template>
@@ -503,7 +504,10 @@ function playNote(note) {
 		panners,
 		gainNode,
 		groupGainNodes,
-		startedAt: audioCtx.currentTime
+		startedAt: audioCtx.currentTime,
+		baseFreq: freq,
+		lfo,
+		lfoGain
 	});
 
 	if (!activeNotes.value.includes(note)) activeNotes.value.push(note);
@@ -810,8 +814,37 @@ watch(pitchBend, (bend) => {
 });
 
 watch(modulationDepth, (depth) => {
-	activeOscillators.forEach(({ lfoGain }) => {
-		if (lfoGain) lfoGain.gain.setTargetAtTime(depth * 10, audioCtx.currentTime, 0.01);
+	activeOscillators.forEach((oscData) => {
+		const { oscillators, lfo, lfoGain } = oscData;
+
+		if (depth > 0) {
+			// Create LFO if it doesn't exist yet
+			if (!lfo || !lfoGain) {
+				const newLFO = audioCtx.createOscillator();
+				const newLFOGain = audioCtx.createGain();
+				newLFO.frequency.value = 6;
+				newLFOGain.gain.value = depth * 10;
+
+				newLFO.connect(newLFOGain).connect(oscillators[0].frequency);
+				newLFO.start();
+
+				oscData.lfo = newLFO;
+				oscData.lfoGain = newLFOGain;
+			} else {
+				lfoGain.gain.setTargetAtTime(depth * 10, audioCtx.currentTime, 0.01);
+			}
+		} else {
+			// Stop and disconnect LFO if modulation set to zero
+			if (lfo) {
+				try { lfo.stop(); } catch { }
+				lfo.disconnect();
+				oscData.lfo = null;
+			}
+			if (lfoGain) {
+				lfoGain.disconnect();
+				oscData.lfoGain = null;
+			}
+		}
 	});
 });
 

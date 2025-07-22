@@ -14,8 +14,7 @@ body {
   background-image: url("../images/black-thread.png");
   background: linear-gradient(rgba(251, 139, 166, 0.7), rgba(224, 140, 194, 0.8), rgba(194, 139, 228, 0.9));
   background: radial-gradient(circle at center, #d0a5d0, #6e7d92);
-
-  background: radial-gradient(circle at center, #d9a0c3 0%, #9b8cb4 50%, #736c92 100%);
+  background: radial-gradient(circle at center, #d9a0c3 0%, #9b8cb4 75%, #736c92 100%);
 }
 
 *,
