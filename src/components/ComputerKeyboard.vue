@@ -1,5 +1,6 @@
 <template>
 	<div id="darkWorkOne" class="p-3 computer-keyboard">
+	
 		<!-- Volume Slider -->
 		<div class="mb-4">
 			<label for="volume" class="form-label">Volume</label><br />
@@ -123,6 +124,11 @@
 					</div>
 				</div>
 			</div>
+				<div class="studio-wrap">
+			<img src="/images/left_speaker.png" class="speaker speakerLeft">
+
+			<img src="/images/right_speaker.png" class="speaker speakerRight">
+		</div>
 			<div class="row">
 				<div class="col-md-12">
 					<div class="mb-4" style="max-width: 400px; margin: 0 auto;">
