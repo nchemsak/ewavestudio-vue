@@ -141,6 +141,44 @@
 				</div>
 
 			</div>
+
+			<div class="row">
+				<div class="col-md-12">
+
+					<div class="mt-5">
+						<h5>Effects</h5>
+
+
+
+
+						<div class="form-check mt-3">
+							<input class="form-check-input" type="checkbox" id="delayEnabled" v-model="delayEnabled">
+							<label class="form-check-label" for="delayEnabled">
+								Enable Delay
+							</label>
+						</div>
+
+
+						<div>
+							<label>Delay Time (ms)</label>
+							<input type="range" min="0" max="1000" step="10" v-model="delayTime" />
+						</div>
+						<div>
+							<label>Feedback</label>
+							<input type="range" min="0" max="0.95" step="0.01" v-model="delayFeedback" />
+						</div>
+						<div>
+							<label>Wet/Dry Mix</label>
+							<input type="range" min="0" max="1" step="0.01" v-model="delayWetMix" />
+						</div>
+					</div>
+
+
+				</div>
+
+			</div>
+
+
 			<ul class="keyboard">
 				<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
 
@@ -238,6 +276,16 @@ import FloatingWindow from './FloatingWindow.vue';
 import PresetBankPanel from './PresetBankPanel.vue';
 import { computed } from 'vue';
 
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+// Visualizer
+const analyser = audioCtx.createAnalyser();
+analyser.fftSize = 1024;
+
+const masterGain = audioCtx.createGain();
+masterGain.gain.value = 1;
+
+
 const waveMixDisplay = computed(() => ({
 	wave1: Math.round((1 - waveMix.value) * 100),
 	wave2: Math.round(waveMix.value * 100)
@@ -248,6 +296,10 @@ const waveMixDisplay = computed(() => ({
 const showPresets = ref(true);
 
 
+
+// Final output
+masterGain.connect(analyser);
+analyser.connect(audioCtx.destination);
 
 const volume = ref(0.5);
 const volumeLabel = ref('50%');
@@ -380,7 +432,6 @@ const keyboardNotes = [
 const midiMode = ref(''); // starts blank. TODO: add 'sample' option
 
 
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const activeOscillators = new Map();
 const activeNotes = ref([]);
 
@@ -401,8 +452,8 @@ function playNote(note) {
 
 	const gainNode = audioCtx.createGain();
 	gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime); // silent start
-	gainNode.connect(analyser);
-	gainNode.connect(audioCtx.destination);
+	gainNode.connect(masterGain);
+	// gainNode.connect(audioCtx.destination);
 
 	// Move this to *after* all connections are established
 	gainNode.gain.setTargetAtTime(volume.value, audioCtx.currentTime, 0.01);
@@ -733,7 +784,12 @@ function saveToBank(index) {
 
 		unisonCount2: unisonCount2.value,
 		detuneCents2: detuneCents2.value,
-		stereoSpread2: stereoSpread2.value
+		stereoSpread2: stereoSpread2.value,
+
+		delayTime: delayTime.value,
+		delayFeedback: delayFeedback.value,
+		delayWetMix: delayWetMix.value,
+		delayEnabled: delayEnabled.value
 	};
 }
 
@@ -757,6 +813,11 @@ function loadFromBank(index) {
 	unisonCount2.value = data.unisonCount2 ?? 1;
 	detuneCents2.value = data.detuneCents2 ?? 0;
 	stereoSpread2.value = data.stereoSpread2 ?? 0;
+
+	delayTime.value = data.delayTime ?? 250;
+	delayFeedback.value = data.delayFeedback ?? 0.35;
+	delayWetMix.value = data.delayWetMix ?? 0.5;
+	delayEnabled.value = data.delayEnabled ?? true;
 }
 
 
@@ -848,25 +909,6 @@ watch(modulationDepth, (depth) => {
 	});
 });
 
-
-// Real-time Detune Adjustment
-// watch(detuneCents, (val) => {
-// 	activeOscillators.forEach(({ oscillators }) => {
-// 		const unison = unisonCount.value;
-// 		if (unison === 1) return;
-
-// 		let idx = 0;
-// 		for (let u = 0; u < unison; u++) {
-// 			const detuneOffset = (u - Math.floor(unison / 2)) * val;
-// 			const osc = oscillators[idx++];
-// 			if (osc && osc.detune) {
-// 				osc.detune.setTargetAtTime(detuneOffset, audioCtx.currentTime, 0.01);
-// 			}
-// 		}
-// 	});
-// });
-
-
 watch(detuneCents1, (val) => {
 	activeOscillators.forEach(({ oscillators }) => {
 		const unison = unisonCount1.value;
@@ -898,27 +940,6 @@ watch(detuneCents2, (val) => {
 		}
 	});
 });
-
-
-
-// Real-time Stereo Spread Adjustment
-// watch(stereoSpread, (val) => {
-// 	activeOscillators.forEach(({ panners }) => {
-// 		const unison = unisonCount.value;
-// 		if (!panners || unison === 1) return;
-
-// 		let idx = 0;
-// 		for (let u = 0; u < unison; u++) {
-// 			const panVal = ((u - Math.floor(unison / 2)) / (unison - 1 || 1)) * val;
-// 			const panner = panners[idx++];
-// 			if (panner) {
-// 				panner.pan.setTargetAtTime(panVal, audioCtx.currentTime, 0.01);
-// 			}
-// 		}
-
-// 	});
-// });
-
 
 watch(stereoSpread1, (val) => {
 	activeOscillators.forEach(({ panners }) => {
@@ -978,9 +999,7 @@ watch(customReal, (newReal) => {
 
 
 
-// Visualizer
-const analyser = audioCtx.createAnalyser();
-analyser.fftSize = 1024;
+
 
 const bufferLength = analyser.frequencyBinCount;
 const dataArray = new Uint8Array(bufferLength);
@@ -1080,13 +1099,61 @@ function drawRainbowVisualizer() {
 	}
 	draw();
 }
-// document.querySelectorAll('.styled-slider').forEach(slider => {
-//   const updateSlider = e => {
-//     const val = ((slider.value - slider.min) / (slider.max - slider.min)) * 100;
-//     slider.style.setProperty('--val', `${val}%`);
-//   };
-//   slider.addEventListener('input', updateSlider);
-//   updateSlider(); // initial
-// });
+
+
+//effects
+
+
+
+// Delay Nodes
+const delayEnabled = ref(true);
+const delayNode = audioCtx.createDelay();
+delayNode.delayTime.value = 0.25; // 250ms
+
+const feedbackGain = audioCtx.createGain();
+feedbackGain.gain.value = 0.35;
+
+const wetGain = audioCtx.createGain();
+wetGain.gain.value = 0.5;
+
+const dryGain = audioCtx.createGain();
+dryGain.gain.value = 0.8;
+
+
+function connectEffects() {
+	masterGain.disconnect();
+	dryGain.disconnect();
+	wetGain.disconnect();
+	delayNode.disconnect();
+	feedbackGain.disconnect();
+
+	masterGain.connect(dryGain);
+
+	if (delayEnabled.value) {
+		masterGain.connect(delayNode);
+		delayNode.connect(feedbackGain);
+		feedbackGain.connect(delayNode);
+		delayNode.connect(wetGain);
+
+		wetGain.connect(analyser);
+	}
+
+	dryGain.connect(analyser);
+}
+
+connectEffects();
+const delayTime = ref(250);
+const delayFeedback = ref(0.35);
+const delayWetMix = ref(0.5);
+
+watch(delayTime, val => delayNode.delayTime.setTargetAtTime(val / 1000, audioCtx.currentTime, 0.01));
+watch(delayFeedback, val => feedbackGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01));
+watch(delayWetMix, val => {
+	wetGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
+	dryGain.gain.setTargetAtTime(1 - val, audioCtx.currentTime, 0.01);
+});
+watch(delayEnabled, () => {
+	connectEffects();
+});
 
 </script>
