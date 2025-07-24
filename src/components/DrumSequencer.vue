@@ -23,13 +23,13 @@
 
 		<div class="instrument-grid">
 			<div v-for="instrument in instruments" :key="instrument.name" class="mb-3">
-				<div class="d-flex justify-content-between align-items-center mb-1">
+				<div class="d-flex align-items-center gap-2 mb-1">
+					<div class="mute-indicator" :class="{ muted: instrument.muted }"
+						@click="toggleMute(instrument.name)" role="button" aria-label="Toggle Mute"
+						:title="instrument.muted ? 'Muted' : 'Playing'"></div>
 					<strong>{{ instrument.label }}</strong>
-					<button class="btn btn-sm" :class="instrument.muted ? 'btn-danger' : 'btn-outline-secondary'"
-						@click="toggleMute(instrument.name)">
-						{{ instrument.muted ? 'Muted' : 'Mute' }}
-					</button>
 				</div>
+
 
 				<div class="d-flex pad-row">
 					<div v-for="(active, index) in instrument.steps" :key="index"
@@ -38,7 +38,8 @@
 							'pad',
 							{ selected: active },
 							{ playing: index === currentStep }
-						]" @mousedown="handleMouseDown(instrument.name, index)" @mouseenter="handleMouseEnter(instrument.name, index)">
+						]" @mousedown="handleMouseDown($event, instrument.name, index)"
+							@mouseenter="handleMouseEnter(instrument.name, index)" @dragstart.prevent>
 						</div>
 						<input v-if="active" type="range" min="0" max="1" step="0.05"
 							v-model.number="instrument.velocities[index]" class="velocity-slider" />
@@ -144,11 +145,11 @@ function toggleMute(instrumentName) {
 const isMouseDown = ref(false);
 const dragMode = ref(null); // 'on' or 'off'
 
-function handleMouseDown(instrumentName, index) {
+function handleMouseDown(event, instrumentName, index) {
+	event.preventDefault(); // <-- prevents browser drag behavior
 	isMouseDown.value = true;
 	const inst = instruments.value.find(i => i.name === instrumentName);
 	if (inst) {
-		// Set drag mode based on first pad clicked
 		dragMode.value = !inst.steps[index] ? 'on' : 'off';
 		inst.steps[index] = dragMode.value === 'on';
 	}
@@ -179,13 +180,13 @@ watch(volume, val => {
 
 onMounted(() => {
 	loadAllSamples();
-	  window.addEventListener('mouseup', handleMouseUp);
+	window.addEventListener('mouseup', handleMouseUp);
 
 });
 
 onBeforeUnmount(() => {
 	cancelAnimationFrame(loopId);
-	  window.removeEventListener('mouseup', handleMouseUp);
+	window.removeEventListener('mouseup', handleMouseUp);
 
 });
 
@@ -245,5 +246,22 @@ onBeforeUnmount(() => {
 .pad-row {
 	padding-bottom: 4px;
 	padding-right: 12px;
+}
+
+
+.mute-indicator {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background-color: #0f0;
+	/* green */
+	box-shadow: 0 0 4px #0f0;
+	cursor: pointer;
+	transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.mute-indicator.muted {
+	background-color: #555;
+	box-shadow: none;
 }
 </style>
