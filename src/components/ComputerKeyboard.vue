@@ -34,8 +34,11 @@
 						<canvas id="oscilloscope" width="600" height="200" class="waveform-visual"></canvas>
 					</div>
 					<div class="col-md-6">
-						<canvas id="rainbow-visualizer" width="600" height="200" class="waveform-visual"></canvas>
+						<canvas id="oscilloscope" width="600" height="200" class="waveform-visual"></canvas>
 					</div>
+					<!-- <div class="col-md-6">
+						<canvas id="rainbow-visualizer" width="600" height="200" class="waveform-visual"></canvas>
+					</div> -->
 				</div>
 			</div>
 			<div class="row">
@@ -169,6 +172,7 @@
 				</div>
 
 			</div>
+
 			<ul class="keyboard">
 				<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
 
@@ -665,7 +669,7 @@ onMounted(() => {
 	window.addEventListener('mousedown', () => isMouseDown.value = true);
 	window.addEventListener('mouseup', () => isMouseDown.value = false);
 	drawOscilloscope();
-	drawRainbowVisualizer();
+	// drawRainbowVisualizer();
 });
 
 
@@ -1011,64 +1015,66 @@ function drawOscilloscope() {
 	}
 	draw();
 }
-function drawRainbowVisualizer() {
-	const canvas = document.getElementById('rainbow-visualizer');
-	if (!canvas) return;
-	const ctx = canvas.getContext('2d');
-	const width = canvas.width;
-	const height = canvas.height;
-
-	const layers = 9; // More layers = thicker band
-	const spacing = 4.5; // px between each line
-	const baseY = height / 2;
-	const colors = [
-		'#24D7BF', '#54FACA', '#FCCF34',
-		'#FF9065', '#FF88A2', '#F45FA8',
-		'#B957C6', '#995CD1', '#3E48A7'
-
-	];
-	analyser.fftSize = 2048;
-
-	const bufferLength = analyser.fftSize;
-	const dataArray = new Uint8Array(bufferLength);
-
-	function draw() {
-		requestAnimationFrame(draw);
-		analyser.getByteTimeDomainData(dataArray);
-
-		ctx.clearRect(0, 0, width, height);
-		ctx.fillRect(0, 0, width, height);
-
-		const sliceWidth = width / bufferLength;
-
-		for (let l = 0; l < layers; l++) {
-			const offsetY = baseY + (l - layers / 2) * spacing;
-			const amplitude = 10;
 
 
-			ctx.strokeStyle = colors[l % colors.length];
-			ctx.shadowColor = colors[l % colors.length];
-			ctx.shadowBlur = 12;
-			ctx.lineWidth = 3.5;
-			ctx.lineCap = 'round';
-			ctx.beginPath();
-			let x = 0;
-			for (let i = 0; i < bufferLength; i++) {
-				const v = dataArray[i] / 128.0;
-				const y = offsetY + (v - 1) * amplitude * spacing * 2;
+// function drawRainbowVisualizer() {
+// 	const canvas = document.getElementById('rainbow-visualizer');
+// 	if (!canvas) return;
+// 	const ctx = canvas.getContext('2d');
+// 	const width = canvas.width;
+// 	const height = canvas.height;
 
-				if (i === 0) {
-					ctx.moveTo(x, y);
-				} else {
-					ctx.lineTo(x, y);
-				}
-				x += sliceWidth;
-			}
-			ctx.stroke();
-		}
-	}
-	draw();
-}
+// 	const layers = 9; // More layers = thicker band
+// 	const spacing = 4.5; // px between each line
+// 	const baseY = height / 2;
+// 	const colors = [
+// 		'#24D7BF', '#54FACA', '#FCCF34',
+// 		'#FF9065', '#FF88A2', '#F45FA8',
+// 		'#B957C6', '#995CD1', '#3E48A7'
+
+// 	];
+// 	analyser.fftSize = 2048;
+
+// 	const bufferLength = analyser.fftSize;
+// 	const dataArray = new Uint8Array(bufferLength);
+
+// 	function draw() {
+// 		requestAnimationFrame(draw);
+// 		analyser.getByteTimeDomainData(dataArray);
+
+// 		ctx.clearRect(0, 0, width, height);
+// 		ctx.fillRect(0, 0, width, height);
+
+// 		const sliceWidth = width / bufferLength;
+
+// 		for (let l = 0; l < layers; l++) {
+// 			const offsetY = baseY + (l - layers / 2) * spacing;
+// 			const amplitude = 10;
+
+
+// 			ctx.strokeStyle = colors[l % colors.length];
+// 			ctx.shadowColor = colors[l % colors.length];
+// 			ctx.shadowBlur = 12;
+// 			ctx.lineWidth = 3.5;
+// 			ctx.lineCap = 'round';
+// 			ctx.beginPath();
+// 			let x = 0;
+// 			for (let i = 0; i < bufferLength; i++) {
+// 				const v = dataArray[i] / 128.0;
+// 				const y = offsetY + (v - 1) * amplitude * spacing * 2;
+
+// 				if (i === 0) {
+// 					ctx.moveTo(x, y);
+// 				} else {
+// 					ctx.lineTo(x, y);
+// 				}
+// 				x += sliceWidth;
+// 			}
+// 			ctx.stroke();
+// 		}
+// 	}
+// 	draw();
+// }
 
 
 //EFFECTS
@@ -1125,5 +1131,10 @@ watch(delayWetMix, val => {
 watch(delayEnabled, () => {
 	connectEffects();
 });
+
+
+
+
+
 
 </script>

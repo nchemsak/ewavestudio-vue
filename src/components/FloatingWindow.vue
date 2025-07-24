@@ -1,7 +1,9 @@
 <template>
     <div class="floating-panel" :style="{ top: y + 'px', left: x + 'px' }" @mousedown.self="bringToFront">
         <div class="floating-header" @mousedown="startDrag">
-<span><slot name="title">Panel</slot></span>
+            <span>
+                <slot name="title">Panel</slot>
+            </span>
             <button class="close-btn" @click="$emit('close')">&times;</button>
         </div>
         <div class="floating-body">
