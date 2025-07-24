@@ -5,7 +5,7 @@
 				<label class="form-label">Volume</label>
 				<input type="range" min="0" max="1" step="0.01" v-model="volume" class="form-range seqOptin" />
 			</div>
-			<div>
+			<!-- <div>
 				<label class="form-label">Tempo</label>
 				<div class="d-flex align-items-center gap-2">
 					<input type="number" v-model.number="tempo" class="form-control w-auto" />
@@ -14,7 +14,16 @@
 					<button class="btn btn-secondary" @click="tempo -= 5">-5</button>
 					<button class="btn btn-secondary" @click="tempo += 5">+5</button>
 				</div>
+			</div> -->
+			<div>
+				<label class="form-label">Tempo</label>
+				<div class="d-flex align-items-center gap-2">
+					<input type="number" v-model.number="tempo" class="form-control w-auto"
+						@mousedown="handleTempoMouseDown" @wheel="handleTempoWheel"
+						:title="'Scroll or drag to change tempo, or type a number'" />
+				</div>
 			</div>
+
 			<button class="btn btn-primary" @click="togglePlay">
 				<span v-if="isPlaying">Stop</span>
 				<span v-else>Play</span>
@@ -29,6 +38,12 @@
 						:title="instrument.muted ? 'Muted' : 'Playing'"></div>
 					<strong>{{ instrument.label }}</strong>
 				</div>
+
+				<div class="channel-volume mb-2">
+					<input type="range" min="0" max="1" step="0.01" v-model.number="instrument.channelVolume"
+						class="form-range" :aria-label="`${instrument.label} Channel Volume`" />
+				</div>
+
 
 
 				<div class="d-flex pad-row">
@@ -55,6 +70,37 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
+let isScrubbing = false;
+let startY = 0;
+let startTempo = 0;
+
+function handleTempoMouseDown(e) {
+	isScrubbing = true;
+	startY = e.clientY;
+	startTempo = tempo.value;
+
+	window.addEventListener('mousemove', handleTempoMouseMove);
+	window.addEventListener('mouseup', handleTempoMouseUp);
+}
+
+function handleTempoMouseMove(e) {
+	if (!isScrubbing) return;
+	const delta = startY - e.clientY;
+	tempo.value = Math.max(20, Math.min(300, Math.round(startTempo + delta)));
+}
+
+function handleTempoMouseUp() {
+	isScrubbing = false;
+	window.removeEventListener('mousemove', handleTempoMouseMove);
+	window.removeEventListener('mouseup', handleTempoMouseUp);
+}
+
+// --- Scroll Wheel ---
+function handleTempoWheel(e) {
+	e.preventDefault();
+	const delta = Math.sign(e.deltaY);
+	tempo.value = Math.max(20, Math.min(300, tempo.value - delta)); // scroll up increases
+}
 
 // Reuse shared AudioContext
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -69,10 +115,32 @@ masterGain.gain.value = volume.value;
 masterGain.connect(audioCtx.destination);
 
 const instruments = ref([
-	// { name: 'kick', label: 'Kick', buffer: null, steps: Array(16).fill(false) },
-	{ name: 'kick', label: 'Kick', buffer: null, muted: false, steps: Array(16).fill(false), velocities: Array(16).fill(1.0) },
-	{ name: 'snare', label: 'Snare', buffer: null, muted: false, steps: Array(16).fill(false), velocities: Array(16).fill(1.0) },
-	{ name: 'hihat', label: 'Hi-Hat', buffer: null, muted: false, steps: Array(16).fill(false), velocities: Array(16).fill(1.0) },
+	{
+		name: 'kick',
+		label: 'Kick',
+		buffer: null,
+		muted: false,
+		channelVolume: 1.0,
+		steps: Array(16).fill(false),
+		velocities: Array(16).fill(1.0)
+	}, {
+		name: 'snare',
+		label: 'Snare',
+		buffer: null,
+		muted: false,
+		channelVolume: 1.0,
+		steps: Array(16).fill(false),
+		velocities: Array(16).fill(1.0)
+	},
+	{
+		name: 'hihat',
+		label: 'Hi-Hat',
+		buffer: null,
+		muted: false,
+		channelVolume: 1.0,
+		steps: Array(16).fill(false),
+		velocities: Array(16).fill(1.0)
+	},
 ]);
 
 let loopId = null;
@@ -101,7 +169,9 @@ function schedule() {
 		instruments.value.forEach(inst => {
 			if (!inst.muted && inst.steps[stepIndex] && inst.buffer) {
 
-				playBuffer(inst.buffer, startTime, inst.velocities[stepIndex]);
+				const padVol = inst.velocities[stepIndex];
+				const chanVol = inst.channelVolume ?? 1.0;
+				playBuffer(inst.buffer, startTime, padVol * chanVol);
 			}
 		});
 		currentStep.value = stepIndex;
@@ -190,6 +260,8 @@ onBeforeUnmount(() => {
 
 });
 
+if (isScrubbing) document.body.classList.add('scrubbing');
+else document.body.classList.remove('scrubbing');
 
 
 </script>
@@ -263,5 +335,18 @@ onBeforeUnmount(() => {
 .mute-indicator.muted {
 	background-color: #555;
 	box-shadow: none;
+}
+
+.channel-volume input[type="range"] {
+	max-width: 150px;
+	height: 4px;
+}
+
+body.scrubbing {
+	cursor: ns-resize;
+}
+
+:global(body.scrubbing) {
+	cursor: ns-resize;
 }
 </style>
