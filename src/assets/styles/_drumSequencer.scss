@@ -3,6 +3,7 @@
         width: 30px;
         height: 30px;
         border: 1px solid $color-black;
+        // margin: 2px;
         background-color: $color-black;
         cursor: pointer;
         transition: background-color 0.2s;
@@ -84,64 +85,9 @@
 
     .pad-wrapper {
         position: relative;
-        // display: flex;
-        // flex-direction: column;
         align-items: center;
         margin: 0px 2px 0px 2px;
     }
-
-    // .hover-slider {
-    //     position: absolute;
-    //     bottom: 100%; // place directly above the pad
-    //     // left: 50%;
-    //     // transform: translateX(-50%);
-    //     // width: 30px;
-    //     // height: 60px;
-    //     // z-index: 10;
-    //     // display: flex;
-    //     // justify-content: center;
-    //     // align-items: flex-end;
-    //     // opacity: 1;
-    //     // pointer-events: none;
-
-    //     & input[type="range"] {
-    //         transform: rotate(270deg);
-    //         width: 60px;
-    //         height: 30px;
-    //         -webkit-appearance: none;
-
-    //         background-color: grey;
-
-    //         &::-webkit-slider-thumb {
-    //             -webkit-appearance: none;
-    //             height: 30px;
-    //             width: 4px;
-    //             background: $color-teal-light;
-    //             cursor: ns-resize;
-    //             border: none;
-    //             border-radius: 0;
-    //         }
-
-    //         &::-moz-range-thumb {
-    //             height: 30px;
-    //             width: 4px;
-    //             background: $color-teal-light;
-    //             border: none;
-    //             cursor: ns-resize;
-    //         }
-
-    //         &::-webkit-slider-runnable-track,
-    //         &::-moz-range-track {
-    //             height: 30px;
-    //             background: rgba(255, 255, 255, 0.2);
-    //             border-radius: 2px;
-    //         }
-    //     }
-    // }
-
-    // .hover-slider.visible {
-    //     pointer-events: auto;
-    // }
 
     // Old section
     // .hover-slider {
@@ -162,32 +108,14 @@
     // }
 
     // New Section
-    // .hover-slider {
-    // position: absolute;
-    // top: 105px;
-    // width: 30px;
-    // height: 60px;
-    // z-index: 10;
-    // opacity: 1;
-    // display: flex;
-    // justify-content: center;
-    // align-items: flex-end;
 
     .hover-slider {
         position: absolute;
-        top: 0px;
+        top: -30px;
         width: 30px;
         height: 30px;
         z-index: 10;
-        /* opacity: 1; */
-        /* display: flex
-; */
-        /* justify-content: center; */
-        /* align-items: flex-end; */
-        // }
-
         input[type="range"] {
-            // writing-mode: bt-lr;
             transform: rotate(270deg);
             width: 30px;
             height: 30px;
@@ -229,6 +157,8 @@
             }
         }
     }
+
+
 
     .channel-label:hover strong {
         text-decoration: underline dotted;

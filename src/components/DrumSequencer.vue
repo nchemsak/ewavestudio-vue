@@ -296,6 +296,9 @@ const isMouseDown = ref(false);
 const dragMode = ref(null); // 'on' or 'off'
 
 function handleMouseDown(event, instrumentName, index) {
+	if (event.target.closest('.hover-slider input[type="range"]')) {
+		return; // Don't toggle pad if user is adjusting the slider
+	}
 	event.preventDefault(); // <-- prevents browser drag behavior
 	isMouseDown.value = true;
 	const inst = instruments.value.find(i => i.name === instrumentName);
@@ -304,6 +307,9 @@ function handleMouseDown(event, instrumentName, index) {
 		inst.steps[index] = dragMode.value === 'on';
 	}
 }
+
+
+
 
 function handleMouseEnter(instrumentName, index) {
 	if (!isMouseDown.value) return;
