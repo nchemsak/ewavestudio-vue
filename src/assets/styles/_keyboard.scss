@@ -1,201 +1,213 @@
-.keyboard-container {
-	background: linear-gradient(to bottom, #2c2c2c, #1e1e1e);
-	border-radius: 18px;
-	padding: 20px 30px;
-	box-shadow:
-		inset 0 0 5px rgba(0, 0, 0, 0.4),
-		0 10px 25px rgba(0, 0, 0, 0.6);
-	display: inline-block;
-	position: relative;
-	max-width: 740px;
-	color: white;
-	&::before {
-		content: "";
-		position: absolute;
-		top: 20px;
-		left: 30px;
-		right: 30px;
-		height: 1px;
-		background: rgba(255, 255, 255, 0.05);
-	}
-}
-
-.keyboard {
-	text-align: center;
-	display: flex;
-	justify-content: center;
-	padding: 0;
-	margin: 0;
-	list-style-type: none;
-	position: relative;
-	user-select: none;
-	gap: 0;
-
-	.keyboard-key {
+.computer-keyboard {
+	.keyboard-container {
+		background: linear-gradient(to bottom, #2c2c2c, #1e1e1e);
+		border-radius: 18px;
+		padding: 20px 30px;
+		box-shadow:
+			inset 0 0 5px rgba(0, 0, 0, 0.4),
+			0 10px 25px rgba(0, 0, 0, 0.6);
+		display: inline-block;
 		position: relative;
-		// width: 40px;
-		// this 100% will change the width of the key based on the width of .keyboard-container. If .keyboard-container is changed in width, this will auto update, but the black keys WILL NOT. You'll have to manually change those.
-		width: 100%;
-		height: 174px;
-		display: flex;
-		justify-content: center;
-		align-items: flex-end;
-		margin: 0;
-		padding: 0;
-
+		max-width: 740px;
+		color: white;
 		&::before {
 			content: "";
 			position: absolute;
-			bottom: 0;
-			left: 0;
-			right: 0;
-			border-radius: 0 0 6px 6px;
-			height: 6px;
-			background: linear-gradient(to bottom, #d8d4ca, #bab5aa);
-			background: linear-gradient(to bottom, #cfcac0, #aaa59a);
-
-			box-shadow:
-				inset 0 -1px 1px rgba(255, 255, 255, 0.3),
-				0 2px 4px rgba(0, 0, 0, 0.35);
-			z-index: 0;
+			top: 20px;
+			left: 30px;
+			right: 30px;
+			height: 1px;
+			background: rgba(255, 255, 255, 0.05);
 		}
-		.key {
-			width: 100%;
-			height: 100%;
-			background: linear-gradient(to top, #e8e2d4 0%, #fbf9f5 100%);
-			color: black;
-			border: 1px solid #dcd9d3;
-			border-radius: 8px;
-			border-radius: 0 0 6px 6px;
-			box-shadow:
-				inset 0 -1px 1px rgba(0, 0, 0, 0.06),
-				0 4px 6px rgba(0, 0, 0, 0.2);
-			display: flex;
-			flex-direction: column;
-			justify-content: flex-end;
-			align-items: center;
-			padding: 10px 0 6px;
-			font-size: 16px;
-			cursor: pointer;
-			transition:
-				transform 0.1s ease,
-				background 0.1s ease;
-			box-sizing: border-box;
+	}
+
+	.keyboard {
+		text-align: center;
+		display: flex;
+		justify-content: center;
+		padding: 0;
+		margin: 0;
+		list-style-type: none;
+		position: relative;
+		user-select: none;
+		gap: 0;
+
+		.keyboard-key {
 			position: relative;
-			z-index: 1;
-
-			box-shadow:
-				inset 0 -1px 1px rgba(0, 0, 0, 0.06),
-				0 4px 6px rgba(0, 0, 0, 0.2),
-				0 2px 2px rgba(0, 0, 0, 0.3);
-
-			&::before {
-				content: "";
-				position: absolute;
-				top: 2px;
-				left: 0;
-				bottom: 4px;
-				width: 2px;
-				background: linear-gradient(to bottom, #d2ccc1, #bcb7ad);
-				border-radius: 1px;
-				opacity: 0.6;
-				pointer-events: none;
-			}
-			&::after {
-				content: "";
-				position: absolute;
-				top: 0;
-				left: 4px;
-				right: 4px;
-				height: 20px;
-				background: linear-gradient(to bottom, rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.05) 80%, transparent);
-				border-radius: 4px 4px 0 0;
-				pointer-events: none;
-			}
-
-			&.mouse-only {
-				background: linear-gradient(to top, #f1f1f1, #fafafa);
-				opacity: 0.85;
-				background: linear-gradient(to top, #f1f1f1, #fafafa);
-				box-shadow:
-					inset 0 -1px 1px rgba(0, 0, 0, 0.06),
-					0 4px 6px rgba(0, 0, 0, 0.2);
-				opacity: 1;
-				padding: 10px 0 6px;
-			}
-
-			&.active {
-				background-color: #ffe9a7;
-				transform: translateY(2px);
-				box-shadow:
-					inset 0 -1px 0 rgba(0, 0, 0, 0.2),
-					0 2px 4px rgba(0, 0, 0, 0.15);
-			}
-
-			.kbd {
-				font-weight: bold;
-				font-size: 12px;
-				color: #666;
-				margin-bottom: 2px;
-			}
-		}
-
-		.upper-key {
-			position: absolute;
-			top: -2px;
-			left: 65%;
-			width: 30px;
-			height: 100px;
-
-			background: linear-gradient(to bottom, #2c2c2c 0%, #1b1b1b 80%, #101010 100%);
-			border: 1px solid #000;
-			border-radius: 0px 0px 6px 6px;
-			z-index: 10;
+			// width: 40px;
+			// this 100% will change the width of the key based on the width of .keyboard-container. If .keyboard-container is changed in width, this will auto update, but the black keys WILL NOT. You'll have to manually change those.
+			width: 100%;
+			height: 174px;
 			display: flex;
 			justify-content: center;
 			align-items: flex-end;
-			padding-bottom: 4px;
-			color: white;
-			font-size: 10px;
-			transition:
-				transform 0.1s ease,
-				background 0.1s ease;
-
-			box-shadow:
-				inset 1px 0 0 #3a3a3a,
-				inset -1px 0 0 #0a0a0a,
-				inset 0 2px 2px #444,
-				0 4px 10px rgba(0, 0, 0, 0.7);
+			margin: 0;
+			padding: 0;
 
 			&::before {
 				content: "";
 				position: absolute;
-				top: 12%;
-				left: 6px;
-				width: 4px;
-				height: 70%;
-				background: linear-gradient(to bottom, rgba(255, 255, 255, 0.15), transparent);
-				border-radius: 2px;
-				pointer-events: none;
+				bottom: 0;
+				left: 0;
+				right: 0;
+				border-radius: 0 0 6px 6px;
+				height: 6px;
+				background: linear-gradient(to bottom, #d8d4ca, #bab5aa);
+				background: linear-gradient(to bottom, #cfcac0, #aaa59a);
+
+				box-shadow:
+					inset 0 -1px 1px rgba(255, 255, 255, 0.3),
+					0 2px 4px rgba(0, 0, 0, 0.35);
+				z-index: 0;
+			}
+			.key {
+				width: 100%;
+				height: 100%;
+				background: linear-gradient(to top, #e8e2d4 0%, #fbf9f5 100%);
+				color: black;
+				border: 1px solid #dcd9d3;
+				border-radius: 8px;
+				border-radius: 0 0 6px 6px;
+				box-shadow:
+					inset 0 -1px 1px rgba(0, 0, 0, 0.06),
+					0 4px 6px rgba(0, 0, 0, 0.2);
+				display: flex;
+				flex-direction: column;
+				justify-content: flex-end;
+				align-items: center;
+				padding: 10px 0 6px;
+				font-size: 16px;
+				cursor: pointer;
+				transition:
+					transform 0.1s ease,
+					background 0.1s ease;
+				box-sizing: border-box;
+				position: relative;
+				z-index: 1;
+
+				box-shadow:
+					inset 0 -1px 1px rgba(0, 0, 0, 0.06),
+					0 4px 6px rgba(0, 0, 0, 0.2),
+					0 2px 2px rgba(0, 0, 0, 0.3);
+
+				&::before {
+					content: "";
+					position: absolute;
+					top: 2px;
+					left: 0;
+					bottom: 4px;
+					width: 2px;
+					background: linear-gradient(to bottom, #d2ccc1, #bcb7ad);
+					border-radius: 1px;
+					opacity: 0.6;
+					pointer-events: none;
+				}
+				&::after {
+					content: "";
+					position: absolute;
+					top: 0;
+					left: 4px;
+					right: 4px;
+					height: 20px;
+					background: linear-gradient(
+						to bottom,
+						rgba(0, 0, 0, 0.08),
+						rgba(255, 255, 255, 0.05) 80%,
+						transparent
+					);
+					border-radius: 4px 4px 0 0;
+					pointer-events: none;
+				}
+
+				&.mouse-only {
+					background: linear-gradient(to top, #f1f1f1, #fafafa);
+					opacity: 0.85;
+					background: linear-gradient(to top, #f1f1f1, #fafafa);
+					box-shadow:
+						inset 0 -1px 1px rgba(0, 0, 0, 0.06),
+						0 4px 6px rgba(0, 0, 0, 0.2);
+					opacity: 1;
+					padding: 10px 0 6px;
+				}
+
+				&.active {
+					background-color: #ffe9a7;
+					transform: translateY(2px);
+					box-shadow:
+						inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+						0 2px 4px rgba(0, 0, 0, 0.15);
+				}
+
+				.kbd {
+					font-weight: bold;
+					font-size: 12px;
+					color: #666;
+					margin-bottom: 2px;
+				}
 			}
 
-			&.mouse-only {
-				background: linear-gradient(to bottom, #3a3a3a, #1e1e1e);
-			}
+			.upper-key {
+				position: absolute;
+				top: -2px;
+				left: 65%;
+				width: 30px;
+				height: 100px;
 
-			&.active {
-				transform: translateY(2px);
+				background: linear-gradient(to bottom, #2c2c2c 0%, #1b1b1b 80%, #101010 100%);
+				border: 1px solid #000;
+				border-radius: 0px 0px 6px 6px;
+				z-index: 10;
+				display: flex;
+				justify-content: center;
+				align-items: flex-end;
+				padding-bottom: 4px;
+				color: white;
+				font-size: 10px;
+				transition:
+					transform 0.1s ease,
+					background 0.1s ease;
+
 				box-shadow:
 					inset 1px 0 0 #3a3a3a,
 					inset -1px 0 0 #0a0a0a,
-					inset 0 2px 2px #222,
-					0 2px 5px rgba(0, 0, 0, 0.4);
+					inset 0 2px 2px #444,
+					0 4px 10px rgba(0, 0, 0, 0.7);
+
+				&::before {
+					content: "";
+					position: absolute;
+					top: 12%;
+					left: 6px;
+					width: 4px;
+					height: 70%;
+					background: linear-gradient(to bottom, rgba(255, 255, 255, 0.15), transparent);
+					border-radius: 2px;
+					pointer-events: none;
+				}
+
+				&.mouse-only {
+					background: linear-gradient(to bottom, #3a3a3a, #1e1e1e);
+				}
+
+				&.active {
+					transform: translateY(2px);
+					box-shadow:
+						inset 1px 0 0 #3a3a3a,
+						inset -1px 0 0 #0a0a0a,
+						inset 0 2px 2px #222,
+						0 2px 5px rgba(0, 0, 0, 0.4);
+				}
+			}
+
+			.note {
+				font-size: 11px;
+				color: #aaa;
 			}
 		}
-
-		.note {
-			font-size: 11px;
-			color: #aaa;
-		}
+	}
+	.waveMixWrapper {
+		max-width: 400px;
+		margin: 0 auto;
+		text-align: center;
 	}
 }

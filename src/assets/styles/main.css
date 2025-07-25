@@ -1804,7 +1804,7 @@ input[type="range"] {
   user-select: none;
   max-width: 100%;
   /* overflow-x: auto; */
-  padding: 10px;
+  /* padding: 10px; */
 }
 
 .waveform-visual {
