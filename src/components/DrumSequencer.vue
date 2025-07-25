@@ -27,25 +27,7 @@
 					<div class="mute-indicator" :class="{ muted: instrument.muted }"
 						@click="toggleMute(instrument.name)" role="button" aria-label="Toggle Mute"
 						:title="instrument.muted ? 'Muted' : 'Playing'"></div>
-					<!-- <div class="channel-label d-flex align-items-center gap-1" @click="editLabel(instrument)">
-						<template v-if="!instrument.isEditingName">
-							<strong>{{ instrument.label }}</strong>
-							<span class="rename-icon" @mouseenter="hoveredLabel = instrument.name"
-								@mouseleave="hoveredLabel = null">
-								✏️
-								<span v-if="hoveredLabel === instrument.name" class="custom-tooltip">Click to
-									rename</span>
-							</span>
 
-						</template>
-
-<template v-else>
-							<input v-model="instrument.label" @blur="stopEditingLabel(instrument)"
-								@keydown.enter.prevent="stopEditingLabel(instrument)"
-								class="form-control form-control-sm" style="max-width: 150px;"
-								:ref="el => instrument.inputRef = el" />
-						</template>
-</div> -->
 					<div class="channel-label d-flex align-items-center gap-1" @click="editLabel(instrument)">
 						<template v-if="!instrument.isEditingName">
 							<strong @mouseenter="hoveredLabel = instrument.name" @mouseleave="hoveredLabel = null"
@@ -66,7 +48,7 @@
 					</div>
 
 					<!-- Only show for custom channels -->
-					<span v-if="instrument.name.startsWith('custom')" class="mb-2">
+					<span v-if="instrument.name.startsWith('custom')" class="">
 						<label class="upload-icon" :title="`Load sample for ${instrument.label}`">
 							📁
 							<input type="file" accept="audio/*" @change="e => loadUserSample(e, instrument)"
@@ -81,28 +63,10 @@
 						class="styled-slider" :aria-label="`${instrument.label} Channel Volume`" />
 				</div>
 
-
-
 				<div class="d-flex pad-row">
-					<!-- <div v-for="(active, index) in instrument.steps" :key="index"
-						class="d-flex flex-column align-items-center me-1">
-						<div :class="[
-							'pad',
-							{ selected: active },
-							{ playing: index === currentStep }
-						]" @mousedown="handleMouseDown($event, instrument.name, index)"
-							@mouseenter="handleMouseEnter(instrument.name, index)" @dragstart.prevent>
-						</div>
-						<input v-if="active" type="range" min="0" max="1" step="0.05"
-							v-model.number="instrument.velocities[index]" class="velocity-slider" />
-					</div> -->
+
 					<div v-for="(active, index) in instrument.steps" :key="index" class="pad-wrapper"
 						@mouseenter="hoveredPad = `${instrument.name}-${index}`" @mouseleave="hoveredPad = null">
-
-						<!-- <div :class="['pad', { selected: active }, { playing: index === currentStep }]"
-							@mousedown="handleMouseDown($event, instrument.name, index)"
-							@mouseenter="handleMouseEnter(instrument.name, index)" @dragstart.prevent>
-						</div> -->
 						<div :class="['pad', { selected: active }, { playing: index === currentStep }]"
 							@mousedown="handleMouseDown($event, instrument.name, index)"
 							@mouseenter="handleMouseEnter(instrument.name, index)" @dragstart.prevent
@@ -131,7 +95,7 @@ let isScrubbing = false;
 let startY = 0;
 let startTempo = 0;
 const hoveredPad = ref(null);
-const hoveredLabel = ref(null); // holds the name of the instrument being hovered
+const hoveredLabel = ref(null);
 
 import { nextTick } from 'vue';
 
@@ -143,7 +107,7 @@ function editLabel(instrument) {
 		if (el) {
 			el.focus();
 			const val = el.value;
-			el.setSelectionRange(val.length, val.length); // place cursor at end
+			el.setSelectionRange(val.length, val.length);
 		}
 	});
 }
@@ -239,20 +203,7 @@ function addCustomChannel() {
 	});
 }
 
-// function loadUserSample(event, instrument) {
-// 	const file = event.target.files[0];
-// 	if (!file) return;
 
-// 	const reader = new FileReader();
-// 	reader.onload = function (e) {
-// 		audioCtx.decodeAudioData(e.target.result, decoded => {
-// 			instrument.buffer = decoded;
-// 		}, err => {
-// 			console.error("Error decoding audio", err);
-// 		});
-// 	};
-// 	reader.readAsArrayBuffer(file);
-// }
 function loadUserSample(event, instrument) {
 	const file = event.target.files[0];
 	if (!file) return;
@@ -340,7 +291,6 @@ function toggleMute(instrumentName) {
 
 
 // click and drag
-// import { ref, onMounted, onBeforeUnmount } from 'vue';
 
 const isMouseDown = ref(false);
 const dragMode = ref(null); // 'on' or 'off'
@@ -369,7 +319,7 @@ function handleMouseUp() {
 
 async function loadAllSamples() {
 	for (const instrument of instruments.value) {
-		const path = `audio/${instrument.name}.mp3`; // adjust path if needed
+		const path = `audio/${instrument.name}.mp3`;
 		instrument.buffer = await loadSample(path);
 	}
 }

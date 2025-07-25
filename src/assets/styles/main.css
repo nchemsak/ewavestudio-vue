@@ -1174,7 +1174,7 @@ div.key {
   color: RGBA(95, 186, 255, 1);
 }
 
-.pad {
+/* .pad {
   width: 25px;
   height: 25px;
   margin-bottom: 2px;
@@ -1184,7 +1184,7 @@ div.key {
   cursor: pointer;
   border: 1px solid white;
   border-radius: 3px;
-}
+} */
 
 .dark {
   background-color: RGBA(248, 248, 248, 0.6);
