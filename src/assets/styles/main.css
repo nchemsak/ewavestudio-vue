@@ -1739,7 +1739,8 @@ input[type="range"] {
 }
 
 .waveform-selector {
-  justify-content: center;
+  justify-content: space-around;
+  gap: 3px;
 }
 
 .active-bank {

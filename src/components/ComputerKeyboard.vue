@@ -37,16 +37,14 @@
 						<div class="col-md-6">
 							<canvas id="oscilloscope2" width="600" height="200" class="waveform-visual"></canvas>
 						</div>
-						<!-- <div class="col-md-6">
-						<canvas id="rainbow-visualizer" width="600" height="200" class="waveform-visual"></canvas>
-					</div> -->
+
 					</div>
 				</div>
 				<div class="row">
 					<div class="col-md-6">
 						<div class="mb-4 waveformgroup">
 							<label class="form-label d-block">Waveform Group 1</label>
-							<div class="waveform-selector d-flex flex-wrap gap-3">
+							<div class="waveform-selector d-flex flex-wrap">
 								<div v-for="wave in waveforms" :key="wave + '-1'" class="waveform-option"
 									:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
 									@click="selectedWave2 !== wave && selectWave1(wave)">
@@ -88,7 +86,7 @@
 					<div class="col-md-6">
 						<div class="mb-4 waveformgroup">
 							<label class="form-label d-block">Waveform Group 2</label>
-							<div class="waveform-selector d-flex flex-wrap gap-3">
+							<div class="waveform-selector d-flex flex-wrap">
 								<div v-for="wave in waveforms" :key="wave + '-2'" class="waveform-option"
 									:class="{ selected: selectedWave2 === wave, disabled: selectedWave1 === wave }"
 									@click="selectedWave1 !== wave && selectWave2(wave)">
@@ -244,13 +242,6 @@
 			</span>
 		</div>
 	</div>
-
-
-
-
-
-
-
 	<!-- <FloatingWindow v-if="showPresets" @close="showPresets = false">
 		<template #title>Presets</template>
 		<PresetBankPanel :banks="banks" :activeBankIndex="activeBankIndex" :isTyping="isTyping" @save="saveToBank"
@@ -294,6 +285,7 @@ const showPresets = ref(true);
 // Final output
 masterGain.connect(analyser);
 analyser.connect(audioCtx.destination);
+// analyser.connect(masterGain);
 
 const volume = ref(0.5);
 const volumeLabel = ref('50%');
@@ -315,6 +307,13 @@ const stereoSpread1 = ref(0);
 const unisonCount2 = ref(1);
 const detuneCents2 = ref(0);
 const stereoSpread2 = ref(0);
+
+
+const analyser1 = audioCtx.createAnalyser();
+const analyser2 = audioCtx.createAnalyser();
+
+analyser1.fftSize = 1024;
+analyser2.fftSize = 1024;
 
 const selectWave1 = (wave) => {
 	if (selectedWave1.value === wave) {
@@ -439,7 +438,7 @@ function playNote(note) {
 	const gainNode = audioCtx.createGain();
 	gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime); // silent start
 	gainNode.connect(masterGain);
-	// gainNode.connect(audioCtx.destination);
+
 
 	// Move this to *after* all connections are established
 	gainNode.gain.setTargetAtTime(volume.value, audioCtx.currentTime, 0.01);
@@ -455,6 +454,7 @@ function playNote(note) {
 			detune: detuneCents1.value,
 			spread: stereoSpread1.value,
 			gainValue: 1 - waveMix.value,
+			analyser: analyser1,
 		},
 		{
 			wave: selectedWave2.value,
@@ -462,7 +462,8 @@ function playNote(note) {
 			detune: detuneCents2.value,
 			spread: stereoSpread2.value,
 			gainValue: waveMix.value,
-		}
+			analyser: analyser2,
+		},
 	];
 
 	const wave = waveformType.value;
@@ -474,6 +475,14 @@ function playNote(note) {
 
 		groupGainNode.gain.value = group.gainValue;
 		groupGainNode.connect(gainNode);
+
+		// New: intermediary gain node to avoid clipping in analyser
+		const analyserGain = audioCtx.createGain();
+		analyserGain.gain.value = 0.25; // reduce signal strength to visualizer
+		groupGainNode.connect(analyserGain);
+		analyserGain.connect(group.analyser);
+
+
 		groupGainNodes.push(groupGainNode);
 		for (let u = 0; u < group.unison; u++) {
 			const osc = audioCtx.createOscillator();
@@ -640,8 +649,8 @@ onMounted(() => {
 	drawWaveformFromReal(customReal.value, 'waveformPreview1');
 	drawWaveformFromReal(customReal.value, 'waveformPreview2');
 
-	drawOscilloscope('oscilloscope1', 'cyan');
-	drawOscilloscope('oscilloscope2', 'magenta'); // or any contrasting color
+	drawOscilloscope(analyser1, 'oscilloscope1', 'cyan');
+	drawOscilloscope(analyser2, 'oscilloscope2', 'magenta');
 	// Set up MIDI immediately
 	if (navigator.requestMIDIAccess) {
 		navigator.requestMIDIAccess().then((access) => {
@@ -673,7 +682,7 @@ onMounted(() => {
 
 	window.addEventListener('mousedown', () => isMouseDown.value = true);
 	window.addEventListener('mouseup', () => isMouseDown.value = false);
-	drawOscilloscope();
+	// drawOscilloscope();
 	// drawRainbowVisualizer();
 });
 
@@ -983,131 +992,48 @@ watch(customReal, (newReal) => {
 
 const bufferLength = analyser.frequencyBinCount;
 const dataArray = new Uint8Array(bufferLength);
-// function drawOscilloscope() {
-// 	const canvas = document.getElementById('oscilloscope1');
-// 	if (!canvas) return;
-// 	const ctx = canvas.getContext('2d');
-// 	const width = canvas.width;
-// 	const height = canvas.height;
 
-// 	function draw() {
-// 		requestAnimationFrame(draw);
-// 		analyser.getByteTimeDomainData(dataArray);
-
-// 		ctx.fillStyle = '#121212';
-// 		ctx.fillRect(0, 0, width, height);
-
-// 		ctx.lineWidth = 2;
-// 		ctx.strokeStyle = 'rgba(0,255,255,0.8)';
-// 		ctx.beginPath();
-
-// 		const sliceWidth = width * 1.0 / bufferLength;
-// 		let x = 0;
-
-// 		for (let i = 0; i < bufferLength; i++) {
-// 			const v = dataArray[i] / 128.0; // 0 to 2
-// 			const y = v * height / 2;
-
-// 			if (i === 0) {
-// 				ctx.moveTo(x, y);
-// 			} else {
-// 				ctx.lineTo(x, y);
-// 			}
-// 			x += sliceWidth;
-// 		}
-// 		ctx.lineTo(canvas.width, canvas.height / 2);
-// 		ctx.stroke();
-// 	}
-// 	draw();
-// }
-function drawOscilloscope(canvasId = 'oscilloscope1') {
+function drawOscilloscope(analyser, canvasId = 'oscilloscope1', color = 'cyan') {
 	const canvas = document.getElementById(canvasId);
 	if (!canvas) return;
 	const ctx = canvas.getContext('2d');
 	const width = canvas.width;
 	const height = canvas.height;
 
+	const bufferLength = analyser.frequencyBinCount;
+	const dataArray = new Uint8Array(bufferLength);
+
 	function draw() {
 		requestAnimationFrame(draw);
 		analyser.getByteTimeDomainData(dataArray);
 
-		ctx.clearRect(0, 0, width, height);
+		ctx.fillStyle = '#121212';
+		ctx.fillRect(0, 0, width, height);
+
+		ctx.lineWidth = 2;
+		ctx.strokeStyle = color;
 		ctx.beginPath();
 
 		const sliceWidth = width / bufferLength;
 		let x = 0;
+
 		for (let i = 0; i < bufferLength; i++) {
 			const v = dataArray[i] / 128.0;
 			const y = v * height / 2;
-			i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+
+			if (i === 0) {
+				ctx.moveTo(x, y);
+			} else {
+				ctx.lineTo(x, y);
+			}
 			x += sliceWidth;
 		}
-		ctx.strokeStyle = 'cyan';
-		ctx.lineWidth = 2;
+		ctx.lineTo(width, height / 2);
 		ctx.stroke();
 	}
 
 	draw();
 }
-
-// function drawRainbowVisualizer() {
-// 	const canvas = document.getElementById('rainbow-visualizer');
-// 	if (!canvas) return;
-// 	const ctx = canvas.getContext('2d');
-// 	const width = canvas.width;
-// 	const height = canvas.height;
-
-// 	const layers = 9; // More layers = thicker band
-// 	const spacing = 4.5; // px between each line
-// 	const baseY = height / 2;
-// 	const colors = [
-// 		'#24D7BF', '#54FACA', '#FCCF34',
-// 		'#FF9065', '#FF88A2', '#F45FA8',
-// 		'#B957C6', '#995CD1', '#3E48A7'
-
-// 	];
-// 	analyser.fftSize = 2048;
-
-// 	const bufferLength = analyser.fftSize;
-// 	const dataArray = new Uint8Array(bufferLength);
-
-// 	function draw() {
-// 		requestAnimationFrame(draw);
-// 		analyser.getByteTimeDomainData(dataArray);
-
-// 		ctx.clearRect(0, 0, width, height);
-// 		ctx.fillRect(0, 0, width, height);
-
-// 		const sliceWidth = width / bufferLength;
-
-// 		for (let l = 0; l < layers; l++) {
-// 			const offsetY = baseY + (l - layers / 2) * spacing;
-// 			const amplitude = 10;
-
-
-// 			ctx.strokeStyle = colors[l % colors.length];
-// 			ctx.shadowColor = colors[l % colors.length];
-// 			ctx.shadowBlur = 12;
-// 			ctx.lineWidth = 3.5;
-// 			ctx.lineCap = 'round';
-// 			ctx.beginPath();
-// 			let x = 0;
-// 			for (let i = 0; i < bufferLength; i++) {
-// 				const v = dataArray[i] / 128.0;
-// 				const y = offsetY + (v - 1) * amplitude * spacing * 2;
-
-// 				if (i === 0) {
-// 					ctx.moveTo(x, y);
-// 				} else {
-// 					ctx.lineTo(x, y);
-// 				}
-// 				x += sliceWidth;
-// 			}
-// 			ctx.stroke();
-// 		}
-// 	}
-// 	draw();
-// }
 
 
 //EFFECTS

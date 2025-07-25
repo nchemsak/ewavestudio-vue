@@ -1,5 +1,5 @@
 <template>
-	<div class="drum-sequencer container py-4">
+	<div class="drum-sequencer">
 		<div class="controls d-flex flex-wrap align-items-center justify-content-between mb-4">
 			<div>
 				<label class="form-label">Volume</label>
@@ -359,5 +359,6 @@ function getPadStyle(instrument, index) {
 		background: `linear-gradient(to top, pink ${percent}%, #fff ${percent}%)`
 	};
 }
-
+console.log(masterGain.gain.value); // Should be > 0
+console.log(audioCtx.state); // Should be "running"
 </script>
