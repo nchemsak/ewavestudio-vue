@@ -1841,10 +1841,6 @@ input[type="range"] {
   max-height: 20px;
 }
 
-
-
-
-
 .studio-wrap {
   display: flex;
   justify-content: center;
@@ -1854,17 +1850,15 @@ input[type="range"] {
   /* height: 100vh; */
 }
 
-
-
 .speaker {
   width: 100px;
   position: relative;
   z-index: 2;
-  transform: translateY(-10px); 
+  transform: translateY(-10px);
 }
 
 .speaker::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -10px;
   left: 50%;

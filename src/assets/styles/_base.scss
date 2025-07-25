@@ -8,11 +8,9 @@
 }
 
 body {
-
-
-/* Unmatched Sections */
-/* background-color: RGBA(47, 50, 56, 1); */
-color: lightgrey;
+  /* Unmatched Sections */
+  /* background-color: RGBA(47, 50, 56, 1); */
+  color: lightgrey;
   background-image: url("../images/black-thread.png");
 
   /* font-family: system-ui, sans-serif;
@@ -32,10 +30,10 @@ body {
   width: 100%;
   min-height: 100%;
 
-/* ensures it covers at least viewport */
-height: auto;
+  /* ensures it covers at least viewport */
+  height: auto;
 
-/* allows it to grow beyond viewport */
+  /* allows it to grow beyond viewport */
 }
 
 body {
@@ -246,7 +244,7 @@ li {
 //   border-radius: 0%;
 //   z-index: 1;
 //   opacity: 0.9;
-  /*  -webkit-box-shadow: 10px 11px 25px 0px rgba(0, 0, 0, 0.75);
+/*  -webkit-box-shadow: 10px 11px 25px 0px rgba(0, 0, 0, 0.75);
   -moz-box-shadow: 10px 11px 25px 0px rgba(0, 0, 0, 0.75);
   box-shadow: 10px 11px 25px 0px rgba(0, 0, 0, 0.75);*/
 // }
@@ -337,8 +335,8 @@ img {
   top: 0%;
   left: 0%;
 
-/* background: linear-gradient(rgba(251, 139, 166, 0.7), rgba(224, 140, 194, 0.8), rgba(194, 139, 228, 0.9)), url(""); */
-background: url("../images/circleWave.gif");
+  /* background: linear-gradient(rgba(251, 139, 166, 0.7), rgba(224, 140, 194, 0.8), rgba(194, 139, 228, 0.9)), url(""); */
+  background: url("../images/circleWave.gif");
   background-size: cover;
   border-radius: 0%;
   z-index: 1;
@@ -357,8 +355,8 @@ background: url("../images/circleWave.gif");
   top: 0%;
   left: 0%;
 
-/* background: linear-gradient(rgba(251, 139, 166, 0.7), rgba(224, 140, 194, 0.8), rgba(194, 139, 228, 0.9)), url(""); */
-background: url("../images/ballWave.gif");
+  /* background: linear-gradient(rgba(251, 139, 166, 0.7), rgba(224, 140, 194, 0.8), rgba(194, 139, 228, 0.9)), url(""); */
+  background: url("../images/ballWave.gif");
   background-size: cover;
   border-radius: 0%;
   z-index: 1;
@@ -377,8 +375,8 @@ background: url("../images/ballWave.gif");
   top: 0%;
   left: 0%;
 
-/* background: linear-gradient(rgba(251, 139, 166, 0.7), rgba(224, 140, 194, 0.8), rgba(194, 139, 228, 0.9)), url(""); */
-background: url("../images/basicWave.gif");
+  /* background: linear-gradient(rgba(251, 139, 166, 0.7), rgba(224, 140, 194, 0.8), rgba(194, 139, 228, 0.9)), url(""); */
+  background: url("../images/basicWave.gif");
   background-size: cover;
   border-radius: 0%;
   z-index: 1;
@@ -939,7 +937,7 @@ input[type="range"] {
   margin: 0 auto;
   max-width: 600px;
 
-/* Controls maximum width */
+  /* Controls maximum width */
 }
 
 .active-note-label-label {
@@ -954,7 +952,7 @@ input[type="range"] {
   gap: 6px;
   margin-top: 6px;
 
-/* Space between label and notes */
+  /* Space between label and notes */
 }
 
 .active-note-label {
@@ -976,7 +974,7 @@ input[type="range"] {
   display: inline-block;
   margin-right: 4px;
 
-/* Adds spacing between icon and note */
+  /* Adds spacing between icon and note */
 }
 
 .note-text {
@@ -1124,7 +1122,7 @@ input[type="range"]::-webkit-slider-thumb {
   cursor: grab;
   margin-top: -7px;
 
-/* Align thumb with track */
+  /* Align thumb with track */
 }
 
 input[type="range"]::-moz-range-thumb {
@@ -1207,8 +1205,6 @@ input[type="range"]:active::-ms-thumb {
   cursor: grabbing;
 }
 
-
 .waveform-selector {
   justify-content: center;
 }
-

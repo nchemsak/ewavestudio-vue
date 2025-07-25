@@ -1,0 +1,154 @@
+.drum-sequencer {
+    .pad {
+        width: 30px;
+        height: 30px;
+        border: 1px solid #555;
+        margin: 2px;
+        background-color: #222;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .pad.selected {
+        background-color: #0cf;
+    }
+
+    .pad.playing {
+        border: 2px solid #fff;
+        box-shadow: 0 0 6px #0ff;
+    }
+
+    .instrument-grid {
+        max-width: 650px;
+        margin: auto;
+    }
+
+    .pad.selected.playing {
+        background-color: #0ff;
+    }
+
+    .velocity-slider {
+        width: 30px;
+        margin-top: 2px;
+    }
+
+    .pad-row {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
+
+    .instrument-grid .d-flex::-webkit-scrollbar {
+        height: 6px;
+    }
+
+    .instrument-grid .d-flex::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.3);
+        border-radius: 3px;
+    }
+
+    .pad-row {
+        padding-bottom: 4px;
+        padding-right: 12px;
+    }
+
+    .mute-indicator {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background-color: $color-teal-light;
+        box-shadow: 0 0 4px $color-white;
+        cursor: pointer;
+        transition:
+            background-color 0.2s,
+            box-shadow 0.2s;
+    }
+
+    .mute-indicator.muted {
+        background-color: #555;
+        box-shadow: none;
+    }
+
+    .channel-volume input[type="range"] {
+        max-width: 150px;
+        height: 4px;
+    }
+
+    body.scrubbing {
+        cursor: ns-resize;
+    }
+
+    :global(body.scrubbing) {
+        cursor: ns-resize;
+    }
+
+    .pad-wrapper {
+        // position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        //   padding-top: 60px;
+    }
+
+    .hover-slider {
+        position: absolute;
+        transform: translateY(-100%); // move above
+        width: 30px;
+        height: 48px;
+        z-index: 10;
+        transition: opacity 0.2s ease;
+        opacity: 0.9;
+        background: rgba(0, 0, 0, 0.2); // optional visual cue
+    }
+    .hover-slider input[type="range"] {
+        writing-mode: bt-lr; /* vertical slider */
+        transform: rotate(270deg);
+        width: 60px;
+        height: 30px;
+    }
+
+    .channel-label:hover strong {
+        text-decoration: underline dotted;
+        color: lighten($color-white, 10%);
+    }
+
+    .channel-label {
+        cursor: pointer;
+        user-select: none;
+
+        .rename-icon {
+            font-size: 0.9rem;
+            opacity: 0.6;
+            margin-left: 4px;
+            transition: opacity 0.2s;
+        }
+
+        &:hover .rename-icon {
+            opacity: 1;
+        }
+    }
+
+    .rename-icon {
+        position: relative;
+        cursor: pointer;
+    }
+
+    .custom-tooltip {
+        position: absolute;
+        top: -28px;
+        left: 0;
+        background: #333;
+        color: #fff;
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        border-radius: 4px;
+        white-space: nowrap;
+        z-index: 20;
+        opacity: 0.95;
+        pointer-events: none;
+        transition: opacity 0.1s ease-in-out;
+    }
+
+    .upload-icon {
+        cursor: pointer;
+    }
+}

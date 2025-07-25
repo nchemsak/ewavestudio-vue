@@ -3,18 +3,9 @@
 		<div class="controls d-flex flex-wrap align-items-center justify-content-between mb-4">
 			<div>
 				<label class="form-label">Volume</label>
-				<input type="range" min="0" max="1" step="0.01" v-model="volume" class="form-range seqOptin" />
+				<input type="range" min="0" max="1" step="0.01" v-model="volume" class="styled-slider" />
 			</div>
-			<!-- <div>
-				<label class="form-label">Tempo</label>
-				<div class="d-flex align-items-center gap-2">
-					<input type="number" v-model.number="tempo" class="form-control w-auto" />
-					<button class="btn btn-secondary" @click="tempo -= 1">-1</button>
-					<button class="btn btn-secondary" @click="tempo += 1">+1</button>
-					<button class="btn btn-secondary" @click="tempo -= 5">-5</button>
-					<button class="btn btn-secondary" @click="tempo += 5">+5</button>
-				</div>
-			</div> -->
+
 			<div>
 				<label class="form-label">Tempo</label>
 				<div class="d-flex align-items-center gap-2">
@@ -36,18 +27,64 @@
 					<div class="mute-indicator" :class="{ muted: instrument.muted }"
 						@click="toggleMute(instrument.name)" role="button" aria-label="Toggle Mute"
 						:title="instrument.muted ? 'Muted' : 'Playing'"></div>
-					<strong>{{ instrument.label }}</strong>
+					<!-- <div class="channel-label d-flex align-items-center gap-1" @click="editLabel(instrument)">
+						<template v-if="!instrument.isEditingName">
+							<strong>{{ instrument.label }}</strong>
+							<span class="rename-icon" @mouseenter="hoveredLabel = instrument.name"
+								@mouseleave="hoveredLabel = null">
+								✏️
+								<span v-if="hoveredLabel === instrument.name" class="custom-tooltip">Click to
+									rename</span>
+							</span>
+
+						</template>
+
+<template v-else>
+							<input v-model="instrument.label" @blur="stopEditingLabel(instrument)"
+								@keydown.enter.prevent="stopEditingLabel(instrument)"
+								class="form-control form-control-sm" style="max-width: 150px;"
+								:ref="el => instrument.inputRef = el" />
+						</template>
+</div> -->
+					<div class="channel-label d-flex align-items-center gap-1" @click="editLabel(instrument)">
+						<template v-if="!instrument.isEditingName">
+							<strong @mouseenter="hoveredLabel = instrument.name" @mouseleave="hoveredLabel = null"
+								class="position-relative">
+								{{ instrument.label }}
+								<span v-if="hoveredLabel === instrument.name" class="custom-tooltip">
+									Click to rename
+								</span>
+							</strong>
+						</template>
+
+						<template v-else>
+							<input v-model="instrument.label" @blur="stopEditingLabel(instrument)"
+								@keydown.enter.prevent="stopEditingLabel(instrument)"
+								class="form-control form-control-sm" style="max-width: 150px;"
+								:ref="el => instrument.inputRef = el" />
+						</template>
+					</div>
+
+					<!-- Only show for custom channels -->
+					<span v-if="instrument.name.startsWith('custom')" class="mb-2">
+						<label class="upload-icon" :title="`Load sample for ${instrument.label}`">
+							📁
+							<input type="file" accept="audio/*" @change="e => loadUserSample(e, instrument)"
+								style="display: none" />
+						</label>
+					</span>
+
 				</div>
 
 				<div class="channel-volume mb-2">
 					<input type="range" min="0" max="1" step="0.01" v-model.number="instrument.channelVolume"
-						class="form-range" :aria-label="`${instrument.label} Channel Volume`" />
+						class="styled-slider" :aria-label="`${instrument.label} Channel Volume`" />
 				</div>
 
 
 
 				<div class="d-flex pad-row">
-					<div v-for="(active, index) in instrument.steps" :key="index"
+					<!-- <div v-for="(active, index) in instrument.steps" :key="index"
 						class="d-flex flex-column align-items-center me-1">
 						<div :class="[
 							'pad',
@@ -58,11 +95,31 @@
 						</div>
 						<input v-if="active" type="range" min="0" max="1" step="0.05"
 							v-model.number="instrument.velocities[index]" class="velocity-slider" />
+					</div> -->
+					<div v-for="(active, index) in instrument.steps" :key="index" class="pad-wrapper"
+						@mouseenter="hoveredPad = `${instrument.name}-${index}`" @mouseleave="hoveredPad = null">
+
+						<!-- <div :class="['pad', { selected: active }, { playing: index === currentStep }]"
+							@mousedown="handleMouseDown($event, instrument.name, index)"
+							@mouseenter="handleMouseEnter(instrument.name, index)" @dragstart.prevent>
+						</div> -->
+						<div :class="['pad', { selected: active }, { playing: index === currentStep }]"
+							@mousedown="handleMouseDown($event, instrument.name, index)"
+							@mouseenter="handleMouseEnter(instrument.name, index)" @dragstart.prevent
+							:style="getPadStyle(instrument, index)"></div>
+						<!-- Floating slider -->
+						<div v-if="active && hoveredPad === `${instrument.name}-${index}`" class="hover-slider">
+							<input type="range" min="0" max="1" step="0.01"
+								v-model.number="instrument.velocities[index]" />
+						</div>
 					</div>
 
 
 				</div>
 			</div>
+			<button class="btn btn-success mb-3" @click="addCustomChannel">
+				+ Add Channel
+			</button>
 		</div>
 	</div>
 </template>
@@ -73,6 +130,29 @@ import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 let isScrubbing = false;
 let startY = 0;
 let startTempo = 0;
+const hoveredPad = ref(null);
+const hoveredLabel = ref(null); // holds the name of the instrument being hovered
+
+import { nextTick } from 'vue';
+
+function editLabel(instrument) {
+	instrument.isEditingName = true;
+
+	nextTick(() => {
+		const el = instrument.inputRef;
+		if (el) {
+			el.focus();
+			const val = el.value;
+			el.setSelectionRange(val.length, val.length); // place cursor at end
+		}
+	});
+}
+
+
+function stopEditingLabel(instrument) {
+	instrument.isEditingName = false;
+	hoveredLabel.value = null;
+}
 
 function handleTempoMouseDown(e) {
 	isScrubbing = true;
@@ -118,6 +198,7 @@ const instruments = ref([
 	{
 		name: 'kick',
 		label: 'Kick',
+		isEditingName: false,
 		buffer: null,
 		muted: false,
 		channelVolume: 1.0,
@@ -126,6 +207,7 @@ const instruments = ref([
 	}, {
 		name: 'snare',
 		label: 'Snare',
+		isEditingName: false,
 		buffer: null,
 		muted: false,
 		channelVolume: 1.0,
@@ -135,6 +217,7 @@ const instruments = ref([
 	{
 		name: 'hihat',
 		label: 'Hi-Hat',
+		isEditingName: false,
 		buffer: null,
 		muted: false,
 		channelVolume: 1.0,
@@ -142,6 +225,53 @@ const instruments = ref([
 		velocities: Array(16).fill(1.0)
 	},
 ]);
+
+function addCustomChannel() {
+	const id = Date.now();
+	instruments.value.push({
+		name: `custom-${id}`,
+		label: `Custom ${instruments.value.length + 1}`,
+		buffer: null,
+		muted: false,
+		channelVolume: 1.0,
+		steps: Array(16).fill(false),
+		velocities: Array(16).fill(1.0),
+	});
+}
+
+// function loadUserSample(event, instrument) {
+// 	const file = event.target.files[0];
+// 	if (!file) return;
+
+// 	const reader = new FileReader();
+// 	reader.onload = function (e) {
+// 		audioCtx.decodeAudioData(e.target.result, decoded => {
+// 			instrument.buffer = decoded;
+// 		}, err => {
+// 			console.error("Error decoding audio", err);
+// 		});
+// 	};
+// 	reader.readAsArrayBuffer(file);
+// }
+function loadUserSample(event, instrument) {
+	const file = event.target.files[0];
+	if (!file) return;
+
+	// Auto-set label based on file name (remove extension)
+	const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+	instrument.label = nameWithoutExt;
+
+	const reader = new FileReader();
+	reader.onload = function (e) {
+		audioCtx.decodeAudioData(e.target.result, decoded => {
+			instrument.buffer = decoded;
+		}, err => {
+			console.error("Error decoding audio", err);
+		});
+	};
+	reader.readAsArrayBuffer(file);
+}
+
 
 let loopId = null;
 let startTime = 0;
@@ -263,90 +393,15 @@ onBeforeUnmount(() => {
 if (isScrubbing) document.body.classList.add('scrubbing');
 else document.body.classList.remove('scrubbing');
 
+function getPadStyle(instrument, index) {
+	if (!instrument.steps[index]) return {};
+
+	const velocity = instrument.velocities[index];
+	const percent = Math.round(velocity * 100);
+
+	return {
+		background: `linear-gradient(to top, pink ${percent}%, #fff ${percent}%)`
+	};
+}
 
 </script>
-
-<style scoped>
-.pad {
-	width: 30px;
-	height: 30px;
-	border: 1px solid #555;
-	margin: 2px;
-	background-color: #222;
-	cursor: pointer;
-	transition: background-color 0.2s;
-}
-
-.pad.selected {
-	background-color: #0cf;
-}
-
-.pad.playing {
-	border: 2px solid #fff;
-	box-shadow: 0 0 6px #0ff;
-}
-
-.instrument-grid {
-	max-width: 650px;
-	margin: auto;
-}
-
-.pad.selected.playing {
-	background-color: #0ff;
-	/* or a slightly different tone */
-}
-
-.velocity-slider {
-	width: 30px;
-	margin-top: 2px;
-}
-
-.pad-row {
-	overflow-x: auto;
-	flex-wrap: nowrap;
-}
-
-.instrument-grid .d-flex::-webkit-scrollbar {
-	height: 6px;
-}
-
-.instrument-grid .d-flex::-webkit-scrollbar-thumb {
-	background-color: rgba(255, 255, 255, 0.3);
-	border-radius: 3px;
-}
-
-.pad-row {
-	padding-bottom: 4px;
-	padding-right: 12px;
-}
-
-
-.mute-indicator {
-	width: 14px;
-	height: 14px;
-	border-radius: 50%;
-	background-color: #0f0;
-	/* green */
-	box-shadow: 0 0 4px #0f0;
-	cursor: pointer;
-	transition: background-color 0.2s, box-shadow 0.2s;
-}
-
-.mute-indicator.muted {
-	background-color: #555;
-	box-shadow: none;
-}
-
-.channel-volume input[type="range"] {
-	max-width: 150px;
-	height: 4px;
-}
-
-body.scrubbing {
-	cursor: ns-resize;
-}
-
-:global(body.scrubbing) {
-	cursor: ns-resize;
-}
-</style>
