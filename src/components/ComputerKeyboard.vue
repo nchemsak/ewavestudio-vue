@@ -1,258 +1,273 @@
-<template>
-	<div class="computer-keyboard">
+	<template>
+		<div class="computer-keyboard">
 
 
-		<!-- Custom Waveform Controls -->
-		<div v-if="selectedWave1 === 'custom' || selectedWave2 === 'custom'" id="custom-waveform-controls" class="mt-4">
-			<h4>Custom Waveform Harmonics</h4>
-			<div class="d-flex gap-4 align-items-start">
-				<div>
-					<div v-for="i in 8" :key="'real-' + i" class="mb-2">
-						<label>H{{ i }}</label>
-						<input type="range" min="-1" max="1" step="0.01" :value="customReal[i]"
-							@input="updateHarmonic(i, $event.target.value)"
-							:aria-valuetext="`Harmonic ${i} amplitude: ${customReal[i]}`" />
+			<!-- Custom Waveform Controls -->
+			<div v-if="selectedWave1 === 'custom' || selectedWave2 === 'custom'" id="custom-waveform-controls"
+				class="mt-4">
+				<h4>Custom Waveform Harmonics</h4>
+				<div class="d-flex gap-4 align-items-start">
+					<div>
+						<div v-for="i in 8" :key="'real-' + i" class="mb-2">
+							<label>H{{ i }}</label>
+							<input type="range" min="-1" max="1" step="0.01" :value="customReal[i]"
+								@input="updateHarmonic(i, $event.target.value)"
+								:aria-valuetext="`Harmonic ${i} amplitude: ${customReal[i]}`" />
+						</div>
 					</div>
-				</div>
-			</div><br />
-			<button type="button" class="btn btn-outline-secondary mt-3" @click="resetHarmonics">Reset
-				Harmonics</button>
-		</div>
-
-		<!-- Keyboard Interface -->
-		<div class="keyboard-container">
-			<!-- Volume Slider -->
-			<div class="mb-4">
-				<label for="volume" class="form-label">Volume</label><br />
-				<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume"
-					v-model="volume" :aria-valuetext="`${Math.round(volume * 100)} percent`" />
-				<div class="slider-percentage" id="label-volume">{{ volumeLabel }}</div>
+				</div><br />
+				<button type="button" class="btn btn-outline-secondary mt-3" @click="resetHarmonics">Reset
+					Harmonics</button>
 			</div>
-			<div class="waveformGroupWrapper">
-				<div class="visualizer-stack d-flex flex-column gap-3 mb-4">
+
+			<!-- Keyboard Interface -->
+			<div class="keyboard-container">
+				<!-- Volume Slider -->
+				<div class="mb-4">
+					<label for="volume" class="form-label">Volume</label><br />
+					<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume"
+						v-model="volume" :aria-valuetext="`${Math.round(volume * 100)} percent`" />
+					<div class="slider-percentage" id="label-volume">{{ volumeLabel }}</div>
+				</div>
+				<div class="waveformGroupWrapper">
+					<div class="visualizer-stack d-flex flex-column gap-3 mb-4">
+						<div class="row">
+							<div class="col-md-6">
+								<canvas id="oscilloscope1" width="600" height="200" class="waveform-visual"></canvas>
+							</div>
+							<div class="col-md-6">
+								<canvas id="oscilloscope2" width="600" height="200" class="waveform-visual"></canvas>
+							</div>
+
+						</div>
+					</div>
 					<div class="row">
 						<div class="col-md-6">
-							<canvas id="oscilloscope1" width="600" height="200" class="waveform-visual"></canvas>
+							<div class="mb-4 waveformgroup">
+								<label class="form-label d-block">Waveform Group 1</label>
+								<div class="waveform-selector d-flex flex-wrap">
+									<div v-for="wave in waveforms" :key="wave + '-1'" class="waveform-option"
+										:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
+										@click="selectedWave2 !== wave && selectWave1(wave)">
+
+										<!-- @click="selectWave1(wave)"> -->
+										<template v-if="wave !== 'custom'">
+											<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
+										</template>
+										<template v-else>
+											<div class="custom-wave-box text-center">
+												<canvas id="waveformPreview1"></canvas>
+											</div>
+										</template>
+									</div>
+								</div>
+								<div class="unison-controls">
+									<div class="slider-label-row">
+										<label>Unison Count</label>
+										<span>{{ unisonCount1 }}</span>
+									</div>
+									<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount1" />
+
+									<div class="slider-label-row">
+										<label>Detune</label>
+										<span>{{ detuneCents1 }} cents</span>
+									</div>
+									<input type="range" class="styled-slider" min="0" max="50" step="1"
+										v-model="detuneCents1" />
+
+									<div class="slider-label-row">
+										<label>Stereo Spread</label>
+										<span>{{ stereoSpread1 }} </span>
+									</div>
+									<input type="range" class="styled-slider" min="0" max="1" step="0.01"
+										v-model="stereoSpread1" />
+								</div>
+							</div>
 						</div>
 						<div class="col-md-6">
-							<canvas id="oscilloscope2" width="600" height="200" class="waveform-visual"></canvas>
+							<div class="mb-4 waveformgroup">
+								<label class="form-label d-block">Waveform Group 2</label>
+								<div class="waveform-selector d-flex flex-wrap">
+									<div v-for="wave in waveforms" :key="wave + '-2'" class="waveform-option"
+										:class="{ selected: selectedWave2 === wave, disabled: selectedWave1 === wave }"
+										@click="selectedWave1 !== wave && selectWave2(wave)">
+										<!-- @click="selectWave2(wave)"> -->
+										<template v-if="wave !== 'custom'">
+											<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
+										</template>
+										<template v-else>
+											<div class="custom-wave-box text-center">
+												<canvas id="waveformPreview2"></canvas>
+											</div>
+										</template>
+									</div>
+								</div>
+								<div class="unison-controls">
+									<div class="slider-label-row">
+										<label>Unison Count</label>
+										<span>{{ unisonCount2 }}</span>
+									</div>
+									<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount2" />
+
+									<div class="slider-label-row">
+										<label>Detune</label>
+										<span>{{ detuneCents2 }} cents</span>
+									</div>
+									<input type="range" class="styled-slider" min="0" max="50" step="1"
+										v-model="detuneCents2" />
+
+
+									<div class="slider-label-row">
+										<label>Stereo Spread</label>
+										<span>{{ stereoSpread2 }} </span>
+									</div>
+									<input type="range" class="styled-slider" min="0" max="1" step="0.01"
+										v-model="stereoSpread2" />
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="row">
+						<div class="col-md-12">
+							<div class="mb-4 waveMixWrapper">
+
+								<label for="waveMix" class="form-label">Wave Mix</label><br />
+								<input type="range" min="0" max="1" step="0.01" class="styled-slider" id="waveMix"
+									v-model="waveMix"
+									:aria-valuetext="`Wave 1: ${waveMixDisplay.wave1}%, Wave 2: ${waveMixDisplay.wave2}%`" />
+								<div class="slider-percentage">
+									<span class="wave1percent">Wave 1: {{ waveMixDisplay.wave1 }}%</span>&nbsp; ⇄
+									&nbsp;<span class="wave2percent">Wave 2: {{ waveMixDisplay.wave2 }}%</span>
+								</div>
+							</div>
 						</div>
 
 					</div>
 				</div>
-				<div class="row">
-					<div class="col-md-6">
-						<div class="mb-4 waveformgroup">
-							<label class="form-label d-block">Waveform Group 1</label>
-							<div class="waveform-selector d-flex flex-wrap">
-								<div v-for="wave in waveforms" :key="wave + '-1'" class="waveform-option"
-									:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
-									@click="selectedWave2 !== wave && selectWave1(wave)">
 
-									<!-- @click="selectWave1(wave)"> -->
-									<template v-if="wave !== 'custom'">
-										<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
-									</template>
-									<template v-else>
-										<div class="custom-wave-box text-center">
-											<canvas id="waveformPreview1"></canvas>
-										</div>
-									</template>
-								</div>
-							</div>
-							<div class="unison-controls">
-								<div class="slider-label-row">
-									<label>Unison Count</label>
-									<span>{{ unisonCount1 }}</span>
-								</div>
-								<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount1" />
-
-								<div class="slider-label-row">
-									<label>Detune</label>
-									<span>{{ detuneCents1 }} cents</span>
-								</div>
-								<input type="range" class="styled-slider" min="0" max="50" step="1"
-									v-model="detuneCents1" />
-
-								<div class="slider-label-row">
-									<label>Stereo Spread</label>
-									<span>{{ stereoSpread1 }} </span>
-								</div>
-								<input type="range" class="styled-slider" min="0" max="1" step="0.01"
-									v-model="stereoSpread1" />
-							</div>
-						</div>
-					</div>
-					<div class="col-md-6">
-						<div class="mb-4 waveformgroup">
-							<label class="form-label d-block">Waveform Group 2</label>
-							<div class="waveform-selector d-flex flex-wrap">
-								<div v-for="wave in waveforms" :key="wave + '-2'" class="waveform-option"
-									:class="{ selected: selectedWave2 === wave, disabled: selectedWave1 === wave }"
-									@click="selectedWave1 !== wave && selectWave2(wave)">
-									<!-- @click="selectWave2(wave)"> -->
-									<template v-if="wave !== 'custom'">
-										<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
-									</template>
-									<template v-else>
-										<div class="custom-wave-box text-center">
-											<canvas id="waveformPreview2"></canvas>
-										</div>
-									</template>
-								</div>
-							</div>
-							<div class="unison-controls">
-								<div class="slider-label-row">
-									<label>Unison Count</label>
-									<span>{{ unisonCount2 }}</span>
-								</div>
-								<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount2" />
-
-								<div class="slider-label-row">
-									<label>Detune</label>
-									<span>{{ detuneCents2 }} cents</span>
-								</div>
-								<input type="range" class="styled-slider" min="0" max="50" step="1"
-									v-model="detuneCents2" />
-
-
-								<div class="slider-label-row">
-									<label>Stereo Spread</label>
-									<span>{{ stereoSpread2 }} </span>
-								</div>
-								<input type="range" class="styled-slider" min="0" max="1" step="0.01"
-									v-model="stereoSpread2" />
-							</div>
-						</div>
-					</div>
+				<div class="mb-3 mt-3 midiModeWrapper">
+					<select id="midiMode" v-model="midiMode" @change="onMidiModeChange" class="form-select w-auto">
+						<option disabled selected value="">MIDI Mode</option>
+						<option value="osc">MIDI Keyboard (Synth)</option>
+						<option value="sample" disabled>Sampler (Coming Soon)</option>
+					</select>
 				</div>
-
-				<div class="row">
-					<div class="col-md-12">
-						<div class="mb-4 waveMixWrapper">
-
-							<label for="waveMix" class="form-label">Wave Mix</label><br />
-							<input type="range" min="0" max="1" step="0.01" class="styled-slider" id="waveMix"
-								v-model="waveMix"
-								:aria-valuetext="`Wave 1: ${waveMixDisplay.wave1}%, Wave 2: ${waveMixDisplay.wave2}%`" />
-							<div class="slider-percentage">
-								<span class="wave1percent">Wave 1: {{ waveMixDisplay.wave1 }}%</span>&nbsp; ⇄
-								&nbsp;<span class="wave2percent">Wave 2: {{ waveMixDisplay.wave2 }}%</span>
-							</div>
+				<div class="effectsWrapper">
+					<div class="row">
+						<div class="col-md-12">
+							<h5>Effects</h5>
 						</div>
 					</div>
+
+
+
+
+
+
+
+					<div class="row">
+						<div class="col-md-12">
+							<div class="form-check mt-3">
+								<input class="form-check-input" type="checkbox" id="delayEnabled"
+									v-model="delayEnabled">
+								<label class="form-check-label" for="delayEnabled">
+									Enable Delay
+								</label>
+							</div>
+							<div>
+								<label>Delay Time (ms)</label>
+								<input type="range" min="0" max="1000" step="10" v-model="delayTime"
+									class="styled-slider" />
+							</div>
+							<div>
+								<label>Feedback</label>
+								<input type="range" min="0" max="0.95" step="0.01" v-model="delayFeedback"
+									class="styled-slider" />
+							</div>
+							<div>
+								<label>Wet/Dry Mix</label>
+								<input type="range" min="0" max="1" step="0.01" v-model="delayWetMix"
+									class="styled-slider" />
+							</div>
+						</div>
+
+					</div>
+
 
 				</div>
+				<ul class="keyboard">
+					<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
+
+						<!-- Mouse-only key -->
+						<template v-if="!note.id">
+							<div class="key mouse-only" :data-note="note.note" role="button" tabindex="0"
+								:aria-label="`Note ${note.note}`" @mousedown="playNote(note.note)"
+								@mouseup="stopNote(note.note)" @mouseleave="stopNote(note.note)"
+								@mouseenter="onMouseEnter(note.note)">
+								<span class="note">{{ note.note }}</span>
+							</div>
+
+							<div v-if="note.sharp" class="upper-key mouse-only" :data-note="note.sharp" role="button"
+								tabindex="0" :aria-label="`Note ${note.sharp}`" @mousedown="playNote(note.sharp)"
+								@mouseup="stopNote(note.sharp)" @mouseleave="stopNote(note.sharp)"
+								@mouseenter="onMouseEnter(note.sharp)">
+								<span><small>{{ note.sharp }}</small></span>
+							</div>
+						</template>
+
+						<!-- Keyboard and Mouse key -->
+						<template v-else>
+							<div class="key" :id="note.id" :data-note="note.note" role="button" tabindex="0"
+								:aria-label="`Key ${note.label}, note ${note.note}`"
+								@mousedown="onKeyMouseDown(note.id)" @mouseup="onKeyMouseUp(note.id)"
+								@mouseleave="onKeyMouseUp(note.id)" @mouseenter="onKeyMouseEnter(note.id)">
+								<span class="kbd">{{ note.label }}</span>
+								<span class="note">{{ note.note }}</span>
+							</div>
+
+							<div v-if="note.sharp" class="upper-key" :id="note.sharpId" :data-note="note.sharp"
+								role="button" tabindex="0" :aria-label="`Key ${note.sharpLabel}, note ${note.sharp}`"
+								@mousedown="onKeyMouseDown(note.sharpId)" @mouseup="onKeyMouseUp(note.sharpId)"
+								@mouseleave="onKeyMouseUp(note.sharpId)" @mouseenter="onKeyMouseEnter(note.sharpId)">
+								<span>{{ note.sharpLabel }}<br /><small>{{ note.sharp }}</small></span>
+							</div>
+						</template>
+
+					</li>
+				</ul>
+
+
+
 			</div>
-
-			<div class="mb-3 mt-3 midiModeWrapper">
-				<select id="midiMode" v-model="midiMode" @change="onMidiModeChange" class="form-select w-auto">
-					<option disabled selected value="">MIDI Mode</option>
-					<option value="osc">MIDI Keyboard (Synth)</option>
-					<option value="sample" disabled>Sampler (Coming Soon)</option>
-				</select>
-			</div>
-
-			<div class="row">
-				<div class="col-md-12">
-
-					<div class="mt-5">
-						<h5>Effects</h5>
-						<div class="form-check mt-3">
-							<input class="form-check-input" type="checkbox" id="delayEnabled" v-model="delayEnabled">
-							<label class="form-check-label" for="delayEnabled">
-								Enable Delay
-							</label>
-						</div>
-						<div>
-							<label>Delay Time (ms)</label>
-							<input type="range" min="0" max="1000" step="10" v-model="delayTime" />
-						</div>
-						<div>
-							<label>Feedback</label>
-							<input type="range" min="0" max="0.95" step="0.01" v-model="delayFeedback" />
-						</div>
-						<div>
-							<label>Wet/Dry Mix</label>
-							<input type="range" min="0" max="1" step="0.01" v-model="delayWetMix" />
-						</div>
-					</div>
-				</div>
-
-			</div>
-
-			<ul class="keyboard">
-				<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
-
-					<!-- Mouse-only key -->
-					<template v-if="!note.id">
-						<div class="key mouse-only" :data-note="note.note" role="button" tabindex="0"
-							:aria-label="`Note ${note.note}`" @mousedown="playNote(note.note)"
-							@mouseup="stopNote(note.note)" @mouseleave="stopNote(note.note)"
-							@mouseenter="onMouseEnter(note.note)">
-							<span class="note">{{ note.note }}</span>
-						</div>
-
-						<div v-if="note.sharp" class="upper-key mouse-only" :data-note="note.sharp" role="button"
-							tabindex="0" :aria-label="`Note ${note.sharp}`" @mousedown="playNote(note.sharp)"
-							@mouseup="stopNote(note.sharp)" @mouseleave="stopNote(note.sharp)"
-							@mouseenter="onMouseEnter(note.sharp)">
-							<span><small>{{ note.sharp }}</small></span>
-						</div>
-					</template>
-
-					<!-- Keyboard and Mouse key -->
-					<template v-else>
-						<div class="key" :id="note.id" :data-note="note.note" role="button" tabindex="0"
-							:aria-label="`Key ${note.label}, note ${note.note}`" @mousedown="onKeyMouseDown(note.id)"
-							@mouseup="onKeyMouseUp(note.id)" @mouseleave="onKeyMouseUp(note.id)"
-							@mouseenter="onKeyMouseEnter(note.id)">
-							<span class="kbd">{{ note.label }}</span>
-							<span class="note">{{ note.note }}</span>
-						</div>
-
-						<div v-if="note.sharp" class="upper-key" :id="note.sharpId" :data-note="note.sharp"
-							role="button" tabindex="0" :aria-label="`Key ${note.sharpLabel}, note ${note.sharp}`"
-							@mousedown="onKeyMouseDown(note.sharpId)" @mouseup="onKeyMouseUp(note.sharpId)"
-							@mouseleave="onKeyMouseUp(note.sharpId)" @mouseenter="onKeyMouseEnter(note.sharpId)">
-							<span>{{ note.sharpLabel }}<br /><small>{{ note.sharp }}</small></span>
-						</div>
-					</template>
-
-				</li>
-			</ul>
-
-
-
 		</div>
-	</div>
-	<div class="text-center mt-4">
-		<div id="active-notes-display">
-			<span class="active-note-label-label">Active Notes:</span>
-			<span id="active-notes">
-				<span v-if="activeNotes.length === 0" class="active-note-label inactive">
-					<span class="note-icon">🎵</span>
-					<span class="note-text">None</span>
-				</span>
-				<span v-else>
-					<span v-for="note in activeNotes" :key="note" class="active-note-label">
-						<span class="note-icon">🎵</span><span class="note-text">{{ note }}</span>
+		<div class="text-center mt-4">
+			<div id="active-notes-display">
+				<span class="active-note-label-label">Active Notes:</span>
+				<span id="active-notes">
+					<span v-if="activeNotes.length === 0" class="active-note-label inactive">
+						<span class="note-icon">🎵</span>
+						<span class="note-text">None</span>
+					</span>
+					<span v-else>
+						<span v-for="note in activeNotes" :key="note" class="active-note-label">
+							<span class="note-icon">🎵</span><span class="note-text">{{ note }}</span>
+						</span>
 					</span>
 				</span>
-			</span>
+			</div>
 		</div>
-	</div>
-	<!-- <FloatingWindow v-if="showPresets" @close="showPresets = false">
-		<template #title>Presets</template>
-		<PresetBankPanel :banks="banks" :activeBankIndex="activeBankIndex" :isTyping="isTyping" @save="saveToBank"
-			@load="loadFromBank" @clear="clearBank" @edit="startEditingBank" :bankHasData="bankHasData"
-			@update:isTyping="val => isTyping = val" />
-	</FloatingWindow> -->
+		<!-- <FloatingWindow v-if="showPresets" @close="showPresets = false">
+			<template #title>Presets</template>
+			<PresetBankPanel :banks="banks" :activeBankIndex="activeBankIndex" :isTyping="isTyping" @save="saveToBank"
+				@load="loadFromBank" @clear="clearBank" @edit="startEditingBank" :bankHasData="bankHasData"
+				@update:isTyping="val => isTyping = val" />
+		</FloatingWindow> -->
 
 
 
 
-</template>
+	</template>
 
 <script setup>
 const isDisabled = (wave) => selectedWave2.value === wave;
@@ -426,6 +441,22 @@ const activeOscillators = new Map();
 const activeNotes = ref([]);
 
 
+function retriggerActiveNotes() {
+	const notesToRetrigger = [...activeNotes.value];
+
+	for (const note of notesToRetrigger) {
+		stopNote(note);
+	}
+
+	setTimeout(() => {
+		for (const note of notesToRetrigger) {
+			if (heldNotes.has(note)) {
+				playNote(note); // only retrigger if physically held
+			}
+		}
+	}, 50);
+}
+
 
 function playNote(note) {
 	const groupGainNodes = [];
@@ -560,6 +591,7 @@ function playNote(note) {
 }
 
 function stopNote(note) {
+	heldNotes.delete(note);
 	const active = activeOscillators.get(note);
 	if (active) {
 		// Stop audio
@@ -619,20 +651,32 @@ function handleMIDIMessage(event) {
 	}
 }
 
+
+
 function onKeyMouseDown(id) {
 	isMouseDown.value = true;
 	const note = keyMap[id];
-	if (note && !isNoteActive(note)) {
-		playNote(note);
-		document.getElementById(id)?.classList.add('active');
+	if (note) {
+		heldNotes.add(note);
+		if (!isNoteActive(note)) {
+			playNote(note);
+			document.getElementById(id)?.classList.add('active');
+		}
 	}
 }
 
+
+
+
 function onKeyMouseUp(id) {
 	const note = keyMap[id];
-	if (note) stopNote(note);
-	document.getElementById(id)?.classList.remove('active');
+	if (note) {
+		heldNotes.delete(note);
+		stopNote(note);
+		document.getElementById(id)?.classList.remove('active');
+	}
 }
+
 
 function onKeyMouseEnter(id) {
 	if (!isMouseDown.value) return;
@@ -643,14 +687,22 @@ function onKeyMouseEnter(id) {
 	}
 }
 
+function onMouseEnter(note) {
+	if (!isMouseDown.value) return;
+	if (!isNoteActive(note)) {
+		heldNotes.add(note);
+		playNote(note);
+	}
+}
+
 
 onMounted(() => {
 	drawWaveformFromReal(customReal.value);
 	drawWaveformFromReal(customReal.value, 'waveformPreview1');
 	drawWaveformFromReal(customReal.value, 'waveformPreview2');
 
-	drawOscilloscope(analyser1, 'oscilloscope1', 'cyan');
-	drawOscilloscope(analyser2, 'oscilloscope2', 'magenta');
+	drawOscilloscope(analyser1, 'oscilloscope1', '#27fcff');
+	drawOscilloscope(analyser2, 'oscilloscope2', 'pink');
 	// Set up MIDI immediately
 	if (navigator.requestMIDIAccess) {
 		navigator.requestMIDIAccess().then((access) => {
@@ -684,6 +736,8 @@ onMounted(() => {
 	window.addEventListener('mouseup', () => isMouseDown.value = false);
 	// drawOscilloscope();
 	// drawRainbowVisualizer();
+	connectEffects();
+
 });
 
 
@@ -703,8 +757,8 @@ function drawWaveformFromReal(real, canvasId = 'waveformPreview1') {
 	if (!canvas) return;
 
 	const dpr = window.devicePixelRatio || 1;
-	const width = 27;
-	const height = 27;
+	const width = 15;
+	const height = 15;
 	canvas.width = width * dpr;
 	canvas.height = height * dpr;
 	canvas.style.width = width + 'px';
@@ -836,12 +890,7 @@ function bankHasData(index) {
 const activeBankIndex = ref(null);
 
 
-function onMouseEnter(note) {
-	if (!isMouseDown.value) return;
-	if (!isNoteActive(note)) {
-		playNote(note);
-	}
-}
+
 
 function onMidiModeChange() {
 	if (audioCtx.state === 'suspended') {
@@ -901,69 +950,30 @@ watch(modulationDepth, (depth) => {
 	});
 });
 
-watch(detuneCents1, (val) => {
-	activeOscillators.forEach(({ oscillators }) => {
-		const unison = unisonCount1.value;
-		if (unison === 1) return;
 
-		let idx = 0;
-		for (let u = 0; u < unison; u++) {
-			const detuneOffset = (u - Math.floor(unison / 2)) * val;
-			const osc = oscillators[idx++];
-			if (osc?.detune) {
-				osc.detune.setTargetAtTime(detuneOffset, audioCtx.currentTime, 0.01);
-			}
-		}
-	});
-});
+let retriggerTimeout = null;
 
-watch(detuneCents2, (val) => {
-	activeOscillators.forEach(({ oscillators }) => {
-		const unison = unisonCount2.value;
-		if (unison === 1) return;
+const heldNotes = new Set();
 
-		let idx = unisonCount1.value; // Start at offset
-		for (let u = 0; u < unison; u++) {
-			const detuneOffset = (u - Math.floor(unison / 2)) * val;
-			const osc = oscillators[idx++];
-			if (osc?.detune) {
-				osc.detune.setTargetAtTime(detuneOffset, audioCtx.currentTime, 0.01);
-			}
-		}
-	});
-});
 
-watch(stereoSpread1, (val) => {
-	activeOscillators.forEach(({ panners }) => {
-		const unison = unisonCount1.value;
-		if (!panners || unison === 1) return;
+const retriggerActiveNotesDebounced = (() => {
+	let timeout = null;
+	return () => {
+		clearTimeout(timeout);
+		timeout = setTimeout(retriggerActiveNotes, 100);
+	};
+})();
 
-		let idx = 0;
-		for (let u = 0; u < unison; u++) {
-			const panVal = ((u - Math.floor(unison / 2)) / (unison - 1 || 1)) * val;
-			const panner = panners[idx++];
-			if (panner) {
-				panner.pan.setTargetAtTime(panVal, audioCtx.currentTime, 0.01);
-			}
-		}
-	});
-});
+watch(detuneCents1, retriggerActiveNotesDebounced);
+watch(unisonCount1, retriggerActiveNotesDebounced);
+watch(stereoSpread1, retriggerActiveNotesDebounced);
 
-watch(stereoSpread2, (val) => {
-	activeOscillators.forEach(({ panners }) => {
-		const unison = unisonCount2.value;
-		if (!panners || unison === 1) return;
+watch(detuneCents2, retriggerActiveNotesDebounced);
+watch(unisonCount2, retriggerActiveNotesDebounced);
+watch(stereoSpread2, retriggerActiveNotesDebounced);
 
-		let idx = unisonCount1.value;
-		for (let u = 0; u < unison; u++) {
-			const panVal = ((u - Math.floor(unison / 2)) / (unison - 1 || 1)) * val;
-			const panner = panners[idx++];
-			if (panner) {
-				panner.pan.setTargetAtTime(panVal, audioCtx.currentTime, 0.01);
-			}
-		}
-	});
-});
+
+
 
 
 watch(waveMix, (val) => {
@@ -1038,9 +1048,7 @@ function drawOscilloscope(analyser, canvasId = 'oscilloscope1', color = 'cyan') 
 
 //EFFECTS
 
-
-
-// Delay Nodes
+// DELAY Nodes
 const delayEnabled = ref(true);
 const delayNode = audioCtx.createDelay();
 delayNode.delayTime.value = 0.25; // 250ms
@@ -1054,29 +1062,6 @@ wetGain.gain.value = 0.5;
 const dryGain = audioCtx.createGain();
 dryGain.gain.value = 0.8;
 
-
-function connectEffects() {
-	masterGain.disconnect();
-	dryGain.disconnect();
-	wetGain.disconnect();
-	delayNode.disconnect();
-	feedbackGain.disconnect();
-
-	masterGain.connect(dryGain);
-
-	if (delayEnabled.value) {
-		masterGain.connect(delayNode);
-		delayNode.connect(feedbackGain);
-		feedbackGain.connect(delayNode);
-		delayNode.connect(wetGain);
-
-		wetGain.connect(analyser);
-	}
-
-	dryGain.connect(analyser);
-}
-
-connectEffects();
 const delayTime = ref(250);
 const delayFeedback = ref(0.35);
 const delayWetMix = ref(0.5);
@@ -1093,7 +1078,23 @@ watch(delayEnabled, () => {
 
 
 
-
+// CONNECT EFFECTS
+function connectEffects() {
+	masterGain.disconnect();
+	dryGain.disconnect();
+	wetGain.disconnect();
+	delayNode.disconnect();
+	feedbackGain.disconnect();
+	masterGain.connect(dryGain);
+	if (delayEnabled.value) {
+		masterGain.connect(delayNode);
+		delayNode.connect(feedbackGain);
+		feedbackGain.connect(delayNode);
+		delayNode.connect(wetGain);
+		wetGain.connect(analyser);
+	}
+	dryGain.connect(analyser);
+}
 
 
 </script>
