@@ -114,15 +114,33 @@
 	<div class="drum-sequencer" id="percussion-synth">
 		<div class="controls d-flex flex-wrap align-items-center justify-content-between mb-4">
 			<div>
-				<div class="slider-label-row">
-					<label>Attack</label> <span class="text-muted">{{ (synthAttack * 1000).toFixed(1) }} ms</span>
+				<div>
+					<label>Attack </label> <span class="text-muted">{{ (synthAttack * 1000).toFixed(1) }} ms</span>
 				</div>
 				<input type="range" min="0" max="100" step="1" v-model.number="attackSliderVal" class="styled-slider"
 					:aria-valuetext="`${(synthAttack * 1000).toFixed(1)} milliseconds`" />
 			</div>
 			<div>
-				<label class="form-label">Decay</label>
+				<label class="form-label">Decay <span class="text-muted">{{ (synthDecay * 1000).toFixed(0) }} ms</span>
+				</label>
 				<input type="range" min="0.05" max="2" step="0.01" v-model.number="synthDecay" class="styled-slider" />
+			</div>
+			<div>
+				<label class="form-label">
+					Pitch Env Amount
+					<span class="text-muted">{{ Math.round(pitchEnvAmt) }} Hz</span>
+				</label>
+				<input type="range" min="0" max="100" step="1" v-model.number="pitchEnvAmtSliderVal"
+					class="styled-slider" :aria-valuetext="`${Math.round(pitchEnvAmt)} Hz`" />
+			</div>
+			<div>
+				<label class="form-label">
+					Pitch Env Decay
+					<span class="text-muted">{{ (pitchEnvDecay * 1000).toFixed(0) }} ms</span>
+				</label>
+				<input type="range" min="0" max="100" step="1" v-model.number="pitchEnvDecaySliderVal"
+					class="styled-slider" :aria-valuetext="`${(pitchEnvDecay * 1000).toFixed(0)} milliseconds`" />
+
 			</div>
 
 		</div>
@@ -212,7 +230,22 @@ const synthDecay = ref(0.4);
 const selectedWaveform = ref("sine");
 const attackSliderVal = ref(20); // Initial slider value (0–100)
 const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
-
+// const pitchEnvAmt = ref(0);   // Hz
+const pitchEnvAmtSliderVal = ref(0); // Slider from 0–100
+const pitchEnvAmt = computed(() => {
+	const min = 1;     // ~1 Hz
+	const max = 2000;  // 2 kHz bend
+	const normalized = pitchEnvAmtSliderVal.value / 100;
+	return min * Math.pow(max / min, normalized);
+});
+// const pitchEnvDecay = ref(0.2); // seconds
+const pitchEnvDecaySliderVal = ref(30); // Slider 0–100, start near short decay
+const pitchEnvDecay = computed(() => {
+	const min = 0.01; // 10ms
+	const max = 1.0;  // 1000ms
+	const normalized = pitchEnvDecaySliderVal.value / 100;
+	return min * Math.pow(max / min, normalized);
+});
 // Logarithmic mapping: attack time in seconds
 const synthAttack = computed(() => {
 	const min = 0.001; // 1ms
@@ -419,7 +452,11 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	// Setup oscillator
 	// osc.type = 'sawtooth'; // or square/triangle later
 	osc.type = selectedWaveform.value;
-	osc.frequency.setValueAtTime(freq, startTime);
+	// osc.frequency.setValueAtTime(freq, startTime);
+	const startFreq = freq + pitchEnvAmt.value;
+	osc.frequency.setValueAtTime(startFreq, startTime);
+	osc.frequency.exponentialRampToValueAtTime(freq, startTime + pitchEnvDecay.value);
+
 
 	// Gain envelope
 	gain.gain.setValueAtTime(0.0001, startTime);
