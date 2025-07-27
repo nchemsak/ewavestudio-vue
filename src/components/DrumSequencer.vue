@@ -14,21 +14,7 @@
 						:title="'Scroll or drag to change tempo, or type a number'" />
 				</div>
 			</div>
-			<div>
-				<label class="form-label">Decay</label>
-				<input type="range" min="0.05" max="2" step="0.01" v-model.number="synthDecay" class="styled-slider" />
-			</div>
-			<div>
 
-
-				<div class="slider-label-row">
-					<label>Attack</label> <span class="text-muted">{{ (synthAttack * 1000).toFixed(1) }} ms</span>
-				</div>
-				<input type="range" min="0" max="100" step="1" v-model.number="attackSliderVal" class="styled-slider"
-					:aria-valuetext="`${(synthAttack * 1000).toFixed(1)} milliseconds`" />
-
-
-			</div>
 
 
 			<button class="btn btn-primary" @click="togglePlay">
@@ -38,7 +24,10 @@
 		</div>
 
 		<div class="instrument-grid">
-			<div v-for="instrument in instruments" :key="instrument.name" class="mb-3">
+			<!-- <div v-for="instrument in instruments" :key="instrument.name" class="mb-3"> -->
+			<div v-for="instrument in instruments.filter(i => i.name !== 'synth-voice')" :key="instrument.name"
+				class="mb-3">
+
 				<div class="d-flex align-items-center gap-2 mb-1">
 					<div class="mute-indicator" :class="{ muted: instrument.muted }"
 						@click="toggleMute(instrument.name)" role="button" aria-label="Toggle Mute"
@@ -122,10 +111,96 @@
 			</button>
 		</div>
 	</div>
+	<div class="drum-sequencer" id="percussion-synth">
+		<div class="controls d-flex flex-wrap align-items-center justify-content-between mb-4">
+			<div>
+				<div class="slider-label-row">
+					<label>Attack</label> <span class="text-muted">{{ (synthAttack * 1000).toFixed(1) }} ms</span>
+				</div>
+				<input type="range" min="0" max="100" step="1" v-model.number="attackSliderVal" class="styled-slider"
+					:aria-valuetext="`${(synthAttack * 1000).toFixed(1)} milliseconds`" />
+			</div>
+			<div>
+				<label class="form-label">Decay</label>
+				<input type="range" min="0.05" max="2" step="0.01" v-model.number="synthDecay" class="styled-slider" />
+			</div>
+
+		</div>
+
+
+
+		<div v-if="synthInstrument" class="mb-3">
+			<div class="d-flex align-items-center gap-2 mb-1">
+				<div class="mute-indicator" :class="{ muted: synthInstrument.muted }"
+					@click="toggleMute(synthInstrument.name)" role="button" aria-label="Toggle Mute"
+					:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
+
+				<div class="channel-label d-flex align-items-center gap-1">
+					<template v-if="!synthInstrument.isEditingName">
+						<strong @click="editLabel(synthInstrument)" @mouseenter="hoveredLabel = synthInstrument.name"
+							@mouseleave="hoveredLabel = null" class="position-relative">
+							{{ synthInstrument.label }}
+							<span v-if="hoveredLabel === synthInstrument.name" class="custom-tooltip">
+								Click to rename
+							</span>
+						</strong>
+					</template>
+					<template v-else>
+						<input v-model="synthInstrument.label" @blur="stopEditingLabel(synthInstrument)"
+							@keydown.enter.prevent="stopEditingLabel(synthInstrument)"
+							class="form-control form-control-sm" style="max-width: 150px;"
+							:ref="el => synthInstrument.inputRef = el" />
+					</template>
+
+					<!-- Waveform Selector -->
+					<div class="btn-group ms-3" role="group">
+						<button v-for="wave in ['sine', 'square', 'triangle', 'sawtooth']" :key="wave" type="button"
+							class="btn btn-sm"
+							:class="wave === selectedWaveform ? 'btn-primary' : 'btn-outline-primary'"
+							@click="selectedWaveform = wave">
+							{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<div class="channel-volume mb-2">
+				<input type="range" min="0" max="1" step="0.01" v-model.number="synthInstrument.channelVolume"
+					class="styled-slider" :aria-label="`${synthInstrument.label} Channel Volume`" />
+			</div>
+
+			<div class="d-flex pad-row">
+				<div v-for="(active, index) in synthInstrument.steps" :key="index" class="pad-wrapper"
+					@mouseenter="hoveredPad = `${synthInstrument.name}-${index}`" @mouseleave="hoveredPad = null">
+					<div :class="['pad', { selected: active }, { playing: index === currentStep }]"
+						@mousedown="handleMouseDown($event, synthInstrument.name, index)"
+						@mouseenter="handleMouseEnter(synthInstrument.name, index)" @dragstart.prevent
+						:style="getPadStyle(synthInstrument, index)">
+					</div>
+					<!-- Volume Slider -->
+					<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
+						class="hover-slider volume-slider">
+						<input type="range" min="0" max="1" step="0.01"
+							v-model.number="synthInstrument.velocities[index]" />
+					</div>
+					<!-- Pitch Slider -->
+					<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
+						class="hover-slider pitch-slider">
+						<input type="range" min="100" max="1000" step="1"
+							v-model.number="synthInstrument.pitches[index]" />
+					</div>
+				</div>
+			</div>
+		</div>
+
+
+
+
+
+	</div>
 </template>
 
 <script setup>
-// import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 
 let isScrubbing = false;
@@ -134,8 +209,9 @@ let startTempo = 0;
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
 const synthDecay = ref(0.4);
-const selectedWaveform = ref("sawtooth");
+const selectedWaveform = ref("sine");
 const attackSliderVal = ref(20); // Initial slider value (0–100)
+const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
 
 // Logarithmic mapping: attack time in seconds
 const synthAttack = computed(() => {
@@ -329,55 +405,7 @@ function schedule() {
 	loopId = requestAnimationFrame(schedule);
 }
 
-// function playSynthNote(freq, velocity, decayTime, startTime) {
-// 	if (!isFinite(decayTime) || decayTime <= 0) {
-// 		console.warn('Invalid decayTime passed to synth:', decayTime);
-// 		decayTime = 0.1;
-// 	}
-// 	if (!isFinite(freq) || freq <= 0) {
-// 		console.warn('Invalid frequency for synth:', freq);
-// 		return;
-// 	}
-// 	if (!isFinite(velocity) || velocity < 0) {
-// 		console.warn('Invalid velocity for synth:', velocity);
-// 		return;
-// 	}
-// 	if (!isFinite(startTime)) {
-// 		console.warn('Invalid startTime:', startTime);
-// 		return;
-// 	}
 
-// 	const rampTargetTime = startTime + decayTime;
-// 	if (!isFinite(rampTargetTime)) {
-// 		console.warn('Invalid ramp target time (startTime + decayTime):', { startTime, decayTime });
-// 		return;
-// 	}
-
-// 	const osc = audioCtx.createOscillator();
-// 	const gain = audioCtx.createGain();
-
-// 	osc.frequency.setValueAtTime(freq, startTime);
-// 	osc.type = 'sawtooth';
-
-// 	// gain.gain.setValueAtTime(velocity, startTime);
-// 	// gain.gain.exponentialRampToValueAtTime(0.001, rampTargetTime);
-
-// 	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
-// 	const attackEnd = startTime + attackTime;
-// 	const decayEnd = attackEnd + decayTime;
-
-// 	gain.gain.setValueAtTime(0.0001, startTime);
-// 	gain.gain.exponentialRampToValueAtTime(velocity, attackEnd);
-// 	gain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
-
-// 	osc.start(startTime);
-// 	osc.stop(decayEnd);
-
-
-// 	osc.connect(gain).connect(masterGain);
-// 	osc.start(startTime);
-// 	osc.stop(rampTargetTime);
-// }
 
 function playSynthNote(freq, velocity, decayTime, startTime) {
 	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;

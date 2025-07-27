@@ -1,20 +1,16 @@
 .drum-sequencer {
-    // background: linear-gradient(to bottom, #2c2c2c, #1e1e1e);
     border-radius: 18px;
     padding: 20px 30px;
     box-shadow:
         inset 0 0 5px rgba(0, 0, 0, 0.4),
         0 10px 25px rgba(0, 0, 0, 0.6);
-    // display: inline-block;
     position: relative;
-    // max-width: 740px;
     color: white;
 
     .pad {
         width: 30px;
         height: 30px;
         border: 1px solid $color-black;
-        // margin: 2px;
         background-color: $color-black;
         cursor: pointer;
         transition: background-color 0.2s;
