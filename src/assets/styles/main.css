@@ -1877,3 +1877,30 @@ input[type="range"] {
   filter: blur(4px);
   opacity: 0.6;
 }
+
+
+
+
+.waveform-option {
+	position: relative;
+
+	.effect-indicator {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background-color: #555;
+		box-shadow: none;
+		transition:
+			background-color 0.2s,
+			box-shadow 0.2s;
+		cursor: pointer;
+	}
+
+	.effect-indicator.active {
+		background-color: teal;
+		box-shadow: 0 0 4px white;
+	}
+}

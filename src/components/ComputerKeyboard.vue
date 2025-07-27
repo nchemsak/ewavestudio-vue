@@ -146,55 +146,67 @@
 					</div>
 				</div>
 
-				<div class="mb-3 mt-3 midiModeWrapper">
+				<!-- <div class="mb-3 mt-3 midiModeWrapper">
 					<select id="midiMode" v-model="midiMode" @change="onMidiModeChange" class="form-select w-auto">
 						<option disabled selected value="">MIDI Mode</option>
 						<option value="osc">MIDI Keyboard (Synth)</option>
 						<option value="sample" disabled>Sampler (Coming Soon)</option>
 					</select>
-				</div>
-				<div class="effectsWrapper">
-					<div class="row">
-						<div class="col-md-12">
-							<h5>Effects</h5>
+				</div> -->
+				<div class="waveformGroupWrapper">
+					<div class="mb-4 waveformgroup">
+						<label class="form-label d-block">Effects</label>
+
+						<!-- Effect Selector Icons -->
+
+						<div class="waveform-selector d-flex flex-wrap">
+							<div v-for="effect in effects" :key="effect.id" class="waveform-option"
+								:class="{ selected: selectedEffect === effect.id }"
+								@click="selectedEffect === effect.id ? selectedEffect = null : selectedEffect = effect.id">
+								<img :src="`images/${effect.icon}`" :alt="effect.name" />
+							</div>
 						</div>
-					</div>
 
-
-
-
-
-
-
-					<div class="row">
-						<div class="col-md-12">
-							<div class="form-check mt-3">
+						<!-- Effect Controls (only Delay for now) -->
+						<div class="unison-controls mt-3" v-if="selectedEffect === 'delay'">
+							<div class="form-check mb-3">
 								<input class="form-check-input" type="checkbox" id="delayEnabled"
-									v-model="delayEnabled">
-								<label class="form-check-label" for="delayEnabled">
-									Enable Delay
-								</label>
+									v-model="delayEnabled" />
+								<label class="form-check-label" for="delayEnabled">Enable Delay</label>
 							</div>
-							<div>
-								<label>Delay Time (ms)</label>
-								<input type="range" min="0" max="1000" step="10" v-model="delayTime"
-									class="styled-slider" />
+
+							<div class="slider-label-row">
+								<label>Delay Time</label>
+								<span>{{ delayTime }} ms</span>
 							</div>
-							<div>
+							<input type="range" min="0" max="1000" step="10" v-model="delayTime"
+								class="styled-slider" />
+
+							<div class="slider-label-row">
 								<label>Feedback</label>
-								<input type="range" min="0" max="0.95" step="0.01" v-model="delayFeedback"
-									class="styled-slider" />
+								<span>{{ delayFeedback }}</span>
 							</div>
-							<div>
-								<label>Wet/Dry Mix</label>
-								<input type="range" min="0" max="1" step="0.01" v-model="delayWetMix"
-									class="styled-slider" />
+							<input type="range" min="0" max="0.95" step="0.01" v-model="delayFeedback"
+								class="styled-slider" />
+
+							<!-- Wet/Dry Mix Label Row -->
+							<div class="d-flex justify-content-between align-items-center slider-label-row">
+								<small>Dry</small>
+								<strong>{{ Math.round(delayWetMix * 100) }}%</strong>
+								<small>Wet</small>
 							</div>
+
+							<!-- Wet/Dry Mix Slider -->
+							<input type="range" min="0" max="1" step="0.01" v-model="delayWetMix"
+								class="styled-slider" />
+
 						</div>
 
+						<!-- Placeholder for future effects -->
+						<div class="mt-3" v-else>
+							<p>Effect not yet available.</p>
+						</div>
 					</div>
-
-
 				</div>
 				<ul class="keyboard">
 					<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
@@ -240,6 +252,13 @@
 
 
 			</div>
+		</div>
+		<div class="mb-3 mt-3 midiModeWrapper">
+			<select id="midiMode" v-model="midiMode" @change="onMidiModeChange" class="form-select w-auto">
+				<option disabled selected value="">MIDI Mode</option>
+				<option value="osc">MIDI Keyboard (Synth)</option>
+				<option value="sample" disabled>Sampler (Coming Soon)</option>
+			</select>
 		</div>
 		<div class="text-center mt-4">
 			<div id="active-notes-display">
@@ -313,6 +332,17 @@ const waveforms = ['sine', 'square', 'sawtooth', 'triangle', 'custom'];
 const selectedWave1 = ref('sine');
 const selectedWave2 = ref(null);
 
+// Effects Selector
+const effects = [
+	{ id: 'delay', name: 'Delay', icon: 'sine1.png' },
+	{ id: 'chorus', name: 'Chorus', icon: 'square1.png' },
+	{ id: 'flanger', name: 'Flanger', icon: 'triangle1.png' },
+	{ id: 'reverb', name: 'Reverb', icon: 'sawtooth1.png' }
+];
+
+const selectedEffect = ref('null');
+
+
 const waveMix = ref(0.5); // 0 = all wave1, 1 = all wave2
 
 const unisonCount1 = ref(1);
@@ -354,14 +384,23 @@ const selectWave2 = (wave) => {
 };
 
 const preloadImages = () => {
+	// Preload waveform icons
 	waveforms.forEach(w => {
 		if (w !== 'custom') {
 			const img = new Image();
 			img.src = `images/${w}1.png`;
-			img.onload = () => console.log(`${img.src} loaded`);
+			// img.onload = () => console.log(`${img.src} loaded`);
 		}
 	});
+
+	// Preload effect icons
+	// effects.forEach(e => {
+	// 	const img = new Image();
+	// 	img.src = `images/${e.icon}`;
+	// 	img.onload = () => console.log(`${img.src} loaded`);
+	// });
 };
+
 
 
 onMounted(preloadImages);
@@ -664,9 +703,6 @@ function onKeyMouseDown(id) {
 		}
 	}
 }
-
-
-
 
 function onKeyMouseUp(id) {
 	const note = keyMap[id];
