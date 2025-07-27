@@ -5,7 +5,6 @@
 				<label class="form-label">Volume</label>
 				<input type="range" min="0" max="1" step="0.01" v-model="volume" class="styled-slider" />
 			</div>
-
 			<div>
 				<label class="form-label">Tempo</label>
 				<div class="d-flex align-items-center gap-2">
@@ -14,9 +13,6 @@
 						:title="'Scroll or drag to change tempo, or type a number'" />
 				</div>
 			</div>
-
-
-
 			<button class="btn btn-primary" @click="togglePlay">
 				<span v-if="isPlaying">Stop</span>
 				<span v-else>Play</span>
@@ -102,8 +98,6 @@
 								v-model.number="instrument.pitches[index]" />
 						</div>
 					</div>
-
-
 				</div>
 			</div>
 			<button class="btn btn-success mb-3" @click="addCustomChannel">
@@ -127,11 +121,10 @@
 			</div>
 			<div>
 				<label class="form-label">
-					Pitch Env Amount
-					<span class="text-muted">{{ Math.round(pitchEnvAmt) }} Hz</span>
+					Pitch Env Amount <span class="text-muted">{{ pitchEnvSemitones }} semitones</span>
 				</label>
-				<input type="range" min="0" max="100" step="1" v-model.number="pitchEnvAmtSliderVal"
-					class="styled-slider" :aria-valuetext="`${Math.round(pitchEnvAmt)} Hz`" />
+				<input type="range" min="0" max="48" step="1" v-model.number="pitchEnvSemitones"
+					class="styled-slider" />
 			</div>
 			<div>
 				<label class="form-label">
@@ -140,12 +133,26 @@
 				</label>
 				<input type="range" min="0" max="100" step="1" v-model.number="pitchEnvDecaySliderVal"
 					class="styled-slider" :aria-valuetext="`${(pitchEnvDecay * 1000).toFixed(0)} milliseconds`" />
+			</div>
+			<div>
+				<label class="form-label">
+					Filter Cutoff
+					<span class="text-muted">{{ filterCutoff }} Hz</span>
+				</label>
+				<input type="range" min="100" max="10000" step="1" v-model.number="filterCutoff"
+					class="styled-slider" />
+			</div>
 
+			<div>
+				<label class="form-label">
+					Resonance (Q)
+					<span class="text-muted">{{ filterResonance }}</span>
+				</label>
+				<input type="range" min="0.1" max="20" step="0.1" v-model.number="filterResonance"
+					class="styled-slider" />
 			</div>
 
 		</div>
-
-
 
 		<div v-if="synthInstrument" class="mb-3">
 			<div class="d-flex align-items-center gap-2 mb-1">
@@ -210,11 +217,6 @@
 				</div>
 			</div>
 		</div>
-
-
-
-
-
 	</div>
 </template>
 
@@ -230,15 +232,9 @@ const synthDecay = ref(0.4);
 const selectedWaveform = ref("sine");
 const attackSliderVal = ref(20); // Initial slider value (0–100)
 const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
-// const pitchEnvAmt = ref(0);   // Hz
 const pitchEnvAmtSliderVal = ref(0); // Slider from 0–100
-const pitchEnvAmt = computed(() => {
-	const min = 1;     // ~1 Hz
-	const max = 2000;  // 2 kHz bend
-	const normalized = pitchEnvAmtSliderVal.value / 100;
-	return min * Math.pow(max / min, normalized);
-});
-// const pitchEnvDecay = ref(0.2); // seconds
+const filterCutoff = ref(5000); // Hz, default cutoff
+const filterResonance = ref(0.5); // Q factor
 const pitchEnvDecaySliderVal = ref(30); // Slider 0–100, start near short decay
 const pitchEnvDecay = computed(() => {
 	const min = 0.01; // 10ms
@@ -253,8 +249,8 @@ const synthAttack = computed(() => {
 	const normalized = attackSliderVal.value / 100; // 0–1 range
 	return min * Math.pow(max / min, normalized);
 });
+const pitchEnvSemitones = ref(0); // Default = 1 octave up
 
-// import { nextTick } from 'vue';
 
 function editLabel(instrument) {
 	instrument.isEditingName = true;
@@ -371,7 +367,6 @@ function addCustomChannel() {
 	});
 }
 
-
 function loadUserSample(event, instrument) {
 	const file = event.target.files[0];
 	if (!file) return;
@@ -390,7 +385,6 @@ function loadUserSample(event, instrument) {
 	};
 	reader.readAsArrayBuffer(file);
 }
-
 
 let loopId = null;
 let startTime = 0;
@@ -428,46 +422,50 @@ function schedule() {
 					playBuffer(inst.buffer, startTime, velocity * volume);
 				}
 			}
-
 		});
 		currentStep.value = stepIndex;
 		stepIndex = (stepIndex + 1) % 16;
 		startTime += stepDuration;
 	}
-
 	loopId = requestAnimationFrame(schedule);
 }
-
-
 
 function playSynthNote(freq, velocity, decayTime, startTime) {
 	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
 	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
 	const osc = audioCtx.createOscillator();
 	const gain = audioCtx.createGain();
+	const filter = audioCtx.createBiquadFilter();
 
-	const attackEnd = startTime + attackTime;
-	const decayEnd = attackEnd + decay;
-
-	// Setup oscillator
-	// osc.type = 'sawtooth'; // or square/triangle later
+	// Configure oscillator
 	osc.type = selectedWaveform.value;
-	// osc.frequency.setValueAtTime(freq, startTime);
-	const startFreq = freq + pitchEnvAmt.value;
+	const semitoneRatio = Math.pow(2, pitchEnvSemitones.value / 12);
+	const startFreq = freq * semitoneRatio;
 	osc.frequency.setValueAtTime(startFreq, startTime);
 	osc.frequency.exponentialRampToValueAtTime(freq, startTime + pitchEnvDecay.value);
 
+	// Configure filter
+	filter.type = 'lowpass';
+	filter.frequency.setValueAtTime(filterCutoff.value, startTime);
+	filter.Q.setValueAtTime(filterResonance.value, startTime);
 
 	// Gain envelope
+	const attackEnd = startTime + attackTime;
+	const decayEnd = attackEnd + decay;
 	gain.gain.setValueAtTime(0.0001, startTime);
 	gain.gain.exponentialRampToValueAtTime(velocity, attackEnd);
 	gain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
 
-	// Connect and play
-	osc.connect(gain).connect(masterGain);
+	// Connect: osc → filter → gain → master
+	osc.connect(filter);
+	filter.connect(gain);
+	gain.connect(masterGain);
+
+	// Start & stop
 	osc.start(startTime);
 	osc.stop(decayEnd);
 }
+
 
 
 async function togglePlay() {
