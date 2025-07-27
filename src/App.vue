@@ -1,16 +1,13 @@
 <template>
-	<div class="container">
+	<div class="container-fluid">
 		<div class="row">
 			<div class="col-6">
-				<div class="app-wrapper">
-					<ComputerKeyboard />
-				</div>
+				<ComputerKeyboard />
 			</div>
 			<div class="col-6">
-				<div class="app-wrapper">
-					<DrumSequencer />
-				</div>
+				<DrumSequencer />
 			</div>
+
 		</div>
 	</div>
 

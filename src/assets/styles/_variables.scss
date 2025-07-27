@@ -1,0 +1,70 @@
+///////////////////// RESPONSIVE BOOTSTRAP DEFINITIONS \\\\\\\\\\\\\\\\\\\\\\\\\
+@mixin xs-only {
+    @media (max-width: 575px) {
+        @content;
+    }
+}
+
+@mixin sm {
+    @media (min-width: 576px) {
+        @content;
+    }
+}
+
+@mixin md {
+    @media (min-width: 768px) {
+        @content;
+    }
+}
+
+@mixin lg {
+    @media (min-width: 992px) {
+        @content;
+    }
+}
+
+@mixin belowlg {
+    @media (max-width: 991px) {
+        @content;
+    }
+}
+
+@mixin xl {
+    @media (min-width: 1200px) {
+        @content;
+    }
+}
+
+@mixin xxl {
+    @media (min-width: 1400px) {
+        @content;
+    }
+}
+
+@mixin xxxl {
+    @media (min-width: 1820px) {
+        @content;
+    }
+}
+
+@mixin xxxxl {
+    @media (min-width: 2200px) {
+        @content;
+    }
+}
+
+
+///////////////////// COLORS \\\\\\\\\\\\\\\\\\\\\\\\\
+
+$color-black: #121210;
+$color-white: #d8d7d0;
+
+$color-tan-light: #d9c5b7;
+$color-tan-dark: #c4a291;
+
+$color-teal-light: #27fcff;
+$color-teal-dark: #4a8890;
+
+$color-pink-light: pink;
+$color-pink-dark: #de9dac;
+$color-pink-avg: #cca49a;

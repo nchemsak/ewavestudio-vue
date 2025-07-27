@@ -1,7 +1,109 @@
-	<template>
-		<div class="computer-keyboard">
+<template>
+	<div class="outer-wrapper">
+		<!-- Volume Slider -->
+		<div class="mb-4">
+			<label for="volume" class="form-label">Volume</label><br />
+			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume"
+				v-model="volume" :aria-valuetext="`${Math.round(volume * 100)} percent`" />
+			<div class="slider-percentage" id="label-volume">{{ volumeLabel }}</div>
+		</div>
+		<div class="waveformGroupWrapper">
+			<div class="visualizer-stack d-flex flex-column gap-3 mb-4">
+				<div class="row">
+					<div class="col-md-6">
+						<canvas id="oscilloscope1" width="600" height="200" class="waveform-visual"></canvas>
+					</div>
+					<div class="col-md-6">
+						<canvas id="oscilloscope2" width="600" height="200" class="waveform-visual"></canvas>
+					</div>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-md-6">
+					<div class="mb-4 waveformgroup">
+						<label class="form-label d-block">Waveform Group 1</label>
+						<div class="waveform-selector d-flex flex-wrap">
+							<div v-for="wave in waveforms" :key="wave + '-1'" class="waveform-option"
+								:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
+								@click="selectedWave2 !== wave && selectWave1(wave)">
+
+								<!-- @click="selectWave1(wave)"> -->
+								<template v-if="wave !== 'custom'">
+									<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
+								</template>
+								<template v-else>
+									<div class="custom-wave-box text-center">
+										<canvas id="waveformPreview1"></canvas>
+									</div>
+								</template>
+							</div>
+						</div>
+						<div class="unison-controls">
+							<div class="slider-label-row">
+								<label>Unison Count</label>
+								<span>{{ unisonCount1 }}</span>
+							</div>
+							<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount1" />
+
+							<div class="slider-label-row">
+								<label>Detune</label>
+								<span>{{ detuneCents1 }} cents</span>
+							</div>
+							<input type="range" class="styled-slider" min="0" max="50" step="1"
+								v-model="detuneCents1" />
+
+							<div class="slider-label-row">
+								<label>Stereo Spread</label>
+								<span>{{ stereoSpread1 }} </span>
+							</div>
+							<input type="range" class="styled-slider" min="0" max="1" step="0.01"
+								v-model="stereoSpread1" />
+						</div>
+					</div>
+				</div>
+				<div class="col-md-6">
+					<div class="mb-4 waveformgroup">
+						<label class="form-label d-block">Waveform Group 2</label>
+						<div class="waveform-selector d-flex flex-wrap">
+							<div v-for="wave in waveforms" :key="wave + '-2'" class="waveform-option"
+								:class="{ selected: selectedWave2 === wave, disabled: selectedWave1 === wave }"
+								@click="selectedWave1 !== wave && selectWave2(wave)">
+								<!-- @click="selectWave2(wave)"> -->
+								<template v-if="wave !== 'custom'">
+									<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
+								</template>
+								<template v-else>
+									<div class="custom-wave-box text-center">
+										<canvas id="waveformPreview2"></canvas>
+									</div>
+								</template>
+							</div>
+						</div>
+						<div class="unison-controls">
+							<div class="slider-label-row">
+								<label>Unison Count</label>
+								<span>{{ unisonCount2 }}</span>
+							</div>
+							<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount2" />
+
+							<div class="slider-label-row">
+								<label>Detune</label>
+								<span>{{ detuneCents2 }} cents</span>
+							</div>
+							<input type="range" class="styled-slider" min="0" max="50" step="1"
+								v-model="detuneCents2" />
 
 
+							<div class="slider-label-row">
+								<label>Stereo Spread</label>
+								<span>{{ stereoSpread2 }} </span>
+							</div>
+							<input type="range" class="styled-slider" min="0" max="1" step="0.01"
+								v-model="stereoSpread2" />
+						</div>
+					</div>
+				</div>
+			</div>
 			<!-- Custom Waveform Controls -->
 			<div v-if="selectedWave1 === 'custom' || selectedWave2 === 'custom'" id="custom-waveform-controls"
 				class="mt-4">
@@ -19,274 +121,153 @@
 				<button type="button" class="btn btn-outline-secondary mt-3" @click="resetHarmonics">Reset
 					Harmonics</button>
 			</div>
+			<div class="row">
+				<div class="col-md-12">
+					<div class="mb-4 waveMixWrapper">
 
-			<!-- Keyboard Interface -->
-			<div class="keyboard-container">
-				<!-- Volume Slider -->
-				<div class="mb-4">
-					<label for="volume" class="form-label">Volume</label><br />
-					<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume"
-						v-model="volume" :aria-valuetext="`${Math.round(volume * 100)} percent`" />
-					<div class="slider-percentage" id="label-volume">{{ volumeLabel }}</div>
-				</div>
-				<div class="waveformGroupWrapper">
-					<div class="visualizer-stack d-flex flex-column gap-3 mb-4">
-						<div class="row">
-							<div class="col-md-6">
-								<canvas id="oscilloscope1" width="600" height="200" class="waveform-visual"></canvas>
-							</div>
-							<div class="col-md-6">
-								<canvas id="oscilloscope2" width="600" height="200" class="waveform-visual"></canvas>
-							</div>
-
+						<label for="waveMix" class="form-label">Wave Mix</label><br />
+						<input type="range" min="0" max="1" step="0.01" class="styled-slider" id="waveMix"
+							v-model="waveMix"
+							:aria-valuetext="`Wave 1: ${waveMixDisplay.wave1}%, Wave 2: ${waveMixDisplay.wave2}%`" />
+						<div class="slider-percentage">
+							<span class="wave1percent">Wave 1: {{ waveMixDisplay.wave1 }}%</span>&nbsp; ⇄
+							&nbsp;<span class="wave2percent">Wave 2: {{ waveMixDisplay.wave2 }}%</span>
 						</div>
-					</div>
-					<div class="row">
-						<div class="col-md-6">
-							<div class="mb-4 waveformgroup">
-								<label class="form-label d-block">Waveform Group 1</label>
-								<div class="waveform-selector d-flex flex-wrap">
-									<div v-for="wave in waveforms" :key="wave + '-1'" class="waveform-option"
-										:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
-										@click="selectedWave2 !== wave && selectWave1(wave)">
-
-										<!-- @click="selectWave1(wave)"> -->
-										<template v-if="wave !== 'custom'">
-											<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
-										</template>
-										<template v-else>
-											<div class="custom-wave-box text-center">
-												<canvas id="waveformPreview1"></canvas>
-											</div>
-										</template>
-									</div>
-								</div>
-								<div class="unison-controls">
-									<div class="slider-label-row">
-										<label>Unison Count</label>
-										<span>{{ unisonCount1 }}</span>
-									</div>
-									<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount1" />
-
-									<div class="slider-label-row">
-										<label>Detune</label>
-										<span>{{ detuneCents1 }} cents</span>
-									</div>
-									<input type="range" class="styled-slider" min="0" max="50" step="1"
-										v-model="detuneCents1" />
-
-									<div class="slider-label-row">
-										<label>Stereo Spread</label>
-										<span>{{ stereoSpread1 }} </span>
-									</div>
-									<input type="range" class="styled-slider" min="0" max="1" step="0.01"
-										v-model="stereoSpread1" />
-								</div>
-							</div>
-						</div>
-						<div class="col-md-6">
-							<div class="mb-4 waveformgroup">
-								<label class="form-label d-block">Waveform Group 2</label>
-								<div class="waveform-selector d-flex flex-wrap">
-									<div v-for="wave in waveforms" :key="wave + '-2'" class="waveform-option"
-										:class="{ selected: selectedWave2 === wave, disabled: selectedWave1 === wave }"
-										@click="selectedWave1 !== wave && selectWave2(wave)">
-										<!-- @click="selectWave2(wave)"> -->
-										<template v-if="wave !== 'custom'">
-											<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
-										</template>
-										<template v-else>
-											<div class="custom-wave-box text-center">
-												<canvas id="waveformPreview2"></canvas>
-											</div>
-										</template>
-									</div>
-								</div>
-								<div class="unison-controls">
-									<div class="slider-label-row">
-										<label>Unison Count</label>
-										<span>{{ unisonCount2 }}</span>
-									</div>
-									<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount2" />
-
-									<div class="slider-label-row">
-										<label>Detune</label>
-										<span>{{ detuneCents2 }} cents</span>
-									</div>
-									<input type="range" class="styled-slider" min="0" max="50" step="1"
-										v-model="detuneCents2" />
-
-
-									<div class="slider-label-row">
-										<label>Stereo Spread</label>
-										<span>{{ stereoSpread2 }} </span>
-									</div>
-									<input type="range" class="styled-slider" min="0" max="1" step="0.01"
-										v-model="stereoSpread2" />
-								</div>
-							</div>
-						</div>
-					</div>
-
-					<div class="row">
-						<div class="col-md-12">
-							<div class="mb-4 waveMixWrapper">
-
-								<label for="waveMix" class="form-label">Wave Mix</label><br />
-								<input type="range" min="0" max="1" step="0.01" class="styled-slider" id="waveMix"
-									v-model="waveMix"
-									:aria-valuetext="`Wave 1: ${waveMixDisplay.wave1}%, Wave 2: ${waveMixDisplay.wave2}%`" />
-								<div class="slider-percentage">
-									<span class="wave1percent">Wave 1: {{ waveMixDisplay.wave1 }}%</span>&nbsp; ⇄
-									&nbsp;<span class="wave2percent">Wave 2: {{ waveMixDisplay.wave2 }}%</span>
-								</div>
-							</div>
-						</div>
-
 					</div>
 				</div>
 
-				<!-- <div class="mb-3 mt-3 midiModeWrapper">
+			</div>
+		</div>
+		<!-- <div class="mb-3 mt-3 midiModeWrapper">
 					<select id="midiMode" v-model="midiMode" @change="onMidiModeChange" class="form-select w-auto">
 						<option disabled selected value="">MIDI Mode</option>
 						<option value="osc">MIDI Keyboard (Synth)</option>
 						<option value="sample" disabled>Sampler (Coming Soon)</option>
 					</select>
 				</div> -->
-				<div class="waveformGroupWrapper">
-					<div class="mb-4 waveformgroup">
-						<label class="form-label d-block">Effects</label>
+		<div class="waveformGroupWrapper">
+			<div class="mb-4 waveformgroup">
+				<label class="form-label d-block">Effects</label>
 
-						<!-- Effect Selector Icons -->
+				<!-- Effect Selector Icons -->
 
-						<div class="waveform-selector d-flex flex-wrap">
-							<div v-for="effect in effects" :key="effect.id" class="waveform-option"
-								:class="{ selected: selectedEffect === effect.id }"
-								@click="selectedEffect === effect.id ? selectedEffect = null : selectedEffect = effect.id">
-								<img :src="`images/${effect.icon}`" :alt="effect.name" />
-							</div>
-						</div>
-
-						<!-- Effect Controls (only Delay for now) -->
-						<div class="unison-controls mt-3" v-if="selectedEffect === 'delay'">
-							<div class="form-check mb-3">
-								<input class="form-check-input" type="checkbox" id="delayEnabled"
-									v-model="delayEnabled" />
-								<label class="form-check-label" for="delayEnabled">Enable Delay</label>
-							</div>
-
-							<div class="slider-label-row">
-								<label>Delay Time</label>
-								<span>{{ delayTime }} ms</span>
-							</div>
-							<input type="range" min="0" max="1000" step="10" v-model="delayTime"
-								class="styled-slider" />
-
-							<div class="slider-label-row">
-								<label>Feedback</label>
-								<span>{{ delayFeedback }}</span>
-							</div>
-							<input type="range" min="0" max="0.95" step="0.01" v-model="delayFeedback"
-								class="styled-slider" />
-
-							<!-- Wet/Dry Mix Label Row -->
-							<div class="d-flex justify-content-between align-items-center slider-label-row">
-								<small>Dry</small>
-								<strong>{{ Math.round(delayWetMix * 100) }}%</strong>
-								<small>Wet</small>
-							</div>
-
-							<!-- Wet/Dry Mix Slider -->
-							<input type="range" min="0" max="1" step="0.01" v-model="delayWetMix"
-								class="styled-slider" />
-
-						</div>
-
-						<!-- Placeholder for future effects -->
-						<div class="mt-3" v-else>
-							<p>Effect not yet available.</p>
-						</div>
+				<div class="waveform-selector d-flex flex-wrap">
+					<div v-for="effect in effects" :key="effect.id" class="waveform-option"
+						:class="{ selected: selectedEffect === effect.id }"
+						@click="selectedEffect === effect.id ? selectedEffect = null : selectedEffect = effect.id">
+						<img :src="`images/${effect.icon}`" :alt="effect.name" />
 					</div>
 				</div>
-				<ul class="keyboard">
-					<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
 
-						<!-- Mouse-only key -->
-						<template v-if="!note.id">
-							<div class="key mouse-only" :data-note="note.note" role="button" tabindex="0"
-								:aria-label="`Note ${note.note}`" @mousedown="playNote(note.note)"
-								@mouseup="stopNote(note.note)" @mouseleave="stopNote(note.note)"
-								@mouseenter="onMouseEnter(note.note)">
-								<span class="note">{{ note.note }}</span>
-							</div>
+				<!-- Effect Controls (only Delay for now) -->
+				<div class="unison-controls mt-3" v-if="selectedEffect === 'delay'">
+					<div class="form-check mb-3">
+						<input class="form-check-input" type="checkbox" id="delayEnabled" v-model="delayEnabled" />
+						<label class="form-check-label" for="delayEnabled">Enable Delay</label>
+					</div>
 
-							<div v-if="note.sharp" class="upper-key mouse-only" :data-note="note.sharp" role="button"
-								tabindex="0" :aria-label="`Note ${note.sharp}`" @mousedown="playNote(note.sharp)"
-								@mouseup="stopNote(note.sharp)" @mouseleave="stopNote(note.sharp)"
-								@mouseenter="onMouseEnter(note.sharp)">
-								<span><small>{{ note.sharp }}</small></span>
-							</div>
-						</template>
+					<div class="slider-label-row">
+						<label>Delay Time</label>
+						<span>{{ delayTime }} ms</span>
+					</div>
+					<input type="range" min="0" max="1000" step="10" v-model="delayTime" class="styled-slider" />
 
-						<!-- Keyboard and Mouse key -->
-						<template v-else>
-							<div class="key" :id="note.id" :data-note="note.note" role="button" tabindex="0"
-								:aria-label="`Key ${note.label}, note ${note.note}`"
-								@mousedown="onKeyMouseDown(note.id)" @mouseup="onKeyMouseUp(note.id)"
-								@mouseleave="onKeyMouseUp(note.id)" @mouseenter="onKeyMouseEnter(note.id)">
-								<span class="kbd">{{ note.label }}</span>
-								<span class="note">{{ note.note }}</span>
-							</div>
+					<div class="slider-label-row">
+						<label>Feedback</label>
+						<span>{{ delayFeedback }}</span>
+					</div>
+					<input type="range" min="0" max="0.95" step="0.01" v-model="delayFeedback" class="styled-slider" />
 
-							<div v-if="note.sharp" class="upper-key" :id="note.sharpId" :data-note="note.sharp"
-								role="button" tabindex="0" :aria-label="`Key ${note.sharpLabel}, note ${note.sharp}`"
-								@mousedown="onKeyMouseDown(note.sharpId)" @mouseup="onKeyMouseUp(note.sharpId)"
-								@mouseleave="onKeyMouseUp(note.sharpId)" @mouseenter="onKeyMouseEnter(note.sharpId)">
-								<span>{{ note.sharpLabel }}<br /><small>{{ note.sharp }}</small></span>
-							</div>
-						</template>
+					<!-- Wet/Dry Mix Label Row -->
+					<div class="d-flex justify-content-between align-items-center slider-label-row">
+						<small>Dry</small>
+						<strong>{{ Math.round(delayWetMix * 100) }}%</strong>
+						<small>Wet</small>
+					</div>
 
-					</li>
-				</ul>
+					<!-- Wet/Dry Mix Slider -->
+					<input type="range" min="0" max="1" step="0.01" v-model="delayWetMix" class="styled-slider" />
 
+				</div>
 
-
+				<!-- Placeholder for future effects -->
+				<div class="mt-3" v-else>
+					<p>Effect not yet available.</p>
+				</div>
 			</div>
 		</div>
-		<div class="mb-3 mt-3 midiModeWrapper">
-			<select id="midiMode" v-model="midiMode" @change="onMidiModeChange" class="form-select w-auto">
-				<option disabled selected value="">MIDI Mode</option>
-				<option value="osc">MIDI Keyboard (Synth)</option>
-				<option value="sample" disabled>Sampler (Coming Soon)</option>
-			</select>
-		</div>
-		<div class="text-center mt-4">
-			<div id="active-notes-display">
-				<span class="active-note-label-label">Active Notes:</span>
-				<span id="active-notes">
-					<span v-if="activeNotes.length === 0" class="active-note-label inactive">
-						<span class="note-icon">🎵</span>
-						<span class="note-text">None</span>
-					</span>
-					<span v-else>
-						<span v-for="note in activeNotes" :key="note" class="active-note-label">
-							<span class="note-icon">🎵</span><span class="note-text">{{ note }}</span>
-						</span>
+		<ul class="keyboard">
+			<li v-for="note in keyboardNotes" :key="note.note || note.id" class="keyboard-key">
+
+				<!-- Mouse-only key -->
+				<template v-if="!note.id">
+					<div class="key mouse-only" :data-note="note.note" role="button" tabindex="0"
+						:aria-label="`Note ${note.note}`" @mousedown="playNote(note.note)"
+						@mouseup="stopNote(note.note)" @mouseleave="stopNote(note.note)"
+						@mouseenter="onMouseEnter(note.note)">
+						<span class="note">{{ note.note }}</span>
+					</div>
+
+					<div v-if="note.sharp" class="upper-key mouse-only" :data-note="note.sharp" role="button"
+						tabindex="0" :aria-label="`Note ${note.sharp}`" @mousedown="playNote(note.sharp)"
+						@mouseup="stopNote(note.sharp)" @mouseleave="stopNote(note.sharp)"
+						@mouseenter="onMouseEnter(note.sharp)">
+						<span><small>{{ note.sharp }}</small></span>
+					</div>
+				</template>
+
+				<!-- Keyboard and Mouse key -->
+				<template v-else>
+					<div class="key" :id="note.id" :data-note="note.note" role="button" tabindex="0"
+						:aria-label="`Key ${note.label}, note ${note.note}`" @mousedown="onKeyMouseDown(note.id)"
+						@mouseup="onKeyMouseUp(note.id)" @mouseleave="onKeyMouseUp(note.id)"
+						@mouseenter="onKeyMouseEnter(note.id)">
+						<span class="kbd">{{ note.label }}</span>
+						<span class="note">{{ note.note }}</span>
+					</div>
+
+					<div v-if="note.sharp" class="upper-key" :id="note.sharpId" :data-note="note.sharp" role="button"
+						tabindex="0" :aria-label="`Key ${note.sharpLabel}, note ${note.sharp}`"
+						@mousedown="onKeyMouseDown(note.sharpId)" @mouseup="onKeyMouseUp(note.sharpId)"
+						@mouseleave="onKeyMouseUp(note.sharpId)" @mouseenter="onKeyMouseEnter(note.sharpId)">
+						<span>{{ note.sharpLabel }}<br /><small>{{ note.sharp }}</small></span>
+					</div>
+				</template>
+
+			</li>
+		</ul>
+	</div>
+	<div class="mb-3 mt-3 midiModeWrapper">
+		<select id="midiMode" v-model="midiMode" @change="onMidiModeChange" class="form-select w-auto">
+			<option disabled selected value="">MIDI Mode</option>
+			<option value="osc">MIDI Keyboard (Synth)</option>
+			<option value="sample" disabled>Sampler (Coming Soon)</option>
+		</select>
+	</div>
+	<div class="text-center mt-4">
+		<div id="active-notes-display">
+			<span class="active-note-label-label">Active Notes:</span>
+			<span id="active-notes">
+				<span v-if="activeNotes.length === 0" class="active-note-label inactive">
+					<span class="note-icon">🎵</span>
+					<span class="note-text">None</span>
+				</span>
+				<span v-else>
+					<span v-for="note in activeNotes" :key="note" class="active-note-label">
+						<span class="note-icon">🎵</span><span class="note-text">{{ note }}</span>
 					</span>
 				</span>
-			</div>
+			</span>
 		</div>
-		<!-- <FloatingWindow v-if="showPresets" @close="showPresets = false">
+	</div>
+	<!-- <FloatingWindow v-if="showPresets" @close="showPresets = false">
 			<template #title>Presets</template>
 			<PresetBankPanel :banks="banks" :activeBankIndex="activeBankIndex" :isTyping="isTyping" @save="saveToBank"
 				@load="loadFromBank" @clear="clearBank" @edit="startEditingBank" :bankHasData="bankHasData"
 				@update:isTyping="val => isTyping = val" />
 		</FloatingWindow> -->
 
-
-
-
-	</template>
+</template>
 
 <script setup>
 const isDisabled = (wave) => selectedWave2.value === wave;
@@ -316,7 +297,7 @@ const showPresets = ref(true);
 
 
 
-// Final output
+// Final output	
 masterGain.connect(analyser);
 analyser.connect(audioCtx.destination);
 // analyser.connect(masterGain);
@@ -393,12 +374,6 @@ const preloadImages = () => {
 		}
 	});
 
-	// Preload effect icons
-	// effects.forEach(e => {
-	// 	const img = new Image();
-	// 	img.src = `images/${e.icon}`;
-	// 	img.onload = () => console.log(`${img.src} loaded`);
-	// });
 };
 
 

@@ -1,18 +1,6 @@
-/* MIDI  */
-.radio2 {
-  display: inline;
-}
-
-#midiWave {
+.midiModeWrapper {
   text-align: center;
+  #midiMode {
+    margin: 0 auto;
+  }
 }
-
-.btn {
-  background-color: black;
-  border: 1px solid white;
-}
-
-#key_data {
-  text-align: center;
-}
-
