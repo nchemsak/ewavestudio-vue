@@ -135,10 +135,16 @@
 
     .hover-slider {
         position: absolute;
-        top: -30px;
+
         width: 30px;
         height: 30px;
         z-index: 10;
+        &.pitch-slider {
+            bottom: -30px;
+        }
+        &.volume-slider {
+            top: -30px;
+        }
         input[type="range"] {
             transform: rotate(270deg);
             width: 30px;

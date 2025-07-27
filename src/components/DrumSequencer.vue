@@ -14,6 +14,10 @@
 						:title="'Scroll or drag to change tempo, or type a number'" />
 				</div>
 			</div>
+			<div>
+				<label class="form-label">Decay</label>
+				<input type="range" min="0.05" max="2" step="0.01" v-model.number="synthDecay" class="styled-slider" />
+			</div>
 
 			<button class="btn btn-primary" @click="togglePlay">
 				<span v-if="isPlaying">Stop</span>
@@ -72,9 +76,16 @@
 							@mouseenter="handleMouseEnter(instrument.name, index)" @dragstart.prevent
 							:style="getPadStyle(instrument, index)"></div>
 						<!-- Floating slider -->
-						<div v-if="active && hoveredPad === `${instrument.name}-${index}`" class="hover-slider">
+						<div v-if="active && hoveredPad === `${instrument.name}-${index}`"
+							class="hover-slider volume-slider">
 							<input type="range" min="0" max="1" step="0.01"
 								v-model.number="instrument.velocities[index]" />
+						</div>
+						<!-- Pitch Slider for Synth Voice -->
+						<div v-if="instrument.name === 'synth-voice' && active && hoveredPad === `${instrument.name}-${index}`"
+							class="hover-slider pitch-slider">
+							<input type="range" min="100" max="1000" step="1"
+								v-model.number="instrument.pitches[index]" />
 						</div>
 					</div>
 
@@ -96,6 +107,7 @@ let startY = 0;
 let startTempo = 0;
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
+const synthDecay = ref(0.4);
 
 import { nextTick } from 'vue';
 
@@ -188,6 +200,17 @@ const instruments = ref([
 		steps: Array(16).fill(false),
 		velocities: Array(16).fill(1.0)
 	},
+	{
+		name: 'synth-voice',
+		label: 'Synth Voice',
+		isEditingName: false,
+		type: 'synth', // <-- custom flag
+		muted: false,
+		channelVolume: 1.0,
+		steps: Array(16).fill(false),
+		velocities: Array(16).fill(1.0),
+		pitches: Array(16).fill(220), // default A3 pitch
+	},
 ]);
 
 function addCustomChannel() {
@@ -248,12 +271,19 @@ function schedule() {
 
 	while (startTime < now + 0.1) {
 		instruments.value.forEach(inst => {
-			if (!inst.muted && inst.steps[stepIndex] && inst.buffer) {
+			if (!inst.muted && inst.steps[stepIndex]) {
+				const velocity = inst.velocities[stepIndex];
+				const volume = inst.channelVolume ?? 1.0;
 
-				const padVol = inst.velocities[stepIndex];
-				const chanVol = inst.channelVolume ?? 1.0;
-				playBuffer(inst.buffer, startTime, padVol * chanVol);
+				if (inst.type === 'synth') {
+					const pitch = inst.pitches[stepIndex] || 220;
+					const safeDecay = isFinite(synthDecay.value) && synthDecay.value > 0 ? synthDecay.value : 0.1;
+					playSynthNote(pitch, velocity * volume, safeDecay, startTime);
+				} else if (inst.buffer) {
+					playBuffer(inst.buffer, startTime, velocity * volume);
+				}
 			}
+
 		});
 		currentStep.value = stepIndex;
 		stepIndex = (stepIndex + 1) % 16;
@@ -263,13 +293,53 @@ function schedule() {
 	loopId = requestAnimationFrame(schedule);
 }
 
-function togglePlay() {
+function playSynthNote(freq, velocity, decayTime, startTime) {
+	if (!isFinite(decayTime) || decayTime <= 0) {
+		console.warn('Invalid decayTime passed to synth:', decayTime);
+		decayTime = 0.1;
+	}
+	if (!isFinite(freq) || freq <= 0) {
+		console.warn('Invalid frequency for synth:', freq);
+		return;
+	}
+	if (!isFinite(velocity) || velocity < 0) {
+		console.warn('Invalid velocity for synth:', velocity);
+		return;
+	}
+	if (!isFinite(startTime)) {
+		console.warn('Invalid startTime:', startTime);
+		return;
+	}
+
+	const rampTargetTime = startTime + decayTime;
+	if (!isFinite(rampTargetTime)) {
+		console.warn('Invalid ramp target time (startTime + decayTime):', { startTime, decayTime });
+		return;
+	}
+
+	const osc = audioCtx.createOscillator();
+	const gain = audioCtx.createGain();
+
+	osc.frequency.setValueAtTime(freq, startTime);
+	osc.type = 'sawtooth';
+
+	gain.gain.setValueAtTime(velocity, startTime);
+	gain.gain.exponentialRampToValueAtTime(0.001, rampTargetTime);
+
+	osc.connect(gain).connect(masterGain);
+	osc.start(startTime);
+	osc.stop(rampTargetTime);
+}
+
+async function togglePlay() {
 	if (isPlaying.value) {
 		cancelAnimationFrame(loopId);
 		isPlaying.value = false;
 		currentStep.value = -1;
 	} else {
-		if (audioCtx.state === 'suspended') audioCtx.resume();
+		if (audioCtx.state === 'suspended') {
+			await audioCtx.resume();
+		}
 		startTime = audioCtx.currentTime;
 		stepIndex = 0;
 		isPlaying.value = true;
@@ -277,10 +347,17 @@ function togglePlay() {
 	}
 }
 
-function loadSample(url) {
-	return fetch(url)
-		.then(res => res.arrayBuffer())
-		.then(data => audioCtx.decodeAudioData(data));
+
+async function loadSample(url) {
+	try {
+		const res = await fetch(url);
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		const data = await res.arrayBuffer();
+		return await audioCtx.decodeAudioData(data);
+	} catch (err) {
+		console.error(`Failed to load or decode sample: ${url}`, err);
+		return null;
+	}
 }
 
 function toggleMute(instrumentName) {
@@ -290,7 +367,7 @@ function toggleMute(instrumentName) {
 
 
 
-// click and drag
+// click and drag START
 
 const isMouseDown = ref(false);
 const dragMode = ref(null); // 'on' or 'off'
@@ -308,9 +385,6 @@ function handleMouseDown(event, instrumentName, index) {
 	}
 }
 
-
-
-
 function handleMouseEnter(instrumentName, index) {
 	if (!isMouseDown.value) return;
 	const inst = instruments.value.find(i => i.name === instrumentName);
@@ -321,14 +395,22 @@ function handleMouseUp() {
 	isMouseDown.value = false;
 	dragMode.value = null;
 }
-// click and drag end
+// click and drag END
 
 async function loadAllSamples() {
 	for (const instrument of instruments.value) {
+		// Skip instruments that don't require audio samples
+		if (instrument.type === 'synth') continue;
+
 		const path = `audio/${instrument.name}.mp3`;
-		instrument.buffer = await loadSample(path);
+		try {
+			instrument.buffer = await loadSample(path);
+		} catch (err) {
+			console.warn(`Sample load failed for ${instrument.name}:`, err);
+		}
 	}
 }
+
 
 watch(volume, val => {
 	masterGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
@@ -359,6 +441,5 @@ function getPadStyle(instrument, index) {
 		background: `linear-gradient(to top, pink ${percent}%, #fff ${percent}%)`
 	};
 }
-console.log(masterGain.gain.value); // Should be > 0
-console.log(audioCtx.state); // Should be "running"
+
 </script>
