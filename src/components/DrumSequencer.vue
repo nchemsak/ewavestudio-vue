@@ -18,6 +18,18 @@
 				<label class="form-label">Decay</label>
 				<input type="range" min="0.05" max="2" step="0.01" v-model.number="synthDecay" class="styled-slider" />
 			</div>
+			<div>
+
+
+				<div class="slider-label-row">
+					<label>Attack</label> <span class="text-muted">{{ (synthAttack * 1000).toFixed(1) }} ms</span>
+				</div>
+				<input type="range" min="0" max="100" step="1" v-model.number="attackSliderVal" class="styled-slider"
+					:aria-valuetext="`${(synthAttack * 1000).toFixed(1)} milliseconds`" />
+
+
+			</div>
+
 
 			<button class="btn btn-primary" @click="togglePlay">
 				<span v-if="isPlaying">Stop</span>
@@ -32,12 +44,15 @@
 						@click="toggleMute(instrument.name)" role="button" aria-label="Toggle Mute"
 						:title="instrument.muted ? 'Muted' : 'Playing'"></div>
 
-					<div class="channel-label d-flex align-items-center gap-1" @click="editLabel(instrument)">
+					<div class="channel-label d-flex align-items-center gap-1">
+
 						<template v-if="!instrument.isEditingName">
-							<strong @mouseenter="hoveredLabel = instrument.name" @mouseleave="hoveredLabel = null"
-								class="position-relative">
+							<strong @click="editLabel(instrument)" @mouseenter="hoveredLabel = instrument.name"
+								@mouseleave="hoveredLabel = null" class="position-relative">
+
 								{{ instrument.label }}
-								<span v-if="hoveredLabel === instrument.name" class="custom-tooltip">
+								<span v-if="hoveredLabel === instrument.name && instrument.name !== 'synth-voice'"
+									class="custom-tooltip">
 									Click to rename
 								</span>
 							</strong>
@@ -49,6 +64,16 @@
 								class="form-control form-control-sm" style="max-width: 150px;"
 								:ref="el => instrument.inputRef = el" />
 						</template>
+
+						<!-- Waveform Selector for Synth Voice -->
+						<div v-if="instrument.name === 'synth-voice'" class="btn-group ms-3" role="group">
+							<button v-for="wave in ['sine', 'square', 'triangle', 'sawtooth']" :key="wave" type="button"
+								class="btn btn-sm"
+								:class="wave === selectedWaveform ? 'btn-primary' : 'btn-outline-primary'"
+								@click="selectedWaveform = wave">
+								{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
+							</button>
+						</div>
 					</div>
 
 					<!-- Only show for custom channels -->
@@ -100,7 +125,8 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
+// import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 
 let isScrubbing = false;
 let startY = 0;
@@ -108,8 +134,18 @@ let startTempo = 0;
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
 const synthDecay = ref(0.4);
+const selectedWaveform = ref("sawtooth");
+const attackSliderVal = ref(20); // Initial slider value (0–100)
 
-import { nextTick } from 'vue';
+// Logarithmic mapping: attack time in seconds
+const synthAttack = computed(() => {
+	const min = 0.001; // 1ms
+	const max = 0.1;   // 100ms
+	const normalized = attackSliderVal.value / 100; // 0–1 range
+	return min * Math.pow(max / min, normalized);
+});
+
+// import { nextTick } from 'vue';
 
 function editLabel(instrument) {
 	instrument.isEditingName = true;
@@ -293,43 +329,81 @@ function schedule() {
 	loopId = requestAnimationFrame(schedule);
 }
 
+// function playSynthNote(freq, velocity, decayTime, startTime) {
+// 	if (!isFinite(decayTime) || decayTime <= 0) {
+// 		console.warn('Invalid decayTime passed to synth:', decayTime);
+// 		decayTime = 0.1;
+// 	}
+// 	if (!isFinite(freq) || freq <= 0) {
+// 		console.warn('Invalid frequency for synth:', freq);
+// 		return;
+// 	}
+// 	if (!isFinite(velocity) || velocity < 0) {
+// 		console.warn('Invalid velocity for synth:', velocity);
+// 		return;
+// 	}
+// 	if (!isFinite(startTime)) {
+// 		console.warn('Invalid startTime:', startTime);
+// 		return;
+// 	}
+
+// 	const rampTargetTime = startTime + decayTime;
+// 	if (!isFinite(rampTargetTime)) {
+// 		console.warn('Invalid ramp target time (startTime + decayTime):', { startTime, decayTime });
+// 		return;
+// 	}
+
+// 	const osc = audioCtx.createOscillator();
+// 	const gain = audioCtx.createGain();
+
+// 	osc.frequency.setValueAtTime(freq, startTime);
+// 	osc.type = 'sawtooth';
+
+// 	// gain.gain.setValueAtTime(velocity, startTime);
+// 	// gain.gain.exponentialRampToValueAtTime(0.001, rampTargetTime);
+
+// 	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
+// 	const attackEnd = startTime + attackTime;
+// 	const decayEnd = attackEnd + decayTime;
+
+// 	gain.gain.setValueAtTime(0.0001, startTime);
+// 	gain.gain.exponentialRampToValueAtTime(velocity, attackEnd);
+// 	gain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
+
+// 	osc.start(startTime);
+// 	osc.stop(decayEnd);
+
+
+// 	osc.connect(gain).connect(masterGain);
+// 	osc.start(startTime);
+// 	osc.stop(rampTargetTime);
+// }
+
 function playSynthNote(freq, velocity, decayTime, startTime) {
-	if (!isFinite(decayTime) || decayTime <= 0) {
-		console.warn('Invalid decayTime passed to synth:', decayTime);
-		decayTime = 0.1;
-	}
-	if (!isFinite(freq) || freq <= 0) {
-		console.warn('Invalid frequency for synth:', freq);
-		return;
-	}
-	if (!isFinite(velocity) || velocity < 0) {
-		console.warn('Invalid velocity for synth:', velocity);
-		return;
-	}
-	if (!isFinite(startTime)) {
-		console.warn('Invalid startTime:', startTime);
-		return;
-	}
-
-	const rampTargetTime = startTime + decayTime;
-	if (!isFinite(rampTargetTime)) {
-		console.warn('Invalid ramp target time (startTime + decayTime):', { startTime, decayTime });
-		return;
-	}
-
+	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
+	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
 	const osc = audioCtx.createOscillator();
 	const gain = audioCtx.createGain();
 
+	const attackEnd = startTime + attackTime;
+	const decayEnd = attackEnd + decay;
+
+	// Setup oscillator
+	// osc.type = 'sawtooth'; // or square/triangle later
+	osc.type = selectedWaveform.value;
 	osc.frequency.setValueAtTime(freq, startTime);
-	osc.type = 'sawtooth';
 
-	gain.gain.setValueAtTime(velocity, startTime);
-	gain.gain.exponentialRampToValueAtTime(0.001, rampTargetTime);
+	// Gain envelope
+	gain.gain.setValueAtTime(0.0001, startTime);
+	gain.gain.exponentialRampToValueAtTime(velocity, attackEnd);
+	gain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
 
+	// Connect and play
 	osc.connect(gain).connect(masterGain);
 	osc.start(startTime);
-	osc.stop(rampTargetTime);
+	osc.stop(decayEnd);
 }
+
 
 async function togglePlay() {
 	if (isPlaying.value) {
