@@ -53,11 +53,12 @@
     }
 }
 
-
 ///////////////////// COLORS \\\\\\\\\\\\\\\\\\\\\\\\\
+$color-black: #000000;
+$color-white: #ffffff;
 
-$color-black: #121210;
-$color-white: #d8d7d0;
+$color-black-off: #121210;
+$color-white-off: #d8d7d0;
 
 $color-tan-light: #d9c5b7;
 $color-tan-dark: #c4a291;
@@ -66,5 +67,5 @@ $color-teal-light: #27fcff;
 $color-teal-dark: #4a8890;
 
 $color-pink-light: pink;
-$color-pink-dark: #de9dac;
 $color-pink-avg: #cca49a;
+$color-pink-dark: #de9dac;

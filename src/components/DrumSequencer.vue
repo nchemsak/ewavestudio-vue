@@ -2,11 +2,11 @@
 	<div class="drum-sequencer">
 		<div class="controls d-flex flex-wrap align-items-center justify-content-between mb-4">
 			<div>
-				<label class="form-label">Volume</label>
+				<label>Volume</label>
 				<input type="range" min="0" max="1" step="0.01" v-model="volume" class="styled-slider" />
 			</div>
 			<div>
-				<label class="form-label">Tempo</label>
+				<label>Tempo</label>
 				<div class="d-flex align-items-center gap-2">
 					<input type="number" v-model.number="tempo" class="form-control w-auto"
 						@mousedown="handleTempoMouseDown" @wheel="handleTempoWheel"
@@ -106,54 +106,6 @@
 		</div>
 	</div>
 	<div class="drum-sequencer" id="percussion-synth">
-		<div class="controls d-flex flex-wrap align-items-center justify-content-between mb-4">
-			<div>
-				<div>
-					<label>Attack </label> <span class="text-muted">{{ (synthAttack * 1000).toFixed(1) }} ms</span>
-				</div>
-				<input type="range" min="0" max="100" step="1" v-model.number="attackSliderVal" class="styled-slider"
-					:aria-valuetext="`${(synthAttack * 1000).toFixed(1)} milliseconds`" />
-			</div>
-			<div>
-				<label class="form-label">Decay <span class="text-muted">{{ (synthDecay * 1000).toFixed(0) }} ms</span>
-				</label>
-				<input type="range" min="0.05" max="2" step="0.01" v-model.number="synthDecay" class="styled-slider" />
-			</div>
-			<div>
-				<label class="form-label">
-					Pitch Env Amount <span class="text-muted">{{ pitchEnvSemitones }} semitones</span>
-				</label>
-				<input type="range" min="0" max="48" step="1" v-model.number="pitchEnvSemitones"
-					class="styled-slider" />
-			</div>
-			<div>
-				<label class="form-label">
-					Pitch Env Decay
-					<span class="text-muted">{{ (pitchEnvDecay * 1000).toFixed(0) }} ms</span>
-				</label>
-				<input type="range" min="0" max="100" step="1" v-model.number="pitchEnvDecaySliderVal"
-					class="styled-slider" :aria-valuetext="`${(pitchEnvDecay * 1000).toFixed(0)} milliseconds`" />
-			</div>
-			<div>
-				<label class="form-label">
-					Filter Cutoff
-					<span class="text-muted">{{ filterCutoff }} Hz</span>
-				</label>
-				<input type="range" min="100" max="10000" step="1" v-model.number="filterCutoff"
-					class="styled-slider" />
-			</div>
-
-			<div>
-				<label class="form-label">
-					Resonance (Q)
-					<span class="text-muted">{{ filterResonance }}</span>
-				</label>
-				<input type="range" min="0.1" max="20" step="0.1" v-model.number="filterResonance"
-					class="styled-slider" />
-			</div>
-
-		</div>
-
 		<div v-if="synthInstrument" class="mb-3">
 			<div class="d-flex align-items-center gap-2 mb-1">
 				<div class="mute-indicator" :class="{ muted: synthInstrument.muted }"
@@ -217,12 +169,152 @@
 				</div>
 			</div>
 		</div>
+		<div class="controls">
+
+
+
+			<div class="row">
+				<div class="col-12 col-md-6">
+					<h5>LFO Modulation</h5>
+
+					<div>
+						<label>LFO Rate <span class="text-muted">{{ lfoRate }} Hz</span></label>
+						<input type="range" min="0.1" max="20" step="0.1" v-model.number="lfoRate"
+							class="styled-slider" />
+					</div>
+
+					<div>
+						<label>LFO Depth <span class="text-muted">{{ lfoDepth }}</span></label>
+						<input type="range" min="0" max="1000" step="1" v-model.number="lfoDepth"
+							class="styled-slider" />
+					</div>
+
+					<div>
+						<label>LFO Target</label>
+						<select v-model="lfoTarget" class="form-select w-auto">
+							<option value="pitch">Pitch</option>
+							<option value="gain">Amplitude</option>
+							<option value="filter">Filter Cutoff</option>
+						</select>
+					</div>
+				</div>
+			</div>
+
+
+
+
+
+
+			<div class="row">
+				<div class="col-12 col-md-6">
+					<div class="slider-label-row">
+						<label>Attack</label> <span class="text-muted">{{ (synthAttack * 1000).toFixed(1) }} ms</span>
+					</div>
+					<input type="range" min="0" max="100" step="1" v-model.number="attackSliderVal"
+						class="styled-slider" :aria-valuetext="`${(synthAttack * 1000).toFixed(1)} milliseconds`" />
+				</div>
+
+				<div class="col-12 col-md-6">
+					<div class="slider-label-row">
+						<label>Decay</label> <span class="text-muted">{{ (synthDecay * 1000).toFixed(0)
+						}}
+							ms</span>
+					</div>
+					<input type="range" min="0.05" max="2" step="0.01" v-model.number="synthDecay"
+						class="styled-slider" />
+				</div>
+			</div>
+
+
+
+			<div class="row">
+				<div class="col-12 col-md-6">
+					<label class="form-label">Pitch Env Mode</label>
+
+
+
+
+					<div>
+						<label class="form-label">Pitch Env Mode</label>
+						<div class="btn-group" role="group" aria-label="Pitch Env Mode">
+							<button class="btn btn-sm"
+								:class="pitchMode === 'up' ? 'btn-primary' : 'btn-outline-primary'"
+								@click="pitchMode = 'up'">
+								<i class="bi bi-arrow-up"></i>
+							</button>
+							<button class="btn btn-sm"
+								:class="pitchMode === 'down' ? 'btn-primary' : 'btn-outline-primary'"
+								@click="pitchMode = 'down'">
+								<i class="bi bi-arrow-down"></i>
+							</button>
+							<button class="btn btn-sm"
+								:class="pitchMode === 'random' ? 'btn-primary' : 'btn-outline-primary'"
+								@click="pitchMode = 'random'">
+								<i class="bi bi-shuffle"></i>
+							</button>
+						</div>
+					</div>
+
+
+
+				</div>
+			</div>
+
+
+
+			<div class="row">
+				<div class="col-12 col-md-6">
+					<div class="slider-label-row">
+						<label>Pitch Env Amount </label><span class="text-muted">{{ pitchEnvSemitones }}
+							semitones</span>
+					</div>
+					<input type="range" min="0" max="48" step="1" v-model.number="pitchEnvSemitones"
+						class="styled-slider" />
+				</div>
+
+				<div class="col-12 col-md-6">
+					<div class="slider-label-row">
+						<label>
+							Pitch Env Decay</label><span class="text-muted">{{ (pitchEnvDecay * 1000).toFixed(0) }}
+							ms</span>
+
+					</div>
+					<input type="range" min="0" max="100" step="1" v-model.number="pitchEnvDecaySliderVal"
+						class="styled-slider" :aria-valuetext="`${(pitchEnvDecay * 1000).toFixed(0)} milliseconds`" />
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-12 col-md-6">
+					<div class="slider-label-row">
+						<label>Filter Cutoff</label><span class="text-muted">{{ filterCutoff }} Hz</span>
+					</div>
+
+					<input type="range" min="100" max="10000" step="1" v-model.number="filterCutoff"
+						class="styled-slider" />
+
+				</div>
+
+
+				<div class="col-12 col-md-6">
+					<div class="slider-label-row">
+						<label>Resonance (Q)
+
+						</label><span class="text-muted">{{ filterResonance }}</span>
+					</div>
+					<input type="range" min="0.1" max="20" step="0.1" v-model.number="filterResonance"
+						class="styled-slider" />
+				</div>
+			</div>
+		</div>
+
+
 	</div>
 </template>
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
-
+// Reuse shared AudioContext
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let isScrubbing = false;
 let startY = 0;
 let startTempo = 0;
@@ -232,7 +324,7 @@ const synthDecay = ref(0.4);
 const selectedWaveform = ref("sine");
 const attackSliderVal = ref(20); // Initial slider value (0–100)
 const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
-const pitchEnvAmtSliderVal = ref(0); // Slider from 0–100
+// const pitchEnvAmtSliderVal = ref(0); // Slider from 0–100
 const filterCutoff = ref(5000); // Hz, default cutoff
 const filterResonance = ref(0.5); // Q factor
 const pitchEnvDecaySliderVal = ref(30); // Slider 0–100, start near short decay
@@ -251,6 +343,32 @@ const synthAttack = computed(() => {
 });
 const pitchEnvSemitones = ref(0); // Default = 1 octave up
 
+const pitchMode = ref('up'); // or 'down', 'random'
+
+// LFO START
+const lfoRate = ref(5); // Hz
+const lfoDepth = ref(50); // Varies by target
+const lfoTarget = ref('pitch'); // 'pitch' | 'gain' | 'filter'
+
+const lfoOsc = audioCtx.createOscillator();
+const lfoGain = audioCtx.createGain();
+
+lfoOsc.type = 'sine';
+lfoOsc.frequency.setValueAtTime(lfoRate.value, audioCtx.currentTime);
+lfoGain.gain.setValueAtTime(lfoDepth.value, audioCtx.currentTime);
+
+// Connect dynamically later
+lfoOsc.connect(lfoGain);
+lfoOsc.start();
+
+watch(lfoRate, rate => {
+	lfoOsc.frequency.setValueAtTime(rate, audioCtx.currentTime);
+});
+
+watch(lfoDepth, depth => {
+	lfoGain.gain.setValueAtTime(depth, audioCtx.currentTime);
+});
+// LFO END
 
 function editLabel(instrument) {
 	instrument.isEditingName = true;
@@ -299,8 +417,7 @@ function handleTempoWheel(e) {
 	tempo.value = Math.max(20, Math.min(300, tempo.value - delta)); // scroll up increases
 }
 
-// Reuse shared AudioContext
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
 
 const volume = ref(0.75);
 const tempo = ref(100);
@@ -318,7 +435,7 @@ const instruments = ref([
 		isEditingName: false,
 		buffer: null,
 		muted: false,
-		channelVolume: 1.0,
+		channelVolume: 0.5,
 		steps: Array(16).fill(false),
 		velocities: Array(16).fill(1.0)
 	}, {
@@ -327,7 +444,7 @@ const instruments = ref([
 		isEditingName: false,
 		buffer: null,
 		muted: false,
-		channelVolume: 1.0,
+		channelVolume: 0.5,
 		steps: Array(16).fill(false),
 		velocities: Array(16).fill(1.0)
 	},
@@ -337,17 +454,17 @@ const instruments = ref([
 		isEditingName: false,
 		buffer: null,
 		muted: false,
-		channelVolume: 1.0,
+		channelVolume: 0.5,
 		steps: Array(16).fill(false),
 		velocities: Array(16).fill(1.0)
 	},
 	{
 		name: 'synth-voice',
-		label: 'Synth Voice',
+		label: 'Percussion Synth',
 		isEditingName: false,
 		type: 'synth', // <-- custom flag
 		muted: false,
-		channelVolume: 1.0,
+		channelVolume: 0.5,
 		steps: Array(16).fill(false),
 		velocities: Array(16).fill(1.0),
 		pitches: Array(16).fill(220), // default A3 pitch
@@ -361,7 +478,7 @@ function addCustomChannel() {
 		label: `Custom ${instruments.value.length + 1}`,
 		buffer: null,
 		muted: false,
-		channelVolume: 1.0,
+		channelVolume: 0.5,
 		steps: Array(16).fill(false),
 		velocities: Array(16).fill(1.0),
 	});
@@ -430,21 +547,31 @@ function schedule() {
 	loopId = requestAnimationFrame(schedule);
 }
 
+
+
 function playSynthNote(freq, velocity, decayTime, startTime) {
 	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
 	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
+
 	const osc = audioCtx.createOscillator();
 	const gain = audioCtx.createGain();
 	const filter = audioCtx.createBiquadFilter();
 
-	// Configure oscillator
-	osc.type = selectedWaveform.value;
-	const semitoneRatio = Math.pow(2, pitchEnvSemitones.value / 12);
+	// Pitch envelope handling
+	let semitoneOffset = pitchEnvSemitones.value;
+	if (pitchMode.value === 'down') {
+		semitoneOffset = -pitchEnvSemitones.value;
+	} else if (pitchMode.value === 'random') {
+		semitoneOffset = (Math.random() * 2 - 1) * pitchEnvSemitones.value; // random between -n and +n
+	}
+	const semitoneRatio = Math.pow(2, semitoneOffset / 12);
 	const startFreq = freq * semitoneRatio;
+
+	osc.type = selectedWaveform.value;
 	osc.frequency.setValueAtTime(startFreq, startTime);
 	osc.frequency.exponentialRampToValueAtTime(freq, startTime + pitchEnvDecay.value);
 
-	// Configure filter
+	// Filter config
 	filter.type = 'lowpass';
 	filter.frequency.setValueAtTime(filterCutoff.value, startTime);
 	filter.Q.setValueAtTime(filterResonance.value, startTime);
@@ -456,16 +583,24 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	gain.gain.exponentialRampToValueAtTime(velocity, attackEnd);
 	gain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
 
-	// Connect: osc → filter → gain → master
+	// Routing
 	osc.connect(filter);
 	filter.connect(gain);
 	gain.connect(masterGain);
 
-	// Start & stop
+	// LFO
+	if (lfoTarget.value === 'pitch') {
+		lfoGain.connect(osc.frequency);
+	} else if (lfoTarget.value === 'gain') {
+		lfoGain.connect(gain.gain);
+	} else if (lfoTarget.value === 'filter') {
+		lfoGain.connect(filter.frequency);
+	}
+
+	// Start/stop
 	osc.start(startTime);
 	osc.stop(decayEnd);
 }
-
 
 
 async function togglePlay() {

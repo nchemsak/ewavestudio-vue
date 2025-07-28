@@ -27,7 +27,7 @@
 								:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
 								@click="selectedWave2 !== wave && selectWave1(wave)">
 
-								<!-- @click="selectWave1(wave)"> -->
+
 								<template v-if="wave !== 'custom'">
 									<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
 								</template>

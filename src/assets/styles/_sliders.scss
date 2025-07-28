@@ -40,7 +40,7 @@ input[type="range"]::-ms-thumb {
 .slider-percentage {
     font-size: 0.8em;
     margin-top: 4px;
-    color: white;
+    color: $color-white;
 }
 
 input[type="range"].styled-slider {
@@ -98,7 +98,7 @@ input[type="range"]:active::-ms-thumb {
     right: 0px;
     padding: 20px;
     display: block;
-    background-color: white;
+    background-color: $color-white;
     border-radius: 5px;
     box-shadow: 0 1px 0 rgba(9, 30, 66, 0.25);
     z-index: 100;
