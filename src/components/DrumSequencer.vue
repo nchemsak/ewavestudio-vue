@@ -230,29 +230,20 @@
 			<div class="row">
 				<div class="col-12 col-md-6">
 					<label class="form-label">Pitch Env Mode</label>
-
-
-
-
-					<div>
-						<label class="form-label">Pitch Env Mode</label>
-						<div class="btn-group" role="group" aria-label="Pitch Env Mode">
-							<button class="btn btn-sm"
-								:class="pitchMode === 'up' ? 'btn-primary' : 'btn-outline-primary'"
-								@click="pitchMode = 'up'">
-								<i class="bi bi-arrow-up"></i>
-							</button>
-							<button class="btn btn-sm"
-								:class="pitchMode === 'down' ? 'btn-primary' : 'btn-outline-primary'"
-								@click="pitchMode = 'down'">
-								<i class="bi bi-arrow-down"></i>
-							</button>
-							<button class="btn btn-sm"
-								:class="pitchMode === 'random' ? 'btn-primary' : 'btn-outline-primary'"
-								@click="pitchMode = 'random'">
-								<i class="bi bi-shuffle"></i>
-							</button>
-						</div>
+					<div class="btn-group" role="group" aria-label="Pitch Env Mode">
+						<button class="btn btn-sm" :class="pitchMode === 'up' ? 'btn-primary' : 'btn-outline-primary'"
+							@click="pitchMode = 'up'">
+							<i class="bi bi-arrow-up"></i>
+						</button>
+						<button class="btn btn-sm" :class="pitchMode === 'down' ? 'btn-primary' : 'btn-outline-primary'"
+							@click="pitchMode = 'down'">
+							<i class="bi bi-arrow-down"></i>
+						</button>
+						<button class="btn btn-sm"
+							:class="pitchMode === 'random' ? 'btn-primary' : 'btn-outline-primary'"
+							@click="pitchMode = 'random'">
+							<i class="bi bi-shuffle"></i>
+						</button>
 					</div>
 
 
@@ -307,8 +298,10 @@
 			</div>
 		</div>
 
+		<canvas ref="oscilloscopeCanvas" class="oscilloscopeDrumSynth" width="600" height="100"></canvas>
 
 	</div>
+
 </template>
 
 <script setup>
@@ -344,6 +337,7 @@ const synthAttack = computed(() => {
 const pitchEnvSemitones = ref(0); // Default = 1 octave up
 
 const pitchMode = ref('up'); // or 'down', 'random'
+const oscilloscopeCanvas = ref(null);
 
 // LFO START
 const lfoRate = ref(5); // Hz
@@ -427,6 +421,15 @@ const currentStep = ref(-1);
 const masterGain = audioCtx.createGain();
 masterGain.gain.value = volume.value;
 masterGain.connect(audioCtx.destination);
+
+
+// Oscilloscope
+const analyser = audioCtx.createAnalyser();
+analyser.fftSize = 2048;
+
+const dataArray = new Uint8Array(analyser.fftSize);
+masterGain.connect(analyser);
+
 
 const instruments = ref([
 	{
@@ -691,6 +694,42 @@ watch(volume, val => {
 onMounted(() => {
 	loadAllSamples();
 	window.addEventListener('mouseup', handleMouseUp);
+	const canvas = oscilloscopeCanvas.value;
+	const canvasCtx = canvas.getContext('2d');
+
+	function drawOscilloscope() {
+		requestAnimationFrame(drawOscilloscope);
+
+		analyser.getByteTimeDomainData(dataArray);
+
+		canvasCtx.fillStyle = '#111';
+		canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+		canvasCtx.lineWidth = 2;
+		canvasCtx.strokeStyle = '#0ff';
+		canvasCtx.beginPath();
+
+		const sliceWidth = canvas.width / analyser.fftSize;
+		let x = 0;
+
+		for (let i = 0; i < analyser.fftSize; i++) {
+			const v = dataArray[i] / 128.0;
+			const y = (v * canvas.height) / 2;
+
+			if (i === 0) {
+				canvasCtx.moveTo(x, y);
+			} else {
+				canvasCtx.lineTo(x, y);
+			}
+			x += sliceWidth;
+		}
+
+		canvasCtx.lineTo(canvas.width, canvas.height / 2);
+		canvasCtx.stroke();
+	}
+
+	drawOscilloscope();
+
 
 });
 
