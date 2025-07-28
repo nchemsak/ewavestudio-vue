@@ -13,6 +13,10 @@
 						:title="'Scroll or drag to change tempo, or type a number'" />
 				</div>
 			</div>
+			<div>
+				<label>Swing <span class="text-muted">{{ Math.round(swing * 100) }}%</span></label>
+				<input type="range" min="0" max="0.5" step="0.01" v-model.number="swing" class="styled-slider" />
+			</div>
 			<button class="btn btn-primary" @click="togglePlay">
 				<span v-if="isPlaying">Stop</span>
 				<span v-else>Play</span>
@@ -59,6 +63,13 @@
 								{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
 							</button>
 						</div>
+						<!-- Delete Button (not for synth-voice) -->
+						<button v-if="instrument.name !== 'synth-voice'" @click="deleteChannel(instrument.name)"
+							class="btn btn-sm btn-outline-danger ms-2" title="Delete Channel"
+							aria-label="Delete Channel">
+							&times;
+						</button>
+
 					</div>
 
 					<!-- Only show for custom channels -->
@@ -185,7 +196,9 @@
 
 					<div>
 						<label>LFO Depth <span class="text-muted">{{ lfoDepth }}</span></label>
-						<input type="range" min="0" max="1000" step="1" v-model.number="lfoDepth"
+						<!-- <input type="range" min="0" max="1000" step="1" v-model.number="lfoDepth"
+							class="styled-slider" /> -->
+						<input type="range" :min="0" :max="lfoDepthMax" step="1" v-model.number="lfoDepth"
 							class="styled-slider" />
 					</div>
 
@@ -224,9 +237,6 @@
 						class="styled-slider" />
 				</div>
 			</div>
-
-
-
 			<div class="row">
 				<div class="col-12 col-md-6">
 					<label class="form-label">Pitch Env Mode</label>
@@ -245,14 +255,8 @@
 							<i class="bi bi-shuffle"></i>
 						</button>
 					</div>
-
-
-
 				</div>
 			</div>
-
-
-
 			<div class="row">
 				<div class="col-12 col-md-6">
 					<div class="slider-label-row">
@@ -284,8 +288,6 @@
 						class="styled-slider" />
 
 				</div>
-
-
 				<div class="col-12 col-md-6">
 					<div class="slider-label-row">
 						<label>Resonance (Q)
@@ -341,12 +343,14 @@ const oscilloscopeCanvas = ref(null);
 
 // LFO START
 const lfoRate = ref(5); // Hz
-const lfoDepth = ref(50); // Varies by target
+const lfoDepth = ref(0); // Varies by target
 const lfoTarget = ref('pitch'); // 'pitch' | 'gain' | 'filter'
 
 const lfoOsc = audioCtx.createOscillator();
 const lfoGain = audioCtx.createGain();
-
+const lfoDepthMax = computed(() => {
+	return lfoTarget.value === 'gain' ? 200 : 1000;
+});
 lfoOsc.type = 'sine';
 lfoOsc.frequency.setValueAtTime(lfoRate.value, audioCtx.currentTime);
 lfoGain.gain.setValueAtTime(lfoDepth.value, audioCtx.currentTime);
@@ -415,6 +419,7 @@ function handleTempoWheel(e) {
 
 const volume = ref(0.75);
 const tempo = ref(100);
+const swing = ref(0);
 const isPlaying = ref(false);
 const currentStep = ref(-1);
 
@@ -487,6 +492,20 @@ function addCustomChannel() {
 	});
 }
 
+function deleteChannel(name) {
+	if (name === 'synth-voice') return; // safeguard
+
+	const index = instruments.value.findIndex(i => i.name === name);
+	if (index !== -1) {
+		const label = instruments.value[index].label || name;
+		const confirmed = confirm(`Are you sure you want to delete "${label}"?`);
+		if (confirmed) {
+			instruments.value.splice(index, 1);
+		}
+	}
+}
+
+
 function loadUserSample(event, instrument) {
 	const file = event.target.files[0];
 	if (!file) return;
@@ -524,6 +543,31 @@ function playBuffer(buffer, time, velocity = 1) {
 	source.start(time);
 }
 
+// function schedule() {
+// 	const now = audioCtx.currentTime;
+// 	const stepDuration = 60 / tempo.value / 4; // 16 steps per bar
+
+// 	while (startTime < now + 0.1) {
+// 		instruments.value.forEach(inst => {
+// 			if (!inst.muted && inst.steps[stepIndex]) {
+// 				const velocity = inst.velocities[stepIndex];
+// 				const volume = inst.channelVolume ?? 1.0;
+
+// 				if (inst.type === 'synth') {
+// 					const pitch = inst.pitches[stepIndex] || 220;
+// 					const safeDecay = isFinite(synthDecay.value) && synthDecay.value > 0 ? synthDecay.value : 0.1;
+// 					playSynthNote(pitch, velocity * volume, safeDecay, startTime);
+// 				} else if (inst.buffer) {
+// 					playBuffer(inst.buffer, startTime, velocity * volume);
+// 				}
+// 			}
+// 		});
+// 		currentStep.value = stepIndex;
+// 		stepIndex = (stepIndex + 1) % 16;
+// 		startTime += stepDuration;
+// 	}
+// 	loopId = requestAnimationFrame(schedule);
+// }
 function schedule() {
 	const now = audioCtx.currentTime;
 	const stepDuration = 60 / tempo.value / 4; // 16 steps per bar
@@ -533,20 +577,27 @@ function schedule() {
 			if (!inst.muted && inst.steps[stepIndex]) {
 				const velocity = inst.velocities[stepIndex];
 				const volume = inst.channelVolume ?? 1.0;
+				const pitch = inst.pitches?.[stepIndex] || 220;
+				const safeDecay = isFinite(synthDecay.value) && synthDecay.value > 0 ? synthDecay.value : 0.1;
+
+				// 🎵 SWING: apply offset to every 2nd step (i.e., 1, 3, 5...)
+				const isEvenStep = stepIndex % 2 === 1;
+				const swingOffset = isEvenStep ? stepDuration * swing.value : 0;
+				const scheduledTime = startTime + swingOffset;
 
 				if (inst.type === 'synth') {
-					const pitch = inst.pitches[stepIndex] || 220;
-					const safeDecay = isFinite(synthDecay.value) && synthDecay.value > 0 ? synthDecay.value : 0.1;
-					playSynthNote(pitch, velocity * volume, safeDecay, startTime);
+					playSynthNote(pitch, velocity * volume, safeDecay, scheduledTime);
 				} else if (inst.buffer) {
-					playBuffer(inst.buffer, startTime, velocity * volume);
+					playBuffer(inst.buffer, scheduledTime, velocity * volume);
 				}
 			}
 		});
+
 		currentStep.value = stepIndex;
 		stepIndex = (stepIndex + 1) % 16;
 		startTime += stepDuration;
 	}
+
 	loopId = requestAnimationFrame(schedule);
 }
 
@@ -583,7 +634,10 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	const attackEnd = startTime + attackTime;
 	const decayEnd = attackEnd + decay;
 	gain.gain.setValueAtTime(0.0001, startTime);
-	gain.gain.exponentialRampToValueAtTime(velocity, attackEnd);
+	// gain.gain.exponentialRampToValueAtTime(velocity, attackEnd);
+	const safeVelocity = Math.max(0.0001, velocity);
+	gain.gain.exponentialRampToValueAtTime(safeVelocity, attackEnd);
+
 	gain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
 
 	// Routing
@@ -595,7 +649,23 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	if (lfoTarget.value === 'pitch') {
 		lfoGain.connect(osc.frequency);
 	} else if (lfoTarget.value === 'gain') {
-		lfoGain.connect(gain.gain);
+		// lfoGain.connect(gain.gain);
+		// Clamp LFO depth for gain mod to a safe musical range
+		const lfoModGain = audioCtx.createGain();
+		lfoModGain.gain.value = lfoDepth.value * 0.005; // scale depth to a small gain range (e.g., 0 to 0.5)
+
+		// Offset node (adds a base gain level)
+		const lfoOffset = audioCtx.createConstantSource();
+		lfoOffset.offset.value = velocity * 0.75; // 75% of velocity as base volume
+
+		// Sum LFO + Offset
+		const lfoSum = audioCtx.createGain();
+		lfoGain.connect(lfoModGain).connect(lfoSum);
+		lfoOffset.connect(lfoSum);
+		lfoSum.connect(gain.gain);
+
+		lfoOffset.start();
+
 	} else if (lfoTarget.value === 'filter') {
 		lfoGain.connect(filter.frequency);
 	}
