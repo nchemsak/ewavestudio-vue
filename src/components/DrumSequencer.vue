@@ -216,6 +216,25 @@
 
 
 
+			<div class="noise-selector">
+				<label>Noise</label>
+				<div class="noise-dot-wrap">
+					<div v-for="type in ['white', 'pink', 'brown']" :key="type" class="noise-dot" :class="[
+						type,
+						{ selected: noiseType === type }
+					]" @click="toggleNoise(type)" :title="type.charAt(0).toUpperCase() + type.slice(1) + ' Noise'" role="button"
+						aria-label="Toggle Noise Type">
+					</div>
+					<div class="mt-2" v-if="noiseType !== 'none'">
+						<label>Noise Amount <span class="text-muted">{{ Math.round(noiseAmount * 100) }}%</span></label>
+						<input type="range" min="0" max="1" step="0.01" v-model.number="noiseAmount"
+							class="styled-slider" />
+					</div>
+
+				</div>
+			</div>
+
+
 
 
 			<div class="row">
@@ -341,6 +360,11 @@ const pitchEnvSemitones = ref(0); // Default = 1 octave up
 const pitchMode = ref('up'); // or 'down', 'random'
 const oscilloscopeCanvas = ref(null);
 
+// Noise
+const noiseType = ref('none'); // 'none' | 'white' | 'pink' | 'brown'
+const noiseAmount = ref(0.5); // 0 = no noise, 1 = full noise
+
+
 // LFO START
 const lfoRate = ref(5); // Hz
 const lfoDepth = ref(0); // Varies by target
@@ -367,6 +391,11 @@ watch(lfoDepth, depth => {
 	lfoGain.gain.setValueAtTime(depth, audioCtx.currentTime);
 });
 // LFO END
+
+
+function toggleNoise(type) {
+	noiseType.value = noiseType.value === type ? 'none' : type;
+}
 
 function editLabel(instrument) {
 	instrument.isEditingName = true;
@@ -543,31 +572,7 @@ function playBuffer(buffer, time, velocity = 1) {
 	source.start(time);
 }
 
-// function schedule() {
-// 	const now = audioCtx.currentTime;
-// 	const stepDuration = 60 / tempo.value / 4; // 16 steps per bar
 
-// 	while (startTime < now + 0.1) {
-// 		instruments.value.forEach(inst => {
-// 			if (!inst.muted && inst.steps[stepIndex]) {
-// 				const velocity = inst.velocities[stepIndex];
-// 				const volume = inst.channelVolume ?? 1.0;
-
-// 				if (inst.type === 'synth') {
-// 					const pitch = inst.pitches[stepIndex] || 220;
-// 					const safeDecay = isFinite(synthDecay.value) && synthDecay.value > 0 ? synthDecay.value : 0.1;
-// 					playSynthNote(pitch, velocity * volume, safeDecay, startTime);
-// 				} else if (inst.buffer) {
-// 					playBuffer(inst.buffer, startTime, velocity * volume);
-// 				}
-// 			}
-// 		});
-// 		currentStep.value = stepIndex;
-// 		stepIndex = (stepIndex + 1) % 16;
-// 		startTime += stepDuration;
-// 	}
-// 	loopId = requestAnimationFrame(schedule);
-// }
 function schedule() {
 	const now = audioCtx.currentTime;
 	const stepDuration = 60 / tempo.value / 4; // 16 steps per bar
@@ -608,7 +613,8 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
 
 	const osc = audioCtx.createOscillator();
-	const gain = audioCtx.createGain();
+	const oscEnvGain = audioCtx.createGain(); // NEW
+	const noiseEnvGain = audioCtx.createGain(); // NEW
 	const filter = audioCtx.createBiquadFilter();
 
 	// Pitch envelope handling
@@ -633,17 +639,22 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	// Gain envelope
 	const attackEnd = startTime + attackTime;
 	const decayEnd = attackEnd + decay;
-	gain.gain.setValueAtTime(0.0001, startTime);
-	// gain.gain.exponentialRampToValueAtTime(velocity, attackEnd);
-	const safeVelocity = Math.max(0.0001, velocity);
-	gain.gain.exponentialRampToValueAtTime(safeVelocity, attackEnd);
 
-	gain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
+	// Crossfade values
+	const blend = Math.min(Math.max(noiseAmount.value, 0), 1); // clamp 0–1
+	const oscBlend = 1 - blend;
+	const noiseBlend = blend;
+
+	const safeOscGain = Math.max(0.0001, velocity * oscBlend);
+	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
+	oscEnvGain.gain.setValueAtTime(0.0001, startTime);
+	oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
+	oscEnvGain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
+
 
 	// Routing
-	osc.connect(filter);
-	filter.connect(gain);
-	gain.connect(masterGain);
+	osc.connect(filter).connect(oscEnvGain).connect(masterGain);
+
 
 	// LFO
 	if (lfoTarget.value === 'pitch') {
@@ -669,6 +680,31 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	} else if (lfoTarget.value === 'filter') {
 		lfoGain.connect(filter.frequency);
 	}
+	// Noise
+
+	if (noiseType.value !== 'none' && noiseAmount.value > 0) {
+		const noiseBuffer = noiseBuffers[noiseType.value];
+		if (noiseBuffer) {
+			const noiseSource = audioCtx.createBufferSource();
+			noiseSource.buffer = noiseBuffer;
+
+			noiseEnvGain.gain.setValueAtTime(0.0001, startTime);
+			noiseEnvGain.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd);
+			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
+
+			const noiseFilter = audioCtx.createBiquadFilter();
+noiseFilter.type = 'bandpass';
+noiseFilter.frequency.setValueAtTime(8000, startTime);
+noiseFilter.Q.setValueAtTime(1, startTime);
+
+noiseSource.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain);
+			noiseSource.start(startTime);
+			noiseSource.stop(decayEnd);
+
+		}
+	}
+
+
 
 	// Start/stop
 	osc.start(startTime);
@@ -763,6 +799,8 @@ watch(volume, val => {
 
 onMounted(() => {
 	loadAllSamples();
+	generateNoiseBuffers();
+
 	window.addEventListener('mouseup', handleMouseUp);
 	const canvas = oscilloscopeCanvas.value;
 	const canvasCtx = canvas.getContext('2d');
@@ -822,5 +860,55 @@ function getPadStyle(instrument, index) {
 		background: `linear-gradient(to top, pink ${percent}%, #fff ${percent}%)`
 	};
 }
+
+const noiseBuffers = {
+	white: null,
+	pink: null,
+	brown: null,
+};
+
+
+// Noise Generator for Percussion Synth
+function generateNoiseBuffers() {
+	const length = audioCtx.sampleRate * 2; // 2 seconds
+	const createBuffer = () => audioCtx.createBuffer(1, length, audioCtx.sampleRate);
+
+	// White Noise
+	const white = createBuffer();
+	const whiteData = white.getChannelData(0);
+	for (let i = 0; i < length; i++) {
+		whiteData[i] = Math.random() * 2 - 1;
+	}
+	noiseBuffers.white = white;
+
+	// Pink Noise
+	const pink = createBuffer();
+	const pinkData = pink.getChannelData(0);
+	let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+	for (let i = 0; i < length; i++) {
+		const white = Math.random() * 2 - 1;
+		b0 = 0.99886 * b0 + white * 0.0555179;
+		b1 = 0.99332 * b1 + white * 0.0750759;
+		b2 = 0.96900 * b2 + white * 0.1538520;
+		b3 = 0.86650 * b3 + white * 0.3104856;
+		b4 = 0.55000 * b4 + white * 0.5329522;
+		b5 = -0.7616 * b5 - white * 0.0168980;
+		pinkData[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+		b6 = white * 0.115926;
+	}
+	noiseBuffers.pink = pink;
+
+	// Brown Noise
+	const brown = createBuffer();
+	const brownData = brown.getChannelData(0);
+	let lastOut = 0;
+	for (let i = 0; i < length; i++) {
+		const white = Math.random() * 2 - 1;
+		lastOut = (lastOut + (0.02 * white)) / 1.02;
+		brownData[i] = lastOut * 3.5;
+	}
+	noiseBuffers.brown = brown;
+}
+
 
 </script>
