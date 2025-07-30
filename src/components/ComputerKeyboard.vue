@@ -1,17 +1,6 @@
 <template>
 	<div class="outer-wrapper">
-		<!-- Volume Slider -->
-		<!-- <div class="mb-4">
-			<label for="volume" class="form-label">Volume</label><br />
-			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume"
-				v-model="volume" :aria-valuetext="`${Math.round(volume * 100)} percent`" />
-			<div class="slider-percentage" id="label-volume">{{ volumeLabel }}</div>
-		</div> -->
-		<div>
-			<!-- <Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" color="#23CDE8" /> -->
-			<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" color="#23CDE8" />
-			
-		</div>
+		<Knob v-model="volume" size="large" label="Volume" :min="0" :max="1" :step="0.01" color="#23CDE8" />
 		<div class="waveformGroupWrapper">
 			<div class="visualizer-stack d-flex flex-column gap-3 mb-4">
 				<div class="row">
@@ -43,27 +32,15 @@
 								</template>
 							</div>
 						</div>
-						<div class="unison-controls">
-							<div class="slider-label-row">
-								<label>Unison Count</label>
-								<span>{{ unisonCount1 }}</span>
-							</div>
-							<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount1" />
 
-							<div class="slider-label-row">
-								<label>Detune</label>
-								<span>{{ detuneCents1 }} cents</span>
-							</div>
-							<input type="range" class="styled-slider" min="0" max="50" step="1"
-								v-model="detuneCents1" />
-
-							<div class="slider-label-row">
-								<label>Stereo Spread</label>
-								<span>{{ stereoSpread1 }} </span>
-							</div>
-							<input type="range" class="styled-slider" min="0" max="1" step="0.01"
-								v-model="stereoSpread1" />
-						</div>
+						<KnobGroup v-model="detuneEnabled1" title="Detune" color="#00e676">
+							<Knob v-model="unisonCount1" size="small" :min="1" :max="5" :step="1" label="Unison"
+								color="#00e676" :disabled="!detuneEnabled1" />
+							<Knob v-model="detuneCents1" size="small" :min="0" :max="100" :step="1" label="Detune"
+								color="#00bcd4" :disabled="!detuneEnabled1" />
+							<Knob v-model="stereoSpread1" size="small" :min="0" :max="100" :step="1" label="Spread"
+								color="#8e24aa" :disabled="!detuneEnabled1" />
+						</KnobGroup>
 					</div>
 				</div>
 				<div class="col-md-6">
@@ -84,28 +61,15 @@
 								</template>
 							</div>
 						</div>
-						<div class="unison-controls">
-							<div class="slider-label-row">
-								<label>Unison Count</label>
-								<span>{{ unisonCount2 }}</span>
-							</div>
-							<input type="range" class="styled-slider" min="1" max="15" v-model="unisonCount2" />
 
-							<div class="slider-label-row">
-								<label>Detune</label>
-								<span>{{ detuneCents2 }} cents</span>
-							</div>
-							<input type="range" class="styled-slider" min="0" max="50" step="1"
-								v-model="detuneCents2" />
-
-
-							<div class="slider-label-row">
-								<label>Stereo Spread</label>
-								<span>{{ stereoSpread2 }} </span>
-							</div>
-							<input type="range" class="styled-slider" min="0" max="1" step="0.01"
-								v-model="stereoSpread2" />
-						</div>
+						<KnobGroup v-model="detuneEnabled2" title="Detune" color="#00e676">
+							<Knob v-model="unisonCount2" size="small" :min="1" :max="5" :step="1" label="Unison"
+								color="#00e676" :disabled="!detuneEnabled2" />
+							<Knob v-model="detuneCents2" size="small" :min="0" :max="100" :step="1" label="Detune"
+								color="#00bcd4" :disabled="!detuneEnabled2" />
+							<Knob v-model="stereoSpread2" size="small" :min="0" :max="100" :step="1" label="Spread"
+								color="#8e24aa" :disabled="!detuneEnabled2" />
+						</KnobGroup>
 					</div>
 				</div>
 			</div>
@@ -283,6 +247,7 @@ import FloatingWindow from './FloatingWindow.vue';
 import PresetBankPanel from './PresetBankPanel.vue';
 import { computed } from 'vue';
 import Knob from './Knob.vue';
+import KnobGroup from './KnobGroup.vue';
 
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -301,7 +266,8 @@ const waveMixDisplay = computed(() => ({
 
 const showPresets = ref(true);
 
-
+const detuneEnabled1 = ref(true);
+const detuneEnabled2 = ref(true);
 
 // Final output	
 masterGain.connect(analyser);
@@ -501,21 +467,22 @@ function playNote(note) {
 	const waveGroups = [
 		{
 			wave: selectedWave1.value,
-			unison: unisonCount1.value,
-			detune: detuneCents1.value,
-			spread: stereoSpread1.value,
+			unison: detuneEnabled1.value ? unisonCount1.value : 1,
+			detune: detuneEnabled1.value ? detuneCents1.value : 0,
+			spread: detuneEnabled1.value ? stereoSpread1.value : 0,
 			gainValue: 1 - waveMix.value,
 			analyser: analyser1,
 		},
 		{
 			wave: selectedWave2.value,
-			unison: unisonCount2.value,
-			detune: detuneCents2.value,
-			spread: stereoSpread2.value,
+			unison: detuneEnabled2.value ? unisonCount2.value : 1,
+			detune: detuneEnabled2.value ? detuneCents2.value : 0,
+			spread: detuneEnabled2.value ? stereoSpread2.value : 0,
 			gainValue: waveMix.value,
 			analyser: analyser2,
-		},
+		}
 	];
+
 
 	const wave = waveformType.value;
 
