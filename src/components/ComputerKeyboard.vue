@@ -1,11 +1,16 @@
 <template>
 	<div class="outer-wrapper">
 		<!-- Volume Slider -->
-		<div class="mb-4">
+		<!-- <div class="mb-4">
 			<label for="volume" class="form-label">Volume</label><br />
 			<input type="range" min="0" max="1" step="0.01" class="form-range styled-slider" id="volume"
 				v-model="volume" :aria-valuetext="`${Math.round(volume * 100)} percent`" />
 			<div class="slider-percentage" id="label-volume">{{ volumeLabel }}</div>
+		</div> -->
+		<div>
+			<!-- <Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" color="#23CDE8" /> -->
+			<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" color="#23CDE8" />
+			
 		</div>
 		<div class="waveformGroupWrapper">
 			<div class="visualizer-stack d-flex flex-column gap-3 mb-4">
@@ -277,6 +282,7 @@ import { nextTick } from 'vue';
 import FloatingWindow from './FloatingWindow.vue';
 import PresetBankPanel from './PresetBankPanel.vue';
 import { computed } from 'vue';
+import Knob from './Knob.vue';
 
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
