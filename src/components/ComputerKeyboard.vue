@@ -266,8 +266,7 @@ const waveMixDisplay = computed(() => ({
 
 const showPresets = ref(true);
 
-const detuneEnabled1 = ref(true);
-const detuneEnabled2 = ref(true);
+
 
 // Final output	
 masterGain.connect(analyser);
@@ -298,13 +297,18 @@ const selectedEffect = ref('null');
 
 const waveMix = ref(0.5); // 0 = all wave1, 1 = all wave2
 
-const unisonCount1 = ref(1);
-const detuneCents1 = ref(0);
-const stereoSpread1 = ref(0);
 
-const unisonCount2 = ref(1);
-const detuneCents2 = ref(0);
-const stereoSpread2 = ref(0);
+// Detune Effect
+const detuneEnabled1 = ref(false);
+const detuneEnabled2 = ref(false);
+
+const unisonCount1 = ref(3);
+const detuneCents1 = ref(12);
+const stereoSpread1 = ref(50);
+
+const unisonCount2 = ref(3);
+const detuneCents2 = ref(12);
+const stereoSpread2 = ref(50);
 
 
 const analyser1 = audioCtx.createAnalyser();
