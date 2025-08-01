@@ -32,15 +32,23 @@
 								</template>
 							</div>
 						</div>
-
-						<KnobGroup v-model="detuneEnabled1" title="Detune" color="#00e676">
+						<!-- <KnobGroup v-model="detuneEnabled1" title="Detune" color="#27fcff">
 							<Knob v-model="unisonCount1" size="small" :min="1" :max="5" :step="1" label="Unison"
-								color="#00e676" :disabled="!detuneEnabled1" />
+								color="#27fcff" :disabled="!detuneEnabled1" />
 							<Knob v-model="detuneCents1" size="small" :min="0" :max="100" :step="1" label="Detune"
-								color="#00bcd4" :disabled="!detuneEnabled1" />
+								color="#27fcff" :disabled="!detuneEnabled1" />
 							<Knob v-model="stereoSpread1" size="small" :min="0" :max="100" :step="1" label="Spread"
-								color="#8e24aa" :disabled="!detuneEnabled1" />
+								color="#27fcff" :disabled="!detuneEnabled1" />
+						</KnobGroup> -->
+						<KnobGroup v-model="detuneEnabled" title="Unison" color="#27fcff">
+							<Knob v-model="unisonCount" size="small" :min="1" :max="5" :step="1" label="Voices"
+								color="#27fcff" :disabled="!detuneEnabled" />
+							<Knob v-model="detuneCents" size="small" :min="0" :max="100" :step="1" label="Detune"
+								color="#27fcff" :disabled="!detuneEnabled" />
+							<Knob v-model="stereoSpread" size="small" :min="0" :max="100" :step="1" label="Spread"
+								color="#27fcff" :disabled="!detuneEnabled" />
 						</KnobGroup>
+
 					</div>
 				</div>
 				<div class="col-md-6">
@@ -50,7 +58,7 @@
 							<div v-for="wave in waveforms" :key="wave + '-2'" class="waveform-option"
 								:class="{ selected: selectedWave2 === wave, disabled: selectedWave1 === wave }"
 								@click="selectedWave1 !== wave && selectWave2(wave)">
-								<!-- @click="selectWave2(wave)"> -->
+
 								<template v-if="wave !== 'custom'">
 									<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
 								</template>
@@ -62,14 +70,14 @@
 							</div>
 						</div>
 
-						<KnobGroup v-model="detuneEnabled2" title="Detune" color="#00e676">
+						<!-- <KnobGroup v-model="detuneEnabled2" title="Detune" color="#27fcff">
 							<Knob v-model="unisonCount2" size="small" :min="1" :max="5" :step="1" label="Unison"
-								color="#00e676" :disabled="!detuneEnabled2" />
+								color="#27fcff" :disabled="!detuneEnabled2" />
 							<Knob v-model="detuneCents2" size="small" :min="0" :max="100" :step="1" label="Detune"
-								color="#00bcd4" :disabled="!detuneEnabled2" />
+								color="#27fcff" :disabled="!detuneEnabled2" />
 							<Knob v-model="stereoSpread2" size="small" :min="0" :max="100" :step="1" label="Spread"
-								color="#8e24aa" :disabled="!detuneEnabled2" />
-						</KnobGroup>
+								color="#27fcff" :disabled="!detuneEnabled2" />
+						</KnobGroup> -->
 					</div>
 				</div>
 			</div>
@@ -299,17 +307,21 @@ const waveMix = ref(0.5); // 0 = all wave1, 1 = all wave2
 
 
 // Detune Effect
-const detuneEnabled1 = ref(false);
-const detuneEnabled2 = ref(false);
+// const detuneEnabled1 = ref(false);
+// const detuneEnabled2 = ref(false);
 
-const unisonCount1 = ref(3);
-const detuneCents1 = ref(12);
-const stereoSpread1 = ref(50);
+// const unisonCount1 = ref(3);
+// const detuneCents1 = ref(12);
+// const stereoSpread1 = ref(50);
 
-const unisonCount2 = ref(3);
-const detuneCents2 = ref(12);
-const stereoSpread2 = ref(50);
+// const unisonCount2 = ref(3);
+// const detuneCents2 = ref(12);
+// const stereoSpread2 = ref(50);
 
+const detuneEnabled = ref(false);
+const unisonCount = ref(3);
+const detuneCents = ref(12);
+const stereoSpread = ref(50);
 
 const analyser1 = audioCtx.createAnalyser();
 const analyser2 = audioCtx.createAnalyser();
@@ -471,21 +483,22 @@ function playNote(note) {
 	const waveGroups = [
 		{
 			wave: selectedWave1.value,
-			unison: detuneEnabled1.value ? unisonCount1.value : 1,
-			detune: detuneEnabled1.value ? detuneCents1.value : 0,
-			spread: detuneEnabled1.value ? stereoSpread1.value : 0,
+			unison: detuneEnabled.value ? unisonCount.value : 1,
+			detune: detuneEnabled.value ? detuneCents.value : 0,
+			spread: detuneEnabled.value ? stereoSpread.value : 0,
 			gainValue: 1 - waveMix.value,
 			analyser: analyser1,
 		},
 		{
 			wave: selectedWave2.value,
-			unison: detuneEnabled2.value ? unisonCount2.value : 1,
-			detune: detuneEnabled2.value ? detuneCents2.value : 0,
-			spread: detuneEnabled2.value ? stereoSpread2.value : 0,
+			unison: detuneEnabled.value ? unisonCount.value : 1,
+			detune: detuneEnabled.value ? detuneCents.value : 0,
+			spread: detuneEnabled.value ? stereoSpread.value : 0,
 			gainValue: waveMix.value,
 			analyser: analyser2,
 		}
 	];
+
 
 
 	const wave = waveformType.value;
@@ -539,7 +552,8 @@ function playNote(note) {
 				panVal = 0;
 			}
 
-			pan.pan.value = panVal;
+			const clampedPan = Math.max(-1, Math.min(1, panVal / 100));
+			pan.pan.value = clampedPan;
 
 
 			// Volume per group
@@ -814,13 +828,17 @@ function saveToBank(index) {
 
 		customReal: [...customReal.value],
 
-		unisonCount1: unisonCount1.value,
-		detuneCents1: detuneCents1.value,
-		stereoSpread1: stereoSpread1.value,
+		// unisonCount1: unisonCount1.value,
+		// detuneCents1: detuneCents1.value,
+		// stereoSpread1: stereoSpread1.value,
 
-		unisonCount2: unisonCount2.value,
-		detuneCents2: detuneCents2.value,
-		stereoSpread2: stereoSpread2.value,
+		// unisonCount2: unisonCount2.value,
+		// detuneCents2: detuneCents2.value,
+		// stereoSpread2: stereoSpread2.value,
+		unisonCount: unisonCount.value,
+		detuneCents: detuneCents.value,
+		stereoSpread: stereoSpread.value,
+		detuneEnabled: detuneEnabled.value,
 
 		delayTime: delayTime.value,
 		delayFeedback: delayFeedback.value,
@@ -839,16 +857,24 @@ function loadFromBank(index) {
 	waveMix.value = data?.waveMix ?? 0.5;
 
 
-	customReal.value = data.customReal ? [...data.customReal] : [0, 0, 0, 0, 0];
+	// customReal.value = data.customReal ? [...data.customReal] : [0, 0, 0, 0, 0];
+	customReal.value = data.customReal ? [...data.customReal] : new Array(9).fill(0);
+	customReal.value[1] = 1;
+
 	drawWaveformFromReal();
 
-	unisonCount1.value = data.unisonCount1 ?? 1;
-	detuneCents1.value = data.detuneCents1 ?? 0;
-	stereoSpread1.value = data.stereoSpread1 ?? 0;
+	// unisonCount1.value = data.unisonCount1 ?? 1;
+	// detuneCents1.value = data.detuneCents1 ?? 0;
+	// stereoSpread1.value = data.stereoSpread1 ?? 0;
 
-	unisonCount2.value = data.unisonCount2 ?? 1;
-	detuneCents2.value = data.detuneCents2 ?? 0;
-	stereoSpread2.value = data.stereoSpread2 ?? 0;
+	// unisonCount2.value = data.unisonCount2 ?? 1;
+	// detuneCents2.value = data.detuneCents2 ?? 0;
+	// stereoSpread2.value = data.stereoSpread2 ?? 0;
+
+	unisonCount.value = data.unisonCount ?? 1;
+	detuneCents.value = data.detuneCents ?? 0;
+	stereoSpread.value = data.stereoSpread ?? 0;
+	detuneEnabled.value = data.detuneEnabled ?? false;
 
 	delayTime.value = data.delayTime ?? 250;
 	delayFeedback.value = data.delayFeedback ?? 0.35;
@@ -952,14 +978,15 @@ const retriggerActiveNotesDebounced = (() => {
 	};
 })();
 
-watch(detuneCents1, retriggerActiveNotesDebounced);
-watch(unisonCount1, retriggerActiveNotesDebounced);
-watch(stereoSpread1, retriggerActiveNotesDebounced);
+// watch(detuneCents1, retriggerActiveNotesDebounced);
+// watch(unisonCount1, retriggerActiveNotesDebounced);
+// watch(stereoSpread1, retriggerActiveNotesDebounced);
 
-watch(detuneCents2, retriggerActiveNotesDebounced);
-watch(unisonCount2, retriggerActiveNotesDebounced);
-watch(stereoSpread2, retriggerActiveNotesDebounced);
+// watch(detuneCents2, retriggerActiveNotesDebounced);
+// watch(unisonCount2, retriggerActiveNotesDebounced);
+// watch(stereoSpread2, retriggerActiveNotesDebounced);
 
+watch([detuneCents, unisonCount, stereoSpread], retriggerActiveNotesDebounced);
 
 
 

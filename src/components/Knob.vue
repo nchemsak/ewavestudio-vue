@@ -2,6 +2,7 @@
 <template>
 	<div class="knob-wrapper" :class="`knob-${props.size}`" @mousedown="startDrag"
 		@touchstart.prevent="startDrag($event, true)">
+		<div class="knob-label">{{ label }}</div>
 		<div class="knob-dial">
 			<div class="dial-grip" :style="{
 				transform: `rotate(${rotation}deg)`,
@@ -14,7 +15,7 @@
 					:style="{ strokeDashoffset: 184 - 184 * ((rotation + 132) / 264) }" />
 			</svg>
 		</div>
-		<div class="knob-label">{{ label }}</div>
+		
 	</div>
 </template>
 

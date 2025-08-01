@@ -316,7 +316,7 @@ input[type="range"]::-webkit-slider-thumb {
     left: 50%;
     width: 5%;
     height: 20%;
-    background-color: #23cde8;
+    background-color: $color-teal-light;
     transform: translateX(-50%);
     border-radius: 2px;
 }
@@ -342,10 +342,11 @@ input[type="range"]::-webkit-slider-thumb {
 
 .knob-stack {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 32px;
-    padding: 20px;
+    justify-content: center;
+    // gap: 32px;
+    // padding: 20px;   
 }
 
 .knob-wrapper.knob-small .knob-label {
