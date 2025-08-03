@@ -693,11 +693,11 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
 
 			const noiseFilter = audioCtx.createBiquadFilter();
-noiseFilter.type = 'bandpass';
-noiseFilter.frequency.setValueAtTime(8000, startTime);
-noiseFilter.Q.setValueAtTime(1, startTime);
+			noiseFilter.type = 'bandpass';
+			noiseFilter.frequency.setValueAtTime(8000, startTime);
+			noiseFilter.Q.setValueAtTime(1, startTime);
 
-noiseSource.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain);
+			noiseSource.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain);
 			noiseSource.start(startTime);
 			noiseSource.stop(decayEnd);
 

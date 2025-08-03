@@ -1,3 +1,5 @@
+@use './variables';
+
 .outer-wrapper {
 	background: linear-gradient(to bottom, #2c2c2c, #1e1e1e);
 	border-radius: 18px;
@@ -7,7 +9,7 @@
 		0 10px 25px rgba(0, 0, 0, 0.6);
 	display: inline-block;
 	position: relative;
-	color: $color-white;
+	color: variables.$color-white;
 }
 
 .keyboard {
@@ -145,7 +147,7 @@
 			justify-content: center;
 			align-items: flex-end;
 			padding-bottom: 4px;
-			color: $color-white;
+			color: variables.$color-white;
 			font-size: 10px;
 			transition:
 				transform 0.1s ease,

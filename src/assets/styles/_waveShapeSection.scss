@@ -1,3 +1,5 @@
+@use "./variables";
+
 .waveformGroupWrapper {
 	padding: 13px;
 	border-radius: 10px;
@@ -22,13 +24,11 @@
 	.waveform-option {
 		cursor: pointer;
 		padding: 6px;
-		/* border-radius: 50%; */
 		border-radius: 5px;
 		border: 2px solid transparent;
 		transition:
 			background-color 0.2s,
 			border-color 0.2s;
-		/* display: flex; */
 		align-items: center;
 		justify-content: center;
 		width: 40px;
@@ -47,8 +47,6 @@
 	}
 
 	.waveform-option.selected {
-		/* border-color: #ffa726; */
-		/* background-color: rgba(255, 167, 38, 0.2); */
 		background-color: rgba(49, 51, 54, 1);
 	}
 

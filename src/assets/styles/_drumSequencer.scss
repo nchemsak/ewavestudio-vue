@@ -1,3 +1,5 @@
+@use "./variables";
+
 .drum-sequencer {
     border-radius: 18px;
     padding: 20px 30px;
@@ -10,20 +12,20 @@
     .pad {
         width: 30px;
         height: 30px;
-        border: 1px solid $color-black;
-        background-color: $color-black;
+        border: 1px solid variables.$color-black;
+        background-color: variables.$color-black;
         cursor: pointer;
         transition: background-color 0.2s;
         border-radius: 2px;
-        @include lg {
+        @include variables.lg {
             width: 20px;
             height: 20px;
         }
-        @include xl {
+        @include variables.xl {
             width: 25px;
             height: 25px;
         }
-        @include xxl {
+        @include variables.xxl {
             width: 30px;
             height: 30px;
         }
@@ -77,8 +79,8 @@
         width: 14px;
         height: 14px;
         border-radius: 50%;
-        background-color: $color-teal-light;
-        box-shadow: 0 0 4px $color-white;
+        background-color: variables.$color-teal-light;
+        box-shadow: 0 0 4px variables.$color-white;
         cursor: pointer;
         transition:
             background-color 0.2s,
@@ -153,19 +155,19 @@
                 -webkit-appearance: none;
                 height: 30px;
                 width: 4px;
-                background: $color-teal-light;
+                background: variables.$color-teal-light;
                 cursor: ns-resize;
                 margin-top: 0px;
                 padding-left: 2px;
                 padding-right: 2px;
                 border-radius: 2px;
-                border: 1px solid $color-black;
+                border: 1px solid variables.$color-black;
             }
 
             &::-moz-range-thumb {
                 height: 30px;
                 width: 4px;
-                background: $color-teal-light;
+                background: variables.$color-teal-light;
                 border: none;
                 cursor: ns-resize;
             }
@@ -185,8 +187,8 @@
     }
 
     .channel-label:hover strong {
-        text-decoration: underline dotted;
-        color: lighten($color-white, 10%);
+        text-decoration: underline dotted 1px;
+        text-underline-offset: 4px;
     }
 
     .channel-label {
