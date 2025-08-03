@@ -1,6 +1,29 @@
 <template>
 	<div class="outer-wrapper">
 		<Knob v-model="volume" size="large" label="Volume" :min="0" :max="1" :step="0.01" color="#23CDE8" />
+		<div class="midiModeWrapper">
+			<select id="midiMode" v-model="midiMode" @change="onMidiModeChange" class="form-select w-auto">
+				<option disabled selected value="">MIDI Mode</option>
+				<option value="osc">MIDI Keyboard (Synth)</option>
+				<option value="sample" disabled>Sampler (Coming Soon)</option>
+			</select>
+		</div>
+		<div class="text-center mt-4">
+			<div id="active-notes-display">
+				<span class="active-note-label-label">Active Notes:</span>
+				<span id="active-notes">
+					<span v-if="activeNotes.length === 0" class="active-note-label inactive">
+						<span class="note-icon">🎵</span>
+						<span class="note-text">None</span>
+					</span>
+					<span v-else>
+						<span v-for="note in activeNotes" :key="note" class="active-note-label">
+							<span class="note-icon">🎵</span><span class="note-text">{{ note }}</span>
+						</span>
+					</span>
+				</span>
+			</div>
+		</div>
 		<div class="waveformGroupWrapper">
 			<div class="visualizer-stack d-flex flex-column gap-3 mb-4">
 				<div class="row">
@@ -12,6 +35,7 @@
 					</div>
 				</div>
 			</div>
+
 			<div class="row">
 				<div class="col-md-6">
 					<div class="mb-4 waveformgroup">
@@ -20,8 +44,6 @@
 							<div v-for="wave in waveforms" :key="wave + '-1'" class="waveform-option"
 								:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
 								@click="selectedWave2 !== wave && selectWave1(wave)">
-
-
 								<template v-if="wave !== 'custom'">
 									<img :src="`images/${wave}1.png`" :alt="`${wave} waveform`" />
 								</template>
@@ -32,39 +54,6 @@
 								</template>
 							</div>
 						</div>
-
-						<KnobGroup v-model="detuneEnabled" title="Unison" color="#27fcff">
-							<!-- Voices -->
-							<div class="position-relative">
-								<Knob v-model="unisonCount" size="small" :min="1" :max="5" :step="1" label="Voices"
-									color="#27fcff" :disabled="!detuneEnabled" @knobStart="activeKnob = 'unisonCount'"
-									@knobEnd="activeKnob = null" />
-								<span v-if="activeKnob === 'unisonCount'" class="custom-tooltip">
-									{{ unisonCount }}
-								</span>
-							</div>
-
-							<!-- Detune -->
-							<div class="position-relative">
-								<Knob v-model="detuneCents" size="small" :min="0" :max="100" :step="1" label="Detune"
-									color="#27fcff" :disabled="!detuneEnabled" @knobStart="activeKnob = 'detuneCents'"
-									@knobEnd="activeKnob = null" />
-								<span v-if="activeKnob === 'detuneCents'" class="custom-tooltip">
-									{{ detuneCents }}¢
-								</span>
-							</div>
-
-							<!-- Spread -->
-							<div class="position-relative">
-								<Knob v-model="stereoSpread" size="small" :min="0" :max="100" :step="1" label="Spread"
-									color="#27fcff" :disabled="!detuneEnabled" @knobStart="activeKnob = 'stereoSpread'"
-									@knobEnd="activeKnob = null" />
-								<span v-if="activeKnob === 'stereoSpread'" class="custom-tooltip">
-									{{ stereoSpread }}%
-								</span>
-							</div>
-						</KnobGroup>
-
 					</div>
 				</div>
 				<div class="col-md-6">
@@ -132,52 +121,108 @@
 		<div class="waveformGroupWrapper">
 			<div class="mb-4 waveformgroup">
 				<label class="form-label d-block">Effects</label>
-
-				<!-- Effect Selector Icons -->
-
-				<div class="waveform-selector d-flex flex-wrap">
-					<div v-for="effect in effects" :key="effect.id" class="waveform-option"
-						:class="{ selected: selectedEffect === effect.id }"
-						@click="selectedEffect === effect.id ? selectedEffect = null : selectedEffect = effect.id">
-						<img :src="`images/${effect.icon}`" :alt="effect.name" />
-					</div>
-				</div>
-
-				<!-- Effect Controls (only Delay for now) -->
-				<div class="unison-controls mt-3" v-if="selectedEffect === 'delay'">
-					<div class="form-check mb-3">
-						<input class="form-check-input" type="checkbox" id="delayEnabled" v-model="delayEnabled" />
-						<label class="form-check-label" for="delayEnabled">Enable Delay</label>
+				<KnobGroup v-model="delayEnabled" title="Delay" color="#FF57A3">
+					<!-- Delay Time -->
+					<div class="position-relative">
+						<Knob v-model="delayTime" size="small" :min="0" :max="1000" :step="10" label="Time"
+							color="#FF57A3" :disabled="!delayEnabled" @knobStart="activeKnob = 'delayTime'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'delayTime'" class="custom-tooltip">
+							{{ delayTime }} ms
+						</span>
 					</div>
 
-					<div class="slider-label-row">
-						<label>Delay Time</label>
-						<span>{{ delayTime }} ms</span>
-					</div>
-					<input type="range" min="0" max="1000" step="10" v-model="delayTime" class="styled-slider" />
-
-					<div class="slider-label-row">
-						<label>Feedback</label>
-						<span>{{ delayFeedback }}</span>
-					</div>
-					<input type="range" min="0" max="0.95" step="0.01" v-model="delayFeedback" class="styled-slider" />
-
-					<!-- Wet/Dry Mix Label Row -->
-					<div class="d-flex justify-content-between align-items-center slider-label-row">
-						<small>Dry</small>
-						<strong>{{ Math.round(delayWetMix * 100) }}%</strong>
-						<small>Wet</small>
+					<!-- Feedback -->
+					<div class="position-relative">
+						<Knob v-model="delayFeedback" size="small" :min="0" :max="0.95" :step="0.01" label="Feedback"
+							color="#FF57A3" :disabled="!delayEnabled" @knobStart="activeKnob = 'delayFeedback'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'delayFeedback'" class="custom-tooltip">
+							{{ Math.round(delayFeedback * 100) }}%
+						</span>
 					</div>
 
-					<!-- Wet/Dry Mix Slider -->
-					<input type="range" min="0" max="1" step="0.01" v-model="delayWetMix" class="styled-slider" />
+					<!-- Wet Mix -->
+					<div class="position-relative">
+						<Knob v-model="delayWetMix" size="small" :min="0" :max="1" :step="0.01" label="Wet Mix"
+							color="#FF57A3" :disabled="!delayEnabled" @knobStart="activeKnob = 'delayWetMix'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'delayWetMix'" class="custom-tooltip">
+							{{ Math.round(delayWetMix * 100) }}%
+						</span>
+					</div>
+				</KnobGroup>
+				<KnobGroup v-model="detuneEnabled" title="Unison" color="#27fcff">
+					<!-- Voices -->
+					<div class="position-relative">
+						<Knob v-model="unisonCount" size="small" :min="1" :max="5" :step="1" label="Voices"
+							color="#27fcff" :disabled="!detuneEnabled" @knobStart="activeKnob = 'unisonCount'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'unisonCount'" class="custom-tooltip">
+							{{ unisonCount }}
+						</span>
+					</div>
 
-				</div>
+					<!-- Detune -->
+					<div class="position-relative">
+						<Knob v-model="detuneCents" size="small" :min="0" :max="100" :step="1" label="Detune"
+							color="#27fcff" :disabled="!detuneEnabled" @knobStart="activeKnob = 'detuneCents'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'detuneCents'" class="custom-tooltip">
+							{{ detuneCents }}¢
+						</span>
+					</div>
 
-				<!-- Placeholder for future effects -->
-				<div class="mt-3" v-else>
-					<p>Effect not yet available.</p>
-				</div>
+					<!-- Spread -->
+					<div class="position-relative">
+						<Knob v-model="stereoSpread" size="small" :min="0" :max="100" :step="1" label="Spread"
+							color="#27fcff" :disabled="!detuneEnabled" @knobStart="activeKnob = 'stereoSpread'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'stereoSpread'" class="custom-tooltip">
+							{{ stereoSpread }}%
+						</span>
+					</div>
+				</KnobGroup>
+				<KnobGroup v-model="driveEnabled" title="Drive" color="#FFA500">
+					<!-- Drive Type Selector -->
+					<div class="drive-type-selector mb-3 d-flex justify-content-center gap-3">
+						<span v-for="type in ['overdrive', 'distortion', 'fuzz', 'saturation']" :key="type"
+							class="drive-type-dot" :class="{ selected: driveType === type }" @click="driveType = type"
+							:title="type.charAt(0).toUpperCase() + type.slice(1)"></span>
+					</div>
+
+					<!-- Amount -->
+					<div class="position-relative">
+						<Knob v-model="driveAmount" size="small" :min="0.5" :max="10" :step="0.1" label="Amount"
+							:color="driveColor" :disabled="!driveEnabled" @knobStart="activeKnob = 'driveAmount'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'driveAmount'" class="custom-tooltip">
+							{{ driveAmount.toFixed(1) }}x
+						</span>
+					</div>
+
+					<!-- Tone -->
+					<div class="position-relative">
+						<Knob v-model="driveTone" size="small" :min="500" :max="16000" :step="100" label="Tone"
+							:color="driveColor" :disabled="!driveEnabled" @knobStart="activeKnob = 'driveTone'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'driveTone'" class="custom-tooltip">
+							{{ driveTone }} Hz
+						</span>
+					</div>
+
+					<!-- Mix -->
+					<div class="position-relative">
+						<Knob v-model="driveMix" size="small" :min="0" :max="1" :step="0.01" label="Mix"
+							:color="driveColor" :disabled="!driveEnabled" @knobStart="activeKnob = 'driveMix'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'driveMix'" class="custom-tooltip">
+							{{ Math.round(driveMix * 100) }}%
+						</span>
+					</div>
+				</KnobGroup>
+
+
 			</div>
 		</div>
 		<ul class="keyboard">
@@ -221,29 +266,8 @@
 			</li>
 		</ul>
 	</div>
-	<div class="mb-3 mt-3 midiModeWrapper">
-		<select id="midiMode" v-model="midiMode" @change="onMidiModeChange" class="form-select w-auto">
-			<option disabled selected value="">MIDI Mode</option>
-			<option value="osc">MIDI Keyboard (Synth)</option>
-			<option value="sample" disabled>Sampler (Coming Soon)</option>
-		</select>
-	</div>
-	<div class="text-center mt-4">
-		<div id="active-notes-display">
-			<span class="active-note-label-label">Active Notes:</span>
-			<span id="active-notes">
-				<span v-if="activeNotes.length === 0" class="active-note-label inactive">
-					<span class="note-icon">🎵</span>
-					<span class="note-text">None</span>
-				</span>
-				<span v-else>
-					<span v-for="note in activeNotes" :key="note" class="active-note-label">
-						<span class="note-icon">🎵</span><span class="note-text">{{ note }}</span>
-					</span>
-				</span>
-			</span>
-		</div>
-	</div>
+
+
 	<!-- <FloatingWindow v-if="showPresets" @close="showPresets = false">
 			<template #title>Presets</template>
 			<PresetBankPanel :banks="banks" :activeBankIndex="activeBankIndex" :isTyping="isTyping" @save="saveToBank"
@@ -301,32 +325,23 @@ const waveforms = ['sine', 'square', 'sawtooth', 'triangle', 'custom'];
 const selectedWave1 = ref('sine');
 const selectedWave2 = ref(null);
 
-// Effects Selector
-const effects = [
-	{ id: 'delay', name: 'Delay', icon: 'sine1.png' },
-	{ id: 'chorus', name: 'Chorus', icon: 'square1.png' },
-	{ id: 'flanger', name: 'Flanger', icon: 'triangle1.png' },
-	{ id: 'reverb', name: 'Reverb', icon: 'sawtooth1.png' }
-];
+
 
 const selectedEffect = ref('null');
 
 
 const waveMix = ref(0.5); // 0 = all wave1, 1 = all wave2
 
+// Drive Effects
+const driveEnabled = ref(false);
+const driveType = ref('overdrive'); // overdrive, distortion, fuzz, saturation
+
+const driveAmount = ref(1); // gain factor
+const driveTone = ref(8000); // Hz cutoff for tone filter
+const driveMix = ref(0.5); // 0 = dry, 1 = wet
+
 
 // Detune Effect
-// const detuneEnabled1 = ref(false);
-// const detuneEnabled2 = ref(false);
-
-// const unisonCount1 = ref(3);
-// const detuneCents1 = ref(12);
-// const stereoSpread1 = ref(50);
-
-// const unisonCount2 = ref(3);
-// const detuneCents2 = ref(12);
-// const stereoSpread2 = ref(50);
-
 const detuneEnabled = ref(false);
 const unisonCount = ref(3);
 const detuneCents = ref(12);
@@ -1072,6 +1087,65 @@ function drawOscilloscope(analyser, canvasId = 'oscilloscope1', color = 'cyan') 
 
 //EFFECTS
 
+// DRIVE Nodes
+const drivePreGain = audioCtx.createGain();
+const driveFilter = audioCtx.createBiquadFilter();
+driveFilter.type = 'lowpass';
+const driveWet = audioCtx.createGain();
+const driveDry = audioCtx.createGain();
+const driveMerger = audioCtx.createGain(); // will connect to analyser
+
+// Default values
+drivePreGain.gain.value = 1;
+driveFilter.frequency.value = 8000;
+driveWet.gain.value = 0.5;
+driveDry.gain.value = 0.5;
+
+watch(driveAmount, val => drivePreGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01));
+watch(driveTone, val => driveFilter.frequency.setTargetAtTime(val, audioCtx.currentTime, 0.01));
+watch(driveMix, val => {
+	driveWet.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
+	driveDry.gain.setTargetAtTime(1 - val, audioCtx.currentTime, 0.01);
+});
+
+function makeDistortionCurve(amount) {
+	const n_samples = 44100;
+	const curve = new Float32Array(n_samples);
+	const deg = Math.PI / 180;
+	for (let i = 0; i < n_samples; ++i) {
+		const x = (i * 2) / n_samples - 1;
+		curve[i] = (3 + amount) * x * 20 * deg / (Math.PI + amount * Math.abs(x));
+	}
+	return curve;
+}
+function getDriveCurve(type, amount = 1) {
+	const samples = 44100;
+	const curve = new Float32Array(samples);
+	const deg = Math.PI / 180;
+
+	for (let i = 0; i < samples; ++i) {
+		const x = (i * 2) / samples - 1;
+		switch (type) {
+			case 'overdrive':
+				curve[i] = Math.tanh(amount * x); // Smooth clip
+				break;
+			case 'distortion':
+				curve[i] = (3 + amount) * x * 20 * deg / (Math.PI + amount * Math.abs(x)); // Standard
+				break;
+			case 'fuzz':
+				curve[i] = Math.sign(x) * (1 - Math.exp(-amount * Math.abs(x))); // Exponential fuzz
+				break;
+			case 'saturation':
+				curve[i] = x / (1 + amount * Math.abs(x)); // Soft saturation
+				break;
+			default:
+				curve[i] = x;
+		}
+	}
+	return curve;
+}
+
+
 // DELAY Nodes
 const delayEnabled = ref(true);
 const delayNode = audioCtx.createDelay();
@@ -1103,22 +1177,69 @@ watch(delayEnabled, () => {
 
 
 // CONNECT EFFECTS
+// function connectEffects() {
+// 	masterGain.disconnect();
+// 	dryGain.disconnect();
+// 	wetGain.disconnect();
+// 	delayNode.disconnect();
+// 	feedbackGain.disconnect();
+// 	masterGain.connect(dryGain);
+// 	if (delayEnabled.value) {
+// 		masterGain.connect(delayNode);
+// 		delayNode.connect(feedbackGain);
+// 		feedbackGain.connect(delayNode);
+// 		delayNode.connect(wetGain);
+// 		wetGain.connect(analyser);
+// 	}
+// 	dryGain.connect(analyser);
+// }
 function connectEffects() {
 	masterGain.disconnect();
 	dryGain.disconnect();
 	wetGain.disconnect();
 	delayNode.disconnect();
 	feedbackGain.disconnect();
-	masterGain.connect(dryGain);
+	drivePreGain.disconnect();
+	driveFilter.disconnect();
+	driveWet.disconnect();
+	driveDry.disconnect();
+	driveMerger.disconnect();
+
+	// Chain start
+	let source = masterGain;
+
+	if (driveEnabled.value) {
+		source.connect(driveDry);
+		source.connect(drivePreGain);
+
+		const waveShaper = audioCtx.createWaveShaper();
+		waveShaper.curve = getDriveCurve(driveType.value, driveAmount.value);
+		waveShaper.oversample = '4x';
+
+		drivePreGain.connect(waveShaper);
+		waveShaper.connect(driveFilter);
+		driveFilter.connect(driveWet);
+
+		driveWet.connect(driveMerger);
+		driveDry.connect(driveMerger);
+		source = driveMerger;
+	}
+
+	// Delay
 	if (delayEnabled.value) {
-		masterGain.connect(delayNode);
+		source.connect(dryGain);
+		source.connect(delayNode);
 		delayNode.connect(feedbackGain);
 		feedbackGain.connect(delayNode);
 		delayNode.connect(wetGain);
 		wetGain.connect(analyser);
+		dryGain.connect(analyser);
+	} else {
+		source.connect(analyser);
 	}
-	dryGain.connect(analyser);
 }
 
+watch(driveEnabled, connectEffects);
+watch(driveType, connectEffects); // optional: future extension
 
 </script>
