@@ -15,7 +15,7 @@
 					:style="{ strokeDashoffset: 184 - 184 * ((rotation + 132) / 264) }" />
 			</svg>
 		</div>
-		
+
 	</div>
 </template>
 
@@ -29,12 +29,12 @@ const props = defineProps({
 	step: { type: Number, default: 0.01 },
 	label: String,
 	color: { type: String, default: '#23CDE8' },
-	size: { type: String, default: 'large' }, // new size prop
+	size: { type: String, default: 'large' },
 	disabled: { type: Boolean, default: false },
 });
 
+const emit = defineEmits(['update:modelValue', 'knobStart', 'knobEnd']);
 
-const emit = defineEmits(['update:modelValue']);
 
 const rotation = computed(() => {
 	const percent = (props.modelValue - props.min) / (props.max - props.min);
@@ -54,7 +54,7 @@ function startDrag(e, isTouch = false) {
 
 	startY = isTouch ? e.touches[0].pageY : e.pageY;
 	startVal = props.modelValue;
-
+	emit('knobStart')
 	function onMove(ev) {
 		const currentY = isTouch ? ev.touches[0].pageY : ev.pageY;
 		const deltaY = startY - currentY;
@@ -67,6 +67,7 @@ function startDrag(e, isTouch = false) {
 	function onUp() {
 		window.removeEventListener(move, onMove);
 		window.removeEventListener(end, onUp);
+		emit('knobEnd');
 	}
 
 	window.addEventListener(move, onMove);

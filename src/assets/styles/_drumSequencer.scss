@@ -212,21 +212,7 @@
         cursor: pointer;
     }
 
-    .custom-tooltip {
-        position: absolute;
-        top: -28px;
-        left: 0;
-        background: #333;
-        color: #fff;
-        padding: 4px 8px;
-        font-size: 0.75rem;
-        border-radius: 4px;
-        white-space: nowrap;
-        z-index: 20;
-        opacity: 0.95;
-        pointer-events: none;
-        transition: opacity 0.1s ease-in-out;
-    }
+
 
     .upload-icon {
         cursor: pointer;

@@ -15,7 +15,7 @@
 			<div class="row">
 				<div class="col-md-6">
 					<div class="mb-4 waveformgroup">
-						<label class="form-label d-block">Waveform Group 1</label>
+						<label class="form-label d-block">Osc 1</label>
 						<div class="waveform-selector d-flex flex-wrap">
 							<div v-for="wave in waveforms" :key="wave + '-1'" class="waveform-option"
 								:class="{ selected: selectedWave1 === wave, disabled: selectedWave2 === wave }"
@@ -32,28 +32,44 @@
 								</template>
 							</div>
 						</div>
-						<!-- <KnobGroup v-model="detuneEnabled1" title="Detune" color="#27fcff">
-							<Knob v-model="unisonCount1" size="small" :min="1" :max="5" :step="1" label="Unison"
-								color="#27fcff" :disabled="!detuneEnabled1" />
-							<Knob v-model="detuneCents1" size="small" :min="0" :max="100" :step="1" label="Detune"
-								color="#27fcff" :disabled="!detuneEnabled1" />
-							<Knob v-model="stereoSpread1" size="small" :min="0" :max="100" :step="1" label="Spread"
-								color="#27fcff" :disabled="!detuneEnabled1" />
-						</KnobGroup> -->
+
 						<KnobGroup v-model="detuneEnabled" title="Unison" color="#27fcff">
-							<Knob v-model="unisonCount" size="small" :min="1" :max="5" :step="1" label="Voices"
-								color="#27fcff" :disabled="!detuneEnabled" />
-							<Knob v-model="detuneCents" size="small" :min="0" :max="100" :step="1" label="Detune"
-								color="#27fcff" :disabled="!detuneEnabled" />
-							<Knob v-model="stereoSpread" size="small" :min="0" :max="100" :step="1" label="Spread"
-								color="#27fcff" :disabled="!detuneEnabled" />
+							<!-- Voices -->
+							<div class="position-relative">
+								<Knob v-model="unisonCount" size="small" :min="1" :max="5" :step="1" label="Voices"
+									color="#27fcff" :disabled="!detuneEnabled" @knobStart="activeKnob = 'unisonCount'"
+									@knobEnd="activeKnob = null" />
+								<span v-if="activeKnob === 'unisonCount'" class="custom-tooltip">
+									{{ unisonCount }}
+								</span>
+							</div>
+
+							<!-- Detune -->
+							<div class="position-relative">
+								<Knob v-model="detuneCents" size="small" :min="0" :max="100" :step="1" label="Detune"
+									color="#27fcff" :disabled="!detuneEnabled" @knobStart="activeKnob = 'detuneCents'"
+									@knobEnd="activeKnob = null" />
+								<span v-if="activeKnob === 'detuneCents'" class="custom-tooltip">
+									{{ detuneCents }}¢
+								</span>
+							</div>
+
+							<!-- Spread -->
+							<div class="position-relative">
+								<Knob v-model="stereoSpread" size="small" :min="0" :max="100" :step="1" label="Spread"
+									color="#27fcff" :disabled="!detuneEnabled" @knobStart="activeKnob = 'stereoSpread'"
+									@knobEnd="activeKnob = null" />
+								<span v-if="activeKnob === 'stereoSpread'" class="custom-tooltip">
+									{{ stereoSpread }}%
+								</span>
+							</div>
 						</KnobGroup>
 
 					</div>
 				</div>
 				<div class="col-md-6">
 					<div class="mb-4 waveformgroup">
-						<label class="form-label d-block">Waveform Group 2</label>
+						<label class="form-label d-block">Osc 2</label>
 						<div class="waveform-selector d-flex flex-wrap">
 							<div v-for="wave in waveforms" :key="wave + '-2'" class="waveform-option"
 								:class="{ selected: selectedWave2 === wave, disabled: selectedWave1 === wave }"
@@ -69,15 +85,6 @@
 								</template>
 							</div>
 						</div>
-
-						<!-- <KnobGroup v-model="detuneEnabled2" title="Detune" color="#27fcff">
-							<Knob v-model="unisonCount2" size="small" :min="1" :max="5" :step="1" label="Unison"
-								color="#27fcff" :disabled="!detuneEnabled2" />
-							<Knob v-model="detuneCents2" size="small" :min="0" :max="100" :step="1" label="Detune"
-								color="#27fcff" :disabled="!detuneEnabled2" />
-							<Knob v-model="stereoSpread2" size="small" :min="0" :max="100" :step="1" label="Spread"
-								color="#27fcff" :disabled="!detuneEnabled2" />
-						</KnobGroup> -->
 					</div>
 				</div>
 			</div>
@@ -274,7 +281,9 @@ const waveMixDisplay = computed(() => ({
 
 const showPresets = ref(true);
 
-
+//hovered label info
+const hoveredKnobs = ref(null)
+const activeKnob = ref(null)
 
 // Final output	
 masterGain.connect(analyser);
