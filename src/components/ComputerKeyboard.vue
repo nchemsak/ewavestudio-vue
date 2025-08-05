@@ -215,7 +215,7 @@
 						<span v-for="type in ['overdrive', 'distortion', 'fuzz', 'saturation']" :key="type"
 							class="drive-type-dot" :class="{ selected: driveType === type, disabled: !driveEnabled }"
 							@click="driveEnabled && (driveType = type)">
-							<span class="drive-tooltip">
+							<span class="selector-tooltip">
 								{{ type.charAt(0).toUpperCase() + type.slice(1) }}
 							</span>
 						</span>

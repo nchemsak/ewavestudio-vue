@@ -1,22 +1,33 @@
 <template>
 	<div class="drum-sequencer">
 		<div class="controls d-flex flex-wrap align-items-center justify-content-between mb-4">
-			<div>
-				<label>Volume</label>
-				<input type="range" min="0" max="1" step="0.01" v-model="volume" class="styled-slider" />
+
+			<div class="position-relative text-center">
+				<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="large" color="#23CDE8"
+					@knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
+				<span v-if="activeKnob === 'volume'" class="custom-tooltip">
+					{{ Math.round(volume * 100) }}%
+				</span>
 			</div>
-			<div>
-				<label>Tempo</label>
-				<div class="d-flex align-items-center gap-2">
-					<input type="number" v-model.number="tempo" class="form-control w-auto"
-						@mousedown="handleTempoMouseDown" @wheel="handleTempoWheel"
-						:title="'Scroll or drag to change tempo, or type a number'" />
-				</div>
+
+
+			<div class="position-relative text-center">
+				<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="large" color="#F39C12"
+					@knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
+				<span v-if="activeKnob === 'tempo'" class="custom-tooltip">
+					{{ tempo }} BPM
+				</span>
 			</div>
-			<div>
-				<label>Swing <span class="text-muted">{{ Math.round(swing * 100) }}%</span></label>
-				<input type="range" min="0" max="0.5" step="0.01" v-model.number="swing" class="styled-slider" />
+
+
+			<div class="position-relative text-center">
+				<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="large" color="#E91E63"
+					@knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
+				<span v-if="activeKnob === 'swing'" class="custom-tooltip">
+					{{ Math.round(swing * 100) }}%
+				</span>
 			</div>
+
 			<button class="btn btn-primary" @click="togglePlay">
 				<span v-if="isPlaying">Stop</span>
 				<span v-else>Play</span>
@@ -24,7 +35,6 @@
 		</div>
 
 		<div class="instrument-grid">
-			<!-- <div v-for="instrument in instruments" :key="instrument.name" class="mb-3"> -->
 			<div v-for="instrument in instruments.filter(i => i.name !== 'synth-voice')" :key="instrument.name"
 				class="mb-3">
 
@@ -84,8 +94,12 @@
 				</div>
 
 				<div class="channel-volume mb-2">
-					<input type="range" min="0" max="1" step="0.01" v-model.number="instrument.channelVolume"
-						class="styled-slider" :aria-label="`${instrument.label} Channel Volume`" />
+
+
+					<Knob v-model="instrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
+						color="#3498DB" />
+
+
 				</div>
 
 				<div class="d-flex pad-row">
@@ -152,10 +166,15 @@
 				</div>
 			</div>
 
-			<div class="channel-volume mb-2">
-				<input type="range" min="0" max="1" step="0.01" v-model.number="synthInstrument.channelVolume"
-					class="styled-slider" :aria-label="`${synthInstrument.label} Channel Volume`" />
+
+			<div class="position-relative text-center">
+				<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small" label="Vol"
+					color="#8E44AD" @knobStart="activeKnob = 'synthVolume'" @knobEnd="activeKnob = null" />
+				<span v-if="activeKnob === 'synthVolume'" class="custom-tooltip">
+					{{ Math.round(synthInstrument.channelVolume * 100) }}%
+				</span>
 			</div>
+
 
 			<div class="d-flex pad-row">
 				<div v-for="(active, index) in synthInstrument.steps" :key="index" class="pad-wrapper"
@@ -188,74 +207,87 @@
 				<div class="col-12 col-md-6">
 					<h5>LFO Modulation</h5>
 
-					<div>
-						<label>LFO Rate <span class="text-muted">{{ lfoRate }} Hz</span></label>
-						<input type="range" min="0.1" max="20" step="0.1" v-model.number="lfoRate"
-							class="styled-slider" />
-					</div>
 
-					<div>
-						<label>LFO Depth <span class="text-muted">{{ lfoDepth }}</span></label>
-						<!-- <input type="range" min="0" max="1000" step="1" v-model.number="lfoDepth"
-							class="styled-slider" /> -->
-						<input type="range" :min="0" :max="lfoDepthMax" step="1" v-model.number="lfoDepth"
-							class="styled-slider" />
-					</div>
 
-					<div>
-						<label>LFO Target</label>
-						<select v-model="lfoTarget" class="form-select w-auto">
-							<option value="pitch">Pitch</option>
-							<option value="gain">Amplitude</option>
-							<option value="filter">Filter Cutoff</option>
-						</select>
-					</div>
+					<KnobGroup v-model="lfoEnabled" title="LFO" color="#00BCD4">
+						<!-- LFO Rate -->
+						<div class="position-relative">
+							<Knob v-model="lfoRate" size="small" :min="0.1" :max="20" :step="0.1" label="Rate"
+								color="#00BCD4" :disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoRate'"
+								@knobEnd="activeKnob = null" />
+							<span v-if="activeKnob === 'lfoRate'" class="custom-tooltip">
+								{{ lfoRate.toFixed(1) }} Hz
+							</span>
+						</div>
+
+						<!-- LFO Depth -->
+						<div class="position-relative">
+							<Knob v-model="lfoDepth" size="small" :min="0" :max="lfoDepthMax" :step="1" label="Depth"
+								color="#00BCD4" :disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoDepth'"
+								@knobEnd="activeKnob = null" />
+							<span v-if="activeKnob === 'lfoDepth'" class="custom-tooltip">
+								{{ lfoDepth }}
+							</span>
+						</div>
+
+
+						<div class="lfo-target-selector mt-3 d-flex justify-content-center gap-3">
+							<span v-for="type in ['pitch', 'gain', 'filter']" :key="type" class="lfo-type-dot"
+								:class="{ selected: lfoTarget === type, disabled: !lfoEnabled }"
+								@click="lfoEnabled && (lfoTarget = type)">
+								<span class="selector-tooltip">
+									{{ type === 'gain' ? 'Amplitude' : type.charAt(0).toUpperCase() + type.slice(1) }}
+								</span>
+							</span>
+						</div>
+
+					</KnobGroup>
+
+
 				</div>
 			</div>
-
-
-
 
 			<div class="noise-selector">
 				<label>Noise</label>
-				<div class="noise-dot-wrap">
-					<div v-for="type in ['white', 'pink', 'brown']" :key="type" class="noise-dot" :class="[
-						type,
-						{ selected: noiseType === type }
-					]" @click="toggleNoise(type)" :title="type.charAt(0).toUpperCase() + type.slice(1) + ' Noise'" role="button"
-						aria-label="Toggle Noise Type">
-					</div>
-					<div class="mt-2" v-if="noiseType !== 'none'">
-						<label>Noise Amount <span class="text-muted">{{ Math.round(noiseAmount * 100) }}%</span></label>
-						<input type="range" min="0" max="1" step="0.01" v-model.number="noiseAmount"
-							class="styled-slider" />
-					</div>
 
+				<div class="noise-dot-wrap d-flex justify-content-center gap-3">
+					<span v-for="type in ['white', 'pink', 'brown']" :key="type" class="noise-dot"
+						:class="[type, { selected: noiseType === type }]" @click="toggleNoise(type)">
+						<span class="selector-tooltip">
+							{{ type.charAt(0).toUpperCase() + type.slice(1) }} Noise
+						</span>
+					</span>
+				</div>
+				<div class="position-relative text-center mt-2" :disabled="noiseType === 'none'">
+					<Knob v-model="noiseAmount" label="Amount" :min="0" :max="1" :step="0.01" size="small"
+						color="#9C27B0" @knobStart="activeKnob = 'noiseAmount'" @knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'noiseAmount'" class="custom-tooltip">
+						{{ Math.round(noiseAmount * 100) }}%
+					</span>
 				</div>
 			</div>
-
-
-
-
-			<div class="row">
-				<div class="col-12 col-md-6">
-					<div class="slider-label-row">
-						<label>Attack</label> <span class="text-muted">{{ (synthAttack * 1000).toFixed(1) }} ms</span>
-					</div>
-					<input type="range" min="0" max="100" step="1" v-model.number="attackSliderVal"
-						class="styled-slider" :aria-valuetext="`${(synthAttack * 1000).toFixed(1)} milliseconds`" />
+			<KnobGroup v-model="envelopeEnabled" title="Envelope" color="#4CAF50">
+				<!-- Attack -->
+				<div class="position-relative">
+					<Knob v-model="attackSliderVal" label="Attack" size="small" :min="0" :max="100" :step="1"
+						color="#4CAF50" :disabled="!envelopeEnabled" @knobStart="activeKnob = 'attack'"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'attack'" class="custom-tooltip">
+						{{ (synthAttack * 1000).toFixed(1) }} ms
+					</span>
 				</div>
 
-				<div class="col-12 col-md-6">
-					<div class="slider-label-row">
-						<label>Decay</label> <span class="text-muted">{{ (synthDecay * 1000).toFixed(0)
-						}}
-							ms</span>
-					</div>
-					<input type="range" min="0.05" max="2" step="0.01" v-model.number="synthDecay"
-						class="styled-slider" />
+				<!-- Decay -->
+				<div class="position-relative">
+					<Knob v-model="synthDecay" label="Decay" size="small" :min="0.05" :max="2" :step="0.01"
+						color="#4CAF50" :disabled="!envelopeEnabled" @knobStart="activeKnob = 'decay'"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'decay'" class="custom-tooltip">
+						{{ (synthDecay * 1000).toFixed(0) }} ms
+					</span>
 				</div>
-			</div>
+			</KnobGroup>
+
 			<div class="row">
 				<div class="col-12 col-md-6">
 					<label class="form-label">Pitch Env Mode</label>
@@ -276,47 +308,52 @@
 					</div>
 				</div>
 			</div>
-			<div class="row">
-				<div class="col-12 col-md-6">
-					<div class="slider-label-row">
-						<label>Pitch Env Amount </label><span class="text-muted">{{ pitchEnvSemitones }}
-							semitones</span>
-					</div>
-					<input type="range" min="0" max="48" step="1" v-model.number="pitchEnvSemitones"
-						class="styled-slider" />
+			<KnobGroup v-model="pitchEnvEnabled" title="Pitch Env" color="#3F51B5">
+				<!-- Amount -->
+				<div class="position-relative">
+					<Knob v-model="pitchEnvSemitones" label="Amount" size="small" :min="0" :max="48" :step="1"
+						color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchAmt'"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'pitchAmt'" class="custom-tooltip">
+						{{ pitchEnvSemitones }} semitones
+					</span>
 				</div>
 
-				<div class="col-12 col-md-6">
-					<div class="slider-label-row">
-						<label>
-							Pitch Env Decay</label><span class="text-muted">{{ (pitchEnvDecay * 1000).toFixed(0) }}
-							ms</span>
-
-					</div>
-					<input type="range" min="0" max="100" step="1" v-model.number="pitchEnvDecaySliderVal"
-						class="styled-slider" :aria-valuetext="`${(pitchEnvDecay * 1000).toFixed(0)} milliseconds`" />
+				<!-- Decay -->
+				<div class="position-relative">
+					<Knob v-model="pitchEnvDecaySliderVal" label="Decay" size="small" :min="0" :max="100" :step="1"
+						color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchDecay'"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'pitchDecay'" class="custom-tooltip">
+						{{ (pitchEnvDecay * 1000).toFixed(0) }} ms
+					</span>
 				</div>
-			</div>
-			<div class="row">
-				<div class="col-12 col-md-6">
-					<div class="slider-label-row">
-						<label>Filter Cutoff</label><span class="text-muted">{{ filterCutoff }} Hz</span>
-					</div>
+			</KnobGroup>
 
-					<input type="range" min="100" max="10000" step="1" v-model.number="filterCutoff"
-						class="styled-slider" />
 
+			<KnobGroup v-model="filterEnabled" title="Filter" color="#FF5722">
+				<!-- Cutoff -->
+				<div class="position-relative">
+					<Knob v-model="filterCutoff" label="Cutoff" size="small" :min="100" :max="10000" :step="1"
+						color="#FF5722" :disabled="!filterEnabled" @knobStart="activeKnob = 'filterCutoff'"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'filterCutoff'" class="custom-tooltip">
+						{{ Math.round(filterCutoff) }} Hz
+					</span>
 				</div>
-				<div class="col-12 col-md-6">
-					<div class="slider-label-row">
-						<label>Resonance (Q)
 
-						</label><span class="text-muted">{{ filterResonance }}</span>
-					</div>
-					<input type="range" min="0.1" max="20" step="0.1" v-model.number="filterResonance"
-						class="styled-slider" />
+				<!-- Resonance -->
+				<div class="position-relative">
+					<Knob v-model="filterResonance" label="Resonance" size="small" :min="0.1" :max="20" :step="0.1"
+						color="#FF5722" :disabled="!filterEnabled" @knobStart="activeKnob = 'filterResonance'"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'filterResonance'" class="custom-tooltip">
+						Q: {{ filterResonance.toFixed(1) }}
+					</span>
 				</div>
-			</div>
+			</KnobGroup>
+
+
 		</div>
 
 		<canvas ref="oscilloscopeCanvas" class="oscilloscopeDrumSynth" width="600" height="100"></canvas>
@@ -327,18 +364,27 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
+import Knob from './Knob.vue';
+import KnobGroup from './KnobGroup.vue';
+
 // Reuse shared AudioContext
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let isScrubbing = false;
 let startY = 0;
 let startTempo = 0;
+
+const activeKnob = ref(null);
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
 const synthDecay = ref(0.4);
 const selectedWaveform = ref("sine");
+
+const pitchEnvEnabled = ref(true);
+const envelopeEnabled = ref(true);
+const filterEnabled = ref(true);
+
 const attackSliderVal = ref(20); // Initial slider value (0–100)
 const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
-// const pitchEnvAmtSliderVal = ref(0); // Slider from 0–100
 const filterCutoff = ref(5000); // Hz, default cutoff
 const filterResonance = ref(0.5); // Q factor
 const pitchEnvDecaySliderVal = ref(30); // Slider 0–100, start near short decay
@@ -366,6 +412,7 @@ const noiseAmount = ref(0.5); // 0 = no noise, 1 = full noise
 
 
 // LFO START
+const lfoEnabled = ref(true); // toggle knob group
 const lfoRate = ref(5); // Hz
 const lfoDepth = ref(0); // Varies by target
 const lfoTarget = ref('pitch'); // 'pitch' | 'gain' | 'filter'
@@ -633,8 +680,11 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 
 	// Filter config
 	filter.type = 'lowpass';
-	filter.frequency.setValueAtTime(filterCutoff.value, startTime);
-	filter.Q.setValueAtTime(filterResonance.value, startTime);
+	if (filterEnabled.value) {
+		filter.frequency.setValueAtTime(filterCutoff.value, startTime);
+		filter.Q.setValueAtTime(filterResonance.value, startTime);
+	}
+
 
 	// Gain envelope
 	const attackEnd = startTime + attackTime;
@@ -647,6 +697,7 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 
 	const safeOscGain = Math.max(0.0001, velocity * oscBlend);
 	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
+
 	oscEnvGain.gain.setValueAtTime(0.0001, startTime);
 	oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
 	oscEnvGain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
@@ -657,28 +708,29 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 
 
 	// LFO
-	if (lfoTarget.value === 'pitch') {
-		lfoGain.connect(osc.frequency);
-	} else if (lfoTarget.value === 'gain') {
-		// lfoGain.connect(gain.gain);
-		// Clamp LFO depth for gain mod to a safe musical range
-		const lfoModGain = audioCtx.createGain();
-		lfoModGain.gain.value = lfoDepth.value * 0.005; // scale depth to a small gain range (e.g., 0 to 0.5)
+	if (lfoEnabled.value) {
+		if (lfoTarget.value === 'pitch') {
+			lfoGain.connect(osc.frequency);
+		} else if (lfoTarget.value === 'gain') {
+			// Clamp LFO depth for gain mod to a safe musical range
+			const lfoModGain = audioCtx.createGain();
+			lfoModGain.gain.value = lfoDepth.value * 0.005; // scale depth to a small gain range (e.g., 0 to 0.5)
 
-		// Offset node (adds a base gain level)
-		const lfoOffset = audioCtx.createConstantSource();
-		lfoOffset.offset.value = velocity * 0.75; // 75% of velocity as base volume
+			// Offset node (adds a base gain level)
+			const lfoOffset = audioCtx.createConstantSource();
+			lfoOffset.offset.value = velocity * 0.75; // 75% of velocity as base volume
 
-		// Sum LFO + Offset
-		const lfoSum = audioCtx.createGain();
-		lfoGain.connect(lfoModGain).connect(lfoSum);
-		lfoOffset.connect(lfoSum);
-		lfoSum.connect(gain.gain);
+			// Sum LFO + Offset
+			const lfoSum = audioCtx.createGain();
+			lfoGain.connect(lfoModGain).connect(lfoSum);
+			lfoOffset.connect(lfoSum);
+			lfoSum.connect(oscEnvGain.gain);
 
-		lfoOffset.start();
+			lfoOffset.start();
 
-	} else if (lfoTarget.value === 'filter') {
-		lfoGain.connect(filter.frequency);
+		} else if (lfoTarget.value === 'filter') {
+			lfoGain.connect(filter.frequency);
+		}
 	}
 	// Noise
 
@@ -703,8 +755,6 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 
 		}
 	}
-
-
 
 	// Start/stop
 	osc.start(startTime);
