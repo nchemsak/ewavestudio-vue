@@ -77,6 +77,31 @@
 					</div>
 				</div>
 			</div>
+			<KnobGroup v-model="fmEnabled" title="FM" color="#A07CFF">
+				<!-- Mod Freq -->
+				<div class="position-relative">
+					<Knob v-model="fmModFreq" size="small" :min="1" :max="1000" :step="1" label="Mod Freq"
+						color="#A07CFF" :disabled="!fmEnabled" @knobStart="activeKnob = 'fmModFreq'"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'fmModFreq'" class="custom-tooltip">
+						{{ fmModFreq }} Hz
+					</span>
+				</div>
+
+				<!-- Mod Amount -->
+				<div class="position-relative">
+					<Knob v-model="fmAmount" size="small" :min="0" :max="1000" :step="1" label="Mod Amount"
+						color="#A07CFF" :disabled="!fmEnabled" @knobStart="activeKnob = 'fmAmount'"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'fmAmount'" class="custom-tooltip">
+						{{ fmAmount }} Hz
+					</span>
+				</div>
+			</KnobGroup>
+
+			<div class="visualizer-stack d-flex flex-column gap-3 mb-4">
+				<canvas id="spectrogram" width="600" height="200" class="waveform-visual"></canvas>
+			</div>
 			<!-- Custom Waveform Controls -->
 			<div v-if="selectedWave1 === 'custom' || selectedWave2 === 'custom'" id="custom-waveform-controls"
 				class="mt-4">
@@ -183,13 +208,20 @@
 						</span>
 					</div>
 				</KnobGroup>
+
 				<KnobGroup v-model="driveEnabled" title="Drive" color="#FFA500">
 					<!-- Drive Type Selector -->
 					<div class="drive-type-selector mb-3 d-flex justify-content-center gap-3">
 						<span v-for="type in ['overdrive', 'distortion', 'fuzz', 'saturation']" :key="type"
-							class="drive-type-dot" :class="{ selected: driveType === type }" @click="driveType = type"
-							:title="type.charAt(0).toUpperCase() + type.slice(1)"></span>
+							class="drive-type-dot" :class="{ selected: driveType === type, disabled: !driveEnabled }"
+							@click="driveEnabled && (driveType = type)">
+							<span class="drive-tooltip">
+								{{ type.charAt(0).toUpperCase() + type.slice(1) }}
+							</span>
+						</span>
+
 					</div>
+
 
 					<!-- Amount -->
 					<div class="position-relative">
@@ -290,6 +322,9 @@ import KnobGroup from './KnobGroup.vue';
 
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
+const finalGain = audioCtx.createGain();
+finalGain.gain.value = 1;
+
 // Visualizer
 const analyser = audioCtx.createAnalyser();
 analyser.fftSize = 1024;
@@ -304,6 +339,12 @@ const waveMixDisplay = computed(() => ({
 }));
 
 const showPresets = ref(true);
+
+
+//FM Synthesis
+const fmEnabled = ref(false);
+const fmModFreq = ref(200); // Hz — frequency of the modulator
+const fmAmount = ref(100);  // Hz — how much it modulates
 
 //hovered label info
 const hoveredKnobs = ref(null)
@@ -561,7 +602,30 @@ function playNote(note) {
 			const detuneOffset = (group.unison === 1)
 				? 0
 				: ((u - Math.floor(group.unison / 2)) * group.detune);
-			osc.frequency.setValueAtTime(freq * Math.pow(2, pitchBend.value / 12), audioCtx.currentTime);
+			// osc.frequency.setValueAtTime(freq * Math.pow(2, pitchBend.value / 12), audioCtx.currentTime);
+			// Frequency setup
+			const baseFreq = freq * Math.pow(2, pitchBend.value / 12);
+			osc.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+
+			//  FM synthesis setup (only if enabled)
+			if (fmEnabled.value) {
+				const modOsc = audioCtx.createOscillator();
+				const modGain = audioCtx.createGain();
+
+				modOsc.frequency.value = fmModFreq.value;
+				const now = audioCtx.currentTime;
+				modGain.gain.setValueAtTime(fmAmount.value, now);
+				modGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5); // 0.5s decay
+
+				modOsc.connect(modGain).connect(osc.frequency);
+				modOsc.start();
+
+				// Store for cleanup
+				if (!osc.fm) osc.fm = [];
+				osc.fm.push(modOsc, modGain);
+			}
+
+
 			osc.detune.value = detuneOffset;
 
 			// Panning
@@ -638,6 +702,17 @@ function stopNote(note) {
 	// Remove visual highlight if exists
 	const el = document.querySelector(`[data-note="${note}"]`);
 	if (el) el.classList.remove('active');
+
+	active.oscillators.forEach(osc => {
+		osc.stop(now + 0.05);
+
+		//  Clean up FM modulator if present
+		if (osc.fm) {
+			osc.fm.forEach(node => {
+				try { node.stop?.(); node.disconnect(); } catch { }
+			});
+		}
+	});
 }
 
 const isMouseDown = ref(false);
@@ -729,6 +804,9 @@ onMounted(() => {
 
 	drawOscilloscope(analyser1, 'oscilloscope1', '#27fcff');
 	drawOscilloscope(analyser2, 'oscilloscope2', 'pink');
+
+	drawSpectrogram(analyser, 'spectrogram');
+
 	// Set up MIDI immediately
 	if (navigator.requestMIDIAccess) {
 		navigator.requestMIDIAccess().then((access) => {
@@ -1042,6 +1120,42 @@ watch(customReal, (newReal) => {
 const bufferLength = analyser.frequencyBinCount;
 const dataArray = new Uint8Array(bufferLength);
 
+
+function drawSpectrogram(analyser, canvasId = 'spectrogram') {
+	const canvas = document.getElementById(canvasId);
+	if (!canvas) return;
+	const ctx = canvas.getContext('2d');
+
+	const width = canvas.width;
+	const height = canvas.height;
+	const bufferLength = analyser.frequencyBinCount;
+	const dataArray = new Uint8Array(bufferLength);
+
+	const scrollSpeed = 1; // pixels per frame
+
+	function draw() {
+		requestAnimationFrame(draw);
+
+		analyser.getByteFrequencyData(dataArray);
+
+		// Scroll the image left
+		const imageData = ctx.getImageData(scrollSpeed, 0, width - scrollSpeed, height);
+		ctx.putImageData(imageData, 0, 0);
+
+		// Draw new frequency data on the right edge
+		for (let y = 0; y < height; y++) {
+			const freqIndex = Math.floor((y / height) * bufferLength);
+			const value = dataArray[freqIndex];
+			const hue = 240 - (value * 2.4); // map 0–255 to 240–0 (blue to red)
+			ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+			ctx.fillRect(width - scrollSpeed, height - y, scrollSpeed, 1);
+		}
+	}
+
+	draw();
+}
+
+
 function drawOscilloscope(analyser, canvasId = 'oscilloscope1', color = 'cyan') {
 	const canvas = document.getElementById(canvasId);
 	if (!canvas) return;
@@ -1235,7 +1349,8 @@ function connectEffects() {
 		wetGain.connect(analyser);
 		dryGain.connect(analyser);
 	} else {
-		source.connect(analyser);
+		source.connect(finalGain);
+		finalGain.connect(analyser);
 	}
 }
 

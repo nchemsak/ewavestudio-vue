@@ -190,37 +190,103 @@
 			color: #aaa;
 		}
 	}
-
-
 }
-	.mode-dot {
-		width: 32px;
-		height: 32px;
-		border-radius: 50%;
-		background: #444;
-		color: white;
-		font-size: 0.8rem;
-		text-align: center;
-		line-height: 32px;
-		cursor: pointer;
-		transition: background 0.2s;
-		&.active {
-			background: #ff8c00;
+.mode-dot {
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: #444;
+	color: white;
+	font-size: 0.8rem;
+	text-align: center;
+	line-height: 32px;
+	cursor: pointer;
+	transition: background 0.2s;
+	&.active {
+		background: #ff8c00;
+	}
+}
+.drive-type-dot {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background-color: #666;
+	cursor: pointer;
+	transition: background-color 0.2s ease;
+}
+
+.drive-type-dot.selected {
+	background-color: #ffa500;
+	box-shadow: 0 0 4px #ffa500;
+}
+
+.drive-type-dot {
+	position: relative;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background-color: #ffa500;
+	cursor: pointer;
+	transition: transform 0.2s ease;
+
+	&.selected {
+		box-shadow:
+			0 0 0 2px white,
+			0 0 5px #ffa500;
+	}
+
+	&.disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+		pointer-events: none;
+
+		.drive-tooltip {
+			display: none;
 		}
 	}
-	.drive-type-dot {
-		width: 12px;
-		height: 12px;
-		border-radius: 50%;
-		background-color: #666;
-		cursor: pointer;
-		transition: background-color 0.2s ease;
+	&:hover {
+		transform: scale(1.2);
 	}
 
-	.drive-type-dot.selected {
-		background-color: #ffa500;
-		box-shadow: 0 0 4px #ffa500;
+	.drive-tooltip {
+		position: absolute;
+		bottom: 125%;
+		left: 50%;
+		transform: translateX(-50%);
+		background-color: #222;
+		color: #fff;
+		padding: 4px 8px;
+		border-radius: 4px;
+		font-size: 0.75rem;
+		white-space: nowrap;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.2s ease;
+		z-index: 10;
+
+		// Optional arrow
+		&::after {
+			content: "";
+			position: absolute;
+			top: 100%;
+			left: 50%;
+			transform: translateX(-50%);
+			border-width: 5px;
+			border-style: solid;
+			border-color: #222 transparent transparent transparent;
+		}
 	}
+
+	&:hover .drive-tooltip {
+		opacity: 1;
+	}
+}
+
+.waveform-visual {
+	border: 1px solid #333;
+	background: #000;
+}
+
 #active-notes-display {
 	display: flex;
 	flex-direction: column;
