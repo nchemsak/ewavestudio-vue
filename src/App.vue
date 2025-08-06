@@ -1,9 +1,9 @@
 <template>
 	<div class="container-fluid">
 		<div class="row">
-			<div class="col-6">
+			<!-- <div class="col-6">
 				<ComputerKeyboard />
-			</div>
+			</div> -->
 			<div class="col-6">
 				<DrumSequencer />
 			</div>

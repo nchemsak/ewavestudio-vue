@@ -3,7 +3,7 @@
 		<div class="controls d-flex flex-wrap align-items-center justify-content-between mb-4">
 
 			<div class="position-relative text-center">
-				<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="large" color="#23CDE8"
+				<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="medium" color="#23CDE8"
 					@knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'volume'" class="custom-tooltip">
 					{{ Math.round(volume * 100) }}%
@@ -12,7 +12,7 @@
 
 
 			<div class="position-relative text-center">
-				<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="large" color="#F39C12"
+				<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium" color="#F39C12"
 					@knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'tempo'" class="custom-tooltip">
 					{{ tempo }} BPM
@@ -21,7 +21,7 @@
 
 
 			<div class="position-relative text-center">
-				<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="large" color="#E91E63"
+				<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="medium" color="#E91E63"
 					@knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'swing'" class="custom-tooltip">
 					{{ Math.round(swing * 100) }}%
@@ -31,102 +31,6 @@
 			<button class="btn btn-primary" @click="togglePlay">
 				<span v-if="isPlaying">Stop</span>
 				<span v-else>Play</span>
-			</button>
-		</div>
-
-		<div class="instrument-grid">
-			<div v-for="instrument in instruments.filter(i => i.name !== 'synth-voice')" :key="instrument.name"
-				class="mb-3">
-
-				<div class="d-flex align-items-center gap-2 mb-1">
-					<div class="mute-indicator" :class="{ muted: instrument.muted }"
-						@click="toggleMute(instrument.name)" role="button" aria-label="Toggle Mute"
-						:title="instrument.muted ? 'Muted' : 'Playing'"></div>
-
-					<div class="channel-label d-flex align-items-center gap-1">
-
-						<template v-if="!instrument.isEditingName">
-							<strong @click="editLabel(instrument)" @mouseenter="hoveredLabel = instrument.name"
-								@mouseleave="hoveredLabel = null" class="position-relative">
-
-								{{ instrument.label }}
-								<span v-if="hoveredLabel === instrument.name && instrument.name !== 'synth-voice'"
-									class="custom-tooltip">
-									Click to rename
-								</span>
-							</strong>
-						</template>
-
-						<template v-else>
-							<input v-model="instrument.label" @blur="stopEditingLabel(instrument)"
-								@keydown.enter.prevent="stopEditingLabel(instrument)"
-								class="form-control form-control-sm" style="max-width: 150px;"
-								:ref="el => instrument.inputRef = el" />
-						</template>
-
-						<!-- Waveform Selector for Synth Voice -->
-						<div v-if="instrument.name === 'synth-voice'" class="btn-group ms-3" role="group">
-							<button v-for="wave in ['sine', 'square', 'triangle', 'sawtooth']" :key="wave" type="button"
-								class="btn btn-sm"
-								:class="wave === selectedWaveform ? 'btn-primary' : 'btn-outline-primary'"
-								@click="selectedWaveform = wave">
-								{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
-							</button>
-						</div>
-						<!-- Delete Button (not for synth-voice) -->
-						<button v-if="instrument.name !== 'synth-voice'" @click="deleteChannel(instrument.name)"
-							class="btn btn-sm btn-outline-danger ms-2" title="Delete Channel"
-							aria-label="Delete Channel">
-							&times;
-						</button>
-
-					</div>
-
-					<!-- Only show for custom channels -->
-					<span v-if="instrument.name.startsWith('custom')" class="">
-						<label class="upload-icon" :title="`Load sample for ${instrument.label}`">
-							📁
-							<input type="file" accept="audio/*" @change="e => loadUserSample(e, instrument)"
-								style="display: none" />
-						</label>
-					</span>
-
-				</div>
-
-				<div class="channel-volume mb-2">
-
-
-					<Knob v-model="instrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
-						color="#3498DB" />
-
-
-				</div>
-
-				<div class="d-flex pad-row">
-
-					<div v-for="(active, index) in instrument.steps" :key="index" class="pad-wrapper"
-						@mouseenter="hoveredPad = `${instrument.name}-${index}`" @mouseleave="hoveredPad = null">
-						<div :class="['pad', { selected: active }, { playing: index === currentStep }]"
-							@mousedown="handleMouseDown($event, instrument.name, index)"
-							@mouseenter="handleMouseEnter(instrument.name, index)" @dragstart.prevent
-							:style="getPadStyle(instrument, index)"></div>
-						<!-- Floating slider -->
-						<div v-if="active && hoveredPad === `${instrument.name}-${index}`"
-							class="hover-slider volume-slider">
-							<input type="range" min="0" max="1" step="0.01"
-								v-model.number="instrument.velocities[index]" />
-						</div>
-						<!-- Pitch Slider for Synth Voice -->
-						<div v-if="instrument.name === 'synth-voice' && active && hoveredPad === `${instrument.name}-${index}`"
-							class="hover-slider pitch-slider">
-							<input type="range" min="100" max="1000" step="1"
-								v-model.number="instrument.pitches[index]" />
-						</div>
-					</div>
-				</div>
-			</div>
-			<button class="btn btn-success mb-3" @click="addCustomChannel">
-				+ Add Channel
 			</button>
 		</div>
 	</div>
@@ -200,47 +104,47 @@
 			</div>
 		</div>
 		<div class="controls">
-
-
-
 			<div class="row">
-				<div class="col-12 col-md-6">
-					<h5>LFO Modulation</h5>
-
-
+				<div class="col-12 col-md-4">
+					<!-- <h5>LFO Modulation</h5> -->
 
 					<KnobGroup v-model="lfoEnabled" title="LFO" color="#00BCD4">
-						<!-- LFO Rate -->
-						<div class="position-relative">
-							<Knob v-model="lfoRate" size="small" :min="0.1" :max="20" :step="0.1" label="Rate"
-								color="#00BCD4" :disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoRate'"
-								@knobEnd="activeKnob = null" />
-							<span v-if="activeKnob === 'lfoRate'" class="custom-tooltip">
-								{{ lfoRate.toFixed(1) }} Hz
-							</span>
-						</div>
-
-						<!-- LFO Depth -->
-						<div class="position-relative">
-							<Knob v-model="lfoDepth" size="small" :min="0" :max="lfoDepthMax" :step="1" label="Depth"
-								color="#00BCD4" :disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoDepth'"
-								@knobEnd="activeKnob = null" />
-							<span v-if="activeKnob === 'lfoDepth'" class="custom-tooltip">
-								{{ lfoDepth }}
-							</span>
-						</div>
-
-
-						<div class="lfo-target-selector mt-3 d-flex justify-content-center gap-3">
-							<span v-for="type in ['pitch', 'gain', 'filter']" :key="type" class="lfo-type-dot"
-								:class="{ selected: lfoTarget === type, disabled: !lfoEnabled }"
-								@click="lfoEnabled && (lfoTarget = type)">
-								<span class="selector-tooltip">
-									{{ type === 'gain' ? 'Amplitude' : type.charAt(0).toUpperCase() + type.slice(1) }}
+						<!--  Inject selector into the header -->
+						<template #header-content>
+							<div class="lfo-target-selector d-flex justify-content-center gap-2 ms-2">
+								<span v-for="type in ['pitch', 'gain', 'filter']" :key="type" class="lfo-type-dot"
+									:class="{ selected: lfoTarget === type, disabled: !lfoEnabled }"
+									@click="lfoEnabled && (lfoTarget = type)">
+									<span class="selector-tooltip">
+										{{ type === 'gain' ? 'Amplitude' : type.charAt(0).toUpperCase() + type.slice(1)
+										}}
+									</span>
 								</span>
-							</span>
-						</div>
+							</div>
+						</template>
 
+						<!-- Knobs stay here -->
+						<div>
+							<!-- LFO Rate -->
+							<div class="position-relative">
+								<Knob v-model="lfoRate" size="small" :min="0.1" :max="20" :step="0.1" label="Rate"
+									color="#00BCD4" :disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoRate'"
+									@knobEnd="activeKnob = null" />
+								<span v-if="activeKnob === 'lfoRate'" class="custom-tooltip">
+									{{ lfoRate.toFixed(1) }} Hz
+								</span>
+							</div>
+
+							<!-- LFO Depth -->
+							<div class="position-relative">
+								<Knob v-model="lfoDepth" size="small" :min="0" :max="lfoDepthMax" :step="1"
+									label="Depth" color="#00BCD4" :disabled="!lfoEnabled"
+									@knobStart="activeKnob = 'lfoDepth'" @knobEnd="activeKnob = null" />
+								<span v-if="activeKnob === 'lfoDepth'" class="custom-tooltip">
+									{{ lfoDepth }}
+								</span>
+							</div>
+						</div>
 					</KnobGroup>
 
 
@@ -288,28 +192,35 @@
 				</div>
 			</KnobGroup>
 
-			<div class="row">
-				<div class="col-12 col-md-6">
-					<label class="form-label">Pitch Env Mode</label>
-					<div class="btn-group" role="group" aria-label="Pitch Env Mode">
-						<button class="btn btn-sm" :class="pitchMode === 'up' ? 'btn-primary' : 'btn-outline-primary'"
+			<KnobGroup v-model="pitchEnvEnabled" title="Pitch Env" color="#3F51B5">
+				<!-- Inject Pitch Env Mode selector into the header -->
+				<template #header-content>
+					<div class="btn-group ms-auto" role="group" aria-label="Pitch Env Mode">
+						<!-- Up -->
+						<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
+							:class="pitchMode === 'up' ? 'btn-primary' : 'btn-outline-primary'"
 							@click="pitchMode = 'up'">
 							<i class="bi bi-arrow-up"></i>
 						</button>
-						<button class="btn btn-sm" :class="pitchMode === 'down' ? 'btn-primary' : 'btn-outline-primary'"
+
+						<!-- Down -->
+						<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
+							:class="pitchMode === 'down' ? 'btn-primary' : 'btn-outline-primary'"
 							@click="pitchMode = 'down'">
 							<i class="bi bi-arrow-down"></i>
 						</button>
-						<button class="btn btn-sm"
+
+						<!-- Random -->
+						<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
 							:class="pitchMode === 'random' ? 'btn-primary' : 'btn-outline-primary'"
 							@click="pitchMode = 'random'">
 							<i class="bi bi-shuffle"></i>
 						</button>
 					</div>
-				</div>
-			</div>
-			<KnobGroup v-model="pitchEnvEnabled" title="Pitch Env" color="#3F51B5">
-				<!-- Amount -->
+				</template>
+
+
+				<!-- Knobs -->
 				<div class="position-relative">
 					<Knob v-model="pitchEnvSemitones" label="Amount" size="small" :min="0" :max="48" :step="1"
 						color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchAmt'"
@@ -319,7 +230,6 @@
 					</span>
 				</div>
 
-				<!-- Decay -->
 				<div class="position-relative">
 					<Knob v-model="pitchEnvDecaySliderVal" label="Decay" size="small" :min="0" :max="100" :step="1"
 						color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchDecay'"
@@ -329,6 +239,7 @@
 					</span>
 				</div>
 			</KnobGroup>
+
 
 
 			<KnobGroup v-model="filterEnabled" title="Filter" color="#FF5722">
@@ -665,18 +576,27 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	const filter = audioCtx.createBiquadFilter();
 
 	// Pitch envelope handling
-	let semitoneOffset = pitchEnvSemitones.value;
-	if (pitchMode.value === 'down') {
-		semitoneOffset = -pitchEnvSemitones.value;
-	} else if (pitchMode.value === 'random') {
-		semitoneOffset = (Math.random() * 2 - 1) * pitchEnvSemitones.value; // random between -n and +n
-	}
-	const semitoneRatio = Math.pow(2, semitoneOffset / 12);
-	const startFreq = freq * semitoneRatio;
-
 	osc.type = selectedWaveform.value;
-	osc.frequency.setValueAtTime(startFreq, startTime);
-	osc.frequency.exponentialRampToValueAtTime(freq, startTime + pitchEnvDecay.value);
+
+	if (pitchEnvEnabled.value) {
+		// Pitch envelope enabled
+		let semitoneOffset = pitchEnvSemitones.value;
+		if (pitchMode.value === 'down') {
+			semitoneOffset = -pitchEnvSemitones.value;
+		} else if (pitchMode.value === 'random') {
+			semitoneOffset = (Math.random() * 2 - 1) * pitchEnvSemitones.value;
+		}
+		const semitoneRatio = Math.pow(2, semitoneOffset / 12);
+		const startFreq = freq * semitoneRatio;
+
+		osc.frequency.setValueAtTime(startFreq, startTime);
+		osc.frequency.exponentialRampToValueAtTime(freq, startTime + pitchEnvDecay.value);
+	} else {
+		// No pitch envelope, just set frequency
+		osc.frequency.setValueAtTime(freq, startTime);
+	}
+
+
 
 	// Filter config
 	filter.type = 'lowpass';
