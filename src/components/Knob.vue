@@ -7,12 +7,13 @@
 			<div class="dial-grip" :style="{
 				transform: `rotate(${rotation}deg)`,
 				borderColor: strokeColor,
-				backgroundColor: props.disabled ? '#444' : '#222',
+				// backgroundColor: props.disabled ? '#444' : '#222',
+				backgroundColor: props.disabled ? 'rgba(34, 34, 34, 0.2)' : '#222',
 			}"></div>
 			<svg class="dial-svg" viewBox="0 0 100 100">
 				<path d="M20,76 A 40 40 0 1 1 80 76" fill="none" stroke="#333" stroke-width="6" />
 				<path d="M20,76 A 40 40 0 1 1 80 76" fill="none" :stroke="strokeColor" stroke-width="6"
-					:style="{ strokeDashoffset: 184 - 184 * ((rotation + 132) / 264) }" />
+					:style="{ strokeDashoffset: 184 - 184 * ((rotation + 132) / 264) }" /> 
 			</svg>
 		</div>
 
