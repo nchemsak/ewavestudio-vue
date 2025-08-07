@@ -104,76 +104,70 @@
 			</div>
 		</div>
 		<div class="controls">
-			<div class="row">
-				<div class="col-12 col-md-4">
-					<!-- <h5>LFO Modulation</h5> -->
-
-					<KnobGroup v-model="lfoEnabled" title="LFO" color="#00BCD4">
-						<!--  Inject selector into the header -->
-						<template #header-content>
-							<div class="lfo-target-selector d-flex justify-content-center gap-2 ms-2">
-								<span v-for="type in ['pitch', 'gain', 'filter']" :key="type" class="lfo-type-dot"
-									:class="{ selected: lfoTarget === type, disabled: !lfoEnabled }"
-									@click="lfoEnabled && (lfoTarget = type)">
-									<span class="selector-tooltip">
-										{{ type === 'gain' ? 'Amplitude' : type.charAt(0).toUpperCase() + type.slice(1)
-										}}
-									</span>
-								</span>
-							</div>
-						</template>
-
-						<!-- Knobs stay here -->
-						<div>
-							<!-- LFO Rate -->
-							<div class="position-relative">
-								<Knob v-model="lfoRate" size="small" :min="0.1" :max="20" :step="0.1" label="Rate"
-									color="#00BCD4" :disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoRate'"
-									@knobEnd="activeKnob = null" />
-								<span v-if="activeKnob === 'lfoRate'" class="custom-tooltip">
-									{{ lfoRate.toFixed(1) }} Hz
-								</span>
-							</div>
-
-							<!-- LFO Depth -->
-							<div class="position-relative">
-								<Knob v-model="lfoDepth" size="small" :min="0" :max="lfoDepthMax" :step="1"
-									label="Depth" color="#00BCD4" :disabled="!lfoEnabled"
-									@knobStart="activeKnob = 'lfoDepth'" @knobEnd="activeKnob = null" />
-								<span v-if="activeKnob === 'lfoDepth'" class="custom-tooltip">
-									{{ lfoDepth }}
-								</span>
-							</div>
-						</div>
-					</KnobGroup>
-
-
-				</div>
-			</div>
-
-			<div class="noise-selector">
-				<label>Noise</label>
-
-				<div class="noise-dot-wrap d-flex justify-content-center gap-3">
-					<span v-for="type in ['white', 'pink', 'brown']" :key="type" class="noise-dot"
-						:class="[type, { selected: noiseType === type }]" @click="toggleNoise(type)">
-						<span class="selector-tooltip">
-							{{ type.charAt(0).toUpperCase() + type.slice(1) }} Noise
+			<KnobGroup title="Noise" :color="'#9C27B0'" :modelValue="true" :showToggle="false">
+				<template #header-content>
+					<!-- Noise selector dots go here -->
+					<div class="noise-dot-wrap d-flex justify-content-center gap-2 ms-2">
+						<span v-for="type in ['white', 'pink', 'brown']" :key="type" class="noise-dot"
+							:class="[type, { selected: noiseType === type }]" @click="toggleNoise(type)">
+							<span class="selector-tooltip">
+								{{ type.charAt(0).toUpperCase() + type.slice(1) }} Noise
+							</span>
 						</span>
-					</span>
-				</div>
+					</div>
+				</template>
+
+				<!-- Noise Amount knob -->
 				<div class="position-relative text-center mt-2" :disabled="noiseType === 'none'">
-					<Knob v-model="noiseAmount" label="Amount" :min="0" :max="1" :step="0.01" size="small"
+					<Knob v-model="noiseAmount" label="Amount" :min="0" :max="1" :step="0.01" size="medium"
 						color="#9C27B0" @knobStart="activeKnob = 'noiseAmount'" @knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'noiseAmount'" class="custom-tooltip">
 						{{ Math.round(noiseAmount * 100) }}%
 					</span>
 				</div>
-			</div>
-			<KnobGroup v-model="envelopeEnabled" title="Envelope" color="#4CAF50">
+			</KnobGroup>
+
+			<KnobGroup v-model="lfoEnabled" title="LFO" color="#00BCD4">
+				<!--  Inject selector into the header -->
+				<template #header-content>
+					<div class="lfo-target-selector d-flex justify-content-center gap-2 ms-2">
+						<span v-for="type in ['pitch', 'gain', 'filter']" :key="type" class="lfo-type-dot"
+							:class="{ selected: lfoTarget === type, disabled: !lfoEnabled }"
+							@click="lfoEnabled && (lfoTarget = type)">
+							<span class="selector-tooltip">
+								{{ type === 'gain' ? 'Amplitude' : type.charAt(0).toUpperCase() + type.slice(1)
+								}}
+							</span>
+						</span>
+					</div>
+				</template>
+
+				<!-- Knobs stay here -->
+				<!-- <div> -->
+				<!-- LFO Rate -->
+				<div class="position-relative">
+					<Knob v-model="lfoRate" size="medium" :min="0.1" :max="20" :step="0.1" label="Rate" color="#00BCD4"
+						:disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoRate'" @knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'lfoRate'" class="custom-tooltip">
+						{{ lfoRate.toFixed(1) }} Hz
+					</span>
+				</div>
+
+				<!-- LFO Depth -->
+				<div class="position-relative">
+					<Knob v-model="lfoDepth" size="medium" :min="0" :max="lfoDepthMax" :step="1" label="Depth"
+						color="#00BCD4" :disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoDepth'"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'lfoDepth'" class="custom-tooltip">
+						{{ lfoDepth }}
+					</span>
+				</div>
+				<!-- </div> -->
+			</KnobGroup>
+			<KnobGroup v-model="envelopeEnabled" title="Envelope" color="#4CAF50" :showToggle="false">
 				<!-- Attack -->
 				<div class="position-relative">
-					<Knob v-model="attackSliderVal" label="Attack" size="small" :min="0" :max="100" :step="1"
+					<Knob v-model="attackSliderVal" label="Attack" size="medium" :min="0" :max="100" :step="1"
 						color="#4CAF50" :disabled="!envelopeEnabled" @knobStart="activeKnob = 'attack'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'attack'" class="custom-tooltip">
@@ -183,7 +177,7 @@
 
 				<!-- Decay -->
 				<div class="position-relative">
-					<Knob v-model="synthDecay" label="Decay" size="small" :min="0.05" :max="2" :step="0.01"
+					<Knob v-model="synthDecay" label="Decay" size="medium" :min="0.05" :max="2" :step="0.01"
 						color="#4CAF50" :disabled="!envelopeEnabled" @knobStart="activeKnob = 'decay'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'decay'" class="custom-tooltip">
@@ -222,7 +216,7 @@
 
 				<!-- Knobs -->
 				<div class="position-relative">
-					<Knob v-model="pitchEnvSemitones" label="Amount" size="small" :min="0" :max="48" :step="1"
+					<Knob v-model="pitchEnvSemitones" label="Amount" size="medium" :min="0" :max="48" :step="1"
 						color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchAmt'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'pitchAmt'" class="custom-tooltip">
@@ -231,7 +225,7 @@
 				</div>
 
 				<div class="position-relative">
-					<Knob v-model="pitchEnvDecaySliderVal" label="Decay" size="small" :min="0" :max="100" :step="1"
+					<Knob v-model="pitchEnvDecaySliderVal" label="Decay" size="medium" :min="0" :max="100" :step="1"
 						color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchDecay'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'pitchDecay'" class="custom-tooltip">
@@ -245,7 +239,7 @@
 			<KnobGroup v-model="filterEnabled" title="Filter" color="#FF5722">
 				<!-- Cutoff -->
 				<div class="position-relative">
-					<Knob v-model="filterCutoff" label="Cutoff" size="small" :min="100" :max="10000" :step="1"
+					<Knob v-model="filterCutoff" label="Cutoff" size="medium" :min="100" :max="10000" :step="1"
 						color="#FF5722" :disabled="!filterEnabled" @knobStart="activeKnob = 'filterCutoff'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'filterCutoff'" class="custom-tooltip">
@@ -255,7 +249,7 @@
 
 				<!-- Resonance -->
 				<div class="position-relative">
-					<Knob v-model="filterResonance" label="Resonance" size="small" :min="0.1" :max="20" :step="0.1"
+					<Knob v-model="filterResonance" label="Resonance" size="medium" :min="0.1" :max="20" :step="0.1"
 						color="#FF5722" :disabled="!filterEnabled" @knobStart="activeKnob = 'filterResonance'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'filterResonance'" class="custom-tooltip">
