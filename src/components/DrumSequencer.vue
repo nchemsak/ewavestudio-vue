@@ -127,43 +127,6 @@
 				</div>
 			</KnobGroup>
 
-			<KnobGroup v-model="lfoEnabled" title="LFO" color="#00BCD4">
-				<!--  Inject selector into the header -->
-				<template #header-content>
-					<div class="lfo-target-selector d-flex justify-content-center gap-2 ms-2">
-						<span v-for="type in ['pitch', 'gain', 'filter']" :key="type" class="lfo-type-dot"
-							:class="{ selected: lfoTarget === type, disabled: !lfoEnabled }"
-							@click="lfoEnabled && (lfoTarget = type)">
-							<span class="selector-tooltip">
-								{{ type === 'gain' ? 'Amplitude' : type.charAt(0).toUpperCase() + type.slice(1)
-								}}
-							</span>
-						</span>
-					</div>
-				</template>
-
-				<!-- Knobs stay here -->
-				<!-- <div> -->
-				<!-- LFO Rate -->
-				<div class="position-relative">
-					<Knob v-model="lfoRate" size="medium" :min="0.1" :max="20" :step="0.1" label="Rate" color="#00BCD4"
-						:disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoRate'" @knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'lfoRate'" class="custom-tooltip">
-						{{ lfoRate.toFixed(1) }} Hz
-					</span>
-				</div>
-
-				<!-- LFO Depth -->
-				<div class="position-relative">
-					<Knob v-model="lfoDepth" size="medium" :min="0" :max="lfoDepthMax" :step="1" label="Depth"
-						color="#00BCD4" :disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoDepth'"
-						@knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'lfoDepth'" class="custom-tooltip">
-						{{ lfoDepth }}
-					</span>
-				</div>
-				<!-- </div> -->
-			</KnobGroup>
 			<KnobGroup v-model="envelopeEnabled" title="Envelope" color="#4CAF50" :showToggle="false">
 				<!-- Attack -->
 				<div class="position-relative">
@@ -185,6 +148,9 @@
 					</span>
 				</div>
 			</KnobGroup>
+
+
+
 
 			<KnobGroup v-model="pitchEnvEnabled" title="Pitch Env" color="#3F51B5">
 				<!-- Inject Pitch Env Mode selector into the header -->
@@ -257,7 +223,41 @@
 					</span>
 				</div>
 			</KnobGroup>
+			<KnobGroup v-model="lfoEnabled" title="LFO" color="#00BCD4">
+				<!--  Inject selector into the header -->
+				<template #header-content>
+					<div class="lfo-target-selector d-flex justify-content-center gap-2 ms-2">
+						<span v-for="type in ['pitch', 'gain', 'filter']" :key="type" class="lfo-type-dot"
+							:class="{ selected: lfoTarget === type, disabled: !lfoEnabled }"
+							@click="lfoEnabled && (lfoTarget = type)">
+							<span class="selector-tooltip">
+								{{ type === 'gain' ? 'Amplitude' : type.charAt(0).toUpperCase() + type.slice(1)
+								}}
+							</span>
+						</span>
+					</div>
+				</template>
 
+
+				<!-- LFO Rate -->
+				<div class="position-relative">
+					<Knob v-model="lfoRate" size="medium" :min="0.1" :max="20" :step="0.1" label="Rate" color="#00BCD4"
+						:disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoRate'" @knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'lfoRate'" class="custom-tooltip">
+						{{ lfoRate.toFixed(1) }} Hz
+					</span>
+				</div>
+
+				<!-- LFO Depth -->
+				<div class="position-relative">
+					<Knob v-model="lfoDepth" size="medium" :min="0" :max="lfoDepthMax" :step="1" label="Depth"
+						color="#00BCD4" :disabled="!lfoEnabled" @knobStart="activeKnob = 'lfoDepth'"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'lfoDepth'" class="custom-tooltip">
+						{{ lfoDepth }}
+					</span>
+				</div>
+			</KnobGroup>
 
 		</div>
 

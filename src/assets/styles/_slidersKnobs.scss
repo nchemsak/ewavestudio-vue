@@ -388,7 +388,6 @@ input[type="range"]::-webkit-slider-thumb {
     background-color: transparent;
     padding: 10px 0px;
     max-width: 172px;
-
 }
 
 .knob-group-header {
@@ -470,12 +469,12 @@ input[type="range"]::-webkit-slider-thumb {
 .lfo-type-dot,
 .drive-type-dot,
 .noise-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background-color: #666;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
+    // width: 12px;
+    // height: 12px;
+    // border-radius: 50%;
+    // background-color: #666;
+    // cursor: pointer;
+    // transition: background-color 0.2s ease;
 }
 
 .drive-type-dot.selected,
@@ -488,17 +487,18 @@ input[type="range"]::-webkit-slider-thumb {
 .drive-type-dot,
 .noise-dot {
     position: relative;
-    width: 16px;
-    height: 16px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background-color: #ffa500;
+    border: 1px solid variables.$color-black;
     cursor: pointer;
     transition: transform 0.2s ease;
 
     &.selected {
         box-shadow:
-            0 0 0 2px white,
-            0 0 5px #ffa500;
+            0 0 0 1px variables.$color-white;
+      
     }
 
     &.disabled {
@@ -557,8 +557,8 @@ input[type="range"]::-webkit-slider-thumb {
 // }
 
 .noise-dot.white {
-    background-color: #fff;
-    border: 1px solid #ccc;
+    background-color: variables.$color-white;
+    border: 1px solid variables.$color-black;
 }
 
 .noise-dot.pink {
@@ -569,9 +569,9 @@ input[type="range"]::-webkit-slider-thumb {
     background-color: #8b4513;
 }
 
-.noise-dot.selected {
-    box-shadow: 0 0 0 2px #333;
-}
+// .noise-dot.selected {
+//     box-shadow: 0 0 0 2px #333;
+// }
 .btn-group-sm > .btn,
 .btn-sm {
     --bs-btn-padding-y: 0px !important;
