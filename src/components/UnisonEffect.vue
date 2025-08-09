@@ -1,5 +1,5 @@
 <template>
-    <KnobGroup v-model="localEnabled" title="Unison" color="#27fcff">
+    <KnobGroup :showToggle="false" v-model="localEnabled" title="Unison" color="#27fcff">
         <!-- Voices -->
         <div class="position-relative text-center">
             <Knob v-model="localVoices" size="small" :min="1" :max="6" :step="1" label="Voices" color="#27fcff"

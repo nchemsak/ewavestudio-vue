@@ -118,7 +118,7 @@
 			<!-- Waveform Selector -->
 			<span class="group-title">Oscillators</span><br />
 			<div class="btn-group ms-3" role="group">
-				<button v-for="wave in ['sine', 'square', 'triangle', 'sawtooth']" :key="wave" type="button"
+				<button v-for="wave in ['sine', 'triangle', 'sawtooth', 'square']" :key="wave" type="button"
 					class="btn btn-sm" :class="wave === selectedWaveform ? 'btn-primary' : 'btn-outline-primary'"
 					@click="selectedWaveform = wave">
 					{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
@@ -150,6 +150,18 @@
 		<div class="controls">
 			<h2>Sound Shaping</h2>
 			<KnobGroup v-model="envelopeEnabled" title="Envelope" color="#4CAF50" :showToggle="false">
+				<!-- <template #header-content>
+					<div class="btn-group ms-auto" role="group" aria-label="Env Mode">
+						<button class="btn btn-sm"
+							:class="envMode === 'oneshot' ? 'btn-primary' : 'btn-outline-primary'"
+							@click="envMode = 'oneshot'">One‑Shot</button>
+						<button class="btn btn-sm" :class="envMode === 'latch' ? 'btn-primary' : 'btn-outline-primary'"
+							@click="envMode = 'latch'">Mono‑Cut</button>
+						<button class="btn btn-sm"
+							:class="envMode === 'cutdecay' ? 'btn-primary' : 'btn-outline-primary'"
+							@click="envMode = 'cutdecay'">Cut‑on‑Overlap</button>
+					</div>
+				</template> -->
 				<!-- Attack -->
 				<div class="position-relative">
 					<Knob v-model="attackSliderVal" label="Attack" size="medium" :min="0" :max="100" :step="1"
@@ -171,7 +183,7 @@
 				</div>
 			</KnobGroup>
 
-			<KnobGroup v-model="filterEnabled" title="Filter" color="#FF5722">
+			<KnobGroup v-model="filterEnabled" title="Filter" color="#FF5722" :showToggle="false">
 				<!-- Cutoff -->
 				<div class="position-relative">
 					<Knob v-model="filterCutoff" label="Cutoff" size="medium" :min="100" :max="10000" :step="1"
@@ -197,7 +209,7 @@
 		<div class="controls">
 			<h2>Pitch & Harmonics</h2>
 
-			<KnobGroup v-model="pitchEnvEnabled" title="Pitch Env" color="#3F51B5">
+			<KnobGroup v-model="pitchEnvEnabled" title="Pitch Env" color="#3F51B5" :showToggle="false">
 				<!-- Inject Pitch Env Mode selector into the header -->
 				<template #header-content>
 					<div class="btn-group ms-auto" role="group" aria-label="Pitch Env Mode">
@@ -253,19 +265,19 @@
 		<div class="controls">
 			<h2>Movement & Modulation</h2>
 
-			<LFOGroup v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth" v-model:target="lfoTarget"
-				:depthMax="lfoDepthMax" color="#00BCD4" :targets="['pitch', 'gain', 'filter']" />
+			<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
+				v-model:target="lfoTarget" :depthMax="lfoDepthMax" color="#00BCD4"
+				:targets="['pitch', 'gain', 'filter']" />
 
 		</div>
 		<div class="controls">
 
 			<h2>Effects</h2>
-			<DelayEffect :audioCtx="audioCtx" v-model:enabled="delayEnabled" v-model:delayTime="delayTime"
-				v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix" />
+			<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
+				v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix" />
 
-
-			<DriveEffect v-model:enabled="driveEnabled" v-model:driveType="driveType" v-model:driveAmount="driveAmount"
-				v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
+			<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
+				v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
 		</div>
 
 		<canvas ref="oscilloscopeCanvas" class="oscilloscopeDrumSynth" width="600" height="100"></canvas>
@@ -303,6 +315,7 @@ const pitchEnvEnabled = ref(true);
 const envelopeEnabled = ref(true);
 const filterEnabled = ref(true);
 
+
 const attackSliderVal = ref(20); // Initial slider value (0–100)
 const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
 const filterCutoff = ref(5000); // Hz, default cutoff
@@ -328,7 +341,7 @@ const oscilloscopeCanvas = ref(null);
 
 // Noise
 const noiseType = ref('none'); // 'none' | 'white' | 'pink' | 'brown'
-const noiseAmount = ref(0.5); // 0 = no noise, 1 = full noise
+const noiseAmount = ref(0.25); // 0 = no noise, 1 = full noise
 
 // Delay Start
 const delayEnabled = ref(false);
@@ -345,6 +358,7 @@ feedbackGain.gain.value = delayFeedback.value;
 
 const delayWet = audioCtx.createGain();
 const delayDry = audioCtx.createGain();
+applyDelayEnabled(delayEnabled.value);
 
 // feedback loop
 delayNode.connect(feedbackGain);
@@ -353,15 +367,41 @@ feedbackGain.connect(delayNode);
 // dry + wet summing nodes connect to master output
 delayNode.connect(delayWet);
 watch(delayTime, val => {
-	delayNode.delayTime.setValueAtTime(val, audioCtx.currentTime);
+	const t = audioCtx.currentTime;
+	// cancel any pending ramps, set current, then glide ~30ms
+	const current = delayNode.delayTime.value;
+	delayNode.delayTime.cancelScheduledValues(t);
+	delayNode.delayTime.setValueAtTime(current, t);
+	delayNode.delayTime.linearRampToValueAtTime(val, t + 0.03);
 });
 watch(delayFeedback, val => {
 	feedbackGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
 });
 watch(delayMix, val => {
-	delayWet.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
-	delayDry.gain.setTargetAtTime(1 - val, audioCtx.currentTime, 0.01);
+	const t = audioCtx.currentTime;
+	if (delayEnabled.value) {
+		delayWet.gain.setTargetAtTime(val, t, 0.02);
+		delayDry.gain.setTargetAtTime(1 - val, t, 0.02);
+	} else {
+		// keep fully dry when disabled
+		delayWet.gain.setValueAtTime(0, t);
+		delayDry.gain.setValueAtTime(1, t);
+	}
 });
+
+watch(delayEnabled, on => {
+	applyDelayEnabled(on);
+});
+function applyDelayEnabled(on) {
+	const t = audioCtx.currentTime;
+	if (on) {
+		delayWet.gain.setValueAtTime(delayMix.value, t);
+		delayDry.gain.setValueAtTime(1 - delayMix.value, t);
+	} else {
+		delayWet.gain.setValueAtTime(0, t);
+		delayDry.gain.setValueAtTime(1, t);
+	}
+}
 //Delay END
 
 // Drive START
@@ -379,26 +419,47 @@ driveToneFilter.type = 'lowpass';
 const driveDry = audioCtx.createGain();
 const driveWet = audioCtx.createGain();
 
+// NEW: sum both drive paths before delay
+const driveSum = audioCtx.createGain();     // summed output of dry+wet drive
+// OPTIONAL: simple make-up gain after shaper/tone (tune if you want)
+const driveMakeup = audioCtx.createGain();
+driveMakeup.gain.value = 1.0; // start neutral; you can bump with 'amount'
+
+// connections inside Drive
+driveShaper.connect(driveToneFilter);
+driveToneFilter.connect(driveMakeup);
+driveMakeup.connect(driveWet);
+
+// gains set by mix
 driveWet.gain.value = driveMix.value;
 driveDry.gain.value = 1 - driveMix.value;
 
-// Tone Filter after distortion
-driveShaper.connect(driveToneFilter);
-driveToneFilter.connect(driveWet);
+// —— IMPORTANT: feed the sum, not the delay directly —— //
+driveDry.connect(driveSum);
+driveWet.connect(driveSum);
 
-// Watch reactive drive settings
+// Now feed delay chain **from the sum** (same for all cases)
+driveSum.connect(delayDry);
+driveSum.connect(delayNode);
+
+
+
+// DRIVE
 watch([driveType, driveAmount], ([type, amount]) => {
 	driveShaper.curve = generateDriveCurve(type, amount);
+	// OPTIONAL make-up (very mild): ~ +0..+0.8 dB
+	driveMakeup.gain.setTargetAtTime(1 + amount * 0.1, audioCtx.currentTime, 0.01);
 });
+
 watch(driveTone, hz => {
 	driveToneFilter.frequency.setValueAtTime(hz, audioCtx.currentTime);
 });
+
 watch(driveMix, val => {
 	driveWet.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
 	driveDry.gain.setTargetAtTime(1 - val, audioCtx.currentTime, 0.01);
 });
-driveDry.connect(delayDry);  // Clean signal → delay
-driveWet.connect(delayNode); // Distorted signal → delay
+
 //Drive END
 
 
@@ -455,7 +516,6 @@ function editLabel(instrument) {
 	});
 }
 
-
 function stopEditingLabel(instrument) {
 	instrument.isEditingName = false;
 	hoveredLabel.value = null;
@@ -489,6 +549,7 @@ function handleTempoWheel(e) {
 	tempo.value = Math.max(20, Math.min(300, tempo.value - delta)); // scroll up increases
 }
 
+const phaseDitherCents = 0.3; // ±0.3 cents per hit, inaudible, fixes overlap dips
 
 
 const volume = ref(0.75);
@@ -620,25 +681,24 @@ function playBuffer(buffer, time, velocity = 1) {
 
 function schedule() {
 	const now = audioCtx.currentTime;
-	const stepDuration = 60 / tempo.value / 4; // 16 steps per bar
+	const stepDuration = 60 / tempo.value / 4; // 16th
 
 	while (startTime < now + 0.1) {
 		instruments.value.forEach(inst => {
 			if (!inst.muted && inst.steps[stepIndex]) {
 				const velocity = inst.velocities[stepIndex];
-				const volume = inst.channelVolume ?? 1.0;
+				const chanVol = inst.channelVolume ?? 1.0;
 				const pitch = inst.pitches?.[stepIndex] || 220;
-				const safeDecay = isFinite(synthDecay.value) && synthDecay.value > 0 ? synthDecay.value : 0.1;
+				const safeDecay = (isFinite(synthDecay.value) && synthDecay.value > 0) ? synthDecay.value : 0.1;
 
-				// 🎵 SWING: apply offset to every 2nd step (i.e., 1, 3, 5...)
 				const isEvenStep = stepIndex % 2 === 1;
 				const swingOffset = isEvenStep ? stepDuration * swing.value : 0;
-				const scheduledTime = startTime + swingOffset;
+				const t = startTime + swingOffset;
 
 				if (inst.type === 'synth') {
-					playSynthNote(pitch, velocity * volume, safeDecay, scheduledTime);
+					playSynthNote(pitch, velocity * chanVol, safeDecay, t);
 				} else if (inst.buffer) {
-					playBuffer(inst.buffer, scheduledTime, velocity * volume);
+					playBuffer(inst.buffer, t, velocity * chanVol);
 				}
 			}
 		});
@@ -710,9 +770,12 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 		}
 
 		// Per-voice detune (cents)
-		const dNorm = normIndex(i, voices);    // -1..1
-		const detuneC = dNorm * detuneStep;    // cents
+		const dNorm = normIndex(i, voices);        // -1..1
+		const detuneC = dNorm * detuneStep;        // unison spread
 		osc.detune.setValueAtTime(detuneC, startTime);
+
+
+
 
 		// Filter settings (clone per voice so stereo spread isn’t collapsed)
 		voiceFilter.type = 'lowpass';
@@ -735,10 +798,14 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 		// LFO routing (optional, respects your existing targets)
 		if (lfoEnabled.value) {
 			if (lfoTarget.value === 'pitch') {
-				lfoGain.connect(osc.frequency);
+				const lfoTap = audioCtx.createGain();
+				lfoTap.gain.value = 1;
+				lfoGain.connect(lfoTap).connect(osc.frequency);
+				// no need to disconnect explicitly; GC when osc stops
 			} else if (lfoTarget.value === 'gain') {
 				const lfoModGain = audioCtx.createGain();
 				lfoModGain.gain.value = lfoDepth.value * 0.005;
+
 				const lfoOffset = audioCtx.createConstantSource();
 				lfoOffset.offset.value = velocity * 0.75;
 
@@ -746,9 +813,13 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 				lfoGain.connect(lfoModGain).connect(lfoSum);
 				lfoOffset.connect(lfoSum);
 				lfoSum.connect(voiceGain.gain);
-				lfoOffset.start();
+
+				lfoOffset.start(startTime);
+				lfoOffset.stop(decayEnd + 0.05); 
 			} else if (lfoTarget.value === 'filter') {
-				lfoGain.connect(voiceFilter.frequency);
+				const lfoTap = audioCtx.createGain();
+				lfoTap.gain.value = 1;
+				lfoGain.connect(lfoTap).connect(voiceFilter.frequency);
 			}
 		}
 
@@ -760,16 +831,14 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 		osc.stop(decayEnd);
 	}
 
-	// ===== Main routing (unchanged) =====
-	// Drive/Delay chain hooks into oscEnvGain as before
+
 	if (driveEnabled.value) {
+		// through drive
 		oscEnvGain.connect(driveDry);
 		oscEnvGain.connect(driveShaper);
-	} else if (delayEnabled.value) {
-		oscEnvGain.connect(delayDry);
-		oscEnvGain.connect(delayNode);
 	} else {
-		oscEnvGain.connect(masterGain);
+		// bypass drive straight into the sum
+		oscEnvGain.connect(driveSum);
 	}
 
 	// ===== Noise (unchanged) =====
@@ -801,9 +870,11 @@ delayWet.connect(masterGain);
 
 async function togglePlay() {
 	if (isPlaying.value) {
+
 		cancelAnimationFrame(loopId);
 		isPlaying.value = false;
 		currentStep.value = -1;
+		return;
 	} else {
 		if (audioCtx.state === 'suspended') {
 			await audioCtx.resume();
@@ -884,6 +955,7 @@ watch(volume, val => {
 	masterGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
 });
 
+
 onMounted(() => {
 	loadAllSamples();
 	generateNoiseBuffers();
@@ -891,12 +963,6 @@ onMounted(() => {
 	window.addEventListener('mouseup', handleMouseUp);
 	const canvas = oscilloscopeCanvas.value;
 	const canvasCtx = canvas.getContext('2d');
-
-	delayDry.gain.value = 1 - delayMix.value;
-	delayWet.gain.value = delayMix.value;
-
-	delayDry.connect(masterGain);
-	delayWet.connect(masterGain);
 
 	function drawOscilloscope() {
 		requestAnimationFrame(drawOscilloscope);
