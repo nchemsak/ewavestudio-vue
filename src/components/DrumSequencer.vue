@@ -419,6 +419,7 @@ driveToneFilter.type = 'lowpass';
 const driveDry = audioCtx.createGain();
 const driveWet = audioCtx.createGain();
 
+
 // NEW: sum both drive paths before delay
 const driveSum = audioCtx.createGain();     // summed output of dry+wet drive
 // OPTIONAL: simple make-up gain after shaper/tone (tune if you want)
@@ -815,7 +816,7 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 				lfoSum.connect(voiceGain.gain);
 
 				lfoOffset.start(startTime);
-				lfoOffset.stop(decayEnd + 0.05); 
+				lfoOffset.stop(decayEnd + 0.05);
 			} else if (lfoTarget.value === 'filter') {
 				const lfoTap = audioCtx.createGain();
 				lfoTap.gain.value = 1;
@@ -1081,9 +1082,6 @@ function generateDriveCurve(type, amount = 0.5) {
 			case 'distortion':
 				curve[i] = (3 + amount * 30) * x * 20 * deg / (Math.PI + amount * Math.abs(x));
 				break;
-			case 'fuzz':
-				curve[i] = Math.sign(x) * (1 - Math.exp(-Math.abs(x * amount * 25)));
-				break;
 			case 'overdrive':
 			default:
 				curve[i] = Math.tanh(x * (1 + amount * 25));
@@ -1093,5 +1091,37 @@ function generateDriveCurve(type, amount = 0.5) {
 	}
 	return curve;
 }
+function initDriveNow() {
+	const t = audioCtx.currentTime;
 
+	// Ensure the shaper actually has a curve before any audio hits it
+	driveShaper.curve = generateDriveCurve(driveType.value, driveAmount.value);
+	driveShaper.oversample = '2x'; // optional
+
+	// Anchor params so setTargetAtTime works consistently in all browsers
+	driveToneFilter.frequency.setValueAtTime(driveTone.value, t);
+
+	// Make sure wet/dry reflect current mix
+	driveWet.gain.setValueAtTime(driveMix.value, t);
+	driveDry.gain.setValueAtTime(1 - driveMix.value, t);
+}
+
+// run once when the component mounts
+onMounted(() => {
+	initDriveNow();
+});
+
+// when the user turns Drive on during playback, pre-warm everything
+watch(driveEnabled, on => {
+	if (on) initDriveNow();
+});
+driveShaper.curve = (() => {
+	const n = 2 ** 10;
+	const c = new Float32Array(n);
+	for (let i = 0; i < n; i++) {
+		const x = (i * 2) / n - 1;
+		c[i] = x; // linear passthrough
+	}
+	return c;
+})();
 </script>

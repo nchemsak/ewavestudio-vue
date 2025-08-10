@@ -69,7 +69,7 @@ const emit = defineEmits([
     'update:driveMix'
 ]);
 
-const driveTypes = ['overdrive', 'distortion', 'fuzz'];
+const driveTypes = ['overdrive', 'distortion'];
 
 const localEnabled = ref(props.enabled);
 const localDriveType = ref(props.driveType ?? 'overdrive');
