@@ -32,6 +32,15 @@
 				<span v-if="isPlaying">Stop</span>
 				<span v-else>Play</span>
 			</button>
+			<div class="btn-group ms-2">
+				<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(-1)">
+					Octave −
+				</button>
+				<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(1)">
+					Octave +
+				</button>
+			</div>
+
 		</div>
 	</div>
 	<div class="drum-sequencer" id="percussion-synth">
@@ -456,6 +465,38 @@ const availableOctaves = computed(() => {
 	}
 	return octs; // let MIN_PAD_HZ/MAX_PAD_HZ drive it
 });
+
+// Global Octave controls
+function canShiftOctave(hz, deltaOct) {
+	const factor = Math.pow(2, deltaOct);
+	const target = hz * factor;
+	return target >= MIN_PAD_HZ && target <= MAX_PAD_HZ;
+}
+
+function octaveShiftAllSkip(deltaOct, { onlyActive = false } = {}) {
+	const inst = synthInstrument.value;
+	if (!inst) return;
+
+	let moved = 0, skipped = 0;
+
+	for (let i = 0; i < inst.pitches.length; i++) {
+		if (onlyActive && !inst.steps[i]) continue;
+
+		const before = inst.pitches[i];
+		if (canShiftOctave(before, deltaOct)) {
+			inst.pitches[i] = before * Math.pow(2, deltaOct);
+			moved++;
+		} else {
+			skipped++;
+		}
+	}
+
+	// Optional: dev log so you can see behavior while testing
+	console.info(
+		`Octave ${deltaOct > 0 ? '+' : '-'} (skip mode): moved=${moved}, skipped=${skipped}`
+	);
+}
+
 
 
 // Disable specific note buttons that would be out of range
