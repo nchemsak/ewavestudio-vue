@@ -80,6 +80,11 @@
 						@mouseenter="handleMouseEnter(synthInstrument.name, index)" @dragstart.prevent
 						:style="getPadStyle(synthInstrument, index)">
 					</div>
+					<!-- Settings dot (top-right) -->
+					<button class="pad-settings-dot" @mousedown.stop
+						@click.stop="openPadSettings(synthInstrument.name, index, $event)" aria-label="Pad settings">
+						•
+					</button>
 
 					<!-- Volume Slider -->
 					<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
@@ -99,58 +104,60 @@
 					<!-- Pitch Slider -->
 					<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
 						class="hover-slider pitch-slider">
-						<input type="range" min="100" max="1000" step="1"
+						<input type="range" min="100" max="2000" step="1"
 							v-model.number="synthInstrument.pitches[index]"
 							@mousedown="activePitchPad = `${synthInstrument.name}-${index}`"
 							@mouseup="activePitchPad = null"
 							@touchstart="activePitchPad = `${synthInstrument.name}-${index}`"
 							@touchend="activePitchPad = null" />
 						<span v-if="activePitchPad === `${synthInstrument.name}-${index}`" class="custom-tooltip">
-							{{ Math.round(synthInstrument.pitches[index]) }} Hz
+							{{ nearestNote(synthInstrument.pitches[index]) }} · {{
+								Math.round(synthInstrument.pitches[index]) }} Hz
 						</span>
 					</div>
 
 				</div>
 			</div>
 		</div>
-		<div class="controls">
-			<h2>Generators</h2>
-			<!-- Waveform Selector -->
-			<span class="group-title">Oscillators</span><br />
-			<div class="btn-group ms-3" role="group">
-				<button v-for="wave in ['sine', 'triangle', 'sawtooth', 'square']" :key="wave" type="button"
-					class="btn btn-sm" :class="wave === selectedWaveform ? 'btn-primary' : 'btn-outline-primary'"
-					@click="selectedWaveform = wave">
-					{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
-				</button>
-			</div>
-			<KnobGroup title="Noise" :color="'#9C27B0'" :modelValue="true" :showToggle="false">
-				<template #header-content>
-					<!-- Noise selector dots go here -->
-					<div class="noise-dot-wrap d-flex justify-content-center gap-2 ms-2">
-						<span v-for="type in ['white', 'pink', 'brown']" :key="type" class="noise-dot"
-							:class="[type, { selected: noiseType === type }]" @click="toggleNoise(type)">
-							<span class="selector-tooltip">
-								{{ type.charAt(0).toUpperCase() + type.slice(1) }} Noise
+		<div class="controlsWrapper">
+			<div class="controls">
+				<h2>Generators</h2>
+				<!-- Waveform Selector -->
+				<span class="group-title">Oscillators</span><br />
+				<div class="btn-group ms-3" role="group">
+					<button v-for="wave in ['sine', 'triangle', 'sawtooth', 'square']" :key="wave" type="button"
+						class="btn btn-sm" :class="wave === selectedWaveform ? 'btn-primary' : 'btn-outline-primary'"
+						@click="selectedWaveform = wave">
+						{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
+					</button>
+				</div>
+				<KnobGroup title="Noise" :color="'#9C27B0'" :modelValue="true" :showToggle="false">
+					<template #header-content>
+						<!-- Noise selector dots go here -->
+						<div class="noise-dot-wrap d-flex justify-content-center gap-2 ms-2">
+							<span v-for="type in ['white', 'pink', 'brown']" :key="type" class="noise-dot"
+								:class="[type, { selected: noiseType === type }]" @click="toggleNoise(type)">
+								<span class="selector-tooltip">
+									{{ type.charAt(0).toUpperCase() + type.slice(1) }} Noise
+								</span>
 							</span>
+						</div>
+					</template>
+
+					<!-- Noise Amount knob -->
+					<div class="position-relative text-center mt-2" :disabled="noiseType === 'none'">
+						<Knob v-model="noiseAmount" label="Amount" :min="0" :max="1" :step="0.01" size="medium"
+							color="#9C27B0" @knobStart="activeKnob = 'noiseAmount'" @knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'noiseAmount'" class="custom-tooltip">
+							{{ Math.round(noiseAmount * 100) }}%
 						</span>
 					</div>
-				</template>
-
-				<!-- Noise Amount knob -->
-				<div class="position-relative text-center mt-2" :disabled="noiseType === 'none'">
-					<Knob v-model="noiseAmount" label="Amount" :min="0" :max="1" :step="0.01" size="medium"
-						color="#9C27B0" @knobStart="activeKnob = 'noiseAmount'" @knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'noiseAmount'" class="custom-tooltip">
-						{{ Math.round(noiseAmount * 100) }}%
-					</span>
-				</div>
-			</KnobGroup>
-		</div>
-		<div class="controls">
-			<h2>Sound Shaping</h2>
-			<KnobGroup v-model="envelopeEnabled" title="Envelope" color="#4CAF50" :showToggle="false">
-				<!-- <template #header-content>
+				</KnobGroup>
+			</div>
+			<div class="controls">
+				<h2>Sound Shaping</h2>
+				<KnobGroup v-model="envelopeEnabled" title="Envelope" color="#4CAF50" :showToggle="false">
+					<!-- <template #header-content>
 					<div class="btn-group ms-auto" role="group" aria-label="Env Mode">
 						<button class="btn btn-sm"
 							:class="envMode === 'oneshot' ? 'btn-primary' : 'btn-outline-primary'"
@@ -162,132 +169,197 @@
 							@click="envMode = 'cutdecay'">Cut‑on‑Overlap</button>
 					</div>
 				</template> -->
-				<!-- Attack -->
-				<div class="position-relative">
-					<Knob v-model="attackSliderVal" label="Attack" size="medium" :min="0" :max="100" :step="1"
-						color="#4CAF50" :disabled="!envelopeEnabled" @knobStart="activeKnob = 'attack'"
-						@knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'attack'" class="custom-tooltip">
-						{{ (synthAttack * 1000).toFixed(1) }} ms
-					</span>
-				</div>
-
-				<!-- Decay -->
-				<div class="position-relative">
-					<Knob v-model="synthDecay" label="Decay" size="medium" :min="0.05" :max="2" :step="0.01"
-						color="#4CAF50" :disabled="!envelopeEnabled" @knobStart="activeKnob = 'decay'"
-						@knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'decay'" class="custom-tooltip">
-						{{ (synthDecay * 1000).toFixed(0) }} ms
-					</span>
-				</div>
-			</KnobGroup>
-
-			<KnobGroup v-model="filterEnabled" title="Filter" color="#FF5722" :showToggle="false">
-				<!-- Cutoff -->
-				<div class="position-relative">
-					<Knob v-model="filterCutoff" label="Cutoff" size="medium" :min="100" :max="10000" :step="1"
-						color="#FF5722" :disabled="!filterEnabled" @knobStart="activeKnob = 'filterCutoff'"
-						@knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'filterCutoff'" class="custom-tooltip">
-						{{ Math.round(filterCutoff) }} Hz
-					</span>
-				</div>
-
-				<!-- Resonance -->
-				<div class="position-relative">
-					<Knob v-model="filterResonance" label="Resonance" size="medium" :min="0.1" :max="20" :step="0.1"
-						color="#FF5722" :disabled="!filterEnabled" @knobStart="activeKnob = 'filterResonance'"
-						@knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'filterResonance'" class="custom-tooltip">
-						Q: {{ filterResonance.toFixed(1) }}
-					</span>
-				</div>
-			</KnobGroup>
-		</div>
-
-		<div class="controls">
-			<h2>Pitch & Harmonics</h2>
-
-			<KnobGroup v-model="pitchEnvEnabled" title="Pitch Env" color="#3F51B5" :showToggle="false">
-				<!-- Inject Pitch Env Mode selector into the header -->
-				<template #header-content>
-					<div class="btn-group ms-auto" role="group" aria-label="Pitch Env Mode">
-						<!-- Up -->
-						<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
-							:class="pitchMode === 'up' ? 'btn-primary' : 'btn-outline-primary'"
-							@click="pitchMode = 'up'">
-							<i class="bi bi-arrow-up"></i>
-
-						</button>
-
-						<!-- Down -->
-						<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
-							:class="pitchMode === 'down' ? 'btn-primary' : 'btn-outline-primary'"
-							@click="pitchMode = 'down'">
-							<i class="bi bi-arrow-down"></i>
-						</button>
-
-						<!-- Random -->
-						<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
-							:class="pitchMode === 'random' ? 'btn-primary' : 'btn-outline-primary'"
-							@click="pitchMode = 'random'">
-							<i class="bi bi-shuffle"></i>
-						</button>
+					<!-- Attack -->
+					<div class="position-relative">
+						<Knob v-model="attackSliderVal" label="Attack" size="medium" :min="0" :max="100" :step="1"
+							color="#4CAF50" :disabled="!envelopeEnabled" @knobStart="activeKnob = 'attack'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'attack'" class="custom-tooltip">
+							{{ (synthAttack * 1000).toFixed(1) }} ms
+						</span>
 					</div>
 
-				</template>
+					<!-- Decay -->
+					<div class="position-relative">
+						<Knob v-model="synthDecay" label="Decay" size="medium" :min="0.05" :max="2" :step="0.01"
+							color="#4CAF50" :disabled="!envelopeEnabled" @knobStart="activeKnob = 'decay'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'decay'" class="custom-tooltip">
+							{{ (synthDecay * 1000).toFixed(0) }} ms
+						</span>
+					</div>
+				</KnobGroup>
+
+				<KnobGroup v-model="filterEnabled" title="Filter" color="#FF5722" :showToggle="false">
+					<!-- Cutoff -->
+					<div class="position-relative">
+						<Knob v-model="filterCutoff" label="Cutoff" size="medium" :min="100" :max="10000" :step="1"
+							color="#FF5722" :disabled="!filterEnabled" @knobStart="activeKnob = 'filterCutoff'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'filterCutoff'" class="custom-tooltip">
+							{{ Math.round(filterCutoff) }} Hz
+						</span>
+					</div>
+
+					<!-- Resonance -->
+					<div class="position-relative">
+						<Knob v-model="filterResonance" label="Resonance" size="medium" :min="0.1" :max="20" :step="0.1"
+							color="#FF5722" :disabled="!filterEnabled" @knobStart="activeKnob = 'filterResonance'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'filterResonance'" class="custom-tooltip">
+							Q: {{ filterResonance.toFixed(1) }}
+						</span>
+					</div>
+				</KnobGroup>
+			</div>
+
+			<div class="controls">
+				<h2>Pitch & Harmonics</h2>
+
+				<KnobGroup v-model="pitchEnvEnabled" title="Pitch Env" color="#3F51B5" :showToggle="false">
+					<!-- Inject Pitch Env Mode selector into the header -->
+					<template #header-content>
+						<div class="btn-group ms-auto" role="group" aria-label="Pitch Env Mode">
+							<!-- Up -->
+							<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
+								:class="pitchMode === 'up' ? 'btn-primary' : 'btn-outline-primary'"
+								@click="pitchMode = 'up'">
+								<i class="bi bi-arrow-up"></i>
+
+							</button>
+
+							<!-- Down -->
+							<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
+								:class="pitchMode === 'down' ? 'btn-primary' : 'btn-outline-primary'"
+								@click="pitchMode = 'down'">
+								<i class="bi bi-arrow-down"></i>
+							</button>
+
+							<!-- Random -->
+							<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
+								:class="pitchMode === 'random' ? 'btn-primary' : 'btn-outline-primary'"
+								@click="pitchMode = 'random'">
+								<i class="bi bi-shuffle"></i>
+							</button>
+						</div>
+
+					</template>
 
 
-				<!-- Knobs -->
-				<div class="position-relative">
-					<Knob v-model="pitchEnvSemitones" label="Amount" size="medium" :min="0" :max="48" :step="1"
-						color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchAmt'"
-						@knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'pitchAmt'" class="custom-tooltip">
-						{{ pitchEnvSemitones }} semitones
-					</span>
-				</div>
+					<!-- Knobs -->
+					<div class="position-relative">
+						<Knob v-model="pitchEnvSemitones" label="Amount" size="medium" :min="0" :max="48" :step="1"
+							color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchAmt'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'pitchAmt'" class="custom-tooltip">
+							{{ pitchEnvSemitones }} semitones
+						</span>
+					</div>
 
-				<div class="position-relative">
-					<Knob v-model="pitchEnvDecaySliderVal" label="Decay" size="medium" :min="0" :max="100" :step="1"
-						color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchDecay'"
-						@knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'pitchDecay'" class="custom-tooltip">
-						{{ (pitchEnvDecay * 1000).toFixed(0) }} ms
-					</span>
-				</div>
-			</KnobGroup>
+					<div class="position-relative">
+						<Knob v-model="pitchEnvDecaySliderVal" label="Decay" size="medium" :min="0" :max="100" :step="1"
+							color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchDecay'"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === 'pitchDecay'" class="custom-tooltip">
+							{{ (pitchEnvDecay * 1000).toFixed(0) }} ms
+						</span>
+					</div>
+				</KnobGroup>
 
-			<UnisonEffect v-model:enabled="unisonEnabled" v-model:voices="unisonVoices" v-model:detune="detuneCents"
-				v-model:spread="stereoSpread" />
+				<UnisonEffect v-model:enabled="unisonEnabled" v-model:voices="unisonVoices" v-model:detune="detuneCents"
+					v-model:spread="stereoSpread" />
+			</div>
+			<div class="controls">
+				<h2>Movement & Modulation</h2>
+
+				<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
+					v-model:target="lfoTarget" :depthMax="lfoDepthMax" color="#00BCD4"
+					:targets="['pitch', 'gain', 'filter']" />
+
+			</div>
+			<div class="controls">
+
+				<h2>Effects</h2>
+				<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
+					v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix" />
+
+				<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
+					v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
+			</div>
 		</div>
-		<div class="controls">
-			<h2>Movement & Modulation</h2>
-
-			<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
-				v-model:target="lfoTarget" :depthMax="lfoDepthMax" color="#00BCD4"
-				:targets="['pitch', 'gain', 'filter']" />
-
-		</div>
-		<div class="controls">
-
-			<h2>Effects</h2>
-			<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
-				v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix" />
-
-			<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
-				v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
-		</div>
-
 		<canvas ref="oscilloscopeCanvas" class="oscilloscopeDrumSynth" width="600" height="100"></canvas>
 
 	</div>
+	<!-- Teleported pad settings popover -->
+	<teleport to="body">
+		<div v-if="padSettings.open" class="pad-settings-popover card p-2 controls"
+			:style="{ left: padSettings.pos.x + 'px', top: padSettings.pos.y + 'px' }" @keydown.esc="closePadSettings"
+			role="dialog" aria-modal="true">
+			<div class="d-flex justify-content-between align-items-center mb-2">
+				<strong>Pad {{ padSettings.index + 1 }}</strong>
+				<button class="btn btn-sm btn-outline-secondary" @click="closePadSettings">Close</button>
+			</div>
+
+			<!-- Live readout -->
+			<div class="mb-2 small">
+				{{ nearestNote(currentPadHz) }} · {{ displayHz }} Hz
+			</div>
+
+			<!-- Note selector (12 semitones) -->
+			<!-- Note selector (12 semitones) -->
+			<div class="d-flex flex-wrap gap-1 mb-2">
+				<button v-for="(n, i) in NOTE_NAMES" :key="n" class="btn btn-xs" :disabled="isNoteDisabled(i, octave)"
+					:class="[
+						(selectedMidi % 12) === i ? 'btn-primary' : 'btn-outline-primary',
+						isNoteDisabled(i, octave) ? 'disabled' : ''
+					]" @click="!isNoteDisabled(i, octave) && setSemitone(i)">
+					{{ n }}
+				</button>
+			</div>
+
+
+			<!-- Octave -->
+			<!-- Octave -->
+			<div class="mb-2">
+				<div class="btn-group btn-group-sm">
+					<button v-for="o in availableOctaves" :key="o" class="btn"
+						:class="octave === o ? 'btn-primary' : 'btn-outline-primary'" @click="setOctave(o)">
+						{{ o }}
+					</button>
+				</div>
+			</div>
+
+
+			<!-- Snap toggle -->
+			<div class="form-check form-switch mb-2">
+				<input class="form-check-input" type="checkbox" id="snapToggle" v-model="snapEnabled">
+				<label class="form-check-label" for="snapToggle">Snap to note</label>
+			</div>
+
+			<!-- Fine tune when snapped; else your existing Hz slider -->
+			<div v-if="snapEnabled" class="mb-2">
+				<div class="small mb-1">Fine Tune (¢)</div>
+				<input type="range" min="-100" max="100" step="1" v-model.number="padDetuneCents">
+			</div>
+			<div v-else class="mb-2">
+				<div class="small mb-1">Frequency (Hz)</div>
+				<input type="range" min="100" max="2000" step="1" :value="currentPadHz"
+					@input="setPadHz($event.target.valueAsNumber)">
+			</div>
+
+			<!-- Optional numeric input for exact values -->
+			<div class="input-group input-group-sm">
+				<span class="input-group-text">Hz</span>
+				<input type="number" class="form-control" :value="currentPadHz.toFixed(2)"
+					@change="setPadHz(parseFloat($event.target.value) || currentPadHz)">
+			</div>
+		</div>
+	</teleport>
 
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
+import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 import Knob from './Knob.vue';
 import KnobGroup from './KnobGroup.vue';
 import DelayEffect from './DelayEffect.vue';
@@ -306,6 +378,52 @@ const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
 const synthDecay = ref(0.4);
 const selectedWaveform = ref("sine");
+
+
+// === Pad Settings: music helpers ===
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+// const OCTAVES = [1, 2, 3, 4, 5, 6];
+function midiOf(octave, semitone) {
+	return (octave + 1) * 12 + semitone; // same scheme you're using
+}
+function freqOf(octave, semitone) {
+	return midiToFreq(midiOf(octave, semitone));
+}
+function isFreqInRange(f) {
+	return f >= MIN_PAD_HZ && f <= MAX_PAD_HZ;
+}
+function isNoteInRange(octave, semitone) {
+	return isFreqInRange(freqOf(octave, semitone));
+}
+
+// Octaves that contain at least one valid note
+const availableOctaves = computed(() => {
+  const octs = [];
+  for (let o = 0; o <= 8; o++) {
+    for (let s = 0; s < 12; s++) {
+      if (isNoteInRange(o, s)) { octs.push(o); break; }
+    }
+  }
+  return octs.filter(o => midiToFreq(midiOf(o, 0)) >= 120); // remove octave 2
+});
+
+// Disable specific note buttons that would be out of range
+function isNoteDisabled(semitone, octave) {
+	return !isNoteInRange(octave, semitone);
+}
+
+const A4 = 440;
+const MIN_PAD_HZ = 100;
+const MAX_PAD_HZ = 2000;
+
+function midiToFreq(m) { return A4 * Math.pow(2, (m - 69) / 12); }
+function freqToMidi(f) { return Math.round(69 + 12 * Math.log2(f / A4)); }
+function midiToName(m) {
+	const n = m % 12, o = Math.floor(m / 12) - 1;
+	return `${NOTE_NAMES[n]}${o}`;
+}
+function nearestNote(hz) { return midiToName(freqToMidi(hz)); }
+
 
 // Pad pitch and volume sliders
 const activeVolumePad = ref(null); // format: `${instrumentName}-${index}`
@@ -392,6 +510,7 @@ watch(delayMix, val => {
 watch(delayEnabled, on => {
 	applyDelayEnabled(on);
 });
+
 function applyDelayEnabled(on) {
 	const t = audioCtx.currentTime;
 	if (on) {
@@ -499,6 +618,140 @@ watch(lfoDepth, depth => {
 });
 // LFO END
 
+// === Pad Settings START: state + computeds ===
+const padSettings = reactive({
+	open: false,
+	name: null,         // instrument name
+	index: -1,          // step index
+	pos: { x: 0, y: 0 },// screen position for popover
+	snapEnabled: true,
+	baseMidi: 69,       // A4
+	detuneCents: 0,     // -100..+100
+});
+
+const snapEnabled = computed({
+	get: () => padSettings.snapEnabled,
+	set: v => padSettings.snapEnabled = v,
+});
+
+const padDetuneCents = computed({
+	get: () => padSettings.detuneCents,
+	set: v => {
+		padSettings.detuneCents = Math.max(-100, Math.min(100, v));
+		if (padSettings.open && snapEnabled.value) applySnapped();
+	},
+});
+
+
+const selectedMidi = computed(() => padSettings.baseMidi);
+
+const octave = computed({
+	get: () => Math.floor(padSettings.baseMidi / 12) - 1,
+	set: o => {
+		const semi = padSettings.baseMidi % 12;
+		padSettings.baseMidi = (o + 1) * 12 + semi;
+		if (snapEnabled.value) applySnapped();
+	}
+});
+
+const currentPadHz = computed({
+	get() {
+		const inst = instruments.value.find(i => i.name === padSettings.name);
+		if (!inst) return 220;
+		return inst.pitches?.[padSettings.index] ?? 220;
+	},
+	set(hz) { setPadHz(hz); }
+});
+
+function setPadHz(hz) {
+	const inst = instruments.value.find(i => i.name === padSettings.name);
+	if (!inst) return;
+	const clamped = Math.max(MIN_PAD_HZ, Math.min(MAX_PAD_HZ, hz));
+	inst.pitches[padSettings.index] = clamped;
+}
+
+function setSemitone(i) {
+	const o = Math.floor(padSettings.baseMidi / 12) - 1;
+	padSettings.baseMidi = (o + 1) * 12 + i;
+
+	if (snapEnabled.value) {
+		padSettings.detuneCents = 0;  // <<< force exact note
+		applySnapped();
+	}
+}
+function setOctave(o) {
+	const semi = padSettings.baseMidi % 12;
+	padSettings.baseMidi = (o + 1) * 12 + semi;
+
+	if (snapEnabled.value) {
+		padSettings.detuneCents = 0;  // <<< force exact note
+		applySnapped();
+	}
+}
+
+function applySnapped() {
+	const base = midiToFreq(padSettings.baseMidi);
+	const hz = base * Math.pow(2, padDetuneCents.value / 1200);
+	setPadHz(hz);
+}
+
+function openPadSettings(name, index, evt) {
+	padSettings.open = true;
+	padSettings.name = name;
+	padSettings.index = index;
+
+	// anchor to the settings dot
+	const r = evt.currentTarget.getBoundingClientRect();
+	const popW = 280, popH = 260, margin = 8;
+	let x = r.right - popW;     // align right edges
+	let y = r.bottom + margin;  // below the dot
+
+	// keep on screen
+	x = Math.max(8, Math.min(window.innerWidth - popW - 8, x));
+	y = (y + popH > window.innerHeight) ? r.top - popH - margin : y;
+
+	padSettings.pos.x = x;
+	padSettings.pos.y = y;
+
+	// initialize from current Hz
+	const hz = currentPadHz.value;
+	padSettings.baseMidi = freqToMidi(hz);
+	// const base = midiToFreq(padSettings.baseMidi);
+	// padSettings.detuneCents = Math.round(1200 * Math.log2(hz / base));
+	padSettings.detuneCents = 0;   // <<< reset cents on open
+	if (snapEnabled.value) applySnapped();
+
+	document.addEventListener('mousedown', onOutsideClick, true);
+	document.addEventListener('keydown', onEscape, true);
+}
+
+function closePadSettings() {
+	padSettings.open = false;
+	document.removeEventListener('mousedown', onOutsideClick, true);
+	document.removeEventListener('keydown', onEscape, true);
+}
+
+function onOutsideClick(e) {
+	const pop = document.querySelector('.pad-settings-popover');
+	if (pop && !pop.contains(e.target)) closePadSettings();
+}
+function onEscape(e) { if (e.key === 'Escape') closePadSettings(); }
+
+// clean up if component is destroyed while popover is open
+onBeforeUnmount(() => { if (padSettings.open) closePadSettings(); });
+
+
+// === Pad Settings END
+watch(snapEnabled, (on) => {
+	if (!on) return;
+	// Re-anchor on a real note and zero the offset
+	padSettings.baseMidi = freqToMidi(currentPadHz.value);
+	padSettings.detuneCents = 0;
+	applySnapped();
+});
+const displayHz = computed(() =>
+	(Math.round(currentPadHz.value * 100) / 100).toFixed(2)
+);
 
 function toggleNoise(type) {
 	noiseType.value = noiseType.value === type ? 'none' : type;
@@ -1124,4 +1377,7 @@ driveShaper.curve = (() => {
 	}
 	return c;
 })();
+
+
+
 </script>
