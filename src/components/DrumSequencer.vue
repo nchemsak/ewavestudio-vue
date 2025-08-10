@@ -325,8 +325,9 @@
 
 			<div class="input-group input-group-sm">
 				<span class="input-group-text">Hz</span>
-				<input type="number" class="form-control" v-model.number="currentPadHz" :min="MIN_PAD_HZ"
-					:max="MAX_PAD_HZ" step="1">
+				<input type="number" class="form-control" v-model.number="currentPadHzDisplay" :min="MIN_PAD_HZ"
+					:max="MAX_PAD_HZ" step="0.01">
+
 			</div>
 		</div>
 	</teleport>
@@ -361,6 +362,8 @@ const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
 const synthDecay = ref(0.4);
 const selectedWaveform = ref("sine");
+
+const isFineAdjust = ref(false);
 
 
 function nearestNote(hz) { return midiToName(freqToMidi(hz)); }
@@ -432,6 +435,17 @@ const currentPadHz = computed({
 	},
 	set(hz) { setPadHz(hz); }
 });
+
+const currentPadHzDisplay = computed({
+	get: () => Number(currentPadHz.value).toFixed(2),
+	set: v => {
+		const parsed = parseFloat(v);
+		if (!isNaN(parsed)) {
+			currentPadHz.value = parsed;
+		}
+	}
+});
+
 
 const availableOctaves = computed(() => {
 	const octs = [];
@@ -662,10 +676,45 @@ const padSettings = reactive({
 const padDetuneCents = computed({
 	get: () => padSettings.detuneCents,
 	set: v => {
-		padSettings.detuneCents = Math.max(-100, Math.min(100, v));
-		if (padSettings.open) applySnapped();   // no snapEnabled check anymore
+		isFineAdjust.value = true;
+
+		// start from proposed cents
+		let cents = Math.max(-200, Math.min(200, v)); // soft guard to avoid huge jumps
+
+		// helper: can we move baseMidi up/down and still be inside the Hz range?
+		const canBump = (dir) => {
+			const nextMidi = padSettings.baseMidi + dir;
+			const nextHz = midiToFreq(nextMidi);
+			return nextHz >= MIN_PAD_HZ && nextHz <= MAX_PAD_HZ;
+		};
+
+		// rollover upward across semitones
+		while (cents > 100 && canBump(+1)) {
+			padSettings.baseMidi += 1;
+			cents -= 100;
+		}
+		// rollover downward across semitones
+		while (cents < -100 && canBump(-1)) {
+			padSettings.baseMidi -= 1;
+			cents += 100;
+		}
+
+		// final clamp to +/-100 so we're strictly within adjacent notes
+		cents = Math.max(-100, Math.min(100, cents));
+		// additional clamp if we’re at the absolute top/bottom edge
+		if (cents > 0 && !canBump(+1)) cents = Math.min(cents, 100);
+		if (cents < 0 && !canBump(-1)) cents = Math.max(cents, -100);
+
+		padSettings.detuneCents = cents;
+
+		// apply base + cents → Hz
+		applySnapped();
+
+		// release the guard on the next microtask so UI can settle
+		queueMicrotask(() => { isFineAdjust.value = false; });
 	},
 });
+
 
 
 
@@ -711,7 +760,9 @@ function applySnapped() {
 }
 
 watch(currentPadHz, (hz) => {
-	// re-anchor baseMidi and zero cents so the knob is centered
+	// If user is actively fine-adjusting or popover is closed, don't re-anchor
+	if (isFineAdjust.value || !padSettings.open) return;
+
 	const m = freqToMidi(hz);
 	padSettings.baseMidi = m;
 	padSettings.detuneCents = Math.round(1200 * Math.log2(hz / midiToFreq(m)));
