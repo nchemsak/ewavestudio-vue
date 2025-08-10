@@ -104,7 +104,7 @@
 					<!-- Pitch Slider -->
 					<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
 						class="hover-slider pitch-slider">
-						<input type="range" min="100" max="2000" step="1"
+						<input type="range" :min="MIN_PAD_HZ" :max="MAX_PAD_HZ" step="1"
 							v-model.number="synthInstrument.pitches[index]"
 							@mousedown="activePitchPad = `${synthInstrument.name}-${index}`"
 							@mouseup="activePitchPad = null"
@@ -157,18 +157,7 @@
 			<div class="controls">
 				<h2>Sound Shaping</h2>
 				<KnobGroup v-model="envelopeEnabled" title="Envelope" color="#4CAF50" :showToggle="false">
-					<!-- <template #header-content>
-					<div class="btn-group ms-auto" role="group" aria-label="Env Mode">
-						<button class="btn btn-sm"
-							:class="envMode === 'oneshot' ? 'btn-primary' : 'btn-outline-primary'"
-							@click="envMode = 'oneshot'">One‑Shot</button>
-						<button class="btn btn-sm" :class="envMode === 'latch' ? 'btn-primary' : 'btn-outline-primary'"
-							@click="envMode = 'latch'">Mono‑Cut</button>
-						<button class="btn btn-sm"
-							:class="envMode === 'cutdecay' ? 'btn-primary' : 'btn-outline-primary'"
-							@click="envMode = 'cutdecay'">Cut‑on‑Overlap</button>
-					</div>
-				</template> -->
+
 					<!-- Attack -->
 					<div class="position-relative">
 						<Knob v-model="attackSliderVal" label="Attack" size="medium" :min="0" :max="100" :step="1"
@@ -306,7 +295,6 @@
 			</div>
 
 			<!-- Note selector (12 semitones) -->
-			<!-- Note selector (12 semitones) -->
 			<div class="d-flex flex-wrap gap-1 mb-2">
 				<button v-for="(n, i) in NOTE_NAMES" :key="n" class="btn btn-xs" :disabled="isNoteDisabled(i, octave)"
 					:class="[
@@ -317,8 +305,6 @@
 				</button>
 			</div>
 
-
-			<!-- Octave -->
 			<!-- Octave -->
 			<div class="mb-2">
 				<div class="btn-group btn-group-sm">
@@ -329,29 +315,18 @@
 				</div>
 			</div>
 
-
-			<!-- Snap toggle -->
-			<div class="form-check form-switch mb-2">
-				<input class="form-check-input" type="checkbox" id="snapToggle" v-model="snapEnabled">
-				<label class="form-check-label" for="snapToggle">Snap to note</label>
+			<div class="position-relative mb-2">
+				<Knob v-model="padDetuneCents" label="Fine (¢)" :min="-100" :max="100" :step="1" size="small"
+					color="#3F51B5" @knobStart="activeKnob = 'padFine'" @knobEnd="activeKnob = null" />
+				<span v-if="activeKnob === 'padFine'" class="custom-tooltip">
+					{{ padDetuneCents }}¢
+				</span>
 			</div>
 
-			<!-- Fine tune when snapped; else your existing Hz slider -->
-			<div v-if="snapEnabled" class="mb-2">
-				<div class="small mb-1">Fine Tune (¢)</div>
-				<input type="range" min="-100" max="100" step="1" v-model.number="padDetuneCents">
-			</div>
-			<div v-else class="mb-2">
-				<div class="small mb-1">Frequency (Hz)</div>
-				<input type="range" min="100" max="2000" step="1" :value="currentPadHz"
-					@input="setPadHz($event.target.valueAsNumber)">
-			</div>
-
-			<!-- Optional numeric input for exact values -->
 			<div class="input-group input-group-sm">
 				<span class="input-group-text">Hz</span>
-				<input type="number" class="form-control" :value="currentPadHz.toFixed(2)"
-					@change="setPadHz(parseFloat($event.target.value) || currentPadHz)">
+				<input type="number" class="form-control" v-model.number="currentPadHz" :min="MIN_PAD_HZ"
+					:max="MAX_PAD_HZ" step="1">
 			</div>
 		</div>
 	</teleport>
@@ -367,6 +342,14 @@ import DriveEffect from './DriveEffect.vue';
 import UnisonEffect from './UnisonEffect.vue';
 import LFOGroup from './LFOGroup.vue';
 
+
+const A4 = 440;
+const MIN_PAD_HZ = 100;
+const MAX_PAD_HZ = 2000;
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+
+
 // Reuse shared AudioContext
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let isScrubbing = false;
@@ -380,9 +363,8 @@ const synthDecay = ref(0.4);
 const selectedWaveform = ref("sine");
 
 
-// === Pad Settings: music helpers ===
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-// const OCTAVES = [1, 2, 3, 4, 5, 6];
+function nearestNote(hz) { return midiToName(freqToMidi(hz)); }
+
 function midiOf(octave, semitone) {
 	return (octave + 1) * 12 + semitone; // same scheme you're using
 }
@@ -396,25 +378,78 @@ function isNoteInRange(octave, semitone) {
 	return isFreqInRange(freqOf(octave, semitone));
 }
 
-// Octaves that contain at least one valid note
-const availableOctaves = computed(() => {
-  const octs = [];
-  for (let o = 0; o <= 8; o++) {
-    for (let s = 0; s < 12; s++) {
-      if (isNoteInRange(o, s)) { octs.push(o); break; }
-    }
-  }
-  return octs.filter(o => midiToFreq(midiOf(o, 0)) >= 120); // remove octave 2
+
+const instruments = ref([
+	{
+		name: 'kick',
+		label: 'Kick',
+		isEditingName: false,
+		buffer: null,
+		muted: false,
+		channelVolume: 0.5,
+		steps: Array(16).fill(false),
+		velocities: Array(16).fill(1.0)
+	}, {
+		name: 'snare',
+		label: 'Snare',
+		isEditingName: false,
+		buffer: null,
+		muted: false,
+		channelVolume: 0.5,
+		steps: Array(16).fill(false),
+		velocities: Array(16).fill(1.0)
+	},
+	{
+		name: 'hihat',
+		label: 'Hi-Hat',
+		isEditingName: false,
+		buffer: null,
+		muted: false,
+		channelVolume: 0.5,
+		steps: Array(16).fill(false),
+		velocities: Array(16).fill(1.0)
+	},
+	{
+		name: 'synth-voice',
+		label: 'Percussion Synth',
+		isEditingName: false,
+		type: 'synth', // <-- custom flag
+		muted: false,
+		channelVolume: 0.5,
+		steps: Array(16).fill(false),
+		velocities: Array(16).fill(1.0),
+		pitches: Array(16).fill(220), // default A3 pitch
+	},
+]);
+
+const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
+
+const currentPadHz = computed({
+	get() {
+		const inst = instruments.value.find(i => i.name === padSettings.name);
+		if (!inst) return 220;
+		return inst.pitches?.[padSettings.index] ?? 220;
+	},
+	set(hz) { setPadHz(hz); }
 });
+
+const availableOctaves = computed(() => {
+	const octs = [];
+	for (let o = 0; o <= 8; o++) {
+		for (let s = 0; s < 12; s++) {
+			if (isNoteInRange(o, s)) { octs.push(o); break; }
+		}
+	}
+	return octs; // let MIN_PAD_HZ/MAX_PAD_HZ drive it
+});
+
 
 // Disable specific note buttons that would be out of range
 function isNoteDisabled(semitone, octave) {
 	return !isNoteInRange(octave, semitone);
 }
 
-const A4 = 440;
-const MIN_PAD_HZ = 100;
-const MAX_PAD_HZ = 2000;
+
 
 function midiToFreq(m) { return A4 * Math.pow(2, (m - 69) / 12); }
 function freqToMidi(f) { return Math.round(69 + 12 * Math.log2(f / A4)); }
@@ -422,7 +457,6 @@ function midiToName(m) {
 	const n = m % 12, o = Math.floor(m / 12) - 1;
 	return `${NOTE_NAMES[n]}${o}`;
 }
-function nearestNote(hz) { return midiToName(freqToMidi(hz)); }
 
 
 // Pad pitch and volume sliders
@@ -435,7 +469,6 @@ const filterEnabled = ref(true);
 
 
 const attackSliderVal = ref(20); // Initial slider value (0–100)
-const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
 const filterCutoff = ref(5000); // Hz, default cutoff
 const filterResonance = ref(0.5); // Q factor
 const pitchEnvDecaySliderVal = ref(30); // Slider 0–100, start near short decay
@@ -562,9 +595,6 @@ driveWet.connect(driveSum);
 driveSum.connect(delayDry);
 driveSum.connect(delayNode);
 
-
-
-// DRIVE
 watch([driveType, driveAmount], ([type, amount]) => {
 	driveShaper.curve = generateDriveCurve(type, amount);
 	// OPTIONAL make-up (very mild): ~ +0..+0.8 dB
@@ -624,23 +654,19 @@ const padSettings = reactive({
 	name: null,         // instrument name
 	index: -1,          // step index
 	pos: { x: 0, y: 0 },// screen position for popover
-	snapEnabled: true,
+	// snapEnabled: true,
 	baseMidi: 69,       // A4
 	detuneCents: 0,     // -100..+100
-});
-
-const snapEnabled = computed({
-	get: () => padSettings.snapEnabled,
-	set: v => padSettings.snapEnabled = v,
 });
 
 const padDetuneCents = computed({
 	get: () => padSettings.detuneCents,
 	set: v => {
 		padSettings.detuneCents = Math.max(-100, Math.min(100, v));
-		if (padSettings.open && snapEnabled.value) applySnapped();
+		if (padSettings.open) applySnapped();   // no snapEnabled check anymore
 	},
 });
+
 
 
 const selectedMidi = computed(() => padSettings.baseMidi);
@@ -650,18 +676,13 @@ const octave = computed({
 	set: o => {
 		const semi = padSettings.baseMidi % 12;
 		padSettings.baseMidi = (o + 1) * 12 + semi;
-		if (snapEnabled.value) applySnapped();
+		padSettings.detuneCents = 0;  // reset fine
+		applySnapped();
 	}
 });
 
-const currentPadHz = computed({
-	get() {
-		const inst = instruments.value.find(i => i.name === padSettings.name);
-		if (!inst) return 220;
-		return inst.pitches?.[padSettings.index] ?? 220;
-	},
-	set(hz) { setPadHz(hz); }
-});
+
+
 
 function setPadHz(hz) {
 	const inst = instruments.value.find(i => i.name === padSettings.name);
@@ -673,57 +694,53 @@ function setPadHz(hz) {
 function setSemitone(i) {
 	const o = Math.floor(padSettings.baseMidi / 12) - 1;
 	padSettings.baseMidi = (o + 1) * 12 + i;
-
-	if (snapEnabled.value) {
-		padSettings.detuneCents = 0;  // <<< force exact note
-		applySnapped();
-	}
+	padSettings.detuneCents = 0;
+	applySnapped();
 }
 function setOctave(o) {
 	const semi = padSettings.baseMidi % 12;
 	padSettings.baseMidi = (o + 1) * 12 + semi;
-
-	if (snapEnabled.value) {
-		padSettings.detuneCents = 0;  // <<< force exact note
-		applySnapped();
-	}
+	padSettings.detuneCents = 0;
+	applySnapped();
 }
 
 function applySnapped() {
 	const base = midiToFreq(padSettings.baseMidi);
-	const hz = base * Math.pow(2, padDetuneCents.value / 1200);
+	const hz = base * Math.pow(2, padSettings.detuneCents / 1200);
 	setPadHz(hz);
 }
+
+watch(currentPadHz, (hz) => {
+	// re-anchor baseMidi and zero cents so the knob is centered
+	const m = freqToMidi(hz);
+	padSettings.baseMidi = m;
+	padSettings.detuneCents = Math.round(1200 * Math.log2(hz / midiToFreq(m)));
+});
 
 function openPadSettings(name, index, evt) {
 	padSettings.open = true;
 	padSettings.name = name;
 	padSettings.index = index;
 
-	// anchor to the settings dot
 	const r = evt.currentTarget.getBoundingClientRect();
 	const popW = 280, popH = 260, margin = 8;
-	let x = r.right - popW;     // align right edges
-	let y = r.bottom + margin;  // below the dot
-
-	// keep on screen
+	let x = r.right - popW;
+	let y = r.bottom + margin;
 	x = Math.max(8, Math.min(window.innerWidth - popW - 8, x));
 	y = (y + popH > window.innerHeight) ? r.top - popH - margin : y;
-
 	padSettings.pos.x = x;
 	padSettings.pos.y = y;
 
-	// initialize from current Hz
+	// Preserve the existing frequency exactly
 	const hz = currentPadHz.value;
-	padSettings.baseMidi = freqToMidi(hz);
-	// const base = midiToFreq(padSettings.baseMidi);
-	// padSettings.detuneCents = Math.round(1200 * Math.log2(hz / base));
-	padSettings.detuneCents = 0;   // <<< reset cents on open
-	if (snapEnabled.value) applySnapped();
+	const m = freqToMidi(hz);
+	padSettings.baseMidi = m;
+	padSettings.detuneCents = Math.round(1200 * Math.log2(hz / midiToFreq(m)));
 
 	document.addEventListener('mousedown', onOutsideClick, true);
 	document.addEventListener('keydown', onEscape, true);
 }
+
 
 function closePadSettings() {
 	padSettings.open = false;
@@ -742,13 +759,7 @@ onBeforeUnmount(() => { if (padSettings.open) closePadSettings(); });
 
 
 // === Pad Settings END
-watch(snapEnabled, (on) => {
-	if (!on) return;
-	// Re-anchor on a real note and zero the offset
-	padSettings.baseMidi = freqToMidi(currentPadHz.value);
-	padSettings.detuneCents = 0;
-	applySnapped();
-});
+
 const displayHz = computed(() =>
 	(Math.round(currentPadHz.value * 100) / 100).toFixed(2)
 );
@@ -825,48 +836,6 @@ const dataArray = new Uint8Array(analyser.fftSize);
 masterGain.connect(analyser);
 
 
-const instruments = ref([
-	{
-		name: 'kick',
-		label: 'Kick',
-		isEditingName: false,
-		buffer: null,
-		muted: false,
-		channelVolume: 0.5,
-		steps: Array(16).fill(false),
-		velocities: Array(16).fill(1.0)
-	}, {
-		name: 'snare',
-		label: 'Snare',
-		isEditingName: false,
-		buffer: null,
-		muted: false,
-		channelVolume: 0.5,
-		steps: Array(16).fill(false),
-		velocities: Array(16).fill(1.0)
-	},
-	{
-		name: 'hihat',
-		label: 'Hi-Hat',
-		isEditingName: false,
-		buffer: null,
-		muted: false,
-		channelVolume: 0.5,
-		steps: Array(16).fill(false),
-		velocities: Array(16).fill(1.0)
-	},
-	{
-		name: 'synth-voice',
-		label: 'Percussion Synth',
-		isEditingName: false,
-		type: 'synth', // <-- custom flag
-		muted: false,
-		channelVolume: 0.5,
-		steps: Array(16).fill(false),
-		velocities: Array(16).fill(1.0),
-		pitches: Array(16).fill(220), // default A3 pitch
-	},
-]);
 
 function addCustomChannel() {
 	const id = Date.now();
