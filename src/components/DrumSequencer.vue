@@ -41,6 +41,10 @@
 				</button>
 			</div>
 
+			<!-- <MpcScreen ref="screen" :text="lcdText" :canvas="showCanvas" /> -->
+			<MpcScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey" @fkey="handleFKey" />
+			<!-- <canvas ref="oscilloscopeCanvas" class="oscilloscopeDrumSynth" width="600" height="100"></canvas> -->
+
 		</div>
 	</div>
 	<div class="drum-sequencer" id="percussion-synth">
@@ -285,7 +289,6 @@
 					v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
 			</div>
 		</div>
-		<canvas ref="oscilloscopeCanvas" class="oscilloscopeDrumSynth" width="600" height="100"></canvas>
 
 	</div>
 	<!-- Teleported pad settings popover -->
@@ -343,7 +346,7 @@
 
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 import Knob from './Knob.vue';
 import KnobGroup from './KnobGroup.vue';
@@ -351,12 +354,175 @@ import DelayEffect from './DelayEffect.vue';
 import DriveEffect from './DriveEffect.vue';
 import UnisonEffect from './UnisonEffect.vue';
 import LFOGroup from './LFOGroup.vue';
-
+import MpcScreen from './Screen.vue'
 
 const A4 = 440;
 const MIN_PAD_HZ = 100;
 const MAX_PAD_HZ = 2000;
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+// MPC Screen BEGIN
+const lcdText = ref('HARP  2')
+const activeFKey = ref<number>(1)
+const lcdView = ref<'text' | 'scope' | 'spec'>('scope') // default F1
+const screen = ref<InstanceType<typeof MpcScreen> | null>(null)
+
+/** Fit a canvas to its CSS size (crisp on HiDPI) */
+function fitCanvasToBox(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+	const dpr = window.devicePixelRatio || 1
+	const rect = canvas.getBoundingClientRect()
+	const w = Math.max(1, Math.round(rect.width * dpr))
+	const h = Math.max(1, Math.round(rect.height * dpr))
+	if (canvas.width !== w || canvas.height !== h) {
+		canvas.width = w
+		canvas.height = h
+	}
+	ctx.setTransform(1, 0, 0, 1, 0, 0)
+	// draw in CSS pixels but with DPR backing store:
+	ctx.scale(dpr, dpr)
+}
+
+/** Toggle by F-keys */
+function handleFKey(n: number) {
+	activeFKey.value = n
+	if (n === 1) lcdView.value = 'scope'
+	else if (n === 2) lcdView.value = 'spec'
+	else lcdView.value = 'text' // placeholders for F3–F6
+}
+
+/** OSCILLOSCOPE (inside LCD) */
+function startScope() {
+	const canvas = screen.value!.scopeCanvas as HTMLCanvasElement
+	if (!canvas) return
+	const ctx = canvas.getContext('2d')
+	if (!ctx) return
+
+	function draw() {
+		requestAnimationFrame(draw)
+		if (lcdView.value !== 'scope') return
+
+		fitCanvasToBox(canvas, ctx)
+		const W = canvas.clientWidth
+		const H = canvas.clientHeight
+
+		analyser.getByteTimeDomainData(dataArray)
+
+		ctx.fillStyle = '#b9bcba'   // LCD bg
+		ctx.fillRect(0, 0, W, H)
+
+		ctx.lineWidth = 2
+		ctx.strokeStyle = '#111'
+		ctx.beginPath()
+
+		const slice = W / analyser.fftSize
+		let x = 0
+		for (let i = 0; i < analyser.fftSize; i++) {
+			const v = dataArray[i] / 128
+			const y = (v * H) / 2
+			i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+			x += slice
+		}
+		ctx.lineTo(W, H / 2)
+		ctx.stroke()
+	}
+	draw()
+}
+
+
+
+
+function startSpectrogram() {
+	const scr = screen.value;
+	if (!scr) return;
+
+	const canvas = scr.specCanvas as HTMLCanvasElement;
+	if (!canvas) return;
+
+	const ctx = canvas.getContext('2d');
+	if (!ctx) return;
+
+	// Keep pixels crisp when we shift 1px columns
+	ctx.imageSmoothingEnabled = false;
+
+	const freqBins = new Uint8Array(analyser.frequencyBinCount);
+
+	// Colors (from your palette)
+	const LCD_BG = '#b9bcba'; // same bg as oscilloscope
+	const PALETTE: Array<{ threshold: number; color: string }> = [
+		{ threshold: 64, color: '#c4a291' }, // low
+		{ threshold: 128, color: '#8b4513' }, // mid
+		{ threshold: 192, color: '#27fcff' }, // high
+		{ threshold: 256, color: '#000000' }  // peak
+	];
+
+	const colorFor = (v: number) => {
+		for (let i = 0; i < PALETTE.length; i++) {
+			if (v < PALETTE[i].threshold) return PALETTE[i].color;
+		}
+		return PALETTE[PALETTE.length - 1].color;
+	};
+
+	function draw() {
+		requestAnimationFrame(draw);
+		if (lcdView.value !== 'spec') return;
+
+		// Fit backing store to CSS size (HiDPI‑safe)
+		fitCanvasToBox(canvas, ctx);
+
+		const W = canvas.clientWidth;
+		const H = canvas.clientHeight;
+
+		// Scroll existing image left by 1px
+		ctx.drawImage(canvas, 1, 0, W - 1, H, 0, 0, W - 1, H);
+
+		// Fetch spectrum
+		analyser.getByteFrequencyData(freqBins);
+
+		// New column background first (so silence is grey)
+		const x = W - 1;
+		ctx.fillStyle = LCD_BG;
+		ctx.fillRect(x, 0, 1, H);
+
+		// Paint energy using log frequency mapping
+		for (let y = 0; y < H; y++) {
+			const logY = 1 - y / H;
+			const bin = Math.min(
+				freqBins.length - 1,
+				Math.floor(Math.pow(logY, 2.0) * freqBins.length)
+			);
+			const v = freqBins[bin]; // 0..255
+			if (v <= 2) continue;     // skip near-silence pixels
+
+			ctx.fillStyle = colorFor(v);
+			ctx.fillRect(x, y, 1, 1);
+		}
+	}
+
+	draw();
+}
+
+
+onMounted(() => {
+	loadAllSamples();
+	generateNoiseBuffers();
+	initDriveNow();
+
+	// nicer visuals
+	analyser.smoothingTimeConstant = 0.8;
+	analyser.minDecibels = -90;
+	analyser.maxDecibels = -10;
+
+	window.addEventListener('mouseup', handleMouseUp);
+
+	// start both loops; each only draws when its view is active
+	startScope();
+	startSpectrogram();
+});
+onBeforeUnmount(() => {
+	cancelAnimationFrame(loopId);
+	window.removeEventListener('mouseup', handleMouseUp);
+});
+// MPC Screen END
 
 
 
@@ -543,7 +709,7 @@ const synthAttack = computed(() => {
 const pitchEnvSemitones = ref(0); // Default = 1 octave up
 
 const pitchMode = ref('up'); // or 'down', 'random'
-const oscilloscopeCanvas = ref(null);
+// const oscilloscopeCanvas = ref(null);
 
 // Noise
 const noiseType = ref('none'); // 'none' | 'white' | 'pink' | 'brown'
@@ -1271,55 +1437,7 @@ watch(volume, val => {
 });
 
 
-onMounted(() => {
-	loadAllSamples();
-	generateNoiseBuffers();
 
-	window.addEventListener('mouseup', handleMouseUp);
-	const canvas = oscilloscopeCanvas.value;
-	const canvasCtx = canvas.getContext('2d');
-
-	function drawOscilloscope() {
-		requestAnimationFrame(drawOscilloscope);
-
-		analyser.getByteTimeDomainData(dataArray);
-
-		canvasCtx.fillStyle = '#111';
-		canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-
-		canvasCtx.lineWidth = 2;
-		canvasCtx.strokeStyle = '#0ff';
-		canvasCtx.beginPath();
-
-		const sliceWidth = canvas.width / analyser.fftSize;
-		let x = 0;
-
-		for (let i = 0; i < analyser.fftSize; i++) {
-			const v = dataArray[i] / 128.0;
-			const y = (v * canvas.height) / 2;
-
-			if (i === 0) {
-				canvasCtx.moveTo(x, y);
-			} else {
-				canvasCtx.lineTo(x, y);
-			}
-			x += sliceWidth;
-		}
-
-		canvasCtx.lineTo(canvas.width, canvas.height / 2);
-		canvasCtx.stroke();
-	}
-
-	drawOscilloscope();
-
-
-});
-
-onBeforeUnmount(() => {
-	cancelAnimationFrame(loopId);
-	window.removeEventListener('mouseup', handleMouseUp);
-
-});
 
 if (isScrubbing) document.body.classList.add('scrubbing');
 else document.body.classList.remove('scrubbing');
