@@ -336,8 +336,37 @@ input[type="range"]::-webkit-slider-thumb {
     width: 5%;
     height: 20%;
     background-color: variables.$color-teal-light;
+    background-color: var(--knob-pointer, variables.$color-teal-light);
+
     transform: translateX(-50%);
+
     border-radius: 2px;
+}
+/* When a whole KnobGroup is disabled OR a single Knob is disabled,
+   gray the pointer, label, and arc. Applies app-wide. */
+.knob-stack.disabled,
+.knob-wrapper.disabled,
+.knob-wrapper[aria-disabled="true"] {
+    --knob-pointer: #9aa0a6; /* pointer bar color */
+}
+
+.knob-stack.disabled .knob-label,
+.knob-wrapper.disabled .knob-label,
+.knob-wrapper[aria-disabled="true"] .knob-label {
+    color: #666;
+}
+
+.knob-stack.disabled .dial-svg path:nth-child(2),
+.knob-wrapper.disabled .dial-svg path:nth-child(2),
+.knob-wrapper[aria-disabled="true"] .dial-svg path:nth-child(2) {
+    stroke: #555 !important; 
+}
+
+
+.knob-wrapper.disabled .dial-grip,
+.knob-wrapper[aria-disabled="true"] .dial-grip {
+    filter: grayscale(1);
+    opacity: 0.8;
 }
 
 .dial-svg {
@@ -397,7 +426,7 @@ input[type="range"]::-webkit-slider-thumb {
     gap: 0.5rem;
     padding-bottom: 8px;
     border-bottom: 2px solid #1d1d1d;
-    // margin-bottom: 12px;
+
 }
 
 .knob-group-header .effect-toggle {
@@ -433,11 +462,11 @@ input[type="range"]::-webkit-slider-thumb {
     user-select: none;
     display: flex;
     align-items: center;
-    // &:hover {
-    //     .group-title {
-    //         color: #fff;
-    //     }
-    // }
+    &:hover {
+        .group-title {
+            color: #fff;
+        }
+    }
     .effect-toggle {
         width: 12px;
         height: 12px;

@@ -218,55 +218,14 @@
 			<div class="controls">
 				<h2>Pitch & Harmonics</h2>
 
-				<KnobGroup v-model="pitchEnvEnabled" title="Pitch Env" color="#3F51B5" :showToggle="false">
-					<!-- Inject Pitch Env Mode selector into the header -->
-					<template #header-content>
-						<div class="btn-group ms-auto" role="group" aria-label="Pitch Env Mode">
-							<!-- Up -->
-							<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
-								:class="pitchMode === 'up' ? 'btn-primary' : 'btn-outline-primary'"
-								@click="pitchMode = 'up'">
-								<i class="bi bi-arrow-up"></i>
-
-							</button>
-
-							<!-- Down -->
-							<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
-								:class="pitchMode === 'down' ? 'btn-primary' : 'btn-outline-primary'"
-								@click="pitchMode = 'down'">
-								<i class="bi bi-arrow-down"></i>
-							</button>
-
-							<!-- Random -->
-							<button class="btn btn-sm" :disabled="!pitchEnvEnabled"
-								:class="pitchMode === 'random' ? 'btn-primary' : 'btn-outline-primary'"
-								@click="pitchMode = 'random'">
-								<i class="bi bi-shuffle"></i>
-							</button>
-						</div>
-
-					</template>
 
 
-					<!-- Knobs -->
-					<div class="position-relative">
-						<Knob v-model="pitchEnvSemitones" label="Amount" size="medium" :min="0" :max="48" :step="1"
-							color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchAmt'"
-							@knobEnd="activeKnob = null" />
-						<span v-if="activeKnob === 'pitchAmt'" class="custom-tooltip">
-							{{ pitchEnvSemitones }} semitones
-						</span>
-					</div>
 
-					<div class="position-relative">
-						<Knob v-model="pitchEnvDecaySliderVal" label="Decay" size="medium" :min="0" :max="100" :step="1"
-							color="#3F51B5" :disabled="!pitchEnvEnabled" @knobStart="activeKnob = 'pitchDecay'"
-							@knobEnd="activeKnob = null" />
-						<span v-if="activeKnob === 'pitchDecay'" class="custom-tooltip">
-							{{ (pitchEnvDecay * 1000).toFixed(0) }} ms
-						</span>
-					</div>
-				</KnobGroup>
+				<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
+					v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
+
+				<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled" v-model:modFreq="fmModFreq"
+					v-model:index="fmIndex" v-model:ratio="fmRatio" />
 
 				<UnisonEffect v-model:enabled="unisonEnabled" v-model:voices="unisonVoices" v-model:detune="detuneCents"
 					v-model:spread="stereoSpread" />
@@ -347,6 +306,7 @@
 </template>
 
 <script setup lang="ts">
+// IMPORTS START
 import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 import Knob from './Knob.vue';
 import KnobGroup from './KnobGroup.vue';
@@ -355,6 +315,21 @@ import DriveEffect from './DriveEffect.vue';
 import UnisonEffect from './UnisonEffect.vue';
 import LFOGroup from './LFOGroup.vue';
 import MpcScreen from './Screen.vue'
+import PitchEnvModule from './modules/PitchEnvModule.vue'
+import { applyPitchEnv } from '../audio/pitchEnv'
+import FMModule from './modules/FMModule.vue'
+import { startFM } from '../audio/fm'
+
+// IMPORTS END
+
+
+// FM Synthesis START
+const fmEnabled = ref(false)
+const fmModFreq = ref(200)     // Hz when not using ratio
+const fmIndex = ref(0)       // 0..50 typical range
+const fmRatio = ref<number | null>(1) // start as 1:1, or null for Hz mode
+// FM Synthesis END
+
 
 const A4 = 440;
 const MIN_PAD_HZ = 100;
@@ -692,13 +667,13 @@ const filterEnabled = ref(true);
 const attackSliderVal = ref(20); // Initial slider value (0–100)
 const filterCutoff = ref(5000); // Hz, default cutoff
 const filterResonance = ref(0.5); // Q factor
-const pitchEnvDecaySliderVal = ref(30); // Slider 0–100, start near short decay
-const pitchEnvDecay = computed(() => {
-	const min = 0.01; // 10ms
-	const max = 1.0;  // 1000ms
-	const normalized = pitchEnvDecaySliderVal.value / 100;
-	return min * Math.pow(max / min, normalized);
-});
+// const pitchEnvDecaySliderVal = ref(30); // Slider 0–100, start near short decay
+// const pitchEnvDecay = computed(() => {
+// 	const min = 0.01; // 10ms
+// 	const max = 1.0;  // 1000ms
+// 	const normalized = pitchEnvDecaySliderVal.value / 100;
+// 	return min * Math.pow(max / min, normalized);
+// });
 // Logarithmic mapping: attack time in seconds
 const synthAttack = computed(() => {
 	const min = 0.001; // 1ms
@@ -706,10 +681,15 @@ const synthAttack = computed(() => {
 	const normalized = attackSliderVal.value / 100; // 0–1 range
 	return min * Math.pow(max / min, normalized);
 });
-const pitchEnvSemitones = ref(0); // Default = 1 octave up
 
-const pitchMode = ref('up'); // or 'down', 'random'
-// const oscilloscopeCanvas = ref(null);
+
+
+const pitchEnvSemitones = ref(0); // Default = 1 octave up
+const pitchEnvDecayMs = ref(300);
+
+// const pitchMode = ref('up'); // or 'down', 'random'
+const pitchMode = ref<'up' | 'down' | 'random'>('up')
+const pitchEnvDecay = computed(() => pitchEnvDecayMs.value / 1000)  // seconds
 
 // Noise
 const noiseType = ref('none'); // 'none' | 'white' | 'pink' | 'brown'
@@ -1198,6 +1178,8 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
 	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
 
+
+
 	// ENV sums all unison voices
 	const oscEnvGain = audioCtx.createGain();
 	const noiseEnvGain = audioCtx.createGain();
@@ -1218,6 +1200,9 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
 	oscEnvGain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
 
+
+
+
 	// ===== UNISON =====
 	const voices = unisonEnabled.value ? Math.max(1, Math.min(6, unisonVoices.value)) : 1;
 	const detuneStep = (voices > 1) ? detuneCents.value : 0;  // cents-per-step
@@ -1236,19 +1221,23 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 		// Waveform
 		osc.type = selectedWaveform.value;
 
-		// Pitch envelope / base frequency
-		if (pitchEnvEnabled.value) {
-			let semitoneOffset = pitchEnvSemitones.value;
-			if (pitchMode.value === 'down') semitoneOffset = -pitchEnvSemitones.value;
-			else if (pitchMode.value === 'random') semitoneOffset = (Math.random() * 2 - 1) * pitchEnvSemitones.value;
 
-			const startFreqRatio = Math.pow(2, semitoneOffset / 12);
-			const startFreq = freq * startFreqRatio;
-			osc.frequency.setValueAtTime(startFreq, startTime);
-			osc.frequency.exponentialRampToValueAtTime(freq, startTime + pitchEnvDecay.value);
-		} else {
-			osc.frequency.setValueAtTime(freq, startTime);
-		}
+		//pitchEnv helper - src/audio/pitchEnv.ts
+		applyPitchEnv(osc, freq, startTime, {
+			enabled: pitchEnvEnabled.value,
+			semitones: pitchEnvSemitones.value,
+			mode: pitchMode.value,
+			decay: pitchEnvDecay.value
+		})
+
+		const fmHandle = startFM(audioCtx, osc, freq, startTime, {
+			enabled: fmEnabled.value,
+			modFreqHz: fmModFreq.value,
+			index: fmIndex.value,
+			ratio: fmRatio.value // if not null, overrides modFreqHz
+		})
+
+
 
 		// Per-voice detune (cents)
 		const dNorm = normIndex(i, voices);        // -1..1
@@ -1307,9 +1296,10 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 		// Connect: osc → voiceFilter → voiceGain → panner → (sum) oscEnvGain
 		osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
 
-		// Start/stop per-voice osc
-		osc.start(startTime);
-		osc.stop(decayEnd);
+		// Start/stop per-voice osc (and FM)
+		osc.start(startTime)
+		osc.stop(decayEnd)
+		if (fmHandle) fmHandle.stop(decayEnd)
 	}
 
 

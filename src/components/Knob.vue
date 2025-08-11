@@ -1,7 +1,7 @@
 <!-- components/Knob.vue -->
 <template>
-	<div class="knob-wrapper" :class="`knob-${props.size}`" @mousedown="startDrag"
-		@touchstart.prevent="startDrag($event, true)">
+	<div class="knob-wrapper" :class="[`knob-${props.size}`, { disabled: props.disabled }]"
+		:aria-disabled="props.disabled" @mousedown="startDrag" @touchstart.prevent="startDrag($event, true)">
 		<div class="knob-label">{{ label }}</div>
 		<div class="knob-dial">
 			<div class="dial-grip" :style="{
@@ -13,7 +13,7 @@
 			<svg class="dial-svg" viewBox="0 0 100 100">
 				<path d="M20,76 A 40 40 0 1 1 80 76" fill="none" stroke="#333" stroke-width="6" />
 				<path d="M20,76 A 40 40 0 1 1 80 76" fill="none" :stroke="strokeColor" stroke-width="6"
-					:style="{ strokeDashoffset: 184 - 184 * ((rotation + 132) / 264) }" /> 
+					:style="{ strokeDashoffset: 184 - 184 * ((rotation + 132) / 264) }" />
 			</svg>
 		</div>
 
