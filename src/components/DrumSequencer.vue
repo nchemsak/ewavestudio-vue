@@ -144,9 +144,8 @@
 						{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
 					</button>
 				</div>
-				<KnobGroup title="Noise" :color="'#9C27B0'" :modelValue="true" :showToggle="false">
+				<!-- <KnobGroup title="Noise" :color="'#9C27B0'" :modelValue="true" :showToggle="false">
 					<template #header-content>
-						<!-- Noise selector dots go here -->
 						<div class="noise-dot-wrap d-flex justify-content-center gap-2 ms-2">
 							<span v-for="type in ['white', 'pink', 'brown']" :key="type" class="noise-dot"
 								:class="[type, { selected: noiseType === type }]" @click="toggleNoise(type)">
@@ -157,7 +156,6 @@
 						</div>
 					</template>
 
-					<!-- Noise Amount knob -->
 					<div class="position-relative text-center mt-2" :disabled="noiseType === 'none'">
 						<Knob v-model="noiseAmount" label="Amount" :min="0" :max="1" :step="0.01" size="medium"
 							color="#9C27B0" @knobStart="activeKnob = 'noiseAmount'" @knobEnd="activeKnob = null" />
@@ -165,62 +163,24 @@
 							{{ Math.round(noiseAmount * 100) }}%
 						</span>
 					</div>
-				</KnobGroup>
+				</KnobGroup> -->
+				<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
+					v-model:amount="noiseAmount" :color="'#9C27B0'" />
+
 			</div>
 			<div class="controls">
 				<h2>Sound Shaping</h2>
-				<KnobGroup v-model="envelopeEnabled" title="Envelope" color="#4CAF50" :showToggle="false">
 
-					<!-- Attack -->
-					<div class="position-relative">
-						<Knob v-model="attackSliderVal" label="Attack" size="medium" :min="0" :max="100" :step="1"
-							color="#4CAF50" :disabled="!envelopeEnabled" @knobStart="activeKnob = 'attack'"
-							@knobEnd="activeKnob = null" />
-						<span v-if="activeKnob === 'attack'" class="custom-tooltip">
-							{{ (synthAttack * 1000).toFixed(1) }} ms
-						</span>
-					</div>
+				<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
+					v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
 
-					<!-- Decay -->
-					<div class="position-relative">
-						<Knob v-model="synthDecay" label="Decay" size="medium" :min="0.05" :max="2" :step="0.01"
-							color="#4CAF50" :disabled="!envelopeEnabled" @knobStart="activeKnob = 'decay'"
-							@knobEnd="activeKnob = null" />
-						<span v-if="activeKnob === 'decay'" class="custom-tooltip">
-							{{ (synthDecay * 1000).toFixed(0) }} ms
-						</span>
-					</div>
-				</KnobGroup>
+				<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
+					v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
 
-				<KnobGroup v-model="filterEnabled" title="Filter" color="#FF5722" :showToggle="false">
-					<!-- Cutoff -->
-					<div class="position-relative">
-						<Knob v-model="filterCutoff" label="Cutoff" size="medium" :min="100" :max="10000" :step="1"
-							color="#FF5722" :disabled="!filterEnabled" @knobStart="activeKnob = 'filterCutoff'"
-							@knobEnd="activeKnob = null" />
-						<span v-if="activeKnob === 'filterCutoff'" class="custom-tooltip">
-							{{ Math.round(filterCutoff) }} Hz
-						</span>
-					</div>
-
-					<!-- Resonance -->
-					<div class="position-relative">
-						<Knob v-model="filterResonance" label="Resonance" size="medium" :min="0.1" :max="20" :step="0.1"
-							color="#FF5722" :disabled="!filterEnabled" @knobStart="activeKnob = 'filterResonance'"
-							@knobEnd="activeKnob = null" />
-						<span v-if="activeKnob === 'filterResonance'" class="custom-tooltip">
-							Q: {{ filterResonance.toFixed(1) }}
-						</span>
-					</div>
-				</KnobGroup>
 			</div>
 
 			<div class="controls">
 				<h2>Pitch & Harmonics</h2>
-
-
-
-
 				<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
 					v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
 
@@ -319,6 +279,9 @@ import PitchEnvModule from './modules/PitchEnvModule.vue'
 import { applyPitchEnv } from '../audio/pitchEnv'
 import FMModule from './modules/FMModule.vue'
 import { startFM } from '../audio/fm'
+import FilterModule from './modules/FilterModule.vue'
+import EnvelopeModule from './modules/EnvelopeModule.vue'
+import NoiseModule from './modules/NoiseModule.vue'
 
 // IMPORTS END
 
@@ -510,7 +473,8 @@ let startTempo = 0;
 const activeKnob = ref(null);
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
-const synthDecay = ref(0.4);
+// const synthDecay = ref(0.4);
+
 const selectedWaveform = ref("sine");
 
 const isFineAdjust = ref(false);
@@ -664,25 +628,16 @@ const envelopeEnabled = ref(true);
 const filterEnabled = ref(true);
 
 
-const attackSliderVal = ref(20); // Initial slider value (0–100)
+// const attackSliderVal = ref(20); // Initial slider value (0–100)
 const filterCutoff = ref(5000); // Hz, default cutoff
 const filterResonance = ref(0.5); // Q factor
-// const pitchEnvDecaySliderVal = ref(30); // Slider 0–100, start near short decay
-// const pitchEnvDecay = computed(() => {
-// 	const min = 0.01; // 10ms
-// 	const max = 1.0;  // 1000ms
-// 	const normalized = pitchEnvDecaySliderVal.value / 100;
-// 	return min * Math.pow(max / min, normalized);
-// });
-// Logarithmic mapping: attack time in seconds
-const synthAttack = computed(() => {
-	const min = 0.001; // 1ms
-	const max = 0.1;   // 100ms
-	const normalized = attackSliderVal.value / 100; // 0–1 range
-	return min * Math.pow(max / min, normalized);
-});
 
 
+const ampEnvAttackMs = ref(20)   // ~20 ms default (feel free to tweak)
+const ampEnvDecayMs = ref(400)  // ~400 ms
+
+const synthAttack = computed(() => ampEnvAttackMs.value / 1000)
+const synthDecay = computed(() => ampEnvDecayMs.value / 1000)
 
 const pitchEnvSemitones = ref(0); // Default = 1 octave up
 const pitchEnvDecayMs = ref(300);
@@ -691,9 +646,20 @@ const pitchEnvDecayMs = ref(300);
 const pitchMode = ref<'up' | 'down' | 'random'>('up')
 const pitchEnvDecay = computed(() => pitchEnvDecayMs.value / 1000)  // seconds
 
-// Noise
-const noiseType = ref('none'); // 'none' | 'white' | 'pink' | 'brown'
-const noiseAmount = ref(0.25); // 0 = no noise, 1 = full noise
+// Noise START
+// const noiseType = ref('none'); // 'none' | 'white' | 'pink' | 'brown'
+// const noiseType = ref<'none' | 'white' | 'pink' | 'brown'>('none')
+type NoiseType = 'white' | 'pink' | 'brown'
+const noiseType = ref<NoiseType>('white') // default selection
+
+const noiseAmount = ref(0); // 0 = no noise, 1 = full noise
+// const noiseEnabled = computed(() => noiseType.value !== 'none')
+const noiseEnabled = ref(false)
+
+// function selectNoise(type: NoiseType) {
+// 	noiseType.value = type      // just change type; no enabling here
+// }
+// Noise END
 
 // Delay Start
 const delayEnabled = ref(false);
@@ -1002,9 +968,9 @@ const displayHz = computed(() =>
 	(Math.round(currentPadHz.value * 100) / 100).toFixed(2)
 );
 
-function toggleNoise(type) {
-	noiseType.value = noiseType.value === type ? 'none' : type;
-}
+// function toggleNoise(type) {
+// 	noiseType.value = noiseType.value === type ? 'none' : type;
+// }
 
 function editLabel(instrument) {
 	instrument.isEditingName = true;
@@ -1189,18 +1155,27 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	const decayEnd = attackEnd + decay;
 
 	// Crossfade osc/noise from your existing noiseAmount
-	const blend = Math.min(Math.max(noiseAmount.value, 0), 1);
-	const oscBlend = 1 - blend;
-	const noiseBlend = blend;
+	// Crossfade osc/noise
+	const blend = noiseEnabled.value ? Math.min(Math.max(noiseAmount.value, 0), 1) : 0
+	const oscBlend = 1 - blend
+	const noiseBlend = blend
 
-	const safeOscGain = Math.max(0.0001, velocity * oscBlend);
-	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
-
-	oscEnvGain.gain.setValueAtTime(0.0001, startTime);
-	oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
-	oscEnvGain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
+	const safeOscGain = Math.max(0.0001, velocity * oscBlend)
+	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend)
 
 
+
+	if (envelopeEnabled.value) {
+		oscEnvGain.gain.setValueAtTime(0.0001, startTime)
+		oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd)
+		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, decayEnd)
+	} else {
+		const gate = Math.max(0.02, ampEnvDecayMs.value / 1000) // gate length
+		oscEnvGain.gain.setValueAtTime(Math.max(0.0001, velocity), startTime)
+		// small fade before stop to avoid a click
+		oscEnvGain.gain.setTargetAtTime(0.0001, startTime + gate - 0.01, 0.005)
+		// and keep using osc.stop(startTime + gate)
+	}
 
 
 	// ===== UNISON =====
@@ -1312,27 +1287,29 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 		oscEnvGain.connect(driveSum);
 	}
 
-	// ===== Noise (unchanged) =====
-	if (noiseType.value !== 'none' && noiseAmount.value > 0) {
-		const noiseBuffer = noiseBuffers[noiseType.value];
+	// ===== Noise =====
+	if (noiseEnabled.value && noiseAmount.value > 0) {
+		const noiseBuffer = noiseBuffers[noiseType.value]
 		if (noiseBuffer) {
-			const noiseSource = audioCtx.createBufferSource();
-			noiseSource.buffer = noiseBuffer;
+			const noiseSource = audioCtx.createBufferSource()
+			noiseSource.buffer = noiseBuffer
 
-			noiseEnvGain.gain.setValueAtTime(0.0001, startTime);
-			noiseEnvGain.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd);
-			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, decayEnd);
+			noiseEnvGain.gain.setValueAtTime(0.0001, startTime)
+			noiseEnvGain.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd)
+			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, decayEnd)
 
-			const noiseFilter = audioCtx.createBiquadFilter();
-			noiseFilter.type = 'bandpass';
-			noiseFilter.frequency.setValueAtTime(8000, startTime);
-			noiseFilter.Q.setValueAtTime(1, startTime);
+			const noiseFilter = audioCtx.createBiquadFilter()
+			noiseFilter.type = 'bandpass'
+			noiseFilter.frequency.setValueAtTime(8000, startTime)
+			noiseFilter.Q.setValueAtTime(1, startTime)
 
-			noiseSource.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain);
-			noiseSource.start(startTime);
-			noiseSource.stop(decayEnd);
+			noiseSource.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain)
+			noiseSource.start(startTime)
+			noiseSource.stop(decayEnd)
 		}
 	}
+
+
 }
 
 

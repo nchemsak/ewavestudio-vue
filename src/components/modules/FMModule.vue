@@ -48,7 +48,7 @@
         </div>
 
 
-        <!-- Index -->
+        <!-- Index / Amount -->
         <div class="position-relative text-center">
             <Knob v-model="localIndex" label="Amount" size="medium" :min="0" :max="50" :step="0.1"
                 :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'ix'" @knobEnd="activeKnob = null" />
