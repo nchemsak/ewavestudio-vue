@@ -83,7 +83,9 @@
 					{{ Math.round(synthInstrument.channelVolume * 100) }}%
 				</span>
 			</div>
-
+			<PatternTools :steps="synthInstrument.steps" :velocities="synthInstrument.velocities"
+				@update:steps="synthInstrument.steps = $event"
+				@update:velocities="synthInstrument.velocities = $event" />
 
 			<div class="d-flex pad-row">
 				<div v-for="(active, index) in synthInstrument.steps" :key="index" class="pad-wrapper"
@@ -211,7 +213,7 @@
 
 	</div>
 	<!-- Teleported pad settings popover -->
-	<teleport to="body">
+	<!-- <teleport to="body">
 		<div v-if="padSettings.open" class="pad-settings-popover card p-2 controls"
 			:style="{ left: padSettings.pos.x + 'px', top: padSettings.pos.y + 'px' }" @keydown.esc="closePadSettings"
 			role="dialog" aria-modal="true">
@@ -220,12 +222,10 @@
 				<button class="btn btn-sm btn-outline-secondary" @click="closePadSettings">Close</button>
 			</div>
 
-			<!-- Live readout -->
 			<div class="mb-2 small">
 				{{ nearestNote(currentPadHz) }} · {{ displayHz }} Hz
 			</div>
 
-			<!-- Note selector (12 semitones) -->
 			<div class="d-flex flex-wrap gap-1 mb-2">
 				<button v-for="(n, i) in NOTE_NAMES" :key="n" class="btn btn-xs" :disabled="isNoteDisabled(i, octave)"
 					:class="[
@@ -236,7 +236,6 @@
 				</button>
 			</div>
 
-			<!-- Octave -->
 			<div class="mb-2">
 				<div class="btn-group btn-group-sm">
 					<button v-for="o in availableOctaves" :key="o" class="btn"
@@ -261,15 +260,16 @@
 
 			</div>
 		</div>
-	</teleport>
-
+	</teleport> -->
+	<PadSettingsPopover v-model:open="padPopover.open" v-model:hz="currentPadHz" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
+		:anchorRect="padPopover.anchorRect" :title="padPopover.title" @close="padPopover.open = false" />
 </template>
 
 <script setup lang="ts">
 // IMPORTS START
 import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 import Knob from './Knob.vue';
-import KnobGroup from './KnobGroup.vue';
+// import KnobGroup from './KnobGroup.vue';
 import DelayEffect from './DelayEffect.vue';
 import DriveEffect from './DriveEffect.vue';
 import UnisonEffect from './UnisonEffect.vue';
@@ -282,6 +282,8 @@ import { startFM } from '../audio/fm'
 import FilterModule from './modules/FilterModule.vue'
 import EnvelopeModule from './modules/EnvelopeModule.vue'
 import NoiseModule from './modules/NoiseModule.vue'
+import PadSettingsPopover from './PadSettingsPopover.vue'
+import PatternTools from './PatternTools.vue'
 
 // IMPORTS END
 
@@ -440,6 +442,7 @@ function startSpectrogram() {
 }
 
 
+
 onMounted(() => {
 	loadAllSamples();
 	generateNoiseBuffers();
@@ -462,6 +465,35 @@ onBeforeUnmount(() => {
 });
 // MPC Screen END
 
+// Pad settings popover BEGIN
+const padPopover = ref({
+	open: false,
+	title: '',
+	anchorRect: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }
+})
+
+function openPadSettings(name: string, index: number, evt: MouseEvent) {
+	// set which pad we’re editing (so currentPadHz points to the right cell)
+	padSettings.name = name
+	padSettings.index = index
+
+	const r = (evt.currentTarget as HTMLElement).getBoundingClientRect()
+	padPopover.value.anchorRect = {
+		left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height
+	}
+	padPopover.value.title = `Pad ${index + 1}`
+	padPopover.value.open = true
+}
+
+function closePadSettings() {
+	padPopover.value.open = false
+}
+
+const padSettings = reactive({
+	name: null as null | string,
+	index: -1
+})
+// Pad settings popover END
 
 
 // Reuse shared AudioContext
@@ -603,12 +635,10 @@ function octaveShiftAllSkip(deltaOct, { onlyActive = false } = {}) {
 }
 
 
-
 // Disable specific note buttons that would be out of range
 function isNoteDisabled(semitone, octave) {
 	return !isNoteInRange(octave, semitone);
 }
-
 
 
 function midiToFreq(m) { return A4 * Math.pow(2, (m - 69) / 12); }
@@ -618,7 +648,6 @@ function midiToName(m) {
 	return `${NOTE_NAMES[n]}${o}`;
 }
 
-
 // Pad pitch and volume sliders
 const activeVolumePad = ref(null); // format: `${instrumentName}-${index}`
 const activePitchPad = ref(null);
@@ -627,8 +656,6 @@ const pitchEnvEnabled = ref(true);
 const envelopeEnabled = ref(true);
 const filterEnabled = ref(true);
 
-
-// const attackSliderVal = ref(20); // Initial slider value (0–100)
 const filterCutoff = ref(5000); // Hz, default cutoff
 const filterResonance = ref(0.5); // Q factor
 
@@ -647,18 +674,14 @@ const pitchMode = ref<'up' | 'down' | 'random'>('up')
 const pitchEnvDecay = computed(() => pitchEnvDecayMs.value / 1000)  // seconds
 
 // Noise START
-// const noiseType = ref('none'); // 'none' | 'white' | 'pink' | 'brown'
-// const noiseType = ref<'none' | 'white' | 'pink' | 'brown'>('none')
 type NoiseType = 'white' | 'pink' | 'brown'
+const noiseBuffers: Record<NoiseType, AudioBuffer | null> = {
+	white: null, pink: null, brown: null
+}
 const noiseType = ref<NoiseType>('white') // default selection
 
 const noiseAmount = ref(0); // 0 = no noise, 1 = full noise
-// const noiseEnabled = computed(() => noiseType.value !== 'none')
 const noiseEnabled = ref(false)
-
-// function selectNoise(type: NoiseType) {
-// 	noiseType.value = type      // just change type; no enabling here
-// }
 // Noise END
 
 // Delay Start
@@ -815,76 +838,7 @@ watch(lfoDepth, depth => {
 });
 // LFO END
 
-// === Pad Settings START: state + computeds ===
-const padSettings = reactive({
-	open: false,
-	name: null,         // instrument name
-	index: -1,          // step index
-	pos: { x: 0, y: 0 },// screen position for popover
-	// snapEnabled: true,
-	baseMidi: 69,       // A4
-	detuneCents: 0,     // -100..+100
-});
-
-const padDetuneCents = computed({
-	get: () => padSettings.detuneCents,
-	set: v => {
-		isFineAdjust.value = true;
-
-		// start from proposed cents
-		let cents = Math.max(-200, Math.min(200, v)); // soft guard to avoid huge jumps
-
-		// helper: can we move baseMidi up/down and still be inside the Hz range?
-		const canBump = (dir) => {
-			const nextMidi = padSettings.baseMidi + dir;
-			const nextHz = midiToFreq(nextMidi);
-			return nextHz >= MIN_PAD_HZ && nextHz <= MAX_PAD_HZ;
-		};
-
-		// rollover upward across semitones
-		while (cents > 100 && canBump(+1)) {
-			padSettings.baseMidi += 1;
-			cents -= 100;
-		}
-		// rollover downward across semitones
-		while (cents < -100 && canBump(-1)) {
-			padSettings.baseMidi -= 1;
-			cents += 100;
-		}
-
-		// final clamp to +/-100 so we're strictly within adjacent notes
-		cents = Math.max(-100, Math.min(100, cents));
-		// additional clamp if we’re at the absolute top/bottom edge
-		if (cents > 0 && !canBump(+1)) cents = Math.min(cents, 100);
-		if (cents < 0 && !canBump(-1)) cents = Math.max(cents, -100);
-
-		padSettings.detuneCents = cents;
-
-		// apply base + cents → Hz
-		applySnapped();
-
-		// release the guard on the next microtask so UI can settle
-		queueMicrotask(() => { isFineAdjust.value = false; });
-	},
-});
-
-
-
-
-const selectedMidi = computed(() => padSettings.baseMidi);
-
-const octave = computed({
-	get: () => Math.floor(padSettings.baseMidi / 12) - 1,
-	set: o => {
-		const semi = padSettings.baseMidi % 12;
-		padSettings.baseMidi = (o + 1) * 12 + semi;
-		padSettings.detuneCents = 0;  // reset fine
-		applySnapped();
-	}
-});
-
-
-
+// === Pad Settings START ===
 
 function setPadHz(hz) {
 	const inst = instruments.value.find(i => i.name === padSettings.name);
@@ -893,84 +847,11 @@ function setPadHz(hz) {
 	inst.pitches[padSettings.index] = clamped;
 }
 
-function setSemitone(i) {
-	const o = Math.floor(padSettings.baseMidi / 12) - 1;
-	padSettings.baseMidi = (o + 1) * 12 + i;
-	padSettings.detuneCents = 0;
-	applySnapped();
-}
-function setOctave(o) {
-	const semi = padSettings.baseMidi % 12;
-	padSettings.baseMidi = (o + 1) * 12 + semi;
-	padSettings.detuneCents = 0;
-	applySnapped();
-}
-
-function applySnapped() {
-	const base = midiToFreq(padSettings.baseMidi);
-	const hz = base * Math.pow(2, padSettings.detuneCents / 1200);
-	setPadHz(hz);
-}
-
-watch(currentPadHz, (hz) => {
-	// If user is actively fine-adjusting or popover is closed, don't re-anchor
-	if (isFineAdjust.value || !padSettings.open) return;
-
-	const m = freqToMidi(hz);
-	padSettings.baseMidi = m;
-	padSettings.detuneCents = Math.round(1200 * Math.log2(hz / midiToFreq(m)));
-});
-
-function openPadSettings(name, index, evt) {
-	padSettings.open = true;
-	padSettings.name = name;
-	padSettings.index = index;
-
-	const r = evt.currentTarget.getBoundingClientRect();
-	const popW = 280, popH = 260, margin = 8;
-	let x = r.right - popW;
-	let y = r.bottom + margin;
-	x = Math.max(8, Math.min(window.innerWidth - popW - 8, x));
-	y = (y + popH > window.innerHeight) ? r.top - popH - margin : y;
-	padSettings.pos.x = x;
-	padSettings.pos.y = y;
-
-	// Preserve the existing frequency exactly
-	const hz = currentPadHz.value;
-	const m = freqToMidi(hz);
-	padSettings.baseMidi = m;
-	padSettings.detuneCents = Math.round(1200 * Math.log2(hz / midiToFreq(m)));
-
-	document.addEventListener('mousedown', onOutsideClick, true);
-	document.addEventListener('keydown', onEscape, true);
-}
-
-
-function closePadSettings() {
-	padSettings.open = false;
-	document.removeEventListener('mousedown', onOutsideClick, true);
-	document.removeEventListener('keydown', onEscape, true);
-}
-
-function onOutsideClick(e) {
-	const pop = document.querySelector('.pad-settings-popover');
-	if (pop && !pop.contains(e.target)) closePadSettings();
-}
-function onEscape(e) { if (e.key === 'Escape') closePadSettings(); }
-
-// clean up if component is destroyed while popover is open
-onBeforeUnmount(() => { if (padSettings.open) closePadSettings(); });
-
-
 // === Pad Settings END
 
 const displayHz = computed(() =>
 	(Math.round(currentPadHz.value * 100) / 100).toFixed(2)
 );
-
-// function toggleNoise(type) {
-// 	noiseType.value = noiseType.value === type ? 'none' : type;
-// }
 
 function editLabel(instrument) {
 	instrument.isEditingName = true;
@@ -1140,64 +1021,52 @@ function schedule() {
 
 
 
+
 function playSynthNote(freq, velocity, decayTime, startTime) {
-	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
-	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
-
-
+	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01
+	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1
 
 	// ENV sums all unison voices
-	const oscEnvGain = audioCtx.createGain();
-	const noiseEnvGain = audioCtx.createGain();
+	const oscEnvGain = audioCtx.createGain()
+	const noiseEnvGain = audioCtx.createGain()
 
 	// Shared envelope timings
-	const attackEnd = startTime + attackTime;
-	const decayEnd = attackEnd + decay;
+	const attackEnd = startTime + attackTime
+	const naturalEnd = attackEnd + decay
+	const gateEnd = startTime + Math.max(0.02, ampEnvDecayMs.value / 1000)
+	const noteEnd = envelopeEnabled.value ? naturalEnd : gateEnd
 
-	// Crossfade osc/noise from your existing noiseAmount
-	// Crossfade osc/noise
+	// Compute blends BEFORE using safeOscGain
 	const blend = noiseEnabled.value ? Math.min(Math.max(noiseAmount.value, 0), 1) : 0
 	const oscBlend = 1 - blend
 	const noiseBlend = blend
-
 	const safeOscGain = Math.max(0.0001, velocity * oscBlend)
 	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend)
 
-
-
+	// Single amplitude envelope (remove the duplicate block you had)
 	if (envelopeEnabled.value) {
 		oscEnvGain.gain.setValueAtTime(0.0001, startTime)
 		oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd)
-		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, decayEnd)
+		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd)
 	} else {
-		const gate = Math.max(0.02, ampEnvDecayMs.value / 1000) // gate length
 		oscEnvGain.gain.setValueAtTime(Math.max(0.0001, velocity), startTime)
-		// small fade before stop to avoid a click
-		oscEnvGain.gain.setTargetAtTime(0.0001, startTime + gate - 0.01, 0.005)
-		// and keep using osc.stop(startTime + gate)
+		oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005)
 	}
 
-
 	// ===== UNISON =====
-	const voices = unisonEnabled.value ? Math.max(1, Math.min(6, unisonVoices.value)) : 1;
-	const detuneStep = (voices > 1) ? detuneCents.value : 0;  // cents-per-step
-	const spreadPct = (voices > 1) ? stereoSpread.value : 0; // 0–100
+	const voices = unisonEnabled.value ? Math.max(1, Math.min(6, unisonVoices.value)) : 1
+	const detuneStep = (voices > 1) ? detuneCents.value : 0
+	const spreadPct = (voices > 1) ? stereoSpread.value : 0
+	const normIndex = (i, n) => (n === 1) ? 0 : ((i / (n - 1)) * 2 - 1)
 
-	// helper to map voice index to -1..1
-	const normIndex = (i, n) => (n === 1) ? 0 : ((i / (n - 1)) * 2 - 1);
-
-	// Create per-voice chain then sum → oscEnvGain
 	for (let i = 0; i < voices; i++) {
-		const osc = audioCtx.createOscillator();
-		const voiceFilter = audioCtx.createBiquadFilter();
-		const voiceGain = audioCtx.createGain();
-		const panner = audioCtx.createStereoPanner();
+		const osc = audioCtx.createOscillator()
+		const voiceFilter = audioCtx.createBiquadFilter()
+		const voiceGain = audioCtx.createGain()
+		const panner = audioCtx.createStereoPanner()
 
-		// Waveform
-		osc.type = selectedWaveform.value;
+		osc.type = selectedWaveform.value
 
-
-		//pitchEnv helper - src/audio/pitchEnv.ts
 		applyPitchEnv(osc, freq, startTime, {
 			enabled: pitchEnvEnabled.value,
 			semitones: pitchEnvSemitones.value,
@@ -1209,82 +1078,63 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 			enabled: fmEnabled.value,
 			modFreqHz: fmModFreq.value,
 			index: fmIndex.value,
-			ratio: fmRatio.value // if not null, overrides modFreqHz
+			ratio: fmRatio.value
 		})
 
+		const dNorm = normIndex(i, voices)
+		const detuneC = dNorm * detuneStep
+		osc.detune.setValueAtTime(detuneC, startTime)
 
-
-		// Per-voice detune (cents)
-		const dNorm = normIndex(i, voices);        // -1..1
-		const detuneC = dNorm * detuneStep;        // unison spread
-		osc.detune.setValueAtTime(detuneC, startTime);
-
-
-
-
-		// Filter settings (clone per voice so stereo spread isn’t collapsed)
-		voiceFilter.type = 'lowpass';
+		voiceFilter.type = 'lowpass'
 		if (filterEnabled.value) {
-			voiceFilter.frequency.setValueAtTime(filterCutoff.value, startTime);
-			voiceFilter.Q.setValueAtTime(filterResonance.value, startTime);
+			voiceFilter.frequency.setValueAtTime(filterCutoff.value, startTime)
+			voiceFilter.Q.setValueAtTime(filterResonance.value, startTime)
 		} else {
-			// if filter off, set high freq so it’s neutral
-			voiceFilter.frequency.setValueAtTime(20000, startTime);
-			voiceFilter.Q.setValueAtTime(0.0001, startTime);
+			voiceFilter.frequency.setValueAtTime(20000, startTime)
+			voiceFilter.Q.setValueAtTime(0.0001, startTime)
 		}
 
-		// Per-voice gain (normalize to avoid clipping)
-		voiceGain.gain.setValueAtTime(1 / voices, startTime);
+		voiceGain.gain.setValueAtTime(1 / voices, startTime)
+		panner.pan.setValueAtTime((dNorm * spreadPct) / 100, startTime)
 
-		// Stereo spread
-		const pan = (dNorm * spreadPct) / 100; // -1..1
-		panner.pan.setValueAtTime(pan, startTime);
-
-		// LFO routing (optional, respects your existing targets)
 		if (lfoEnabled.value) {
 			if (lfoTarget.value === 'pitch') {
-				const lfoTap = audioCtx.createGain();
-				lfoTap.gain.value = 1;
-				lfoGain.connect(lfoTap).connect(osc.frequency);
-				// no need to disconnect explicitly; GC when osc stops
+				const lfoTap = audioCtx.createGain()
+				lfoTap.gain.value = 1
+				lfoGain.connect(lfoTap).connect(osc.frequency)
 			} else if (lfoTarget.value === 'gain') {
-				const lfoModGain = audioCtx.createGain();
-				lfoModGain.gain.value = lfoDepth.value * 0.005;
+				const lfoModGain = audioCtx.createGain()
+				lfoModGain.gain.value = lfoDepth.value * 0.005
 
-				const lfoOffset = audioCtx.createConstantSource();
-				lfoOffset.offset.value = velocity * 0.75;
+				const lfoOffset = audioCtx.createConstantSource()
+				lfoOffset.offset.value = velocity * 0.75
 
-				const lfoSum = audioCtx.createGain();
-				lfoGain.connect(lfoModGain).connect(lfoSum);
-				lfoOffset.connect(lfoSum);
-				lfoSum.connect(voiceGain.gain);
+				const lfoSum = audioCtx.createGain()
+				lfoGain.connect(lfoModGain).connect(lfoSum)
+				lfoOffset.connect(lfoSum)
+				lfoSum.connect(voiceGain.gain)
 
-				lfoOffset.start(startTime);
-				lfoOffset.stop(decayEnd + 0.05);
+				lfoOffset.start(startTime)
+				lfoOffset.stop(noteEnd + 0.05) // was decayEnd
 			} else if (lfoTarget.value === 'filter') {
-				const lfoTap = audioCtx.createGain();
-				lfoTap.gain.value = 1;
-				lfoGain.connect(lfoTap).connect(voiceFilter.frequency);
+				const lfoTap = audioCtx.createGain()
+				lfoTap.gain.value = 1
+				lfoGain.connect(lfoTap).connect(voiceFilter.frequency)
 			}
 		}
 
-		// Connect: osc → voiceFilter → voiceGain → panner → (sum) oscEnvGain
-		osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
+		osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain)
 
-		// Start/stop per-voice osc (and FM)
 		osc.start(startTime)
-		osc.stop(decayEnd)
-		if (fmHandle) fmHandle.stop(decayEnd)
+		osc.stop(noteEnd)
+		if (fmHandle) fmHandle.stop(noteEnd)
 	}
 
-
 	if (driveEnabled.value) {
-		// through drive
-		oscEnvGain.connect(driveDry);
-		oscEnvGain.connect(driveShaper);
+		oscEnvGain.connect(driveDry)
+		oscEnvGain.connect(driveShaper)
 	} else {
-		// bypass drive straight into the sum
-		oscEnvGain.connect(driveSum);
+		oscEnvGain.connect(driveSum)
 	}
 
 	// ===== Noise =====
@@ -1296,7 +1146,7 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 
 			noiseEnvGain.gain.setValueAtTime(0.0001, startTime)
 			noiseEnvGain.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd)
-			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, decayEnd)
+			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd)
 
 			const noiseFilter = audioCtx.createBiquadFilter()
 			noiseFilter.type = 'bandpass'
@@ -1305,11 +1155,9 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 
 			noiseSource.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain)
 			noiseSource.start(startTime)
-			noiseSource.stop(decayEnd)
+			noiseSource.stop(noteEnd)
 		}
 	}
-
-
 }
 
 
@@ -1420,13 +1268,6 @@ function getPadStyle(instrument, index) {
 	};
 }
 
-const noiseBuffers = {
-	white: null,
-	pink: null,
-	brown: null,
-};
-
-
 // Noise Generator for Percussion Synth
 function generateNoiseBuffers() {
 	const length = audioCtx.sampleRate * 2; // 2 seconds
@@ -1506,9 +1347,9 @@ function initDriveNow() {
 }
 
 // run once when the component mounts
-onMounted(() => {
-	initDriveNow();
-});
+// onMounted(() => {
+// 	initDriveNow();
+// });
 
 // when the user turns Drive on during playback, pre-warm everything
 watch(driveEnabled, on => {
