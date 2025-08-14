@@ -29,8 +29,8 @@
 
 <script setup>
 import { ref, watch, onMounted } from 'vue';
-import Knob from './Knob.vue';
-import KnobGroup from './KnobGroup.vue';
+import Knob from '../Knob.vue';
+import KnobGroup from '../KnobGroup.vue';
 
 const props = defineProps({
     audioCtx: Object,

@@ -1,87 +1,133 @@
 <template>
-    <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-        <strong class="me-2">Pattern</strong>
+    <div class="pattern-tools p-2">
+        <h2 class="mb-2">Pattern Tools</h2>
 
-        <div class="btn-group btn-group-sm">
-            <button class="btn btn-outline-secondary" @click="clear">Clear</button>
-            <button class="btn btn-outline-secondary" @click="invert">Invert</button>
-            <button class="btn btn-outline-secondary" @click="shift(-1)">Shift ←</button>
-            <button class="btn btn-outline-secondary" @click="shift(1)">Shift →</button>
+        <!-- Clear / Invert / Shift -->
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" @click="clear">Clear</button>
+                <button class="btn btn-outline-secondary" @click="invert">Invert</button>
+                <button class="btn btn-outline-secondary" @click="shift(-1)">Shift ←</button>
+                <button class="btn btn-outline-secondary" @click="shift(1)">Shift →</button>
+            </div>
         </div>
 
-        <!-- Randomize -->
-        <div class="d-flex align-items-center ms-2">
-            <small class="me-2">Randomize</small>
-            <input type="range" min="0" max="1" step="0.01" v-model.number="densityLocal" style="width: 120px" />
-            <small class="ms-2">{{ Math.round(densityLocal * 100) }}%</small>
-            <button class="btn btn-sm btn-primary ms-2" @click="randomize">Go</button>
+        <!-- Randomize (steps only) -->
+        <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="position-relative text-center">
+                <Knob v-model="randomizeAmt" label="Randomize %" :min="0" :max="1" :step="0.01" size="small"
+                    color="#2ECC71" @knobStart="activeKnob = 'rand'" @knobEnd="activeKnob = null" />
+                <span v-if="activeKnob === 'rand'" class="custom-tooltip">
+                    {{ Math.round(randomizeAmt * 100) }}%
+                </span>
+            </div>
+
+            <button class="btn btn-sm btn-outline-success" @click="randomize">
+                Randomize
+            </button>
+            <!-- <small class="text-muted">Steps only</small> -->
         </div>
 
-        <!-- Humanize -->
-        <div class="d-flex align-items-center ms-3" v-if="velocities">
-            <small class="me-2">Humanize</small>
-            <input type="range" min="0" max="0.4" step="0.01" v-model.number="humanizeAmt" style="width: 120px" />
-            <small class="ms-2">±{{ Math.round(humanizeAmt * 100) }}%</small>
-            <button class="btn btn-sm btn-outline-primary ms-2" @click="humanize">Apply</button>
+        <!-- Humanize (velocities only, from 100% each click) -->
+        <div class="d-flex align-items-center gap-3" v-if="props.velocities">
+            <div class="position-relative text-center">
+                <Knob v-model="humanizeAmt" label="Humanize %" :min="0" :max="1" :step="0.01" size="small"
+                    color="#9B59B6" @knobStart="activeKnob = 'human'" @knobEnd="activeKnob = null" />
+                <span v-if="activeKnob === 'human'" class="custom-tooltip">
+                    up to {{ Math.round(humanizeAmt * 100) }}% range
+                </span>
+            </div>
+
+            <button class="btn btn-sm btn-outline-primary" @click="humanize">
+                Humanize
+            </button>
+            <!-- <small class="text-muted">Per-click = fresh random from 100%</small> -->
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref } from 'vue';
+import Knob from './Knob.vue';
 
 const props = defineProps<{
-    steps: boolean[]
-    velocities?: number[] // 0..1, optional
-}>()
+    steps: boolean[];
+    velocities?: number[]; // 0..1
+}>();
 
 const emit = defineEmits<{
-    (e: 'update:steps', v: boolean[]): void
-    (e: 'update:velocities', v: number[]): void
-}>()
+    (e: 'update:steps', v: boolean[]): void;
+    (e: 'update:velocities', v: number[]): void;
+}>();
 
-const densityLocal = ref(0.35)   // default randomize density
-const humanizeAmt = ref(0.08)   // ±8% by default
+/* UI state */
+const randomizeAmt = ref(0.35);
+const humanizeAmt = ref(0.5); // higher default for a noticeable effect
+const activeKnob = ref<null | 'rand' | 'human'>(null);
 
-function clear() {
-    emit('update:steps', props.steps.map(() => false))
-}
-
-function invert() {
-    emit('update:steps', props.steps.map(s => !s))
-}
-
-function shift(dir: -1 | 1) {
-    const s = props.steps
-    const out = dir === -1
-        ? s.slice(1).concat(s[0])
-        : s.slice(-1).concat(s.slice(0, -1))
-    emit('update:steps', out)
-
+/* Buttons */
+function clear(): void {
+    // Steps -> all off
+    emit('update:steps', props.steps.map(() => false));
+    // Velocities -> all 1.0 (even for inactive pads)
     if (props.velocities) {
-        const v = props.velocities
-        const vout = dir === -1
-            ? v.slice(1).concat(v[0])
-            : v.slice(-1).concat(v.slice(0, -1))
-        emit('update:velocities', vout)
+        emit('update:velocities', props.velocities.map(() => 1));
     }
 }
 
-function randomize() {
-    const d = Math.min(Math.max(densityLocal.value, 0), 1)
-    const newSteps = props.steps.map(() => Math.random() < d)
-    emit('update:steps', newSteps)
-    // leave velocities as-is; users can adjust with your hover sliders
+function invert(): void {
+    emit('update:steps', props.steps.map(s => !s));
 }
 
-function humanize() {
-    if (!props.velocities) return
-    const amt = Math.min(Math.max(humanizeAmt.value, 0), 0.4)
-    const out = props.velocities.map((v, i) => {
-        if (!props.steps[i]) return v
-        const jitter = (Math.random() * 2 - 1) * amt
-        return Math.min(1, Math.max(0, v + jitter))
-    })
-    emit('update:velocities', out)
+function shift(dir: -1 | 1): void {
+    const s = props.steps;
+    const out = dir === -1
+        ? s.slice(1).concat(s[0])
+        : s.slice(-1).concat(s.slice(0, -1));
+    emit('update:steps', out);
+
+    if (props.velocities) {
+        const v = props.velocities;
+        const vout = dir === -1
+            ? v.slice(1).concat(v[0])
+            : v.slice(-1).concat(v.slice(0, -1));
+        emit('update:velocities', vout);
+    }
+}
+
+/* Actions */
+function randomize(): void {
+    const d = clamp01(randomizeAmt.value);
+    const newSteps = props.steps.map(() => Math.random() < d);
+    emit('update:steps', newSteps);
+    // Velocities untouched here (by design).
+}
+
+function humanize(): void {
+    if (!props.velocities) return;
+
+    const amt = clamp01(humanizeAmt.value);
+    // At amt=1 -> uniform in [0..1]; at amt=0.5 -> [0.5..1], etc.
+    const floor = clamp(1 - amt, 0, 1);
+
+    const out = props.velocities.map((_, i) => {
+        if (!props.steps[i]) return 1; // inactive pads snap to full velocity
+        return floor + Math.random() * (1 - floor);
+    });
+    emit('update:velocities', out);
+}
+
+/* Utils */
+function clamp(x: number, lo: number, hi: number): number {
+    return Math.max(lo, Math.min(hi, x));
+}
+function clamp01(x: number): number {
+    return clamp(x, 0, 1);
 }
 </script>
+
+<style scoped>
+.pattern-tools {
+    max-width: 520px;
+}
+</style>

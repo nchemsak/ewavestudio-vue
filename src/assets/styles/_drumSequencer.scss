@@ -574,7 +574,10 @@
 		cursor: pointer;
 	}
 	.controlsWrapper {
-		margin-top: 200px;
+		// margin-top: 200px;
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
 	}
 
 	.pad-settings-dot {

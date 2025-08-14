@@ -41,11 +41,139 @@
 				</button>
 			</div>
 
-			<!-- <MpcScreen ref="screen" :text="lcdText" :canvas="showCanvas" /> -->
 			<MpcScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey" @fkey="handleFKey" />
-			<!-- <canvas ref="oscilloscopeCanvas" class="oscilloscopeDrumSynth" width="600" height="100"></canvas> -->
 
 		</div>
+	</div>
+	<div class="controls">
+	<div class="padTEST-grid">
+		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
+		<button class="padTEST neon" aria-label="padTEST"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+		<button class="padTEST neon"></button>
+	</div>
+	<div class="padTEST-grid">
+		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
+		<button class="padTEST gel" aria-label="padTEST"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+		<button class="padTEST gel"></button>
+	</div>
+	<div class="padTEST-grid">
+		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
+		<button class="padTEST bevel" aria-label="padTEST"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+		<button class="padTEST bevel"></button>
+	</div>
+
+
+
+	<div class="padTEST-grid">
+		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
+		<button class="padTEST liquid" aria-label="padTEST"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+		<button class="padTEST liquid"></button>
+	</div>
+
+
+
+	<div class="padTEST-grid">
+		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
+		<button class="padTEST aurora" aria-label="padTEST"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+		<button class="padTEST aurora"></button>
+	</div>
+
+
+
+
+	<div class="padTEST-grid">
+		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
+		<button class="padTEST nick1" aria-label="padTEST"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+		<button class="padTEST nick1"></button>
+	</div>
+
+
+
+
 	</div>
 	<div class="drum-sequencer" id="percussion-synth">
 		<div v-if="synthInstrument" class="mb-3">
@@ -83,9 +211,11 @@
 					{{ Math.round(synthInstrument.channelVolume * 100) }}%
 				</span>
 			</div>
-			<PatternTools :steps="synthInstrument.steps" :velocities="synthInstrument.velocities"
-				@update:steps="synthInstrument.steps = $event"
-				@update:velocities="synthInstrument.velocities = $event" />
+
+
+
+
+
 
 			<div class="d-flex pad-row">
 				<div v-for="(active, index) in synthInstrument.steps" :key="index" class="pad-wrapper"
@@ -136,6 +266,12 @@
 		</div>
 		<div class="controlsWrapper">
 			<div class="controls">
+				<PatternTools :steps="synthInstrument.steps" :velocities="synthInstrument.velocities"
+					@update:steps="synthInstrument.steps = $event"
+					@update:velocities="synthInstrument.velocities = $event" />
+			</div>
+			<div class="controls">
+
 				<h2>Generators</h2>
 				<!-- Waveform Selector -->
 				<span class="group-title">Oscillators</span><br />
@@ -146,26 +282,7 @@
 						{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
 					</button>
 				</div>
-				<!-- <KnobGroup title="Noise" :color="'#9C27B0'" :modelValue="true" :showToggle="false">
-					<template #header-content>
-						<div class="noise-dot-wrap d-flex justify-content-center gap-2 ms-2">
-							<span v-for="type in ['white', 'pink', 'brown']" :key="type" class="noise-dot"
-								:class="[type, { selected: noiseType === type }]" @click="toggleNoise(type)">
-								<span class="selector-tooltip">
-									{{ type.charAt(0).toUpperCase() + type.slice(1) }} Noise
-								</span>
-							</span>
-						</div>
-					</template>
-
-					<div class="position-relative text-center mt-2" :disabled="noiseType === 'none'">
-						<Knob v-model="noiseAmount" label="Amount" :min="0" :max="1" :step="0.01" size="medium"
-							color="#9C27B0" @knobStart="activeKnob = 'noiseAmount'" @knobEnd="activeKnob = null" />
-						<span v-if="activeKnob === 'noiseAmount'" class="custom-tooltip">
-							{{ Math.round(noiseAmount * 100) }}%
-						</span>
-					</div>
-				</KnobGroup> -->
+				<hr />
 				<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
 					v-model:amount="noiseAmount" :color="'#9C27B0'" />
 
@@ -175,7 +292,7 @@
 
 				<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 					v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
-
+				<hr />
 				<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 					v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
 
@@ -185,10 +302,10 @@
 				<h2>Pitch & Harmonics</h2>
 				<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
 					v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
-
+				<hr />
 				<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled" v-model:modFreq="fmModFreq"
 					v-model:index="fmIndex" v-model:ratio="fmRatio" />
-
+				<hr />
 				<UnisonEffect v-model:enabled="unisonEnabled" v-model:voices="unisonVoices" v-model:detune="detuneCents"
 					v-model:spread="stereoSpread" />
 			</div>
@@ -205,7 +322,7 @@
 				<h2>Effects</h2>
 				<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
 					v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix" />
-
+				<hr />
 				<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
 					v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
 			</div>
@@ -269,30 +386,83 @@
 // IMPORTS START
 import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 import Knob from './Knob.vue';
-// import KnobGroup from './KnobGroup.vue';
-import DelayEffect from './DelayEffect.vue';
-import DriveEffect from './DriveEffect.vue';
-import UnisonEffect from './UnisonEffect.vue';
-import LFOGroup from './LFOGroup.vue';
-import MpcScreen from './Screen.vue'
-import PitchEnvModule from './modules/PitchEnvModule.vue'
-import { applyPitchEnv } from '../audio/pitchEnv'
-import FMModule from './modules/FMModule.vue'
-import { startFM } from '../audio/fm'
-import FilterModule from './modules/FilterModule.vue'
-import EnvelopeModule from './modules/EnvelopeModule.vue'
-import NoiseModule from './modules/NoiseModule.vue'
-import PadSettingsPopover from './PadSettingsPopover.vue'
-import PatternTools from './PatternTools.vue'
+import DelayEffect from './modules/DelayEffect.vue';
+import DriveEffect from './modules/DriveEffect.vue';
+import UnisonEffect from './modules/UnisonEffect.vue';
+import LFOGroup from './modules/LFOGroup.vue';
+import MpcScreen from './Screen.vue';
+import PitchEnvModule from './modules/PitchEnvModule.vue';
+import { applyPitchEnv } from '../audio/pitchEnv';
+import FMModule from './modules/FMModule.vue';
+import { startFM } from '../audio/fm';
+import FilterModule from './modules/FilterModule.vue';
+import EnvelopeModule from './modules/EnvelopeModule.vue';
+import NoiseModule from './modules/NoiseModule.vue';
+import PadSettingsPopover from './PadSettingsPopover.vue';
+import PatternTools from './PatternTools.vue';
 
 // IMPORTS END
 
+//PatternTools BEGIN
+const randomizeAmt = ref(0.5);
+const humanizeAmt = ref(0.08);
+
+// DrumSequencer.vue – keep only this for Randomize:
+function onRandomize(amt: number): void {
+	const inst = synthInstrument.value;
+	if (!inst) return;
+	for (let i = 0; i < inst.steps.length; i++) {
+		inst.steps[i] = Math.random() < amt; // only steps
+	}
+}
+
+
+function onHumanize(amt: number): void {
+	const inst = synthInstrument.value;
+	if (!inst) return;
+	for (let i = 0; i < inst.steps.length; i++) {
+		if (!inst.steps[i]) continue;
+		const v = inst.velocities[i];
+		inst.velocities[i] = Math.max(0, Math.min(1, v * (1 + (Math.random() * 2 - 1) * amt)));
+	}
+}
+
+function clear(): void {
+	const inst = synthInstrument.value;
+	if (!inst) return;
+	inst.steps = inst.steps.map(() => false);
+	// Optional: also reset velocities
+	// inst.velocities = inst.velocities.map(() => 1);
+}
+
+function invert(): void {
+	const inst = synthInstrument.value;
+	if (!inst) return;
+	inst.steps = inst.steps.map(v => !v);
+}
+
+function shift(delta: number): void {
+	const inst = synthInstrument.value;
+	if (!inst) return;
+	const len = inst.steps.length;
+	if (!len) return;
+
+	const n = ((delta % len) + len) % len;
+
+	const rot = <T>(arr: T[]) =>
+		n === 0 ? arr.slice() : arr.slice(len - n).concat(arr.slice(0, len - n));
+
+	inst.steps = rot(inst.steps);
+	inst.velocities = rot(inst.velocities);
+}
+
+//Patterntools END
 
 // FM Synthesis START
-const fmEnabled = ref(false)
-const fmModFreq = ref(200)     // Hz when not using ratio
-const fmIndex = ref(0)       // 0..50 typical range
-const fmRatio = ref<number | null>(1) // start as 1:1, or null for Hz mode
+const fmEnabled = ref(false);
+const fmModFreq = ref(200);     // Hz when not using ratio
+const fmIndex = ref(0);       // 0..50 typical range
+const fmRatio = ref<number | null>(1); // start as 1:1, or null for Hz mode
 // FM Synthesis END
 
 
@@ -302,70 +472,70 @@ const MAX_PAD_HZ = 2000;
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 // MPC Screen BEGIN
-const lcdText = ref('HARP  2')
-const activeFKey = ref<number>(1)
-const lcdView = ref<'text' | 'scope' | 'spec'>('scope') // default F1
-const screen = ref<InstanceType<typeof MpcScreen> | null>(null)
+const lcdText = ref('HARP  2');
+const activeFKey = ref<number>(1);
+const lcdView = ref<'text' | 'scope' | 'spec'>('scope'); // default F1
+const screen = ref<InstanceType<typeof MpcScreen> | null>(null);
 
 /** Fit a canvas to its CSS size (crisp on HiDPI) */
 function fitCanvasToBox(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
-	const dpr = window.devicePixelRatio || 1
-	const rect = canvas.getBoundingClientRect()
-	const w = Math.max(1, Math.round(rect.width * dpr))
-	const h = Math.max(1, Math.round(rect.height * dpr))
+	const dpr = window.devicePixelRatio || 1;
+	const rect = canvas.getBoundingClientRect();
+	const w = Math.max(1, Math.round(rect.width * dpr));
+	const h = Math.max(1, Math.round(rect.height * dpr));
 	if (canvas.width !== w || canvas.height !== h) {
-		canvas.width = w
-		canvas.height = h
+		canvas.width = w;
+		canvas.height = h;
 	}
-	ctx.setTransform(1, 0, 0, 1, 0, 0)
+	ctx.setTransform(1, 0, 0, 1, 0, 0);
 	// draw in CSS pixels but with DPR backing store:
-	ctx.scale(dpr, dpr)
+	ctx.scale(dpr, dpr);
 }
 
 /** Toggle by F-keys */
 function handleFKey(n: number) {
-	activeFKey.value = n
-	if (n === 1) lcdView.value = 'scope'
-	else if (n === 2) lcdView.value = 'spec'
-	else lcdView.value = 'text' // placeholders for F3–F6
+	activeFKey.value = n;
+	if (n === 1) lcdView.value = 'scope';
+	else if (n === 2) lcdView.value = 'spec';
+	else lcdView.value = 'text'; // placeholders for F3–F6
 }
 
 /** OSCILLOSCOPE (inside LCD) */
 function startScope() {
-	const canvas = screen.value!.scopeCanvas as HTMLCanvasElement
-	if (!canvas) return
-	const ctx = canvas.getContext('2d')
-	if (!ctx) return
+	const canvas = screen.value!.scopeCanvas as HTMLCanvasElement;
+	if (!canvas) return;
+	const ctx = canvas.getContext('2d');
+	if (!ctx) return;
 
 	function draw() {
-		requestAnimationFrame(draw)
-		if (lcdView.value !== 'scope') return
+		requestAnimationFrame(draw);
+		if (lcdView.value !== 'scope') return;
 
-		fitCanvasToBox(canvas, ctx)
-		const W = canvas.clientWidth
-		const H = canvas.clientHeight
+		fitCanvasToBox(canvas, ctx);
+		const W = canvas.clientWidth;
+		const H = canvas.clientHeight;
 
-		analyser.getByteTimeDomainData(dataArray)
+		analyser.getByteTimeDomainData(dataArray);
 
-		ctx.fillStyle = '#b9bcba'   // LCD bg
-		ctx.fillRect(0, 0, W, H)
+		ctx.fillStyle = '#b9bcba';   // LCD bg
+		ctx.fillRect(0, 0, W, H);
 
-		ctx.lineWidth = 2
-		ctx.strokeStyle = '#111'
-		ctx.beginPath()
+		ctx.lineWidth = 2;
+		ctx.strokeStyle = '#111';
+		ctx.beginPath();
 
-		const slice = W / analyser.fftSize
-		let x = 0
+		const slice = W / analyser.fftSize;
+		let x = 0;
 		for (let i = 0; i < analyser.fftSize; i++) {
-			const v = dataArray[i] / 128
-			const y = (v * H) / 2
-			i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-			x += slice
+			const v = dataArray[i] / 128;
+			const y = (v * H) / 2;
+			i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+			x += slice;
 		}
-		ctx.lineTo(W, H / 2)
-		ctx.stroke()
+		ctx.lineTo(W, H / 2);
+		ctx.stroke();
 	}
-	draw()
+	draw();
 }
 
 
@@ -470,23 +640,23 @@ const padPopover = ref({
 	open: false,
 	title: '',
 	anchorRect: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }
-})
+});
 
 function openPadSettings(name: string, index: number, evt: MouseEvent) {
 	// set which pad we’re editing (so currentPadHz points to the right cell)
-	padSettings.name = name
-	padSettings.index = index
+	padSettings.name = name;
+	padSettings.index = index;
 
-	const r = (evt.currentTarget as HTMLElement).getBoundingClientRect()
+	const r = (evt.currentTarget as HTMLElement).getBoundingClientRect();
 	padPopover.value.anchorRect = {
 		left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height
 	}
-	padPopover.value.title = `Pad ${index + 1}`
-	padPopover.value.open = true
+	padPopover.value.title = `Pad ${index + 1}`;
+	padPopover.value.open = true;
 }
 
 function closePadSettings() {
-	padPopover.value.open = false
+	padPopover.value.open = false;
 }
 
 const padSettings = reactive({
@@ -1023,111 +1193,111 @@ function schedule() {
 
 
 function playSynthNote(freq, velocity, decayTime, startTime) {
-	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01
-	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1
+	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
+	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
 
 	// ENV sums all unison voices
-	const oscEnvGain = audioCtx.createGain()
-	const noiseEnvGain = audioCtx.createGain()
+	const oscEnvGain = audioCtx.createGain();
+	const noiseEnvGain = audioCtx.createGain();
 
 	// Shared envelope timings
-	const attackEnd = startTime + attackTime
-	const naturalEnd = attackEnd + decay
-	const gateEnd = startTime + Math.max(0.02, ampEnvDecayMs.value / 1000)
-	const noteEnd = envelopeEnabled.value ? naturalEnd : gateEnd
+	const attackEnd = startTime + attackTime;
+	const naturalEnd = attackEnd + decay;
+	const gateEnd = startTime + Math.max(0.02, ampEnvDecayMs.value / 1000);
+	const noteEnd = envelopeEnabled.value ? naturalEnd : gateEnd;
 
 	// Compute blends BEFORE using safeOscGain
-	const blend = noiseEnabled.value ? Math.min(Math.max(noiseAmount.value, 0), 1) : 0
-	const oscBlend = 1 - blend
-	const noiseBlend = blend
-	const safeOscGain = Math.max(0.0001, velocity * oscBlend)
-	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend)
+	const blend = noiseEnabled.value ? Math.min(Math.max(noiseAmount.value, 0), 1) : 0;
+	const oscBlend = 1 - blend;
+	const noiseBlend = blend;
+	const safeOscGain = Math.max(0.0001, velocity * oscBlend);
+	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
 
 	// Single amplitude envelope (remove the duplicate block you had)
 	if (envelopeEnabled.value) {
-		oscEnvGain.gain.setValueAtTime(0.0001, startTime)
-		oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd)
-		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd)
+		oscEnvGain.gain.setValueAtTime(0.0001, startTime);
+		oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
+		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
 	} else {
-		oscEnvGain.gain.setValueAtTime(Math.max(0.0001, velocity), startTime)
-		oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005)
+		oscEnvGain.gain.setValueAtTime(Math.max(0.0001, velocity), startTime);
+		oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005);
 	}
 
 	// ===== UNISON =====
-	const voices = unisonEnabled.value ? Math.max(1, Math.min(6, unisonVoices.value)) : 1
-	const detuneStep = (voices > 1) ? detuneCents.value : 0
-	const spreadPct = (voices > 1) ? stereoSpread.value : 0
-	const normIndex = (i, n) => (n === 1) ? 0 : ((i / (n - 1)) * 2 - 1)
+	const voices = unisonEnabled.value ? Math.max(1, Math.min(6, unisonVoices.value)) : 1;
+	const detuneStep = (voices > 1) ? detuneCents.value : 0;
+	const spreadPct = (voices > 1) ? stereoSpread.value : 0;
+	const normIndex = (i, n) => (n === 1) ? 0 : ((i / (n - 1)) * 2 - 1);
 
 	for (let i = 0; i < voices; i++) {
-		const osc = audioCtx.createOscillator()
-		const voiceFilter = audioCtx.createBiquadFilter()
-		const voiceGain = audioCtx.createGain()
-		const panner = audioCtx.createStereoPanner()
+		const osc = audioCtx.createOscillator();
+		const voiceFilter = audioCtx.createBiquadFilter();
+		const voiceGain = audioCtx.createGain();
+		const panner = audioCtx.createStereoPanner();
 
-		osc.type = selectedWaveform.value
+		osc.type = selectedWaveform.value;
 
 		applyPitchEnv(osc, freq, startTime, {
 			enabled: pitchEnvEnabled.value,
 			semitones: pitchEnvSemitones.value,
 			mode: pitchMode.value,
 			decay: pitchEnvDecay.value
-		})
+		});
 
 		const fmHandle = startFM(audioCtx, osc, freq, startTime, {
 			enabled: fmEnabled.value,
 			modFreqHz: fmModFreq.value,
 			index: fmIndex.value,
 			ratio: fmRatio.value
-		})
+		});
 
-		const dNorm = normIndex(i, voices)
-		const detuneC = dNorm * detuneStep
-		osc.detune.setValueAtTime(detuneC, startTime)
+		const dNorm = normIndex(i, voices);
+		const detuneC = dNorm * detuneStep;
+		osc.detune.setValueAtTime(detuneC, startTime);
 
-		voiceFilter.type = 'lowpass'
+		voiceFilter.type = 'lowpass';
 		if (filterEnabled.value) {
-			voiceFilter.frequency.setValueAtTime(filterCutoff.value, startTime)
-			voiceFilter.Q.setValueAtTime(filterResonance.value, startTime)
+			voiceFilter.frequency.setValueAtTime(filterCutoff.value, startTime);
+			voiceFilter.Q.setValueAtTime(filterResonance.value, startTime);
 		} else {
-			voiceFilter.frequency.setValueAtTime(20000, startTime)
-			voiceFilter.Q.setValueAtTime(0.0001, startTime)
+			voiceFilter.frequency.setValueAtTime(20000, startTime);
+			voiceFilter.Q.setValueAtTime(0.0001, startTime);
 		}
 
-		voiceGain.gain.setValueAtTime(1 / voices, startTime)
-		panner.pan.setValueAtTime((dNorm * spreadPct) / 100, startTime)
+		voiceGain.gain.setValueAtTime(1 / voices, startTime);
+		panner.pan.setValueAtTime((dNorm * spreadPct) / 100, startTime);
 
 		if (lfoEnabled.value) {
 			if (lfoTarget.value === 'pitch') {
-				const lfoTap = audioCtx.createGain()
-				lfoTap.gain.value = 1
-				lfoGain.connect(lfoTap).connect(osc.frequency)
+				const lfoTap = audioCtx.createGain();
+				lfoTap.gain.value = 1;
+				lfoGain.connect(lfoTap).connect(osc.frequency);
 			} else if (lfoTarget.value === 'gain') {
-				const lfoModGain = audioCtx.createGain()
-				lfoModGain.gain.value = lfoDepth.value * 0.005
+				const lfoModGain = audioCtx.createGain();
+				lfoModGain.gain.value = lfoDepth.value * 0.005;
 
 				const lfoOffset = audioCtx.createConstantSource()
-				lfoOffset.offset.value = velocity * 0.75
+				lfoOffset.offset.value = velocity * 0.75;
 
-				const lfoSum = audioCtx.createGain()
-				lfoGain.connect(lfoModGain).connect(lfoSum)
-				lfoOffset.connect(lfoSum)
-				lfoSum.connect(voiceGain.gain)
+				const lfoSum = audioCtx.createGain();
+				lfoGain.connect(lfoModGain).connect(lfoSum);
+				lfoOffset.connect(lfoSum);
+				lfoSum.connect(voiceGain.gain);
 
-				lfoOffset.start(startTime)
-				lfoOffset.stop(noteEnd + 0.05) // was decayEnd
+				lfoOffset.start(startTime);
+				lfoOffset.stop(noteEnd + 0.05); // was decayEnd
 			} else if (lfoTarget.value === 'filter') {
-				const lfoTap = audioCtx.createGain()
-				lfoTap.gain.value = 1
-				lfoGain.connect(lfoTap).connect(voiceFilter.frequency)
+				const lfoTap = audioCtx.createGain();
+				lfoTap.gain.value = 1;
+				lfoGain.connect(lfoTap).connect(voiceFilter.frequency);
 			}
 		}
 
-		osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain)
+		osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
 
-		osc.start(startTime)
-		osc.stop(noteEnd)
-		if (fmHandle) fmHandle.stop(noteEnd)
+		osc.start(startTime);
+		osc.stop(noteEnd);
+		if (fmHandle) fmHandle.stop(noteEnd);
 	}
 
 	if (driveEnabled.value) {

@@ -34,8 +34,8 @@
 
 <script setup>
 import { ref, watch, computed } from 'vue'
-import Knob from './Knob.vue'
-import KnobGroup from './KnobGroup.vue'
+import Knob from '../Knob.vue'
+import KnobGroup from '../KnobGroup.vue'
 
 const props = defineProps({
     /* v-model for enabled */

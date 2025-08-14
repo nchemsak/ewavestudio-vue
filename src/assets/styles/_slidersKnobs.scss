@@ -359,9 +359,8 @@ input[type="range"]::-webkit-slider-thumb {
 .knob-stack.disabled .dial-svg path:nth-child(2),
 .knob-wrapper.disabled .dial-svg path:nth-child(2),
 .knob-wrapper[aria-disabled="true"] .dial-svg path:nth-child(2) {
-    stroke: #555 !important; 
+    stroke: #555 !important;
 }
-
 
 .knob-wrapper.disabled .dial-grip,
 .knob-wrapper[aria-disabled="true"] .dial-grip {
@@ -426,7 +425,6 @@ input[type="range"]::-webkit-slider-thumb {
     gap: 0.5rem;
     padding-bottom: 8px;
     border-bottom: 2px solid #1d1d1d;
-
 }
 
 .knob-group-header .effect-toggle {
@@ -462,11 +460,7 @@ input[type="range"]::-webkit-slider-thumb {
     user-select: none;
     display: flex;
     align-items: center;
-    &:hover {
-        .group-title {
-            color: #fff;
-        }
-    }
+
     .effect-toggle {
         width: 12px;
         height: 12px;
@@ -478,6 +472,11 @@ input[type="range"]::-webkit-slider-thumb {
         font-weight: bold;
         color: #ccc;
         cursor: pointer;
+        &:hover {
+            // .group-title {
+            color: #fff;
+            // }
+        }
     }
 }
 

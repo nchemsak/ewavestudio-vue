@@ -49,9 +49,10 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
-import Knob from './Knob.vue';
-import KnobGroup from './KnobGroup.vue';
+
+import { ref, watch } from 'vue'
+import Knob from '../Knob.vue'
+import KnobGroup from '../KnobGroup.vue'
 
 const props = defineProps({
     enabled: Boolean,

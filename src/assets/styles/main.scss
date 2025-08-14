@@ -1,12 +1,13 @@
-@use './variables';
+@use "./variables";
+@use "./general"; 
 @use "./slidersKnobs";
 @use "./drumSequencer";
 @use "./keyboard";
 @use "./oscilloscope";
-@use './midi';
-@use './percussionSynth';
+@use "./midi";
+@use "./percussionSynth";
 @use "./effects";
-@use './waveShapeSection';
-// @use './theremin';
+@use "./waveShapeSection";
+
 // @use './form';
 // @use './utilities';
