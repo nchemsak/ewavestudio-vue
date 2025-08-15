@@ -368,11 +368,13 @@
 	/* Tweak in one place */
 	--pad-w: 30px; /* pad width  */
 	--pad-h: 100px; /* pad height */
-	--slider-w: 30px; /* slider column width (matches pad width) */
+	// --slider-w: 30px; /* slider column width (matches pad width) */
+	--slider-w: 74px;
 	--slider-l: 100px; /* how far sliders extend away from pad */
 	--track-thickness: 8px; /* visual thickness of the track */
-	--thumb-thickness: 6px; /* visual thickness of the thumb bar */
 
+	// --thumb-thickness: 6px; /* visual thickness of the thumb bar */
+	--thumb-thickness: 10px;
 	position: relative;
 	color: white;
 	border-radius: 18px;
@@ -407,6 +409,17 @@
 		box-shadow: 0 0 6px #0ff;
 	}
 	.pad.selected.playing {
+		background-color: #0ff;
+	}
+
+	.padTEST.selected {
+		background-color: #0cf;
+	}
+	.padTEST.playing {
+		border: 2px solid #fff;
+		box-shadow: 0 0 6px #0ff;
+	}
+	.padTEST.selected.playing {
 		background-color: #0ff;
 	}
 
@@ -513,7 +526,7 @@
 	/* Track */
 	.hover-slider input[type="range"]::-webkit-slider-runnable-track {
 		height: var(--track-thickness);
-		background: rgba(255, 255, 255, 0.2);
+		// background: rgba(255, 255, 255, 0.2);
 		border-radius: 2px;
 	}
 	.hover-slider input[type="range"]::-moz-range-track {

@@ -1,8 +1,8 @@
 <template>
-	<div class="drum-sequencer">
-		<div class="controls d-flex flex-wrap align-items-center justify-content-between mb-4">
+	<div class="drum-sequencer controls">
+		<div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
 
-			<div class="position-relative text-center">
+			<div class="position-relative text-center knobWrap">
 				<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="medium" color="#23CDE8"
 					@knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'volume'" class="custom-tooltip">
@@ -11,7 +11,7 @@
 			</div>
 
 
-			<div class="position-relative text-center">
+			<div class="position-relative text-center knobWrap">
 				<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium" color="#F39C12"
 					@knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'tempo'" class="custom-tooltip">
@@ -20,162 +20,61 @@
 			</div>
 
 
-			<div class="position-relative text-center">
+			<div class="position-relative text-center knobWrap">
 				<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="medium" color="#E91E63"
 					@knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'swing'" class="custom-tooltip">
 					{{ Math.round(swing * 100) }}%
 				</span>
 			</div>
-
-			<button class="btn btn-primary" @click="togglePlay">
-				<span v-if="isPlaying">Stop</span>
-				<span v-else>Play</span>
-			</button>
-			<div class="btn-group ms-2">
-				<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(-1)">
-					Octave −
-				</button>
-				<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(1)">
-					Octave +
+			<div class="position-relative text-center knobWrap">
+				<button class="btn btn-primary" @click="togglePlay">
+					<span v-if="isPlaying">Stop</span>
+					<span v-else>Play</span>
 				</button>
 			</div>
+			<div class="position-relative text-center knobWrap">
+				<div class="btn-group ms-2">
+					<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(-1)">
+						Octave −
+					</button>
+					<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(1)">
+						Octave +
+					</button>
+				</div>
+			</div>
+			<div class="position-relative text-center knobWrap">
 
-			<MpcScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey" @fkey="handleFKey" />
+				<MpcScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey" @fkey="handleFKey" />
+			</div>
+			<div class="position-relative text-center knobWrap">
 
+				<!-- <div class="padTEST-grid"> -->
+				<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat, nick1, liquid -->
+				<!-- <button class="padTEST liquid" aria-label="padTEST"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+					<button class="padTEST liquid"></button>
+				</div> -->
+			</div>
 		</div>
-	</div>
-	<div class="controls">
-	<div class="padTEST-grid">
-		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
-		<button class="padTEST neon" aria-label="padTEST"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-		<button class="padTEST neon"></button>
-	</div>
-	<div class="padTEST-grid">
-		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
-		<button class="padTEST gel" aria-label="padTEST"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-		<button class="padTEST gel"></button>
-	</div>
-	<div class="padTEST-grid">
-		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
-		<button class="padTEST bevel" aria-label="padTEST"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-		<button class="padTEST bevel"></button>
-	</div>
+
+		<!-- </div>
 
 
-
-	<div class="padTEST-grid">
-		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
-		<button class="padTEST liquid" aria-label="padTEST"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-		<button class="padTEST liquid"></button>
-	</div>
-
-
-
-	<div class="padTEST-grid">
-		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
-		<button class="padTEST aurora" aria-label="padTEST"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-		<button class="padTEST aurora"></button>
-	</div>
-
-
-
-
-	<div class="padTEST-grid">
-		<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat -->
-		<button class="padTEST nick1" aria-label="padTEST"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-		<button class="padTEST nick1"></button>
-	</div>
-
-
-
-
-	</div>
-	<div class="drum-sequencer" id="percussion-synth">
+	<div class="drum-sequencer" id="percussion-synth"> -->
 		<div v-if="synthInstrument" class="mb-3">
 			<div class="d-flex align-items-center gap-2 mb-1">
 				<div class="mute-indicator" :class="{ muted: synthInstrument.muted }"
@@ -198,8 +97,6 @@
 							class="form-control form-control-sm" style="max-width: 150px;"
 							:ref="el => synthInstrument.inputRef = el" />
 					</template>
-
-
 				</div>
 			</div>
 
@@ -212,55 +109,60 @@
 				</span>
 			</div>
 
-
-
-
-
-
 			<div class="d-flex pad-row">
-				<div v-for="(active, index) in synthInstrument.steps" :key="index" class="pad-wrapper"
+				<!-- <div v-for="(active, index) in synthInstrument.steps" :key="index" class="pad-wrapper"
 					@mouseenter="hoveredPad = `${synthInstrument.name}-${index}`" @mouseleave="hoveredPad = null">
 					<div :class="['pad', { selected: active }, { playing: index === currentStep }]"
 						@mousedown="handleMouseDown($event, synthInstrument.name, index)"
 						@mouseenter="handleMouseEnter(synthInstrument.name, index)" @dragstart.prevent
 						:style="getPadStyle(synthInstrument, index)">
+					</div> -->
+				<div class="padTEST-grid">
+					<div v-for="(active, index) in synthInstrument.steps" :key="index" class="padTESTwrap"
+						@mouseenter="hoveredPad = `${synthInstrument.name}-${index}`" @mouseleave="hoveredPad = null">
+						<div :class="['padTEST liquid', { selected: active }, { playing: index === currentStep }]"
+							@mousedown="handleMouseDown($event, synthInstrument.name, index)"
+							@mouseenter="handleMouseEnter(synthInstrument.name, index)" @dragstart.prevent
+							:style="getPadStyle(synthInstrument, index)">
+						</div>
+						<!-- Settings dot (top-right) -->
+						<button class="pad-settings-dot" @mousedown.stop
+							@click.stop="openPadSettings(synthInstrument.name, index, $event)"
+							aria-label="Pad settings">
+							•
+						</button>
+
+						<!-- Volume Slider -->
+						<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
+							class="hover-slider volume-slider">
+							<input type="range" min="0" max="1" step="0.01"
+								v-model.number="synthInstrument.velocities[index]"
+								@mousedown="activeVolumePad = `${synthInstrument.name}-${index}`"
+								@mouseup="activeVolumePad = null"
+								@touchstart="activeVolumePad = `${synthInstrument.name}-${index}`"
+								@touchend="activeVolumePad = null" />
+							<span v-if="activeVolumePad === `${synthInstrument.name}-${index}`" class="custom-tooltip">
+								{{ Math.round(synthInstrument.velocities[index] * 100) }}%
+							</span>
+						</div>
+
+
+						<!-- Pitch Slider -->
+						<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
+							class="hover-slider pitch-slider">
+							<input type="range" :min="MIN_PAD_HZ" :max="MAX_PAD_HZ" step="1"
+								v-model.number="synthInstrument.pitches[index]"
+								@mousedown="activePitchPad = `${synthInstrument.name}-${index}`"
+								@mouseup="activePitchPad = null"
+								@touchstart="activePitchPad = `${synthInstrument.name}-${index}`"
+								@touchend="activePitchPad = null" />
+							<span v-if="activePitchPad === `${synthInstrument.name}-${index}`" class="custom-tooltip">
+								{{ nearestNote(synthInstrument.pitches[index]) }} · {{
+									Math.round(synthInstrument.pitches[index]) }} Hz
+							</span>
+						</div>
+
 					</div>
-					<!-- Settings dot (top-right) -->
-					<button class="pad-settings-dot" @mousedown.stop
-						@click.stop="openPadSettings(synthInstrument.name, index, $event)" aria-label="Pad settings">
-						•
-					</button>
-
-					<!-- Volume Slider -->
-					<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
-						class="hover-slider volume-slider">
-						<input type="range" min="0" max="1" step="0.01"
-							v-model.number="synthInstrument.velocities[index]"
-							@mousedown="activeVolumePad = `${synthInstrument.name}-${index}`"
-							@mouseup="activeVolumePad = null"
-							@touchstart="activeVolumePad = `${synthInstrument.name}-${index}`"
-							@touchend="activeVolumePad = null" />
-						<span v-if="activeVolumePad === `${synthInstrument.name}-${index}`" class="custom-tooltip">
-							{{ Math.round(synthInstrument.velocities[index] * 100) }}%
-						</span>
-					</div>
-
-
-					<!-- Pitch Slider -->
-					<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
-						class="hover-slider pitch-slider">
-						<input type="range" :min="MIN_PAD_HZ" :max="MAX_PAD_HZ" step="1"
-							v-model.number="synthInstrument.pitches[index]"
-							@mousedown="activePitchPad = `${synthInstrument.name}-${index}`"
-							@mouseup="activePitchPad = null"
-							@touchstart="activePitchPad = `${synthInstrument.name}-${index}`"
-							@touchend="activePitchPad = null" />
-						<span v-if="activePitchPad === `${synthInstrument.name}-${index}`" class="custom-tooltip">
-							{{ nearestNote(synthInstrument.pitches[index]) }} · {{
-								Math.round(synthInstrument.pitches[index]) }} Hz
-						</span>
-					</div>
-
 				</div>
 			</div>
 		</div>
@@ -320,8 +222,9 @@
 			<div class="controls">
 
 				<h2>Effects</h2>
-				<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
-					v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix" />
+				<DelayEffect :audioCtx="audioCtx" v-model:enabled="delayEnabled" v-model:syncEnabled="delaySync"
+					:tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback"
+					v-model:delayMix="delayMix" />
 				<hr />
 				<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
 					v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
@@ -856,9 +759,10 @@ const noiseEnabled = ref(false)
 
 // Delay Start
 const delayEnabled = ref(false);
-const delayTime = ref(0.2);      // seconds (0.01 to 1.0)
-const delayFeedback = ref(0.3);  // 0–0.95 recommended
-const delayMix = ref(0.3);       // 0–1
+const delaySync = ref(false);        // NEW
+const delayTime = ref(0.2);          // seconds (0.01 to 1.0)
+const delayFeedback = ref(0.3);      // 0–0.95
+const delayMix = ref(0.3);           // 0–1
 
 
 const delayNode = audioCtx.createDelay(5.0); // max delay time = 5s

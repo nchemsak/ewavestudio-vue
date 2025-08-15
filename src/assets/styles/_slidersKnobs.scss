@@ -597,3 +597,7 @@ input[type="range"]::-webkit-slider-thumb {
     --bs-btn-padding-x: 8px !important;
     --bs-btn-font-size: 9px !important;
 }
+
+.knobWrap {
+    display: inline-block;
+}

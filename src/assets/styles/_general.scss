@@ -308,8 +308,6 @@ hr {
         filter: brightness(1.05) saturate(1.1);
     }
 
-
-
     .padTEST.nick1 {
         position: relative;
         border-radius: 50%;
@@ -340,5 +338,7 @@ hr {
         filter: brightness(1.05) saturate(1.1);
     }
 
-
+    .padTESTwrap {
+        position: relative;
+    }
 }
