@@ -10,7 +10,6 @@
 				</span>
 			</div>
 
-
 			<div class="position-relative text-center knobWrap">
 				<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium" color="#F39C12"
 					@knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
@@ -18,7 +17,6 @@
 					{{ tempo }} BPM
 				</span>
 			</div>
-
 
 			<div class="position-relative text-center knobWrap">
 				<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="medium" color="#E91E63"
@@ -187,18 +185,11 @@
 					v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled" v-model:toneHz="delayToneHz"
 					v-model:toneType="delayToneType" />
 
-
-
-
 				<hr />
 				<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
 					v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
 			</div>
 		</div>
-
-		<!-- <SequencerKeyboard @note-on="onKeyboardNoteOn" @note-off="onKeyboardNoteOff" /> -->
-		<!-- <SequencerKeyboard :enable-qwerty="true" :enable-midi="false" :qwerty-velocity="1" @note-on="onKeyboardNoteOn"
-			@note-off="onKeyboardNoteOff" /> -->
 	</div>
 
 
@@ -229,11 +220,13 @@ import PatternTools from './PatternTools.vue';
 
 // IMPORTS END
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 //PatternTools BEGIN
 const randomizeAmt = ref(0.5);
 const humanizeAmt = ref(0.08);
 
-// DrumSequencer.vue – keep only this for Randomize:
+//  keep only this for Randomize:
 function onRandomize(amt: number): void {
 	const inst = synthInstrument.value;
 	if (!inst) return;
@@ -257,8 +250,6 @@ function clear(): void {
 	const inst = synthInstrument.value;
 	if (!inst) return;
 	inst.steps = inst.steps.map(() => false);
-	// Optional: also reset velocities
-	// inst.velocities = inst.velocities.map(() => 1);
 }
 
 function invert(): void {
@@ -284,6 +275,8 @@ function shift(delta: number): void {
 
 //Patterntools END
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 // FM Synthesis START
 const fmEnabled = ref(false);
 const fmModFreq = ref(200);     // Hz when not using ratio
@@ -291,11 +284,14 @@ const fmIndex = ref(0);       // 0..50 typical range
 const fmRatio = ref<number | null>(1); // start as 1:1, or null for Hz mode
 // FM Synthesis END
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 const A4 = 440;
 const MIN_PAD_HZ = 100;
 const MAX_PAD_HZ = 2000;
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 // MPC Screen BEGIN
 const lcdText = ref('HARP  2');
@@ -454,12 +450,22 @@ onMounted(() => {
 	// start both loops; each only draws when its view is active
 	startScope();
 	startSpectrogram();
+
+	// window.addEventListener('keydown', onGlobalKeydown);
+	window.addEventListener('keydown', onGlobalKeydown, { capture: true });
+	window.addEventListener('keyup', onGlobalKeyup, { capture: true });
+
 });
 onBeforeUnmount(() => {
 	cancelAnimationFrame(loopId);
 	window.removeEventListener('mouseup', handleMouseUp);
+	window.removeEventListener('keydown', onGlobalKeydown, { capture: true } as any);
+	window.removeEventListener('keyup', onGlobalKeyup, { capture: true } as any);
+
 });
 // MPC Screen END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Pad settings popover BEGIN
 const padPopover = ref({
@@ -491,6 +497,7 @@ const padSettings = reactive({
 })
 // Pad settings popover END
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Reuse shared AudioContext
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -596,7 +603,7 @@ const availableOctaves = computed(() => {
 			if (isNoteInRange(o, s)) { octs.push(o); break; }
 		}
 	}
-	return octs; // let MIN_PAD_HZ/MAX_PAD_HZ drive it
+	return octs;
 });
 
 // Global Octave controls
@@ -623,19 +630,12 @@ function octaveShiftAllSkip(deltaOct, { onlyActive = false } = {}) {
 			skipped++;
 		}
 	}
-
-	// Optional: dev log so you can see behavior while testing
-	console.info(
-		`Octave ${deltaOct > 0 ? '+' : '-'} (skip mode): moved=${moved}, skipped=${skipped}`
-	);
 }
-
 
 // Disable specific note buttons that would be out of range
 function isNoteDisabled(semitone, octave) {
 	return !isNoteInRange(octave, semitone);
 }
-
 
 function midiToFreq(m) { return A4 * Math.pow(2, (m - 69) / 12); }
 function freqToMidi(f) { return Math.round(69 + 12 * Math.log2(f / A4)); }
@@ -655,7 +655,6 @@ const filterEnabled = ref(true);
 const filterCutoff = ref(5000); // Hz, default cutoff
 const filterResonance = ref(0.5); // Q factor
 
-
 const ampEnvAttackMs = ref(20)   // ~20 ms default (feel free to tweak)
 const ampEnvDecayMs = ref(400)  // ~400 ms
 
@@ -665,9 +664,10 @@ const synthDecay = computed(() => ampEnvDecayMs.value / 1000)
 const pitchEnvSemitones = ref(0); // Default = 1 octave up
 const pitchEnvDecayMs = ref(300);
 
-// const pitchMode = ref('up'); // or 'down', 'random'
 const pitchMode = ref<'up' | 'down' | 'random'>('up')
 const pitchEnvDecay = computed(() => pitchEnvDecayMs.value / 1000)  // seconds
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Noise START
 type NoiseType = 'white' | 'pink' | 'brown'
@@ -680,6 +680,8 @@ const noiseAmount = ref(0); // 0 = no noise, 1 = full noise
 const noiseEnabled = ref(false)
 // Noise END
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 // Delay Start
 const delayEnabled = ref(false);
 const delaySync = ref(false);        // NEW
@@ -689,10 +691,6 @@ const delayMix = ref(0.3);           // 0–1
 const delayToneHz = ref(5000);
 const delayToneType = ref('lowpass');
 const delayToneEnabled = ref(true);
-
-// const delayDuckEnabled = ref(true);
-// const delayDuckAmt = ref(0.6);
-// const delayDuckRelease = ref(0.2);
 
 
 const delayNode = audioCtx.createDelay(5.0); // max delay time = 5s
@@ -704,11 +702,6 @@ feedbackGain.gain.value = delayFeedback.value;
 const delayWet = audioCtx.createGain();
 const delayDry = audioCtx.createGain();
 applyDelayEnabled(delayEnabled.value);
-
-// feedback loop
-// delayNode.connect(feedbackGain);
-// feedbackGain.connect(delayNode);
-
 
 const fbTone = audioCtx.createBiquadFilter();
 fbTone.type = 'lowpass';
@@ -725,16 +718,6 @@ feedbackGain.connect(delayNode);
 
 delayNode.connect(wetTone);
 wetTone.connect(delayWet);
-
-// watch(delayToneHz, v => fbTone.frequency.setTargetAtTime(v, audioCtx.currentTime, 0.02));
-// watch(delayToneType, t => { fbTone.type = (t === 'highpass') ? 'highpass' : 'lowpass'; });
-
-
-// dry + wet summing nodes connect to master output
-// delayNode.connect(delayWet);
-// fbTone.connect(delayWet);
-
-
 
 watch(delayTime, val => {
 	const t = audioCtx.currentTime;
@@ -792,27 +775,10 @@ function applyDelayEnabled(on) {
 	}
 }
 
-// function duckDelay(atTime) {
-// 	if (!delayEnabled.value || !delayDuckEnabled.value) return;
-
-// 	const base = delayMix.value;
-// 	const amount = Math.min(0.9, Math.max(0, delayDuckAmt.value));
-// 	const release = delayDuckRelease.value;
-
-// 	const sixteenth = 60 / tempo.value / 4;
-// 	const hold = Math.min(0.12, Math.max(0.04, sixteenth * 0.4));
-
-// 	const t = atTime;
-// 	delayWet.gain.setValueAtTime(base, t - 0.001); // anchor	
-// 	delayWet.gain.cancelScheduledValues(t);
-// 	delayWet.gain.setTargetAtTime(base * (1 - amount), t, 0.005);
-// 	delayWet.gain.setTargetAtTime(base, t + hold, release);
-// }
-
-
-// const delayToneEnabled = ref(true);
 
 //Delay END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Drive START
 const driveEnabled = ref(false);
@@ -870,6 +836,8 @@ watch(driveMix, val => {
 
 //Drive END
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 
 // Unison / Detune START
 const unisonEnabled = ref(false);
@@ -877,6 +845,8 @@ const unisonVoices = ref(3);   // 1–6
 const detuneCents = ref(12);  // 0–100 cents per step
 const stereoSpread = ref(50);  // 0–100 %
 // Unison / Detune END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 // LFO START
 const lfoEnabled = ref(true); // toggle knob group
@@ -906,7 +876,9 @@ watch(lfoDepth, depth => {
 });
 // LFO END
 
-// === Pad Settings START ===
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// Pad Settings START
 
 function setPadHz(hz) {
 	const inst = instruments.value.find(i => i.name === padSettings.name);
@@ -915,7 +887,65 @@ function setPadHz(hz) {
 	inst.pitches[padSettings.index] = clamped;
 }
 
-// === Pad Settings END
+// Pad Settings END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+
+// Space Bar play/stop controls BEGIN
+
+function isTypingTarget(el: EventTarget | null): boolean {
+	const t = el as HTMLElement | null;
+	if (!t) return false;
+	return !!t.closest('input, textarea, select, [contenteditable], [contenteditable="true"]');
+}
+
+function onGlobalKeydown(e: KeyboardEvent) {
+	const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
+	if (!isSpace) return;
+
+	if (e.repeat) {
+		e.preventDefault();
+		return;
+	}
+
+	const el = e.target as HTMLElement | null;
+
+	// If we're typing, ignore
+	if (isTypingTarget(el)) return;
+
+	// If focus is on a button (or role=button), hijack the spacebar
+	const onButton = el?.closest('button, [role="button"]');
+	if (onButton) {
+		e.preventDefault();
+		e.stopPropagation();
+		togglePlay();
+		return;
+	}
+
+	// Global toggle elsewhere
+	e.preventDefault(); // avoid page scroll
+	togglePlay();
+}
+
+// Prevent the button’s default "space => click" on keyup too
+function onGlobalKeyup(e: KeyboardEvent) {
+	const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
+	if (!isSpace) return;
+	const el = e.target as HTMLElement | null;
+	if (el?.closest('button, [role="button"]')) {
+		e.preventDefault();
+		e.stopPropagation();
+	}
+}
+
+
+// Space Bar play/stop controls END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+
+
 
 const displayHz = computed(() =>
 	(Math.round(currentPadHz.value * 100) / 100).toFixed(2)
@@ -989,7 +1019,6 @@ const dataArray = new Uint8Array(analyser.fftSize);
 masterGain.connect(analyser);
 
 
-
 function addCustomChannel() {
 	const id = Date.now();
 	instruments.value.push({
@@ -1055,39 +1084,7 @@ function playBuffer(buffer, time, velocity = 1) {
 }
 
 
-//KEYBOARD BEGIN
 
-// Keep track if you want to gate releases later; optional for one-shots:
-// const liveNotes = new Map<string, number>(); // note -> startedAt (or voice id if you add one later)
-
-/**
- * When a keyboard note is pressed, trigger the *same* engine your pads use:
- * playSynthNote(freq, velocity, decayTime, startTime)
- */
-// async function onKeyboardNoteOn(payload: { note: string; freq: number; velocity: number }) {
-// 	if (audioCtx.state !== 'running') {
-// 		try { await audioCtx.resume(); } catch { }
-// 	}
-
-// 	const { freq, velocity } = payload;
-// 	const decay = (isFinite(synthDecay.value) && synthDecay.value > 0) ? synthDecay.value : 0.2;
-// 	const t = audioCtx.currentTime;
-// 	playSynthNote(freq, velocity, decay, t);
-// 	liveNotes.set(payload.note, t);
-// }
-
-/**
- * For now, your percussion voice is one-shot (envelope-decay driven),
- * so we don’t need to explicitly stop the note early.
- * This handler is here if/when you want gateable sustain later.
- */
-// function onKeyboardNoteOff(payload: { note: string }) {
-// 	liveNotes.delete(payload.note);
-// 	// If you later switch to a gated envelope, you can fade out here.
-// 	// e.g., keep a map of voice gains and ramp to zero.
-// }
-
-//KEYBOARD END
 
 function schedule() {
 	const now = audioCtx.currentTime;
@@ -1449,11 +1446,6 @@ function initDriveNow() {
 	driveWet.gain.setValueAtTime(driveMix.value, t);
 	driveDry.gain.setValueAtTime(1 - driveMix.value, t);
 }
-
-// run once when the component mounts
-// onMounted(() => {
-// 	initDriveNow();
-// });
 
 // when the user turns Drive on during playback, pre-warm everything
 watch(driveEnabled, on => {
