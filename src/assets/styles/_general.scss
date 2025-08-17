@@ -9,12 +9,14 @@ hr {
 }
 
 .padTEST-grid {
-    display: grid;
-    grid-template-columns: repeat(4, var(--padTEST-size));
-    gap: 14px;
-    width: max-content;
-
+    // display: grid;
+    // grid-template-columns: repeat(4, var(--padTEST-size));
+    // gap: 14px;
+    // width: max-content;
+    display: flex;
+    justify-content: space-around;
     .padTEST {
+        display: inline-block;
         inline-size: var(--padTEST-size);
         block-size: var(--padTEST-size);
         border-radius: var(--padTEST-radius);

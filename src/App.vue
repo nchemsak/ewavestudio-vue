@@ -16,7 +16,7 @@
 
 <script setup>
 import DrumSequencer from './components/DrumSequencer.vue';
-import ComputerKeyboard from './components/ComputerKeyboard.vue'
+// import ComputerKeyboard from './components/ComputerKeyboard.vue'
 </script>
 
 

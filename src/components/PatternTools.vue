@@ -15,7 +15,7 @@
         <!-- Randomize (steps only) -->
         <div class="d-flex align-items-center gap-3 mb-3">
             <div class="position-relative text-center">
-                <Knob v-model="randomizeAmt" label="Randomize %" :min="0" :max="1" :step="0.01" size="small"
+                <Knob v-model="randomizeAmt" label="Randomize" :min="0" :max="1" :step="0.01" size="small"
                     color="#2ECC71" @knobStart="activeKnob = 'rand'" @knobEnd="activeKnob = null" />
                 <span v-if="activeKnob === 'rand'" class="custom-tooltip">
                     {{ Math.round(randomizeAmt * 100) }}%
@@ -25,23 +25,21 @@
             <button class="btn btn-sm btn-outline-success" @click="randomize">
                 Randomize
             </button>
-            <!-- <small class="text-muted">Steps only</small> -->
         </div>
 
         <!-- Humanize (velocities only, from 100% each click) -->
         <div class="d-flex align-items-center gap-3" v-if="props.velocities">
             <div class="position-relative text-center">
-                <Knob v-model="humanizeAmt" label="Humanize %" :min="0" :max="1" :step="0.01" size="small"
-                    color="#9B59B6" @knobStart="activeKnob = 'human'" @knobEnd="activeKnob = null" />
+                <Knob v-model="humanizeAmt" label="Humanize" :min="0" :max="1" :step="0.01" size="small" color="#9B59B6"
+                    @knobStart="activeKnob = 'human'" @knobEnd="activeKnob = null" />
                 <span v-if="activeKnob === 'human'" class="custom-tooltip">
-                    up to {{ Math.round(humanizeAmt * 100) }}% range
+                    {{ Math.round(humanizeAmt * 100) }}%
                 </span>
             </div>
 
             <button class="btn btn-sm btn-outline-primary" @click="humanize">
                 Humanize
             </button>
-            <!-- <small class="text-muted">Per-click = fresh random from 100%</small> -->
         </div>
     </div>
 </template>

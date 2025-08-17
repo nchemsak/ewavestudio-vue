@@ -1,9 +1,9 @@
 <template>
     <KnobGroup v-model="localEnabled" title="Delay" color="#00BCD4">
-        <!-- Mode toggle -->
-        <div class="d-flex align-items-center justify-content-between mb-2">
-            <small class="text-muted">Mode</small>
-            <div class="btn-group btn-group-sm">
+        <!-- Header: Free/Sync -->
+        <template #header-content>
+            <div class="btn-group btn-group-sm ms-auto">
+                <span v-if="localSync" class="header-info">{{ DIVS[divIndex].label }}</span>
                 <button type="button" class="btn" :class="!localSync ? 'btn-primary' : 'btn-outline-primary'"
                     @click="localSync = false" :disabled="!localEnabled">
                     Free
@@ -13,7 +13,7 @@
                     Sync
                 </button>
             </div>
-        </div>
+        </template>
 
         <!-- Time -->
         <div class="position-relative">
@@ -22,8 +22,8 @@
                 size="small" color="#00BCD4" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
                 @knobEnd="activeKnob = null" />
 
-            <!-- Sync: snapped musical divisions -->
-            <Knob v-else v-model="divIndexKnob" label="Time (Sync)" :min="0" :max="1" :step="knobStep" size="small"
+            <!-- Sync: snapped divisions -->
+            <Knob v-else v-model="divIndexKnob" label="Time" :min="0" :max="1" :step="knobStep" size="small"
                 color="#00BCD4" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
                 @knobEnd="activeKnob = null" />
 
@@ -37,6 +37,7 @@
             </span>
         </div>
 
+        <!-- Feedback -->
         <div class="position-relative">
             <Knob v-model="localFeedback" label="Feedback" :min="0" :max="0.95" :step="0.01" size="small"
                 color="#00BCD4" :disabled="!localEnabled" @knobStart="activeKnob = 'feedback'"
@@ -46,6 +47,7 @@
             </span>
         </div>
 
+        <!-- Mix -->
         <div class="position-relative">
             <Knob v-model="localMix" label="Mix" :min="0" :max="1" :step="0.01" size="small" color="#00BCD4"
                 :disabled="!localEnabled" @knobStart="activeKnob = 'mix'" @knobEnd="activeKnob = null" />
@@ -53,9 +55,42 @@
                 {{ Math.round(localMix * 100) }}%
             </span>
         </div>
+
+        <!-- Tone -->
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <small class="text-muted">Tone</small>
+            <div class="d-flex align-items-center gap-2">
+                <!-- On/Off -->
+                <div class="btn-group btn-group-sm me-2">
+                    <button type="button" class="btn" :class="localToneEnabled ? 'btn-primary' : 'btn-outline-primary'"
+                        @click="localToneEnabled = true" :disabled="!localEnabled">On</button>
+                    <button type="button" class="btn" :class="!localToneEnabled ? 'btn-primary' : 'btn-outline-primary'"
+                        @click="localToneEnabled = false" :disabled="!localEnabled">Off</button>
+                </div>
+
+                <!-- LP / HP -->
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn"
+                        :class="localToneType === 'lowpass' ? 'btn-primary' : 'btn-outline-primary'"
+                        @click="localToneType = 'lowpass'" :disabled="!localEnabled || !localToneEnabled">LP</button>
+                    <button type="button" class="btn"
+                        :class="localToneType === 'highpass' ? 'btn-primary' : 'btn-outline-primary'"
+                        @click="localToneType = 'highpass'" :disabled="!localEnabled || !localToneEnabled">HP</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cutoff -->
+        <div class="position-relative">
+            <Knob v-model="localToneHz" label="Cutoff" :min="120" :max="12000" :step="1" size="small" color="#00BCD4"
+                :disabled="!localEnabled || !localToneEnabled" @knobStart="activeKnob = 'toneHz'"
+                @knobEnd="activeKnob = null" />
+            <span v-if="activeKnob === 'toneHz'" class="custom-tooltip">
+                {{ Math.round(localToneHz) }} Hz
+            </span>
+        </div>
     </KnobGroup>
 </template>
-
 
 <script setup>
 import { ref, watch, computed } from 'vue';
@@ -69,17 +104,17 @@ const props = defineProps({
     delayFeedback: Number,
     delayMix: Number,
 
-    // NEW
+    // Tone
+    toneEnabled: { type: Boolean, default: true },
+    toneHz: { type: Number, default: 5000 },
+    toneType: { type: String, default: 'lowpass' }, // 'lowpass' | 'highpass'
+
+    // Sync
     syncEnabled: { type: Boolean, default: false },
     tempo: { type: Number, default: 120 },
-    // Max allowed seconds (match your createDelay(5.0))
     maxSeconds: { type: Number, default: 5.0 },
 
-    /**
-     * Optional custom divisions. If omitted, we use a rich default pack.
-     * Each item: { label: string, steps: number }
-     * (1 step = 1/16 note in your grid)
-     */
+    // Musical divisions for Sync mode
     divisions: {
         type: Array,
         default: () => ([
@@ -88,17 +123,13 @@ const props = defineProps({
             { label: '1/32', steps: 0.5 },
             { label: '1/16T', steps: (2 / 3) * 1 },
             { label: '1/16', steps: 1 },
-            { label: '1/8T', steps: (2 / 3) * 2 }
-            // { label: '1/8', steps: 2 },
-            // { label: '1/8.', steps: 3 },      // dotted 1/8 = 3 steps
-            // { label: '1/4T', steps: (2 / 3) * 4 },
-            // { label: '1/4', steps: 4 },
-            // { label: '1/4.', steps: 6 },      // dotted 1/4 = 6 steps
-            // { label: '1/2T', steps: (2 / 3) * 8 },
-            // { label: '1/2', steps: 8 },
-            // { label: '1/2.', steps: 12 },     // dotted 1/2 = 12 steps
-            // { label: '1', steps: 16 }      // whole note = full bar (16 steps)
-            // You can add { label:'2', steps:32 } for 2 bars; stays clamped by maxSeconds.
+            { label: '1/8T', steps: (2 / 3) * 2 },
+            { label: '1/8', steps: 2 },
+            { label: '1/8.', steps: 3 },
+            { label: '1/4T', steps: (2 / 3) * 4 },
+            { label: '1/4', steps: 4 },
+            { label: '1/4.', steps: 6 },
+            { label: '1/2T', steps: (2 / 3) * 8 }
         ])
     }
 });
@@ -108,23 +139,31 @@ const emit = defineEmits([
     'update:delayTime',
     'update:delayFeedback',
     'update:delayMix',
-    'update:syncEnabled'
+    'update:syncEnabled',
+    'update:toneEnabled',
+    'update:toneHz',
+    'update:toneType'
 ]);
 
-// Local mirrors
+// Locals
 const localEnabled = ref(props.enabled);
 const localTime = ref(props.delayTime ?? 0.2);
 const localFeedback = ref(props.delayFeedback ?? 0.3);
 const localMix = ref(props.delayMix ?? 0.3);
 const localSync = ref(props.syncEnabled ?? false);
+
+const localToneEnabled = ref(props.toneEnabled);
+const localToneHz = ref(props.toneHz);
+const localToneType = ref(props.toneType);
+
 const activeKnob = ref(null);
 
 // Music math
 const stepDuration = computed(() => 60 / (props.tempo || 120) / 4); // 1/16 note
 const DIVS = computed(() => props.divisions);
 
-// Snap control via a 0..1 knob that maps to 0..N-1 indices
-const divIndex = ref(4); // default to 1/16 (index of '1/16' in defaults)
+// Sync index mapped to a 0..1 knob
+const divIndex = ref(4); // default ~ 1/16
 const knobStep = computed(() => DIVS.value.length > 1 ? 1 / (DIVS.value.length - 1) : 1);
 const divIndexKnob = computed({
     get: () => DIVS.value.length > 1 ? (divIndex.value / (DIVS.value.length - 1)) : 0,
@@ -134,14 +173,14 @@ const divIndexKnob = computed({
     }
 });
 
-// Convert the selected division to seconds, clamped to device max
+// Synced time (seconds/ms)
 const syncedSeconds = computed(() => {
     const s = DIVS.value[divIndex.value]?.steps ?? 1;
     return Math.min(props.maxSeconds, Math.max(0.005, s * stepDuration.value));
 });
 const syncedMs = computed(() => syncedSeconds.value * 1000);
 
-// Upstream updates
+// Emit upstream
 watch(localEnabled, v => emit('update:enabled', v));
 watch(localFeedback, v => emit('update:delayFeedback', v));
 watch(localMix, v => emit('update:delayMix', v));
@@ -150,10 +189,15 @@ watch(localSync, v => emit('update:syncEnabled', v));
 // Free: emit raw seconds
 watch(localTime, v => { if (!localSync.value) emit('update:delayTime', Math.min(props.maxSeconds, v)); });
 
-// Sync: emit computed seconds whenever division or tempo changes
+// Sync: emit computed seconds on changes
 watch([divIndex, stepDuration, DIVS, localSync], () => {
     if (localSync.value) emit('update:delayTime', syncedSeconds.value);
 });
+
+// Tone emits
+watch(localToneEnabled, v => emit('update:toneEnabled', v));
+watch(localToneHz, v => emit('update:toneHz', v));
+watch(localToneType, v => emit('update:toneType', v));
 
 // Keep locals in sync with parent
 watch(() => props.enabled, v => (localEnabled.value = v));
@@ -162,7 +206,11 @@ watch(() => props.delayFeedback, v => (localFeedback.value = v));
 watch(() => props.delayMix, v => (localMix.value = v));
 watch(() => props.syncEnabled, v => (localSync.value = v));
 
-// When switching to Sync, pick the closest division to current time
+watch(() => props.toneEnabled, v => (localToneEnabled.value = v));
+watch(() => props.toneHz, v => (localToneHz.value = v));
+watch(() => props.toneType, v => (localToneType.value = v));
+
+// When switching to Sync, pick closest division
 watch(localSync, on => {
     if (on) {
         const curSec = (typeof props.delayTime === 'number') ? props.delayTime : localTime.value;

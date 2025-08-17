@@ -33,132 +33,81 @@
 					<span v-else>Play</span>
 				</button>
 			</div>
-			<div class="position-relative text-center knobWrap">
-				<div class="btn-group ms-2">
-					<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(-1)">
-						Octave −
-					</button>
-					<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(1)">
-						Octave +
-					</button>
-				</div>
-			</div>
+
 			<div class="position-relative text-center knobWrap">
 
 				<MpcScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey" @fkey="handleFKey" />
 			</div>
 			<div class="position-relative text-center knobWrap">
 
-				<!-- <div class="padTEST-grid"> -->
-				<!-- pick ONE of: neon, gel, bevel, donut, pixel, flat, nick1, liquid -->
-				<!-- <button class="padTEST liquid" aria-label="padTEST"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-					<button class="padTEST liquid"></button>
-				</div> -->
 			</div>
 		</div>
 
-		<!-- </div>
 
-
-	<div class="drum-sequencer" id="percussion-synth"> -->
-		<div v-if="synthInstrument" class="mb-3">
+		<div v-for="inst in instruments" :key="inst.name" class="mb-3">
 			<div class="d-flex align-items-center gap-2 mb-1">
-				<div class="mute-indicator" :class="{ muted: synthInstrument.muted }"
-					@click="toggleMute(synthInstrument.name)" role="button" aria-label="Toggle Mute"
-					:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
+				<div class="mute-indicator" :class="{ muted: inst.muted }" @click="toggleMute(inst.name)" role="button"
+					aria-label="Toggle Mute" :title="inst.muted ? 'Muted' : 'Playing'"></div>
 
 				<div class="channel-label d-flex align-items-center gap-1">
-					<template v-if="!synthInstrument.isEditingName">
-						<strong @click="editLabel(synthInstrument)" @mouseenter="hoveredLabel = synthInstrument.name"
+					<template v-if="!inst.isEditingName">
+						<strong @click="editLabel(inst)" @mouseenter="hoveredLabel = inst.name"
 							@mouseleave="hoveredLabel = null" class="position-relative">
-							{{ synthInstrument.label }}
-							<span v-if="hoveredLabel === synthInstrument.name" class="custom-tooltip">
-								Click to rename
-							</span>
+							{{ inst.label }}
+							<span v-if="hoveredLabel === inst.name" class="custom-tooltip">Click to rename</span>
 						</strong>
 					</template>
 					<template v-else>
-						<input v-model="synthInstrument.label" @blur="stopEditingLabel(synthInstrument)"
-							@keydown.enter.prevent="stopEditingLabel(synthInstrument)"
-							class="form-control form-control-sm" style="max-width: 150px;"
-							:ref="el => synthInstrument.inputRef = el" />
+						<input v-model="inst.label" @blur="stopEditingLabel(inst)"
+							@keydown.enter.prevent="stopEditingLabel(inst)" class="form-control form-control-sm"
+							style="max-width: 150px;" :ref="el => inst.inputRef = el" />
 					</template>
 				</div>
 			</div>
 
-
 			<div class="position-relative text-center">
-				<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small" label="Vol"
-					color="#8E44AD" @knobStart="activeKnob = 'synthVolume'" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === 'synthVolume'" class="custom-tooltip">
-					{{ Math.round(synthInstrument.channelVolume * 100) }}%
+				<Knob v-model="inst.channelVolume" :min="0" :max="1" :step="0.01" size="small" label="Vol"
+					color="#8E44AD" @knobStart="activeKnob = `vol-${inst.name}`" @knobEnd="activeKnob = null" />
+				<span v-if="activeKnob === `vol-${inst.name}`" class="custom-tooltip">
+					{{ Math.round(inst.channelVolume * 100) }}%
 				</span>
 			</div>
 
 			<div class="d-flex pad-row">
-				<!-- <div v-for="(active, index) in synthInstrument.steps" :key="index" class="pad-wrapper"
-					@mouseenter="hoveredPad = `${synthInstrument.name}-${index}`" @mouseleave="hoveredPad = null">
-					<div :class="['pad', { selected: active }, { playing: index === currentStep }]"
-						@mousedown="handleMouseDown($event, synthInstrument.name, index)"
-						@mouseenter="handleMouseEnter(synthInstrument.name, index)" @dragstart.prevent
-						:style="getPadStyle(synthInstrument, index)">
-					</div> -->
 				<div class="padTEST-grid">
-					<div v-for="(active, index) in synthInstrument.steps" :key="index" class="padTESTwrap"
-						@mouseenter="hoveredPad = `${synthInstrument.name}-${index}`" @mouseleave="hoveredPad = null">
+					<div v-for="(active, index) in inst.steps" :key="index" class="padTESTwrap"
+						@mouseenter="hoveredPad = `${inst.name}-${index}`" @mouseleave="hoveredPad = null">
 						<div :class="['padTEST liquid', { selected: active }, { playing: index === currentStep }]"
-							@mousedown="handleMouseDown($event, synthInstrument.name, index)"
-							@mouseenter="handleMouseEnter(synthInstrument.name, index)" @dragstart.prevent
-							:style="getPadStyle(synthInstrument, index)">
+							@mousedown="handleMouseDown($event, inst.name, index)"
+							@mouseenter="handleMouseEnter(inst.name, index)" @dragstart.prevent
+							:style="getPadStyle(inst, index)">
 						</div>
-						<!-- Settings dot (top-right) -->
-						<button class="pad-settings-dot" @mousedown.stop
-							@click.stop="openPadSettings(synthInstrument.name, index, $event)"
-							aria-label="Pad settings">
-							•
-						</button>
+
+						<!-- Settings dot only for synth -->
+						<button v-if="inst.type === 'synth'" class="pad-settings-dot" @mousedown.stop
+							@click.stop="openPadSettings(inst.name, index, $event)" aria-label="Pad settings">•</button>
 
 						<!-- Volume Slider -->
-						<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
-							class="hover-slider volume-slider">
-							<input type="range" min="0" max="1" step="0.01"
-								v-model.number="synthInstrument.velocities[index]"
-								@mousedown="activeVolumePad = `${synthInstrument.name}-${index}`"
-								@mouseup="activeVolumePad = null"
-								@touchstart="activeVolumePad = `${synthInstrument.name}-${index}`"
+						<div v-if="active && hoveredPad === `${inst.name}-${index}`" class="hover-slider volume-slider">
+							<input type="range" min="0" max="1" step="0.01" v-model.number="inst.velocities[index]"
+								@mousedown="activeVolumePad = `${inst.name}-${index}`" @mouseup="activeVolumePad = null"
+								@touchstart="activeVolumePad = `${inst.name}-${index}`"
 								@touchend="activeVolumePad = null" />
-							<span v-if="activeVolumePad === `${synthInstrument.name}-${index}`" class="custom-tooltip">
-								{{ Math.round(synthInstrument.velocities[index] * 100) }}%
+							<span v-if="activeVolumePad === `${inst.name}-${index}`" class="custom-tooltip">
+								{{ Math.round(inst.velocities[index] * 100) }}%
 							</span>
 						</div>
 
-
-						<!-- Pitch Slider -->
-						<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
+						<!-- Pitch Slider only for synth -->
+						<div v-if="inst.type === 'synth' && active && hoveredPad === `${inst.name}-${index}`"
 							class="hover-slider pitch-slider">
 							<input type="range" :min="MIN_PAD_HZ" :max="MAX_PAD_HZ" step="1"
-								v-model.number="synthInstrument.pitches[index]"
-								@mousedown="activePitchPad = `${synthInstrument.name}-${index}`"
-								@mouseup="activePitchPad = null"
-								@touchstart="activePitchPad = `${synthInstrument.name}-${index}`"
+								v-model.number="inst.pitches[index]"
+								@mousedown="activePitchPad = `${inst.name}-${index}`" @mouseup="activePitchPad = null"
+								@touchstart="activePitchPad = `${inst.name}-${index}`"
 								@touchend="activePitchPad = null" />
-							<span v-if="activePitchPad === `${synthInstrument.name}-${index}`" class="custom-tooltip">
-								{{ nearestNote(synthInstrument.pitches[index]) }} · {{
-									Math.round(synthInstrument.pitches[index]) }} Hz
+							<span v-if="activePitchPad === `${inst.name}-${index}`" class="custom-tooltip">
+								{{ nearestNote(inst.pitches[index]) }} · {{ Math.round(inst.pitches[index]) }} Hz
 							</span>
 						</div>
 
@@ -166,11 +115,22 @@
 				</div>
 			</div>
 		</div>
+
 		<div class="controlsWrapper">
 			<div class="controls">
 				<PatternTools :steps="synthInstrument.steps" :velocities="synthInstrument.velocities"
 					@update:steps="synthInstrument.steps = $event"
 					@update:velocities="synthInstrument.velocities = $event" />
+				<div class="position-relative text-center knobWrap">
+					<div class="btn-group ms-2">
+						<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(-1)">
+							Octave −
+						</button>
+						<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(1)">
+							Octave +
+						</button>
+					</div>
+				</div>
 			</div>
 			<div class="controls">
 
@@ -224,63 +184,24 @@
 				<h2>Effects</h2>
 				<DelayEffect :audioCtx="audioCtx" v-model:enabled="delayEnabled" v-model:syncEnabled="delaySync"
 					:tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback"
-					v-model:delayMix="delayMix" />
+					v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled" v-model:toneHz="delayToneHz"
+					v-model:toneType="delayToneType" />
+
+
+
+
 				<hr />
 				<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
 					v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
 			</div>
 		</div>
 
+		<!-- <SequencerKeyboard @note-on="onKeyboardNoteOn" @note-off="onKeyboardNoteOff" /> -->
+		<!-- <SequencerKeyboard :enable-qwerty="true" :enable-midi="false" :qwerty-velocity="1" @note-on="onKeyboardNoteOn"
+			@note-off="onKeyboardNoteOff" /> -->
 	</div>
-	<!-- Teleported pad settings popover -->
-	<!-- <teleport to="body">
-		<div v-if="padSettings.open" class="pad-settings-popover card p-2 controls"
-			:style="{ left: padSettings.pos.x + 'px', top: padSettings.pos.y + 'px' }" @keydown.esc="closePadSettings"
-			role="dialog" aria-modal="true">
-			<div class="d-flex justify-content-between align-items-center mb-2">
-				<strong>Pad {{ padSettings.index + 1 }}</strong>
-				<button class="btn btn-sm btn-outline-secondary" @click="closePadSettings">Close</button>
-			</div>
 
-			<div class="mb-2 small">
-				{{ nearestNote(currentPadHz) }} · {{ displayHz }} Hz
-			</div>
 
-			<div class="d-flex flex-wrap gap-1 mb-2">
-				<button v-for="(n, i) in NOTE_NAMES" :key="n" class="btn btn-xs" :disabled="isNoteDisabled(i, octave)"
-					:class="[
-						(selectedMidi % 12) === i ? 'btn-primary' : 'btn-outline-primary',
-						isNoteDisabled(i, octave) ? 'disabled' : ''
-					]" @click="!isNoteDisabled(i, octave) && setSemitone(i)">
-					{{ n }}
-				</button>
-			</div>
-
-			<div class="mb-2">
-				<div class="btn-group btn-group-sm">
-					<button v-for="o in availableOctaves" :key="o" class="btn"
-						:class="octave === o ? 'btn-primary' : 'btn-outline-primary'" @click="setOctave(o)">
-						{{ o }}
-					</button>
-				</div>
-			</div>
-
-			<div class="position-relative mb-2">
-				<Knob v-model="padDetuneCents" label="Fine (¢)" :min="-100" :max="100" :step="1" size="small"
-					color="#3F51B5" @knobStart="activeKnob = 'padFine'" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === 'padFine'" class="custom-tooltip">
-					{{ padDetuneCents }}¢
-				</span>
-			</div>
-
-			<div class="input-group input-group-sm">
-				<span class="input-group-text">Hz</span>
-				<input type="number" class="form-control" v-model.number="currentPadHzDisplay" :min="MIN_PAD_HZ"
-					:max="MAX_PAD_HZ" step="0.01">
-
-			</div>
-		</div>
-	</teleport> -->
 	<PadSettingsPopover v-model:open="padPopover.open" v-model:hz="currentPadHz" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
 		:anchorRect="padPopover.anchorRect" :title="padPopover.title" @close="padPopover.open = false" />
 </template>
@@ -303,6 +224,8 @@ import EnvelopeModule from './modules/EnvelopeModule.vue';
 import NoiseModule from './modules/NoiseModule.vue';
 import PadSettingsPopover from './PadSettingsPopover.vue';
 import PatternTools from './PatternTools.vue';
+// import SequencerKeyboard from './SequencerKeyboard.vue';
+
 
 // IMPORTS END
 
@@ -763,6 +686,13 @@ const delaySync = ref(false);        // NEW
 const delayTime = ref(0.2);          // seconds (0.01 to 1.0)
 const delayFeedback = ref(0.3);      // 0–0.95
 const delayMix = ref(0.3);           // 0–1
+const delayToneHz = ref(5000);
+const delayToneType = ref('lowpass');
+const delayToneEnabled = ref(true);
+
+// const delayDuckEnabled = ref(true);
+// const delayDuckAmt = ref(0.6);
+// const delayDuckRelease = ref(0.2);
 
 
 const delayNode = audioCtx.createDelay(5.0); // max delay time = 5s
@@ -776,11 +706,36 @@ const delayDry = audioCtx.createGain();
 applyDelayEnabled(delayEnabled.value);
 
 // feedback loop
-delayNode.connect(feedbackGain);
+// delayNode.connect(feedbackGain);
+// feedbackGain.connect(delayNode);
+
+
+const fbTone = audioCtx.createBiquadFilter();
+fbTone.type = 'lowpass';
+fbTone.frequency.value = 5000;
+
+// wet path tone (colors first echo)
+const wetTone = audioCtx.createBiquadFilter();
+wetTone.type = 'lowpass';
+wetTone.frequency.value = 5000;
+
+delayNode.connect(fbTone);
+fbTone.connect(feedbackGain);
 feedbackGain.connect(delayNode);
 
+delayNode.connect(wetTone);
+wetTone.connect(delayWet);
+
+// watch(delayToneHz, v => fbTone.frequency.setTargetAtTime(v, audioCtx.currentTime, 0.02));
+// watch(delayToneType, t => { fbTone.type = (t === 'highpass') ? 'highpass' : 'lowpass'; });
+
+
 // dry + wet summing nodes connect to master output
-delayNode.connect(delayWet);
+// delayNode.connect(delayWet);
+// fbTone.connect(delayWet);
+
+
+
 watch(delayTime, val => {
 	const t = audioCtx.currentTime;
 	// cancel any pending ramps, set current, then glide ~30ms
@@ -804,6 +759,24 @@ watch(delayMix, val => {
 	}
 });
 
+function applyDelayToneState() {
+	const type = delayToneEnabled.value
+		? (delayToneType.value === 'highpass' ? 'highpass' : 'lowpass')
+		: 'allpass'; // simple, click-free bypass
+
+	fbTone.type = type;
+	wetTone.type = type;
+
+	const targetHz = delayToneEnabled.value ? delayToneHz.value : 20000;
+	const t = audioCtx.currentTime;
+	fbTone.frequency.setTargetAtTime(targetHz, t, 0.02);
+	wetTone.frequency.setTargetAtTime(targetHz, t, 0.02);
+}
+
+watch([delayToneEnabled, delayToneType, delayToneHz], applyDelayToneState);
+onMounted(applyDelayToneState);
+
+
 watch(delayEnabled, on => {
 	applyDelayEnabled(on);
 });
@@ -818,6 +791,27 @@ function applyDelayEnabled(on) {
 		delayDry.gain.setValueAtTime(1, t);
 	}
 }
+
+// function duckDelay(atTime) {
+// 	if (!delayEnabled.value || !delayDuckEnabled.value) return;
+
+// 	const base = delayMix.value;
+// 	const amount = Math.min(0.9, Math.max(0, delayDuckAmt.value));
+// 	const release = delayDuckRelease.value;
+
+// 	const sixteenth = 60 / tempo.value / 4;
+// 	const hold = Math.min(0.12, Math.max(0.04, sixteenth * 0.4));
+
+// 	const t = atTime;
+// 	delayWet.gain.setValueAtTime(base, t - 0.001); // anchor	
+// 	delayWet.gain.cancelScheduledValues(t);
+// 	delayWet.gain.setTargetAtTime(base * (1 - amount), t, 0.005);
+// 	delayWet.gain.setTargetAtTime(base, t + hold, release);
+// }
+
+
+// const delayToneEnabled = ref(true);
+
 //Delay END
 
 // Drive START
@@ -1061,11 +1055,47 @@ function playBuffer(buffer, time, velocity = 1) {
 }
 
 
+//KEYBOARD BEGIN
+
+// Keep track if you want to gate releases later; optional for one-shots:
+// const liveNotes = new Map<string, number>(); // note -> startedAt (or voice id if you add one later)
+
+/**
+ * When a keyboard note is pressed, trigger the *same* engine your pads use:
+ * playSynthNote(freq, velocity, decayTime, startTime)
+ */
+// async function onKeyboardNoteOn(payload: { note: string; freq: number; velocity: number }) {
+// 	if (audioCtx.state !== 'running') {
+// 		try { await audioCtx.resume(); } catch { }
+// 	}
+
+// 	const { freq, velocity } = payload;
+// 	const decay = (isFinite(synthDecay.value) && synthDecay.value > 0) ? synthDecay.value : 0.2;
+// 	const t = audioCtx.currentTime;
+// 	playSynthNote(freq, velocity, decay, t);
+// 	liveNotes.set(payload.note, t);
+// }
+
+/**
+ * For now, your percussion voice is one-shot (envelope-decay driven),
+ * so we don’t need to explicitly stop the note early.
+ * This handler is here if/when you want gateable sustain later.
+ */
+// function onKeyboardNoteOff(payload: { note: string }) {
+// 	liveNotes.delete(payload.note);
+// 	// If you later switch to a gated envelope, you can fade out here.
+// 	// e.g., keep a map of voice gains and ramp to zero.
+// }
+
+//KEYBOARD END
+
 function schedule() {
 	const now = audioCtx.currentTime;
-	const stepDuration = 60 / tempo.value / 4; // 16th
+	const stepDuration = 60 / tempo.value / 4;
 
 	while (startTime < now + 0.1) {
+		// let duckedThisStep = false;
+
 		instruments.value.forEach(inst => {
 			if (!inst.muted && inst.steps[stepIndex]) {
 				const velocity = inst.velocities[stepIndex];
@@ -1077,11 +1107,10 @@ function schedule() {
 				const swingOffset = isEvenStep ? stepDuration * swing.value : 0;
 				const t = startTime + swingOffset;
 
-				if (inst.type === 'synth') {
-					playSynthNote(pitch, velocity * chanVol, safeDecay, t);
-				} else if (inst.buffer) {
-					playBuffer(inst.buffer, t, velocity * chanVol);
-				}
+				// if (!duckedThisStep) { duckDelay(t); duckedThisStep = true; }
+
+				if (inst.type === 'synth') playSynthNote(pitch, velocity * chanVol, safeDecay, t);
+				else if (inst.buffer) playBuffer(inst.buffer, t, velocity * chanVol);
 			}
 		});
 
@@ -1092,6 +1121,7 @@ function schedule() {
 
 	loopId = requestAnimationFrame(schedule);
 }
+
 
 
 
