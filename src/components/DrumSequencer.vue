@@ -42,154 +42,250 @@
 		</div>
 
 
-		<div v-for="inst in instruments" :key="inst.name" class="mb-3">
-			<div class="d-flex align-items-center gap-2 mb-1">
-				<div class="mute-indicator" :class="{ muted: inst.muted }" @click="toggleMute(inst.name)" role="button"
-					aria-label="Toggle Mute" :title="inst.muted ? 'Muted' : 'Playing'"></div>
 
-				<div class="channel-label d-flex align-items-center gap-1">
-					<template v-if="!inst.isEditingName">
-						<strong @click="editLabel(inst)" @mouseenter="hoveredLabel = inst.name"
-							@mouseleave="hoveredLabel = null" class="position-relative">
-							{{ inst.label }}
-							<span v-if="hoveredLabel === inst.name" class="custom-tooltip">Click to rename</span>
-						</strong>
-					</template>
-					<template v-else>
-						<input v-model="inst.label" @blur="stopEditingLabel(inst)"
-							@keydown.enter.prevent="stopEditingLabel(inst)" class="form-control form-control-sm"
-							style="max-width: 150px;" :ref="el => inst.inputRef = el" />
-					</template>
+
+		<!-- ===== Sampler Channels (Kick/Snare/Hi-hat/Customs) ===== -->
+		<section class="channels-section">
+			<div v-for="inst in orderedChannels" :key="inst.key || inst.name" class="mb-3 channel-wrap">
+
+				<!-- Inserted Add Channel row -->
+				<template v-if="inst.isAddButton">
+					<div class="d-flex align-items-center">
+						<button class="btn btn-sm btn-outline-success" @click="addCustomChannel">
+							+ Add Channel
+						</button>
+					</div>
+				</template>
+
+				<!-- Regular sampler channel rows -->
+				<template v-else>
+					<div class="d-flex align-items-center gap-2 mb-1">
+						<div class="mute-indicator" :class="{ muted: inst.muted }" @click="toggleMute(inst.name)"
+							role="button" aria-label="Toggle Mute" :title="inst.muted ? 'Muted' : 'Playing'"></div>
+
+						<div class="channel-label d-flex align-items-center gap-1">
+							<template v-if="!inst.isEditingName">
+								<strong @click="editLabel(inst)" @mouseenter="hoveredLabel = inst.name"
+									@mouseleave="hoveredLabel = null" class="position-relative">
+									{{ inst.label }}
+									<span v-if="hoveredLabel === inst.name" class="custom-tooltip">Click to
+										rename</span>
+								</strong>
+							</template>
+							<template v-else>
+								<input v-model="inst.label" @blur="stopEditingLabel(inst)"
+									@keydown.enter.prevent="stopEditingLabel(inst)" class="form-control form-control-sm"
+									style="max-width: 150px;" :ref="el => inst.inputRef = el" />
+							</template>
+						</div>
+
+						<div class="ms-auto d-flex align-items-center gap-2 channel-actions">
+							<button v-if="inst.isCustom" class="btn btn-sm btn-outline-secondary"
+								@click="triggerFilePicker(inst)">
+								Upload
+							</button>
+							<input class="d-none" :id="`file-${inst.name}`" type="file" accept="audio/*"
+								@change="loadUserSample($event, inst)" />
+							<button v-if="canDelete(inst.name)" class="btn btn-sm btn-outline-danger"
+								@click="deleteChannel(inst.name)">
+								Delete
+							</button>
+						</div>
+					</div>
+
+					<div class="position-relative text-center">
+						<Knob v-model="inst.channelVolume" :min="0" :max="1" :step="0.01" size="small" label="Vol"
+							color="#8E44AD" @knobStart="activeKnob = `vol-${inst.name}`" @knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === `vol-${inst.name}`" class="custom-tooltip">
+							{{ Math.round(inst.channelVolume * 100) }}%
+						</span>
+					</div>
+
+					<div class="d-flex pad-row">
+						<div class="padTEST-grid">
+							<div v-for="(active, index) in inst.steps" :key="index" class="padTESTwrap"
+								@mouseenter="hoveredPad = `${inst.name}-${index}`" @mouseleave="hoveredPad = null">
+								<div :class="['padTEST liquid', { selected: active }, { playing: index === currentStep }]"
+									@mousedown="handleMouseDown($event, inst.name, index)"
+									@mouseenter="handleMouseEnter(inst.name, index)" @dragstart.prevent
+									:style="getPadStyle(inst, index)">
+								</div>
+
+								<!-- Volume hover slider -->
+								<div v-if="active && hoveredPad === `${inst.name}-${index}`"
+									class="hover-slider volume-slider">
+									<input type="range" min="0" max="1" step="0.01"
+										v-model.number="inst.velocities[index]"
+										@mousedown="activeVolumePad = `${inst.name}-${index}`"
+										@mouseup="activeVolumePad = null"
+										@touchstart="activeVolumePad = `${inst.name}-${index}`"
+										@touchend="activeVolumePad = null" />
+									<span v-if="activeVolumePad === `${inst.name}-${index}`" class="custom-tooltip">
+										{{ Math.round(inst.velocities[index] * 100) }}%
+									</span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</template>
+			</div>
+		</section>
+
+		<!-- ===== Percussion Synth (separate section) ===== -->
+		<section class="synth-section" v-if="synthInstrument">
+			<!-- Your existing synth UI goes here: pads + modules/effects/PatternTools -->
+			<!-- Render the synth pads separately (uses the same markup but bound to synthInstrument) -->
+			<div class="mb-3 channel-wrap">
+				<div class="d-flex align-items-center gap-2 mb-1">
+					<div class="mute-indicator" :class="{ muted: synthInstrument.muted }"
+						@click="toggleMute(synthInstrument.name)" role="button" aria-label="Toggle Mute"
+						:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
+
+					<div class="channel-label d-flex align-items-center gap-1">
+						<strong class="position-relative">Percussion Synth</strong>
+					</div>
 				</div>
-			</div>
 
-			<div class="position-relative text-center">
-				<Knob v-model="inst.channelVolume" :min="0" :max="1" :step="0.01" size="small" label="Vol"
-					color="#8E44AD" @knobStart="activeKnob = `vol-${inst.name}`" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === `vol-${inst.name}`" class="custom-tooltip">
-					{{ Math.round(inst.channelVolume * 100) }}%
-				</span>
-			</div>
+				<div class="position-relative text-center">
+					<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
+						label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === `vol-${synthInstrument.name}`" class="custom-tooltip">
+						{{ Math.round(synthInstrument.channelVolume * 100) }}%
+					</span>
+				</div>
 
-			<div class="d-flex pad-row">
-				<div class="padTEST-grid">
-					<div v-for="(active, index) in inst.steps" :key="index" class="padTESTwrap"
-						@mouseenter="hoveredPad = `${inst.name}-${index}`" @mouseleave="hoveredPad = null">
-						<div :class="['padTEST liquid', { selected: active }, { playing: index === currentStep }]"
-							@mousedown="handleMouseDown($event, inst.name, index)"
-							@mouseenter="handleMouseEnter(inst.name, index)" @dragstart.prevent
-							:style="getPadStyle(inst, index)">
+				<div class="d-flex pad-row">
+					<div class="padTEST-grid">
+						<div v-for="(active, index) in synthInstrument.steps" :key="index" class="padTESTwrap"
+							@mouseenter="hoveredPad = `${synthInstrument.name}-${index}`"
+							@mouseleave="hoveredPad = null">
+							<div :class="['padTEST liquid', { selected: active }, { playing: index === currentStep }]"
+								@mousedown="handleMouseDown($event, synthInstrument.name, index)"
+								@mouseenter="handleMouseEnter(synthInstrument.name, index)" @dragstart.prevent
+								:style="getPadStyle(synthInstrument, index)">
+							</div>
+
+							<!-- Synth-only controls -->
+							<button class="pad-settings-dot" @mousedown.stop
+								@click.stop="openPadSettings(synthInstrument.name, index, $event)"
+								aria-label="Pad settings">•</button>
+
+							<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
+								class="hover-slider volume-slider">
+								<input type="range" min="0" max="1" step="0.01"
+									v-model.number="synthInstrument.velocities[index]"
+									@mousedown="activeVolumePad = `${synthInstrument.name}-${index}`"
+									@mouseup="activeVolumePad = null"
+									@touchstart="activeVolumePad = `${synthInstrument.name}-${index}`"
+									@touchend="activeVolumePad = null" />
+								<span v-if="activeVolumePad === `${synthInstrument.name}-${index}`"
+									class="custom-tooltip">
+									{{ Math.round(synthInstrument.velocities[index] * 100) }}%
+								</span>
+							</div>
+
+							<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
+								class="hover-slider pitch-slider">
+								<input type="range" :min="MIN_PAD_HZ" :max="MAX_PAD_HZ" step="1"
+									v-model.number="synthInstrument.pitches[index]"
+									@mousedown="activePitchPad = `${synthInstrument.name}-${index}`"
+									@mouseup="activePitchPad = null"
+									@touchstart="activePitchPad = `${synthInstrument.name}-${index}`"
+									@touchend="activePitchPad = null" />
+								<span v-if="activePitchPad === `${synthInstrument.name}-${index}`"
+									class="custom-tooltip">
+									{{ nearestNote(synthInstrument.pitches[index]) }} · {{
+										Math.round(synthInstrument.pitches[index]) }} Hz
+								</span>
+							</div>
 						</div>
-
-						<!-- Settings dot only for synth -->
-						<button v-if="inst.type === 'synth'" class="pad-settings-dot" @mousedown.stop
-							@click.stop="openPadSettings(inst.name, index, $event)" aria-label="Pad settings">•</button>
-
-						<!-- Volume Slider -->
-						<div v-if="active && hoveredPad === `${inst.name}-${index}`" class="hover-slider volume-slider">
-							<input type="range" min="0" max="1" step="0.01" v-model.number="inst.velocities[index]"
-								@mousedown="activeVolumePad = `${inst.name}-${index}`" @mouseup="activeVolumePad = null"
-								@touchstart="activeVolumePad = `${inst.name}-${index}`"
-								@touchend="activeVolumePad = null" />
-							<span v-if="activeVolumePad === `${inst.name}-${index}`" class="custom-tooltip">
-								{{ Math.round(inst.velocities[index] * 100) }}%
-							</span>
-						</div>
-
-						<!-- Pitch Slider only for synth -->
-						<div v-if="inst.type === 'synth' && active && hoveredPad === `${inst.name}-${index}`"
-							class="hover-slider pitch-slider">
-							<input type="range" :min="MIN_PAD_HZ" :max="MAX_PAD_HZ" step="1"
-								v-model.number="inst.pitches[index]"
-								@mousedown="activePitchPad = `${inst.name}-${index}`" @mouseup="activePitchPad = null"
-								@touchstart="activePitchPad = `${inst.name}-${index}`"
-								@touchend="activePitchPad = null" />
-							<span v-if="activePitchPad === `${inst.name}-${index}`" class="custom-tooltip">
-								{{ nearestNote(inst.pitches[index]) }} · {{ Math.round(inst.pitches[index]) }} Hz
-							</span>
-						</div>
-
 					</div>
 				</div>
 			</div>
-		</div>
 
-		<div class="controlsWrapper">
-			<div class="controls">
-				<PatternTools :steps="synthInstrument.steps" :velocities="synthInstrument.velocities"
-					@update:steps="synthInstrument.steps = $event"
-					@update:velocities="synthInstrument.velocities = $event" />
-				<div class="position-relative text-center knobWrap">
-					<div class="btn-group ms-2">
-						<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(-1)">
-							Octave −
-						</button>
-						<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(1)">
-							Octave +
-						</button>
+			<div class="controlsWrapper">
+				<div class="controls">
+					<PatternTools :steps="synthInstrument.steps" :velocities="synthInstrument.velocities"
+						@update:steps="synthInstrument.steps = $event"
+						@update:velocities="synthInstrument.velocities = $event" />
+					<div class="position-relative text-center knobWrap">
+						<div class="btn-group ms-2">
+							<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(-1)">
+								Octave −
+							</button>
+							<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(1)">
+								Octave +
+							</button>
+						</div>
 					</div>
 				</div>
-			</div>
-			<div class="controls">
+				<div class="controls">
 
-				<h2>Generators</h2>
-				<!-- Waveform Selector -->
-				<span class="group-title">Oscillators</span><br />
-				<div class="btn-group ms-3" role="group">
-					<button v-for="wave in ['sine', 'triangle', 'sawtooth', 'square']" :key="wave" type="button"
-						class="btn btn-sm" :class="wave === selectedWaveform ? 'btn-primary' : 'btn-outline-primary'"
-						@click="selectedWaveform = wave">
-						{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
-					</button>
+					<h2>Generators</h2>
+					<!-- Waveform Selector -->
+					<span class="group-title">Oscillators</span><br />
+					<div class="btn-group ms-3" role="group">
+						<button v-for="wave in ['sine', 'triangle', 'sawtooth', 'square']" :key="wave" type="button"
+							class="btn btn-sm"
+							:class="wave === selectedWaveform ? 'btn-primary' : 'btn-outline-primary'"
+							@click="selectedWaveform = wave">
+							{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
+						</button>
+					</div>
+					<hr />
+					<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
+						v-model:amount="noiseAmount" :color="'#9C27B0'" />
+
 				</div>
-				<hr />
-				<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
-					v-model:amount="noiseAmount" :color="'#9C27B0'" />
+				<div class="controls">
+					<h2>Sound Shaping</h2>
 
+					<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
+						v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
+					<hr />
+					<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
+						v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
+
+				</div>
+
+				<div class="controls">
+					<h2>Pitch & Harmonics</h2>
+					<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
+						v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
+						v-model:mode="pitchMode" />
+					<hr />
+					<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
+						v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
+					<hr />
+					<UnisonEffect v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
+						v-model:detune="detuneCents" v-model:spread="stereoSpread" />
+				</div>
+				<div class="controls">
+					<h2>Movement & Modulation</h2>
+
+					<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
+						v-model:target="lfoTarget" :depthMax="lfoDepthMax" color="#00BCD4"
+						:targets="['pitch', 'gain', 'filter']" />
+
+				</div>
+				<div class="controls">
+
+					<h2>Effects</h2>
+					<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
+						v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime"
+						v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix"
+						v-model:toneEnabled="delayToneEnabled" v-model:toneHz="delayToneHz"
+						v-model:toneType="delayToneType" />
+
+					<hr />
+					<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
+						v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
+				</div>
 			</div>
-			<div class="controls">
-				<h2>Sound Shaping</h2>
+		</section>
 
-				<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
-					v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
-				<hr />
-				<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
-					v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
 
-			</div>
-
-			<div class="controls">
-				<h2>Pitch & Harmonics</h2>
-				<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
-					v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
-				<hr />
-				<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled" v-model:modFreq="fmModFreq"
-					v-model:index="fmIndex" v-model:ratio="fmRatio" />
-				<hr />
-				<UnisonEffect v-model:enabled="unisonEnabled" v-model:voices="unisonVoices" v-model:detune="detuneCents"
-					v-model:spread="stereoSpread" />
-			</div>
-			<div class="controls">
-				<h2>Movement & Modulation</h2>
-
-				<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
-					v-model:target="lfoTarget" :depthMax="lfoDepthMax" color="#00BCD4"
-					:targets="['pitch', 'gain', 'filter']" />
-
-			</div>
-			<div class="controls">
-
-				<h2>Effects</h2>
-				<DelayEffect :audioCtx="audioCtx" v-model:enabled="delayEnabled" v-model:syncEnabled="delaySync"
-					:tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback"
-					v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled" v-model:toneHz="delayToneHz"
-					v-model:toneType="delayToneType" />
-
-				<hr />
-				<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
-					v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
-			</div>
-		</div>
 	</div>
 
 
@@ -223,55 +319,55 @@ import PatternTools from './PatternTools.vue';
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 //PatternTools BEGIN
-const randomizeAmt = ref(0.5);
-const humanizeAmt = ref(0.08);
+// const randomizeAmt = ref(0.5);
+// const humanizeAmt = ref(0.08);
 
 //  keep only this for Randomize:
-function onRandomize(amt: number): void {
-	const inst = synthInstrument.value;
-	if (!inst) return;
-	for (let i = 0; i < inst.steps.length; i++) {
-		inst.steps[i] = Math.random() < amt; // only steps
-	}
-}
+// function onRandomize(amt: number): void {
+// 	const inst = synthInstrument.value;
+// 	if (!inst) return;
+// 	for (let i = 0; i < inst.steps.length; i++) {
+// 		inst.steps[i] = Math.random() < amt; // only steps
+// 	}
+// }
 
 
-function onHumanize(amt: number): void {
-	const inst = synthInstrument.value;
-	if (!inst) return;
-	for (let i = 0; i < inst.steps.length; i++) {
-		if (!inst.steps[i]) continue;
-		const v = inst.velocities[i];
-		inst.velocities[i] = Math.max(0, Math.min(1, v * (1 + (Math.random() * 2 - 1) * amt)));
-	}
-}
+// function onHumanize(amt: number): void {
+// 	const inst = synthInstrument.value;
+// 	if (!inst) return;
+// 	for (let i = 0; i < inst.steps.length; i++) {
+// 		if (!inst.steps[i]) continue;
+// 		const v = inst.velocities[i];
+// 		inst.velocities[i] = Math.max(0, Math.min(1, v * (1 + (Math.random() * 2 - 1) * amt)));
+// 	}
+// }
 
-function clear(): void {
-	const inst = synthInstrument.value;
-	if (!inst) return;
-	inst.steps = inst.steps.map(() => false);
-}
+// function clear(): void {
+// 	const inst = synthInstrument.value;
+// 	if (!inst) return;
+// 	inst.steps = inst.steps.map(() => false);
+// }
 
-function invert(): void {
-	const inst = synthInstrument.value;
-	if (!inst) return;
-	inst.steps = inst.steps.map(v => !v);
-}
+// function invert(): void {
+// 	const inst = synthInstrument.value;
+// 	if (!inst) return;
+// 	inst.steps = inst.steps.map(v => !v);
+// }
 
-function shift(delta: number): void {
-	const inst = synthInstrument.value;
-	if (!inst) return;
-	const len = inst.steps.length;
-	if (!len) return;
+// function shift(delta: number): void {
+// 	const inst = synthInstrument.value;
+// 	if (!inst) return;
+// 	const len = inst.steps.length;
+// 	if (!len) return;
 
-	const n = ((delta % len) + len) % len;
+// 	const n = ((delta % len) + len) % len;
 
-	const rot = <T>(arr: T[]) =>
-		n === 0 ? arr.slice() : arr.slice(len - n).concat(arr.slice(0, len - n));
+// 	const rot = <T>(arr: T[]) =>
+// 		n === 0 ? arr.slice() : arr.slice(len - n).concat(arr.slice(0, len - n));
 
-	inst.steps = rot(inst.steps);
-	inst.velocities = rot(inst.velocities);
-}
+// 	inst.steps = rot(inst.steps);
+// 	inst.velocities = rot(inst.velocities);
+// }
 
 //Patterntools END
 
@@ -501,10 +597,6 @@ const padSettings = reactive({
 
 // Reuse shared AudioContext
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-let isScrubbing = false;
-let startY = 0;
-let startTempo = 0;
-
 const activeKnob = ref(null);
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
@@ -535,15 +627,20 @@ const instruments = ref([
 	{
 		name: 'kick',
 		label: 'Kick',
+		type: 'sample',
+		isCustom: false,
 		isEditingName: false,
 		buffer: null,
 		muted: false,
 		channelVolume: 0.5,
 		steps: Array(16).fill(false),
 		velocities: Array(16).fill(1.0)
-	}, {
+	},
+	{
 		name: 'snare',
 		label: 'Snare',
+		type: 'sample',
+		isCustom: false,
 		isEditingName: false,
 		buffer: null,
 		muted: false,
@@ -554,6 +651,8 @@ const instruments = ref([
 	{
 		name: 'hihat',
 		label: 'Hi-Hat',
+		type: 'sample',
+		isCustom: false,
 		isEditingName: false,
 		buffer: null,
 		muted: false,
@@ -564,17 +663,30 @@ const instruments = ref([
 	{
 		name: 'synth-voice',
 		label: 'Percussion Synth',
+		type: 'synth',          // << keep this
+		isCustom: false,
 		isEditingName: false,
-		type: 'synth', // <-- custom flag
 		muted: false,
 		channelVolume: 0.5,
 		steps: Array(16).fill(false),
 		velocities: Array(16).fill(1.0),
-		pitches: Array(16).fill(220), // default A3 pitch
+		pitches: Array(16).fill(220),
 	},
 ]);
 
+
+const DEFAULT_CHANNELS = new Set(['kick', 'snare', 'hihat', 'synth-voice']);
+function canDelete(name: string) { return !DEFAULT_CHANNELS.has(name); }
+
+function triggerFilePicker(inst: any) {
+	const input = document.getElementById(`file-${inst.name}`) as HTMLInputElement | null;
+	input?.click();
+}
+
+
 const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
+
+
 
 const currentPadHz = computed({
 	get() {
@@ -605,6 +717,28 @@ const availableOctaves = computed(() => {
 	}
 	return octs;
 });
+
+
+// New: sampler channels only (kick/snare/hihat + customs) with the “Add Channel” row
+const ADD_ROW = { key: 'add-row', isAddButton: true } as const;
+
+const orderedChannels = computed(() => {
+	const byName = (n: string) => instruments.value.find(i => i.name === n);
+	const kick = byName('kick');
+	const snare = byName('snare');
+	const hihat = byName('hihat');
+	const customs = instruments.value.filter(i => i.isCustom);
+
+	const rows: any[] = [];
+	if (kick) rows.push(kick);
+	if (snare) rows.push(snare);
+	if (hihat) rows.push(hihat);
+	rows.push(...customs);
+	rows.push(ADD_ROW); // Add Channel always after customs
+	return rows;
+});
+
+
 
 // Global Octave controls
 function canShiftOctave(hz, deltaOct) {
@@ -969,37 +1103,6 @@ function stopEditingLabel(instrument) {
 	hoveredLabel.value = null;
 }
 
-function handleTempoMouseDown(e) {
-	isScrubbing = true;
-	startY = e.clientY;
-	startTempo = tempo.value;
-
-	window.addEventListener('mousemove', handleTempoMouseMove);
-	window.addEventListener('mouseup', handleTempoMouseUp);
-}
-
-function handleTempoMouseMove(e) {
-	if (!isScrubbing) return;
-	const delta = startY - e.clientY;
-	tempo.value = Math.max(20, Math.min(300, Math.round(startTempo + delta)));
-}
-
-function handleTempoMouseUp() {
-	isScrubbing = false;
-	window.removeEventListener('mousemove', handleTempoMouseMove);
-	window.removeEventListener('mouseup', handleTempoMouseUp);
-}
-
-// --- Scroll Wheel ---
-function handleTempoWheel(e) {
-	e.preventDefault();
-	const delta = Math.sign(e.deltaY);
-	tempo.value = Math.max(20, Math.min(300, tempo.value - delta)); // scroll up increases
-}
-
-const phaseDitherCents = 0.3; // ±0.3 cents per hit, inaudible, fixes overlap dips
-
-
 const volume = ref(0.75);
 const tempo = ref(100);
 const swing = ref(0);
@@ -1021,49 +1124,61 @@ masterGain.connect(analyser);
 
 function addCustomChannel() {
 	const id = Date.now();
+	const customIndex = instruments.value.filter(i => i.isCustom).length + 1;
+
 	instruments.value.push({
 		name: `custom-${id}`,
-		label: `Custom ${instruments.value.length + 1}`,
+		label: `Custom ${customIndex}`,
+		type: 'sample',
+		isCustom: true,
+		isEditingName: false,
 		buffer: null,
 		muted: false,
 		channelVolume: 0.5,
 		steps: Array(16).fill(false),
 		velocities: Array(16).fill(1.0),
 	});
+
+	// Prompt for a file right away
+	nextTick(() => {
+		const input = document.getElementById(`file-custom-${id}`) as HTMLInputElement | null;
+		input?.click();
+	});
 }
 
-function deleteChannel(name) {
-	if (name === 'synth-voice') return; // safeguard
 
+function deleteChannel(name: string) {
+	if (!canDelete(name)) return; // protect defaults + synth
 	const index = instruments.value.findIndex(i => i.name === name);
 	if (index !== -1) {
 		const label = instruments.value[index].label || name;
-		const confirmed = confirm(`Are you sure you want to delete "${label}"?`);
-		if (confirmed) {
-			instruments.value.splice(index, 1);
-		}
+		const confirmed = confirm(`Delete "${label}"?`);
+		if (confirmed) instruments.value.splice(index, 1);
 	}
 }
 
-
-function loadUserSample(event, instrument) {
-	const file = event.target.files[0];
+function loadUserSample(event: Event, instrument: any) {
+	const input = event.target as HTMLInputElement;
+	const file = input.files?.[0];
 	if (!file) return;
 
-	// Auto-set label based on file name (remove extension)
-	const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
-	instrument.label = nameWithoutExt;
+	instrument.label = file.name.replace(/\.[^/.]+$/, '');
 
 	const reader = new FileReader();
-	reader.onload = function (e) {
-		audioCtx.decodeAudioData(e.target.result, decoded => {
-			instrument.buffer = decoded;
-		}, err => {
-			console.error("Error decoding audio", err);
-		});
+	reader.onload = async () => {
+		try {
+			const arr = reader.result as ArrayBuffer;
+			instrument.buffer = await audioCtx.decodeAudioData(arr);
+		} catch (err) {
+			console.error('Error decoding audio', err);
+		} finally {
+			input.value = ''; // allow reselection of same file
+		}
 	};
 	reader.readAsArrayBuffer(file);
 }
+
+
 
 let loopId = null;
 let startTime = 0;
@@ -1335,9 +1450,7 @@ function handleMouseUp() {
 
 async function loadAllSamples() {
 	for (const instrument of instruments.value) {
-		// Skip instruments that don't require audio samples
-		if (instrument.type === 'synth') continue;
-
+		if (instrument.type === 'synth' || instrument.isCustom) continue; // << skip customs
 		const path = `audio/${instrument.name}.mp3`;
 		try {
 			instrument.buffer = await loadSample(path);
@@ -1355,8 +1468,8 @@ watch(volume, val => {
 
 
 
-if (isScrubbing) document.body.classList.add('scrubbing');
-else document.body.classList.remove('scrubbing');
+// if (isScrubbing) document.body.classList.add('scrubbing');
+// else document.body.classList.remove('scrubbing');
 
 function getPadStyle(instrument, index) {
 	if (!instrument.steps[index]) return {};
