@@ -44,92 +44,129 @@
 
 
 
-		<!-- ===== Sampler Channels (Kick/Snare/Hi-hat/Customs) ===== -->
-		<section class="channels-section">
-			<div v-for="inst in orderedChannels" :key="inst.key || inst.name" class="mb-3 channel-wrap">
 
-				<!-- Inserted Add Channel row -->
-				<template v-if="inst.isAddButton">
-					<div class="d-flex align-items-center">
-						<button class="btn btn-sm btn-outline-success" @click="addCustomChannel">
-							+ Add Channel
+
+
+		<!-- ===== Sequencer (sampler channels) in an accordion ===== -->
+		<section class="sequencer-accordion mb-3">
+			<div class="accordion" id="seqAccordion">
+				<div class="accordion-item">
+					<h2 class="accordion-header">
+						<button type="button" class="accordion-button" :class="{ collapsed: !seqOpen }"
+							@click="seqOpen = !seqOpen" :aria-expanded="seqOpen ? 'true' : 'false'"
+							aria-controls="seqPanel">
+							Sequencer
+							<!-- <small class="ms-2 text-muted d-none d-sm-inline">
+								(Kick, Snare, Hi-hat, Custom Channels)
+							</small> -->
 						</button>
-					</div>
-				</template>
+					</h2>
 
-				<!-- Regular sampler channel rows -->
-				<template v-else>
-					<div class="d-flex align-items-center gap-2 mb-1">
-						<div class="mute-indicator" :class="{ muted: inst.muted }" @click="toggleMute(inst.name)"
-							role="button" aria-label="Toggle Mute" :title="inst.muted ? 'Muted' : 'Playing'"></div>
+					<div id="seqPanel" class="accordion-collapse collapse" :class="{ show: seqOpen }">
+						<div class="accordion-body p-3">
 
-						<div class="channel-label d-flex align-items-center gap-1">
-							<template v-if="!inst.isEditingName">
-								<strong @click="editLabel(inst)" @mouseenter="hoveredLabel = inst.name"
-									@mouseleave="hoveredLabel = null" class="position-relative">
-									{{ inst.label }}
-									<span v-if="hoveredLabel === inst.name" class="custom-tooltip">Click to
-										rename</span>
-								</strong>
-							</template>
-							<template v-else>
-								<input v-model="inst.label" @blur="stopEditingLabel(inst)"
-									@keydown.enter.prevent="stopEditingLabel(inst)" class="form-control form-control-sm"
-									style="max-width: 150px;" :ref="el => inst.inputRef = el" />
-							</template>
-						</div>
+							<!-- ===== Sampler Channels (Kick/Snare/Hi-hat/Customs) ===== -->
+							<section class="channels-section">
+								<div v-for="inst in orderedChannels" :key="inst.key || inst.name"
+									class="mb-3 channel-wrap">
+									<!-- Inserted Add Channel row -->
+									<template v-if="inst.isAddButton">
+										<div class="d-flex align-items-center">
+											<button class="btn btn-sm btn-outline-success" @click="addCustomChannel">
+												+ Add Channel
+											</button>
+										</div>
+									</template>
 
-						<div class="ms-auto d-flex align-items-center gap-2 channel-actions">
-							<button v-if="inst.isCustom" class="btn btn-sm btn-outline-secondary"
-								@click="triggerFilePicker(inst)">
-								Upload
-							</button>
-							<input class="d-none" :id="`file-${inst.name}`" type="file" accept="audio/*"
-								@change="loadUserSample($event, inst)" />
-							<button v-if="canDelete(inst.name)" class="btn btn-sm btn-outline-danger"
-								@click="deleteChannel(inst.name)">
-								Delete
-							</button>
-						</div>
-					</div>
+									<!-- Regular sampler channel rows -->
+									<template v-else>
+										<div class="d-flex align-items-center gap-2 mb-1">
+											<div class="mute-indicator" :class="{ muted: inst.muted }"
+												@click="toggleMute(inst.name)" role="button" aria-label="Toggle Mute"
+												:title="inst.muted ? 'Muted' : 'Playing'"></div>
 
-					<div class="position-relative text-center">
-						<Knob v-model="inst.channelVolume" :min="0" :max="1" :step="0.01" size="small" label="Vol"
-							color="#8E44AD" @knobStart="activeKnob = `vol-${inst.name}`" @knobEnd="activeKnob = null" />
-						<span v-if="activeKnob === `vol-${inst.name}`" class="custom-tooltip">
-							{{ Math.round(inst.channelVolume * 100) }}%
-						</span>
-					</div>
+											<div class="channel-label d-flex align-items-center gap-1">
+												<template v-if="!inst.isEditingName">
+													<strong @click="editLabel(inst)"
+														@mouseenter="hoveredLabel = inst.name"
+														@mouseleave="hoveredLabel = null" class="position-relative">
+														{{ inst.label }}
+														<span v-if="hoveredLabel === inst.name"
+															class="custom-tooltip">Click to rename</span>
+													</strong>
+												</template>
+												<template v-else>
+													<input v-model="inst.label" @blur="stopEditingLabel(inst)"
+														@keydown.enter.prevent="stopEditingLabel(inst)"
+														class="form-control form-control-sm" style="max-width: 150px;"
+														:ref="el => inst.inputRef = el" />
+												</template>
+											</div>
 
-					<div class="d-flex pad-row">
-						<div class="padTEST-grid">
-							<div v-for="(active, index) in inst.steps" :key="index" class="padTESTwrap"
-								@mouseenter="hoveredPad = `${inst.name}-${index}`" @mouseleave="hoveredPad = null">
-								<div :class="['padTEST liquid', { selected: active }, { playing: index === currentStep }]"
-									@mousedown="handleMouseDown($event, inst.name, index)"
-									@mouseenter="handleMouseEnter(inst.name, index)" @dragstart.prevent
-									:style="getPadStyle(inst, index)">
+											<div class="ms-auto d-flex align-items-center gap-2 channel-actions">
+												<button v-if="inst.isCustom" class="btn btn-sm btn-outline-secondary"
+													@click="triggerFilePicker(inst)">
+													Upload
+												</button>
+												<input class="d-none" :id="`file-${inst.name}`" type="file"
+													accept="audio/*" @change="loadUserSample($event, inst)" />
+												<button v-if="canDelete(inst.name)"
+													class="btn btn-sm btn-outline-danger"
+													@click="deleteChannel(inst.name)">
+													Delete
+												</button>
+											</div>
+										</div>
+
+										<div class="position-relative text-center mb-2">
+											<Knob v-model="inst.channelVolume" :min="0" :max="1" :step="0.01"
+												size="small" label="Vol" color="#8E44AD"
+												@knobStart="activeKnob = `vol-${inst.name}`"
+												@knobEnd="activeKnob = null" />
+											<span v-if="activeKnob === `vol-${inst.name}`" class="custom-tooltip">
+												{{ Math.round(inst.channelVolume * 100) }}%
+											</span>
+										</div>
+
+										<div class="d-flex pad-row">
+											<div class="padTEST-grid">
+												<div v-for="(active, index) in inst.steps" :key="index"
+													class="padTESTwrap"
+													@mouseenter="hoveredPad = `${inst.name}-${index}`"
+													@mouseleave="hoveredPad = null">
+													<div :class="['padTEST liquid', { selected: active }, { playing: index === currentStep }]"
+														@mousedown="handleMouseDown($event, inst.name, index)"
+														@mouseenter="handleMouseEnter(inst.name, index)"
+														@dragstart.prevent :style="getPadStyle(inst, index)"></div>
+
+													<!-- Volume hover slider -->
+													<div v-if="active && hoveredPad === `${inst.name}-${index}`"
+														class="hover-slider volume-slider">
+														<input type="range" min="0" max="1" step="0.01"
+															v-model.number="inst.velocities[index]"
+															@mousedown="activeVolumePad = `${inst.name}-${index}`"
+															@mouseup="activeVolumePad = null"
+															@touchstart="activeVolumePad = `${inst.name}-${index}`"
+															@touchend="activeVolumePad = null" />
+														<span v-if="activeVolumePad === `${inst.name}-${index}`"
+															class="custom-tooltip">
+															{{ Math.round(inst.velocities[index] * 100) }}%
+														</span>
+													</div>
+												</div>
+											</div>
+										</div>
+									</template>
 								</div>
+							</section>
+							<!-- /channels-section -->
 
-								<!-- Volume hover slider -->
-								<div v-if="active && hoveredPad === `${inst.name}-${index}`"
-									class="hover-slider volume-slider">
-									<input type="range" min="0" max="1" step="0.01"
-										v-model.number="inst.velocities[index]"
-										@mousedown="activeVolumePad = `${inst.name}-${index}`"
-										@mouseup="activeVolumePad = null"
-										@touchstart="activeVolumePad = `${inst.name}-${index}`"
-										@touchend="activeVolumePad = null" />
-									<span v-if="activeVolumePad === `${inst.name}-${index}`" class="custom-tooltip">
-										{{ Math.round(inst.velocities[index] * 100) }}%
-									</span>
-								</div>
-							</div>
 						</div>
 					</div>
-				</template>
+				</div>
 			</div>
 		</section>
+
 
 		<!-- ===== Percussion Synth (separate section) ===== -->
 		<section class="synth-section" v-if="synthInstrument">
@@ -315,6 +352,15 @@ import PatternTools from './PatternTools.vue';
 
 
 // IMPORTS END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+//Sequencer Accordian BEGIN
+// const seqOpen = ref(true); // start open so current behavior doesn't change
+const seqOpen = ref(localStorage.getItem('seqOpen') !== 'false');
+watch(seqOpen, v => localStorage.setItem('seqOpen', String(v)));
+
+//Sequencer Accordian END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 

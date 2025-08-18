@@ -211,7 +211,7 @@ const hzInput = computed({
 </script>
 
 <style scoped>
-.pad-settings-popover {
+/* .pad-settings-popover {
     position: absolute;
     width: 280px;
     z-index: 1000;
@@ -221,5 +221,5 @@ const hzInput = computed({
     padding: 0.15rem 0.4rem;
     font-size: 0.75rem;
     line-height: 1;
-}
+} */
 </style>
