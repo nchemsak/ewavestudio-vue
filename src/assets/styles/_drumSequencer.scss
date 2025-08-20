@@ -1,380 +1,18 @@
 @use "./variables";
 
-// .drum-sequencer {
-//     border-radius: 18px;
-//     padding: 20px 30px;
-//     box-shadow:
-//         inset 0 0 5px rgba(0, 0, 0, 0.4),
-//         0 10px 25px rgba(0, 0, 0, 0.6);
-//     position: relative;
-//     color: white;
-
-//     .pad {
-//         width: 30px;
-//         height: 30px;
-
-//         border: 1px solid variables.$color-black;
-//         background-color: variables.$color-black;
-//         cursor: pointer;
-//         transition: background-color 0.2s;
-//         border-radius: 2px;
-//         @include variables.lg {
-//             width: 20px;
-//             height: 20px;
-//             height: 100px;
-//         }
-//         @include variables.xl {
-//             width: 25px;
-//             height: 25px;
-//             height: 100px;
-//         }
-//         @include variables.xxl {
-//             width: 30px;
-//             height: 30px;
-//             height: 100px;
-//         }
-//     }
-
-//     .pad.selected {
-//         background-color: #0cf;
-//     }
-
-//     .pad.playing {
-//         border: 2px solid #fff;
-//         box-shadow: 0 0 6px #0ff;
-//     }
-
-//     .instrument-grid {
-//         // max-width: 650px;
-//         margin: auto;
-//     }
-
-//     .pad.selected.playing {
-//         background-color: #0ff;
-//     }
-
-//     .velocity-slider {
-//         width: 30px;
-//         margin-top: 2px;
-//     }
-
-//     .pad-row {
-//         // overflow-x: auto;
-//         overflow-x: visible;
-//         flex-wrap: wrap;
-//         justify-content: start;
-//     }
-
-//     .instrument-grid .d-flex::-webkit-scrollbar {
-//         height: 6px;
-//     }
-
-//     .instrument-grid .d-flex::-webkit-scrollbar-thumb {
-//         background-color: rgba(255, 255, 255, 0.3);
-//         border-radius: 3px;
-//     }
-
-//     .pad-row {
-//         padding-bottom: 4px;
-//         padding-right: 12px;
-//     }
-
-//     .mute-indicator {
-//         width: 14px;
-//         height: 14px;
-//         border-radius: 50%;
-//         background-color: variables.$color-teal-light;
-//         box-shadow: 0 0 4px variables.$color-white;
-//         cursor: pointer;
-//         transition:
-//             background-color 0.2s,
-//             box-shadow 0.2s;
-//     }
-
-//     .mute-indicator.muted {
-//         background-color: #555;
-//         box-shadow: none;
-//     }
-
-//     .channel-volume input[type="range"] {
-//         max-width: 150px;
-//         height: 4px;
-//     }
-
-//     body.scrubbing {
-//         cursor: ns-resize;
-//     }
-
-//     :global(body.scrubbing) {
-//         cursor: ns-resize;
-//     }
-
-//     .pad-wrapper {
-//         position: relative;
-//         align-items: center;
-//         margin: 0px 2px 0px 2px;
-//     }
-
-//     // New Section
-
-//     .hover-slider {
-//         position: absolute;
-
-//         width: 30px;
-//         height: 30px;
-//         height: 100px;
-//         z-index: 10;
-//         &.pitch-slider {
-//             bottom: -30px;
-//         }
-//         &.volume-slider {
-//             top: -30px;
-//             top: -70px;
-//             top: -100px;
-//             top: 30px;
-//             input {
-//                 position: absolute;
-//                 bottom: 100px;
-//             }
-//         }
-//         input[type="range"] {
-//             transform: rotate(270deg);
-//             width: 30px;
-//             height: 30px;
-//             height: 100px;
-//             -webkit-appearance: none;
-//             background: transparent;
-
-//             &::-webkit-slider-thumb {
-//                 -webkit-appearance: none;
-//                 height: 30px;
-//                 width: 4px;
-//                 background: variables.$color-teal-light;
-//                 cursor: ns-resize;
-//                 margin-top: 0px;
-//                 padding-left: 2px;
-//                 padding-right: 2px;
-//                 border-radius: 2px;
-//                 border: 1px solid variables.$color-black;
-//             }
-
-//             &::-moz-range-thumb {
-//                 height: 30px;
-//                 width: 4px;
-//                 background: variables.$color-teal-light;
-//                 border: none;
-//                 cursor: ns-resize;
-//             }
-
-//             &::-webkit-slider-runnable-track {
-//                 height: 30px;
-//                 width: 30px;
-//                 width: 100px;
-//                 background: rgba(255, 255, 255, 0.2);
-//                 border-radius: 2px;
-//                 position: absolute;
-//             }
-
-//             &::-moz-range-track {
-//                 height: 30px;
-//                 width: 30px;
-//                 width: 100px;
-//                 background: rgba(255, 255, 255, 0.2);
-//                 border-radius: 2px;
-//                 position: absolute;
-//             }
-//         }
-//     }
-
-//     .channel-label:hover strong {
-//         text-decoration: underline dotted 1px;
-//         text-underline-offset: 4px;
-//     }
-
-//     .channel-label {
-//         cursor: pointer;
-//         user-select: none;
-
-//         .rename-icon {
-//             font-size: 0.9rem;
-//             opacity: 0.6;
-//             margin-left: 4px;
-//             transition: opacity 0.2s;
-//         }
-
-//         &:hover .rename-icon {
-//             opacity: 1;
-//         }
-//     }
-
-//     .rename-icon {
-//         position: relative;
-//         cursor: pointer;
-//     }
-
-//     .upload-icon {
-//         cursor: pointer;
-//     }
-// }
-
-// @use "./variables";
-
-/* Tweak these in one place */
-// .drum-sequencer {
-//     --pad-w: 30px; /* pad width  */
-//     --pad-h: 100px; /* pad height */
-//     --slider-w: 30px; /* visual slider width (same as pad) */
-//     --slider-l: 100px; /* slider length away from pad */
-//     --track-thickness: 8px;
-//     position: relative;
-//     color: white;
-//     border-radius: 18px;
-//     padding: 20px 30px;
-//     box-shadow:
-//         inset 0 0 5px rgba(0, 0, 0, 0.4),
-//         0 10px 25px rgba(0, 0, 0, 0.6);
-
-//     /* === Pads ===================================================== */
-//     .pad-wrapper {
-//         position: relative;
-//         align-items: center;
-//         margin: 0 2px;
-//     }
-
-//     .pad {
-//         width: var(--pad-w);
-//         height: var(--pad-h);
-//         border: 1px solid variables.$color-black;
-//         background: variables.$color-black;
-//         border-radius: 2px;
-//         cursor: pointer;
-//         transition: background-color 0.2s;
-//     }
-//     .pad.selected {
-//         background-color: #0cf;
-//     }
-//     .pad.playing {
-//         border: 2px solid #fff;
-//         box-shadow: 0 0 6px #0ff;
-//     }
-
-//     /* === Hover sliders ============================================ */
-//     /* A simple container is positioned above/below the pad.
-//      The <input> is centered inside and rotated. */
-//     .hover-slider {
-//         position: absolute;
-//         left: 50%;
-//         transform: translateX(-50%); /* center over pad */
-//         width: var(--slider-w);
-//         height: var(--slider-l);
-//         z-index: 10;
-//         display: flex; /* center the input */
-//         align-items: center;
-//         justify-content: center;
-//         pointer-events: none; /* container ignores pointer... */
-//     }
-//     .hover-slider input {
-//         pointer-events: auto;
-//     } /* ...thumb still draggable */
-
-//     /* Volume above: touch the top edge and extend upward */
-//     .hover-slider.volume-slider {
-//         bottom: 100%;
-//     }
-
-//     /* Pitch below: touch the bottom edge and extend downward */
-//     .hover-slider.pitch-slider {
-//         top: 100%;
-//     }
-
-//     /* === Rotated range styling (WebKit + Firefox) ================= */
-//     .hover-slider input[type="range"] {
-//         -webkit-appearance: none;
-//         appearance: none;
-//         background: transparent;
-//         /* Center inside the container, then rotate */
-//         transform: rotate(-90deg);
-//         /* Before rotation, width = visual length, height = thickness */
-//         width: var(--slider-l);
-//         height: var(--slider-w);
-//         outline: none;
-//     }
-
-//     /* Track */
-//     .hover-slider input[type="range"]::-webkit-slider-runnable-track {
-//         height: 8px; /* track thickness (before rotate) */
-//         background: rgba(255, 255, 255, 0.2);
-//         border-radius: 2px;
-//     }
-//     .hover-slider input[type="range"]::-moz-range-track {
-//         height: 8px;
-//         background: rgba(255, 255, 255, 0.2);
-//         border-radius: 2px;
-//     }
-
-//     /* Thumb: make a small horizontal bar (becomes horizontal after rotate) */
-//     // .hover-slider input[type="range"]::-webkit-slider-thumb {
-//     //     -webkit-appearance: none;
-//     //     width: 30px; /* bar length */
-//     //     height: 4px; /* bar thickness */
-//     //     background: variables.$color-teal-light;
-//     //     border: 1px solid variables.$color-black;
-//     //     border-radius: 2px;
-//     //     cursor: ns-resize;
-//     //     margin-top: -13px; /* center thumb on track (tweak) */
-//     // }
-//     // .hover-slider input[type="range"]::-moz-range-thumb {
-//     //     width: 30px;
-//     //     height: 4px;
-//     //     background: variables.$color-teal-light;
-//     //     border: 1px solid variables.$color-black;
-//     //     border-radius: 2px;
-//     //     cursor: ns-resize;
-//     // }
-
-//     .hover-slider input[type="range"]::-webkit-slider-thumb {
-//         -webkit-appearance: none;
-//         /* Full width of the rotated track */
-//         width: var(--slider-w); /* matches the unrotated track thickness */
-//         height: 6px; /* bar thickness after rotation */
-//         background: variables.$color-teal-light;
-//         border: 1px solid variables.$color-black;
-//         border-radius: 2px;
-//         cursor: ns-resize;
-//     }
-
-//     .hover-slider input[type="range"]::-moz-range-thumb {
-//         width: var(--slider-w);
-//         height: 6px;
-//         background: variables.$color-teal-light;
-//         border: 1px solid variables.$color-black;
-//         border-radius: 2px;
-//         cursor: ns-resize;
-//     }
-
-//     /* Optional: faint column behind each slider for clarity */
-//     .hover-slider::before {
-//         content: "";
-//         position: absolute;
-//         inset: 0;
-//         background: rgba(255, 255, 255, 0.08);
-//         border-radius: 2px;
-//     }
-
-//     /* (Your other, unrelated rules can stay) */
-// }
-
-.drum-sequencer {
-	/* Tweak in one place */
-	--pad-w: 30px; /* pad width  */
-	--pad-h: 100px; /* pad height */
-	// --slider-w: 30px; /* slider column width (matches pad width) */
+:root {
+	--padTEST-size: 40px;
+	--padTEST-radius: 14px;
+	--bg: #0e1118;
+	--pad-w: 30px; 
+	--pad-h: 100px;
 	--slider-w: 74px;
 	--slider-l: 100px; /* how far sliders extend away from pad */
-	--track-thickness: 8px; /* visual thickness of the track */
-
-	// --thumb-thickness: 6px; /* visual thickness of the thumb bar */
+	--track-thickness: 8px;
 	--thumb-thickness: 10px;
+}
+
+.drum-sequencer {
 	position: relative;
 	color: white;
 	border-radius: 18px;
@@ -478,8 +116,9 @@
 		position: absolute;
 		left: 50%;
 		transform: translateX(-50%); /* center over pad */
-		width: var(--slider-w);
+		// width: var(--slider-w);
 		height: var(--slider-l);
+		width: var(--padTEST-size);
 		z-index: 10;
 		display: flex;
 		align-items: center;
@@ -521,6 +160,7 @@
        height = column width (left/right) */
 		width: var(--slider-l);
 		height: var(--slider-w);
+		height: var(--padTEST-size);
 	}
 
 	/* Track */
@@ -542,18 +182,21 @@
        width  -> final height (thin)
        height -> final width  (span across column) */
 		width: var(--thumb-thickness);
-		height: var(--slider-w);
+		height: var(--padTEST-size);
+		// height: var(--slider-w);
 		background: variables.$color-teal-light;
 		border: 1px solid variables.$color-black;
 		border-radius: 3px;
 		cursor: ns-resize;
 
 		/* Center the tall thumb on the thin track */
-		margin-top: calc((var(--slider-w) - var(--track-thickness)) / -2);
+		margin-top: calc((var(--padTEST-size) - var(--track-thickness)) / -2);
 	}
 	.hover-slider input[type="range"]::-moz-range-thumb {
 		width: var(--thumb-thickness);
-		height: var(--slider-w);
+		// height: var(--slider-w);
+		height: var(--padTEST-size);
+
 		background: variables.$color-teal-light;
 		border: 1px solid variables.$color-black;
 		border-radius: 3px;
@@ -614,16 +257,6 @@
 		opacity: 1;
 	}
 
-	// .pad-settings-popover {
-	// 	position: fixed;
-	// 	z-index: 2000;
-	// 	min-width: 260px;
-	// 	background: #1a1a1a;
-	// 	color: #eee;
-	// 	border: 1px solid #333;
-	// 	border-radius: 12px;
-	// 	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-	// }
 	.btn-xs {
 		padding: 2px 6px;
 		font-size: 12px;
@@ -648,4 +281,85 @@
 .btn-xs {
 	padding: 2px 6px;
 	font-size: 12px;
+}
+
+// Pad grid
+
+.padTEST-grid {
+	display: flex;
+	justify-content: space-around;
+	gap: 5px;
+	.padTEST {
+		display: inline-block;
+		inline-size: var(--padTEST-size);
+		block-size: var(--padTEST-size);
+		border-radius: var(--padTEST-radius);
+		border: 1px solid transparent;
+		background: #222; /* default overridden below */
+		box-shadow:
+			0 10px 18px rgba(0, 0, 0, 0.45),
+			inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+		cursor: pointer;
+		transition:
+			transform 0.05s ease,
+			box-shadow 0.18s ease,
+			filter 0.18s ease,
+			background 0.25s ease,
+			border-color 0.25s ease;
+	}
+	.padTEST:focus-visible {
+		outline: none;
+		box-shadow:
+			0 0 0 3px #7bd0ff66,
+			0 10px 18px rgba(0, 0, 0, 0.45),
+			inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+	}
+	.padTEST:active,
+	.padTEST.is-lit {
+		transform: translateY(1px);
+	}
+
+	.padTEST.liquid {
+		position: relative;
+		overflow: hidden;
+		border-radius: 18px;
+		border-radius: 0px;
+		border: 1px solid #ffffff1a;
+		background:
+			radial-gradient(140% 120% at 20% 15%, #3a2255, #261a3a 42%, #161a27 72%),
+			radial-gradient(80% 80% at 80% 80%, #23466a, transparent 60%);
+		box-shadow:
+			0 12px 22px rgba(0, 0, 0, 0.55),
+			inset 0 8px 18px rgba(255, 255, 255, 0.06);
+	}
+
+	.padTEST.padTEST-grid {
+		position: relative;
+		overflow: hidden;
+		border-radius: 14px;
+		background: #12151d;
+		border: 1px solid #1e2230;
+		box-shadow:
+			0 12px 20px rgba(0, 0, 0, 0.55),
+			inset 0 2px 8px rgba(255, 255, 255, 0.05);
+	}
+	.padTEST.padTEST-grid::before {
+		content: "";
+		position: absolute;
+		inset: 8px;
+		border-radius: 10px;
+		--dot: #2a2f42;
+		background: radial-gradient(circle, var(--dot) 35%, transparent 36%);
+		background-size: 18px 18px;
+		filter: drop-shadow(0 0 0 transparent);
+	}
+	.padTEST.padTEST-grid:active::before,
+	.padTEST.padTEST-grid.is-lit::before {
+		--dot: #8ad8ff;
+		filter: drop-shadow(0 0 10px #6bdcff66);
+	}
+
+	.padTESTwrap {
+		position: relative;
+	}
 }
