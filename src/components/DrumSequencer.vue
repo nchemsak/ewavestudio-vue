@@ -122,17 +122,22 @@
 			</div>
 
 			<div class="controlsWrapper">
-				<div class="controls">
-					<!-- <PatternTools :steps="synthInstrument.steps" :velocities="synthInstrument.velocities"
+				<!-- <div class="pt-panel"> -->
+
+				<!-- <PatternTools :steps="synthInstrument.steps" :velocities="synthInstrument.velocities"
 						@update:steps="synthInstrument.steps = $event"
 						@update:velocities="synthInstrument.velocities = $event" /> -->
 
-					<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
+				<!-- <PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
 						:max-freq="2000" @update:steps="steps = $event" @update:velocities="velocities = $event"
-						@update:frequencies="padFrequencies = $event" />
+						@update:frequencies="padFrequencies = $event" :currentTheme="currentTheme"/> -->
+				<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
+					:max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
+					@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
+					@octave-shift="octaveShiftAllSkip($event)" />
 
 
-					<div class="position-relative text-center knobWrap">
+				<!-- <div class="position-relative text-center knobWrap">
 						<div class="btn-group ms-2">
 							<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(-1)">
 								Octave −
@@ -141,9 +146,9 @@
 								Octave +
 							</button>
 						</div>
-					</div>
-				</div>
-				<div class="controls">
+					</div> -->
+				<!-- </div> -->
+				<div class="pt-panel">
 
 					<h2>Generators</h2>
 					<!-- Waveform Selector -->
@@ -161,7 +166,7 @@
 						v-model:amount="noiseAmount" :color="'#9C27B0'" />
 
 				</div>
-				<div class="controls">
+				<div class="pt-panel">
 					<h2>Sound Shaping</h2>
 
 					<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
@@ -172,7 +177,7 @@
 
 				</div>
 
-				<div class="controls">
+				<div class="pt-panel">
 					<h2>Pitch & Harmonics</h2>
 					<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
 						v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
@@ -184,7 +189,7 @@
 					<UnisonEffect v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
 						v-model:detune="detuneCents" v-model:spread="stereoSpread" />
 				</div>
-				<div class="controls">
+				<div class="pt-panel">
 					<h2>Movement & Modulation</h2>
 
 					<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
@@ -192,7 +197,7 @@
 						:targets="['pitch', 'gain', 'filter']" />
 
 				</div>
-				<div class="controls">
+				<div class="pt-panel">
 
 					<h2>Effects</h2>
 					<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
@@ -418,6 +423,12 @@ watch(seqOpen, v => localStorage.setItem('seqOpen', String(v)));
 // }
 
 //Patterntools END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// Theming START
+const currentTheme = ref(''); // '', 'theme-light', or 'theme-synthwave'
+// Theming END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -801,7 +812,7 @@ const orderedChannels = computed(() => {
 
 
 
-// Global Octave controls
+// // Global Octave controls
 function canShiftOctave(hz, deltaOct) {
 	const factor = Math.pow(2, deltaOct);
 	const target = hz * factor;

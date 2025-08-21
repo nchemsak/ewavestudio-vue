@@ -1,72 +1,73 @@
 <template>
-    <div class="pattern-tools p-2">
-        <h2 class="mb-2">Pattern Tools</h2>
+    <div class="pattern-tools pt-panel" :class="props.currentTheme">
+        <h2 class="pt-title">Pattern Tools</h2>
 
         <!-- Step Fills -->
-        <div class="mb-3">
-            <div class="group-title">Step Fills</div>
-            <div class="btn-group btn-group-sm" role="group" aria-label="Step fills">
-                <button class="btn btn-outline-success" @click="fillAll">All</button>
-                <button class="btn btn-outline-success" @click="fillEvery2">Every 2</button>
-                <button class="btn btn-outline-success" @click="fillEvery4">Every 4</button>
-                <button class="btn btn-outline-success" @click="fillRandom()">Random</button>
-                <button class="btn btn-outline-secondary" @click="invert">Invert</button>
-                <button class="btn btn-outline-danger" @click="clear">Clear</button>
+        <section class="pt-section">
+            <div class="pt-section-title">Step Fills</div>
+            <div class="pt-btn-group" role="group" aria-label="Step fills">
+                <button class="pt-btn" @click="fillAll">All</button>
+                <button class="pt-btn" @click="fillEvery2">Every 2</button>
+                <button class="pt-btn" @click="fillEvery4">Every 4</button>
+                <button class="pt-btn" @click="fillRandom()">Random</button>
+                <button class="pt-btn" @click="invert">Invert</button>
+                <button class="pt-btn pt-danger" @click="clear">Clear</button>
             </div>
-        </div>
+        </section>
 
         <!-- Velocity Shapes -->
-        <div class="mb-3" v-if="props.velocities">
-            <!-- <div class="small mb-1">Velocity Shapes</div> -->
-            <div class="group-title">Velocity Shapes</div>
-
-            <div class="btn-group btn-group-sm" role="group" aria-label="Velocity shapes">
-                <button class="btn btn-outline-primary" @click="shapePeaks">Peaks</button>
-                <button class="btn btn-outline-primary" @click="shapeStairs4">Stairs 4</button>
-                <button class="btn btn-outline-primary" @click="shapeRamp">Ramp</button>
-                <button class="btn btn-outline-primary" @click="shapeBackbeat">Backbeat</button>
-                <button class="btn btn-outline-primary" @click="shapeRandom">Random</button>
-                <button class="btn btn-outline-secondary" @click="shapeReset">Reset</button>
+        <section class="pt-section" v-if="props.velocities">
+            <div class="pt-section-title">Velocity Shapes</div>
+            <div class="pt-btn-group" role="group" aria-label="Velocity shapes">
+                <button class="pt-btn" @click="shapePeaks">Peaks</button>
+                <button class="pt-btn" @click="shapeStairs4">Stairs 4</button>
+                <button class="pt-btn" @click="shapeRamp">Ramp</button>
+                <button class="pt-btn" @click="shapeBackbeat">Backbeat</button>
+                <button class="pt-btn" @click="shapeRandom">Random</button>
+                <button class="pt-btn pt-danger" @click="shapeReset">Reset</button>
             </div>
+        </section>
 
-        </div>
+        <!-- Pitch & Scale -->
+        <section class="pt-section" v-if="props.frequencies">
+            <div class="pt-section-title">Pitch &amp; Scale</div>
 
-        <!-- Random Pitch (applies to ALL pads; quantized to notes) -->
-        <div class="pitch-tools border-top pt-3 mt-3" v-if="props.frequencies">
-            <div class="d-flex flex-wrap gap-2 align-items-center">
-                <label class="form-label mb-0 small">Key</label>
-                <select v-model="keyRoot" class="form-select form-select-sm w-auto">
-                    <option v-for="r in ROOTS" :key="r" :value="r">{{ r }}</option>
-                </select>
+            <div class="pt-fields">
+                <label class="pt-field">
+                    <span class="pt-label">Key</span>
+                    <PtSelect v-model="keyRoot" :options="keyOptions" aria-label="Key" />
+                </label>
 
-                <label class="form-label mb-0 small ms-2">Scale</label>
-                <select v-model="keyScale" class="form-select form-select-sm w-auto">
-                    <option v-for="(v, name) in SCALES" :key="name" :value="name">
-                        {{ SCALE_LABELS[name] ?? name }}
-                    </option>
-                </select>
+                <label class="pt-field">
+                    <span class="pt-label">Scale</span>
+                    <PtSelect v-model="keyScale" :options="scaleOptions" aria-label="Scale" />
+                </label>
 
                 <!-- Register presets -->
-                <div class="btn-group btn-group-sm ms-1" role="group" aria-label="Register range">
-                    <button v-for="(def, key) in PRESETS" :key="key" type="button" class="btn"
-                        :class="rangePreset === key ? 'btn-primary' : 'btn-outline-primary'" @click="rangePreset = key">
+                <div class="pt-chips" role="group" aria-label="Register range">
+                    <button v-for="(def, key) in PRESETS" :key="key" type="button" class="pt-chip"
+                        :class="{ 'is-active': rangePreset === key }" @click="rangePreset = key">
                         {{ def.label }}
                     </button>
                 </div>
-
-                <!-- Live hint of what the pool actually is -->
-                <span class="small ms-2">{{ poolSummary }}</span>
-
-                <button class="btn btn-sm btn-outline-primary ms-2" @click="randomizePitches">
-                    Random Pitch
-                </button>
             </div>
-        </div>
+
+            <div class="pt-meta">{{ poolSummary }}</div>
+
+
+            <div class="pt-actions">
+                <button class="pt-btn pt-accent-cool" @click="emit('octave-shift', -1)">↓ Octave</button>
+                <button class="pt-btn pt-accent-warm" @click="emit('octave-shift', +1)">↑ Octave</button>
+                <button class="pt-btn pt-glow" @click="randomizePitches">Random Pitch</button>
+            </div>
+        </section>
     </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import PtSelect from './PtSelect.vue';
+
 
 const props = defineProps<{
     steps: boolean[];
@@ -74,13 +75,18 @@ const props = defineProps<{
     frequencies?: number[];      // Hz per pad (required for Random Pitch)
     minFreq?: number;            // defaults to 100
     maxFreq?: number;            // defaults to 2000
+    currentTheme?: string;
 }>();
-
 const emit = defineEmits<{
     (e: 'update:steps', v: boolean[]): void;
     (e: 'update:velocities', v: number[]): void;
     (e: 'update:frequencies', v: number[]): void;
+    (e: 'octave-shift', delta: number): void;
 }>();
+
+
+
+
 
 /* ---------- Utils ---------- */
 function clamp(x: number, lo: number, hi: number): number {
@@ -208,6 +214,9 @@ const PRESETS: Record<PresetKey, { minOct: number; maxOct: number; label: string
     wide: { minOct: 2, maxOct: 6, label: 'Wide' },
 };
 const rangePreset = ref<PresetKey>('wide');
+
+
+
 const minOctave = ref<number>(3);
 const maxOctave = ref<number>(6);
 
@@ -264,6 +273,11 @@ function randomizePitches(): void {
     const out = props.frequencies.map(() => midiToFreq(pool[Math.floor(Math.random() * pool.length)]));
     emit('update:frequencies', out);
 }
+const keyOptions = ROOTS.map(r => ({ label: r, value: r }));
+const scaleOptions = Object.keys(SCALES).map(name => ({
+    label: SCALE_LABELS[name] ?? name, value: name
+}));
+
 </script>
 
 <style scoped>
