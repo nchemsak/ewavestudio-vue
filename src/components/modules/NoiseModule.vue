@@ -1,21 +1,22 @@
 <template>
     <KnobGroup v-model="enabledLocal" title="Noise" :color="color" :showToggle="showToggle">
-        <template #header-content>
-            <div class="noise-dot-wrap d-flex justify-content-center gap-2 ms-2">
-                <span v-for="type in types" :key="type" class="noise-dot"
-                    :class="[type, { selected: typeLocal === type, disabled: !enabledLocal }]"
-                    @click="enabledLocal && setType(type)">
-                    <span class="selector-tooltip">{{ label(type) }} Noise</span>
+        <div class="noise-row">
+            <!-- type chips -->
+            <div class="noise-chips" role="group" aria-label="Noise type">
+                <button v-for="t in types" :key="t" type="button" class="pt-chip"
+                    :class="{ 'is-active': enabledLocal && typeLocal === t }" @click="onSelectType(t)">
+                    {{ label(t) }}
+                </button>
+            </div>
+
+            <!-- amount knob -->
+            <div class="noise-knob">
+                <Knob v-model="amountLocal" label="Amount" :min="0" :max="1" :step="0.01" size="small" :color="color"
+                    :disabled="!enabledLocal" @knobStart="activeKnob = 'noiseAmount'" @knobEnd="activeKnob = null" />
+                <span v-if="activeKnob === 'noiseAmount'" class="custom-tooltip">
+                    {{ Math.round(amountLocal * 100) }}%
                 </span>
             </div>
-        </template>
-
-        <div class="position-relative text-center mt-2">
-            <Knob v-model="amountLocal" label="Amount" :min="0" :max="1" :step="0.01" size="medium" :color="color"
-                :disabled="!enabledLocal" @knobStart="activeKnob = 'noiseAmount'" @knobEnd="activeKnob = null" />
-            <span v-if="activeKnob === 'noiseAmount'" class="custom-tooltip">
-                {{ Math.round(amountLocal * 100) }}%
-            </span>
         </div>
     </KnobGroup>
 </template>
@@ -38,7 +39,7 @@ const props = withDefaults(defineProps<{
     type: 'white',
     amount: 0.25,
     color: '#9C27B0',
-    showToggle: false
+    showToggle: true   // default to visible toggle
 })
 
 const emit = defineEmits<{
@@ -61,7 +62,40 @@ watch(amountLocal, v => emit('update:amount', Math.max(0, Math.min(1, v))))
 
 const types: NoiseType[] = ['white', 'pink', 'brown']
 const label = (t: NoiseType) => t.charAt(0).toUpperCase() + t.slice(1)
-const setType = (t: NoiseType) => { typeLocal.value = t }
+
+function onSelectType(t: NoiseType) {
+    if (!enabledLocal.value) enabledLocal.value = true; // smart enable
+    typeLocal.value = t;
+}
 
 const activeKnob = ref<null | 'noiseAmount'>(null)
 </script>
+
+<style scoped>
+.noise-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: var(--pt-gap);
+}
+
+.noise-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+
+@media (max-width: 560px) {
+    .noise-row {
+        grid-template-columns: 1fr;
+    }
+
+    .noise-chips {
+        flex-wrap: wrap;
+    }
+
+    .noise-knob {
+        margin-top: 6px;
+    }
+}
+</style>

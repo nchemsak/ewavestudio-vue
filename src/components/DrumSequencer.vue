@@ -148,10 +148,9 @@
 						</div>
 					</div> -->
 				<!-- </div> -->
-				<div class="pt-panel">
+				<!-- <div class="pt-panel">
 
 					<h2>Generators</h2>
-					<!-- Waveform Selector -->
 					<span class="group-title">Oscillators</span><br />
 					<div class="btn-group" role="group">
 						<button v-for="wave in ['sine', 'triangle', 'sawtooth', 'square']" :key="wave" type="button"
@@ -165,17 +164,43 @@
 					<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
 						v-model:amount="noiseAmount" :color="'#9C27B0'" />
 
-				</div>
+				</div> -->
+				<section class="pt-panel">
+					<h2 class="pt-title">Generators</h2>
+
+					<!-- Oscillators -->
+					<section class="pt-section">
+						<div class="pt-section-title">Oscillators</div>
+
+						<div class="pt-btn-group" role="group" aria-label="Waveforms">
+							<button v-for="wave in waves" :key="wave" class="pt-btn"
+								:class="{ 'is-active': selectedWaveform === wave }"
+								:aria-pressed="selectedWaveform === wave" @click="selectedWaveform = wave">
+								{{ waveLabel(wave) }}
+							</button>
+						</div>
+					</section>
+
+					<div class="pt-rule" aria-hidden="true"></div>
+
+					<!-- Noise -->
+					<NoiseModule :showToggle="true" v-model:enabled="noiseEnabled" v-model:type="noiseType"
+						v-model:amount="noiseAmount" :color="'#9C27B0'" />
+
+				</section>
+
 				<div class="pt-panel">
-					<h2>Sound Shaping</h2>
+					<h2 class="pt-title">Sound Shaping</h2>
 
 					<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 						v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
-					<hr />
+
+					<div class="pt-rule"></div>
+
 					<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 						v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
-
 				</div>
+
 
 				<div class="pt-panel">
 					<h2>Pitch & Harmonics</h2>
@@ -662,6 +687,9 @@ const hoveredLabel = ref(null);
 // const synthDecay = ref(0.4);
 
 const selectedWaveform = ref("sine");
+const waves = ['sine', 'triangle', 'sawtooth', 'square'] as const;
+const waveLabel = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+
 
 const isFineAdjust = ref(false);
 
