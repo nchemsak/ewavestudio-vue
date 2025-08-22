@@ -41,15 +41,6 @@
 			</div>
 		</div>
 
-
-
-
-
-
-
-
-
-
 		<!-- ===== Percussion Synth (separate section) ===== -->
 		<section class="synth-section" v-if="synthInstrument">
 			<div class="mb-3 channel-wrap">
@@ -122,49 +113,12 @@
 			</div>
 
 			<div class="controlsWrapper">
-				<!-- <div class="pt-panel"> -->
 
-				<!-- <PatternTools :steps="synthInstrument.steps" :velocities="synthInstrument.velocities"
-						@update:steps="synthInstrument.steps = $event"
-						@update:velocities="synthInstrument.velocities = $event" /> -->
-
-				<!-- <PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
-						:max-freq="2000" @update:steps="steps = $event" @update:velocities="velocities = $event"
-						@update:frequencies="padFrequencies = $event" :currentTheme="currentTheme"/> -->
 				<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
 					:max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
 					@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
 					@octave-shift="octaveShiftAllSkip($event)" />
 
-
-				<!-- <div class="position-relative text-center knobWrap">
-						<div class="btn-group ms-2">
-							<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(-1)">
-								Octave −
-							</button>
-							<button class="btn btn-sm btn-outline-secondary" @click="octaveShiftAllSkip(1)">
-								Octave +
-							</button>
-						</div>
-					</div> -->
-				<!-- </div> -->
-				<!-- <div class="pt-panel">
-
-					<h2>Generators</h2>
-					<span class="group-title">Oscillators</span><br />
-					<div class="btn-group" role="group">
-						<button v-for="wave in ['sine', 'triangle', 'sawtooth', 'square']" :key="wave" type="button"
-							class="btn btn-sm"
-							:class="wave === selectedWaveform ? 'btn-primary' : 'btn-outline-primary'"
-							@click="selectedWaveform = wave">
-							{{ wave.charAt(0).toUpperCase() + wave.slice(1) }}
-						</button>
-					</div>
-					<hr />
-					<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
-						v-model:amount="noiseAmount" :color="'#9C27B0'" />
-
-				</div> -->
 				<section class="pt-panel">
 					<h2 class="pt-title">Generators</h2>
 
@@ -203,19 +157,23 @@
 
 
 				<div class="pt-panel">
-					<h2>Pitch & Harmonics</h2>
-					<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
+					<h2 class="pt-title">Pitch & Harmonics</h2>
+
+					<PitchEnvModule :color="'#3F51B5'" :showToggle="true" v-model:enabled="pitchEnvEnabled"
 						v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
 						v-model:mode="pitchMode" />
-					<hr />
+
+					<div class="pt-rule" aria-hidden="true"></div>
+
 					<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
 						v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
-					<hr />
+					<div class="pt-rule" aria-hidden="true"></div>
+
 					<UnisonEffect v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
 						v-model:detune="detuneCents" v-model:spread="stereoSpread" />
 				</div>
 				<div class="pt-panel">
-					<h2>Movement & Modulation</h2>
+					<h2 class="pt-title">Movement & Modulation</h2>
 
 					<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
 						v-model:target="lfoTarget" :depthMax="lfoDepthMax" color="#00BCD4"
@@ -224,14 +182,15 @@
 				</div>
 				<div class="pt-panel">
 
-					<h2>Effects</h2>
+					<h2 class="pt-title">Effects</h2>
 					<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
 						v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime"
 						v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix"
 						v-model:toneEnabled="delayToneEnabled" v-model:toneHz="delayToneHz"
 						v-model:toneType="delayToneType" />
 
-					<hr />
+					<div class="pt-rule" aria-hidden="true"></div>
+
 					<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
 						v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
 				</div>
@@ -247,9 +206,7 @@
 							@click="seqOpen = !seqOpen" :aria-expanded="seqOpen ? 'true' : 'false'"
 							aria-controls="seqPanel">
 							Sequencer
-							<!-- <small class="ms-2 text-muted d-none d-sm-inline">
-								(Kick, Snare, Hi-hat, Custom Channels)
-							</small> -->
+
 						</button>
 					</h2>
 
@@ -393,61 +350,6 @@ const seqOpen = ref(localStorage.getItem('seqOpen') !== 'false');
 watch(seqOpen, v => localStorage.setItem('seqOpen', String(v)));
 
 //Sequencer Accordian END
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-//PatternTools BEGIN
-// const randomizeAmt = ref(0.5);
-// const humanizeAmt = ref(0.08);
-
-//  keep only this for Randomize:
-// function onRandomize(amt: number): void {
-// 	const inst = synthInstrument.value;
-// 	if (!inst) return;
-// 	for (let i = 0; i < inst.steps.length; i++) {
-// 		inst.steps[i] = Math.random() < amt; // only steps
-// 	}
-// }
-
-
-// function onHumanize(amt: number): void {
-// 	const inst = synthInstrument.value;
-// 	if (!inst) return;
-// 	for (let i = 0; i < inst.steps.length; i++) {
-// 		if (!inst.steps[i]) continue;
-// 		const v = inst.velocities[i];
-// 		inst.velocities[i] = Math.max(0, Math.min(1, v * (1 + (Math.random() * 2 - 1) * amt)));
-// 	}
-// }
-
-// function clear(): void {
-// 	const inst = synthInstrument.value;
-// 	if (!inst) return;
-// 	inst.steps = inst.steps.map(() => false);
-// }
-
-// function invert(): void {
-// 	const inst = synthInstrument.value;
-// 	if (!inst) return;
-// 	inst.steps = inst.steps.map(v => !v);
-// }
-
-// function shift(delta: number): void {
-// 	const inst = synthInstrument.value;
-// 	if (!inst) return;
-// 	const len = inst.steps.length;
-// 	if (!len) return;
-
-// 	const n = ((delta % len) + len) % len;
-
-// 	const rot = <T>(arr: T[]) =>
-// 		n === 0 ? arr.slice() : arr.slice(len - n).concat(arr.slice(0, len - n));
-
-// 	inst.steps = rot(inst.steps);
-// 	inst.velocities = rot(inst.velocities);
-// }
-
-//Patterntools END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 

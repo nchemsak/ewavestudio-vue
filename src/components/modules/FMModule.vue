@@ -1,27 +1,46 @@
 <!-- /components/modules/FMModule.vue -->
 <template>
     <KnobGroup v-model="localEnabled" title="FM" :color="color" :showToggle="showToggle">
+        <!-- HEADER -->
         <template #header-content>
-            <div class="d-flex align-items-center ms-auto gap-2 position-relative">
-                <!-- Ratio presets -->
-                <div class="btn-group" role="group" aria-label="FM Ratio Presets">
-                    <button v-for="r in ratioPresets" :key="r.label" class="btn btn-sm" :disabled="!localEnabled"
-                        :class="localRatio === r.value ? 'btn-primary' : 'btn-outline-primary'"
-                        @click="setRatio(r.value)" :title="`Mod Freq = Carrier × ${r.label}`">{{ r.label }}</button>
-                    <button class="btn btn-sm" :disabled="!localEnabled"
-                        :class="localRatio === null ? 'btn-info' : 'btn-outline-info'" @click="setRatio(null)"
-                        title="Free Hz (use Mod Freq knob)">Hz</button>
+            <div class="pt-header-tools">
+                <!-- Ratio presets (segmented) -->
+                <div class="pt-seg pt-seg-sm" role="group" aria-label="FM Ratio Presets">
+                    <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 1 }"
+                        :aria-pressed="localRatio === 1" :disabled="!localEnabled" @click="setRatio(1)">
+                        1:1
+                        <span class="selector-tooltip">Carrier × 1</span>
+                    </button>
+
+                    <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 1.5 }"
+                        :aria-pressed="localRatio === 1.5" :disabled="!localEnabled" @click="setRatio(1.5)">
+                        3:2
+                        <span class="selector-tooltip">Carrier × 1.5</span>
+                    </button>
+
+                    <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 2 }"
+                        :aria-pressed="localRatio === 2" :disabled="!localEnabled" @click="setRatio(2)">
+                        2:1
+                        <span class="selector-tooltip">Carrier × 2</span>
+                    </button>
+
+                    <button class="pt-seg-btn" :class="{ 'is-active': localRatio === null }"
+                        :aria-pressed="localRatio === null" :disabled="!localEnabled" @click="setRatio(null)">
+                        Hz
+                        <span class="selector-tooltip">Free Hz mode</span>
+                    </button>
                 </div>
 
-                <!-- Info button -->
-                <button class="btn btn-xs btn-outline-secondary" @click.stop="infoOpen = !infoOpen"
+                <!-- Info icon -->
+                <button ref="infoBtn" class="pt-info-icon" :class="{ 'is-active': infoOpen }" @click.stop="toggleInfo"
                     aria-label="What is FM?" title="What is FM?">
-                    <i class="bi bi-info-circle"></i>
+                    ⓘ
                 </button>
 
-                <!-- Info pop-up -->
-                <div v-if="infoOpen" class="fm-info-popover card p-2 small" @click.stop>
-                    <strong class="d-block mb-1">FM Explained</strong>
+                <!-- Popover (fixed; positioned via JS; never off-screen) -->
+                <div v-if="infoOpen" ref="infoEl" class="pt-popover fm-info" :data-side="infoSide"
+                    :style="{ top: infoPos.top + 'px', left: infoPos.left + 'px' }" @click.stop>
+                    <strong class="d-block mb-2">FM Explained</strong>
                     <ul class="mb-2 ps-3">
                         <li>FM adds a fast wobble to pitch → new harmonics.</li>
                     </ul>
@@ -29,15 +48,14 @@
                     <div class="mb-1"><strong>Hz</strong>: Unlocks Mod Freq. Tone varies more between notes.</div>
                     <div class="mb-1"><strong>Mod Freq</strong>: Modulator speed (active in Hz mode).</div>
                     <div class="mb-2"><strong>Amount</strong>: Intensity/brightness. Higher = richer/clangier.</div>
-                    <div class="text-muted mb-2"><i>Tip: Sine wave sounds cleanest with FM.</i></div>
-                    <div class="text-end">
-                        <button class="btn btn-xs btn-outline-secondary" @click="infoOpen = false">Close</button>
+                    <div class="text-end mt-2">
+                        <button class="pt-seg-btn pt-seg-sm" @click="infoOpen = false">Close</button>
                     </div>
                 </div>
             </div>
         </template>
 
-        <!-- Mod Freq (active only in Hz mode) -->
+        <!-- Mod Freq (Hz mode only) -->
         <div class="position-relative text-center" :class="{ 'is-disabled': modFreqDisabled }" aria-disabled="true">
             <Knob v-model="localModFreq" label="Mod Freq" size="medium" :min="1" :max="5000" :step="1"
                 :disabled="modFreqDisabled" :color="color" @knobStart="activeKnob = 'mf'"
@@ -46,7 +64,6 @@
                 {{ Math.round(localModFreq) }} Hz
             </span>
         </div>
-
 
         <!-- Index / Amount -->
         <div class="position-relative text-center">
@@ -60,17 +77,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, computed } from 'vue'
-
+import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import Knob from '../Knob.vue'
 import KnobGroup from '../KnobGroup.vue'
-const modFreqDisabled = computed(() => !localEnabled.value || localRatio.value !== null)
+
+type Ratio = number | null
 
 const props = withDefaults(defineProps<{
     enabled: boolean
     modFreq: number
     index: number
-    ratio: number | null
+    ratio: Ratio
     title?: string
     color?: string
     showToggle?: boolean
@@ -84,14 +101,14 @@ const emit = defineEmits<{
     (e: 'update:enabled', v: boolean): void
     (e: 'update:modFreq', v: number): void
     (e: 'update:index', v: number): void
-    (e: 'update:ratio', v: number | null): void
+    (e: 'update:ratio', v: Ratio): void
 }>()
 
-// local mirrors
+/* local mirrors */
 const localEnabled = ref(props.enabled)
 const localModFreq = ref(props.modFreq ?? 200)
 const localIndex = ref(props.index ?? 0)
-const localRatio = ref<number | null>(props.ratio ?? null)
+const localRatio = ref<Ratio>(props.ratio ?? null)
 
 watch(() => props.enabled, v => (localEnabled.value = v))
 watch(() => props.modFreq, v => (localModFreq.value = v ?? 200))
@@ -101,57 +118,94 @@ watch(() => props.ratio, v => (localRatio.value = v ?? null))
 watch(localEnabled, v => emit('update:enabled', v))
 watch(localModFreq, v => emit('update:modFreq', Math.max(1, Math.min(5000, Math.round(v)))))
 watch(localIndex, v => emit('update:index', Math.max(0, Math.min(50, +v))))
-function setRatio(r: number | null) {
+
+function setRatio(r: Ratio) {
     localRatio.value = r
     emit('update:ratio', r)
 }
 
-// ratios in ascending order
-const ratioPresets = [
-    { value: 1, label: '1:1' },
-    { value: 3 / 2, label: '3:2' },
-    { value: 2, label: '2:1' }
-    // { value: 5 / 2, label: '5:2' },
-    // { value: 7 / 2, label: '7:2' }
-]
+const modFreqDisabled = computed(() => !localEnabled.value || localRatio.value !== null)
 
-// info popover
+/* --- Info popover: fixed positioning, auto-flip + clamped --- */
 const infoOpen = ref(false)
-function handleDocClick() {
-    if (infoOpen.value) infoOpen.value = false
-}
-onMounted(() => document.addEventListener('click', handleDocClick))
-onBeforeUnmount(() => document.removeEventListener('click', handleDocClick))
+const infoBtn = ref<HTMLElement | null>(null)
+const infoEl = ref<HTMLElement | null>(null)
+const infoSide = ref<'right' | 'left'>('right')
+const infoPos = ref({ top: 0, left: 0 })
 
+function positionInfo() {
+    const btnRect = infoBtn.value?.getBoundingClientRect()
+    const elRect = infoEl.value?.getBoundingClientRect()
+    if (!btnRect || !elRect) return
+
+    const gap = 10
+    const margin = 8
+
+    // choose the side
+    const spaceRight = window.innerWidth - btnRect.right
+    infoSide.value = spaceRight >= elRect.width + gap ? 'right' : 'left'
+
+    // compute coords
+    let top = btnRect.top + btnRect.height / 2 - elRect.height / 2
+    let left = infoSide.value === 'right'
+        ? btnRect.right + gap
+        : btnRect.left - elRect.width - gap
+
+    // clamp to viewport
+    top = Math.max(margin, Math.min(top, window.innerHeight - elRect.height - margin))
+    left = Math.max(margin, Math.min(left, window.innerWidth - elRect.width - margin))
+
+    infoPos.value = { top, left }
+}
+
+function toggleInfo() {
+    infoOpen.value = !infoOpen.value
+    if (infoOpen.value) nextTick(positionInfo)
+}
+
+function onViewportChange() {
+    if (infoOpen.value) positionInfo()
+}
+
+function onDocClick(e: MouseEvent) {
+    if (!infoOpen.value) return
+    const t = e.target as Node
+    if (infoEl.value && !infoEl.value.contains(t) && infoBtn.value && !infoBtn.value.contains(t)) {
+        infoOpen.value = false
+    }
+}
+
+onMounted(() => {
+    window.addEventListener('resize', onViewportChange)
+    window.addEventListener('scroll', onViewportChange, { passive: true })
+    document.addEventListener('click', onDocClick, { capture: true })
+})
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', onViewportChange)
+    window.removeEventListener('scroll', onViewportChange)
+    document.removeEventListener('click', onDocClick, { capture: true })
+})
+
+/* knob tooltip state */
 const activeKnob = ref<null | 'mf' | 'ix'>(null)
 </script>
 
 <style scoped>
-.fm-info-popover {
-    position: absolute;
-    left: 179px;
-    top: 0px;
-    width: 375px;
-    z-index: 10;
+/* popover is fixed & sized; the rest comes from your global .pt-popover styles */
+.fm-info {
+    position: fixed;
+    width: min(380px, 76vw);
 }
 
-.btn.btn-xs {
-    padding: 0.15rem 0.4rem;
-    font-size: 0.75rem;
-    line-height: 1;
-}
-
-/* Gray out the knob’s label (and optionally value text) when disabled */
+/* Dim the knob label/value when disabled (Hz hidden by ratio) */
 .is-disabled :deep(.knob-label) {
     color: #9aa0a6;
-    /* subtle gray */
-    opacity: 0.7;
+    opacity: .7;
 }
 
-/* Optional: dim the number readout if your Knob shows one */
 .is-disabled :deep(.knob-readout),
 .is-disabled :deep(.knob-value) {
     color: #9aa0a6;
-    opacity: 0.6;
+    opacity: .6;
 }
 </style>

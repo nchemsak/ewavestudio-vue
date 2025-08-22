@@ -418,30 +418,30 @@ input[type="range"]::-webkit-slider-thumb {
     max-width: 172px;
 }
 
-.knob-group-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    gap: 0.5rem;
-    padding-bottom: 8px;
-    border-bottom: 2px solid #1d1d1d;
-}
+// .knob-group-header {
+//     display: flex;
+//     align-items: center;
+//     gap: 10px;
+//     gap: 0.5rem;
+//     padding-bottom: 8px;
+//     border-bottom: 2px solid #1d1d1d;
+// }
 
-.knob-group-header .effect-toggle {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
+// .knob-group-header .effect-toggle {
+//     width: 14px;
+//     height: 14px;
+//     border-radius: 50%;
+//     cursor: pointer;
+//     transition: background-color 0.2s;
+// }
 
-.group-title {
-    font-weight: 500;
-    color: #fff;
-    font-size: 1rem;
-    font-size: 10px;
-    font-family: monospace;
-}
+// .group-title {
+//     font-weight: 500;
+//     color: #fff;
+//     font-size: 1rem;
+//     font-size: 10px;
+//     font-family: monospace;
+// }
 
 .knob-group-header.inactive .group-title {
     color: #888;
@@ -455,32 +455,96 @@ input[type="range"]::-webkit-slider-thumb {
     stroke: #555 !important;
 }
 
-.toggle-header {
-    user-select: none;
+// .toggle-header {
+//     user-select: none;
+//     display: flex;
+//     align-items: center;
+
+//     .effect-toggle {
+//         width: 12px;
+//         height: 12px;
+//         border-radius: 50%;
+
+//         transition: background-color 0.2s ease;
+//     }
+//     .group-title {
+//         font-weight: bold;
+//         color: #ccc;
+//         cursor: pointer;
+//         &:hover {
+//             color: #fff;
+//         }
+//     }
+// }
+/* ==== KnobGroup header (single source of truth) ==== */
+.knob-group-header {
     display: flex;
     align-items: center;
+    flex-wrap: no   wrap; 
+    gap: 0.6rem;
+    min-block-size: 24px; /* enough room for a 12–14px dot */
+    padding-bottom: 8px;
+    border-bottom: 2px solid #1d1d1d;
+    user-select: none;
+}
 
-    .effect-toggle {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
+.knob-group-header .group-title {
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #ccc;
+    cursor: pointer;
+    white-space: nowrap; /* never break “Pitch Env” */
+    min-width: max-content; /* reserve exactly the text width */
+    line-height: 1.1; /* nice vertical rhythm */
+}
+.knob-group-header .group-title:hover {
+    color: #fff;
+}
+.knob-group-header.inactive .group-title {
+    color: #888;
+}
 
-        transition: background-color 0.2s ease;
-    }
-    .group-title {
-        font-weight: bold;
-        color: #ccc;
-        cursor: pointer;
-        &:hover {
-            color: #fff;
-        }
-    }
+
+
+/* ==== Enable/disable dot ==== */
+.knob-group-header .effect-toggle {
+    inline-size: 14px; /* width */
+    block-size: 14px; /* height */
+    aspect-ratio: 1 / 1; /* force a circle */
+    border-radius: 50%;
+    flex: 0 0 14px; /* don't stretch in flex row */
+    cursor: pointer;
+
+    /* subtle ring that matches your themed accents */
+    border: 1px solid hsl(var(--pt-accent) 40% 60% / 0.6);
+    box-shadow: 0 0 0 2px hsl(var(--pt-accent) 40% 60% / 0.15);
+    transition:
+        transform 0.12s ease,
+        box-shadow 0.2s ease;
+}
+.knob-group-header .effect-toggle:hover {
+    box-shadow: 0 0 0 3px hsl(var(--pt-accent) 40% 60% / 0.25);
+}
+.knob-group-header .effect-toggle:active {
+    transform: scale(0.95);
+}
+.knob-group-header.inactive .effect-toggle {
+    opacity: 0.7;
+    filter: saturate(0.6);
+}
+
+.knob-group-header > :last-child {
+    margin-left: auto; /* push controls to the right */
+    flex: 1 1 auto; /* lets them drop to next line on narrow widths */
 }
 
 .header-info {
     font-size: 10px;
     margin-right: 10px;
 }
+
+
 
 .mode-dot {
     width: 32px;
