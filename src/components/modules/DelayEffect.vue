@@ -1,137 +1,155 @@
+<!-- components/modules/DelayModule.vue -->
 <template>
-    <KnobGroup v-model="localEnabled" title="Delay" color="#00BCD4">
-        <!-- Header: Free/Sync -->
+    <KnobGroup v-model="localEnabled" title="Delay" :color="color" :showToggle="showToggle">
+        <!-- Header: Free / Sync segmented switch -->
         <template #header-content>
-            <div class="btn-group btn-group-sm ms-auto">
-                <span v-if="localSync" class="header-info">{{ DIVS[divIndex].label }}</span>
-                <button type="button" class="btn" :class="!localSync ? 'btn-primary' : 'btn-outline-primary'"
-                    @click="localSync = false" :disabled="!localEnabled">
-                    Free
-                </button>
-                <button type="button" class="btn" :class="localSync ? 'btn-primary' : 'btn-outline-primary'"
-                    @click="localSync = true" :disabled="!localEnabled">
-                    Sync
-                </button>
+            <div class="pt-header-tools">
+
+                <div class="pt-seg pt-seg-sm" role="group" aria-label="Delay Time Mode">
+                    <button class="pt-seg-btn" :class="{ 'is-active': !localSync }" :aria-pressed="!localSync"
+                        :disabled="!localEnabled" @click="localSync = false">Free</button>
+
+                    <button class="pt-seg-btn" :class="{ 'is-active': localSync }" :aria-pressed="localSync"
+                        :disabled="!localEnabled" @click="localSync = true">Sync</button>
+                </div>
+                <span v-if="localSync" class="info"><i>{{ currentDivLabel }}</i></span>
+
             </div>
         </template>
 
+
         <!-- Time -->
-        <div class="position-relative">
+        <div class="position-relative text-center">
             <!-- Free: seconds -->
             <Knob v-if="!localSync" v-model="localTime" label="Time" :min="0.01" :max="maxSeconds" :step="0.01"
-                size="small" color="#00BCD4" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
+                size="small" :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
                 @knobEnd="activeKnob = null" />
-
-            <!-- Sync: snapped divisions -->
+            <!-- Sync: snapped divisions (0..1 knob maps to index) -->
             <Knob v-else v-model="divIndexKnob" label="Time" :min="0" :max="1" :step="knobStep" size="small"
-                color="#00BCD4" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
+                :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
                 @knobEnd="activeKnob = null" />
 
             <span v-if="activeKnob === 'time'" class="custom-tooltip">
-                <template v-if="!localSync">
-                    {{ (localTime * 1000).toFixed(0) }} ms
-                </template>
-                <template v-else>
-                    {{ DIVS[divIndex].label }} · {{ (syncedMs).toFixed(0) }} ms
-                </template>
+                <template v-if="!localSync">{{ (localTime * 1000).toFixed(0) }} ms</template>
+                <template v-else>{{ currentDivLabel }} · {{ syncedMs.toFixed(0) }} ms</template>
             </span>
         </div>
 
         <!-- Feedback -->
-        <div class="position-relative">
-            <Knob v-model="localFeedback" label="Feedback" :min="0" :max="0.95" :step="0.01" size="small"
-                color="#00BCD4" :disabled="!localEnabled" @knobStart="activeKnob = 'feedback'"
-                @knobEnd="activeKnob = null" />
+        <div class="position-relative text-center">
+            <Knob v-model="localFeedback" label="Feedback" :min="0" :max="0.95" :step="0.01" size="small" :color="color"
+                :disabled="!localEnabled" @knobStart="activeKnob = 'feedback'" @knobEnd="activeKnob = null" />
             <span v-if="activeKnob === 'feedback'" class="custom-tooltip">
                 {{ Math.round(localFeedback * 100) }}%
             </span>
         </div>
 
         <!-- Mix -->
-        <div class="position-relative">
-            <Knob v-model="localMix" label="Mix" :min="0" :max="1" :step="0.01" size="small" color="#00BCD4"
+        <div class="position-relative text-center">
+            <Knob v-model="localMix" label="Mix" :min="0" :max="1" :step="0.01" size="small" :color="color"
                 :disabled="!localEnabled" @knobStart="activeKnob = 'mix'" @knobEnd="activeKnob = null" />
             <span v-if="activeKnob === 'mix'" class="custom-tooltip">
                 {{ Math.round(localMix * 100) }}%
             </span>
         </div>
 
-        <!-- Tone -->
-        <div class="d-flex align-items-center justify-content-between mb-2">
-            <small class="text-muted">Tone</small>
-            <div class="d-flex align-items-center gap-2">
-                <!-- On/Off -->
-                <div class="btn-group btn-group-sm me-2">
-                    <button type="button" class="btn" :class="localToneEnabled ? 'btn-primary' : 'btn-outline-primary'"
-                        @click="localToneEnabled = true" :disabled="!localEnabled">On</button>
-                    <button type="button" class="btn" :class="!localToneEnabled ? 'btn-primary' : 'btn-outline-primary'"
-                        @click="localToneEnabled = false" :disabled="!localEnabled">Off</button>
-                </div>
+        <!-- Tone subsection -->
+        <div class="tone-row">
+            <!-- Dot toggle -->
+            <button class="pt-dot effect-toggle" :class="{ 'is-on': localToneEnabled }" :aria-pressed="localToneEnabled"
+                :title="localToneEnabled ? 'Tone on' : 'Tone off'"
+                @click="localToneEnabled = !localToneEnabled"></button>
 
-                <!-- LP / HP -->
-                <div class="btn-group btn-group-sm">
-                    <button type="button" class="btn"
-                        :class="localToneType === 'lowpass' ? 'btn-primary' : 'btn-outline-primary'"
-                        @click="localToneType = 'lowpass'" :disabled="!localEnabled || !localToneEnabled">LP</button>
-                    <button type="button" class="btn"
-                        :class="localToneType === 'highpass' ? 'btn-primary' : 'btn-outline-primary'"
-                        @click="localToneType = 'highpass'" :disabled="!localEnabled || !localToneEnabled">HP</button>
-                </div>
+            <!-- LP / HP -->
+            <div class="pt-seg pt-seg-sm" role="group" aria-label="Tone Type">
+                <button class="pt-seg-btn" :class="{ 'is-active': localToneType === 'lowpass' }"
+                    :aria-pressed="localToneType === 'lowpass'" :disabled="!localEnabled || !localToneEnabled"
+                    @click="localToneType = 'lowpass'">
+                    LP
+                </button>
+                <button class="pt-seg-btn" :class="{ 'is-active': localToneType === 'highpass' }"
+                    :aria-pressed="localToneType === 'highpass'" :disabled="!localEnabled || !localToneEnabled"
+                    @click="localToneType = 'highpass'">
+                    HP
+                </button>
             </div>
-        </div>
 
-        <!-- Cutoff -->
-        <div class="position-relative">
-            <Knob v-model="localToneHz" label="Cutoff" :min="120" :max="12000" :step="1" size="small" color="#00BCD4"
-                :disabled="!localEnabled || !localToneEnabled" @knobStart="activeKnob = 'toneHz'"
-                @knobEnd="activeKnob = null" />
-            <span v-if="activeKnob === 'toneHz'" class="custom-tooltip">
-                {{ Math.round(localToneHz) }} Hz
-            </span>
+            <!-- Cutoff knob -->
+            <div class="tone-knob position-relative text-center">
+                <Knob v-model="localToneHz" label="Cutoff" :min="120" :max="12000" :step="1" size="small" :color="color"
+                    :disabled="!localEnabled || !localToneEnabled" @knobStart="activeKnob = 'toneHz'"
+                    @knobEnd="activeKnob = null" />
+                <span v-if="activeKnob === 'toneHz'" class="custom-tooltip">
+                    {{ Math.round(localToneHz) }} Hz
+                </span>
+            </div>
         </div>
     </KnobGroup>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 
-const props = defineProps({
-    audioCtx: Object,
-    enabled: Boolean,
-    delayTime: Number,
-    delayFeedback: Number,
-    delayMix: Number,
+type ToneType = 'lowpass' | 'highpass';
+
+const props = withDefaults(defineProps<{
+    audioCtx?: AudioContext | null;
+    enabled: boolean;
+
+    delayTime?: number;
+    delayFeedback?: number;
+    delayMix?: number;
 
     // Tone
-    toneEnabled: { type: Boolean, default: true },
-    toneHz: { type: Number, default: 5000 },
-    toneType: { type: String, default: 'lowpass' }, // 'lowpass' | 'highpass'
+    toneEnabled?: boolean;
+    toneHz?: number;
+    toneType?: ToneType;
 
     // Sync
-    syncEnabled: { type: Boolean, default: false },
-    tempo: { type: Number, default: 120 },
-    maxSeconds: { type: Number, default: 5.0 },
+    syncEnabled?: boolean;      // default: true (Sync as default)
+    tempo?: number;             // BPM
+    maxSeconds?: number;
 
     // Musical divisions for Sync mode
-    divisions: {
-        type: Array,
-        default: () => ([
-            { label: '1/64', steps: 0.25 },
-            { label: '1/32T', steps: (2 / 3) * 0.5 },
-            { label: '1/32', steps: 0.5 },
-            { label: '1/16T', steps: (2 / 3) * 1 },
-            { label: '1/16', steps: 1 },
-            { label: '1/8T', steps: (2 / 3) * 2 },
-            { label: '1/8', steps: 2 },
-            { label: '1/8.', steps: 3 },
-            { label: '1/4T', steps: (2 / 3) * 4 },
-            { label: '1/4', steps: 4 },
-            { label: '1/4.', steps: 6 },
-            { label: '1/2T', steps: (2 / 3) * 8 }
-        ])
-    }
+    divisions?: Array<{ label: string; steps: number }>;
+
+    // Theme bits
+    color?: string;
+    showToggle?: boolean;
+}>(), {
+    enabled: false,
+
+    delayTime: 0.2,
+    delayFeedback: 0.3,
+    delayMix: 0.3,
+
+    toneEnabled: true,
+    toneHz: 5000,
+    toneType: 'lowpass',
+
+    syncEnabled: true,          // <-- Sync is default now
+    tempo: 120,
+    maxSeconds: 5.0,
+
+    divisions: () => ([
+        { label: '1/64', steps: 0.25 },
+        { label: '1/32T', steps: (2 / 3) * 0.5 },
+        { label: '1/32', steps: 0.5 },
+        { label: '1/16T', steps: (2 / 3) * 1 },
+        { label: '1/16', steps: 1 },
+        { label: '1/8T', steps: (2 / 3) * 2 },
+        { label: '1/8', steps: 2 },
+        { label: '1/8.', steps: 3 },
+        { label: '1/4T', steps: (2 / 3) * 4 },
+        { label: '1/4', steps: 4 },
+        { label: '1/4.', steps: 6 },
+        { label: '1/2T', steps: (2 / 3) * 8 }
+    ]),
+
+    color: '#00BCD4',
+    showToggle: false
 });
 
 const emit = defineEmits([
@@ -145,49 +163,61 @@ const emit = defineEmits([
     'update:toneType'
 ]);
 
-// Locals
-const localEnabled = ref(props.enabled);
-const localTime = ref(props.delayTime ?? 0.2);
-const localFeedback = ref(props.delayFeedback ?? 0.3);
-const localMix = ref(props.delayMix ?? 0.3);
-const localSync = ref(props.syncEnabled ?? false);
+/* Locals */
+const localEnabled = ref<boolean>(props.enabled);
+const localTime = ref<number>(props.delayTime ?? 0.2);
+const localFeedback = ref<number>(props.delayFeedback ?? 0.3);
+const localMix = ref<number>(props.delayMix ?? 0.3);
+const localSync = ref<boolean>(props.syncEnabled ?? true);
 
-const localToneEnabled = ref(props.toneEnabled);
-const localToneHz = ref(props.toneHz);
-const localToneType = ref(props.toneType);
+const localToneEnabled = ref<boolean>(props.toneEnabled ?? true);
+const localToneHz = ref<number>(props.toneHz ?? 5000);
+const localToneType = ref<ToneType>(props.toneType ?? 'lowpass');
 
-const activeKnob = ref(null);
+const activeKnob = ref<null | 'time' | 'feedback' | 'mix' | 'toneHz'>(null);
 
-// Music math
+/* Music math */
+const DIVS = computed(() => props.divisions ?? []);
 const stepDuration = computed(() => 60 / (props.tempo || 120) / 4); // 1/16 note
-const DIVS = computed(() => props.divisions);
 
-// Sync index mapped to a 0..1 knob
-const divIndex = ref(4); // default ~ 1/16
+// Index into divisions; default to 1/16 if present
+const defaultDivIndex = computed(() => {
+    const i = DIVS.value.findIndex(d => d.label === '1/16');
+    return i >= 0 ? i : Math.min(4, Math.max(0, DIVS.value.length - 1));
+});
+const divIndex = ref<number>(defaultDivIndex.value);
+
+// Map 0..1 knob to index
 const knobStep = computed(() => DIVS.value.length > 1 ? 1 / (DIVS.value.length - 1) : 1);
-const divIndexKnob = computed({
+const divIndexKnob = computed<number>({
     get: () => DIVS.value.length > 1 ? (divIndex.value / (DIVS.value.length - 1)) : 0,
-    set: (v) => {
+    set: (v: number) => {
         const idx = Math.round(v * (DIVS.value.length - 1));
         divIndex.value = Math.max(0, Math.min(DIVS.value.length - 1, idx));
     }
 });
 
-// Synced time (seconds/ms)
-const syncedSeconds = computed(() => {
+const syncedSeconds = computed<number>(() => {
     const s = DIVS.value[divIndex.value]?.steps ?? 1;
-    return Math.min(props.maxSeconds, Math.max(0.005, s * stepDuration.value));
+    const sec = s * stepDuration.value;
+    return Math.min(props.maxSeconds || 5, Math.max(0.005, sec));
 });
-const syncedMs = computed(() => syncedSeconds.value * 1000);
+const syncedMs = computed<number>(() => syncedSeconds.value * 1000);
+const currentDivLabel = computed<string>(() => DIVS.value[divIndex.value]?.label ?? '—');
 
-// Emit upstream
+/* Emits */
 watch(localEnabled, v => emit('update:enabled', v));
 watch(localFeedback, v => emit('update:delayFeedback', v));
 watch(localMix, v => emit('update:delayMix', v));
 watch(localSync, v => emit('update:syncEnabled', v));
 
 // Free: emit raw seconds
-watch(localTime, v => { if (!localSync.value) emit('update:delayTime', Math.min(props.maxSeconds, v)); });
+watch(localTime, v => {
+    if (!localSync.value) {
+        const clamped = Math.min(props.maxSeconds || 5, Math.max(0.01, v));
+        emit('update:delayTime', clamped);
+    }
+});
 
 // Sync: emit computed seconds on changes
 watch([divIndex, stepDuration, DIVS, localSync], () => {
@@ -199,18 +229,20 @@ watch(localToneEnabled, v => emit('update:toneEnabled', v));
 watch(localToneHz, v => emit('update:toneHz', v));
 watch(localToneType, v => emit('update:toneType', v));
 
-// Keep locals in sync with parent
-watch(() => props.enabled, v => (localEnabled.value = v));
-watch(() => props.delayTime, v => { if (!localSync.value && typeof v === 'number') localTime.value = v; });
-watch(() => props.delayFeedback, v => (localFeedback.value = v));
-watch(() => props.delayMix, v => (localMix.value = v));
-watch(() => props.syncEnabled, v => (localSync.value = v));
+/* Keep in sync with parent */
+watch(() => props.enabled, v => (localEnabled.value = !!v));
+watch(() => props.delayTime, v => {
+    if (!localSync.value && typeof v === 'number') localTime.value = v;
+});
+watch(() => props.delayFeedback, v => (localFeedback.value = typeof v === 'number' ? v : localFeedback.value));
+watch(() => props.delayMix, v => (localMix.value = typeof v === 'number' ? v : localMix.value));
+watch(() => props.syncEnabled, v => (localSync.value = typeof v === 'boolean' ? v : localSync.value));
 
-watch(() => props.toneEnabled, v => (localToneEnabled.value = v));
-watch(() => props.toneHz, v => (localToneHz.value = v));
-watch(() => props.toneType, v => (localToneType.value = v));
+watch(() => props.toneEnabled, v => (localToneEnabled.value = typeof v === 'boolean' ? v : localToneEnabled.value));
+watch(() => props.toneHz, v => (localToneHz.value = typeof v === 'number' ? v : localToneHz.value));
+watch(() => props.toneType, v => (localToneType.value = (v as ToneType) || localToneType.value));
 
-// When switching to Sync, pick closest division
+/* When switching to Sync, snap to closest division from current time */
 watch(localSync, on => {
     if (on) {
         const curSec = (typeof props.delayTime === 'number') ? props.delayTime : localTime.value;
@@ -225,3 +257,60 @@ watch(localSync, on => {
     }
 });
 </script>
+<style scoped>
+/* small inline pill for the current sync division */
+.info {
+    font-size: 10px;
+    font-style: italic;
+    position: absolute;
+    right: 4px;
+
+}
+
+.pt-header-tools {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: nowrap;
+    /* keep in one row */
+    white-space: nowrap;
+    /* no wraps inside */
+}
+
+/* One-line layout: dot — LP/HP — knob */
+.tone-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    /* keep it on one line; remove if you want wrapping on narrow screens */
+    flex-wrap: nowrap;
+}
+
+/* keep knob from shrinking too small */
+.tone-knob {
+    flex: 0 0 auto;
+}
+
+/* small accent dot toggle */
+
+
+/* inner fill that shows on/off */
+.pt-dot::after {
+
+    transition: background .2s ease, box-shadow .2s ease;
+}
+
+.pt-dot.is-on::after {
+    background: hsl(var(--pt-accent) 82% 60%);
+    box-shadow: 0 0 10px var(--pt-btn-glow);
+}
+
+.pt-dot.is-on {
+    background: hsl(var(--pt-accent) 82% 60%);
+
+}
+
+.pt-dot:active {
+    transform: translateY(1px) scale(0.98);
+}
+</style>

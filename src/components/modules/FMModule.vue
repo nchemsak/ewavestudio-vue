@@ -40,17 +40,20 @@
                 <!-- Popover (fixed; positioned via JS; never off-screen) -->
                 <div v-if="infoOpen" ref="infoEl" class="pt-popover fm-info" :data-side="infoSide"
                     :style="{ top: infoPos.top + 'px', left: infoPos.left + 'px' }" @click.stop>
-                    <strong class="d-block mb-2">FM Explained</strong>
+                    <strong class="mb-2 pt-section-title">FM Explained</strong> <button
+                        class="pt-seg-btn pt-seg-sm fm-btn" @click="infoOpen = false">X</button><br />
+
+
+                    FM adds a fast wobble to pitch → new harmonics.
+                    <div class="pt-rule"></div>
                     <ul class="mb-2 ps-3">
-                        <li>FM adds a fast wobble to pitch → new harmonics.</li>
+                        <li class="fm-li"><strong>Ratio</strong>: Locks Mod Freq to the note. Consistent tone.</li>
+                        <li class="fm-li"><strong>Hz</strong>: Unlocks Mod Freq. Tone varies more between notes.</li>
+                        <li class="fm-li"><strong>Mod Freq</strong>: Modulator speed <i>(only active in "Hz" mode)</i>
+                        </li>
+                        <li class="fm-li"><strong>Amount</strong>: Intensity/brightness. Higher = richer/clangier.</li>
                     </ul>
-                    <div class="mb-1"><strong>Ratio</strong>: Locks Mod Freq to the note. Consistent tone.</div>
-                    <div class="mb-1"><strong>Hz</strong>: Unlocks Mod Freq. Tone varies more between notes.</div>
-                    <div class="mb-1"><strong>Mod Freq</strong>: Modulator speed (active in Hz mode).</div>
-                    <div class="mb-2"><strong>Amount</strong>: Intensity/brightness. Higher = richer/clangier.</div>
-                    <div class="text-end mt-2">
-                        <button class="pt-seg-btn pt-seg-sm" @click="infoOpen = false">Close</button>
-                    </div>
+
                 </div>
             </div>
         </template>
@@ -194,7 +197,17 @@ const activeKnob = ref<null | 'mf' | 'ix'>(null)
 /* popover is fixed & sized; the rest comes from your global .pt-popover styles */
 .fm-info {
     position: fixed;
-    width: min(380px, 76vw);
+    width: min(420px, 76vw);
+    font-size: 12px;
+}
+
+.fm-btn {
+    right: 12px;
+    position: absolute;
+}
+
+.fm-li strong {
+    border-bottom: 1px dotted white;
 }
 
 /* Dim the knob label/value when disabled (Hz hidden by ratio) */

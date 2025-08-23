@@ -820,7 +820,7 @@ const noiseEnabled = ref(false)
 
 // Delay Start
 const delayEnabled = ref(false);
-const delaySync = ref(false);        // NEW
+const delaySync = ref(true);        // NEW
 const delayTime = ref(0.2);          // seconds (0.01 to 1.0)
 const delayFeedback = ref(0.3);      // 0–0.95
 const delayMix = ref(0.3);           // 0–1
