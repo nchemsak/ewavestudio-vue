@@ -45,7 +45,6 @@
 		</section>
 
 
-		<!-- ===== Percussion Synth (separate section) ===== -->
 		<!-- Percussion Synth -->
 		<section class="pt-card" v-if="synthInstrument">
 
@@ -172,7 +171,6 @@
 
 		</section>
 
-		<!-- ===== Sequencer (sampler channels) in an accordion ===== -->
 		<!-- Sequencer -->
 		<section class="pt-panel">
 			<h2 class="pt-title">Sequencer</h2>
@@ -353,7 +351,7 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 // MPC Screen BEGIN
 const lcdText = ref('HARP  2');
 const activeFKey = ref<number>(1);
-const lcdView = ref<'text' | 'scope' | 'spec'>('scope'); // default F1
+const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner'>('scope');
 const screen = ref<InstanceType<typeof MpcScreen> | null>(null);
 
 /** Fit a canvas to its CSS size (crisp on HiDPI) */
@@ -376,7 +374,8 @@ function handleFKey(n: number) {
 	activeFKey.value = n;
 	if (n === 1) lcdView.value = 'scope';
 	else if (n === 2) lcdView.value = 'spec';
-	else lcdView.value = 'text'; // placeholders for F3–F6
+	else if (n === 3) lcdView.value = 'tuner';
+	else lcdView.value = 'text'; // F4–F6 placeholders
 }
 
 
@@ -523,7 +522,68 @@ function startSpectrogram() {
 	draw();
 }
 
+function startTuner() {
+	const scr = screen.value;
+	if (!scr) return;
 
+	const canvas = scr.tunerCanvas as unknown as HTMLCanvasElement;
+	if (!canvas) return;
+
+	const ctx = canvas.getContext('2d');
+	if (!ctx) return;
+
+	// LATCH: persist last played note until a new one plays
+	let latchedHz = 0;
+	let latchedNote = '—';
+	let prevStep = -999; // track step changes so we only update once per step
+
+	function draw() {
+		requestAnimationFrame(draw);
+		if (lcdView.value !== 'tuner') return;
+
+		fitCanvasToBox(canvas, ctx);
+		const W = canvas.clientWidth, H = canvas.clientHeight;
+
+		const css = getComputedStyle(canvas);
+		const bg = (css.getPropertyValue('--mpc-lcd-bg') || '#0f141b').trim();
+		const ink = (css.getPropertyValue('--mpc-scope-trace') || '#c7d6ff').trim();
+
+		// --- update latch ONLY when we advance to a new step that actually plays ---
+		const inst = synthInstrument.value;
+		const step = currentStep.value;
+
+		if (inst && step >= 0 && step !== prevStep) {
+			prevStep = step;
+			if (!inst.muted && inst.steps[step]) {
+				const hz = inst.pitches?.[step] ?? 0;
+				if (hz > 0) {
+					latchedHz = hz;
+					latchedNote = midiToName(freqToMidi(hz));
+				}
+			}
+			// if the step is empty or muted, keep the existing latched values
+		}
+
+		// --- draw using latched values ---
+		ctx.fillStyle = bg;
+		ctx.fillRect(0, 0, W, H);
+
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.fillStyle = ink;
+
+		const fsNote = Math.max(12, Math.floor(H * 0.30));
+		const fsFreq = Math.max(10, Math.floor(H * 0.16));
+
+		ctx.font = `700 ${fsNote}px Cousine, ui-monospace, monospace`;
+		ctx.fillText(latchedHz > 0 ? latchedNote : '—', W / 2, H * 0.46);
+
+		ctx.font = `700 ${fsFreq}px Cousine, ui-monospace, monospace`;
+		ctx.fillText(latchedHz > 0 ? `${latchedHz.toFixed(1)} Hz` : '', W / 2, H * 0.70);
+	}
+
+	draw();
+}
 
 onMounted(() => {
 	loadAllSamples();
@@ -540,6 +600,7 @@ onMounted(() => {
 	// start both loops; each only draws when its view is active
 	startScope();
 	startSpectrogram();
+	startTuner();
 
 	// window.addEventListener('keydown', onGlobalKeydown);
 	window.addEventListener('keydown', onGlobalKeydown, { capture: true });
@@ -660,7 +721,7 @@ const instruments = ref([
 	{
 		name: 'synth-voice',
 		label: 'Percussion Synth',
-		type: 'synth',          // << keep this
+		type: 'synth',        
 		isCustom: false,
 		isEditingName: false,
 		muted: false,
@@ -750,7 +811,7 @@ const orderedChannels = computed(() => {
 
 
 
-// // Global Octave controls
+// Global Octave controls
 function canShiftOctave(hz, deltaOct) {
 	const factor = Math.pow(2, deltaOct);
 	const target = hz * factor;
@@ -938,12 +999,10 @@ driveToneFilter.type = 'lowpass';
 const driveDry = audioCtx.createGain();
 const driveWet = audioCtx.createGain();
 
-
 //  sum both drive paths before delay
-const driveSum = audioCtx.createGain();     // summed output of dry+wet drive
-// OPTIONAL: simple make-up gain after shaper/tone (tune if you want)
+const driveSum = audioCtx.createGain();     
 const driveMakeup = audioCtx.createGain();
-driveMakeup.gain.value = 1.0; // start neutral; you can bump with 'amount'
+driveMakeup.gain.value = 1.0;
 
 // connections inside Drive
 driveShaper.connect(driveToneFilter);
@@ -964,7 +1023,6 @@ driveSum.connect(delayNode);
 
 watch([driveType, driveAmount], ([type, amount]) => {
 	driveShaper.curve = generateDriveCurve(type, amount);
-	// OPTIONAL make-up (very mild): ~ +0..+0.8 dB
 	driveMakeup.gain.setTargetAtTime(1 + amount * 0.1, audioCtx.currentTime, 0.01);
 });
 
@@ -1051,10 +1109,9 @@ function onGlobalKeydown(e: KeyboardEvent) {
 		e.preventDefault();
 		return;
 	}
-
 	const el = e.target as HTMLElement | null;
 
-	// If we're typing, ignore
+	// If typing, ignore
 	if (isTypingTarget(el)) return;
 
 	// If focus is on a button (or role=button), hijack the spacebar
@@ -1082,12 +1139,9 @@ function onGlobalKeyup(e: KeyboardEvent) {
 	}
 }
 
-
 // Space Bar play/stop controls END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-
-
 
 
 const displayHz = computed(() =>
@@ -1113,7 +1167,7 @@ function stopEditingLabel(instrument) {
 }
 
 const volume = ref(0.75);
-const tempo = ref(100);
+const tempo = ref(80);
 const swing = ref(0);
 const isPlaying = ref(false);
 const currentStep = ref(-1);
@@ -1122,14 +1176,19 @@ const masterGain = audioCtx.createGain();
 masterGain.gain.value = volume.value;
 masterGain.connect(audioCtx.destination);
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
-// Oscilloscope
+// Oscilloscope BEGIN
+
+// --- scope/spectrogram analyser ---
 const analyser = audioCtx.createAnalyser();
 analyser.fftSize = 2048;
-
 const dataArray = new Uint8Array(analyser.fftSize);
 masterGain.connect(analyser);
 
+
+// Oscilloscope END
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 function addCustomChannel() {
 	const id = Date.now();
@@ -1154,7 +1213,6 @@ function addCustomChannel() {
 		input?.click();
 	});
 }
-
 
 function deleteChannel(name: string) {
 	if (!canDelete(name)) return; // protect defaults + synth
@@ -1187,8 +1245,6 @@ function loadUserSample(event: Event, instrument: any) {
 	reader.readAsArrayBuffer(file);
 }
 
-
-
 let loopId = null;
 let startTime = 0;
 let stepIndex = 0;
@@ -1207,15 +1263,11 @@ function playBuffer(buffer, time, velocity = 1) {
 	source.start(time);
 }
 
-
-
-
 function schedule() {
 	const now = audioCtx.currentTime;
 	const stepDuration = 60 / tempo.value / 4;
 
 	while (startTime < now + 0.1) {
-		// let duckedThisStep = false;
 
 		instruments.value.forEach(inst => {
 			if (!inst.muted && inst.steps[stepIndex]) {
@@ -1227,9 +1279,6 @@ function schedule() {
 				const isEvenStep = stepIndex % 2 === 1;
 				const swingOffset = isEvenStep ? stepDuration * swing.value : 0;
 				const t = startTime + swingOffset;
-
-				// if (!duckedThisStep) { duckDelay(t); duckedThisStep = true; }
-
 				if (inst.type === 'synth') playSynthNote(pitch, velocity * chanVol, safeDecay, t);
 				else if (inst.buffer) playBuffer(inst.buffer, t, velocity * chanVol);
 			}
@@ -1242,9 +1291,6 @@ function schedule() {
 
 	loopId = requestAnimationFrame(schedule);
 }
-
-
-
 
 
 function playSynthNote(freq, velocity, decayTime, startTime) {
@@ -1407,7 +1453,6 @@ async function togglePlay() {
 	}
 }
 
-
 async function loadSample(url) {
 	try {
 		const res = await fetch(url);
@@ -1425,10 +1470,9 @@ function toggleMute(instrumentName) {
 	if (inst) inst.muted = !inst.muted;
 }
 
-
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 // click and drag START
-
 const isMouseDown = ref(false);
 const dragMode = ref(null); // 'on' or 'off'
 
@@ -1436,7 +1480,7 @@ function handleMouseDown(event, instrumentName, index) {
 	if (event.target.closest('.hover-slider input[type="range"]')) {
 		return; // Don't toggle pad if user is adjusting the slider
 	}
-	event.preventDefault(); // <-- prevents browser drag behavior
+	event.preventDefault(); // prevents browser drag behavior
 	isMouseDown.value = true;
 	const inst = instruments.value.find(i => i.name === instrumentName);
 	if (inst) {
@@ -1456,6 +1500,8 @@ function handleMouseUp() {
 	dragMode.value = null;
 }
 // click and drag END
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 
 async function loadAllSamples() {
 	for (const instrument of instruments.value) {
@@ -1474,12 +1520,6 @@ watch(volume, val => {
 	masterGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
 });
 
-
-
-
-// if (isScrubbing) document.body.classList.add('scrubbing');
-// else document.body.classList.remove('scrubbing');
-
 function getPadStyle(instrument, index) {
 	if (!instrument.steps[index]) return {};
 
@@ -1491,7 +1531,9 @@ function getPadStyle(instrument, index) {
 	};
 }
 
-// Noise Generator for Percussion Synth
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// Noise Generator START
 function generateNoiseBuffers() {
 	const length = audioCtx.sampleRate * 2; // 2 seconds
 	const createBuffer = () => audioCtx.createBuffer(1, length, audioCtx.sampleRate);
@@ -1532,8 +1574,11 @@ function generateNoiseBuffers() {
 	}
 	noiseBuffers.brown = brown;
 }
+// Noise Generator END
 
-//DRIVE
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// Drive effect START
 function generateDriveCurve(type, amount = 0.5) {
 	const samples = 1024;
 	const curve = new Float32Array(samples);
@@ -1582,10 +1627,12 @@ driveShaper.curve = (() => {
 	}
 	return c;
 })();
-
-
+// Drive effect END
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 </script>
+
+
 
 <style scoped>
 .transport-row .transport-actions {
@@ -1599,7 +1646,7 @@ driveShaper.curve = (() => {
 	margin-top: 10px;
 }
 
-/* small, on-theme mute dot */
+
 .mute-dot {
 	width: 12px;
 	height: 12px;
