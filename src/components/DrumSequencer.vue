@@ -1,131 +1,134 @@
 <template>
 	<div class="drum-sequencer controls">
-		<div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
+		<!-- Transport & Mix -->
+		<section class="pt-panel">
+			<h2 class="pt-title">Transport & Mix</h2>
 
-			<div class="position-relative text-center knobWrap">
-				<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="medium" color="#23CDE8"
-					@knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === 'volume'" class="custom-tooltip">
-					{{ Math.round(volume * 100) }}%
-				</span>
+			<!-- Knobs row -->
+			<div class="pt-knob-row transport-row">
+				<!-- Volume -->
+				<div class="position-relative text-center">
+					<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="medium" color="#23CDE8"
+						@knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'volume'" class="custom-tooltip">{{ Math.round(volume * 100) }}%</span>
+				</div>
+
+				<!-- Tempo -->
+				<div class="position-relative text-center">
+					<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium" color="#F39C12"
+						@knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'tempo'" class="custom-tooltip">{{ tempo }} BPM</span>
+				</div>
+
+				<!-- Swing -->
+				<div class="position-relative text-center">
+					<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="medium" color="#E91E63"
+						@knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'swing'" class="custom-tooltip">{{ Math.round(swing * 100) }}%</span>
+				</div>
+
+				<!-- Play/Stop -->
+				<div class="transport-actions">
+					<button class="pt-btn" @click="togglePlay">
+						<span v-if="isPlaying">Stop</span>
+						<span v-else>Play</span>
+					</button>
+				</div>
 			</div>
 
-			<div class="position-relative text-center knobWrap">
-				<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium" color="#F39C12"
-					@knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === 'tempo'" class="custom-tooltip">
-					{{ tempo }} BPM
-				</span>
-			</div>
-
-			<div class="position-relative text-center knobWrap">
-				<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="medium" color="#E91E63"
-					@knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === 'swing'" class="custom-tooltip">
-					{{ Math.round(swing * 100) }}%
-				</span>
-			</div>
-			<div class="position-relative text-center knobWrap">
-				<button class="btn btn-primary" @click="togglePlay">
-					<span v-if="isPlaying">Stop</span>
-					<span v-else>Play</span>
-				</button>
-			</div>
-
-			<div class="position-relative text-center knobWrap">
-
+			<!-- MPC screen -->
+			<div class="mpc-wrap">
 				<MpcScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey" @fkey="handleFKey" />
 			</div>
-			<div class="position-relative text-center knobWrap">
+		</section>
 
-			</div>
-		</div>
 
 		<!-- ===== Percussion Synth (separate section) ===== -->
-		<section class="synth-section" v-if="synthInstrument">
-			<div class="mb-3 channel-wrap">
-				<div class="d-flex align-items-center gap-2 mb-1">
-					<div class="mute-indicator" :class="{ muted: synthInstrument.muted }"
-						@click="toggleMute(synthInstrument.name)" role="button" aria-label="Toggle Mute"
-						:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
+		<!-- Percussion Synth -->
+		<section class="pt-panel" v-if="synthInstrument">
+			<h2 class="pt-title">Percussion Synth</h2>
 
-					<div class="channel-label d-flex align-items-center gap-1">
-						<strong class="position-relative">Percussion Synth</strong>
+			<!-- Row: mute dot + channel volume -->
+			<div class="pt-subheader">
+				<div class="channel-caption d-flex align-items-center gap-2">
+					<div class="mute-dot" :class="{ muted: synthInstrument.muted }"
+						@click="toggleMute(synthInstrument.name)" role="button"
+						:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
+					<span class="pt-section-title">Channel</span>
+				</div>
+
+				<div class="pt-header-tools">
+					<div class="position-relative text-center">
+						<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
+							label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === `vol-${synthInstrument.name}`" class="custom-tooltip">
+							{{ Math.round(synthInstrument.channelVolume * 100) }}%
+						</span>
 					</div>
 				</div>
+			</div>
 
-				<div class="position-relative text-center">
-					<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
-						label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
-						@knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === `vol-${synthInstrument.name}`" class="custom-tooltip">
-						{{ Math.round(synthInstrument.channelVolume * 100) }}%
-					</span>
-				</div>
+			<!-- Pads grid (unchanged behavior) -->
+			<div class="d-flex pad-row">
+				<div class="padTEST-grid">
+					<div v-for="(active, index) in synthInstrument.steps" :key="index" class="padTESTwrap"
+						@mouseenter="hoveredPad = `${synthInstrument.name}-${index}`" @mouseleave="hoveredPad = null">
+						<div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
+							@mousedown="handleMouseDown($event, synthInstrument.name, index)"
+							@mouseenter="handleMouseEnter(synthInstrument.name, index)" @dragstart.prevent
+							:style="getPadStyle(synthInstrument, index)" />
+						<!-- per-step menu -->
+						<button class="pad-settings-dot" @mousedown.stop
+							@click.stop="openPadSettings(synthInstrument.name, index, $event)"
+							aria-label="Pad settings">•</button>
 
-				<div class="d-flex pad-row">
-					<div class="padTEST-grid">
-						<div v-for="(active, index) in synthInstrument.steps" :key="index" class="padTESTwrap"
-							@mouseenter="hoveredPad = `${synthInstrument.name}-${index}`"
-							@mouseleave="hoveredPad = null">
-							<div :class="['padTEST liquid', { selected: active }, { playing: index === currentStep }]"
-								@mousedown="handleMouseDown($event, synthInstrument.name, index)"
-								@mouseenter="handleMouseEnter(synthInstrument.name, index)" @dragstart.prevent
-								:style="getPadStyle(synthInstrument, index)">
-							</div>
+						<!-- hover sliders (unchanged) -->
+						<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
+							class="hover-slider volume-slider">
+							<input type="range" min="0" max="1" step="0.01"
+								v-model.number="synthInstrument.velocities[index]"
+								@mousedown="activeVolumePad = `${synthInstrument.name}-${index}`"
+								@mouseup="activeVolumePad = null"
+								@touchstart="activeVolumePad = `${synthInstrument.name}-${index}`"
+								@touchend="activeVolumePad = null" />
+							<span v-if="activeVolumePad === `${synthInstrument.name}-${index}`" class="custom-tooltip">
+								{{ Math.round(synthInstrument.velocities[index] * 100) }}%
+							</span>
+						</div>
 
-							<!-- Synth-only controls -->
-							<button class="pad-settings-dot" @mousedown.stop
-								@click.stop="openPadSettings(synthInstrument.name, index, $event)"
-								aria-label="Pad settings">•</button>
-
-							<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
-								class="hover-slider volume-slider">
-								<input type="range" min="0" max="1" step="0.01"
-									v-model.number="synthInstrument.velocities[index]"
-									@mousedown="activeVolumePad = `${synthInstrument.name}-${index}`"
-									@mouseup="activeVolumePad = null"
-									@touchstart="activeVolumePad = `${synthInstrument.name}-${index}`"
-									@touchend="activeVolumePad = null" />
-								<span v-if="activeVolumePad === `${synthInstrument.name}-${index}`"
-									class="custom-tooltip">
-									{{ Math.round(synthInstrument.velocities[index] * 100) }}%
-								</span>
-							</div>
-
-							<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
-								class="hover-slider pitch-slider">
-								<input type="range" :min="MIN_PAD_HZ" :max="MAX_PAD_HZ" step="1"
-									v-model.number="synthInstrument.pitches[index]"
-									@mousedown="activePitchPad = `${synthInstrument.name}-${index}`"
-									@mouseup="activePitchPad = null"
-									@touchstart="activePitchPad = `${synthInstrument.name}-${index}`"
-									@touchend="activePitchPad = null" />
-								<span v-if="activePitchPad === `${synthInstrument.name}-${index}`"
-									class="custom-tooltip">
-									{{ nearestNote(synthInstrument.pitches[index]) }} · {{
-										Math.round(synthInstrument.pitches[index]) }} Hz
-								</span>
-							</div>
+						<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
+							class="hover-slider pitch-slider">
+							<input type="range" :min="MIN_PAD_HZ" :max="MAX_PAD_HZ" step="1"
+								v-model.number="synthInstrument.pitches[index]"
+								@mousedown="activePitchPad = `${synthInstrument.name}-${index}`"
+								@mouseup="activePitchPad = null"
+								@touchstart="activePitchPad = `${synthInstrument.name}-${index}`"
+								@touchend="activePitchPad = null" />
+							<span v-if="activePitchPad === `${synthInstrument.name}-${index}`" class="custom-tooltip">
+								{{ nearestNote(synthInstrument.pitches[index]) }} · {{
+									Math.round(synthInstrument.pitches[index]) }} Hz
+							</span>
 						</div>
 					</div>
 				</div>
 			</div>
 
-			<div class="controlsWrapper">
+			<!-- Pattern tools  -->
+			<div class="controlsWrapper pt-cards">
 
 				<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
 					:max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
 					@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
 					@octave-shift="octaveShiftAllSkip($event)" />
 
-				<section class="pt-panel">
+				<!-- Generators -->
+				<section class="pt-card">
 					<h2 class="pt-title">Generators</h2>
 
 					<!-- Oscillators -->
 					<section class="pt-section">
 						<div class="pt-section-title">Oscillators</div>
-
 						<div class="pt-btn-group" role="group" aria-label="Waveforms">
 							<button v-for="wave in waves" :key="wave" class="pt-btn"
 								:class="{ 'is-active': selectedWaveform === wave }"
@@ -140,10 +143,10 @@
 					<!-- Noise -->
 					<NoiseModule :showToggle="true" v-model:enabled="noiseEnabled" v-model:type="noiseType"
 						v-model:amount="noiseAmount" :color="'#9C27B0'" />
-
 				</section>
 
-				<div class="pt-panel">
+				<!-- Sound Shaping -->
+				<section class="pt-card">
 					<h2 class="pt-title">Sound Shaping</h2>
 
 					<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
@@ -153,11 +156,11 @@
 
 					<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 						v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
-				</div>
+				</section>
 
-
-				<div class="pt-panel">
-					<h2 class="pt-title">Pitch & Harmonics</h2>
+				<!-- Pitch & Harmonics -->
+				<section class="pt-card">
+					<h2 class="pt-title">Pitch &amp; Harmonics</h2>
 
 					<PitchEnvModule :color="'#3F51B5'" :showToggle="true" v-model:enabled="pitchEnvEnabled"
 						v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
@@ -167,22 +170,27 @@
 
 					<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
 						v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
+
 					<div class="pt-rule" aria-hidden="true"></div>
 
 					<UnisonEffect v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
 						v-model:detune="detuneCents" v-model:spread="stereoSpread" />
-				</div>
-				<div class="pt-panel">
-					<h2 class="pt-title">Movement & Modulation</h2>
+				</section>
+
+				<!-- Movement & Modulation -->
+				<section class="pt-card">
+					<h2 class="pt-title">Movement &amp; Modulation</h2>
 
 					<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
 						v-model:target="lfoTarget" :depthMax="lfoDepthMax" color="#00BCD4"
 						:targets="['pitch', 'gain', 'filter']" />
+				</section>
 
-				</div>
-				<div class="pt-panel">
-
+				<!-- Effects -->
+				<section class="pt-card">
 					<h2 class="pt-title">Effects</h2>
+
+					<!-- Delay (Sync default driven by v-model:syncEnabled) -->
 					<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
 						v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime"
 						v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix"
@@ -193,43 +201,47 @@
 
 					<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
 						v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
-				</div>
+				</section>
 			</div>
 
 		</section>
+
 		<!-- ===== Sequencer (sampler channels) in an accordion ===== -->
-		<section class="sequencer-accordion mb-3">
+		<!-- Sequencer -->
+		<section class="pt-panel">
+			<h2 class="pt-title">Sequencer</h2>
+
+			<!-- Keep your bootstrap accordion if you like -->
 			<div class="accordion" id="seqAccordion">
 				<div class="accordion-item">
 					<h2 class="accordion-header">
 						<button type="button" class="accordion-button" :class="{ collapsed: !seqOpen }"
 							@click="seqOpen = !seqOpen" :aria-expanded="seqOpen ? 'true' : 'false'"
 							aria-controls="seqPanel">
-							Sequencer
-
+							Pattern
 						</button>
 					</h2>
 
 					<div id="seqPanel" class="accordion-collapse collapse" :class="{ show: seqOpen }">
 						<div class="accordion-body p-3">
-
-							<!-- ===== Sampler Channels (Kick/Snare/Hi-hat/Customs) ===== -->
+							<!-- ===== Sampler Channels ===== -->
 							<section class="channels-section">
 								<div v-for="inst in orderedChannels" :key="inst.key || inst.name"
 									class="mb-3 channel-wrap">
+
+									<!-- Add Channel row -->
 									<template v-if="inst.isAddButton">
 										<div class="d-flex align-items-center">
-											<button class="btn btn-sm btn-outline-success" @click="addCustomChannel">
-												+ Add Channel
-											</button>
+											<button class="pt-btn pt-accent-cool" @click="addCustomChannel">+ Add
+												Channel</button>
 										</div>
 									</template>
 
-									<!-- Regular sampler channel rows -->
+									<!-- Regular channels (unchanged inner logic) -->
 									<template v-else>
 										<div class="d-flex align-items-center gap-2 mb-1">
-											<div class="mute-indicator" :class="{ muted: inst.muted }"
-												@click="toggleMute(inst.name)" role="button" aria-label="Toggle Mute"
+											<div class="mute-dot" :class="{ muted: inst.muted }"
+												@click="toggleMute(inst.name)" role="button"
 												:title="inst.muted ? 'Muted' : 'Playing'"></div>
 
 											<div class="channel-label d-flex align-items-center gap-1">
@@ -251,17 +263,12 @@
 											</div>
 
 											<div class="ms-auto d-flex align-items-center gap-2 channel-actions">
-												<button v-if="inst.isCustom" class="btn btn-sm btn-outline-secondary"
-													@click="triggerFilePicker(inst)">
-													Upload
-												</button>
+												<button v-if="inst.isCustom" class="pt-btn pt-btn-sm"
+													@click="triggerFilePicker(inst)">Upload</button>
 												<input class="d-none" :id="`file-${inst.name}`" type="file"
 													accept="audio/*" @change="loadUserSample($event, inst)" />
-												<button v-if="canDelete(inst.name)"
-													class="btn btn-sm btn-outline-danger"
-													@click="deleteChannel(inst.name)">
-													Delete
-												</button>
+												<button v-if="canDelete(inst.name)" class="pt-btn pt-btn-sm pt-danger"
+													@click="deleteChannel(inst.name)">Delete</button>
 											</div>
 										</div>
 
@@ -277,16 +284,16 @@
 
 										<div class="d-flex pad-row">
 											<div class="padTEST-grid">
+												<!-- your pad cells + volume slider kept verbatim -->
 												<div v-for="(active, index) in inst.steps" :key="index"
 													class="padTESTwrap"
 													@mouseenter="hoveredPad = `${inst.name}-${index}`"
 													@mouseleave="hoveredPad = null">
-													<div :class="['padTEST liquid', { selected: active }, { playing: index === currentStep }]"
+													<div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
 														@mousedown="handleMouseDown($event, inst.name, index)"
 														@mouseenter="handleMouseEnter(inst.name, index)"
 														@dragstart.prevent :style="getPadStyle(inst, index)"></div>
 
-													<!-- Volume hover slider -->
 													<div v-if="active && hoveredPad === `${inst.name}-${index}`"
 														class="hover-slider volume-slider">
 														<input type="range" min="0" max="1" step="0.01"
@@ -311,6 +318,7 @@
 				</div>
 			</div>
 		</section>
+
 
 	</div>
 
@@ -820,7 +828,7 @@ const noiseEnabled = ref(false)
 
 // Delay Start
 const delayEnabled = ref(false);
-const delaySync = ref(true);        // NEW
+const delaySync = ref(false);        // NEW
 const delayTime = ref(0.2);          // seconds (0.01 to 1.0)
 const delayFeedback = ref(0.3);      // 0–0.95
 const delayMix = ref(0.3);           // 0–1
@@ -1579,3 +1587,35 @@ driveShaper.curve = (() => {
 
 
 </script>
+
+<style scoped>
+.transport-row .transport-actions {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 96px;
+}
+
+.mpc-wrap {
+	margin-top: 10px;
+}
+
+/* small, on-theme mute dot */
+.mute-dot {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--pt-btn-border);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+	cursor: pointer;
+	transition: transform .15s ease, filter .15s ease;
+}
+
+.mute-dot:hover {
+	transform: scale(1.1);
+}
+
+.mute-dot.muted {
+	filter: grayscale(.7) brightness(.7);
+}
+</style>

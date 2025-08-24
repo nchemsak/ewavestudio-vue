@@ -91,9 +91,11 @@ $dark: map.get($themes, dark);
     color: var(--pt-text);
     border-radius: 12px;
     padding: 16px;
-    max-width: 560px;
+    inline-size: 100%;
+    max-inline-size: var(--pt-panel-max, none);
     box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
 }
+
 .pt-title {
     font-size: var(--pt-title-size);
     font-weight: 700;
@@ -121,6 +123,16 @@ $dark: map.get($themes, dark);
     font-weight: 600;
     margin-bottom: 8px;
 }
+
+.pt-panel--card {
+    --pt-panel-max: 560px;
+} // old look
+.pt-panel--wide {
+    --pt-panel-max: 1200px;
+} // good for sequencer
+.pt-panel--fluid {
+    --pt-panel-max: none;
+} // no cap
 
 /* Layout bits */
 .pt-fields {
@@ -514,8 +526,10 @@ $dark: map.get($themes, dark);
 /* Segmented controls (e.g., Pitch Env) */
 .pt-seg {
     display: inline-flex;
+    display: flex;
     gap: 6px;
-    flex-wrap: nowrap;
+
+    flex-wrap: wrap;
 }
 .pt-seg.pt-seg-sm .pt-seg-btn {
     padding: 4px 8px;
@@ -524,6 +538,7 @@ $dark: map.get($themes, dark);
 }
 
 .pt-seg-btn {
+    flex: 0 0 auto;
     position: relative;
     border: 1px solid transparent;
     border-radius: 999px;
@@ -617,8 +632,9 @@ $dark: map.get($themes, dark);
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: nowrap;
-    white-space: nowrap;
+    flex-wrap: wrap;
+    min-width: 0;
+    white-space: normal;
 }
 
 /* Minimal info icon */
@@ -703,12 +719,7 @@ $dark: map.get($themes, dark);
 }
 
 /* Make sure header area can host the icon nicely */
-.pt-header-tools {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    white-space: nowrap;
-}
+
 .pt-info-icon {
     /* you already have this in your file; keep it */
 }
@@ -720,3 +731,66 @@ $dark: map.get($themes, dark);
     margin-top: 8px;
     width: min(380px, 76vw);
 }
+
+/* Flatten any accidental panel-in-panel */
+.pt-panel .pt-panel {
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0;
+}
+
+/* Module cards inside a panel */
+.pt-cards {
+    --pt-card-min: 380px;
+    display: grid;
+    gap: var(--pt-gap);
+    /* min() keeps the min from exceeding the container on small screens */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--pt-card-min)), 1fr));
+}
+
+.pt-card {
+    background: linear-gradient(145deg, var(--pt-surface-1), var(--pt-surface-2));
+    border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 70%);
+    border-radius: var(--pt-radius);
+    padding: 14px;
+    /* subtle inset look, no outer drop shadow */
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.05);
+    min-width: 0;
+}
+.pt-card .pt-title {
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+}
+
+/* 1) Make Vue custom elements behave like blocks */
+// :where(
+//     pitch-env-module,
+//     fm-module,
+//     unison-effect,
+//     envelope-module,
+//     filter-module,
+//     noise-module,
+//     lfo-group,
+//     delay-effect,
+//     drive-effect,
+//     pattern-tools
+// ) {
+//     display: block;
+//     width: 100%;
+// }
+
+/* 2) Ensure grid items (cards & non-card children) stretch and don’t shrink weirdly */
+// .pt-cards > * {
+//     justify-self: stretch;
+//     width: 100%;
+//     min-width: 0;
+// }
+
+// /* 3) Defensive: headers can’t force narrow widths */
+// .knob-group,
+// .knob-group-header,
+// .pt-header-tools {
+//     width: 100%;
+//     min-width: 0;
+// }
