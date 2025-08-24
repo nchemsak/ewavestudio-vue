@@ -377,6 +377,7 @@ input[type="range"]::-webkit-slider-thumb {
 
     text-align: center;
     font-family: monospace;
+    color: var(--pt-text);
 }
 
 .knob-stack {
@@ -448,7 +449,7 @@ input[type="range"]::-webkit-slider-thumb {
     gap: 0.6rem;
     min-block-size: 24px;
     padding-bottom: 8px;
-    border-bottom: 2px solid #1d1d1d;
+    // border-bottom: 2px solid #1d1d1d;
     user-select: none;
     min-width: 0;
 }

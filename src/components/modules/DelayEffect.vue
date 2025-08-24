@@ -6,11 +6,12 @@
             <div class="pt-header-tools">
 
                 <div class="pt-seg pt-seg-sm" role="group" aria-label="Delay Time Mode">
+                    <button class="pt-seg-btn" :class="{ 'is-active': localSync }" :aria-pressed="localSync"
+                        :disabled="!localEnabled" @click="localSync = true">Sync</button>
                     <button class="pt-seg-btn" :class="{ 'is-active': !localSync }" :aria-pressed="!localSync"
                         :disabled="!localEnabled" @click="localSync = false">Free</button>
 
-                    <button class="pt-seg-btn" :class="{ 'is-active': localSync }" :aria-pressed="localSync"
-                        :disabled="!localEnabled" @click="localSync = true">Sync</button>
+
                 </div>
                 <span v-if="localSync" class="info"><i>{{ currentDivLabel }}</i></span>
 
@@ -115,7 +116,7 @@ const props = withDefaults(defineProps<{
     // Musical divisions for Sync mode
     divisions?: Array<{ label: string; steps: number }>;
 
-    // Theme bits
+    // Theme 
     color?: string;
     showToggle?: boolean;
 }>(), {
@@ -129,7 +130,7 @@ const props = withDefaults(defineProps<{
     toneHz: 5000,
     toneType: 'lowpass',
 
-    syncEnabled: true,          // <-- Sync is default now
+    syncEnabled: true,
     tempo: 120,
     maxSeconds: 5.0,
 
@@ -205,13 +206,13 @@ const syncedSeconds = computed<number>(() => {
 const syncedMs = computed<number>(() => syncedSeconds.value * 1000);
 const currentDivLabel = computed<string>(() => DIVS.value[divIndex.value]?.label ?? '—');
 
-/* Emits */
+// Emits 
 watch(localEnabled, v => emit('update:enabled', v));
 watch(localFeedback, v => emit('update:delayFeedback', v));
 watch(localMix, v => emit('update:delayMix', v));
-watch(localSync, v => emit('update:syncEnabled', v));
+watch(localSync, v => emit('update:syncEnabled', v), { immediate: true });
 
-// Free: emit raw seconds
+// Free
 watch(localTime, v => {
     if (!localSync.value) {
         const clamped = Math.min(props.maxSeconds || 5, Math.max(0.01, v));
@@ -219,17 +220,17 @@ watch(localTime, v => {
     }
 });
 
-// Sync: emit computed seconds on changes
+// Sync
 watch([divIndex, stepDuration, DIVS, localSync], () => {
     if (localSync.value) emit('update:delayTime', syncedSeconds.value);
-});
+}, { immediate: true });
 
 // Tone emits
 watch(localToneEnabled, v => emit('update:toneEnabled', v));
 watch(localToneHz, v => emit('update:toneHz', v));
 watch(localToneType, v => emit('update:toneType', v));
 
-/* Keep in sync with parent */
+// Keep in sync with parent
 watch(() => props.enabled, v => (localEnabled.value = !!v));
 watch(() => props.delayTime, v => {
     if (!localSync.value && typeof v === 'number') localTime.value = v;
@@ -242,7 +243,7 @@ watch(() => props.toneEnabled, v => (localToneEnabled.value = typeof v === 'bool
 watch(() => props.toneHz, v => (localToneHz.value = typeof v === 'number' ? v : localToneHz.value));
 watch(() => props.toneType, v => (localToneType.value = (v as ToneType) || localToneType.value));
 
-/* When switching to Sync, snap to closest division from current time */
+// When switching to Sync, snap to closest division from current time
 watch(localSync, on => {
     if (on) {
         const curSec = (typeof props.delayTime === 'number') ? props.delayTime : localTime.value;
@@ -258,7 +259,6 @@ watch(localSync, on => {
 });
 </script>
 <style scoped>
-/* small inline pill for the current sync division */
 .info {
     font-size: 10px;
     font-style: italic;
@@ -272,31 +272,21 @@ watch(localSync, on => {
     align-items: center;
     gap: 10px;
     flex-wrap: nowrap;
-    /* keep in one row */
     white-space: nowrap;
-    /* no wraps inside */
 }
 
-/* One-line layout: dot — LP/HP — knob */
 .tone-row {
     display: flex;
     align-items: center;
     gap: 12px;
-    /* keep it on one line; remove if you want wrapping on narrow screens */
     flex-wrap: nowrap;
 }
 
-/* keep knob from shrinking too small */
 .tone-knob {
     flex: 0 0 auto;
 }
 
-/* small accent dot toggle */
-
-
-/* inner fill that shows on/off */
 .pt-dot::after {
-
     transition: background .2s ease, box-shadow .2s ease;
 }
 

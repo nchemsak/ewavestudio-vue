@@ -1,5 +1,5 @@
 <template>
-    <div class="pattern-tools pt-panel" :class="props.currentTheme">
+    <div class="pattern-tools pt-card" :class="props.currentTheme">
         <h2 class="pt-title">Pattern Tools</h2>
 
         <!-- Step Fills -->
@@ -17,7 +17,7 @@
 
         <!-- Velocity Shapes -->
         <section class="pt-section" v-if="props.velocities">
-            <div class="pt-section-title">Velocity Shapes</div>
+            <div class="pt-section-title">Humanize Presets</div>
             <div class="pt-btn-group" role="group" aria-label="Velocity shapes">
                 <button class="pt-btn" @click="shapePeaks">Peaks</button>
                 <button class="pt-btn" @click="shapeStairs4">Stairs 4</button>
@@ -30,7 +30,7 @@
 
         <!-- Pitch & Scale -->
         <section class="pt-section" v-if="props.frequencies">
-            <div class="pt-section-title">Pitch &amp; Scale</div>
+            <div class="pt-section-title">Melody Maker</div>
 
             <div class="pt-fields">
                 <label class="pt-field">

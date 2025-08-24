@@ -1,8 +1,10 @@
 <template>
-	<div class="drum-sequencer controls">
+	<!-- <div class="drum-sequencer controls"> -->
+	<div class="drum-sequencer" :class="currentTheme">
 		<!-- Transport & Mix -->
-		<section class="pt-panel">
-			<h2 class="pt-title">Transport & Mix</h2>
+		<h2 class="pt-title">Ephemeral Wave</h2>
+		<section class="pt-card">
+
 
 			<!-- Knobs row -->
 			<div class="pt-knob-row transport-row">
@@ -45,15 +47,16 @@
 
 		<!-- ===== Percussion Synth (separate section) ===== -->
 		<!-- Percussion Synth -->
-		<section class="pt-panel" v-if="synthInstrument">
-			<h2 class="pt-title">Percussion Synth</h2>
+		<section class="pt-card" v-if="synthInstrument">
 
+			<h2 class="pt-title">Percussion Synth</h2>
 			<!-- Row: mute dot + channel volume -->
 			<div class="pt-subheader">
 				<div class="channel-caption d-flex align-items-center gap-2">
 					<div class="mute-dot" :class="{ muted: synthInstrument.muted }"
 						@click="toggleMute(synthInstrument.name)" role="button"
-						:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
+						:title="synthInstrument.muted ? 'Muted' : 'Playing'">
+					</div>
 					<span class="pt-section-title">Channel</span>
 				</div>
 
@@ -69,50 +72,13 @@
 				</div>
 			</div>
 
-			<!-- Pads grid (unchanged behavior) -->
-			<div class="d-flex pad-row">
-				<div class="padTEST-grid">
-					<div v-for="(active, index) in synthInstrument.steps" :key="index" class="padTESTwrap"
-						@mouseenter="hoveredPad = `${synthInstrument.name}-${index}`" @mouseleave="hoveredPad = null">
-						<div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
-							@mousedown="handleMouseDown($event, synthInstrument.name, index)"
-							@mouseenter="handleMouseEnter(synthInstrument.name, index)" @dragstart.prevent
-							:style="getPadStyle(synthInstrument, index)" />
-						<!-- per-step menu -->
-						<button class="pad-settings-dot" @mousedown.stop
-							@click.stop="openPadSettings(synthInstrument.name, index, $event)"
-							aria-label="Pad settings">•</button>
 
-						<!-- hover sliders (unchanged) -->
-						<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
-							class="hover-slider volume-slider">
-							<input type="range" min="0" max="1" step="0.01"
-								v-model.number="synthInstrument.velocities[index]"
-								@mousedown="activeVolumePad = `${synthInstrument.name}-${index}`"
-								@mouseup="activeVolumePad = null"
-								@touchstart="activeVolumePad = `${synthInstrument.name}-${index}`"
-								@touchend="activeVolumePad = null" />
-							<span v-if="activeVolumePad === `${synthInstrument.name}-${index}`" class="custom-tooltip">
-								{{ Math.round(synthInstrument.velocities[index] * 100) }}%
-							</span>
-						</div>
+			<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
+				:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
+				v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
+				:nearestNote="nearestNote"
+				@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
 
-						<div v-if="active && hoveredPad === `${synthInstrument.name}-${index}`"
-							class="hover-slider pitch-slider">
-							<input type="range" :min="MIN_PAD_HZ" :max="MAX_PAD_HZ" step="1"
-								v-model.number="synthInstrument.pitches[index]"
-								@mousedown="activePitchPad = `${synthInstrument.name}-${index}`"
-								@mouseup="activePitchPad = null"
-								@touchstart="activePitchPad = `${synthInstrument.name}-${index}`"
-								@touchend="activePitchPad = null" />
-							<span v-if="activePitchPad === `${synthInstrument.name}-${index}`" class="custom-tooltip">
-								{{ nearestNote(synthInstrument.pitches[index]) }} · {{
-									Math.round(synthInstrument.pitches[index]) }} Hz
-							</span>
-						</div>
-					</div>
-				</div>
-			</div>
 
 			<!-- Pattern tools  -->
 			<div class="controlsWrapper pt-cards">
@@ -141,7 +107,7 @@
 					<div class="pt-rule" aria-hidden="true"></div>
 
 					<!-- Noise -->
-					<NoiseModule :showToggle="true" v-model:enabled="noiseEnabled" v-model:type="noiseType"
+					<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
 						v-model:amount="noiseAmount" :color="'#9C27B0'" />
 				</section>
 
@@ -162,7 +128,7 @@
 				<section class="pt-card">
 					<h2 class="pt-title">Pitch &amp; Harmonics</h2>
 
-					<PitchEnvModule :color="'#3F51B5'" :showToggle="true" v-model:enabled="pitchEnvEnabled"
+					<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
 						v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
 						v-model:mode="pitchMode" />
 
@@ -173,7 +139,7 @@
 
 					<div class="pt-rule" aria-hidden="true"></div>
 
-					<UnisonEffect v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
+					<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
 						v-model:detune="detuneCents" v-model:spread="stereoSpread" />
 				</section>
 
@@ -345,6 +311,7 @@ import EnvelopeModule from './modules/EnvelopeModule.vue';
 import NoiseModule from './modules/NoiseModule.vue';
 import PadSettingsPopover from './PadSettingsPopover.vue';
 import PatternTools from './PatternTools.vue';
+import SynthStepGrid from './SynthStepGrid.vue'
 // import SequencerKeyboard from './SequencerKeyboard.vue';
 
 
@@ -412,12 +379,15 @@ function handleFKey(n: number) {
 	else lcdView.value = 'text'; // placeholders for F3–F6
 }
 
-/** OSCILLOSCOPE (inside LCD) */
+
 function startScope() {
 	const canvas = screen.value!.scopeCanvas as HTMLCanvasElement;
 	if (!canvas) return;
 	const ctx = canvas.getContext('2d');
 	if (!ctx) return;
+
+	const readVar = (name: string, fallback: string) =>
+		(getComputedStyle(canvas).getPropertyValue(name) || fallback).trim();
 
 	function draw() {
 		requestAnimationFrame(draw);
@@ -427,16 +397,22 @@ function startScope() {
 		const W = canvas.clientWidth;
 		const H = canvas.clientHeight;
 
-		analyser.getByteTimeDomainData(dataArray);
+		// theme-aware background + trace style
+		const bg = readVar('--mpc-lcd-bg', '#b9bcba');
+		const trace = readVar('--mpc-scope-trace', '#111');
+		const width = parseFloat(readVar('--mpc-scope-width', '2')) || 2;
 
-		ctx.fillStyle = '#b9bcba';   // LCD bg
+		ctx.fillStyle = bg;
 		ctx.fillRect(0, 0, W, H);
 
-		ctx.lineWidth = 2;
-		ctx.strokeStyle = '#111';
-		ctx.beginPath();
+		ctx.lineWidth = width;
+		ctx.lineCap = 'round';
+		ctx.strokeStyle = trace;
+
+		analyser.getByteTimeDomainData(dataArray);
 
 		const slice = W / analyser.fftSize;
+		ctx.beginPath();
 		let x = 0;
 		for (let i = 0; i < analyser.fftSize; i++) {
 			const v = dataArray[i] / 128;
@@ -452,70 +428,94 @@ function startScope() {
 
 
 
-
 function startSpectrogram() {
 	const scr = screen.value;
 	if (!scr) return;
 
-	const canvas = scr.specCanvas as HTMLCanvasElement;
+	const canvas = scr.specCanvas as unknown as HTMLCanvasElement;
 	if (!canvas) return;
 
 	const ctx = canvas.getContext('2d');
 	if (!ctx) return;
 
-	// Keep pixels crisp when we shift 1px columns
 	ctx.imageSmoothingEnabled = false;
 
 	const freqBins = new Uint8Array(analyser.frequencyBinCount);
 
-	// Colors (from your palette)
-	const LCD_BG = '#b9bcba'; // same bg as oscilloscope
-	const PALETTE: Array<{ threshold: number; color: string }> = [
-		{ threshold: 64, color: '#c4a291' }, // low
-		{ threshold: 128, color: '#8b4513' }, // mid
-		{ threshold: 192, color: '#27fcff' }, // high
-		{ threshold: 256, color: '#000000' }  // peak
-	];
-
-	const colorFor = (v: number) => {
-		for (let i = 0; i < PALETTE.length; i++) {
-			if (v < PALETTE[i].threshold) return PALETTE[i].color;
-		}
-		return PALETTE[PALETTE.length - 1].color;
+	// Helper to read current theme vars from CSS
+	const readTheme = () => {
+		const s = getComputedStyle(canvas);
+		const bg = (s.getPropertyValue('--mpc-lcd-bg') || '#b9bcba').trim();
+		const low = (s.getPropertyValue('--mpc-spec-low') || '#4fc3f7').trim();
+		const mid = (s.getPropertyValue('--mpc-spec-mid') || '#00e676').trim();
+		const high = (s.getPropertyValue('--mpc-spec-high') || '#ffc400').trim();
+		const peak = (s.getPropertyValue('--mpc-spec-peak') || '#ffffff').trim();
+		return { bg, low, mid, high, peak };
 	};
+
+	// Make a tiny signature so we can detect when theme vars change
+	const signatureOf = (t: ReturnType<typeof readTheme>) =>
+		`${t.bg}|${t.low}|${t.mid}|${t.high}|${t.peak}`;
+
+	let theme = readTheme();
+	let lastSig = signatureOf(theme);
+
+	const colorFor = (v: number, t = theme) =>
+		v < 64 ? t.low :
+			v < 128 ? t.mid :
+				v < 192 ? t.high : t.peak;
 
 	function draw() {
 		requestAnimationFrame(draw);
 		if (lcdView.value !== 'spec') return;
 
-		// Fit backing store to CSS size (HiDPI‑safe)
 		fitCanvasToBox(canvas, ctx);
-
 		const W = canvas.clientWidth;
 		const H = canvas.clientHeight;
 
-		// Scroll existing image left by 1px
-		ctx.drawImage(canvas, 1, 0, W - 1, H, 0, 0, W - 1, H);
+		// Refresh theme if it changed (e.g., you switched .theme-* class)
+		const maybeNew = readTheme();
+		const sig = signatureOf(maybeNew);
+		const themeChanged = sig !== lastSig;
+		if (themeChanged) {
+			theme = maybeNew;
+			lastSig = sig;
+			// wipe so old colors don't smear across after the palette swap
+			ctx.save();
+			ctx.setTransform(1, 0, 0, 1, 0, 0); // ensure fillRect uses CSS px after fitCanvasToBox
+			ctx.fillStyle = theme.bg;
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+			ctx.restore();
+		} else {
+			// Scroll existing image left by 1px
+			ctx.drawImage(canvas, 1, 0, W - 1, H, 0, 0, W - 1, H);
+		}
 
 		// Fetch spectrum
 		analyser.getByteFrequencyData(freqBins);
 
-		// New column background first (so silence is grey)
+		// Noise floor suppression (removes the “always-on” bottom line)
+		const MIN_BIN = 3;
+		const FLOOR_TAP = 8;
+		let floor = 0;
+		for (let i = 0; i < FLOOR_TAP; i++) floor += freqBins[i];
+		floor = floor / FLOOR_TAP + 3;
+
+		// Column background (silence color)
 		const x = W - 1;
-		ctx.fillStyle = LCD_BG;
+		ctx.fillStyle = theme.bg;
 		ctx.fillRect(x, 0, 1, H);
 
-		// Paint energy using log frequency mapping
+		// Draw new column with current palette
 		for (let y = 0; y < H; y++) {
-			const logY = 1 - y / H;
-			const bin = Math.min(
-				freqBins.length - 1,
-				Math.floor(Math.pow(logY, 2.0) * freqBins.length)
-			);
-			const v = freqBins[bin]; // 0..255
-			if (v <= 2) continue;     // skip near-silence pixels
+			const logY = 1 - (y + 0.5) / H;
+			const idxRaw = Math.floor(Math.pow(logY, 2.0) * (freqBins.length - MIN_BIN)) + MIN_BIN;
+			const bin = Math.min(freqBins.length - 1, Math.max(MIN_BIN, idxRaw));
 
-			ctx.fillStyle = colorFor(v);
+			const v = Math.max(0, freqBins[bin] - floor);
+			if (v < 6) continue;
+
+			ctx.fillStyle = colorFor(v, theme);
 			ctx.fillRect(x, y, 1, 1);
 		}
 	}
@@ -729,7 +729,7 @@ const availableOctaves = computed(() => {
 });
 
 
-// New: sampler channels only (kick/snare/hihat + customs) with the “Add Channel” row
+//  sampler channels only (kick/snare/hihat + customs) with the “Add Channel” row
 const ADD_ROW = { key: 'add-row', isAddButton: true } as const;
 
 const orderedChannels = computed(() => {
@@ -828,14 +828,13 @@ const noiseEnabled = ref(false)
 
 // Delay Start
 const delayEnabled = ref(false);
-const delaySync = ref(false);        // NEW
+const delaySync = ref(true);
 const delayTime = ref(0.2);          // seconds (0.01 to 1.0)
 const delayFeedback = ref(0.3);      // 0–0.95
 const delayMix = ref(0.3);           // 0–1
 const delayToneHz = ref(5000);
-const delayToneType = ref('lowpass');
 const delayToneEnabled = ref(true);
-
+const delayToneType = ref<'lowpass' | 'highpass'>('lowpass');
 
 const delayNode = audioCtx.createDelay(5.0); // max delay time = 5s
 delayNode.delayTime.setValueAtTime(delayTime.value, audioCtx.currentTime);
@@ -940,7 +939,7 @@ const driveDry = audioCtx.createGain();
 const driveWet = audioCtx.createGain();
 
 
-// NEW: sum both drive paths before delay
+//  sum both drive paths before delay
 const driveSum = audioCtx.createGain();     // summed output of dry+wet drive
 // OPTIONAL: simple make-up gain after shaper/tone (tune if you want)
 const driveMakeup = audioCtx.createGain();

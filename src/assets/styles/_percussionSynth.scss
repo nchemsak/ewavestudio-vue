@@ -55,8 +55,14 @@
 
 	border: 1px solid #333;
 	display: inline-block;
-	// h2 {
-	// 	font-family: monospace;
-	// 	font-size: 1rem;
-	// }
+	
+}
+
+.theme-dark .controls,
+.theme-synthwave .controls {
+	color: #fff;
+}
+
+.theme-light .controls {
+	color: var(--pt-text);
 }

@@ -78,11 +78,39 @@ $dark: map.get($themes, dark);
     --pt-accent-3: #{map.get($dark, accent3)};
     --pt-btn-border: hsl(var(--pt-accent) 80% 60%);
     --pt-btn-glow: hsl(var(--pt-accent) 90% 60% / 0.4);
+    --pt-header-fg: #fff;
+    --pt-text-strong: #fff;
+
+    /*  hairline + focus ring tokens (fallbacks) */
+    --pt-hairline: rgba(255, 255, 255, 0.06); /* good for dark; light overrides below */
+    --pt-focus-ring: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / 0.35);
 }
 
 /* 4) Theme classes for toggling at runtime */
 @each $name, $t in $themes {
     @include emit-theme($name, $t);
+}
+
+/* 4b) Color-scheme + light theme overrides */
+:root,
+.theme-dark,
+.theme-synthwave {
+    color-scheme: dark;
+}
+
+.theme-light {
+    color-scheme: light;
+    --pt-header-fg: #1f2328;
+    --pt-text-strong: #1f2328;
+    /*  hairline fallback that reads on light if color-mix is unavailable */
+    --pt-hairline: rgba(0, 0, 0, 0.12);
+}
+
+/* 4c) Prefer computed hairline when supported (auto-adapts to any theme text color) */
+@supports (color: color-mix(in oklab, #000, #fff)) {
+    :root {
+        --pt-hairline: color-mix(in oklab, var(--pt-text) 12%, transparent);
+    }
 }
 
 /* 5) Reusable UI classes (global) */
@@ -100,6 +128,7 @@ $dark: map.get($themes, dark);
     font-size: var(--pt-title-size);
     font-weight: 700;
     margin: 0 0 8px;
+    color: var(--pt-text);
 }
 .pt-section {
     position: relative;
@@ -115,7 +144,8 @@ $dark: map.get($themes, dark);
     right: 0;
     top: 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
+    /*  use hairline token (adapts to theme) */
+    background: linear-gradient(90deg, transparent, var(--pt-hairline), transparent);
 }
 .pt-section-title {
     color: var(--pt-muted);
@@ -197,6 +227,7 @@ $dark: map.get($themes, dark);
     transform: translateY(1px) scale(0.98);
 }
 .pt-btn:focus-visible {
+    /* keep your outline if you prefer; token is provided */
     outline: 2px solid hsl(var(--btn-hue, var(--pt-accent)) 80% 60%);
     outline-offset: 2px;
 }
@@ -262,14 +293,14 @@ $dark: map.get($themes, dark);
 }
 .pt-chip {
     background: linear-gradient(145deg, var(--pt-surface-1), var(--pt-surface-2));
-    border: 1px dashed var(--pt-btn-border);
+    border: 1px dashed var(--pt-btn-border); /* fallback */
     color: var(--pt-text);
     padding: 6px 10px;
     border-radius: 999px;
     font-size: 0.8rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    border-color: color-mix(in oklab, var(--pt-btn-border), transparent 40%);
+    border-color: color-mix(in oklab, var(--pt-btn-border), transparent 40%); /* modern */
 }
 .pt-chip:hover {
     box-shadow: 0 0 10px var(--pt-btn-glow);
@@ -328,7 +359,7 @@ $dark: map.get($themes, dark);
     filter: saturate(1.05);
 }
 .pt-select:focus-visible {
-    --ring: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / 0.35);
+    --ring: var(--pt-focus-ring);
 }
 
 /* Native select popups */
@@ -349,17 +380,7 @@ $dark: map.get($themes, dark);
     }
 }
 
-/* Theme color-scheme helpers */
-:root,
-.theme-dark,
-.theme-synthwave {
-    color-scheme: dark;
-}
-.theme-light {
-    color-scheme: light;
-}
-
-/* Encourage dark UI on the control and its items */
+/* Theme color-scheme helpers: keep selects dark-styled */
 .pt-select,
 .pt-select option,
 .pt-select optgroup {
@@ -433,6 +454,7 @@ $dark: map.get($themes, dark);
         inset 0 0 0 1px rgb(255 255 255 / 0.03);
     color: var(--pt-text);
     backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px); /*  Safari */
     color-scheme: dark;
 }
 .pt-option {
@@ -456,7 +478,8 @@ $dark: map.get($themes, dark);
 .pt-rule {
     height: 1px;
     margin: 14px 0;
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
+    /*  use hairline token */
+    background: linear-gradient(90deg, transparent, var(--pt-hairline), transparent);
 }
 
 /* Sub-block wrapper used inside panels */
@@ -525,10 +548,8 @@ $dark: map.get($themes, dark);
 
 /* Segmented controls (e.g., Pitch Env) */
 .pt-seg {
-    display: inline-flex;
-    display: flex;
+    display: inline-flex; /* FIX: remove duplicate flex declaration */
     gap: 6px;
-
     flex-wrap: wrap;
 }
 .pt-seg.pt-seg-sm .pt-seg-btn {
@@ -585,6 +606,10 @@ $dark: map.get($themes, dark);
         0 0 0 3px hsl(var(--seg-hue) 90% 60% / 0.18),
         0 6px 22px hsl(var(--seg-hue) 90% 60% / 0.25);
     transform: translateY(-1px);
+}
+/*  keep visible state even when disabled */
+.pt-seg-btn[disabled].is-active {
+    opacity: 0.8;
 }
 
 /* Segmented tooltips (match LFO feel) */
@@ -671,9 +696,8 @@ $dark: map.get($themes, dark);
 }
 
 /* Generic themed popover */
-/* Popover base look (keep your theme styling) */
 .pt-popover {
-    position: fixed; /* <-- key change */
+    position: fixed; /* coords set inline */
     z-index: 1000;
     padding: 12px 14px;
     border: 1px solid transparent;
@@ -686,11 +710,12 @@ $dark: map.get($themes, dark);
         0 12px 40px rgb(0 0 0 / 0.45),
         inset 0 0 0 1px rgb(255 255 255 / 0.03);
     color: var(--pt-text);
-
     white-space: normal;
     overflow: auto;
     max-height: 60vh;
     width: clamp(260px, 44vw, 420px);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px); /*  Safari */
 }
 
 /* tiny arrow – points from popover back to the icon */
@@ -701,35 +726,17 @@ $dark: map.get($themes, dark);
     height: 0;
     border: 8px solid transparent;
 }
-
-/* when shown to the right of the icon */
 .pt-popover[data-side="right"]::after {
-    left: -8px; /* stick arrow on left edge */
+    left: -8px;
     top: 50%;
     transform: translateY(-50%);
     border-right-color: var(--pt-panel);
 }
-
-/* when flipped to the left of the icon */
 .pt-popover[data-side="left"]::after {
-    right: -8px; /* stick arrow on right edge */
+    right: -8px;
     top: 50%;
     transform: translateY(-50%);
     border-left-color: var(--pt-panel);
-}
-
-/* Make sure header area can host the icon nicely */
-
-.pt-info-icon {
-    /* you already have this in your file; keep it */
-}
-
-/* FM-specific popover placement helper */
-.fm-info {
-    right: 0;
-    top: 100%;
-    margin-top: 8px;
-    width: min(380px, 76vw);
 }
 
 /* Flatten any accidental panel-in-panel */
@@ -745,7 +752,6 @@ $dark: map.get($themes, dark);
     --pt-card-min: 380px;
     display: grid;
     gap: var(--pt-gap);
-    /* min() keeps the min from exceeding the container on small screens */
     grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--pt-card-min)), 1fr));
 }
 
@@ -754,43 +760,63 @@ $dark: map.get($themes, dark);
     border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 70%);
     border-radius: var(--pt-radius);
     padding: 14px;
-    /* subtle inset look, no outer drop shadow */
     box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.05);
     min-width: 0;
+    color: var(--pt-text);
 }
 .pt-card .pt-title {
     font-size: 1.1rem;
     margin-bottom: 10px;
 }
 
-/* 1) Make Vue custom elements behave like blocks */
-// :where(
-//     pitch-env-module,
-//     fm-module,
-//     unison-effect,
-//     envelope-module,
-//     filter-module,
-//     noise-module,
-//     lfo-group,
-//     delay-effect,
-//     drive-effect,
-//     pattern-tools
-// ) {
-//     display: block;
-//     width: 100%;
-// }
+/* Make header text explicit in Light theme (kept) */
+.theme-light .toggle-header .group-title,
+.theme-light .toggle-header:hover .group-title,
+.theme-light .toggle-header:focus-visible .group-title,
+.theme-light .toggle-header.is-active .group-title,
+.theme-light .toggle-header.is-active:hover .group-title {
+    color: var(--pt-text-strong, #1f2328) !important;
+}
 
-/* 2) Ensure grid items (cards & non-card children) stretch and don’t shrink weirdly */
-// .pt-cards > * {
-//     justify-self: stretch;
-//     width: 100%;
-//     min-width: 0;
-// }
+/* Limit hover accent to interactive bits, not the title */
+.toggle-header:hover .pt-dot,
+.toggle-header:focus-visible .pt-dot,
+.toggle-header:hover .pt-seg-btn,
+.toggle-header:focus-visible .pt-seg-btn {
+    /* intentionally empty: rely on existing accent styles */
+}
 
-// /* 3) Defensive: headers can’t force narrow widths */
-// .knob-group,
-// .knob-group-header,
-// .pt-header-tools {
-//     width: 100%;
-//     min-width: 0;
-// }
+.theme-light .toggle-header .pt-title,
+.theme-light .toggle-header:hover .pt-title {
+    color: var(--pt-text-strong, #1f2328) !important;
+}
+
+.toggle-header {
+    color: var(--pt-header-fg);
+}
+.toggle-header .group-title {
+    color: var(--pt-header-fg);
+}
+
+/* Accessibility  */
+@media (forced-colors: active) {
+    .pt-btn,
+    .pt-seg-btn,
+    .pt-selectbtn {
+        background: ButtonFace;
+        color: ButtonText;
+        border: 1px solid ButtonText;
+        box-shadow: none;
+    }
+    .pt-seg-btn.is-active {
+        outline: 2px solid Highlight;
+    }
+}
+
+.pt-title {
+    color: var(--pt-text-strong);
+}
+
+.theme-light .pt-title {
+    color: var(--pt-text-strong, #1f2328) !important;
+}
