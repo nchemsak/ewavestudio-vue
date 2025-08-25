@@ -6,11 +6,17 @@
                 <div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
                     @mousedown="onMouseDown($event, index)" @mouseenter="onMouseEnter(index)" @dragstart.prevent
                     :style="padStyle(index)" />
-                <!-- per-step menu -->
-                <button class="pad-settings-dot" @mousedown.stop @click.stop="emitOpenSettings(index, $event)"
-                    aria-label="Pad settings">•</button>
 
-                <!-- hover sliders -->
+                <!-- settings (now a 3-dot button, shown on hover/focus) -->
+                <button class="pad-settings-dot" @mousedown.stop @click.stop="emitOpenSettings(index, $event)"
+                    aria-label="Pad settings">⋮</button>
+
+                <!-- per-step note chip -->
+                <div v-if="active" class="note-chip">
+                    {{ nearestNote(pitches[index]) }}
+                </div>
+
+                <!-- hover sliders (unchanged) -->
                 <div v-if="active && hovered === index" class="hover-slider volume-slider">
                     <input type="range" min="0" max="1" step="0.01" :value="velocities[index]"
                         @input="updateVelocity(index, $event)" @mousedown="activeVol = index"
@@ -25,9 +31,7 @@
                         @input="updatePitch(index, $event)" @mousedown="activePitch = index"
                         @mouseup="activePitch = null" @touchstart="activePitch = index"
                         @touchend="activePitch = null" />
-                    <span v-if="activePitch === index" class="custom-tooltip">
-                        {{ nearestNote(pitches[index]) }} · {{ Math.round(pitches[index]) }} Hz
-                    </span>
+
                 </div>
             </div>
         </div>
@@ -113,15 +117,80 @@ function emitOpenSettings(index: number, evt: MouseEvent) {
     emit('open-pad-settings', { name: props.name, index, anchorRect: r });
 }
 
-function padStyle(index: number) {
-    if (!props.steps[index]) return {};
-    const percent = Math.round(props.velocities[index] * 100);
-    return { background: `linear-gradient(to top, pink ${percent}%, #fff ${percent}%)` };
+// function padStyle(index: number) {
+//     if (!props.steps[index]) return {};
+//     const percent = Math.round(props.velocities[index] * 100);
+//     return { background: `linear-gradient(to top, pink ${percent}%, #fff ${percent}%)` };
+// }
+
+
+
+function hueFor(hz: number, lo = props.minHz, hi = props.maxHz) {
+    // map min Hz → 220° (blue), max Hz → 0° (red)
+    const t = Math.min(1, Math.max(0, (hz - lo) / (hi - lo)));
+    return Math.round(220 * (1 - t));
 }
 
-const nearestNote = props.nearestNote; // just to use directly in template
+function padStyle(index: number) {
+    if (!props.steps[index]) return { '--pad-on': 0 }; // let CSS show “off” state
+    const pct = Math.round(props.velocities[index] * 100);
+    const hue = hueFor(props.pitches[index] || props.minHz);
+    return {
+        '--vol': pct,           // 0..100 (no % sign; CSS uses calc(var(--vol)*1%))
+        '--heat-h': hue,        // 0..360
+        '--pad-on': 1
+    } as any;
+}
+
+const nearestNote = props.nearestNote;
 </script>
 
 <style scoped>
-/* inherits your existing padTEST / hover-slider styles */
+.note-chip {
+    position: absolute;
+    left: 50%;
+    bottom: -6px;
+    transform: translate(-50%, 100%);
+    padding: 2px 6px;
+    font-size: 10px;
+    line-height: 1;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, .65);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, .12);
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 1000;
+}
+
+/* nicer 3-dot settings; hidden until hover */
+.pad-settings-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 8px;
+    border: 1px solid #2a2f42;
+    background: rgba(15, 18, 26, .78);
+    color: #c9d4ff;
+    font-size: 13px;
+    line-height: 1;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    opacity: 0;
+    transform: scale(.9);
+    transition: opacity .15s ease, transform .15s ease, background .15s ease;
+}
+
+.padTESTwrap:hover .pad-settings-dot,
+.pad-settings-dot:focus-visible {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.pad-settings-dot:hover {
+    background: rgba(15, 18, 26, .9)
+}
 </style>

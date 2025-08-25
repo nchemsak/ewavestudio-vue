@@ -285,10 +285,12 @@
 
 
 	</div>
-
-
+	<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
+		v-model:open="padPopover.open" v-model:hz="currentPadHz" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
+		:anchorRect="padPopover.anchorRect" :title="padPopover.title" />
+	<!-- 
 	<PadSettingsPopover v-model:open="padPopover.open" v-model:hz="currentPadHz" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
-		:anchorRect="padPopover.anchorRect" :title="padPopover.title" @close="padPopover.open = false" />
+		:anchorRect="padPopover.anchorRect" :title="padPopover.title" @close="padPopover.open = false" /> -->
 </template>
 
 <script setup lang="ts">
@@ -721,7 +723,7 @@ const instruments = ref([
 	{
 		name: 'synth-voice',
 		label: 'Percussion Synth',
-		type: 'synth',        
+		type: 'synth',
 		isCustom: false,
 		isEditingName: false,
 		muted: false,
@@ -1000,7 +1002,7 @@ const driveDry = audioCtx.createGain();
 const driveWet = audioCtx.createGain();
 
 //  sum both drive paths before delay
-const driveSum = audioCtx.createGain();     
+const driveSum = audioCtx.createGain();
 const driveMakeup = audioCtx.createGain();
 driveMakeup.gain.value = 1.0;
 
@@ -1520,15 +1522,30 @@ watch(volume, val => {
 	masterGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
 });
 
-function getPadStyle(instrument, index) {
-	if (!instrument.steps[index]) return {};
+// function getPadStyle(instrument, index) {
+// 	if (!instrument.steps[index]) return {};
 
-	const velocity = instrument.velocities[index];
-	const percent = Math.round(velocity * 100);
+// 	const velocity = instrument.velocities[index];
+// 	const percent = Math.round(velocity * 100);
 
-	return {
-		background: `linear-gradient(to top, pink ${percent}%, #fff ${percent}%)`
-	};
+// 	return {
+// 		background: `linear-gradient(to top, pink ${percent}%, #fff ${percent}%)`
+// 	};
+// }
+function hueFor(hz: number, lo = MIN_PAD_HZ, hi = MAX_PAD_HZ) {
+	const t = Math.min(1, Math.max(0, (hz - lo) / (hi - lo)));
+	return Math.round(220 * (1 - t)); // blue→red
+}
+
+function getPadStyle(instrument: any, index: number) {
+	if (!instrument.steps[index]) return { '--pad-on': 0 };
+
+	const pct = Math.round(instrument.velocities[index] * 100);
+	// samples don't have pitch; use a calm neutral hue (210 = blue-ish)
+	const hue = instrument.pitches ? hueFor(instrument.pitches[index] || MIN_PAD_HZ)
+		: 210;
+
+	return { '--vol': pct, '--heat-h': hue, '--pad-on': 1 };
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------

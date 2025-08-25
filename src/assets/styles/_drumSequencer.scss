@@ -4,7 +4,7 @@
 	--padTEST-size: 40px;
 	--padTEST-radius: 14px;
 	--bg: #0e1118;
-	--pad-w: 30px; 
+	--pad-w: 30px;
 	--pad-h: 100px;
 	--slider-w: 74px;
 	--slider-l: 100px; /* how far sliders extend away from pad */
@@ -12,7 +12,16 @@
 	--thumb-thickness: 10px;
 }
 
+/* ----------------------------------------------------------
+   Drum Sequencer
+---------------------------------------------------------- */
 .drum-sequencer {
+	/* defaults (dark) */
+	--slider-bg: rgba(255, 255, 255, 0.08); /* column behind slider */
+	--slider-track: rgba(255, 255, 255, 0.22); /* track line (if used) */
+	--slider-thumb: #7bd0ff; /* thumb bar */
+	--slider-thumb-border: rgba(255, 255, 255, 0.15);
+
 	position: relative;
 	color: white;
 	border-radius: 18px;
@@ -43,7 +52,6 @@
 		background-color: #0cf;
 	}
 	.pad.playing {
-		border: 2px solid #fff;
 		box-shadow: 0 0 6px #0ff;
 	}
 	.pad.selected.playing {
@@ -54,11 +62,10 @@
 		background-color: #0cf;
 	}
 	.padTEST.playing {
-		border: 2px solid #fff;
 		box-shadow: 0 0 6px #0ff;
 	}
 	.padTEST.selected.playing {
-		background-color: #0ff;
+		box-shadow: 0 0 6px #0ff;
 	}
 
 	/* Grid & rows */
@@ -98,7 +105,7 @@
 		box-shadow: none;
 	}
 
-	/* Channel volume (horizontal, not the pad sliders) */
+	/* Channel volume (horizontal) */
 	.channel-volume input[type="range"] {
 		max-width: 150px;
 		height: 4px;
@@ -116,7 +123,6 @@
 		position: absolute;
 		left: 50%;
 		transform: translateX(-50%); /* center over pad */
-		// width: var(--slider-w);
 		height: var(--slider-l);
 		width: var(--padTEST-size);
 		z-index: 10;
@@ -124,28 +130,33 @@
 		align-items: center;
 		justify-content: center;
 		pointer-events: none; /* container ignores pointer */
+
+		/* fallback column color (helps if ::before is ever overridden) */
+		background: var(--slider-bg);
+		border-radius: 2px;
 	}
 	.hover-slider input {
 		pointer-events: auto;
 	} /* let the thumb be draggable */
 
-	/* Volume: sits above pad, touching its top edge and extending upward */
+	/* Volume above, Pitch below */
 	.hover-slider.volume-slider {
 		bottom: 100%;
 	}
-
-	/* Pitch: sits below pad, touching its bottom edge and extending downward */
 	.hover-slider.pitch-slider {
 		top: 100%;
 	}
 
-	/* Optional faint column behind the slider */
+	/* Column background layer */
 	.hover-slider::before {
 		content: "";
 		position: absolute;
 		inset: 0;
-		background: rgba(255, 255, 255, 0.08);
+		background: var(--slider-bg);
 		border-radius: 2px;
+		/* subtle inner edge for contrast on light bg */
+		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+		z-index: 0; /* under the input */
 	}
 
 	/* ===== Rotated input styling ===== */
@@ -155,52 +166,43 @@
 		background: transparent;
 		outline: none;
 		transform: rotate(-90deg);
-		/* Before rotation:
-       width  = visual length (up/down)
-       height = column width (left/right) */
-		width: var(--slider-l);
-		height: var(--slider-w);
-		height: var(--padTEST-size);
+		width: var(--slider-l); /* visual length (vertical) */
+		height: var(--padTEST-size); /* column width (horizontal) */
+		position: relative;
+		z-index: 1; /* above ::before */
 	}
 
-	/* Track */
+	/* You removed track fills; keep height so the control renders consistently */
 	.hover-slider input[type="range"]::-webkit-slider-runnable-track {
 		height: var(--track-thickness);
-		// background: rgba(255, 255, 255, 0.2);
 		border-radius: 2px;
 	}
 	.hover-slider input[type="range"]::-moz-range-track {
 		height: var(--track-thickness);
-		background: rgba(255, 255, 255, 0.2);
 		border-radius: 2px;
 	}
 
-	/* Thumb = long thin bar that spans track width */
+	/* Thumb = long thin bar that spans the column */
 	.hover-slider input[type="range"]::-webkit-slider-thumb {
 		-webkit-appearance: none;
-		/* Pre-rotation:
-       width  -> final height (thin)
-       height -> final width  (span across column) */
-		width: var(--thumb-thickness);
-		height: var(--padTEST-size);
-		// height: var(--slider-w);
-		background: variables.$color-teal-light;
-		border: 1px solid variables.$color-black;
+		width: var(--thumb-thickness); /* final thickness (horizontal) */
+		height: var(--padTEST-size); /* final length (vertical) */
+		border: 1px solid;
 		border-radius: 3px;
 		cursor: ns-resize;
-
-		/* Center the tall thumb on the thin track */
+		background: var(--slider-thumb);
+		border-color: var(--slider-thumb-border);
+		/* center the tall thumb on the thin track */
 		margin-top: calc((var(--padTEST-size) - var(--track-thickness)) / -2);
 	}
 	.hover-slider input[type="range"]::-moz-range-thumb {
 		width: var(--thumb-thickness);
-		// height: var(--slider-w);
 		height: var(--padTEST-size);
-
-		background: variables.$color-teal-light;
-		border: 1px solid variables.$color-black;
+		border: 1px solid;
 		border-radius: 3px;
 		cursor: ns-resize;
+		background: var(--slider-thumb);
+		border-color: var(--slider-thumb-border);
 	}
 
 	/* ===== Misc headings/labels ===== */
@@ -229,11 +231,12 @@
 	.upload-icon {
 		cursor: pointer;
 	}
+
 	.controlsWrapper {
-		// margin-top: 200px;
 		display: flex;
 		flex-wrap: wrap;
 		justify-content: space-between;
+		margin-top: 50px;
 	}
 
 	.pad-settings-dot {
@@ -263,11 +266,32 @@
 	}
 }
 
+/* Theme overrides work whether the theme class is on the same node
+   or an ancestor wrapping the sequencer. */
+.theme-light .drum-sequencer,
+.drum-sequencer.theme-light {
+	--slider-bg: rgba(0, 0, 0, 0.1);
+	--slider-track: rgba(0, 0, 0, 0.25);
+	--slider-thumb: #2563eb;
+	--slider-thumb-border: rgba(0, 0, 0, 0.28);
+}
+
+.theme-synthwave .drum-sequencer,
+.drum-sequencer.theme-synthwave {
+	--slider-bg: rgba(255, 255, 255, 0.1);
+	--slider-track: rgba(255, 255, 255, 0.28);
+	--slider-thumb: #ff71e8;
+	--slider-thumb-border: rgba(255, 255, 255, 0.25);
+}
+
+/* ----------------------------------------------------------
+   Pad Settings Popover
+---------------------------------------------------------- */
 .pad-settings-popover {
 	position: fixed;
 	z-index: 9999;
 	min-width: 260px;
-	max-width: calc(100vw - 16px); /* prevent horizontal scroll */
+	max-width: calc(100vw - 16px);
 	background: #1a1a1a;
 	color: #eee;
 	border: 1px solid #333;
@@ -283,83 +307,85 @@
 	font-size: 12px;
 }
 
-// Pad grid
-
+/* ----------------------------------------------------------
+   Pad Grid
+---------------------------------------------------------- */
 .padTEST-grid {
 	display: flex;
 	justify-content: space-around;
 	gap: 5px;
+
+	.padTESTwrap {
+		position: relative;
+	}
+
 	.padTEST {
-		display: inline-block;
 		inline-size: var(--padTEST-size);
 		block-size: var(--padTEST-size);
 		border-radius: var(--padTEST-radius);
-		border: 1px solid transparent;
-		background: #222; /* default overridden below */
-		box-shadow:
-			0 10px 18px rgba(0, 0, 0, 0.45),
-			inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-		cursor: pointer;
-		transition:
-			transform 0.05s ease,
-			box-shadow 0.18s ease,
-			filter 0.18s ease,
-			background 0.25s ease,
-			border-color 0.25s ease;
-	}
-	.padTEST:focus-visible {
-		outline: none;
-		box-shadow:
-			0 0 0 3px #7bd0ff66,
-			0 10px 18px rgba(0, 0, 0, 0.45),
-			inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-	}
-	.padTEST:active,
-	.padTEST.is-lit {
-		transform: translateY(1px);
-	}
-
-	.padTEST.liquid {
+		border: 1px solid #ffffff1a;
 		position: relative;
 		overflow: hidden;
-		border-radius: 18px;
-		border-radius: 0px;
-		border: 1px solid #ffffff1a;
+		cursor: pointer;
+
+		/* base look */
 		background:
 			radial-gradient(140% 120% at 20% 15%, #3a2255, #261a3a 42%, #161a27 72%),
 			radial-gradient(80% 80% at 80% 80%, #23466a, transparent 60%);
 		box-shadow:
 			0 12px 22px rgba(0, 0, 0, 0.55),
 			inset 0 8px 18px rgba(255, 255, 255, 0.06);
+		transition:
+			transform 0.05s ease,
+			box-shadow 0.18s ease,
+			filter 0.18s ease;
 	}
 
-	.padTEST.padTEST-grid {
-		position: relative;
-		overflow: hidden;
-		border-radius: 14px;
-		background: #12151d;
-		border: 1px solid #1e2230;
-		box-shadow:
-			0 12px 20px rgba(0, 0, 0, 0.55),
-			inset 0 2px 8px rgba(255, 255, 255, 0.05);
-	}
-	.padTEST.padTEST-grid::before {
+	/* pitch heat tint + volume fill (uses CSS vars from Vue) */
+	.padTEST::after {
 		content: "";
 		position: absolute;
-		inset: 8px;
-		border-radius: 10px;
-		--dot: #2a2f42;
-		background: radial-gradient(circle, var(--dot) 35%, transparent 36%);
-		background-size: 18px 18px;
-		filter: drop-shadow(0 0 0 transparent);
-	}
-	.padTEST.padTEST-grid:active::before,
-	.padTEST.padTEST-grid.is-lit::before {
-		--dot: #8ad8ff;
-		filter: drop-shadow(0 0 10px #6bdcff66);
+		inset: 0;
+		background: linear-gradient(
+			to top,
+			hsla(var(--heat-h, 210), 85%, 60%, 0.85) calc(var(--vol, 0) * 1%),
+			transparent calc(var(--vol, 0) * 1%)
+		);
+		mix-blend-mode: screen;
+		opacity: var(--pad-on, 0);
+		transition:
+			opacity 0.15s ease,
+			background 0.15s ease;
+		pointer-events: none;
 	}
 
-	.padTESTwrap {
-		position: relative;
+	/* subtle inner tint always on when selected */
+	.padTEST.selected {
+		box-shadow:
+			0 12px 22px rgba(0, 0, 0, 0.55),
+			inset 0 12px 22px hsla(var(--heat-h, 210), 85%, 60%, 0.18),
+			inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+	}
+
+	/* ACTIVE-STEP HALO */
+	.padTEST.playing::before {
+		content: "";
+		position: absolute;
+		inset: -7px;
+		border-radius: inherit;
+		background: radial-gradient(circle at 50% 50%, hsla(var(--heat-h, 210), 90%, 70%, 0.55), transparent 60%);
+		filter: blur(2px);
+		animation: step-pop 0.18s ease-out;
+		pointer-events: none;
+	}
+	@keyframes step-pop {
+		from {
+			opacity: 0;
+			transform: scale(0.92);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
 	}
 }

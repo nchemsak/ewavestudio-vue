@@ -135,24 +135,53 @@ function midiToName(m: number) { const n = m % 12, o = Math.floor(m / 12) - 1; r
 const clampHz = (hz: number) => Math.max(props.minHz, Math.min(props.maxHz, hz));
 
 /* internal base+fine */
-const baseMidi = ref(freqToMidi(clampHz(props.hz)));
-const detuneCentsLocal = ref(Math.round(1200 * Math.log2(clampHz(props.hz) / midiToFreq(baseMidi.value))));
+// const baseMidi = ref(freqToMidi(clampHz(props.hz)));
+// const detuneCentsLocal = ref(Math.round(1200 * Math.log2(clampHz(props.hz) / midiToFreq(baseMidi.value))));
+// const isFineAdjust = ref(false);
+// const activeKnob = ref<null | 'fine'>(null);
+
+// watch(() => props.hz, hz => {
+//     if (isFineAdjust.value || !openLocal.value) return;
+//     const c = clampHz(hz);
+//     const m = freqToMidi(c);
+//     baseMidi.value = m;
+//     detuneCentsLocal.value = Math.round(1200 * Math.log2(c / midiToFreq(m)));
+// });
+
+
+
+
+const baseMidi = ref(0);
+const detuneCentsLocal = ref(0);
 const isFineAdjust = ref(false);
 const activeKnob = ref<null | 'fine'>(null);
 
-watch(() => props.hz, hz => {
-    if (isFineAdjust.value || !openLocal.value) return;
+function syncFromHz(hz: number) {
     const c = clampHz(hz);
     const m = freqToMidi(c);
     baseMidi.value = m;
     detuneCentsLocal.value = Math.round(1200 * Math.log2(c / midiToFreq(m)));
-});
-
+}
 const currentHz = computed(() => clampHz(midiToFreq(baseMidi.value) * Math.pow(2, detuneCentsLocal.value / 1200)));
 watch([baseMidi, detuneCentsLocal], () => {
     isFineAdjust.value = true;
     emit('update:hz', currentHz.value);
     queueMicrotask(() => { isFineAdjust.value = false; });
+});
+// Always initialize from the incoming prop and keep it synced,
+// but don't fight the user while they're adjusting knobs in the popover.
+watch(
+    () => props.hz,
+    (hz) => {
+        if (isFineAdjust.value) return;
+        if (Number.isFinite(hz)) syncFromHz(hz);
+    },
+    { immediate: true }
+);
+
+// Also re-sync any time the popover opens (covers any race on open)
+watch(openLocal, (isOpen) => {
+    if (isOpen) syncFromHz(props.hz);
 });
 
 /* UI computeds/actions */
