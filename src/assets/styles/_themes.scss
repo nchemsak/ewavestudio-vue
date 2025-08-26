@@ -12,7 +12,8 @@ $themes: (
         surface2: #1c202b,
         accent: 276,
         accent2: 195,
-        accent3: 320
+        accent3: 320,
+        chevron: #dfe7ff
     ),
     light: (
         bg: #f7f8fa,
@@ -23,7 +24,8 @@ $themes: (
         surface2: #eceff4,
         accent: 235,
         accent2: 200,
-        accent3: 320
+        accent3: 320,
+        chevron: #3b4048
     ),
     synthwave: (
         bg: #0d0221,
@@ -34,7 +36,8 @@ $themes: (
         surface2: #1a0b3a,
         accent: 305,
         accent2: 190,
-        accent3: 260
+        accent3: 260,
+        chevron: #ffd6ff
     )
 );
 
@@ -52,6 +55,7 @@ $themes: (
         --pt-accent-3: #{map.get($t, accent3)};
         --pt-btn-border: hsl(var(--pt-accent) 80% 60%);
         --pt-btn-glow: hsl(var(--pt-accent) 90% 60% / 0.4);
+        --cc-chevron: #{map.get($t, chevron)};
     }
 }
 
@@ -84,6 +88,8 @@ $dark: map.get($themes, dark);
     /*  hairline + focus ring tokens (fallbacks) */
     --pt-hairline: rgba(255, 255, 255, 0.06); /* good for dark; light overrides below */
     --pt-focus-ring: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / 0.35);
+
+    --cc-chevron: #{map.get($dark, chevron)};
 }
 
 /* 4) Theme classes for toggling at runtime */
@@ -325,8 +331,9 @@ $dark: map.get($themes, dark);
 /* Native SELECT styling (kept for any places still using <select>) */
 .pt-select,
 .pt-btn {
-    min-height: 38px;
+    min-height: 34px;
     line-height: 1.15;
+    font-size: 0.8rem;
 }
 .pt-select {
     appearance: none;
@@ -406,6 +413,7 @@ $dark: map.get($themes, dark);
     box-shadow:
         inset 0 0 0 1px rgb(255 255 255 / 0.03),
         0 2px 10px rgb(0 0 0 / 0.25);
+    font-size: 0.8rem;
 }
 .pt-selectbtn:hover {
     box-shadow:
@@ -492,7 +500,7 @@ $dark: map.get($themes, dark);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 6px;
+    margin-bottom: 0px;
 }
 
 /* Two knobs side-by-side; stacks nicely on narrow screens */
@@ -500,9 +508,10 @@ $dark: map.get($themes, dark);
     display: flex;
     gap: var(--pt-gap);
     align-items: center;
+    justify-content: left;
 }
 .pt-knob-row > * {
-    flex: 1 1 0;
+    // flex: 1 1 0;
     min-width: 0;
 }
 
@@ -763,10 +772,13 @@ $dark: map.get($themes, dark);
     box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.05);
     min-width: 0;
     color: var(--pt-text);
+    .step-sequencer-subheader {
+        margin-bottom: 25px;
+    }
 }
 .pt-card .pt-title {
     font-size: 1.1rem;
-    margin-bottom: 10px;
+    margin-bottom: 0px;
 }
 
 /* Make header text explicit in Light theme (kept) */
@@ -819,4 +831,14 @@ $dark: map.get($themes, dark);
 
 .theme-light .pt-title {
     color: var(--pt-text-strong, #1f2328) !important;
+}
+
+.pt-collapse-btn .pt-title {
+    user-select: none;
+}
+.pt-card.collapsible .pt-subheader {
+    cursor: default;
+}
+.pt-card.collapsible .pt-collapse-btn {
+    cursor: pointer;
 }

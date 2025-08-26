@@ -1,49 +1,16 @@
-<!-- /components/modules/FMModule.vue -->
+<!-- components/modules/FMModule.vue -->
 <template>
     <KnobGroup v-model="localEnabled" title="FM" :color="color" :showToggle="showToggle">
-        <!-- HEADER -->
+        <!-- keep info button in header -->
         <template #header-content>
             <div class="pt-header-tools">
-                <!-- Ratio presets (segmented) -->
-                <div class="pt-seg pt-seg-sm" role="group" aria-label="FM Ratio Presets">
-                    <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 1 }"
-                        :aria-pressed="localRatio === 1" :disabled="!localEnabled" @click="setRatio(1)">
-                        1:1
-                        <span class="selector-tooltip">Carrier × 1</span>
-                    </button>
-
-                    <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 1.5 }"
-                        :aria-pressed="localRatio === 1.5" :disabled="!localEnabled" @click="setRatio(1.5)">
-                        3:2
-                        <span class="selector-tooltip">Carrier × 1.5</span>
-                    </button>
-
-                    <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 2 }"
-                        :aria-pressed="localRatio === 2" :disabled="!localEnabled" @click="setRatio(2)">
-                        2:1
-                        <span class="selector-tooltip">Carrier × 2</span>
-                    </button>
-
-                    <button class="pt-seg-btn" :class="{ 'is-active': localRatio === null }"
-                        :aria-pressed="localRatio === null" :disabled="!localEnabled" @click="setRatio(null)">
-                        Hz
-                        <span class="selector-tooltip">Free Hz mode</span>
-                    </button>
-                </div>
-
-                <!-- Info icon -->
                 <button ref="infoBtn" class="pt-info-icon" :class="{ 'is-active': infoOpen }" @click.stop="toggleInfo"
-                    aria-label="What is FM?" title="What is FM?">
-                    ⓘ
-                </button>
+                    aria-label="What is FM?" title="What is FM?">ⓘ</button>
 
-                <!-- Popover (fixed; positioned via JS; never off-screen) -->
                 <div v-if="infoOpen" ref="infoEl" class="pt-popover fm-info" :data-side="infoSide"
                     :style="{ top: infoPos.top + 'px', left: infoPos.left + 'px' }" @click.stop>
-                    <strong class="mb-2 pt-section-title">FM Explained</strong> <button
-                        class="pt-seg-btn pt-seg-sm fm-btn" @click="infoOpen = false">X</button><br />
-
-
+                    <strong class="mb-2 pt-section-title">FM Explained</strong>
+                    <button class="pt-seg-btn pt-seg-sm fm-btn" @click="infoOpen = false">X</button><br />
                     FM adds a fast wobble to pitch → new harmonics.
                     <div class="pt-rule"></div>
                     <ul class="mb-2 ps-3">
@@ -53,28 +20,47 @@
                         </li>
                         <li class="fm-li"><strong>Amount</strong>: Intensity/brightness. Higher = richer/clangier.</li>
                     </ul>
-
                 </div>
             </div>
         </template>
 
-        <!-- Mod Freq (Hz mode only) -->
-        <div class="position-relative text-center" :class="{ 'is-disabled': modFreqDisabled }" aria-disabled="true">
-            <Knob v-model="localModFreq" label="Mod Freq" size="medium" :min="1" :max="5000" :step="1"
-                :disabled="modFreqDisabled" :color="color" @knobStart="activeKnob = 'mf'"
-                @knobEnd="activeKnob = null" />
-            <span v-if="activeKnob === 'mf'" class="custom-tooltip">
-                {{ Math.round(localModFreq) }} Hz
-            </span>
-        </div>
+        <!-- stack: buttons row, then knobs row -->
+        <div class="pt-stack">
+            <div class="pt-seg pt-seg-sm pt-seg-row" role="group" aria-label="FM Ratio Presets">
+                <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 1 }" :aria-pressed="localRatio === 1"
+                    :disabled="!localEnabled" @click="setRatio(1)">
+                    1:1 <span class="selector-tooltip">Carrier × 1</span>
+                </button>
+                <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 1.5 }"
+                    :aria-pressed="localRatio === 1.5" :disabled="!localEnabled" @click="setRatio(1.5)">
+                    3:2 <span class="selector-tooltip">Carrier × 1.5</span>
+                </button>
+                <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 2 }" :aria-pressed="localRatio === 2"
+                    :disabled="!localEnabled" @click="setRatio(2)">
+                    2:1 <span class="selector-tooltip">Carrier × 2</span>
+                </button>
+                <button class="pt-seg-btn" :class="{ 'is-active': localRatio === null }"
+                    :aria-pressed="localRatio === null" :disabled="!localEnabled" @click="setRatio(null)">
+                    Hz <span class="selector-tooltip">Free Hz mode</span>
+                </button>
+            </div>
 
-        <!-- Index / Amount -->
-        <div class="position-relative text-center">
-            <Knob v-model="localIndex" label="Amount" size="medium" :min="0" :max="50" :step="0.1"
-                :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'ix'" @knobEnd="activeKnob = null" />
-            <span v-if="activeKnob === 'ix'" class="custom-tooltip">
-                {{ localIndex.toFixed(1) }}
-            </span>
+            <div class="pt-knob-row">
+                <div class="position-relative text-center" :class="{ 'is-disabled': modFreqDisabled }"
+                    aria-disabled="true">
+                    <Knob v-model="localModFreq" label="Mod Freq" size="medium" :min="1" :max="5000" :step="1"
+                        :disabled="modFreqDisabled" :color="color" @knobStart="activeKnob = 'mf'"
+                        @knobEnd="activeKnob = null" />
+                    <span v-if="activeKnob === 'mf'" class="custom-tooltip">{{ Math.round(localModFreq) }} Hz</span>
+                </div>
+
+                <div class="position-relative text-center">
+                    <Knob v-model="localIndex" label="Amount" size="medium" :min="0" :max="50" :step="0.1"
+                        :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'ix'"
+                        @knobEnd="activeKnob = null" />
+                    <span v-if="activeKnob === 'ix'" class="custom-tooltip">{{ localIndex.toFixed(1) }}</span>
+                </div>
+            </div>
         </div>
     </KnobGroup>
 </template>
@@ -144,17 +130,14 @@ function positionInfo() {
     const gap = 10
     const margin = 8
 
-    // choose the side
     const spaceRight = window.innerWidth - btnRect.right
     infoSide.value = spaceRight >= elRect.width + gap ? 'right' : 'left'
 
-    // compute coords
     let top = btnRect.top + btnRect.height / 2 - elRect.height / 2
     let left = infoSide.value === 'right'
         ? btnRect.right + gap
         : btnRect.left - elRect.width - gap
 
-    // clamp to viewport
     top = Math.max(margin, Math.min(top, window.innerHeight - elRect.height - margin))
     left = Math.max(margin, Math.min(left, window.innerWidth - elRect.width - margin))
 
@@ -194,7 +177,32 @@ const activeKnob = ref<null | 'mf' | 'ix'>(null)
 </script>
 
 <style scoped>
-/* popover is fixed & sized; the rest comes from your global .pt-popover styles */
+.pt-seg-row {
+    margin-top: 0.25rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* vertical stack container */
+.pt-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+/* knobs on their own row */
+.pt-knob-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* existing styles kept */
 .fm-info {
     position: fixed;
     width: min(420px, 76vw);
@@ -210,7 +218,6 @@ const activeKnob = ref<null | 'mf' | 'ix'>(null)
     border-bottom: 1px dotted white;
 }
 
-/* Dim the knob label/value when disabled (Hz hidden by ratio) */
 .is-disabled :deep(.knob-label) {
     color: #9aa0a6;
     opacity: .7;

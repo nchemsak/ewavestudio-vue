@@ -48,25 +48,29 @@
 		<!-- Percussion Synth -->
 		<section class="pt-card" v-if="synthInstrument">
 
-			<h2 class="pt-title">Percussion Synth</h2>
-			<!-- Row: mute dot + channel volume -->
-			<div class="pt-subheader">
+			<div class="pt-subheader step-sequencer-subheader">
 				<div class="channel-caption d-flex align-items-center gap-2">
+
 					<div class="mute-dot" :class="{ muted: synthInstrument.muted }"
 						@click="toggleMute(synthInstrument.name)" role="button"
 						:title="synthInstrument.muted ? 'Muted' : 'Playing'">
 					</div>
-					<span class="pt-section-title">Channel</span>
+					<h2 class="pt-title">Step Sequencer</h2>
+					<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
+						label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === `vol-${synthInstrument.name}`" class="custom-tooltip">
+						{{ Math.round(synthInstrument.channelVolume * 100) }}%
+					</span>
 				</div>
-
 				<div class="pt-header-tools">
-					<div class="position-relative text-center">
-						<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
-							label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
-							@knobEnd="activeKnob = null" />
-						<span v-if="activeKnob === `vol-${synthInstrument.name}`" class="custom-tooltip">
-							{{ Math.round(synthInstrument.channelVolume * 100) }}%
-						</span>
+					<div class="d-flex gap-2">
+
+						<button class="pt-btn pt-btn-sm" :disabled="allOpen" @click="setAllCollapsibles(true)">Expand
+							all</button>
+						<button class="pt-btn pt-btn-sm" :disabled="allClosed"
+							@click="setAllCollapsibles(false)">Collapse all</button>
+
 					</div>
 				</div>
 			</div>
@@ -81,16 +85,15 @@
 
 			<!-- Pattern tools  -->
 			<div class="controlsWrapper pt-cards">
-
-				<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
-					:max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
-					@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
-					@octave-shift="octaveShiftAllSkip($event)" />
+				<CollapsibleCard id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
+					<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
+						:max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
+						@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
+						@octave-shift="octaveShiftAllSkip($event)" />
+				</CollapsibleCard>
 
 				<!-- Generators -->
-				<section class="pt-card">
-					<h2 class="pt-title">Generators</h2>
-
+				<CollapsibleCard id="generators" title="Generators" v-model="collapsibleState['generators']">
 					<!-- Oscillators -->
 					<section class="pt-section">
 						<div class="pt-section-title">Oscillators</div>
@@ -108,12 +111,11 @@
 					<!-- Noise -->
 					<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
 						v-model:amount="noiseAmount" :color="'#9C27B0'" />
-				</section>
+				</CollapsibleCard>
 
-				<!-- Sound Shaping -->
-				<section class="pt-card">
-					<h2 class="pt-title">Sound Shaping</h2>
 
+
+				<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
 					<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 						v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
 
@@ -121,12 +123,9 @@
 
 					<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 						v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
-				</section>
-
+				</CollapsibleCard>
 				<!-- Pitch & Harmonics -->
-				<section class="pt-card">
-					<h2 class="pt-title">Pitch &amp; Harmonics</h2>
-
+				<CollapsibleCard id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
 					<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
 						v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
 						v-model:mode="pitchMode" />
@@ -140,22 +139,18 @@
 
 					<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
 						v-model:detune="detuneCents" v-model:spread="stereoSpread" />
-				</section>
+				</CollapsibleCard>
+
 
 				<!-- Movement & Modulation -->
-				<section class="pt-card">
-					<h2 class="pt-title">Movement &amp; Modulation</h2>
-
+				<CollapsibleCard id="mod" title="Movement & Modulation" v-model="collapsibleState['mod']">
 					<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
 						v-model:target="lfoTarget" :depthMax="lfoDepthMax" color="#00BCD4"
 						:targets="['pitch', 'gain', 'filter']" />
-				</section>
+				</CollapsibleCard>
 
 				<!-- Effects -->
-				<section class="pt-card">
-					<h2 class="pt-title">Effects</h2>
-
-					<!-- Delay (Sync default driven by v-model:syncEnabled) -->
+				<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
 					<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
 						v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime"
 						v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix"
@@ -166,7 +161,8 @@
 
 					<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
 						v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
-				</section>
+				</CollapsibleCard>
+
 			</div>
 
 		</section>
@@ -288,9 +284,7 @@
 	<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 		v-model:open="padPopover.open" v-model:hz="currentPadHz" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
 		:anchorRect="padPopover.anchorRect" :title="padPopover.title" />
-	<!-- 
-	<PadSettingsPopover v-model:open="padPopover.open" v-model:hz="currentPadHz" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
-		:anchorRect="padPopover.anchorRect" :title="padPopover.title" @close="padPopover.open = false" /> -->
+
 </template>
 
 <script setup lang="ts">
@@ -312,6 +306,7 @@ import NoiseModule from './modules/NoiseModule.vue';
 import PadSettingsPopover from './PadSettingsPopover.vue';
 import PatternTools from './PatternTools.vue';
 import SynthStepGrid from './SynthStepGrid.vue'
+import CollapsibleCard from './CollapsibleCard.vue';
 // import SequencerKeyboard from './SequencerKeyboard.vue';
 
 
@@ -327,6 +322,36 @@ watch(seqOpen, v => localStorage.setItem('seqOpen', String(v)));
 //Sequencer Accordian END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+//Collapsible Cards BEGIN
+
+// Which collapsibles exist on this page (keep ids in one place)
+const collapseIds = ['pattern-tools', 'generators', 'sound', 'pitch', 'mod', 'fx'] as const;
+type CollapseId = typeof collapseIds[number];
+
+// Parent-held open state for each card. Start as `undefined` so each card
+// can use its own saved localStorage value on first render.
+const collapsibleState = reactive<Record<CollapseId, boolean | undefined>>({
+	'pattern-tools': undefined,
+	'generators': undefined,
+	'sound': undefined,
+	'pitch': undefined,
+	'mod': undefined,
+	'fx': undefined,
+});
+
+// Expand/collapse all at once (also persists because each card writes to localStorage)
+function setAllCollapsibles(open: boolean) {
+	collapseIds.forEach(id => { collapsibleState[id] = open; });
+}
+
+const allOpen = computed(() => collapseIds.every(id => collapsibleState[id] === true));
+const allClosed = computed(() => collapseIds.every(id => collapsibleState[id] === false));
+
+//Collapsible Cards END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 
 // Theming START
 const currentTheme = ref(''); // '', 'theme-light', or 'theme-synthwave'

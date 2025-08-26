@@ -181,9 +181,9 @@ const activeKnob = ref<null | 'time' | 'feedback' | 'mix' | 'toneHz'>(null);
 const DIVS = computed(() => props.divisions ?? []);
 const stepDuration = computed(() => 60 / (props.tempo || 120) / 4); // 1/16 note
 
-// Index into divisions; default to 1/16 if present
+// Index into divisions; default settings
 const defaultDivIndex = computed(() => {
-    const i = DIVS.value.findIndex(d => d.label === '1/16');
+    const i = DIVS.value.findIndex(d => d.label === '1/8.');
     return i >= 0 ? i : Math.min(4, Math.max(0, DIVS.value.length - 1));
 });
 const divIndex = ref<number>(defaultDivIndex.value);
