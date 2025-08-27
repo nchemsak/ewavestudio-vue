@@ -1,35 +1,31 @@
 <!-- components/modules/DelayModule.vue -->
 <template>
     <KnobGroup v-model="localEnabled" title="Delay" :color="color" :showToggle="showToggle">
-        <!-- Header: Free / Sync segmented switch -->
+        <!-- Header: keep only the division readout -->
         <template #header-content>
             <div class="pt-header-tools">
-
-                <div class="pt-seg pt-seg-sm" role="group" aria-label="Delay Time Mode">
-                    <button class="pt-seg-btn" :class="{ 'is-active': localSync }" :aria-pressed="localSync"
-                        :disabled="!localEnabled" @click="localSync = true">Sync</button>
-                    <button class="pt-seg-btn" :class="{ 'is-active': !localSync }" :aria-pressed="!localSync"
-                        :disabled="!localEnabled" @click="localSync = false">Free</button>
-
-
-                </div>
                 <span v-if="localSync" class="info"><i>{{ currentDivLabel }}</i></span>
-
             </div>
         </template>
 
+        <!-- MODE ROW (moved out of header) -->
+        <div class="mode-row">
+            <div class="pt-seg pt-seg-sm" role="group" aria-label="Delay Time Mode">
+                <button class="pt-seg-btn" :class="{ 'is-active': localSync }" :aria-pressed="localSync"
+                    :disabled="!localEnabled" @click="localSync = true">Sync</button>
+                <button class="pt-seg-btn" :class="{ 'is-active': !localSync }" :aria-pressed="!localSync"
+                    :disabled="!localEnabled" @click="localSync = false">Free</button>
+            </div>
+        </div>
 
         <!-- Time -->
         <div class="position-relative text-center">
-            <!-- Free: seconds -->
             <Knob v-if="!localSync" v-model="localTime" label="Time" :min="0.01" :max="maxSeconds" :step="0.01"
                 size="small" :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
                 @knobEnd="activeKnob = null" />
-            <!-- Sync: snapped divisions (0..1 knob maps to index) -->
             <Knob v-else v-model="divIndexKnob" label="Time" :min="0" :max="1" :step="knobStep" size="small"
                 :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
                 @knobEnd="activeKnob = null" />
-
             <span v-if="activeKnob === 'time'" class="custom-tooltip">
                 <template v-if="!localSync">{{ (localTime * 1000).toFixed(0) }} ms</template>
                 <template v-else>{{ currentDivLabel }} · {{ syncedMs.toFixed(0) }} ms</template>
@@ -54,25 +50,21 @@
             </span>
         </div>
 
-        <!-- Tone subsection -->
+        <!-- TONE ROW (forced onto next line) -->
         <div class="tone-row">
             <!-- Dot toggle -->
             <button class="pt-dot effect-toggle" :class="{ 'is-on': localToneEnabled }" :aria-pressed="localToneEnabled"
-                :title="localToneEnabled ? 'Tone on' : 'Tone off'"
+                :disabled="!localEnabled" :title="localToneEnabled ? 'Tone on' : 'Tone off'"
                 @click="localToneEnabled = !localToneEnabled"></button>
 
             <!-- LP / HP -->
             <div class="pt-seg pt-seg-sm" role="group" aria-label="Tone Type">
                 <button class="pt-seg-btn" :class="{ 'is-active': localToneType === 'lowpass' }"
                     :aria-pressed="localToneType === 'lowpass'" :disabled="!localEnabled || !localToneEnabled"
-                    @click="localToneType = 'lowpass'">
-                    LP
-                </button>
+                    @click="localToneType = 'lowpass'">LP</button>
                 <button class="pt-seg-btn" :class="{ 'is-active': localToneType === 'highpass' }"
                     :aria-pressed="localToneType === 'highpass'" :disabled="!localEnabled || !localToneEnabled"
-                    @click="localToneType = 'highpass'">
-                    HP
-                </button>
+                    @click="localToneType = 'highpass'">HP</button>
             </div>
 
             <!-- Cutoff knob -->
@@ -259,33 +251,59 @@ watch(localSync, on => {
 });
 </script>
 <style scoped>
+/* Small readout on the right of the header */
 .info {
     font-size: 10px;
     font-style: italic;
     position: absolute;
-    right: 4px;
-
+    right: 6px;
+    top: 0;
 }
 
+/* Keep header container minimal */
 .pt-header-tools {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: nowrap;
-    white-space: nowrap;
+    position: relative;
+    min-height: 18px;
 }
 
+/* ✅ Force these rows onto their own line no matter if the parent is GRID or FLEX */
+.mode-row,
 .tone-row {
+    /* If parent is CSS Grid: take the whole row */
+    grid-column: 1 / -1 !important;
+
+    /* If parent is Flex: take the whole line */
+    flex: 0 0 100% !important;
+    width: 100%;
+
+    /* Row layout */
     display: flex;
     align-items: center;
     gap: 12px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
 }
 
+/* Spacing */
+.mode-row {
+    margin-bottom: 2px;
+}
+
+.tone-row {
+    margin-top: 6px;
+}
+
+/* Don’t let segment groups shrink weirdly */
+.mode-row .pt-seg,
+.tone-row .pt-seg {
+    min-width: 0;
+}
+
+/* Tone knob block stays compact */
 .tone-knob {
     flex: 0 0 auto;
 }
 
+/* Dot state polish */
 .pt-dot::after {
     transition: background .2s ease, box-shadow .2s ease;
 }
@@ -297,7 +315,6 @@ watch(localSync, on => {
 
 .pt-dot.is-on {
     background: hsl(var(--pt-accent) 82% 60%);
-
 }
 
 .pt-dot:active {
