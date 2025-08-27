@@ -60,16 +60,15 @@
 
 
 		<!-- Percussion Synth -->
-		<section class="pt-card" v-if="synthInstrument">
-
+		<section class="pt-card step-card" v-if="synthInstrument">
 			<div class="pt-subheader step-sequencer-subheader">
 				<div class="channel-caption d-flex align-items-center gap-2">
-
 					<div class="mute-dot" :class="{ muted: synthInstrument.muted }"
 						@click="toggleMute(synthInstrument.name)" role="button"
 						:title="synthInstrument.muted ? 'Muted' : 'Playing'">
 					</div>
 					<h2 class="pt-title">Step Sequencer</h2>
+
 					<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
 						label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
 						@knobEnd="activeKnob = null" />
@@ -77,107 +76,110 @@
 						{{ Math.round(synthInstrument.channelVolume * 100) }}%
 					</span>
 				</div>
+
 				<div class="pt-header-tools">
 					<div class="d-flex gap-2">
-
 						<button class="pt-btn pt-btn-sm" :disabled="allOpen" @click="setAllCollapsibles(true)">Expand
 							all</button>
 						<button class="pt-btn pt-btn-sm" :disabled="allClosed"
 							@click="setAllCollapsibles(false)">Collapse all</button>
-
 					</div>
 				</div>
 			</div>
 
-
-			<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
-				:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
-				v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
-				:nearestNote="nearestNote"
-				@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
+			<div class="step-card__grid">
 
 
-			<!-- Pattern tools  -->
-			<div class="controlsWrapper pt-cards">
-				<CollapsibleCard id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
-					<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
-						:max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
-						@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
-						@octave-shift="octaveShiftAllSkip($event)" />
-				</CollapsibleCard>
-
-				<!-- Generators -->
-				<CollapsibleCard id="generators" title="Generators" v-model="collapsibleState['generators']">
-					<!-- Oscillators -->
-					<section class="pt-section">
-						<div class="pt-section-title">Oscillators</div>
-						<div class="pt-btn-group" role="group" aria-label="Waveforms">
-							<button v-for="wave in waves" :key="wave" class="pt-btn"
-								:class="{ 'is-active': selectedWaveform === wave }"
-								:aria-pressed="selectedWaveform === wave" @click="selectedWaveform = wave">
-								{{ waveLabel(wave) }}
-							</button>
-						</div>
-					</section>
-
-					<div class="pt-rule" aria-hidden="true"></div>
-
-					<!-- Noise -->
-					<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
-						v-model:amount="noiseAmount" :color="'#9C27B0'" />
-				</CollapsibleCard>
-
-
-
-				<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
-					<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
-						v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
-
-					<div class="pt-rule"></div>
-
-					<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
-						v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
-				</CollapsibleCard>
-				<!-- Pitch & Harmonics -->
-				<CollapsibleCard id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
-					<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
-						v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
-						v-model:mode="pitchMode" />
-
-					<div class="pt-rule" aria-hidden="true"></div>
-
-					<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
-						v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
-
-					<div class="pt-rule" aria-hidden="true"></div>
-
-					<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
-						v-model:detune="detuneCents" v-model:spread="stereoSpread" />
-				</CollapsibleCard>
-
-
-				<!-- Movement & Modulation -->
-				<CollapsibleCard id="mod" title="Movement & Modulation" v-model="collapsibleState['mod']">
-					<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
-						v-model:target="lfoTarget" :depthMax="lfoDepthMax" color="#00BCD4"
-						:targets="['pitch', 'gain', 'filter']" />
-				</CollapsibleCard>
-
-				<!-- Effects -->
-				<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
-					<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
-						v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime"
-						v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix"
-						v-model:toneEnabled="delayToneEnabled" v-model:toneHz="delayToneHz"
-						v-model:toneType="delayToneType" />
-
-					<div class="pt-rule" aria-hidden="true"></div>
-
-					<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
-						v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
-				</CollapsibleCard>
+				<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
+					:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
+					v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
+					:nearestNote="nearestNote"
+					@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
 
 			</div>
+		</section>
+		<section class="pt-cards controlsWrapper">
+
+			<!-- Pattern tools  -->
+			<!-- <div class="controlsWrapper pt-cards"> -->
+			<CollapsibleCard id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
+				<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
+					:max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
+					@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
+					@octave-shift="octaveShiftAllSkip($event)" />
+			</CollapsibleCard>
+
+			<!-- Generators -->
+			<CollapsibleCard id="generators" title="Generators" v-model="collapsibleState['generators']">
+				<!-- Oscillators -->
+				<section class="pt-section">
+					<div class="pt-section-title">Oscillators</div>
+					<div class="pt-btn-group" role="group" aria-label="Waveforms">
+						<button v-for="wave in waves" :key="wave" class="pt-btn"
+							:class="{ 'is-active': selectedWaveform === wave }"
+							:aria-pressed="selectedWaveform === wave" @click="selectedWaveform = wave">
+							{{ waveLabel(wave) }}
+						</button>
+					</div>
+				</section>
+
+				<div class="pt-rule" aria-hidden="true"></div>
+
+				<!-- Noise -->
+				<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
+					v-model:amount="noiseAmount" :color="'#9C27B0'" />
+			</CollapsibleCard>
+
+
+
+			<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
+				<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
+					v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
+
+				<div class="pt-rule"></div>
+
+				<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
+					v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
+			</CollapsibleCard>
+			<!-- Pitch & Harmonics -->
+			<CollapsibleCard id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
+				<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
+					v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
+
+				<div class="pt-rule" aria-hidden="true"></div>
+
+				<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled" v-model:modFreq="fmModFreq"
+					v-model:index="fmIndex" v-model:ratio="fmRatio" />
+
+				<div class="pt-rule" aria-hidden="true"></div>
+
+				<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
+					v-model:detune="detuneCents" v-model:spread="stereoSpread" />
+			</CollapsibleCard>
+
+
+			<!-- Movement & Modulation -->
+			<CollapsibleCard id="mod" title="Movement & Modulation" v-model="collapsibleState['mod']">
+				<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
+					v-model:target="lfoTarget" :depthMax="lfoDepthMax" color="#00BCD4"
+					:targets="['pitch', 'gain', 'filter']" />
+			</CollapsibleCard>
+
+			<!-- Effects -->
+			<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
+				<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
+					v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime"
+					v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix"
+					v-model:toneEnabled="delayToneEnabled" v-model:toneHz="delayToneHz"
+					v-model:toneType="delayToneType" />
+
+				<div class="pt-rule" aria-hidden="true"></div>
+
+				<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
+					v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
+			</CollapsibleCard>
+
+			<!-- </div> -->
 
 		</section>
 
@@ -263,6 +265,9 @@
 													class="padTESTwrap"
 													@mouseenter="hoveredPad = `${inst.name}-${index}`"
 													@mouseleave="hoveredPad = null">
+
+													<div class="pad-step-num">{{ index + 1 }}</div> 
+													
 													<div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
 														@mousedown="handleMouseDown($event, inst.name, index)"
 														@mouseenter="handleMouseEnter(inst.name, index)"

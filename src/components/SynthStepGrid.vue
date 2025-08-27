@@ -3,15 +3,18 @@
         <div class="padTEST-grid">
             <div v-for="(active, index) in steps" :key="index" class="padTESTwrap" @mouseenter="hovered = index"
                 @mouseleave="hovered = null">
+                <!-- NEW: step number -->
+                <div v-if="showIndices" class="pad-step-num">{{ index + 1 }}</div>
+
                 <div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
                     @mousedown="onMouseDown($event, index)" @mouseenter="onMouseEnter(index)" @dragstart.prevent
                     :style="padStyle(index)" />
 
-                <!-- settings (now a 3-dot button, shown on hover/focus) -->
+                <!-- settings (unchanged) -->
                 <button class="pad-settings-dot" @mousedown.stop @click.stop="emitOpenSettings(index, $event)"
                     aria-label="Pad settings">⋮</button>
 
-                <!-- per-step note chip -->
+                <!-- per-step note chip (unchanged) -->
                 <div v-if="active" class="note-chip">
                     {{ nearestNote(pitches[index]) }}
                 </div>
@@ -27,36 +30,38 @@
                 </div>
 
                 <div v-if="active && hovered === index" class="hover-slider pitch-slider">
-                    <input type="range" :min="minHz" :max="maxHz" step="1" :value="pitches[index]"
+                    <input :min="minHz" :max="maxHz" step="1" type="range" :value="pitches[index]"
                         @input="updatePitch(index, $event)" @mousedown="activePitch = index"
                         @mouseup="activePitch = null" @touchstart="activePitch = index"
                         @touchend="activePitch = null" />
-
                 </div>
             </div>
         </div>
     </div>
 </template>
 
+
 <script setup lang="ts">
 import { ref } from 'vue';
 
 type NoteNameFn = (hz: number) => string;
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     name: string;
     currentStep: number;
     minHz: number;
     maxHz: number;
 
-    /* v-models */
     steps: boolean[];
     velocities: number[];
     pitches: number[];
 
-    /* util from parent */
     nearestNote: NoteNameFn;
-}>();
+
+    showIndices?: boolean;
+}>(), {
+    showIndices: true
+});
 
 const emit = defineEmits<{
     (e: 'update:steps', v: boolean[]): void;

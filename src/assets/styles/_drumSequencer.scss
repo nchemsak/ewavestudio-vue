@@ -30,6 +30,10 @@
 	--knob-arc-disabled: #555;
 	--knob-face: #1c1e28;
 
+	/* neumorphic look */
+	--pad-bg: #232433; /* base surface */
+	--pad-tint: #b186ff; /* active tint (mixes into bg subtly) */
+
 	position: relative;
 	color: white;
 	border-radius: 18px;
@@ -66,15 +70,15 @@
 		background-color: #0ff;
 	}
 
-	.padTEST.selected {
-		background-color: #0cf;
-	}
-	.padTEST.playing {
-		box-shadow: 0 0 6px #0ff;
-	}
-	.padTEST.selected.playing {
-		box-shadow: 0 0 6px #0ff;
-	}
+	// .padTEST.selected {
+	// 	background-color: #0cf;
+	// }
+	// .padTEST.playing {
+	// 	box-shadow: 0 0 6px #0ff;
+	// }
+	// .padTEST.selected.playing {
+	// 	box-shadow: 0 0 6px #0ff;
+	// }
 
 	/* Grid & rows */
 	.instrument-grid {
@@ -141,7 +145,8 @@
 
 		/* fallback column color (helps if ::before is ever overridden) */
 		background: var(--slider-bg);
-		border-radius: 2px;
+		// border-radius: 2px;
+		border-radius: var(--padTEST-radius);
 	}
 	.hover-slider input {
 		pointer-events: auto;
@@ -160,7 +165,7 @@
 		content: "";
 		position: absolute;
 		inset: 0;
-		background: var(--slider-bg);
+		// background: var(--slider-bg);
 		border-radius: 2px;
 		/* subtle inner edge for contrast on light bg */
 		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
@@ -243,8 +248,7 @@
 	.controlsWrapper {
 		display: flex;
 		flex-wrap: wrap;
-		justify-content: space-between;
-		justify-content: left;
+		justify-content: flex-start;
 		margin-top: 50px;
 	}
 
@@ -290,6 +294,9 @@
 	--knob-track-disabled: #c2c7d0;
 	--knob-arc-disabled: #b6bcc7;
 	--knob-face: #eef2f6;
+
+	--pad-bg: #eef1f6;
+	--pad-tint: #7c4dff;
 }
 
 .theme-synthwave .drum-sequencer,
@@ -303,6 +310,8 @@
 	--knob-pointer: #e793ff;
 	--knob-track: #35204d;
 	--knob-face: #1b1126;
+	--pad-bg: #1b1126;
+	--pad-tint: #e793ff;
 }
 
 /* ----------------------------------------------------------
@@ -340,26 +349,63 @@
 		position: relative;
 	}
 
+	.pad-step-num {
+		position: absolute;
+		top: -20px;
+		left: 50%;
+		transform: translateX(-50%);
+		font:
+			600 10px/1.2 ui-monospace,
+			monospace;
+		color: #cfd4ff;
+		// background: #0b0e17;
+		// border: 1px solid #ffffff1a;
+		padding: 2px 6px;
+		// border-radius: 10px;
+		box-shadow:
+			0 2px 6px rgba(0, 0, 0, 0.35),
+			inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+		pointer-events: none;
+		opacity: 0.9;
+		z-index: 1000;
+
+		line-height: 1;
+		border-radius: 6px;
+		background: rgba(0, 0, 0, 0.65);
+		// color: #fff;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+	}
+
 	.padTEST {
 		inline-size: var(--padTEST-size);
 		block-size: var(--padTEST-size);
 		border-radius: var(--padTEST-radius);
-		border: 1px solid #ffffff1a;
+		// border: 1px solid #ffffff1a;
 		position: relative;
 		overflow: hidden;
 		cursor: pointer;
+		isolation: isolate;
 
-		/* base look */
-		background:
-			radial-gradient(140% 120% at 20% 15%, #3a2255, #261a3a 42%, #161a27 72%),
-			radial-gradient(80% 80% at 80% 80%, #23466a, transparent 60%);
+		background: var(--pad-bg);
 		box-shadow:
-			0 12px 22px rgba(0, 0, 0, 0.55),
-			inset 0 8px 18px rgba(255, 255, 255, 0.06);
+			2px 2px 12px rgba(0, 0, 0, 0.55),
+			-2px -2px 6px rgba(255, 255, 255, 0.05);
 		transition:
-			transform 0.05s ease,
-			box-shadow 0.18s ease,
+			transform 0.06s ease,
+			box-shadow 0.14s ease,
 			filter 0.18s ease;
+	}
+
+	.padTEST::before {
+		content: "";
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		/* inner bevel + highlight like the CodePen */
+		box-shadow:
+			inset 2px 2px 2px color-mix(in oklab, var(--pad-bg) 85%, white 15%),
+			inset -2px -2px 2px rgba(0, 0, 0, 0.7);
+		pointer-events: none;
 	}
 
 	/* pitch heat tint + volume fill (uses CSS vars from Vue) */
@@ -378,14 +424,33 @@
 			opacity 0.15s ease,
 			background 0.15s ease;
 		pointer-events: none;
+		border-radius: inherit;
+	}
+	.padTEST:hover {
+		box-shadow:
+			3px 3px 14px rgba(0, 0, 0, 0.58),
+			-2px -2px 7px rgba(255, 255, 255, 0.06);
 	}
 
 	/* subtle inner tint always on when selected */
 	.padTEST.selected {
+		transform: translateY(2px);
+		/* darken a touch using the tint; if color-mix not supported it just keeps var(--pad-bg) */
+		background: color-mix(in oklab, var(--pad-bg) 92%, var(--pad-tint) 8%);
+		box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.55); /* smaller drop when pressed */
+	}
+
+	.padTEST.selected::before {
+		/* CodePen ‘active’ rim: strong outer shine + deep inner cavity */
 		box-shadow:
-			0 12px 22px rgba(0, 0, 0, 0.55),
-			inset 0 12px 22px hsla(var(--heat-h, 210), 85%, 60%, 0.18),
-			inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+			2px 2px 2px color-mix(in oklab, var(--pad-tint) 10%, white 90%),
+			inset 1px 1px 2px rgba(0, 0, 0, 0.9);
+	}
+
+	.padTEST.playing {
+		filter: drop-shadow(0 0 8px hsla(var(--heat-h, 210), 90%, 70%, 0.55))
+			drop-shadow(0 0 16px hsla(var(--heat-h, 210), 80%, 60%, 0.32));
+		will-change: filter;
 	}
 
 	/* ACTIVE-STEP HALO */
@@ -409,4 +474,36 @@
 			transform: scale(1);
 		}
 	}
+}
+/* Numbers for SynthStepGrid dots */
+.step-index {
+	position: absolute;
+	top: -14px;
+	left: 50%;
+	transform: translateX(-50%);
+	font:
+		600 10px/1.2 ui-monospace,
+		monospace;
+	color: #cfd4ff;
+	background: #0b0e17;
+	border: 1px solid #ffffff1a;
+	padding: 2px 6px;
+	border-radius: 10px;
+	box-shadow:
+		0 2px 6px rgba(0, 0, 0, 0.35),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+	pointer-events: none;
+	opacity: 0.9;
+}
+
+/* Dedicated Step Sequencer card layout */
+.step-card {
+	/* inherits pt-card chrome; add a gentle accent ring */
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 12px 24px rgba(0, 0, 0, 0.35);
+}
+
+.step-card__grid {
+	padding: 0.5rem 0.25rem 0.75rem;
 }
