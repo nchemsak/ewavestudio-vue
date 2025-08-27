@@ -2,47 +2,61 @@
 	<!-- <div class="drum-sequencer controls"> -->
 	<div class="drum-sequencer" :class="currentTheme">
 		<!-- Transport & Mix -->
-		<h2 class="pt-title">Ephemeral Wave</h2>
-		<section class="pt-card">
+		<!-- Transport & Mix -->
+		<section class="pt-card transport-card">
+			<div class="transport-layout">
+				<!-- Left: title + knobs + play -->
+				<div class="transport-left">
+					<h2 class="pt-title mb-2">Ephemeral Wave</h2>
+
+					<div class="pt-knob-row transport-row">
+						<!-- Volume -->
+						<div class="position-relative text-center">
+							<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="medium"
+								:useThemeArc="true" @knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
+							<span v-if="activeKnob === 'volume'" class="custom-tooltip">{{ Math.round(volume * 100)
+							}}%</span>
+						</div>
+
+						<!-- Tempo -->
+						<div class="position-relative text-center">
+							<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium"
+								:useThemeArc="true" @knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
+							<span v-if="activeKnob === 'tempo'" class="custom-tooltip">{{ tempo }} BPM</span>
+						</div>
+
+						<!-- Swing -->
+						<div class="position-relative text-center">
+							<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="medium"
+								:useThemeArc="true" @knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
+							<span v-if="activeKnob === 'swing'" class="custom-tooltip">{{ Math.round(swing * 100)
+							}}%</span>
+						</div>
 
 
-			<!-- Knobs row -->
-			<div class="pt-knob-row transport-row">
-				<!-- Volume -->
-				<div class="position-relative text-center">
-					<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="medium" color="#23CDE8"
-						@knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'volume'" class="custom-tooltip">{{ Math.round(volume * 100) }}%</span>
+
+
+
+						<!-- Play/Stop -->
+						<div class="transport-actions">
+							<button class="pt-btn" @click="togglePlay">
+								<span v-if="isPlaying">Stop</span>
+								<span v-else>Play</span>
+							</button>
+						</div>
+					</div>
 				</div>
 
-				<!-- Tempo -->
-				<div class="position-relative text-center">
-					<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium" color="#F39C12"
-						@knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'tempo'" class="custom-tooltip">{{ tempo }} BPM</span>
+				<!-- Right: screen -->
+				<div class="transport-right">
+					<div class="mpc-wrap">
+						<MpcScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey"
+							@fkey="handleFKey" />
+					</div>
 				</div>
-
-				<!-- Swing -->
-				<div class="position-relative text-center">
-					<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="medium" color="#E91E63"
-						@knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'swing'" class="custom-tooltip">{{ Math.round(swing * 100) }}%</span>
-				</div>
-
-				<!-- Play/Stop -->
-				<div class="transport-actions">
-					<button class="pt-btn" @click="togglePlay">
-						<span v-if="isPlaying">Stop</span>
-						<span v-else>Play</span>
-					</button>
-				</div>
-			</div>
-
-			<!-- MPC screen -->
-			<div class="mpc-wrap">
-				<MpcScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey" @fkey="handleFKey" />
 			</div>
 		</section>
+
 
 
 		<!-- Percussion Synth -->
@@ -1705,5 +1719,52 @@ driveShaper.curve = (() => {
 
 .mute-dot.muted {
 	filter: grayscale(.7) brightness(.7);
+}
+
+/* Top card two-column layout */
+.transport-card {
+	/* nothing special, inherits pt-card look */
+}
+
+.transport-layout {
+	display: grid;
+	grid-template-columns: minmax(420px, 1fr) auto;
+	align-items: center;
+	gap: 1.25rem;
+}
+
+.transport-left .pt-title {
+	margin: 0 0 .35rem;
+}
+
+/* Keep your existing knob row; ensure play button area
+   doesn’t collapse narrower than the button */
+.transport-row .transport-actions {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 96px;
+}
+
+/* Let the screen hug the right edge neatly */
+.transport-right {
+	justify-self: end;
+}
+
+/* Remove extra spacing above the screen in this context */
+.mpc-wrap {
+	margin-top: 0;
+}
+
+/* Responsive: stack on smaller widths */
+@media (max-width: 980px) {
+	.transport-layout {
+		grid-template-columns: 1fr;
+		align-items: start;
+	}
+
+	.transport-right {
+		justify-self: start;
+	}
 }
 </style>
