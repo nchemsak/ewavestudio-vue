@@ -1,14 +1,14 @@
 <!-- components/modules/DelayModule.vue -->
 <template>
     <KnobGroup v-model="localEnabled" title="Delay" :color="color" :showToggle="showToggle">
-        <!-- Header: keep only the division readout -->
+        <!-- Header -->
         <template #header-content>
             <div class="pt-header-tools">
                 <span v-if="localSync" class="info"><i>{{ currentDivLabel }}</i></span>
             </div>
         </template>
 
-        <!-- MODE ROW (moved out of header) -->
+        <!-- MODE ROW -->
         <div class="mode-row">
             <div class="pt-seg pt-seg-sm" role="group" aria-label="Delay Time Mode">
                 <button class="pt-seg-btn" :class="{ 'is-active': localSync }" :aria-pressed="localSync"
@@ -50,7 +50,7 @@
             </span>
         </div>
 
-        <!-- TONE ROW (forced onto next line) -->
+        <!-- TONE ROW  -->
         <div class="tone-row">
             <!-- Dot toggle -->
             <button class="pt-dot effect-toggle" :class="{ 'is-on': localToneEnabled }" :aria-pressed="localToneEnabled"
@@ -260,13 +260,12 @@ watch(localSync, on => {
     top: 0;
 }
 
-/* Keep header container minimal */
 .pt-header-tools {
     position: relative;
     min-height: 18px;
 }
 
-/* ✅ Force these rows onto their own line no matter if the parent is GRID or FLEX */
+/* Force these rows onto their own line no matter if the parent is GRID or FLEX */
 .mode-row,
 .tone-row {
     /* If parent is CSS Grid: take the whole row */
@@ -276,14 +275,12 @@ watch(localSync, on => {
     flex: 0 0 100% !important;
     width: 100%;
 
-    /* Row layout */
     display: flex;
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
 }
 
-/* Spacing */
 .mode-row {
     margin-bottom: 2px;
 }
@@ -298,12 +295,10 @@ watch(localSync, on => {
     min-width: 0;
 }
 
-/* Tone knob block stays compact */
 .tone-knob {
     flex: 0 0 auto;
 }
 
-/* Dot state polish */
 .pt-dot::after {
     transition: background .2s ease, box-shadow .2s ease;
 }

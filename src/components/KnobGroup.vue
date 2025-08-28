@@ -9,7 +9,6 @@
                 @click="enabled = !enabled"></div>
 
             <!-- Title (clickable toggle) -->
-            <!-- <span class="group-title">{{ title }}</span> -->
             <span class="group-title" @click="enabled = !enabled">{{ title }}</span>
 
 

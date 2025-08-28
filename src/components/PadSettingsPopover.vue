@@ -134,23 +134,6 @@ function freqToMidi(f: number) { return Math.round(69 + 12 * Math.log2(f / A4));
 function midiToName(m: number) { const n = m % 12, o = Math.floor(m / 12) - 1; return `${NOTE_NAMES[n]}${o}`; }
 const clampHz = (hz: number) => Math.max(props.minHz, Math.min(props.maxHz, hz));
 
-/* internal base+fine */
-// const baseMidi = ref(freqToMidi(clampHz(props.hz)));
-// const detuneCentsLocal = ref(Math.round(1200 * Math.log2(clampHz(props.hz) / midiToFreq(baseMidi.value))));
-// const isFineAdjust = ref(false);
-// const activeKnob = ref<null | 'fine'>(null);
-
-// watch(() => props.hz, hz => {
-//     if (isFineAdjust.value || !openLocal.value) return;
-//     const c = clampHz(hz);
-//     const m = freqToMidi(c);
-//     baseMidi.value = m;
-//     detuneCentsLocal.value = Math.round(1200 * Math.log2(c / midiToFreq(m)));
-// });
-
-
-
-
 const baseMidi = ref(0);
 const detuneCentsLocal = ref(0);
 const isFineAdjust = ref(false);
@@ -236,7 +219,6 @@ const hzInput = computed({
     padding: 12px 14px;
     max-height: none;
     overflow: visible;
-    /* no inner scrollbar */
 }
 
 /* Keyboard grid */
@@ -246,7 +228,6 @@ const hzInput = computed({
     gap: 10px;
     margin: 6px 0 16px;
     padding-top: 28px;
-    /* reserves space so black keys don't hit the header */
 }
 
 .kb-cell {
@@ -259,13 +240,10 @@ const hzInput = computed({
     font-weight: 600;
 }
 
-/* black keys sit above the white row, centered between columns */
 .kb-black {
     position: absolute;
     top: -22px;
-    /* floats above the white key */
     right: -14px;
-    /* visually centers between this and the next column */
     min-height: 26px;
     padding: 4px 10px;
     font-size: 0.8rem;
@@ -277,7 +255,6 @@ const hzInput = computed({
     padding-top: 12px;
 }
 
-/* Octave + fine rows */
 .pad-row {
     display: grid;
     grid-template-columns: 74px 1fr;
@@ -295,7 +272,7 @@ const hzInput = computed({
     gap: 6px;
 }
 
-/* fine + hz */
+ /* fine + hz   */
 .fine-row {
     grid-template-columns: 1fr 1fr;
     grid-column: 1 / -1;

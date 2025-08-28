@@ -3,23 +3,23 @@
         <div class="padTEST-grid">
             <div v-for="(active, index) in steps" :key="index" class="padTESTwrap" @mouseenter="hovered = index"
                 @mouseleave="hovered = null">
-                <!-- NEW: step number -->
+                <!-- step number -->
                 <div v-if="showIndices" class="pad-step-num">{{ index + 1 }}</div>
 
                 <div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
                     @mousedown="onMouseDown($event, index)" @mouseenter="onMouseEnter(index)" @dragstart.prevent
                     :style="padStyle(index)" />
 
-                <!-- settings (unchanged) -->
+                <!-- settings -->
                 <button class="pad-settings-dot" @mousedown.stop @click.stop="emitOpenSettings(index, $event)"
                     aria-label="Pad settings">⋮</button>
 
-                <!-- per-step note chip (unchanged) -->
+                <!-- per-step note chip -->
                 <div v-if="active" class="note-chip">
                     {{ nearestNote(pitches[index]) }}
                 </div>
 
-                <!-- hover sliders (unchanged) -->
+                <!-- hover sliders -->
                 <div v-if="active && hovered === index" class="hover-slider volume-slider">
                     <input type="range" min="0" max="1" step="0.01" :value="velocities[index]"
                         @input="updateVelocity(index, $event)" @mousedown="activeVol = index"
@@ -122,16 +122,7 @@ function emitOpenSettings(index: number, evt: MouseEvent) {
     emit('open-pad-settings', { name: props.name, index, anchorRect: r });
 }
 
-// function padStyle(index: number) {
-//     if (!props.steps[index]) return {};
-//     const percent = Math.round(props.velocities[index] * 100);
-//     return { background: `linear-gradient(to top, pink ${percent}%, #fff ${percent}%)` };
-// }
-
-
-
 function hueFor(hz: number, lo = props.minHz, hi = props.maxHz) {
-    // map min Hz → 220° (blue), max Hz → 0° (red)
     const t = Math.min(1, Math.max(0, (hz - lo) / (hi - lo)));
     return Math.round(220 * (1 - t));
 }

@@ -1,4 +1,3 @@
-<!-- components/CollapsibleCard.vue (or same folder as DrumSequencer.vue) -->
 <template>
     <section class="pt-card collapsible" :class="{ 'is-collapsed': !open }">
         <div class="pt-subheader">
@@ -12,7 +11,6 @@
                 <h2 class="pt-title">{{ title }}</h2>
             </button>
 
-            <!-- optional right-side tools in the header -->
             <div class="pt-header-tools">
                 <slot name="tools" />
             </div>
@@ -92,7 +90,6 @@ function onAfterLeave(el: HTMLElement) {
 }
 
 onMounted(() => {
-    // if initially open, ensure correct height
     if (open.value && bodyEl.value) bodyEl.value.style.height = 'auto';
 });
 </script>
@@ -127,7 +124,6 @@ onMounted(() => {
     opacity: .85;
     color: var(--cc-chevron, currentColor);
     opacity: .95;
-    /* a touch brighter than .85 */
 }
 
 .chev.open {

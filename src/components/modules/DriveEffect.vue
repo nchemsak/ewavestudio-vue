@@ -1,7 +1,6 @@
 <!-- components/modules/DriveEffect.vue -->
 <template>
     <KnobGroup v-model="localEnabled" title="Drive" :color="color" :showToggle="showToggle">
-        <!-- Header: keep your dot selectors -->
         <template #header-content>
             <div class="pt-header-tools">
                 <div class="drive-type-selector" role="group" aria-label="Drive Type">
@@ -53,7 +52,7 @@ import KnobGroup from '../KnobGroup.vue';
 
 type DriveType = 'overdrive' | 'distortion' | string;
 
-const props = withDefaults(defineProps < {
+const props = withDefaults(defineProps<{
     enabled: boolean;
     driveType?: DriveType;
     driveAmount?: number;
@@ -61,7 +60,7 @@ const props = withDefaults(defineProps < {
     driveMix?: number;
     color?: string;
     showToggle?: boolean;
-} > (), {
+}>(), {
     driveType: 'overdrive',
     driveAmount: 0.4,
     driveTone: 5000,
@@ -70,22 +69,22 @@ const props = withDefaults(defineProps < {
     showToggle: true
 });
 
-const emit = defineEmits < {
-  (e: 'update:enabled', v: boolean): void;
-(e: 'update:driveType', v: DriveType): void;
-(e: 'update:driveAmount', v: number): void;
-(e: 'update:driveTone', v: number): void;
-(e: 'update:driveMix', v: number): void;
-}> ();
+const emit = defineEmits<{
+    (e: 'update:enabled', v: boolean): void;
+    (e: 'update:driveType', v: DriveType): void;
+    (e: 'update:driveAmount', v: number): void;
+    (e: 'update:driveTone', v: number): void;
+    (e: 'update:driveMix', v: number): void;
+}>();
 
 const driveTypes: DriveType[] = ['overdrive', 'distortion'];
 
-const localEnabled = ref < boolean > (props.enabled);
-const localDriveType = ref < DriveType > (props.driveType ?? 'overdrive');
-const localAmount = ref < number > (props.driveAmount ?? 0.4);
-const localTone = ref < number > (props.driveTone ?? 5000);
-const localMix = ref < number > (props.driveMix ?? 0.5);
-const activeKnob = ref < null | 'amount' | 'tone' | 'mix' > (null);
+const localEnabled = ref<boolean>(props.enabled);
+const localDriveType = ref<DriveType>(props.driveType ?? 'overdrive');
+const localAmount = ref<number>(props.driveAmount ?? 0.4);
+const localTone = ref<number>(props.driveTone ?? 5000);
+const localMix = ref<number>(props.driveMix ?? 0.5);
+const activeKnob = ref<null | 'amount' | 'tone' | 'mix'>(null);
 
 /* emit upward */
 watch(localEnabled, v => emit('update:enabled', v));
@@ -105,7 +104,6 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 </script>
 
 <style scoped>
-/* tidy header dots without Bootstrap helpers */
 .drive-type-selector {
     display: flex;
     gap: 8px;
@@ -113,10 +111,8 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     align-items: center;
 }
 
-/* (Optional) let the selected dot take the Drive color; keeps your dot visuals */
 .drive-dot.selected {
     background: #FF4081;
-    /* or use your theme accent if you prefer */
     box-shadow: 0 0 6px #FF4081;
 }
 </style>

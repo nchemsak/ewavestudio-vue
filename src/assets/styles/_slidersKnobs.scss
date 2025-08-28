@@ -140,7 +140,6 @@ input.spread-slider {
     cursor: pointer;
 }
 
-/* WebKit slider track */
 input.detune-slider::-webkit-slider-runnable-track,
 input.spread-slider::-webkit-slider-runnable-track {
     height: 0.5rem;
@@ -148,7 +147,6 @@ input.spread-slider::-webkit-slider-runnable-track {
     border-radius: 5px;
 }
 
-/* WebKit slider thumb */
 input.detune-slider::-webkit-slider-thumb,
 input.spread-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -160,7 +158,6 @@ input.spread-slider::-webkit-slider-thumb {
     cursor: pointer;
 }
 
-/* Firefox */
 input.detune-slider::-moz-range-track,
 input.spread-slider::-moz-range-track {
     height: 0.5rem;
@@ -286,7 +283,6 @@ input[type="range"]::-webkit-slider-thumb {
 
 // KNOBS
 .knob-wrapper {
-    // margin: 10px;
     text-align: center;
     user-select: none;
 }
@@ -310,14 +306,6 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .dial-grip {
-    // position: absolute;
-    // inset: 20%;
-    // width: auto;
-    // height: auto;
-    // background-color: #222;
-    // border-radius: 50%;
-    // transform: translate(-50%, -50%);
-    // box-shadow: inset 0 0 4px #000;
     position: absolute;
     inset: 20%;
     border-radius: 50%;
@@ -326,17 +314,16 @@ input[type="range"]::-webkit-slider-thumb {
         inset 0 0 10px rgba(0, 0, 0, 0.55),
         inset -10px -10px 18px rgba(0, 0, 0, 0.6),
         inset 8px 8px 14px rgba(255, 255, 255, 0.05);
-    z-index: 0; /* highlight below the moving tick */
+    z-index: 0;
 }
 
-/* top-left highlight */
 .dial-grip::before {
     content: "";
     position: absolute;
-    left: 8%;
-    top: 6%;
-    width: 58%;
-    height: 48%;
+    left: 5%;
+    top: 5%;
+    width: 94%;
+    height: 94%;
     pointer-events: none;
     background: radial-gradient(120% 120% at 0% 0%, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 60%);
     filter: blur(0.2px);
@@ -344,58 +331,30 @@ input[type="range"]::-webkit-slider-thumb {
     z-index: 0;
 }
 
-.dial-grip::after {
-    // content: "";
-    // position: absolute;
-    // top: 6%;
-    // left: 50%;
-    // width: 5%;
-    // height: 20%;
-    // background-color: variables.$color-teal-light;
-    // background-color: var(--knob-pointer, variables.$color-teal-light);
-
-    // transform: translateX(-50%);
-
-    // border-radius: 2px;
-
-    // content: "";
-    // position: absolute;
-    // top: 6%;
-    // left: 50%;
-    // width: 5%;
-    // height: 20%;
-    // transform: translateX(-50%);
-    // background-color: var(--knob-pointer, #c078ff);
-    // border-radius: 2px;
-}
-
 .dial-rotor {
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    z-index: 1; /* above highlight */
+    z-index: 1;
 }
 
 .dial-rotor::after {
     content: "";
     position: absolute;
-    top: 6%;
+    top: 9%;
     left: 50%;
     width: 5%;
     height: 20%;
     transform: translateX(-50%);
     background-color: var(--knob-pointer, #c078ff);
     border-radius: 2px;
-    z-index: 2; /* on top of everything on the face */
+    z-index: 2;
 }
 
-/* When a whole KnobGroup is disabled OR a single Knob is disabled,
-   gray the pointer, label, and arc. Applies app-wide. */
 .knob-stack.disabled,
 .knob-wrapper.disabled,
 .knob-wrapper[aria-disabled="true"] {
     --knob-pointer: #9aa0a6;
-    /* pointer bar color */
 }
 
 .knob-stack.disabled .knob-label,
@@ -417,15 +376,6 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .dial-svg {
-    // position: absolute;
-    // inset: 0;
-    // width: 100%;
-    // height: 100%;
-    // pointer-events: none;
-    // stroke-width: 8;
-    // stroke-dasharray: 184;
-    // stroke-linecap: round;
-
     position: absolute;
     inset: 0;
     width: 100%;
@@ -470,12 +420,6 @@ input[type="range"]::-webkit-slider-thumb {
     pointer-events: none;
 }
 
-// .knob-group {
-//     background-color: transparent;
-//     padding: 10px 0px;
-//     max-width: 172px;
-// }
-
 .knob-group {
     background-color: transparent;
     padding: 10px 0;
@@ -495,18 +439,6 @@ input[type="range"]::-webkit-slider-thumb {
     stroke: #555 !important;
 }
 
-/* ==== KnobGroup header (single source of truth) ==== */
-// .knob-group-header {
-//     display: flex;
-//     align-items: center;
-//     flex-wrap: no wrap;
-//     gap: 0.6rem;
-//     min-block-size: 24px; /* enough room for a 12–14px dot */
-//     padding-bottom: 8px;
-//     border-bottom: 2px solid #1d1d1d;
-//     user-select: none;
-// }
-
 .knob-group-header {
     display: flex;
     align-items: center;
@@ -514,21 +446,9 @@ input[type="range"]::-webkit-slider-thumb {
     gap: 0.6rem;
     min-block-size: 24px;
     padding-bottom: 8px;
-    // border-bottom: 2px solid #1d1d1d;
     user-select: none;
     min-width: 0;
 }
-
-// .knob-group-header .group-title {
-//     font-family: monospace;
-//     font-weight: 700;
-//     font-size: 0.85rem;
-//     color: #ccc;
-//     cursor: pointer;
-//     white-space: nowrap; /* never break “Pitch Env” */
-//     min-width: max-content; /* reserve exactly the text width */
-//     line-height: 1.1; /* nice vertical rhythm */
-// }
 
 .knob-group-header .group-title {
     font-family: monospace;
@@ -536,7 +456,6 @@ input[type="range"]::-webkit-slider-thumb {
     font-size: 0.85rem;
     color: #ccc;
     cursor: pointer;
-    /* optional: comment these out if you want wrapping on narrow screens */
     white-space: nowrap;
     min-width: max-content;
     line-height: 1.1;
@@ -549,16 +468,14 @@ input[type="range"]::-webkit-slider-thumb {
     color: #888;
 }
 
-/* ==== Enable/disable dot ==== */
 .effect-toggle {
-    inline-size: 14px; /* width */
-    block-size: 14px; /* height */
-    aspect-ratio: 1 / 1; /* force a circle */
+    inline-size: 14px;
+    block-size: 14px;
+    aspect-ratio: 1 / 1;
     border-radius: 50%;
-    flex: 0 0 14px; /* don't stretch in flex row */
+    flex: 0 0 14px;
     cursor: pointer;
 
-    /* subtle ring that matches your themed accents */
     border: 1px solid hsl(var(--pt-accent) 40% 60% / 0.6);
     box-shadow: 0 0 0 2px hsl(var(--pt-accent) 40% 60% / 0.15);
     transition:
@@ -575,11 +492,6 @@ input[type="range"]::-webkit-slider-thumb {
     opacity: 0.7;
     filter: saturate(0.6);
 }
-
-// .knob-group-header > :last-child {
-//     margin-left: auto; /* push controls to the right */
-//     flex: 1 1 auto; /* lets them drop to next line on narrow widths */
-// }
 
 .knob-group-header > :last-child {
     margin-left: auto;
@@ -666,7 +578,6 @@ input[type="range"]::-webkit-slider-thumb {
     transition: opacity 0.2s ease;
     z-index: 10;
 
-    // Optional arrow
     &::after {
         content: "";
         position: absolute;
@@ -678,14 +589,6 @@ input[type="range"]::-webkit-slider-thumb {
         border-color: #222 transparent transparent transparent;
     }
 }
-// .noise-dot {
-//     width: 14px;
-//     height: 14px;
-//     border-radius: 50%;
-//     cursor: pointer;
-//     position: relative;
-//     transition: box-shadow 0.2s ease-in-out;
-// }
 
 .noise-dot.white {
     background-color: variables.$color-white;
@@ -700,9 +603,6 @@ input[type="range"]::-webkit-slider-thumb {
     background-color: #8b4513;
 }
 
-// .noise-dot.selected {
-//     box-shadow: 0 0 0 2px #333;
-// }
 .btn-group-sm > .btn,
 .btn-sm {
     --bs-btn-padding-y: 0px !important;

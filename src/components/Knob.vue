@@ -41,10 +41,9 @@ const props = defineProps({
 	step: { type: Number, default: 0.01 },
 	label: String,
 
-	/** Old behavior (single color) still supported */
 	color: { type: String, default: '#23CDE8' },
 
-	/** NEW: use theme gradient for the arc by default */
+	/** Use theme gradient for the arc by default */
 	useThemeArc: { type: Boolean, default: true },
 
 	/** Optional per-knob override gradient (keeps other knobs customizable) */
@@ -82,7 +81,7 @@ const arcEndColor = computed(() =>
 const activeStroke = computed(() => {
 	if (props.disabled) return 'var(--knob-arc-disabled, #555)'
 	if (props.useThemeArc || (props.arcStart && props.arcEnd)) return `url(#${gradId})`
-	return props.color // legacy single-color arc
+	return props.color
 })
 
 /* drag behavior */

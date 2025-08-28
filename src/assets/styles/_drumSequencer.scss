@@ -17,22 +17,25 @@
 ---------------------------------------------------------- */
 .drum-sequencer {
 	/* defaults (dark) */
-	--slider-bg: rgba(255, 255, 255, 0.08); /* column behind slider */
-	--slider-track: rgba(255, 255, 255, 0.22); /* track line (if used) */
-	--slider-thumb: #7bd0ff; /* thumb bar */
+	--slider-bg: rgba(255, 255, 255, 0.08);
+	--slider-track: rgba(255, 255, 255, 0.22);
+	--slider-thumb: #7bd0ff;
 	--slider-thumb-border: rgba(255, 255, 255, 0.15);
 
-	--knob-arc-start: #79d9ff; /* cyan */
-	--knob-arc-end: #c078ff; /* magenta */
-	--knob-pointer: #c078ff; /* purple tick */
+	--knob-arc-start: #79d9ff;
+	--knob-arc-end: #c078ff;
+	--knob-pointer: #c078ff;
 	--knob-track: #2f3142;
 	--knob-track-disabled: #555;
 	--knob-arc-disabled: #555;
 	--knob-face: #1c1e28;
 
-	/* neumorphic look */
-	--pad-bg: #232433; /* base surface */
-	--pad-tint: #b186ff; /* active tint (mixes into bg subtly) */
+	--pad-bg: #232433;
+	--pad-tint: #b186ff;
+
+	--bevel-hi: rgba(153, 153, 153, 0.405);
+	--bevel-lo: rgba(0, 0, 0, 0.7);
+	--active-ring: rgba(255, 235, 173, 0.24);
 
 	position: relative;
 	color: white;
@@ -42,7 +45,6 @@
 		inset 0 0 5px rgba(0, 0, 0, 0.4),
 		0 10px 25px rgba(0, 0, 0, 0.6);
 
-	/* ===== Pads ===== */
 	.pad-wrapper {
 		position: relative;
 		align-items: center;
@@ -70,17 +72,6 @@
 		background-color: #0ff;
 	}
 
-	// .padTEST.selected {
-	// 	background-color: #0cf;
-	// }
-	// .padTEST.playing {
-	// 	box-shadow: 0 0 6px #0ff;
-	// }
-	// .padTEST.selected.playing {
-	// 	box-shadow: 0 0 6px #0ff;
-	// }
-
-	/* Grid & rows */
 	.instrument-grid {
 		margin: auto;
 	}
@@ -100,7 +91,6 @@
 		border-radius: 3px;
 	}
 
-	/* Mute dot */
 	.mute-indicator {
 		width: 14px;
 		height: 14px;
@@ -117,7 +107,6 @@
 		box-shadow: none;
 	}
 
-	/* Channel volume (horizontal) */
 	.channel-volume input[type="range"] {
 		max-width: 150px;
 		height: 4px;
@@ -130,29 +119,25 @@
 		cursor: ns-resize;
 	}
 
-	/* ===== Hover sliders (shown on hover over active pad) ===== */
 	.hover-slider {
 		position: absolute;
 		left: 50%;
-		transform: translateX(-50%); /* center over pad */
+		transform: translateX(-50%);
 		height: var(--slider-l);
 		width: var(--padTEST-size);
 		z-index: 10;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		pointer-events: none; /* container ignores pointer */
+		pointer-events: none;
 
-		/* fallback column color (helps if ::before is ever overridden) */
 		background: var(--slider-bg);
-		// border-radius: 2px;
 		border-radius: var(--padTEST-radius);
 	}
 	.hover-slider input {
 		pointer-events: auto;
-	} /* let the thumb be draggable */
+	}
 
-	/* Volume above, Pitch below */
 	.hover-slider.volume-slider {
 		bottom: 100%;
 	}
@@ -160,32 +145,27 @@
 		top: 100%;
 	}
 
-	/* Column background layer */
 	.hover-slider::before {
 		content: "";
 		position: absolute;
 		inset: 0;
-		// background: var(--slider-bg);
-		border-radius: 2px;
-		/* subtle inner edge for contrast on light bg */
+		border-radius: var(--padTEST-radius);
 		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
-		z-index: 0; /* under the input */
+		z-index: 0;
 	}
 
-	/* ===== Rotated input styling ===== */
 	.hover-slider input[type="range"] {
 		-webkit-appearance: none;
 		appearance: none;
 		background: transparent;
 		outline: none;
 		transform: rotate(-90deg);
-		width: var(--slider-l); /* visual length (vertical) */
-		height: var(--padTEST-size); /* column width (horizontal) */
+		width: var(--slider-l);
+		height: var(--padTEST-size);
 		position: relative;
-		z-index: 1; /* above ::before */
+		z-index: 1;
 	}
 
-	/* You removed track fills; keep height so the control renders consistently */
 	.hover-slider input[type="range"]::-webkit-slider-runnable-track {
 		height: var(--track-thickness);
 		border-radius: 2px;
@@ -195,17 +175,15 @@
 		border-radius: 2px;
 	}
 
-	/* Thumb = long thin bar that spans the column */
 	.hover-slider input[type="range"]::-webkit-slider-thumb {
 		-webkit-appearance: none;
-		width: var(--thumb-thickness); /* final thickness (horizontal) */
-		height: var(--padTEST-size); /* final length (vertical) */
+		width: var(--thumb-thickness);
+		height: var(--padTEST-size);
 		border: 1px solid;
 		border-radius: 3px;
 		cursor: ns-resize;
 		background: var(--slider-thumb);
 		border-color: var(--slider-thumb-border);
-		/* center the tall thumb on the thin track */
 		margin-top: calc((var(--padTEST-size) - var(--track-thickness)) / -2);
 	}
 	.hover-slider input[type="range"]::-moz-range-thumb {
@@ -218,7 +196,6 @@
 		border-color: var(--slider-thumb-border);
 	}
 
-	/* ===== Misc headings/labels ===== */
 	.channel-label {
 		cursor: pointer;
 		user-select: none;
@@ -279,8 +256,6 @@
 	}
 }
 
-/* Theme overrides work whether the theme class is on the same node
-   or an ancestor wrapping the sequencer. */
 .theme-light .drum-sequencer,
 .drum-sequencer.theme-light {
 	--slider-bg: rgba(0, 0, 0, 0.1);
@@ -331,7 +306,6 @@
 	pointer-events: auto;
 }
 
-/* tiny button size (global is fine) */
 .btn-xs {
 	padding: 2px 6px;
 	font-size: 12px;
@@ -358,10 +332,7 @@
 			600 10px/1.2 ui-monospace,
 			monospace;
 		color: #cfd4ff;
-		// background: #0b0e17;
-		// border: 1px solid #ffffff1a;
 		padding: 2px 6px;
-		// border-radius: 10px;
 		box-shadow:
 			0 2px 6px rgba(0, 0, 0, 0.35),
 			inset 0 0 0 1px rgba(255, 255, 255, 0.04);
@@ -372,7 +343,6 @@
 		line-height: 1;
 		border-radius: 6px;
 		background: rgba(0, 0, 0, 0.65);
-		// color: #fff;
 		border: 1px solid rgba(255, 255, 255, 0.12);
 	}
 
@@ -380,20 +350,12 @@
 		inline-size: var(--padTEST-size);
 		block-size: var(--padTEST-size);
 		border-radius: var(--padTEST-radius);
-		// border: 1px solid #ffffff1a;
 		position: relative;
 		overflow: hidden;
-		cursor: pointer;
 		isolation: isolate;
-
+		cursor: pointer;
 		background: var(--pad-bg);
-		box-shadow:
-			2px 2px 12px rgba(0, 0, 0, 0.55),
-			-2px -2px 6px rgba(255, 255, 255, 0.05);
-		transition:
-			transform 0.06s ease,
-			box-shadow 0.14s ease,
-			filter 0.18s ease;
+		box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.6);
 	}
 
 	.padTEST::before {
@@ -401,49 +363,53 @@
 		position: absolute;
 		inset: 0;
 		border-radius: inherit;
-		/* inner bevel + highlight like the CodePen */
-		box-shadow:
-			inset 2px 2px 2px color-mix(in oklab, var(--pad-bg) 85%, white 15%),
-			inset -2px -2px 2px rgba(0, 0, 0, 0.7);
+		z-index: 1;
 		pointer-events: none;
+		mix-blend-mode: screen;
+		--heat-a: 0.82;
+		background: linear-gradient(
+			to top,
+			hsla(var(--heat-h, 210), 85%, 60%, var(--heat-a)) calc(var(--vol, 0) * 1%),
+			transparent calc(var(--vol, 0) * 1%)
+		);
+		opacity: var(--pad-on, 0);
+		transition:
+			opacity 0.15s,
+			background 0.15s;
 	}
 
-	/* pitch heat tint + volume fill (uses CSS vars from Vue) */
 	.padTEST::after {
 		content: "";
 		position: absolute;
 		inset: 0;
-		background: linear-gradient(
-			to top,
-			hsla(var(--heat-h, 210), 85%, 60%, 0.85) calc(var(--vol, 0) * 1%),
-			transparent calc(var(--vol, 0) * 1%)
-		);
-		mix-blend-mode: screen;
-		opacity: var(--pad-on, 0);
-		transition:
-			opacity 0.15s ease,
-			background 0.15s ease;
-		pointer-events: none;
 		border-radius: inherit;
-	}
-	.padTEST:hover {
+		z-index: 2;
+		pointer-events: none;
 		box-shadow:
-			3px 3px 14px rgba(0, 0, 0, 0.58),
-			-2px -2px 7px rgba(255, 255, 255, 0.06);
+			inset 2px 2px 2px rgba(153, 153, 153, 0.405),
+			inset -2px -2px 2px rgba(0, 0, 0, 0.7);
 	}
 
-	/* subtle inner tint always on when selected */
 	.padTEST.selected {
-		transform: translateY(2px);
-		/* darken a touch using the tint; if color-mix not supported it just keeps var(--pad-bg) */
+		--heat-a: 0.72;
 		background: color-mix(in oklab, var(--pad-bg) 92%, var(--pad-tint) 8%);
-		box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.55); /* smaller drop when pressed */
+		box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.7);
+	}
+	.padTEST.selected::after {
+		box-shadow:
+			2px 2px 2px rgba(255, 235, 173, 0.24),
+			inset 1px 1px 2px rgba(0, 0, 0, 0.9);
 	}
 
-	.padTEST.selected::before {
-		/* CodePen ‘active’ rim: strong outer shine + deep inner cavity */
+	.padTEST.selected {
+		background: color-mix(in oklab, var(--pad-bg) 92%, var(--pad-tint) 8%);
+		box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.7);
+		--heat-a: 0.72;
+	}
+
+	.padTEST.selected::after {
 		box-shadow:
-			2px 2px 2px color-mix(in oklab, var(--pad-tint) 10%, white 90%),
+			2px 2px 2px var(--active-ring),
 			inset 1px 1px 2px rgba(0, 0, 0, 0.9);
 	}
 
@@ -453,17 +419,6 @@
 		will-change: filter;
 	}
 
-	/* ACTIVE-STEP HALO */
-	.padTEST.playing::before {
-		content: "";
-		position: absolute;
-		inset: -7px;
-		border-radius: inherit;
-		background: radial-gradient(circle at 50% 50%, hsla(var(--heat-h, 210), 90%, 70%, 0.55), transparent 60%);
-		filter: blur(2px);
-		animation: step-pop 0.18s ease-out;
-		pointer-events: none;
-	}
 	@keyframes step-pop {
 		from {
 			opacity: 0;
@@ -475,7 +430,8 @@
 		}
 	}
 }
-/* Numbers for SynthStepGrid dots */
+
+// Numbers for SynthStepGrid dots
 .step-index {
 	position: absolute;
 	top: -14px;
@@ -496,9 +452,7 @@
 	opacity: 0.9;
 }
 
-/* Dedicated Step Sequencer card layout */
 .step-card {
-	/* inherits pt-card chrome; add a gentle accent ring */
 	box-shadow:
 		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
 		0 12px 24px rgba(0, 0, 0, 0.35);

@@ -18,7 +18,7 @@ export function useTheme() {
     return theme.value;
   });
 
-  // CSS class we’ll apply to <html>
+  // CSS applied to <html>
   const themeClass = computed(() => `theme-${resolved.value}`);
 
   function apply() {

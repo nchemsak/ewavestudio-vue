@@ -1,6 +1,5 @@
 <template>
     <div class="pattern-tools" :class="props.currentTheme">
-        <!-- <h2 class="pt-title">Pattern Tools</h2> -->
 
         <!-- Step Fills -->
         <section class="pt-section">

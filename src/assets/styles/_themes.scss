@@ -1,7 +1,7 @@
 /* _themes.scss */
 @use "sass:map";
 
-/* 1) Theme tokens as a Sass map */
+/* Theme tokens as a Sass map */
 $themes: (
     dark: (
         bg: #0f1116,
@@ -41,7 +41,7 @@ $themes: (
     )
 );
 
-/* 2) Mixin to emit CSS custom properties for a theme class */
+/* Mixin to emit CSS custom properties for a theme class */
 @mixin emit-theme($name, $t) {
     .theme-#{$name} {
         --pt-bg: #{map.get($t, bg)};
@@ -59,7 +59,7 @@ $themes: (
     }
 }
 
-/* 3) Base (root) — tokens + DEFAULT THEME = dark */
+/* Base (root) — tokens + DEFAULT THEME = dark */
 $dark: map.get($themes, dark);
 
 :root {
@@ -85,19 +85,16 @@ $dark: map.get($themes, dark);
     --pt-header-fg: #fff;
     --pt-text-strong: #fff;
 
-    /*  hairline + focus ring tokens (fallbacks) */
-    --pt-hairline: rgba(255, 255, 255, 0.06); /* good for dark; light overrides below */
+    --pt-hairline: rgba(255, 255, 255, 0.06);
     --pt-focus-ring: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / 0.35);
 
     --cc-chevron: #{map.get($dark, chevron)};
 }
 
-/* 4) Theme classes for toggling at runtime */
 @each $name, $t in $themes {
     @include emit-theme($name, $t);
 }
 
-/* 4b) Color-scheme + light theme overrides */
 :root,
 .theme-dark,
 .theme-synthwave {
@@ -108,18 +105,15 @@ $dark: map.get($themes, dark);
     color-scheme: light;
     --pt-header-fg: #1f2328;
     --pt-text-strong: #1f2328;
-    /*  hairline fallback that reads on light if color-mix is unavailable */
     --pt-hairline: rgba(0, 0, 0, 0.12);
 }
 
-/* 4c) Prefer computed hairline when supported (auto-adapts to any theme text color) */
 @supports (color: color-mix(in oklab, #000, #fff)) {
     :root {
         --pt-hairline: color-mix(in oklab, var(--pt-text) 12%, transparent);
     }
 }
 
-/* 5) Reusable UI classes (global) */
 .pt-panel {
     background: var(--pt-panel);
     color: var(--pt-text);
@@ -150,7 +144,6 @@ $dark: map.get($themes, dark);
     right: 0;
     top: 0;
     height: 1px;
-    /*  use hairline token (adapts to theme) */
     background: linear-gradient(90deg, transparent, var(--pt-hairline), transparent);
 }
 .pt-section-title {
@@ -162,13 +155,13 @@ $dark: map.get($themes, dark);
 
 .pt-panel--card {
     --pt-panel-max: 560px;
-} // old look
+}
 .pt-panel--wide {
     --pt-panel-max: 1200px;
-} // good for sequencer
+}
 .pt-panel--fluid {
     --pt-panel-max: none;
-} // no cap
+}
 
 /* Layout bits */
 .pt-fields {
@@ -233,7 +226,6 @@ $dark: map.get($themes, dark);
     transform: translateY(1px) scale(0.98);
 }
 .pt-btn:focus-visible {
-    /* keep your outline if you prefer; token is provided */
     outline: 2px solid hsl(var(--btn-hue, var(--pt-accent)) 80% 60%);
     outline-offset: 2px;
 }
@@ -261,16 +253,15 @@ $dark: map.get($themes, dark);
     --btn-hue: calc(var(--pt-accent) + 18);
 }
 
-/* Variants */
 .pt-danger {
     --btn-hue: 7;
-} /* red */
+}
 .pt-accent-cool {
     --btn-hue: var(--pt-accent-2);
-} /* cyan/blue */
+}
 .pt-accent-warm {
     --btn-hue: var(--pt-accent-3);
-} /* magenta */
+}
 .pt-glow {
     box-shadow: 0 0 12px var(--pt-btn-glow);
 }
@@ -291,7 +282,6 @@ $dark: map.get($themes, dark);
     filter: saturate(1.05);
 }
 
-/* Chips */
 .pt-chips {
     display: flex;
     flex-wrap: wrap;
@@ -306,7 +296,7 @@ $dark: map.get($themes, dark);
     font-size: 0.8rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    border-color: color-mix(in oklab, var(--pt-btn-border), transparent 40%); /* modern */
+    border-color: color-mix(in oklab, var(--pt-btn-border), transparent 40%);
 }
 .pt-chip:hover {
     box-shadow: 0 0 10px var(--pt-btn-glow);
@@ -447,7 +437,7 @@ $dark: map.get($themes, dark);
 
 /* Popover panel (PtSelect menu) */
 .pt-menu {
-    position: fixed; /* coords set inline */
+    position: fixed;
     max-height: 260px;
     overflow: auto;
     border: 1px solid transparent;
@@ -486,7 +476,6 @@ $dark: map.get($themes, dark);
 .pt-rule {
     height: 1px;
     margin: 14px 0;
-    /*  use hairline token */
     background: linear-gradient(90deg, transparent, var(--pt-hairline), transparent);
 }
 
@@ -511,7 +500,6 @@ $dark: map.get($themes, dark);
     justify-content: left;
 }
 .pt-knob-row > * {
-    // flex: 1 1 0;
     min-width: 0;
 }
 
@@ -555,9 +543,8 @@ $dark: map.get($themes, dark);
     transform: translateX(20px);
 }
 
-/* Segmented controls (e.g., Pitch Env) */
 .pt-seg {
-    display: inline-flex; /* FIX: remove duplicate flex declaration */
+    display: inline-flex;
     gap: 6px;
     flex-wrap: wrap;
 }
@@ -601,7 +588,6 @@ $dark: map.get($themes, dark);
     filter: none;
 }
 
-/* Active/selected – clearer */
 .pt-seg-btn.is-active,
 .pt-seg-btn[aria-pressed="true"] {
     --seg-hue: var(--pt-accent);
@@ -616,12 +602,10 @@ $dark: map.get($themes, dark);
         0 6px 22px hsl(var(--seg-hue) 90% 60% / 0.25);
     transform: translateY(-1px);
 }
-/*  keep visible state even when disabled */
 .pt-seg-btn[disabled].is-active {
     opacity: 0.8;
 }
 
-/* Segmented tooltips (match LFO feel) */
 .pt-seg-btn .selector-tooltip {
     position: absolute;
     bottom: calc(100% + 8px);
@@ -704,9 +688,8 @@ $dark: map.get($themes, dark);
     text-shadow: 0 0 10px var(--pt-btn-glow);
 }
 
-/* Generic themed popover */
 .pt-popover {
-    position: fixed; /* coords set inline */
+    position: fixed;
     z-index: 1000;
     padding: 12px 14px;
     border: 1px solid transparent;
@@ -724,10 +707,9 @@ $dark: map.get($themes, dark);
     max-height: 60vh;
     width: clamp(260px, 44vw, 420px);
     backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px); /*  Safari */
+    -webkit-backdrop-filter: blur(2px);
 }
 
-/* tiny arrow – points from popover back to the icon */
 .pt-popover::after {
     content: "";
     position: absolute;
@@ -748,7 +730,7 @@ $dark: map.get($themes, dark);
     border-left-color: var(--pt-panel);
 }
 
-/* Flatten any accidental panel-in-panel */
+// Flatten any accidental panel-in-panel
 .pt-panel .pt-panel {
     background: transparent;
     box-shadow: none;
@@ -756,7 +738,6 @@ $dark: map.get($themes, dark);
     border-radius: 0;
 }
 
-/* Module cards inside a panel */
 .pt-cards {
     --pt-card-min: 380px;
     display: grid;
@@ -781,7 +762,6 @@ $dark: map.get($themes, dark);
     margin-bottom: 0px;
 }
 
-/* Make header text explicit in Light theme (kept) */
 .theme-light .toggle-header .group-title,
 .theme-light .toggle-header:hover .group-title,
 .theme-light .toggle-header:focus-visible .group-title,
@@ -790,12 +770,11 @@ $dark: map.get($themes, dark);
     color: var(--pt-text-strong, #1f2328) !important;
 }
 
-/* Limit hover accent to interactive bits, not the title */
 .toggle-header:hover .pt-dot,
 .toggle-header:focus-visible .pt-dot,
 .toggle-header:hover .pt-seg-btn,
 .toggle-header:focus-visible .pt-seg-btn {
-    /* intentionally empty: rely on existing accent styles */
+    //    intentionally empty: rely on existing accent styles
 }
 
 .theme-light .toggle-header .pt-title,

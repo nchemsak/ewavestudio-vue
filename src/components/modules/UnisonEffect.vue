@@ -82,5 +82,4 @@ watch(() => props.spread, v => (localSpread.value = v))
 </script>
 
 <style scoped>
-/* No extra styles needed — layout uses global .pt-knob-row */
 </style>

@@ -43,27 +43,19 @@ defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner
 
 
 <style scoped>
-/* If you want the Cousine font, load it globally:
-@import url('https://fonts.googleapis.com/css2?family=Cousine:wght@400;700&display=swap');
-*/
-
-/* ── The component exposes tunable vars; themes override them below ── */
 .mpc-screen {
-    /* size */
     --screen-w: 22rem;
 
-    /* bezel (aligns with your dark tokens) */
     --mpc-bezel-bg: #171a21;
     --mpc-bezel-rim: rgba(255, 255, 255, .06);
 
     /* LCD — darker base for high contrast */
     --mpc-lcd-bg: #0f141b;
-    /* deep slate/navy */
+
     --mpc-lcd-vignette: rgba(0, 0, 0, .42);
     --mpc-lcd-gloss: rgba(255, 255, 255, .10);
     --mpc-lcd-scanline: #7aa2ff;
     --mpc-lcd-fg: #e6edf3;
-    /* NEW: text color for 'text' view */
 
     /* Spectrogram palette (bright on dark) */
     --mpc-spec-low: #00e5ff;
@@ -71,7 +63,6 @@ defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner
     --mpc-spec-high: #ffd54f;
     --mpc-spec-peak: #ffffff;
 
-    /* Scope trace (optional) */
     --mpc-scope-trace: #c7d6ff;
 
     width: var(--screen-w);
@@ -165,8 +156,6 @@ defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner
     bottom: .28rem;
     height: .12rem;
     border-radius: .12rem;
-    /* background: linear-gradient(90deg,
-            transparent, color-mix(in oklab, var(--mpc-lcd-scanline) 85%, black 15%), transparent); */
     background: linear-gradient(90deg,
             transparent,
             color-mix(in oklab, var(--mpc-lcd-scanline) 60%, black 40%),
@@ -195,7 +184,6 @@ defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner
     height: 100%;
 }
 
-/* function keys (unchanged as requested) */
 .mpc-screen__fkeys {
     display: grid;
     grid-template-columns: repeat(6, 1fr);

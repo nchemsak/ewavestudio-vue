@@ -266,8 +266,8 @@
 													@mouseenter="hoveredPad = `${inst.name}-${index}`"
 													@mouseleave="hoveredPad = null">
 
-													<div class="pad-step-num">{{ index + 1 }}</div> 
-													
+													<div class="pad-step-num">{{ index + 1 }}</div>
+
 													<div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
 														@mousedown="handleMouseDown($event, inst.name, index)"
 														@mouseenter="handleMouseEnter(inst.name, index)"
@@ -334,7 +334,6 @@ import CollapsibleCard from './CollapsibleCard.vue';
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 //Sequencer Accordian BEGIN
-// const seqOpen = ref(true); // start open so current behavior doesn't change
 const seqOpen = ref(localStorage.getItem('seqOpen') !== 'false');
 watch(seqOpen, v => localStorage.setItem('seqOpen', String(v)));
 
@@ -1566,16 +1565,6 @@ watch(volume, val => {
 	masterGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
 });
 
-// function getPadStyle(instrument, index) {
-// 	if (!instrument.steps[index]) return {};
-
-// 	const velocity = instrument.velocities[index];
-// 	const percent = Math.round(velocity * 100);
-
-// 	return {
-// 		background: `linear-gradient(to top, pink ${percent}%, #fff ${percent}%)`
-// 	};
-// }
 function hueFor(hz: number, lo = MIN_PAD_HZ, hi = MAX_PAD_HZ) {
 	const t = Math.min(1, Math.max(0, (hz - lo) / (hi - lo)));
 	return Math.round(220 * (1 - t)); // blue→red
@@ -1726,10 +1715,7 @@ driveShaper.curve = (() => {
 	filter: grayscale(.7) brightness(.7);
 }
 
-/* Top card two-column layout */
-.transport-card {
-	/* nothing special, inherits pt-card look */
-}
+.transport-card {}
 
 .transport-layout {
 	display: grid;
@@ -1742,8 +1728,6 @@ driveShaper.curve = (() => {
 	margin: 0 0 .35rem;
 }
 
-/* Keep your existing knob row; ensure play button area
-   doesn’t collapse narrower than the button */
 .transport-row .transport-actions {
 	display: flex;
 	align-items: center;
@@ -1751,17 +1735,14 @@ driveShaper.curve = (() => {
 	min-width: 96px;
 }
 
-/* Let the screen hug the right edge neatly */
 .transport-right {
 	justify-self: end;
 }
 
-/* Remove extra spacing above the screen in this context */
 .mpc-wrap {
 	margin-top: 0;
 }
 
-/* Responsive: stack on smaller widths */
 @media (max-width: 980px) {
 	.transport-layout {
 		grid-template-columns: 1fr;
