@@ -159,12 +159,18 @@
 
 
 			<!-- Movement & Modulation -->
-			<CollapsibleCard id="mod" title="Movement & Modulation" v-model="collapsibleState['mod']">
+			<!-- <CollapsibleCard id="mod" title="Movement & Modulation" v-model="collapsibleState['mod']">
 				<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
 					v-model:target="lfoTarget" :depthMax="lfoDepthMax" color="#00BCD4"
 					:targets="['pitch', 'gain', 'filter']" />
+			</CollapsibleCard> -->
+			<CollapsibleCard id="mod" title="Movement & Modulation" v-model="collapsibleState['mod']">
+				<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
+					v-model:target="lfoTarget" v-model:waveform="lfoWaveform" v-model:syncEnabled="lfoSync"
+					v-model:division="lfoDivision" :depthMax="lfoDepthMax" color="#00BCD4"
+					:targets="['pitch', 'gain', 'filter', 'pan', 'resonance']"
+					:divisions="['1/1', '1/2', '1/4', '1/8', '1/16', '1/8T', '1/8.']" />
 			</CollapsibleCard>
-
 			<!-- Effects -->
 			<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
 				<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
@@ -658,6 +664,9 @@ onBeforeUnmount(() => {
 	window.removeEventListener('keydown', onGlobalKeydown, { capture: true } as any);
 	window.removeEventListener('keyup', onGlobalKeyup, { capture: true } as any);
 
+	if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
+	stopSnh();
+
 });
 // MPC Screen END
 
@@ -1094,32 +1103,177 @@ const stereoSpread = ref(50);  // 0–100 %
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+// // LFO START
+// const lfoEnabled = ref(true); // toggle knob group
+// const lfoRate = ref(5); // Hz
+// const lfoDepth = ref(0); // Varies by target
+// const lfoTarget = ref('pitch'); // 'pitch' | 'gain' | 'filter'
+
+// const lfoOsc = audioCtx.createOscillator();
+// const lfoGain = audioCtx.createGain();
+// const lfoDepthMax = computed(() => {
+// 	return lfoTarget.value === 'gain' ? 200 : 1000;
+// });
+// lfoOsc.type = 'sine';
+// lfoOsc.frequency.setValueAtTime(lfoRate.value, audioCtx.currentTime);
+// lfoGain.gain.setValueAtTime(lfoDepth.value, audioCtx.currentTime);
+
+// // Connect dynamically later
+// lfoOsc.connect(lfoGain);
+// lfoOsc.start();
+
+// watch(lfoRate, rate => {
+// 	lfoOsc.frequency.setValueAtTime(rate, audioCtx.currentTime);
+// });
+
+// watch(lfoDepth, depth => {
+// 	lfoGain.gain.setValueAtTime(depth, audioCtx.currentTime);
+// });
+// // LFO END
+
+const volume = ref(0.75);
+const tempo = ref(80);
+const swing = ref(0);
+const isPlaying = ref(false);
+const currentStep = ref(-1);
+
+
 // LFO START
-const lfoEnabled = ref(true); // toggle knob group
-const lfoRate = ref(5); // Hz
-const lfoDepth = ref(0); // Varies by target
-const lfoTarget = ref('pitch'); // 'pitch' | 'gain' | 'filter'
+const lfoEnabled = ref(true);
+const lfoRate = ref(5);                  // Hz (when free)
+const lfoDepth = ref(0);
+const lfoTarget = ref<'pitch' | 'gain' | 'filter' | 'pan' | 'resonance'>('pitch');
 
-const lfoOsc = audioCtx.createOscillator();
-const lfoGain = audioCtx.createGain();
+const lfoWaveform = ref<'sine' | 'triangle' | 'sawtooth' | 'square' | 'random'>('sine');
+const lfoSync = ref(false);
+const lfoDivision = ref('1/8');
+
+// sensible depth caps per target
 const lfoDepthMax = computed(() => {
-	return lfoTarget.value === 'gain' ? 200 : 1000;
-});
-lfoOsc.type = 'sine';
-lfoOsc.frequency.setValueAtTime(lfoRate.value, audioCtx.currentTime);
-lfoGain.gain.setValueAtTime(lfoDepth.value, audioCtx.currentTime);
-
-// Connect dynamically later
-lfoOsc.connect(lfoGain);
-lfoOsc.start();
-
-watch(lfoRate, rate => {
-	lfoOsc.frequency.setValueAtTime(rate, audioCtx.currentTime);
+	switch (lfoTarget.value) {
+		case 'pitch': return 1200;     // cents (±1 octave)
+		case 'gain': return 100;       // %
+		case 'pan': return 100;        // %
+		case 'filter': return 5000;    // Hz swing
+		case 'resonance': return 10;   // Q
+		default: return 100;
+	}
 });
 
-watch(lfoDepth, depth => {
-	lfoGain.gain.setValueAtTime(depth, audioCtx.currentTime);
+// --- LFO source + core gain ---
+let lfoOsc: OscillatorNode | null = null;          // for sine/tri/saw/square
+let lfoSnh: ConstantSourceNode | null = null;      // for random (sample & hold)
+let snhTimer: number | null = null;
+
+const lfoGain = audioCtx.createGain(); // raw depth scaler (units depend on target)
+lfoGain.gain.value = 0;
+
+// helper: compute Hz when synced
+function divisionToHz(div: string, bpm: number): number {
+	// period in beats: 1/1=4 beats, 1/2=2 beats, 1/4=1 beat, 1/8=0.5, 1/16=0.25
+	// dotted (.) = ×1.5 length, triplet (T) = ×2/3 length
+	const parts = div.replace(/\s+/g, '');
+	const dotted = parts.endsWith('.');
+	const trip = parts.endsWith('T');
+	const base = parts.replace(/[\.T]$/, ''); // e.g., "1/8"
+
+	const denom = parseInt(base.split('/')[1] || '4', 10);
+	let beats = 4 / denom; // whole note = 4 beats
+	if (dotted) beats *= 1.5;
+	if (trip) beats *= 2 / 3;
+
+	const seconds = (60 / bpm) * beats;
+	return Math.max(0.01, 1 / seconds);
+}
+
+function currentLfoHz() {
+	return lfoSync.value ? divisionToHz(lfoDivision.value, tempo.value) : lfoRate.value;
+}
+
+function stopSnh() {
+	if (snhTimer) { clearInterval(snhTimer as any); snhTimer = null; }
+	if (lfoSnh) { try { lfoSnh.stop(); } catch { } lfoSnh.disconnect(); lfoSnh = null; }
+}
+
+function ensureLfoSource() {
+	// clean up both
+	if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
+	stopSnh();
+
+	const hz = currentLfoHz();
+
+	if (lfoWaveform.value === 'random') {
+		// Sample & Hold via ConstantSource + JS timer (lightweight for this use)
+		lfoSnh = audioCtx.createConstantSource();
+		lfoSnh.offset.value = (Math.random() * 2 - 1);
+		lfoSnh.connect(lfoGain);
+		lfoSnh.start();
+
+		const ms = Math.max(15, Math.round(1000 / hz));
+		snhTimer = window.setInterval(() => {
+			const t = audioCtx.currentTime + 0.002;
+			const v = (Math.random() * 2 - 1);
+			lfoSnh!.offset.setValueAtTime(v, t);
+		}, ms) as unknown as number;
+	} else {
+		lfoOsc = audioCtx.createOscillator();
+		lfoOsc.type = lfoWaveform.value;
+		lfoOsc.frequency.setValueAtTime(hz, audioCtx.currentTime);
+		lfoOsc.connect(lfoGain);
+		lfoOsc.start();
+	}
+}
+
+// init + react to changes
+ensureLfoSource();
+
+watch([lfoWaveform, lfoSync, lfoDivision, tempo], () => {
+	// shape or sync parameters changed → rebuild or retune
+	if (lfoWaveform.value === 'random') {
+		stopSnh();
+		ensureLfoSource();
+	} else if (lfoOsc) {
+		lfoOsc.type = lfoWaveform.value;
+		lfoOsc.frequency.setValueAtTime(currentLfoHz(), audioCtx.currentTime);
+	} else {
+		ensureLfoSource();
+	}
 });
+
+watch(lfoRate, (r) => {
+	if (!lfoSync.value && lfoOsc) {
+		lfoOsc.frequency.setValueAtTime(r, audioCtx.currentTime);
+	}
+});
+
+// scale lfoGain.gain to match the target’s expected unit
+function applyDepthScale() {
+	const t = audioCtx.currentTime;
+	switch (lfoTarget.value) {
+		case 'pitch':
+			// cents → connect to osc.detune (no further scaling)
+			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
+			break;
+		case 'pan':
+			// % → -1..1 scaling happens by AudioParam sum around 0; we'll connect directly, so scale to 0..1
+			lfoGain.gain.setValueAtTime(lfoDepth.value / 100, t);
+			break;
+		case 'gain':
+			// % → reuse your previous feel
+			lfoGain.gain.setValueAtTime(lfoDepth.value * 0.005, t);
+			break;
+		case 'filter':
+			// Hz additive
+			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
+			break;
+		case 'resonance':
+			// Q additive (small)
+			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
+			break;
+	}
+}
+watch([lfoDepth, lfoTarget], applyDepthScale);
+applyDepthScale();
 // LFO END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -1211,11 +1365,7 @@ function stopEditingLabel(instrument) {
 	hoveredLabel.value = null;
 }
 
-const volume = ref(0.75);
-const tempo = ref(80);
-const swing = ref(0);
-const isPlaying = ref(false);
-const currentStep = ref(-1);
+
 
 const masterGain = audioCtx.createGain();
 masterGain.gain.value = volume.value;
@@ -1413,16 +1563,43 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 		voiceGain.gain.setValueAtTime(1 / voices, startTime);
 		panner.pan.setValueAtTime((dNorm * spreadPct) / 100, startTime);
 
+		// if (lfoEnabled.value) {
+		// 	if (lfoTarget.value === 'pitch') {
+		// 		const lfoTap = audioCtx.createGain();
+		// 		lfoTap.gain.value = 1;
+		// 		lfoGain.connect(lfoTap).connect(osc.frequency);
+		// 	} else if (lfoTarget.value === 'gain') {
+		// 		const lfoModGain = audioCtx.createGain();
+		// 		lfoModGain.gain.value = lfoDepth.value * 0.005;
+
+		// 		const lfoOffset = audioCtx.createConstantSource()
+		// 		lfoOffset.offset.value = velocity * 0.75;
+
+		// 		const lfoSum = audioCtx.createGain();
+		// 		lfoGain.connect(lfoModGain).connect(lfoSum);
+		// 		lfoOffset.connect(lfoSum);
+		// 		lfoSum.connect(voiceGain.gain);
+
+		// 		lfoOffset.start(startTime);
+		// 		lfoOffset.stop(noteEnd + 0.05); // was decayEnd
+		// 	} else if (lfoTarget.value === 'filter') {
+		// 		const lfoTap = audioCtx.createGain();
+		// 		lfoTap.gain.value = 1;
+		// 		lfoGain.connect(lfoTap).connect(voiceFilter.frequency);
+		// 	}
+		// }
 		if (lfoEnabled.value) {
 			if (lfoTarget.value === 'pitch') {
+				// Use detune in cents (clean, musical)
 				const lfoTap = audioCtx.createGain();
 				lfoTap.gain.value = 1;
-				lfoGain.connect(lfoTap).connect(osc.frequency);
+				lfoGain.connect(lfoTap).connect(osc.detune);
 			} else if (lfoTarget.value === 'gain') {
+				// Your existing offset+sum mapping (kept)
 				const lfoModGain = audioCtx.createGain();
-				lfoModGain.gain.value = lfoDepth.value * 0.005;
+				lfoModGain.gain.value = 1;
 
-				const lfoOffset = audioCtx.createConstantSource()
+				const lfoOffset = audioCtx.createConstantSource();
 				lfoOffset.offset.value = velocity * 0.75;
 
 				const lfoSum = audioCtx.createGain();
@@ -1431,11 +1608,20 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 				lfoSum.connect(voiceGain.gain);
 
 				lfoOffset.start(startTime);
-				lfoOffset.stop(noteEnd + 0.05); // was decayEnd
+				lfoOffset.stop(noteEnd + 0.05);
 			} else if (lfoTarget.value === 'filter') {
 				const lfoTap = audioCtx.createGain();
 				lfoTap.gain.value = 1;
 				lfoGain.connect(lfoTap).connect(voiceFilter.frequency);
+			} else if (lfoTarget.value === 'pan') {
+				// StereoPanner.pan is -1..+1; our lfoGain.gain is scaled to 0..1 above.
+				const lfoTap = audioCtx.createGain();
+				lfoTap.gain.value = 1;
+				lfoGain.connect(lfoTap).connect(panner.pan);
+			} else if (lfoTarget.value === 'resonance') {
+				const lfoTap = audioCtx.createGain();
+				lfoTap.gain.value = 1;
+				lfoGain.connect(lfoTap).connect(voiceFilter.Q);
 			}
 		}
 
