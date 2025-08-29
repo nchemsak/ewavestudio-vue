@@ -745,6 +745,29 @@ $dark: map.get($themes, dark);
     grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--pt-card-min)), 1fr));
 }
 
+// .pt-cards.controlsWrapper {
+//     display: grid;
+//     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+//     gap: 12px;
+// }
+
+.pt-cards.controlsWrapper > .pt-card,
+.pt-cards.controlsWrapper > * {
+    /* fallback selector for your CollapsibleCard root */
+    flex: 1 1 380px; /* preferred width ~380px */
+    min-width: 300px; /* when narrower, wrap to next line */
+    max-width: 520px; /* keep any single card from getting huge */
+    min-inline-size: 0; /* allow children to shrink */
+}
+
+.knob-group,
+.mode-row,
+.tone-row,
+.pt-seg,
+.pt-btn-group {
+    min-width: 0;
+}
+
 .pt-card {
     background: linear-gradient(145deg, var(--pt-surface-1), var(--pt-surface-2));
     border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 70%);

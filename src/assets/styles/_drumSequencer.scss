@@ -25,10 +25,13 @@
 	--knob-arc-start: #79d9ff;
 	--knob-arc-end: #c078ff;
 	--knob-pointer: #c078ff;
-	--knob-track: #2f3142;
-	--knob-track-disabled: #555;
+	--knob-track: #444;
+	--knob-track-disabled: #333;
 	--knob-arc-disabled: #555;
 	--knob-face: #1c1e28;
+
+	--knob-marker: rgba(192, 120, 255, 0.55);
+	--knob-marker-active: #e6c6ff;
 
 	--pad-bg: #232433;
 	--pad-tint: #b186ff;
@@ -270,6 +273,9 @@
 	--knob-arc-disabled: #b6bcc7;
 	--knob-face: #eef2f6;
 
+	--knob-marker: rgba(79, 163, 255, 0.55);
+	--knob-marker-active: #cfe2ff;
+
 	--pad-bg: #eef1f6;
 	--pad-tint: #7c4dff;
 }
@@ -283,7 +289,13 @@
 	--knob-arc-start: #76f4ff;
 	--knob-arc-end: #ff5bd3;
 	--knob-pointer: #e793ff;
-	--knob-track: #35204d;
+	
+	--knob-marker: rgba(231, 147, 255, 0.6);
+	--knob-marker-active: #ffd8ff;
+
+	--knob-track: #444;
+	--knob-track-disabled: #333;
+
 	--knob-face: #1b1126;
 	--pad-bg: #1b1126;
 	--pad-tint: #e793ff;
