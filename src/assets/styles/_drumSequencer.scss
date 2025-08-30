@@ -289,7 +289,7 @@
 	--knob-arc-start: #76f4ff;
 	--knob-arc-end: #ff5bd3;
 	--knob-pointer: #e793ff;
-	
+
 	--knob-marker: rgba(231, 147, 255, 0.6);
 	--knob-marker-active: #ffd8ff;
 
@@ -402,27 +402,34 @@
 			inset -2px -2px 2px rgba(0, 0, 0, 0.7);
 	}
 
-	.padTEST.selected {
-		--heat-a: 0.72;
-		background: color-mix(in oklab, var(--pad-bg) 92%, var(--pad-tint) 8%);
-		box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.7);
-	}
-	.padTEST.selected::after {
-		box-shadow:
-			2px 2px 2px rgba(255, 235, 173, 0.24),
-			inset 1px 1px 2px rgba(0, 0, 0, 0.9);
-	}
+	// .padTEST.selected {
+	// 	--heat-a: 0.72;
+	// 	background: color-mix(in oklab, var(--pad-bg) 92%, var(--pad-tint) 8%);
+	// 	box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.7);
+	// 	box-shadow:
+	// 		2px 2px 2px 0px rgba(255, 235, 173, 0.24),
+	// 		inset 1px 1px 2px 0px rgba(0, 0, 0, 0.9);
+	// }
+	// .padTEST.selected::after {
+	// 	box-shadow:
+	// 		2px 2px 2px rgba(255, 235, 173, 0.24),
+	// 		inset 1px 1px 2px rgba(0, 0, 0, 0.9);
+	// }
 
 	.padTEST.selected {
 		background: color-mix(in oklab, var(--pad-bg) 92%, var(--pad-tint) 8%);
-		box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.7);
+		// box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.7);
+		box-shadow:
+			2px 2px 3px 0px rgba(255, 235, 173, 0.24),
+			inset 2px 2px 4px 0px rgba(0, 0, 0, 0.9);
 		--heat-a: 0.72;
 	}
 
 	.padTEST.selected::after {
-		box-shadow:
-			2px 2px 2px var(--active-ring),
-			inset 1px 1px 2px rgba(0, 0, 0, 0.9);
+		// box-shadow:
+		// 	2px 2px 2px var(--active-ring),
+		// 	inset 1px 1px 2px rgba(0, 0, 0, 0.9);
+		box-shadow: inset 2px 2px 3px 0px rgba(0, 0, 0, 0.9);
 	}
 
 	.padTEST.playing {

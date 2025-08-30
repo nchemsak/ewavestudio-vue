@@ -33,7 +33,7 @@
 
             <div class="pt-fields">
                 <label class="pt-field">
-                    <span class="pt-label">Key</span>
+                    <span class="pt-label">Key/Note</span>
                     <PtSelect v-model="keyRoot" :options="keyOptions" aria-label="Key" />
                 </label>
 
@@ -76,13 +76,19 @@ const props = defineProps<{
     maxFreq?: number;            // defaults to 2000
     currentTheme?: string;
 }>();
+// const emit = defineEmits<{
+//     (e: 'update:steps', v: boolean[]): void;
+//     (e: 'update:velocities', v: number[]): void;
+//     (e: 'update:frequencies', v: number[]): void;
+//     (e: 'octave-shift', delta: number): void;
+// }>();
 const emit = defineEmits<{
     (e: 'update:steps', v: boolean[]): void;
     (e: 'update:velocities', v: number[]): void;
     (e: 'update:frequencies', v: number[]): void;
     (e: 'octave-shift', delta: number): void;
+    (e: 'key-root-change', root: typeof ROOTS[number]): void;
 }>();
-
 
 
 
@@ -139,7 +145,7 @@ function applyVelocityPattern(fn: (i: number, len: number) => number): void {
 
 function shapePeaks(): void {
     // 1.00, 0.75, 0.50, 0.75 (repeat)
-    const cycle = [1.0, 0.75, 0.5, 0.75];
+    const cycle = [1.0, 0.55, 0.25, 0.55];
     applyVelocityPattern(i => cycle[i % 4]);
 }
 
@@ -162,12 +168,12 @@ function shapeRamp(): void {
 
 function shapeBackbeat(): void {
     // Accents on 2 & 4 (1-indexed quarter-notes)
-    applyVelocityPattern(i => ((i % 4 === 1) || (i % 4 === 3)) ? 1.0 : 0.7);
+    applyVelocityPattern(i => ((i % 4 === 1) || (i % 4 === 3)) ? 1.0 : 0.5);
 }
 
 function shapeRandom(): void {
     // Random musical range for active steps
-    const minV = 0.5, maxV = 1.0;
+    const minV = 0.15, maxV = 1.0;
     applyVelocityPattern(() => minV + Math.random() * (maxV - minV));
 }
 
@@ -199,11 +205,28 @@ const SCALE_LABELS: Record<string, string> = {
     egyptian: 'Egyptian Pentatonic',
 };
 
-const keyRoot = ref<typeof ROOTS[number]>('C');
+// const keyRoot = ref<typeof ROOTS[number]>('C');
+const keyRoot = ref<typeof ROOTS[number]>('A');
 const keyScale = ref<keyof typeof SCALES>('major');
 
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const midiToName = (m: number) => `${NOTE_NAMES[m % 12]}${Math.floor(m / 12) - 1}`;
+// const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+// const midiToName = (m: number) => `${NOTE_NAMES[m % 12]}${Math.floor(m / 12) - 1}`;
+
+const SHARP_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+const FLAT_NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+const FLAT_KEYS = new Set(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb']);
+const SHARP_KEYS = new Set(['G', 'D', 'A', 'E', 'B', 'F#', 'C#']);
+
+const preferFlat = computed(() =>
+    keyRoot.value.includes('b') || FLAT_KEYS.has(keyRoot.value)
+);
+// If you want C/A to use flats instead, flip this computed to default to flats when neutral.
+
+const NAMES = computed(() => preferFlat.value ? FLAT_NOTE_NAMES : SHARP_NOTE_NAMES);
+
+const midiToName = (m: number) =>
+    `${NAMES.value[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
+
 
 type PresetKey = 'low' | 'mid' | 'high' | 'wide';
 const PRESETS: Record<PresetKey, { minOct: number; maxOct: number; label: string }> = {
@@ -276,6 +299,8 @@ const keyOptions = ROOTS.map(r => ({ label: r, value: r }));
 const scaleOptions = Object.keys(SCALES).map(name => ({
     label: SCALE_LABELS[name] ?? name, value: name
 }));
+
+watch(keyRoot, (v) => emit('key-root-change', v), { immediate: true });
 
 </script>
 

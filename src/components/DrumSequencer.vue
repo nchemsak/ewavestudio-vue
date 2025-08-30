@@ -103,10 +103,17 @@
 			<!-- Pattern tools  -->
 			<!-- <div class="controlsWrapper pt-cards"> -->
 			<CollapsibleCard id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
+				<!-- <PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
+					:max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
+					@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
+					@octave-shift="octaveShiftAllSkip($event)" /> -->
+
+
 				<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
 					:max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
 					@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
-					@octave-shift="octaveShiftAllSkip($event)" />
+					@octave-shift="octaveShiftAllSkip($event)" @key-root-change="onKeyRootChange" />
+
 			</CollapsibleCard>
 
 			<!-- Generators -->
@@ -395,7 +402,52 @@ const fmRatio = ref<number | null>(1); // start as 1:1, or null for Hz mode
 const A4 = 440;
 const MIN_PAD_HZ = 100;
 const MAX_PAD_HZ = 2000;
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+// const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+// Map Melody Maker roots (includes flats) → semitone index
+const ROOT_TO_SEMITONE: Record<string, number> = {
+	'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6,
+	'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
+};
+
+const defaultOctaveForPads = 3; // A3 was the old default (220 Hz)
+const selectedKeyRoot = ref<'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B'>('A');
+
+function midiToFreq(m: number) { return A4 * Math.pow(2, (m - 69) / 12); }
+function freqForRootAtOct(root: string, oct: number) {
+	const semi = ROOT_TO_SEMITONE[root] ?? 9; // fallback 'A'
+	return midiToFreq((oct + 1) * 12 + semi);
+}
+const defaultPadHz = computed(() => freqForRootAtOct(selectedKeyRoot.value, defaultOctaveForPads));
+
+
+const globalOctaveOffset = ref(0);
+
+const currentDefaultHz = computed(() =>
+	defaultPadHz.value * Math.pow(2, globalOctaveOffset.value)
+);
+
+const SHARP_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+const FLAT_NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+
+const FLAT_KEYS = new Set(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb']);
+const SHARP_KEYS = new Set(['G', 'D', 'A', 'E', 'B', 'F#', 'C#']);
+
+type AccidentalMode = 'sharp' | 'flat';
+const accidentalMode = computed<AccidentalMode>(() => {
+	const r = selectedKeyRoot.value;
+	if (r.includes('b') || FLAT_KEYS.has(r)) return 'flat';
+	if (r.includes('#') || SHARP_KEYS.has(r)) return 'sharp';
+	return 'sharp'; // default for C/A etc.
+});
+
+function midiToNamePref(m: number, mode: AccidentalMode = accidentalMode.value) {
+	const names = mode === 'flat' ? FLAT_NOTE_NAMES : SHARP_NOTE_NAMES;
+	const n = ((m % 12) + 12) % 12;
+	const o = Math.floor(m / 12) - 1;
+	return `${names[n]}${o}`;
+}
+
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -609,7 +661,9 @@ function startTuner() {
 				const hz = inst.pitches?.[step] ?? 0;
 				if (hz > 0) {
 					latchedHz = hz;
-					latchedNote = midiToName(freqToMidi(hz));
+					// latchedNote = midiToName(freqToMidi(hz));
+					latchedNote = midiToNamePref(freqToMidi(hz));
+
 				}
 			}
 			// if the step is empty or muted, keep the existing latched values
@@ -719,7 +773,9 @@ const waveLabel = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
 const isFineAdjust = ref(false);
 
 
-function nearestNote(hz) { return midiToName(freqToMidi(hz)); }
+// function nearestNote(hz) { return midiToName(freqToMidi(hz)); }
+function nearestNote(hz) { return midiToNamePref(freqToMidi(hz)); }
+
 
 function midiOf(octave, semitone) {
 	return (octave + 1) * 12 + semitone; // same scheme you're using
@@ -782,7 +838,9 @@ const instruments = ref([
 		channelVolume: 0.5,
 		steps: Array(16).fill(false),
 		velocities: Array(16).fill(1.0),
-		pitches: Array(16).fill(220),
+		// pitches: Array(16).fill(220),
+		// pitches: Array(16).fill(defaultPadHz.value),
+		pitches: Array(16).fill(currentDefaultHz.value),
 	},
 ]);
 
@@ -876,6 +934,11 @@ function octaveShiftAllSkip(deltaOct, { onlyActive = false } = {}) {
 	const inst = synthInstrument.value;
 	if (!inst) return;
 
+	// Advance the global default so untouched pads keep tracking the octave.
+	if (!onlyActive) {
+		globalOctaveOffset.value += deltaOct;
+	}
+
 	let moved = 0, skipped = 0;
 
 	for (let i = 0; i < inst.pitches.length; i++) {
@@ -896,13 +959,39 @@ function isNoteDisabled(semitone, octave) {
 	return !isNoteInRange(octave, semitone);
 }
 
-function midiToFreq(m) { return A4 * Math.pow(2, (m - 69) / 12); }
+// function midiToFreq(m) { return A4 * Math.pow(2, (m - 69) / 12); }
 function freqToMidi(f) { return Math.round(69 + 12 * Math.log2(f / A4)); }
-function midiToName(m) {
-	const n = m % 12, o = Math.floor(m / 12) - 1;
-	return `${NOTE_NAMES[n]}${o}`;
-}
+// function midiToName(m) {
+// 	const n = m % 12, o = Math.floor(m / 12) - 1;
+// 	return `${NOTE_NAMES[n]}${o}`;
+// }
 
+
+// Called when PatternTools reports a new key root
+function onKeyRootChange(root: typeof selectedKeyRoot.value) {
+	const inst = synthInstrument.value;
+	if (!inst) { selectedKeyRoot.value = root; return; }
+
+	const oldBaseline = currentDefaultHz.value; // includes octave offset
+	selectedKeyRoot.value = root;            // this flips defaultPadHz to the new value
+	// const newDefault = defaultPadHz.value;
+	const newBaseline = currentDefaultHz.value;
+
+	// Consider a pad “unassigned” if its pitch equals the old default (within a small epsilon)
+	const EPS = 0.5; // Hz
+	// 	inst.pitches = inst.pitches.map(hz =>
+	// 		Math.abs(hz - oldDefault) <= EPS ? newDefault : hz
+	// 	);
+	// }
+	// Only retarget pads that are (a) INACTIVE and (b) still at the old default.
+	// inst.pitches = inst.pitches.map((hz, i) =>
+	// 	(!inst.steps[i] && Math.abs(hz - oldDefault) <= EPS) ? newDefault : hz
+	// );
+
+	inst.pitches = inst.pitches.map((hz, i) =>
+		(!inst.steps[i] && Math.abs(hz - oldBaseline) <= EPS) ? newBaseline : hz
+	);
+}
 // Pad pitch and volume sliders
 const activeVolumePad = ref(null); // format: `${instrumentName}-${index}`
 const activePitchPad = ref(null);
@@ -1211,9 +1300,9 @@ function ensureLfoSource() {
 
 		const ms = Math.max(15, Math.round(1000 / hz));
 		snhTimer = window.setInterval(() => {
-			const t = audioCtx.currentTime + 0.002;
+			const t = audioCtx.currentTime;
 			const v = (Math.random() * 2 - 1);
-			lfoSnh!.offset.setValueAtTime(v, t);
+			lfoSnh!.offset.setTargetAtTime(v, t, 0.005);
 		}, ms) as unknown as number;
 	} else {
 		lfoOsc = audioCtx.createOscillator();
@@ -1251,24 +1340,19 @@ function applyDepthScale() {
 	const t = audioCtx.currentTime;
 	switch (lfoTarget.value) {
 		case 'pitch':
-			// cents → connect to osc.detune (no further scaling)
-			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
+			lfoGain.gain.setValueAtTime(lfoDepth.value, t);         // cents
 			break;
 		case 'pan':
-			// % → -1..1 scaling happens by AudioParam sum around 0; we'll connect directly, so scale to 0..1
-			lfoGain.gain.setValueAtTime(lfoDepth.value / 100, t);
+			lfoGain.gain.setValueAtTime(lfoDepth.value / 100, t);   // 0..1
 			break;
 		case 'gain':
-			// % → reuse your previous feel
-			lfoGain.gain.setValueAtTime(lfoDepth.value * 0.005, t);
+			lfoGain.gain.setValueAtTime(1, t); // <-- raw -1..+1 for tremolo mapping
 			break;
 		case 'filter':
-			// Hz additive
-			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
+			lfoGain.gain.setValueAtTime(lfoDepth.value, t);         // Hz
 			break;
 		case 'resonance':
-			// Q additive (small)
-			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
+			lfoGain.gain.setValueAtTime(lfoDepth.value, t);         // Q
 			break;
 	}
 }
@@ -1488,6 +1572,179 @@ function schedule() {
 }
 
 
+// function playSynthNote(freq, velocity, decayTime, startTime) {
+// 	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
+// 	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
+
+// 	// ENV sums all unison voices
+// 	const oscEnvGain = audioCtx.createGain();
+// 	const noiseEnvGain = audioCtx.createGain();
+
+// 	// Shared envelope timings
+// 	const attackEnd = startTime + attackTime;
+// 	const naturalEnd = attackEnd + decay;
+// 	const gateEnd = startTime + Math.max(0.02, ampEnvDecayMs.value / 1000);
+// 	const noteEnd = envelopeEnabled.value ? naturalEnd : gateEnd;
+
+// 	// Compute blends BEFORE using safeOscGain
+// 	const blend = noiseEnabled.value ? Math.min(Math.max(noiseAmount.value, 0), 1) : 0;
+// 	const oscBlend = 1 - blend;
+// 	const noiseBlend = blend;
+// 	const safeOscGain = Math.max(0.0001, velocity * oscBlend);
+// 	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
+
+// 	// Single amplitude envelope (remove the duplicate block you had)
+// 	if (envelopeEnabled.value) {
+// 		oscEnvGain.gain.setValueAtTime(0.0001, startTime);
+// 		oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
+// 		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
+// 	} else {
+// 		oscEnvGain.gain.setValueAtTime(Math.max(0.0001, velocity), startTime);
+// 		oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005);
+// 	}
+
+// 	// ===== UNISON =====
+// 	const voices = unisonEnabled.value ? Math.max(1, Math.min(6, unisonVoices.value)) : 1;
+// 	const detuneStep = (voices > 1) ? detuneCents.value : 0;
+// 	const spreadPct = (voices > 1) ? stereoSpread.value : 0;
+// 	const normIndex = (i, n) => (n === 1) ? 0 : ((i / (n - 1)) * 2 - 1);
+
+// 	for (let i = 0; i < voices; i++) {
+// 		const osc = audioCtx.createOscillator();
+// 		const voiceFilter = audioCtx.createBiquadFilter();
+// 		const voiceGain = audioCtx.createGain();
+// 		const panner = audioCtx.createStereoPanner();
+
+// 		osc.type = selectedWaveform.value;
+
+// 		applyPitchEnv(osc, freq, startTime, {
+// 			enabled: pitchEnvEnabled.value,
+// 			semitones: pitchEnvSemitones.value,
+// 			mode: pitchMode.value,
+// 			decay: pitchEnvDecay.value
+// 		});
+
+// 		const fmHandle = startFM(audioCtx, osc, freq, startTime, {
+// 			enabled: fmEnabled.value,
+// 			modFreqHz: fmModFreq.value,
+// 			index: fmIndex.value,
+// 			ratio: fmRatio.value
+// 		});
+
+// 		const dNorm = normIndex(i, voices);
+// 		const detuneC = dNorm * detuneStep;
+// 		osc.detune.setValueAtTime(detuneC, startTime);
+
+// 		voiceFilter.type = 'lowpass';
+// 		if (filterEnabled.value) {
+// 			voiceFilter.frequency.setValueAtTime(filterCutoff.value, startTime);
+// 			voiceFilter.Q.setValueAtTime(filterResonance.value, startTime);
+// 		} else {
+// 			voiceFilter.frequency.setValueAtTime(20000, startTime);
+// 			voiceFilter.Q.setValueAtTime(0.0001, startTime);
+// 		}
+
+// 		voiceGain.gain.setValueAtTime(1 / voices, startTime);
+// 		panner.pan.setValueAtTime((dNorm * spreadPct) / 100, startTime);
+
+// 		// if (lfoEnabled.value) {
+// 		// 	if (lfoTarget.value === 'pitch') {
+// 		// 		const lfoTap = audioCtx.createGain();
+// 		// 		lfoTap.gain.value = 1;
+// 		// 		lfoGain.connect(lfoTap).connect(osc.frequency);
+// 		// 	} else if (lfoTarget.value === 'gain') {
+// 		// 		const lfoModGain = audioCtx.createGain();
+// 		// 		lfoModGain.gain.value = lfoDepth.value * 0.005;
+
+// 		// 		const lfoOffset = audioCtx.createConstantSource()
+// 		// 		lfoOffset.offset.value = velocity * 0.75;
+
+// 		// 		const lfoSum = audioCtx.createGain();
+// 		// 		lfoGain.connect(lfoModGain).connect(lfoSum);
+// 		// 		lfoOffset.connect(lfoSum);
+// 		// 		lfoSum.connect(voiceGain.gain);
+
+// 		// 		lfoOffset.start(startTime);
+// 		// 		lfoOffset.stop(noteEnd + 0.05); // was decayEnd
+// 		// 	} else if (lfoTarget.value === 'filter') {
+// 		// 		const lfoTap = audioCtx.createGain();
+// 		// 		lfoTap.gain.value = 1;
+// 		// 		lfoGain.connect(lfoTap).connect(voiceFilter.frequency);
+// 		// 	}
+// 		// }
+// 		if (lfoEnabled.value) {
+// 			if (lfoTarget.value === 'pitch') {
+// 				// Use detune in cents (clean, musical)
+// 				const lfoTap = audioCtx.createGain();
+// 				lfoTap.gain.value = 1;
+// 				lfoGain.connect(lfoTap).connect(osc.detune);
+// 			} else if (lfoTarget.value === 'gain') {
+// 				// Your existing offset+sum mapping (kept)
+// 				const lfoModGain = audioCtx.createGain();
+// 				lfoModGain.gain.value = 1;
+
+// 				const lfoOffset = audioCtx.createConstantSource();
+// 				lfoOffset.offset.value = velocity * 0.75;
+
+// 				const lfoSum = audioCtx.createGain();
+// 				lfoGain.connect(lfoModGain).connect(lfoSum);
+// 				lfoOffset.connect(lfoSum);
+// 				lfoSum.connect(voiceGain.gain);
+
+// 				lfoOffset.start(startTime);
+// 				lfoOffset.stop(noteEnd + 0.05);
+// 			} else if (lfoTarget.value === 'filter') {
+// 				const lfoTap = audioCtx.createGain();
+// 				lfoTap.gain.value = 1;
+// 				lfoGain.connect(lfoTap).connect(voiceFilter.frequency);
+// 			} else if (lfoTarget.value === 'pan') {
+// 				// StereoPanner.pan is -1..+1; our lfoGain.gain is scaled to 0..1 above.
+// 				const lfoTap = audioCtx.createGain();
+// 				lfoTap.gain.value = 1;
+// 				lfoGain.connect(lfoTap).connect(panner.pan);
+// 			} else if (lfoTarget.value === 'resonance') {
+// 				const lfoTap = audioCtx.createGain();
+// 				lfoTap.gain.value = 1;
+// 				lfoGain.connect(lfoTap).connect(voiceFilter.Q);
+// 			}
+// 		}
+
+// 		osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
+
+// 		osc.start(startTime);
+// 		osc.stop(noteEnd);
+// 		if (fmHandle) fmHandle.stop(noteEnd);
+// 	}
+
+// 	if (driveEnabled.value) {
+// 		oscEnvGain.connect(driveDry)
+// 		oscEnvGain.connect(driveShaper)
+// 	} else {
+// 		oscEnvGain.connect(driveSum)
+// 	}
+
+// 	// ===== Noise =====
+// 	if (noiseEnabled.value && noiseAmount.value > 0) {
+// 		const noiseBuffer = noiseBuffers[noiseType.value]
+// 		if (noiseBuffer) {
+// 			const noiseSource = audioCtx.createBufferSource()
+// 			noiseSource.buffer = noiseBuffer
+
+// 			noiseEnvGain.gain.setValueAtTime(0.0001, startTime)
+// 			noiseEnvGain.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd)
+// 			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd)
+
+// 			const noiseFilter = audioCtx.createBiquadFilter()
+// 			noiseFilter.type = 'bandpass'
+// 			noiseFilter.frequency.setValueAtTime(8000, startTime)
+// 			noiseFilter.Q.setValueAtTime(1, startTime)
+
+// 			noiseSource.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain)
+// 			noiseSource.start(startTime)
+// 			noiseSource.stop(noteEnd)
+// 		}
+// 	}
+// }
 function playSynthNote(freq, velocity, decayTime, startTime) {
 	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
 	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
@@ -1509,7 +1766,7 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 	const safeOscGain = Math.max(0.0001, velocity * oscBlend);
 	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
 
-	// Single amplitude envelope (remove the duplicate block you had)
+	// Single amplitude envelope
 	if (envelopeEnabled.value) {
 		oscEnvGain.gain.setValueAtTime(0.0001, startTime);
 		oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
@@ -1563,68 +1820,62 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 		voiceGain.gain.setValueAtTime(1 / voices, startTime);
 		panner.pan.setValueAtTime((dNorm * spreadPct) / 100, startTime);
 
-		// if (lfoEnabled.value) {
-		// 	if (lfoTarget.value === 'pitch') {
-		// 		const lfoTap = audioCtx.createGain();
-		// 		lfoTap.gain.value = 1;
-		// 		lfoGain.connect(lfoTap).connect(osc.frequency);
-		// 	} else if (lfoTarget.value === 'gain') {
-		// 		const lfoModGain = audioCtx.createGain();
-		// 		lfoModGain.gain.value = lfoDepth.value * 0.005;
-
-		// 		const lfoOffset = audioCtx.createConstantSource()
-		// 		lfoOffset.offset.value = velocity * 0.75;
-
-		// 		const lfoSum = audioCtx.createGain();
-		// 		lfoGain.connect(lfoModGain).connect(lfoSum);
-		// 		lfoOffset.connect(lfoSum);
-		// 		lfoSum.connect(voiceGain.gain);
-
-		// 		lfoOffset.start(startTime);
-		// 		lfoOffset.stop(noteEnd + 0.05); // was decayEnd
-		// 	} else if (lfoTarget.value === 'filter') {
-		// 		const lfoTap = audioCtx.createGain();
-		// 		lfoTap.gain.value = 1;
-		// 		lfoGain.connect(lfoTap).connect(voiceFilter.frequency);
-		// 	}
-		// }
+		// ===== LFO routing per target (except 'gain' — handled post-envelope below) =====
+		// ===== LFO routing per target (except 'gain' — handled post-envelope below) =====
 		if (lfoEnabled.value) {
 			if (lfoTarget.value === 'pitch') {
-				// Use detune in cents (clean, musical)
-				const lfoTap = audioCtx.createGain();
-				lfoTap.gain.value = 1;
+				const lfoTap = audioCtx.createGain(); lfoTap.gain.value = 1;
 				lfoGain.connect(lfoTap).connect(osc.detune);
-			} else if (lfoTarget.value === 'gain') {
-				// Your existing offset+sum mapping (kept)
-				const lfoModGain = audioCtx.createGain();
-				lfoModGain.gain.value = 1;
 
-				const lfoOffset = audioCtx.createConstantSource();
-				lfoOffset.offset.value = velocity * 0.75;
-
-				const lfoSum = audioCtx.createGain();
-				lfoGain.connect(lfoModGain).connect(lfoSum);
-				lfoOffset.connect(lfoSum);
-				lfoSum.connect(voiceGain.gain);
-
-				lfoOffset.start(startTime);
-				lfoOffset.stop(noteEnd + 0.05);
 			} else if (lfoTarget.value === 'filter') {
+				// --- keep cutoff in a safe band and smooth the control ---
+				const f0 = filterEnabled.value ? filterCutoff.value : 20000;
+				const minHz = 30;
+				const maxHz = audioCtx.sampleRate * 0.45; // ~0.45*Nyquist for headroom
+
+				// How far we can swing symmetrically without crossing bounds:
+				const maxDepth = Math.max(0, Math.min(f0 - minHz, maxHz - f0));
+				// Scale down requested depth if it would exceed the safe band:
+				const scale = (lfoDepth.value > 0) ? Math.min(1, maxDepth / lfoDepth.value) : 0;
+
 				const lfoTap = audioCtx.createGain();
-				lfoTap.gain.value = 1;
-				lfoGain.connect(lfoTap).connect(voiceFilter.frequency);
-			} else if (lfoTarget.value === 'pan') {
-				// StereoPanner.pan is -1..+1; our lfoGain.gain is scaled to 0..1 above.
-				const lfoTap = audioCtx.createGain();
-				lfoTap.gain.value = 1;
-				lfoGain.connect(lfoTap).connect(panner.pan);
+				lfoTap.gain.value = scale;      // shrink to stay within [minHz, maxHz]
+
+				// Light smoothing to avoid "fast automation" spikes (control-rate ~ 120 Hz)
+				const ctrlLP = audioCtx.createBiquadFilter();
+				ctrlLP.type = 'lowpass';
+				ctrlLP.frequency.value = 120;
+
+				lfoGain.connect(lfoTap).connect(ctrlLP).connect(voiceFilter.frequency);
+
 			} else if (lfoTarget.value === 'resonance') {
-				const lfoTap = audioCtx.createGain();
-				lfoTap.gain.value = 1;
-				lfoGain.connect(lfoTap).connect(voiceFilter.Q);
+				// --- keep Q >= 0 and <= sensible cap, with smoothing ---
+				const qBase = filterEnabled.value ? filterResonance.value : 0.0001;
+				const qMin = 0.0001, qMax = 20; // wide but safe musical range
+
+				const maxUp = qMax - qBase;     // upward headroom
+				const maxDown = qBase - qMin;     // downward headroom
+				const maxSym = Math.max(0, Math.min(maxUp, maxDown));
+
+				const qScale = (lfoDepth.value > 0) ? Math.min(1, maxSym / lfoDepth.value) : 0;
+
+				const qTap = audioCtx.createGain();
+				qTap.gain.value = qScale;
+
+				const qLP = audioCtx.createBiquadFilter();
+				qLP.type = 'lowpass';
+				qLP.frequency.value = 120;
+
+				lfoGain.connect(qTap).connect(qLP).connect(voiceFilter.Q);
+
+			} else if (lfoTarget.value === 'pan') {
+				const lfoTap = audioCtx.createGain(); lfoTap.gain.value = 1;
+				lfoGain.connect(lfoTap).connect(panner.pan);
 			}
 		}
 
+
+		// voice chain into the shared envelope
 		osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
 
 		osc.start(startTime);
@@ -1632,32 +1883,75 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 		if (fmHandle) fmHandle.stop(noteEnd);
 	}
 
-	if (driveEnabled.value) {
-		oscEnvGain.connect(driveDry)
-		oscEnvGain.connect(driveShaper)
-	} else {
-		oscEnvGain.connect(driveSum)
+	// ===== AMPLITUDE LFO (tremolo) — multiplicative, post-envelope =====
+	// Assumes applyDepthScale() sets lfoGain.gain = 1 for 'gain' target (raw −1..+1)
+	let postAmpNode = oscEnvGain;
+
+	if (lfoEnabled.value && lfoTarget.value === 'gain') {
+		const tremoloVca = audioCtx.createGain();
+		tremoloVca.gain.setValueAtTime(1, startTime);
+
+		// Map LFO −1..+1 → 0..1
+		const half = audioCtx.createGain(); half.gain.value = 0.5;
+		const offset = audioCtx.createConstantSource(); offset.offset.value = 0.5;
+
+		const lfoUni = audioCtx.createGain(); // 0..1 unipolar LFO
+		lfoGain.connect(half).connect(lfoUni);
+		offset.connect(lfoUni);
+		offset.start(startTime);
+		offset.stop(noteEnd + 0.05);
+
+		// Depth 0..1 from lfoDepth (0..100)
+		const d = Math.min(1, Math.max(0, lfoDepth.value / 100));
+
+		// Gain = (1 - d) + d * lfoUni
+		const scale = audioCtx.createGain();                // d * lfoUni
+		scale.gain.setValueAtTime(d, startTime);
+		lfoUni.connect(scale);
+
+		const base = audioCtx.createConstantSource();       // (1 - d)
+		base.offset.setValueAtTime(1 - d, startTime);
+		base.start(startTime);
+		base.stop(noteEnd + 0.05);
+
+		const ampSum = audioCtx.createGain();
+		scale.connect(ampSum);
+		base.connect(ampSum);
+
+		ampSum.connect(tremoloVca.gain);
+
+		// audio through the VCA
+		oscEnvGain.connect(tremoloVca);
+		postAmpNode = tremoloVca;
 	}
 
-	// ===== Noise =====
+	// ===== Route to the rest of the chain using postAmpNode =====
+	if (driveEnabled.value) {
+		postAmpNode.connect(driveDry);
+		postAmpNode.connect(driveShaper);
+	} else {
+		postAmpNode.connect(driveSum);
+	}
+
+	// ===== Noise (unchanged; not tremolo’d) =====
 	if (noiseEnabled.value && noiseAmount.value > 0) {
-		const noiseBuffer = noiseBuffers[noiseType.value]
+		const noiseBuffer = noiseBuffers[noiseType.value];
 		if (noiseBuffer) {
-			const noiseSource = audioCtx.createBufferSource()
-			noiseSource.buffer = noiseBuffer
+			const noiseSource = audioCtx.createBufferSource();
+			noiseSource.buffer = noiseBuffer;
 
-			noiseEnvGain.gain.setValueAtTime(0.0001, startTime)
-			noiseEnvGain.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd)
-			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd)
+			noiseEnvGain.gain.setValueAtTime(0.0001, startTime);
+			noiseEnvGain.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd);
+			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
 
-			const noiseFilter = audioCtx.createBiquadFilter()
-			noiseFilter.type = 'bandpass'
-			noiseFilter.frequency.setValueAtTime(8000, startTime)
-			noiseFilter.Q.setValueAtTime(1, startTime)
+			const noiseFilter = audioCtx.createBiquadFilter();
+			noiseFilter.type = 'bandpass';
+			noiseFilter.frequency.setValueAtTime(8000, startTime);
+			noiseFilter.Q.setValueAtTime(1, startTime);
 
-			noiseSource.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain)
-			noiseSource.start(startTime)
-			noiseSource.stop(noteEnd)
+			noiseSource.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain);
+			noiseSource.start(startTime);
+			noiseSource.stop(noteEnd);
 		}
 	}
 }
