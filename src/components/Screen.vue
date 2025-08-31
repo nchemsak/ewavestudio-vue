@@ -44,7 +44,14 @@ defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner
 
 <style scoped>
 .mpc-screen {
-    --screen-w: 22rem;
+    /* --screen-w: 22rem; */
+
+    /* --screen-w: min(22rem, 100%); */
+    /* width: var(--screen-w);*/
+
+    width: min(22rem, 100%);
+    max-width: 100%;
+    box-sizing: border-box;
 
     --mpc-bezel-bg: #171a21;
     --mpc-bezel-rim: rgba(255, 255, 255, .06);
@@ -126,7 +133,8 @@ defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner
     position: relative;
     background: var(--mpc-lcd-bg);
     width: clamp(60%, 82%, 92%);
-    height: calc(var(--screen-w) * 0.30);
+    /* height: calc(var(--screen-w) * 0.30); */
+    aspect-ratio: 10 / 3;
     margin: 0 auto;
     border-radius: .35rem;
     box-shadow:

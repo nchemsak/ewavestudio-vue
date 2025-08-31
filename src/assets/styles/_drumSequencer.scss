@@ -225,11 +225,10 @@
 		cursor: pointer;
 	}
 
-	.controlsWrapper {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: flex-start;
-		margin-top: 50px;
+
+	.ds-modules.controlsWrapper {
+		display: block; 
+		margin-top: 0;
 	}
 
 	.pad-settings-dot {

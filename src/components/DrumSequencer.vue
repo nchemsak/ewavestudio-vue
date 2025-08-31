@@ -1,12 +1,20 @@
 <template>
 	<div class="drum-sequencer" :class="currentTheme">
-		<!-- Transport & Mix -->
-		<section class="pt-card transport-card">
-			<div class="transport-layout">
-				<!-- Left: title + knobs + play -->
+		<!-- MAIN GRID -->
+		<div class="ds-grid">
+
+			<!-- Right rail: Visualizer (sticky) -->
+			<aside class="pt-card ds-visualizer">
+				<div class="mpc-wrap">
+					<MpcScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey"
+						@fkey="handleFKey" />
+				</div>
+			</aside>
+
+			<!-- Transport (left, row 1) -->
+			<section class="pt-card transport-card ds-transport">
 				<div class="transport-left">
 					<h2 class="pt-title mb-2">Ephemeral Wave</h2>
-
 					<div class="pt-knob-row transport-row">
 						<!-- Volume -->
 						<div class="position-relative text-center">
@@ -40,265 +48,243 @@
 						</div>
 					</div>
 				</div>
+			</section>
 
-				<!-- Right: screen -->
-				<div class="transport-right">
-					<div class="mpc-wrap">
-						<MpcScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey"
-							@fkey="handleFKey" />
+			<!-- Step Sequencer (left, row 2) -->
+			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
+				<div class="pt-subheader step-sequencer-subheader">
+					<div class="channel-caption d-flex align-items-center gap-2">
+						<div class="mute-dot" :class="{ muted: synthInstrument.muted }"
+							@click="toggleMute(synthInstrument.name)" role="button"
+							:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
+						<h2 class="pt-title">Step Sequencer</h2>
+
+						<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
+							label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
+							@knobEnd="activeKnob = null" />
+						<span v-if="activeKnob === `vol-${synthInstrument.name}`" class="custom-tooltip">
+							{{ Math.round(synthInstrument.channelVolume * 100) }}%
+						</span>
 					</div>
-				</div>
-			</div>
-		</section>
 
-		<!-- Percussion Synth -->
-		<section class="pt-card step-card" v-if="synthInstrument">
-			<div class="pt-subheader step-sequencer-subheader">
-				<div class="channel-caption d-flex align-items-center gap-2">
-					<div class="mute-dot" :class="{ muted: synthInstrument.muted }"
-						@click="toggleMute(synthInstrument.name)" role="button"
-						:title="synthInstrument.muted ? 'Muted' : 'Playing'">
-					</div>
-					<h2 class="pt-title">Step Sequencer</h2>
-
-					<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
-						label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
-						@knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === `vol-${synthInstrument.name}`" class="custom-tooltip">
-						{{ Math.round(synthInstrument.channelVolume * 100) }}%
-					</span>
-				</div>
-
-				<div class="pt-header-tools">
-					<div class="d-flex gap-2">
-						<button class="pt-btn pt-btn-sm" :disabled="allOpen" @click="setAllCollapsibles(true)">Expand
-							all</button>
-						<button class="pt-btn pt-btn-sm" :disabled="allClosed"
-							@click="setAllCollapsibles(false)">Collapse all</button>
-					</div>
-				</div>
-			</div>
-
-			<div class="step-card__grid">
-
-
-				<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
-					:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
-					v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
-					:nearestNote="nearestNote"
-					@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
-
-			</div>
-		</section>
-		<section class="pt-cards controlsWrapper">
-
-			<!-- Pattern tools  -->
-			<CollapsibleCard id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
-
-
-
-				<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies" :min-freq="100"
-					:max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
-					@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
-					@octave-shift="octaveShiftAllSkip($event)" @key-root-change="onKeyRootChange" />
-
-			</CollapsibleCard>
-
-			<!-- Generators -->
-			<CollapsibleCard id="generators" title="Generators" v-model="collapsibleState['generators']">
-				<!-- Oscillators -->
-				<section class="pt-section">
-					<div class="pt-section-title">Oscillators</div>
-					<div class="pt-btn-group" role="group" aria-label="Waveforms">
-						<button v-for="wave in waves" :key="wave" class="pt-btn"
-							:class="{ 'is-active': selectedWaveform === wave }"
-							:aria-pressed="selectedWaveform === wave" @click="selectedWaveform = wave">
-							{{ waveLabel(wave) }}
-						</button>
-					</div>
-				</section>
-
-				<div class="pt-rule" aria-hidden="true"></div>
-
-				<!-- Noise -->
-				<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
-					v-model:amount="noiseAmount" :color="'#9C27B0'" />
-			</CollapsibleCard>
-
-
-
-			<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
-				<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
-					v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
-
-				<div class="pt-rule"></div>
-
-				<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
-					v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
-			</CollapsibleCard>
-			<!-- Pitch & Harmonics -->
-			<CollapsibleCard id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
-				<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
-					v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
-
-				<div class="pt-rule" aria-hidden="true"></div>
-
-				<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled" v-model:modFreq="fmModFreq"
-					v-model:index="fmIndex" v-model:ratio="fmRatio" />
-
-				<div class="pt-rule" aria-hidden="true"></div>
-
-				<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
-					v-model:detune="detuneCents" v-model:spread="stereoSpread" />
-			</CollapsibleCard>
-
-
-			<!-- Movement & Modulation -->
-
-			<CollapsibleCard id="mod" title="Movement & Modulation" v-model="collapsibleState['mod']">
-				<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate" v-model:depth="lfoDepth"
-					v-model:target="lfoTarget" v-model:waveform="lfoWaveform" v-model:syncEnabled="lfoSync"
-					v-model:division="lfoDivision" :depthMax="lfoDepthMax" color="#00BCD4"
-					:targets="['pitch', 'gain', 'filter', 'pan', 'resonance']"
-					:divisions="['1/1', '1/2', '1/4', '1/8', '1/16', '1/8T', '1/8.']" />
-			</CollapsibleCard>
-			<!-- Effects -->
-			<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
-				<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
-					v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime"
-					v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix"
-					v-model:toneEnabled="delayToneEnabled" v-model:toneHz="delayToneHz"
-					v-model:toneType="delayToneType" />
-
-				<div class="pt-rule" aria-hidden="true"></div>
-
-				<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
-					v-model:driveAmount="driveAmount" v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
-			</CollapsibleCard>
-		</section>
-
-		<!-- Sequencer -->
-		<section class="pt-panel">
-			<h2 class="pt-title">Sequencer</h2>
-
-			<!-- Keep your bootstrap accordion if you like -->
-			<div class="accordion" id="seqAccordion">
-				<div class="accordion-item">
-					<h2 class="accordion-header">
-						<button type="button" class="accordion-button" :class="{ collapsed: !seqOpen }"
-							@click="seqOpen = !seqOpen" :aria-expanded="seqOpen ? 'true' : 'false'"
-							aria-controls="seqPanel">
-							Pattern
-						</button>
-					</h2>
-
-					<div id="seqPanel" class="accordion-collapse collapse" :class="{ show: seqOpen }">
-						<div class="accordion-body p-3">
-							<!-- ===== Sampler Channels ===== -->
-							<section class="channels-section">
-								<div v-for="inst in orderedChannels" :key="inst.key || inst.name"
-									class="mb-3 channel-wrap">
-
-									<!-- Add Channel row -->
-									<template v-if="inst.isAddButton">
-										<div class="d-flex align-items-center">
-											<button class="pt-btn pt-accent-cool" @click="addCustomChannel">+ Add
-												Channel</button>
-										</div>
-									</template>
-
-									<!-- Regular channels (unchanged inner logic) -->
-									<template v-else>
-										<div class="d-flex align-items-center gap-2 mb-1">
-											<div class="mute-dot" :class="{ muted: inst.muted }"
-												@click="toggleMute(inst.name)" role="button"
-												:title="inst.muted ? 'Muted' : 'Playing'"></div>
-
-											<div class="channel-label d-flex align-items-center gap-1">
-												<template v-if="!inst.isEditingName">
-													<strong @click="editLabel(inst)"
-														@mouseenter="hoveredLabel = inst.name"
-														@mouseleave="hoveredLabel = null" class="position-relative">
-														{{ inst.label }}
-														<span v-if="hoveredLabel === inst.name"
-															class="custom-tooltip">Click to rename</span>
-													</strong>
-												</template>
-												<template v-else>
-													<input v-model="inst.label" @blur="stopEditingLabel(inst)"
-														@keydown.enter.prevent="stopEditingLabel(inst)"
-														class="form-control form-control-sm" style="max-width: 150px;"
-														:ref="el => inst.inputRef = el" />
-												</template>
-											</div>
-
-											<div class="ms-auto d-flex align-items-center gap-2 channel-actions">
-												<button v-if="inst.isCustom" class="pt-btn pt-btn-sm"
-													@click="triggerFilePicker(inst)">Upload</button>
-												<input class="d-none" :id="`file-${inst.name}`" type="file"
-													accept="audio/*" @change="loadUserSample($event, inst)" />
-												<button v-if="canDelete(inst.name)" class="pt-btn pt-btn-sm pt-danger"
-													@click="deleteChannel(inst.name)">Delete</button>
-											</div>
-										</div>
-
-										<div class="position-relative text-center mb-2">
-											<Knob v-model="inst.channelVolume" :min="0" :max="1" :step="0.01"
-												size="small" label="Vol" color="#8E44AD"
-												@knobStart="activeKnob = `vol-${inst.name}`"
-												@knobEnd="activeKnob = null" />
-											<span v-if="activeKnob === `vol-${inst.name}`" class="custom-tooltip">
-												{{ Math.round(inst.channelVolume * 100) }}%
-											</span>
-										</div>
-
-										<div class="d-flex pad-row">
-											<div class="padTEST-grid">
-												<!-- your pad cells + volume slider kept verbatim -->
-												<div v-for="(active, index) in inst.steps" :key="index"
-													class="padTESTwrap"
-													@mouseenter="hoveredPad = `${inst.name}-${index}`"
-													@mouseleave="hoveredPad = null">
-
-													<div class="pad-step-num">{{ index + 1 }}</div>
-
-													<div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
-														@mousedown="handleMouseDown($event, inst.name, index)"
-														@mouseenter="handleMouseEnter(inst.name, index)"
-														@dragstart.prevent :style="getPadStyle(inst, index)"></div>
-
-													<div v-if="active && hoveredPad === `${inst.name}-${index}`"
-														class="hover-slider volume-slider">
-														<input type="range" min="0" max="1" step="0.01"
-															v-model.number="inst.velocities[index]"
-															@mousedown="activeVolumePad = `${inst.name}-${index}`"
-															@mouseup="activeVolumePad = null"
-															@touchstart="activeVolumePad = `${inst.name}-${index}`"
-															@touchend="activeVolumePad = null" />
-														<span v-if="activeVolumePad === `${inst.name}-${index}`"
-															class="custom-tooltip">
-															{{ Math.round(inst.velocities[index] * 100) }}%
-														</span>
-													</div>
-												</div>
-											</div>
-										</div>
-									</template>
-								</div>
-							</section>
+					<div class="pt-header-tools">
+						<div class="d-flex gap-2">
+							<button class="pt-btn pt-btn-sm" :disabled="allOpen"
+								@click="setAllCollapsibles(true)">Expand all</button>
+							<button class="pt-btn pt-btn-sm" :disabled="allClosed"
+								@click="setAllCollapsibles(false)">Collapse all</button>
 						</div>
 					</div>
 				</div>
-			</div>
-		</section>
 
+				<div class="step-card__grid">
+					<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
+						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
+						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
+						:nearestNote="nearestNote"
+						@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
+				</div>
+			</section>
 
+			<!-- Modules grid (two compact rows) -->
+			<section class="pt-cards controlsWrapper ds-modules">
+
+				<div class="module pattern-tools">
+					<CollapsibleCard id="pattern-tools" title="Pattern Tools"
+						v-model="collapsibleState['pattern-tools']">
+						<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies"
+							:min-freq="100" :max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
+							@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
+							@octave-shift="octaveShiftAllSkip($event)" @key-root-change="onKeyRootChange" />
+					</CollapsibleCard>
+				</div>
+
+				<div class="module generators">
+					<CollapsibleCard id="generators" title="Generators" v-model="collapsibleState['generators']">
+						<section class="pt-section">
+							<div class="pt-section-title">Oscillators</div>
+							<div class="pt-btn-group" role="group" aria-label="Waveforms">
+								<button v-for="wave in waves" :key="wave" class="pt-btn"
+									:class="{ 'is-active': selectedWaveform === wave }"
+									:aria-pressed="selectedWaveform === wave" @click="selectedWaveform = wave">
+									{{ waveLabel(wave) }}
+								</button>
+							</div>
+						</section>
+
+						<div class="pt-rule" aria-hidden="true"></div>
+
+						<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
+							v-model:amount="noiseAmount" :color="'#9C27B0'" />
+					</CollapsibleCard>
+				</div>
+
+				<div class="module sound">
+					<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
+						<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
+							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
+						<div class="pt-rule"></div>
+						<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
+							v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
+					</CollapsibleCard>
+				</div>
+
+				<div class="module mod">
+					<CollapsibleCard id="mod" title="Movement & Modulation" v-model="collapsibleState['mod']">
+						<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate"
+							v-model:depth="lfoDepth" v-model:target="lfoTarget" v-model:waveform="lfoWaveform"
+							v-model:syncEnabled="lfoSync" v-model:division="lfoDivision" :depthMax="lfoDepthMax"
+							color="#00BCD4" :targets="['pitch', 'gain', 'filter', 'pan', 'resonance']"
+							:divisions="['1/1', '1/2', '1/4', '1/8', '1/16', '1/8T', '1/8.']" />
+					</CollapsibleCard>
+				</div>
+
+				<div class="module pitch">
+					<CollapsibleCard id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
+						<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
+							v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
+							v-model:mode="pitchMode" />
+						<div class="pt-rule" aria-hidden="true"></div>
+						<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
+							v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
+						<div class="pt-rule" aria-hidden="true"></div>
+						<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
+							v-model:detune="detuneCents" v-model:spread="stereoSpread" />
+					</CollapsibleCard>
+				</div>
+
+				<div class="module fx">
+					<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
+						<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
+							v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime"
+							v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix"
+							v-model:toneEnabled="delayToneEnabled" v-model:toneHz="delayToneHz"
+							v-model:toneType="delayToneType" />
+						<div class="pt-rule" aria-hidden="true"></div>
+						<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
+							v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
+							v-model:driveMix="driveMix" />
+					</CollapsibleCard>
+				</div>
+
+			</section>
+
+			<!-- Bottom Sequencer -->
+			<section class="pt-panel ds-sequencer">
+				<h2 class="pt-title">Sequencer</h2>
+				<div class="accordion" id="seqAccordion">
+					<div class="accordion-item">
+						<h2 class="accordion-header">
+							<button type="button" class="accordion-button" :class="{ collapsed: !seqOpen }"
+								@click="seqOpen = !seqOpen" :aria-expanded="seqOpen ? 'true' : 'false'"
+								aria-controls="seqPanel">Pattern</button>
+						</h2>
+
+						<div id="seqPanel" class="accordion-collapse collapse" :class="{ show: seqOpen }">
+							<div class="accordion-body p-3">
+								<!-- Channels (unchanged) -->
+								<section class="channels-section">
+									<div v-for="inst in orderedChannels" :key="inst.key || inst.name"
+										class="mb-3 channel-wrap">
+										<template v-if="inst.isAddButton">
+											<div class="d-flex align-items-center">
+												<button class="pt-btn pt-accent-cool" @click="addCustomChannel">+ Add
+													Channel</button>
+											</div>
+										</template>
+
+										<template v-else>
+											<div class="d-flex align-items-center gap-2 mb-1">
+												<div class="mute-dot" :class="{ muted: inst.muted }"
+													@click="toggleMute(inst.name)" role="button"
+													:title="inst.muted ? 'Muted' : 'Playing'"></div>
+
+												<div class="channel-label d-flex align-items-center gap-1">
+													<template v-if="!inst.isEditingName">
+														<strong @click="editLabel(inst)"
+															@mouseenter="hoveredLabel = inst.name"
+															@mouseleave="hoveredLabel = null" class="position-relative">
+															{{ inst.label }}
+															<span v-if="hoveredLabel === inst.name"
+																class="custom-tooltip">Click to rename</span>
+														</strong>
+													</template>
+													<template v-else>
+														<input v-model="inst.label" @blur="stopEditingLabel(inst)"
+															@keydown.enter.prevent="stopEditingLabel(inst)"
+															class="form-control form-control-sm"
+															style="max-width: 150px;" :ref="el => inst.inputRef = el" />
+													</template>
+												</div>
+
+												<div class="ms-auto d-flex align-items-center gap-2 channel-actions">
+													<button v-if="inst.isCustom" class="pt-btn pt-btn-sm"
+														@click="triggerFilePicker(inst)">Upload</button>
+													<input class="d-none" :id="`file-${inst.name}`" type="file"
+														accept="audio/*" @change="loadUserSample($event, inst)" />
+													<button v-if="canDelete(inst.name)"
+														class="pt-btn pt-btn-sm pt-danger"
+														@click="deleteChannel(inst.name)">Delete</button>
+												</div>
+											</div>
+
+											<div class="position-relative text-center mb-2">
+												<Knob v-model="inst.channelVolume" :min="0" :max="1" :step="0.01"
+													size="small" label="Vol" color="#8E44AD"
+													@knobStart="activeKnob = `vol-${inst.name}`"
+													@knobEnd="activeKnob = null" />
+												<span v-if="activeKnob === `vol-${inst.name}`" class="custom-tooltip">
+													{{ Math.round(inst.channelVolume * 100) }}%
+												</span>
+											</div>
+
+											<div class="d-flex pad-row">
+												<div class="padTEST-grid">
+													<div v-for="(active, index) in inst.steps" :key="index"
+														class="padTESTwrap"
+														@mouseenter="hoveredPad = `${inst.name}-${index}`"
+														@mouseleave="hoveredPad = null">
+														<div class="pad-step-num">{{ index + 1 }}</div>
+
+														<div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
+															@mousedown="handleMouseDown($event, inst.name, index)"
+															@mouseenter="handleMouseEnter(inst.name, index)"
+															@dragstart.prevent :style="getPadStyle(inst, index)"></div>
+
+														<div v-if="active && hoveredPad === `${inst.name}-${index}`"
+															class="hover-slider volume-slider">
+															<input type="range" min="0" max="1" step="0.01"
+																v-model.number="inst.velocities[index]"
+																@mousedown="activeVolumePad = `${inst.name}-${index}`"
+																@mouseup="activeVolumePad = null"
+																@touchstart="activeVolumePad = `${inst.name}-${index}`"
+																@touchend="activeVolumePad = null" />
+															<span v-if="activeVolumePad === `${inst.name}-${index}`"
+																class="custom-tooltip">
+																{{ Math.round(inst.velocities[index] * 100) }}%
+															</span>
+														</div>
+													</div>
+												</div>
+											</div>
+										</template>
+									</div>
+								</section>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+		</div>
+
+		<!-- Popover (unchanged) -->
+		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
+			v-model:open="padPopover.open" v-model:hz="currentPadHz" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
+			:anchorRect="padPopover.anchorRect" :title="padPopover.title" />
 	</div>
-	<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
-		v-model:open="padPopover.open" v-model:hz="currentPadHz" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
-		:anchorRect="padPopover.anchorRect" :title="padPopover.title" />
-
 </template>
+
 
 <script setup lang="ts">
 // IMPORTS START
@@ -1921,6 +1907,173 @@ driveShaper.curve = (() => {
 
 
 <style scoped>
+/* ---- Compact widescreen grid ---- */
+.ds-grid {
+	display: grid;
+	gap: 12px;
+	grid-template-columns: 1fr;
+	/* mobile-first stack */
+}
+
+.pt-card .pt-section {
+	margin-bottom: 8px;
+}
+
+.pt-card .pt-rule {
+	margin: 10px 0;
+}
+
+@media (max-width: 768px) {
+	.ds-modules {
+		columns: auto;
+	}
+
+	.ds-modules .module {
+		margin: 0 0 12px;
+	}
+}
+
+/* lg: 8-col grid */
+@media (min-width: 992px) {
+	.ds-grid {
+		grid-template-columns: repeat(8, minmax(0, 1fr));
+		gap: 14px;
+	}
+
+	.ds-transport {
+		grid-column: 1 / span 5;
+	}
+
+	.ds-steps {
+		grid-column: 1 / span 5;
+	}
+
+	.ds-visualizer {
+		grid-column: 6 / -1;
+		grid-row: 1 / span 2;
+		/* spans Transport + Steps */
+		position: sticky;
+		top: 10px;
+		align-self: start;
+	}
+
+	.ds-modules {
+		column-width: 340px;
+		column-gap: 14px;
+		column-fill: balance;
+		grid-column: 1 / -1;
+	}
+
+	.ds-modules .module {
+		break-inside: avoid;
+		display: inline-block;
+		width: 100%;
+		margin: 0 0 14px;
+	}
+
+	.ds-sequencer {
+		grid-column: 1 / -1;
+	}
+}
+
+/* xl: 12-col grid (final widescreen packing) */
+@media (min-width: 1280px) {
+	.ds-grid {
+		grid-template-columns: repeat(12, minmax(0, 1fr));
+		gap: 16px;
+	}
+
+	.ds-transport {
+		grid-column: 1 / span 9;
+	}
+
+
+	.ds-steps {
+		grid-column: 1 / span 9;
+	}
+
+
+	.ds-visualizer {
+		grid-column: 10 / -1;
+		grid-row: 1 / span 2;
+		position: sticky;
+		top: 14px;
+	}
+
+
+
+
+
+
+	/* First row: 4×3 */
+	/* .ds-modules .module.pattern-tools {
+		grid-column: span 3;
+	}
+
+	.ds-modules .module.generators {
+		grid-column: span 3;
+	}
+
+	.ds-modules .module.sound {
+		grid-column: span 3;
+	}
+
+	.ds-modules .module.mod {
+		grid-column: span 3;
+	}
+
+	.ds-modules .module.pitch {
+		grid-column: span 4;
+	}
+
+	.ds-modules .module.fx {
+		grid-column: span 8;
+	} */
+
+
+	.pt-card,
+	.pt-panel {
+		padding: 10px 12px;
+	}
+
+	.pt-title {
+		font-size: 14px;
+		margin-bottom: .3rem;
+	}
+
+	.pt-btn {
+		padding: 4px 8px;
+		line-height: 1.1;
+	}
+
+	.pt-btn-group .pt-btn {
+		min-height: 28px;
+	}
+
+
+
+	.pt-knob-row {
+		gap: 10px;
+	}
+}
+
+.ds-modules .module>.pt-card,
+.ds-modules .module>* {
+	height: auto;
+	display: block;
+}
+
+/* --- Density tweaks (compact but readable) --- */
+.pt-card,
+.pt-panel {
+	padding: 12px 14px;
+}
+
+.pt-title {
+	margin: 0 0 .35rem;
+}
+
+/* transport odds & ends (kept from your file) */
 .transport-row .transport-actions {
 	display: flex;
 	align-items: center;
@@ -1929,9 +2082,8 @@ driveShaper.curve = (() => {
 }
 
 .mpc-wrap {
-	margin-top: 10px;
+	margin-top: 0;
 }
-
 
 .mute-dot {
 	width: 12px;
@@ -1951,42 +2103,19 @@ driveShaper.curve = (() => {
 	filter: grayscale(.7) brightness(.7);
 }
 
-.transport-card {}
+/* Small screen fallback for the visualizer */
+/* .ds-visualizer {
+	order: -1;
+	overflow: hidden;
+} */
 
-.transport-layout {
-	display: grid;
-	grid-template-columns: minmax(420px, 1fr) auto;
-	align-items: center;
-	gap: 1.25rem;
-}
+/* .ds-visualizer :deep(.mpc-screen) {
+	--screen-w: min(22rem, 100%);
+	width: var(--screen-w);
+} */
 
-.transport-left .pt-title {
-	margin: 0 0 .35rem;
-}
-
-.transport-row .transport-actions {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	min-width: 96px;
-}
-
-.transport-right {
-	justify-self: end;
-}
-
-.mpc-wrap {
-	margin-top: 0;
-}
-
-@media (max-width: 980px) {
-	.transport-layout {
-		grid-template-columns: 1fr;
-		align-items: start;
-	}
-
-	.transport-right {
-		justify-self: start;
-	}
+.ds-visualizer {
+	overflow: hidden;
+	align-self: start;
 }
 </style>
