@@ -150,7 +150,7 @@ $dark: map.get($themes, dark);
     color: var(--pt-muted);
     font-size: 0.95rem;
     font-weight: 600;
-    margin-bottom: 8px;
+    margin-bottom: 0px;
 }
 
 .pt-panel--card {
@@ -710,8 +710,9 @@ $dark: map.get($themes, dark);
     overflow: auto;
     max-height: 60vh;
     width: clamp(260px, 44vw, 420px);
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    background: rgba(149, 165, 166, 0.1);
 }
 
 .pt-popover::after {

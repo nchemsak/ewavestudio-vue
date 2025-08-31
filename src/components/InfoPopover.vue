@@ -26,7 +26,7 @@
                 </button>
             </div>
 
-            <div v-if="title || showClose" ></div>
+            <div v-if="title || showClose"></div>
 
             <slot />
         </div>
@@ -216,6 +216,7 @@ onBeforeUnmount(() => {
     padding-right: 30px;
     /* room for X button */
     user-select: none;
+    margin-bottom: 8px;
 }
 
 /* .info-popover__header.is-draggable {
@@ -242,25 +243,10 @@ onBeforeUnmount(() => {
     top: 8px;
 }
 
-/* .is-dragging {
-    cursor: grabbing;
-    user-select: none;
-} */
-
-/* make it obvious the header is draggable */
-/* .info-popover__header.is-draggable {
-    cursor: grab;
-} */
-
-/* .info-popover.is-dragging {
-    cursor: grabbing;
-    user-select: none;
-} */
-
 /* classic “six-dot” grip */
 .drag-grip {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     margin-right: 8px;
     opacity: 0.6;
     /* dot pattern via radial-gradients */
@@ -277,5 +263,6 @@ onBeforeUnmount(() => {
         0px 6px, 6px 6px,
         0px 12px, 6px 12px;
     flex: 0 0 auto;
+    background-repeat: no-repeat;
 }
 </style>

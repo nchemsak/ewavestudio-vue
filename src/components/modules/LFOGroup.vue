@@ -5,7 +5,7 @@
         <template #header-content>
             <div class="pt-header-tools lfo-header">
                 <div class="lfo-info-wrap">
-                    <InfoPopover title="LFO Explained" aria-label="What is the LFO?">
+                    <!-- <InfoPopover title="LFO Explained" aria-label="What is the LFO?">
                         The LFO is a slow modulation source that periodically changes a target parameter.
                         <div class="pt-rule"></div>
                         <ul class="mb-2 ps-3">
@@ -19,6 +19,33 @@
                             </li>
                             <li><strong>Depth</strong>: Units follow target (cents, %, Hz, Q). Changing targets resets
                                 depth to avoid jumps.</li>
+                        </ul>
+                    </InfoPopover> -->
+                    <InfoPopover title="LFO" aria-label="What is the LFO?">
+                        A Low Frequencey Oscillator (LFO) is a slow modulation source that changes a target parameter.
+                        <div class="pt-rule"></div>
+                        <ul class="mb-2 ps-3">
+                            <li><strong>Targets</strong>:
+                                <ul>
+                                    <li>Pitch (vibrato)</li>
+                                    <li>Gain (tremolo)</li>
+                                    <li>Filter (wah)</li>
+                                    <li>Pan (auto-pan)</li>
+                                    <li>Resonance (squelch)</li>
+                                </ul>
+                            </li>
+                            <li><strong>Wave Shapes</strong>:
+
+                                <ul>
+                                    <li>Sine (smooth)</li>
+                                    <li>Triangle (linear)</li>
+                                    <li>Sawtooth (ramp)</li>
+                                    <li>Square (on/off)</li>
+                                    <li>Random/S&H (stepped)</li>
+                                </ul>
+                            </li>
+                            <li><strong>Rate</strong>: <em>Sync</em> locks to tempo. <em>Free</em> = Hz.</li>
+                            <li><strong>Depth</strong>: Mod amount.</li>
                         </ul>
                     </InfoPopover>
                 </div>
