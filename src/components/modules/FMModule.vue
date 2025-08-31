@@ -1,26 +1,19 @@
 <!-- components/modules/FMModule.vue -->
 <template>
     <KnobGroup v-model="localEnabled" title="FM" :color="color" :showToggle="showToggle">
-        <!-- keep info button in header -->
+        <!-- header info button -->
         <template #header-content>
             <div class="pt-header-tools">
-                <button ref="infoBtn" class="pt-info-icon" :class="{ 'is-active': infoOpen }" @click.stop="toggleInfo"
-                    aria-label="What is FM?" title="What is FM?">ⓘ</button>
-
-                <div v-if="infoOpen" ref="infoEl" class="pt-popover fm-info" :data-side="infoSide"
-                    :style="{ top: infoPos.top + 'px', left: infoPos.left + 'px' }" @click.stop>
-                    <strong class="mb-2 pt-section-title">FM Explained</strong>
-                    <button class="pt-seg-btn pt-seg-sm fm-btn" @click="infoOpen = false">X</button><br />
+                <InfoPopover title="FM Explained" aria-label="What is FM?">
                     FM adds a fast wobble to pitch → new harmonics.
                     <div class="pt-rule"></div>
                     <ul class="mb-2 ps-3">
-                        <li class="fm-li"><strong>Ratio</strong>: Locks Mod Freq to the note. Consistent tone.</li>
-                        <li class="fm-li"><strong>Hz</strong>: Unlocks Mod Freq. Tone varies more between notes.</li>
-                        <li class="fm-li"><strong>Mod Freq</strong>: Modulator speed <i>(only active in "Hz" mode)</i>
-                        </li>
-                        <li class="fm-li"><strong>Amount</strong>: Intensity/brightness. Higher = richer/clangier.</li>
+                        <li><strong>Ratio</strong>: Locks Mod Freq to the note. Consistent tone.</li>
+                        <li><strong>Hz</strong>: Unlocks Mod Freq. Tone varies more between notes.</li>
+                        <li><strong>Mod Freq</strong>: Modulator speed <i>(only active in "Hz" mode)</i></li>
+                        <li><strong>Amount</strong>: Intensity/brightness. Higher = richer/clangier.</li>
                     </ul>
-                </div>
+                </InfoPopover>
             </div>
         </template>
 
@@ -66,9 +59,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
+import { ref, watch, computed } from 'vue'
 import Knob from '../Knob.vue'
 import KnobGroup from '../KnobGroup.vue'
+import InfoPopover from '../InfoPopover.vue' // ⬅️ ADD THIS
 
 type Ratio = number | null
 
@@ -99,11 +93,13 @@ const localModFreq = ref(props.modFreq ?? 200)
 const localIndex = ref(props.index ?? 0)
 const localRatio = ref<Ratio>(props.ratio ?? null)
 
+/* sync down */
 watch(() => props.enabled, v => (localEnabled.value = v))
 watch(() => props.modFreq, v => (localModFreq.value = v ?? 200))
 watch(() => props.index, v => (localIndex.value = v ?? 0))
 watch(() => props.ratio, v => (localRatio.value = v ?? null))
 
+/* emit up */
 watch(localEnabled, v => emit('update:enabled', v))
 watch(localModFreq, v => emit('update:modFreq', Math.max(1, Math.min(5000, Math.round(v)))))
 watch(localIndex, v => emit('update:index', Math.max(0, Math.min(50, +v))))
@@ -115,78 +111,20 @@ function setRatio(r: Ratio) {
 
 const modFreqDisabled = computed(() => !localEnabled.value || localRatio.value !== null)
 
-/* --- Info popover: fixed positioning, auto-flip + clamped --- */
-const infoOpen = ref(false)
-const infoBtn = ref<HTMLElement | null>(null)
-const infoEl = ref<HTMLElement | null>(null)
-const infoSide = ref<'right' | 'left'>('right')
-const infoPos = ref({ top: 0, left: 0 })
-
-function positionInfo() {
-    const btnRect = infoBtn.value?.getBoundingClientRect()
-    const elRect = infoEl.value?.getBoundingClientRect()
-    if (!btnRect || !elRect) return
-
-    const gap = 10
-    const margin = 8
-
-    const spaceRight = window.innerWidth - btnRect.right
-    infoSide.value = spaceRight >= elRect.width + gap ? 'right' : 'left'
-
-    let top = btnRect.top + btnRect.height / 2 - elRect.height / 2
-    let left = infoSide.value === 'right'
-        ? btnRect.right + gap
-        : btnRect.left - elRect.width - gap
-
-    top = Math.max(margin, Math.min(top, window.innerHeight - elRect.height - margin))
-    left = Math.max(margin, Math.min(left, window.innerWidth - elRect.width - margin))
-
-    infoPos.value = { top, left }
-}
-
-function toggleInfo() {
-    infoOpen.value = !infoOpen.value
-    if (infoOpen.value) nextTick(positionInfo)
-}
-
-function onViewportChange() {
-    if (infoOpen.value) positionInfo()
-}
-
-function onDocClick(e: MouseEvent) {
-    if (!infoOpen.value) return
-    const t = e.target as Node
-    if (infoEl.value && !infoEl.value.contains(t) && infoBtn.value && !infoBtn.value.contains(t)) {
-        infoOpen.value = false
-    }
-}
-
-onMounted(() => {
-    window.addEventListener('resize', onViewportChange)
-    window.addEventListener('scroll', onViewportChange, { passive: true })
-    document.addEventListener('click', onDocClick, { capture: true })
-})
-onBeforeUnmount(() => {
-    window.removeEventListener('resize', onViewportChange)
-    window.removeEventListener('scroll', onViewportChange)
-    document.removeEventListener('click', onDocClick, { capture: true })
-})
-
 /* knob tooltip state */
 const activeKnob = ref<null | 'mf' | 'ix'>(null)
 </script>
 
 <style scoped>
 .pt-seg-row {
-    margin-top: 0.25rem;
-    margin-bottom: 0.5rem;
+    margin-top: .25rem;
+    margin-bottom: .5rem;
     display: flex;
     gap: 8px;
     justify-content: center;
     flex-wrap: wrap;
 }
 
-/* vertical stack container */
 .pt-stack {
     display: flex;
     flex-direction: column;
@@ -194,24 +132,11 @@ const activeKnob = ref<null | 'mf' | 'ix'>(null)
     width: 100%;
 }
 
-/* knobs on their own row */
 .pt-knob-row {
     display: flex;
     gap: 16px;
     justify-content: center;
     flex-wrap: wrap;
-}
-
-/* existing styles kept */
-.fm-info {
-    position: fixed;
-    width: min(420px, 76vw);
-    font-size: 12px;
-}
-
-.fm-btn {
-    right: 12px;
-    position: absolute;
 }
 
 .fm-li strong {

@@ -1,6 +1,26 @@
 <!-- components/modules/PitchEnvModule.vue -->
 <template>
     <KnobGroup v-model="localEnabled" :title="title" :color="color" :showToggle="showToggle">
+        <!-- Info button in header -->
+        <template #header-content>
+            <div class="pt-header-tools">
+                <InfoPopover title="Pitch Env Explained" aria-label="What is the Pitch Envelope?">
+                    Nudges the note’s frequency at start, then returns to normal pitch.
+                    <div class="pt-rule"></div>
+                    <ul class="mb-2 ps-3">
+                        <li><strong>Mode</strong>:
+                            <em>↑ Up</em> rises then settles ·
+                            <em>↓ Down</em> drops then settles ·
+                            <em>⇵ Random</em> picks up or down each trigger.
+                        </li>
+                        <li><strong>Amount</strong>: Depth in semitones (0–48). Higher = more dramatic sweep.</li>
+                        <li><strong>Decay</strong>: How quickly it returns (ms).
+                        </li>
+                    </ul>
+                </InfoPopover>
+            </div>
+        </template>
+
         <div class="pt-stack">
             <!-- buttons row -->
             <div class="pt-seg pt-seg-row" role="group" aria-label="Pitch Env Mode">
@@ -42,6 +62,7 @@
 import { ref, watch } from 'vue'
 import Knob from '../Knob.vue'
 import KnobGroup from '../KnobGroup.vue'
+import InfoPopover from '../InfoPopover.vue' // ⬅️ add this (omit if globally registered)
 
 type Mode = 'up' | 'down' | 'random'
 
@@ -91,15 +112,14 @@ const activeKnob = ref<null | 'amt' | 'decay'>(null)
 
 <style scoped>
 .pt-seg-row {
-    margin-top: 0.25rem;
-    margin-bottom: 0.5rem;
+    margin-top: .25rem;
+    margin-bottom: .5rem;
     display: flex;
     gap: 8px;
     justify-content: center;
     flex-wrap: wrap;
 }
 
-/* forces vertical stacking inside KnobGroup regardless of its internal layout */
 .pt-stack {
     display: flex;
     flex-direction: column;
@@ -107,7 +127,6 @@ const activeKnob = ref<null | 'amt' | 'decay'>(null)
     width: 100%;
 }
 
-/* layout for the knobs row */
 .pt-knob-row {
     display: flex;
     gap: 16px;

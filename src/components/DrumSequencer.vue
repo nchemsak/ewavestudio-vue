@@ -1234,7 +1234,7 @@ const lfoDepth = ref(0);
 const lfoTarget = ref<'pitch' | 'gain' | 'filter' | 'pan' | 'resonance'>('pitch');
 
 const lfoWaveform = ref<'sine' | 'triangle' | 'sawtooth' | 'square' | 'random'>('sine');
-const lfoSync = ref(false);
+const lfoSync = ref(true);
 const lfoDivision = ref('1/8');
 
 // sensible depth caps per target

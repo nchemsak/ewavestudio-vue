@@ -1,32 +1,41 @@
 <!-- components/modules/UnisonEffect.vue -->
 <template>
     <KnobGroup v-model="localEnabled" title="Unison" :color="color" :showToggle="showToggle">
+        <!-- Info button goes in the header tools, just like FM -->
+        <template #header-content>
+            <div class="pt-header-tools">
+                <InfoPopover title="Unison Explained" aria-label="What is Unison?">
+                    Unison duplicates the oscillator into multiple, slightly detuned voices for a thicker, wider sound.
+                    <div class="pt-rule"></div>
+                    <ul class="mb-2 ps-3">
+                        <li><strong>Voices</strong>: How many copies play at once (1–6).</li>
+                        <li><strong>Detune</strong>: Pitch spread between voices.</li>
+                        <li><strong>Spread</strong>: Stereo width (0% mono → 100% hard L/R).</li>
+                    </ul>
+                </InfoPopover>
+            </div>
+        </template>
+
         <div class="pt-knob-row">
             <!-- Voices -->
             <div class="position-relative text-center">
                 <Knob v-model="localVoices" size="small" :min="1" :max="6" :step="1" label="Voices" :color="color"
                     :disabled="!localEnabled" @knobStart="activeKnob = 'voices'" @knobEnd="activeKnob = null" />
-                <span v-if="activeKnob === 'voices'" class="custom-tooltip">
-                    {{ localVoices }}
-                </span>
+                <span v-if="activeKnob === 'voices'" class="custom-tooltip">{{ localVoices }}</span>
             </div>
 
             <!-- Detune -->
             <div class="position-relative text-center">
                 <Knob v-model="localDetune" size="small" :min="0" :max="100" :step="1" label="Detune" :color="color"
                     :disabled="!localEnabled" @knobStart="activeKnob = 'detune'" @knobEnd="activeKnob = null" />
-                <span v-if="activeKnob === 'detune'" class="custom-tooltip">
-                    {{ localDetune }}¢
-                </span>
+                <span v-if="activeKnob === 'detune'" class="custom-tooltip">{{ localDetune }}¢</span>
             </div>
 
             <!-- Stereo Spread -->
             <div class="position-relative text-center">
                 <Knob v-model="localSpread" size="small" :min="0" :max="100" :step="1" label="Spread" :color="color"
                     :disabled="!localEnabled" @knobStart="activeKnob = 'spread'" @knobEnd="activeKnob = null" />
-                <span v-if="activeKnob === 'spread'" class="custom-tooltip">
-                    {{ localSpread }}%
-                </span>
+                <span v-if="activeKnob === 'spread'" class="custom-tooltip">{{ localSpread }}%</span>
             </div>
         </div>
     </KnobGroup>
@@ -36,31 +45,32 @@
 import { ref, watch } from 'vue'
 import Knob from '../Knob.vue'
 import KnobGroup from '../KnobGroup.vue'
+import InfoPopover from '../InfoPopover.vue'
 
-const props = withDefaults(defineProps < {
+const props = withDefaults(defineProps<{
     enabled: boolean
-  voices: number
-  detune: number     // cents
-  spread: number     // percent
-  color?: string
-  showToggle?: boolean
-} > (), {
+    voices: number
+    detune: number     // cents
+    spread: number     // percent
+    color?: string
+    showToggle?: boolean
+}>(), {
     enabled: false,
     voices: 3,
     detune: 10,
     spread: 50,
     color: '#27fcff',
-    showToggle: true,   // keep the on/off ability visible
+    showToggle: true,
 })
 
-const emit = defineEmits < {
-  (e: 'update:enabled', v: boolean): void
+const emit = defineEmits<{
+    (e: 'update:enabled', v: boolean): void
     (e: 'update:voices', v: number): void
-        (e: 'update:detune', v: number): void
-            (e: 'update:spread', v: number): void
-}> ()
+    (e: 'update:detune', v: number): void
+    (e: 'update:spread', v: number): void
+}>()
 
-const activeKnob = ref < null | 'voices' | 'detune' | 'spread' > (null)
+const activeKnob = ref<null | 'voices' | 'detune' | 'spread'>(null)
 
 /* local mirrors for smooth knob UX */
 const localEnabled = ref(props.enabled)
@@ -82,4 +92,5 @@ watch(() => props.spread, v => (localSpread.value = v))
 </script>
 
 <style scoped>
+/* (no extra styles needed; inherits your global .pt-info-icon / .pt-popover etc.) */
 </style>

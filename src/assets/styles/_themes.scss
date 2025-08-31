@@ -662,6 +662,8 @@ $dark: map.get($themes, dark);
     padding: 0;
     width: 22px;
     height: 22px;
+    width: auto;
+    height: auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -675,8 +677,10 @@ $dark: map.get($themes, dark);
         text-shadow 0.2s ease;
 }
 .pt-info-icon:hover {
-    color: var(--pt-text);
-    transform: scale(1.06);
+    // color: var(--pt-text);
+    // transform: scale(1.06);
+    color: hsl(var(--pt-accent-2), 82%, 68%);
+    text-shadow: 0 0 10px var(--pt-btn-glow);
 }
 .pt-info-icon:focus-visible {
     outline: 2px solid var(--pt-btn-border);
