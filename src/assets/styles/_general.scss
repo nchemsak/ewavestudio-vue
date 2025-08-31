@@ -1,13 +1,6 @@
 /************************************************************************************
                                   GENERAL STYLES
 ************************************************************************************/
-/* * {
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  -o-user-select: none;
-  user-select: none;
-} */
 
 body {
     color: lightgrey;
@@ -31,7 +24,6 @@ body {
 }
 
 body {
-    // font-family: "Raleway", sans-serif;
     font-family: monospace;
 }
 
@@ -60,9 +52,7 @@ input[type="range"] {
 }
 
 .btn-group .btn.active {
-    /* background-color: #0d6efd; */
     color: white;
-    /* border-color: #0d6efd; */
 }
 
 /* Speakers */
@@ -72,7 +62,6 @@ input[type="range"] {
     align-items: flex-end;
     gap: 2rem;
     padding: 3rem;
-    /* height: 100vh; */
     .speaker {
         width: 100px;
         position: relative;

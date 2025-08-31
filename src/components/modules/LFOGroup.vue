@@ -5,22 +5,6 @@
         <template #header-content>
             <div class="pt-header-tools lfo-header">
                 <div class="lfo-info-wrap">
-                    <!-- <InfoPopover title="LFO Explained" aria-label="What is the LFO?">
-                        The LFO is a slow modulation source that periodically changes a target parameter.
-                        <div class="pt-rule"></div>
-                        <ul class="mb-2 ps-3">
-                            <li><strong>Targets</strong>: <em>Pitch</em> (vibrato), <em>Gain</em> (tremolo),
-                                <em>Filter</em> (wah), <em>Pan</em> (auto-pan), <em>Resonance</em> (squelch).
-                            </li>
-                            <li><strong>Wave</strong>: Sine (smooth), Triangle (linear), Saw (ramp), Square (on/off),
-                                Random = Sample & Hold.</li>
-                            <li><strong>Rate</strong>: <em>Sync</em> locks to tempo divisions (e.g., 1/4, 1/8T, 1/8.);
-                                <em>Free</em> = Hz.
-                            </li>
-                            <li><strong>Depth</strong>: Units follow target (cents, %, Hz, Q). Changing targets resets
-                                depth to avoid jumps.</li>
-                        </ul>
-                    </InfoPopover> -->
                     <InfoPopover title="LFO" aria-label="What is the LFO?">
                         A Low Frequencey Oscillator (LFO) is a slow modulation source that changes a target parameter.
                         <div class="pt-rule"></div>
@@ -52,11 +36,8 @@
             </div>
         </template>
 
-        <!-- Body: controls row + knobs row -->
         <div class="pt-stack">
-            <!-- Controls row moved out of header -->
             <div class="lfo-controls" role="group" aria-label="LFO Controls">
-                <!-- Sync segmented: Sync FIRST, then Free -->
                 <div class="pt-seg pt-seg-sm" role="group" aria-label="LFO Rate Mode"
                     :class="{ disabled: !localEnabled }">
                     <button class="pt-seg-btn" :class="{ 'is-active': localSync }" :disabled="!localEnabled"
@@ -69,7 +50,6 @@
                     </button>
                 </div>
 
-                <!-- Wave shape segmented -->
                 <div class="pt-seg pt-seg-sm" role="group" aria-label="LFO Wave" :class="{ disabled: !localEnabled }">
                     <button v-for="w in waves" :key="w" class="pt-seg-btn" :class="{ 'is-active': localWaveform === w }"
                         :aria-pressed="localWaveform === w" :disabled="!localEnabled" @click="setWave(w)">
@@ -78,7 +58,6 @@
                     </button>
                 </div>
 
-                <!-- Targets (dots) -->
                 <div class="lfo-target-selector" role="group" aria-label="LFO Target">
                     <span v-for="t in targets" :key="t" class="lfo-type-dot"
                         :class="{ selected: currentTarget === t, disabled: !localEnabled }"
@@ -88,9 +67,7 @@
                 </div>
             </div>
 
-            <!-- Knobs row -->
             <div class="pt-knob-row">
-                <!-- Rate: Hz in Free OR index when Sync -->
                 <div class="position-relative text-center">
                     <Knob v-model="rateKnobModel" size="medium" :min="rateMin" :max="rateMax" :step="rateStep"
                         label="Rate" :color="color" :disabled="!localEnabled" :showMarkers="localSync"
@@ -102,7 +79,6 @@
                     </span>
                 </div>
 
-                <!-- Depth -->
                 <div class="position-relative text-center">
                     <Knob v-model="localDepth" size="medium" :min="0" :max="depthMax" :step="depthStep" label="Depth"
                         :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'depth'"
@@ -145,7 +121,6 @@ const props = withDefaults(defineProps<{
     depth: 0,
     target: 'gain',
     waveform: 'sine',
-    /* Sync is default ON now */
     syncEnabled: true,
     division: '1/8',
     depthMax: 100,
@@ -268,7 +243,7 @@ const divisionIndex = computed({
         const n = props.divisions.length
         const i = Math.min(n - 1, Math.max(0, Math.round(v)))
         const d = props.divisions[i] || props.divisions[0]
-        setDivision(d) // emits update:division
+        setDivision(d)
     }
 })
 
@@ -279,13 +254,12 @@ const rateKnobModel = computed({
     },
     set(v: number) {
         if (localSync.value) divisionIndex.value = v
-        else localRate.value = v // emits update:rate via watch(localRate)
+        else localRate.value = v
     }
 })
 </script>
 
 <style scoped>
-/* Header now only shows the info icon */
 .lfo-header {
     display: flex;
     align-items: center;
@@ -295,7 +269,6 @@ const rateKnobModel = computed({
     margin-left: auto;
 }
 
-/* Controls row under header */
 .lfo-controls {
     display: flex;
     gap: 10px;

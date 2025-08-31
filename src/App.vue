@@ -29,15 +29,10 @@ useTheme();
 
 <style scoped>
 .app-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  padding: 12px 16px;
+	display: flex;
+	justify-content: flex-end;
+	padding: 12px 16px;
 }
+
 /* Global styles if needed */
 </style>
-<!-- Speaker img -->
-<!-- <div class="studio-wrap">
-			<img src="/images/left_speaker.png" class="speaker speakerLeft">
-
-			<img src="/images/right_speaker.png" class="speaker speakerRight">
-		</div> -->
