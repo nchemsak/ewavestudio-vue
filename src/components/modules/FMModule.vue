@@ -41,14 +41,14 @@
             <div class="pt-knob-row">
                 <div class="position-relative text-center" :class="{ 'is-disabled': modFreqDisabled }"
                     aria-disabled="true">
-                    <Knob v-model="localModFreq" label="Mod Freq" size="medium" :min="1" :max="5000" :step="1"
+                    <Knob v-model="localModFreq" label="Mod Freq" size="small" :min="1" :max="5000" :step="1"
                         :disabled="modFreqDisabled" :color="color" @knobStart="activeKnob = 'mf'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'mf'" class="custom-tooltip">{{ Math.round(localModFreq) }} Hz</span>
                 </div>
 
                 <div class="position-relative text-center">
-                    <Knob v-model="localIndex" label="Amount" size="medium" :min="0" :max="50" :step="0.1"
+                    <Knob v-model="localIndex" label="Amount" size="small" :min="0" :max="50" :step="0.1"
                         :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'ix'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'ix'" class="custom-tooltip">{{ localIndex.toFixed(1) }}</span>

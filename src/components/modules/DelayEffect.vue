@@ -21,12 +21,12 @@
         <!-- Time -->
         <div class="position-relative text-center">
             <Knob v-if="!localSync" v-model="localTime" label="Time" :min="0.01" :max="maxSeconds" :step="0.01"
-                size="medium" :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
+                size="small" :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
                 @knobEnd="activeKnob = null" />
 
 
             <!-- When Sync is ON -->
-            <Knob v-else v-model="divIndexKnob" label="Time" :min="0" :max="1" :step="knobStep" size="medium"
+            <Knob v-else v-model="divIndexKnob" label="Time" :min="0" :max="1" :step="knobStep" size="small"
                 :color="color" :disabled="!localEnabled" :showMarkers="true" :markers="knobMarkers" :markersOnly="true"
                 :markersOffsetDeg="-90" @knobStart="activeKnob = 'time'" @knobEnd="activeKnob = null" />
 
@@ -40,7 +40,7 @@
 
         <!-- Feedback -->
         <div class="position-relative text-center">
-            <Knob v-model="localFeedback" label="Feedback" :min="0" :max="0.95" :step="0.01" size="medium" :color="color"
+            <Knob v-model="localFeedback" label="Feedback" :min="0" :max="0.95" :step="0.01" size="small" :color="color"
                 :disabled="!localEnabled" @knobStart="activeKnob = 'feedback'" @knobEnd="activeKnob = null" />
             <span v-if="activeKnob === 'feedback'" class="custom-tooltip">
                 {{ Math.round(localFeedback * 100) }}%
@@ -49,7 +49,7 @@
 
         <!-- Mix -->
         <div class="position-relative text-center">
-            <Knob v-model="localMix" label="Mix" :min="0" :max="1" :step="0.01" size="medium" :color="color"
+            <Knob v-model="localMix" label="Mix" :min="0" :max="1" :step="0.01" size="small" :color="color"
                 :disabled="!localEnabled" @knobStart="activeKnob = 'mix'" @knobEnd="activeKnob = null" />
             <span v-if="activeKnob === 'mix'" class="custom-tooltip">
                 {{ Math.round(localMix * 100) }}%

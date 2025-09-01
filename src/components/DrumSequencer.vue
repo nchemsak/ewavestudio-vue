@@ -99,13 +99,13 @@
 					</CollapsibleCard>
 				</div>
 
-				<div class="module generators">
+				<!-- <div class="module generators">
 					<CollapsibleCard id="generators" title="Generators" v-model="collapsibleState['generators']">
 						<section class="pt-section">
 							<div class="pt-section-title">Oscillators</div>
-							<div class="pt-btn-group" role="group" aria-label="Waveforms">
-								<button v-for="wave in waves" :key="wave" class="pt-btn"
-									:class="{ 'is-active': selectedWaveform === wave }"
+							<div class="pt-seg pt-seg-sm" role="tablist" aria-label="Waveforms">
+								<button v-for="wave in waves" :key="wave" class="pt-seg-btn"
+									:class="{ 'is-active': selectedWaveform === wave }" role="tab"
 									:aria-pressed="selectedWaveform === wave" @click="selectedWaveform = wave">
 									{{ waveLabel(wave) }}
 								</button>
@@ -117,7 +117,56 @@
 						<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
 							v-model:amount="noiseAmount" :color="'#9C27B0'" />
 					</CollapsibleCard>
+				</div> -->
+				<div class="module generators">
+					<CollapsibleCard id="generators" title="Generators" v-model="collapsibleState['generators']">
+						<!-- Toolbar directly under heading -->
+						<div class="gen-toolbar">
+							<div class="pt-seg pt-seg-sm" role="tablist" aria-label="Generators mode">
+								<button class="pt-seg-btn" :class="{ 'is-active': genTab === 'osc' }" role="tab"
+									:aria-pressed="genTab === 'osc'" @click="genTab = 'osc'">Oscillators</button>
+								<button class="pt-seg-btn" :class="{ 'is-active': genTab === 'noise' }" role="tab"
+									:aria-pressed="genTab === 'noise'" @click="genTab = 'noise'">Noise</button>
+							</div>
+
+							<div class="pt-header-tools">
+								<button class="pt-info-icon" @click="genInfoOpen = !genInfoOpen"
+									aria-label="About generators">i</button>
+								<button class="pt-info-icon" aria-label="More options">⋯</button>
+							</div>
+						</div>
+
+						<!-- Divider under the tabs -->
+						<div class="pt-rule gen-divider" aria-hidden="true"></div>
+
+						<!-- Oscillators -->
+						<div v-show="genTab === 'osc'" class="gen-panel osc-panel">
+							<div class="pt-btn-group" role="group" aria-label="Waveforms">
+								<button v-for="wave in waves" :key="wave" class="pt-btn"
+									:class="{ 'is-active': selectedWaveform === wave }"
+									:aria-pressed="selectedWaveform === wave" @click="selectedWaveform = wave">
+									{{ waveLabel(wave) }}
+								</button>
+							</div>
+						</div>
+
+						<!-- Noise -->
+						<div v-show="genTab === 'noise'" class="gen-panel noise-panel">
+							<!-- one row: dot + W/P/B + Amount -->
+							<div class="noise-inline">
+								<button class="pt-dot" :class="{ 'is-on': noiseEnabled }" :aria-pressed="noiseEnabled"
+									title="Toggle noise" @click="noiseEnabled = !noiseEnabled"></button>
+
+								<!-- Keep the module toggle hidden; we control enable via the dot -->
+								<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
+									v-model:amount="noiseAmount" :color="'#9C27B0'" />
+							</div>
+						</div>
+					</CollapsibleCard>
+
+
 				</div>
+
 
 				<div class="module sound">
 					<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
@@ -153,7 +202,7 @@
 					</CollapsibleCard>
 				</div>
 
-				<div class="module fx">
+				<!-- <div class="module fx">
 					<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
 						<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
 							v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime"
@@ -164,6 +213,72 @@
 						<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
 							v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
 							v-model:driveMix="driveMix" />
+					</CollapsibleCard>
+				</div> -->
+				<div class="module fx">
+					<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
+
+						<!-- header toolbar -->
+						<div class="pt-subheader">
+							<div class="pt-section-title">Delay • Drive</div>
+							<div class="pt-header-tools">
+
+								<!-- segment: which effect is visible -->
+								<div class="pt-seg pt-seg-sm" role="tablist" aria-label="Effects view">
+									<button class="pt-seg-btn" :class="{ 'is-active': ui.fxTab === 'delay' }" role="tab"
+										@click="ui.fxTab = 'delay'">Delay</button>
+									<button class="pt-seg-btn" :class="{ 'is-active': ui.fxTab === 'drive' }" role="tab"
+										@click="ui.fxTab = 'drive'">Drive</button>
+								</div>
+
+								<!-- quick toggles for the selected effect -->
+								<div class="pt-seg pt-seg-sm" v-if="ui.fxTab === 'delay'">
+									<button class="pt-seg-btn" :class="{ 'is-active': delaySync }"
+										@click="delaySync = !delaySync">Sync</button>
+									<button class="pt-seg-btn" :class="{ 'is-active': delayToneEnabled }"
+										@click="delayToneEnabled = !delayToneEnabled">Tone</button>
+									<button class="pt-seg-btn" :class="{ 'is-active': delayToneType === 'highpass' }"
+										@click="delayToneType = (delayToneType === 'highpass' ? 'lowpass' : 'highpass')">
+										{{ delayToneType === 'highpass' ? 'HP' : 'LP' }}
+									</button>
+								</div>
+
+								<!-- kebab menu for rare actions -->
+								<button class="pt-info-icon" aria-label="More"
+									@click="openMenu('fx', $event)">⋯</button>
+							</div>
+						</div>
+
+						<!-- Delay panel -->
+						<section v-show="ui.fxTab === 'delay'" class="pt-section">
+							<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
+								v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5"
+								v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback"
+								v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled"
+								v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" />
+						</section>
+
+						<!-- Drive panel -->
+						<section v-show="ui.fxTab === 'drive'" class="pt-section">
+							<DriveEffect :showToggle="false" v-model:enabled="driveEnabled"
+								v-model:driveType="driveType" v-model:driveAmount="driveAmount"
+								v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
+						</section>
+
+						<!-- simple anchored menu -->
+						<div v-if="ui.menus.fx.open" class="pt-select-overlay" @click="closeMenus"></div>
+						<div v-if="ui.menus.fx.open" class="pt-menu" data-side="right"
+							:style="{ left: ui.menus.fx.x + 'px', top: ui.menus.fx.y + 'px' }">
+							<div class="pt-option is-active" role="menuitemcheckbox"
+								@click="delayEnabled = !delayEnabled">Toggle Delay</div>
+							<div class="pt-option is-active" role="menuitemcheckbox"
+								@click="driveEnabled = !driveEnabled">Toggle Drive</div>
+							<div class="pt-rule"></div>
+							<div class="pt-option" role="menuitem"
+								@click="delayFeedback = 0.3; delayMix = 0.3; delayTime = 0.2">Reset Delay</div>
+							<div class="pt-option" role="menuitem"
+								@click="driveAmount = 0.4; driveMix = 0.5; driveTone = 5000">Reset Drive</div>
+						</div>
 					</CollapsibleCard>
 				</div>
 
@@ -310,6 +425,54 @@ import CollapsibleCard from './CollapsibleCard.vue';
 
 
 // IMPORTS END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+// PANEL MENU START
+
+// UI state for header tabs + menus
+const ui = reactive({
+	generatorsTab: 'osc' as 'osc' | 'noise',
+	soundTab: 'env' as 'env' | 'filter',        // you can wire this next
+	movementTab: 'lfo' as 'lfo' | 'unison',     // you can wire this next
+	fxTab: 'delay' as 'delay' | 'drive',
+	menus: {
+		fx: { open: false, x: 0, y: 0 },
+	}
+});
+
+// Generators tab + (optional) info popover
+const genTab = ref<'osc' | 'noise'>('osc');
+const genInfoOpen = ref(false);
+
+function closeMenus() { for (const k in ui.menus) (ui.menus as any)[k].open = false; }
+
+
+// tabs + menus + help popovers
+ui.generatorsTab ??= 'osc';
+
+ui.menus.gen = ui.menus.gen ?? { open: false, x: 0, y: 0 };
+const info = reactive({
+	gen: { open: false, x: 0, y: 0 }
+});
+
+function openMenu(name: keyof typeof ui.menus, e: MouseEvent) {
+	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+	const m = ui.menus[name];
+	m.open = true; m.x = Math.round(r.right + 8); m.y = Math.round(r.top);
+}
+function openInfo(name: keyof typeof info, e: MouseEvent) {
+	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+	const p = info[name];
+	p.open = true; p.x = Math.round(r.right + 8); p.y = Math.round(r.top);
+}
+function closeOverlays() {
+	for (const k in ui.menus) (ui.menus as any)[k].open = false;
+	for (const k in info) (info as any)[k].open = false;
+}
+
+
+// PANEL MENU END
+
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1323,6 +1486,16 @@ function onGlobalKeydown(e: KeyboardEvent) {
 		return;
 	}
 
+	// Number keys 1..6 switch F-keys (avoid while typing)
+	if (!isTypingTarget(el) && /^[1-6]$/.test(e.key)) {
+		const n = Number(e.key);
+		activeFKey.value = n;
+		handleFKey(n);
+		e.preventDefault();
+		e.stopPropagation();
+		return;
+	}
+
 	// Global toggle elsewhere
 	e.preventDefault(); // avoid page scroll
 	togglePlay();
@@ -2000,37 +2173,6 @@ driveShaper.curve = (() => {
 		top: 14px;
 	}
 
-
-
-
-
-
-	/* First row: 4×3 */
-	/* .ds-modules .module.pattern-tools {
-		grid-column: span 3;
-	}
-
-	.ds-modules .module.generators {
-		grid-column: span 3;
-	}
-
-	.ds-modules .module.sound {
-		grid-column: span 3;
-	}
-
-	.ds-modules .module.mod {
-		grid-column: span 3;
-	}
-
-	.ds-modules .module.pitch {
-		grid-column: span 4;
-	}
-
-	.ds-modules .module.fx {
-		grid-column: span 8;
-	} */
-
-
 	.pt-card,
 	.pt-panel {
 		padding: 10px 12px;
@@ -2103,19 +2245,446 @@ driveShaper.curve = (() => {
 	filter: grayscale(.7) brightness(.7);
 }
 
-/* Small screen fallback for the visualizer */
-/* .ds-visualizer {
-	order: -1;
-	overflow: hidden;
-} */
-
-/* .ds-visualizer :deep(.mpc-screen) {
-	--screen-w: min(22rem, 100%);
-	width: var(--screen-w);
-} */
-
 .ds-visualizer {
 	overflow: hidden;
 	align-self: start;
+}
+
+
+
+
+/* NEW */
+/* =========================
+   OVERRIDES (append at end)
+   ========================= */
+
+/* --- Visualizer rail fills its grid area --- */
+@media (min-width: 992px) {
+	.ds-visualizer {
+		/* already row-span:2 in your CSS; add flex so children can stretch */
+		display: flex;
+		min-height: 0;
+	}
+
+	.ds-visualizer .mpc-wrap {
+		flex: 1 1 auto;
+		display: flex;
+		min-height: 0;
+	}
+
+	/* Reach into the MpcScreen component and make its layout "auto / 1fr / auto"
+     so the LCD middle row grows to fill the rail. Works with <style scoped>. */
+	.ds-visualizer :deep(.mpc-screen),
+	.ds-visualizer ::v-deep(.mpc-screen) {
+		display: grid;
+		grid-template-rows: auto 1fr auto;
+		width: 100%;
+		height: 100%;
+		min-height: 0;
+	}
+
+	.ds-visualizer :deep(.mpc-screen__lcd),
+	.ds-visualizer ::v-deep(.mpc-screen__lcd) {
+		/* neutralize any fixed ratio like height: calc(var(--screen-w)*0.30) */
+		height: auto !important;
+		min-height: 0;
+	}
+}
+
+/* --- Lock the modules into a grid instead of multicol --- */
+@media (min-width: 992px) {
+	.ds-modules {
+		/* replace the multicol setup on lg with a real grid */
+		display: grid !important;
+		grid-template-columns: repeat(8, minmax(0, 1fr));
+		gap: 14px;
+		column-width: auto !important;
+		column-gap: 0 !important;
+		column-fill: balance;
+	}
+
+	.ds-modules .module {
+		/* cancel the inline-block used for masonry */
+		display: block !important;
+		break-inside: auto !important;
+		width: auto !important;
+		margin: 0 !important;
+		grid-column: span 4;
+		/* 2 cards per row on lg */
+	}
+}
+
+/* --- Exact desktop (xl) layout you requested --- */
+@media (min-width: 1280px) {
+	/* 12-col grid overall is already set above in your CSS */
+
+	/* Spans: Transport 8, Visualizer 4 (row-span 2), Steps 8 */
+	.ds-transport {
+		grid-column: 1 / span 8 !important;
+	}
+
+	.ds-steps {
+		grid-column: 1 / span 8 !important;
+	}
+
+	.ds-visualizer {
+		grid-column: 9 / -1 !important;
+		grid-row: 1 / span 2 !important;
+		position: sticky;
+		top: 1rem;
+		/* keep it in view while scrolling */
+		align-self: start;
+	}
+
+	/* Modules grid: four 3-col cards, then 4/5/3 */
+	.ds-modules {
+		display: grid !important;
+		grid-template-columns: repeat(12, minmax(0, 1fr));
+		gap: 16px;
+		column-width: auto !important;
+		column-gap: 0 !important;
+	}
+
+	.ds-modules .module.pattern-tools {
+		grid-column: 1 / span 3 !important;
+	}
+
+	.ds-modules .module.generators {
+		grid-column: 4 / span 3 !important;
+	}
+
+	.ds-modules .module.sound {
+		grid-column: 7 / span 3 !important;
+	}
+
+	.ds-modules .module.mod {
+		grid-column: 10 / span 3 !important;
+	}
+
+	.ds-modules .module.pitch {
+		grid-column: 1 / span 4 !important;
+	}
+
+	.ds-modules .module.fx {
+		grid-column: 5 / span 5 !important;
+	}
+
+	.ds-sequencer {
+		grid-column: 10 / span 3 !important;
+	}
+}
+
+
+/* ===== SAFE PATCH v2: visualizer fill + restore masonry ===== */
+
+/* 1) Visualizer: fill the two-row rail, stretch the LCD/canvases */
+@media (min-width: 992px) {
+	.ds-visualizer {
+		display: flex;
+		align-items: stretch;
+		position: sticky;
+		/* keep your sticky behavior */
+		top: 14px;
+	}
+
+	.ds-visualizer .mpc-wrap {
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+	}
+
+	/* make the MpcScreen root fill the card */
+	.ds-visualizer .mpc-wrap>* {
+		flex: 1 1 auto;
+		min-height: 0;
+		width: 100%;
+	}
+
+	/* be robust to class names inside <MpcScreen> */
+	/* .ds-visualizer :deep([class*="screen"]) {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		height: 100%;
+		width: 100%;
+	} */
+
+	.ds-visualizer :deep([class*="lcd"]) {
+		/* let the LCD grow to fill */
+		flex: 1 1 auto;
+		min-height: 0;
+		height: auto !important;
+		/* neutralize any fixed ratio */
+	}
+
+	.ds-visualizer :deep(canvas) {
+		/* the scope/spec/tuner canvases fill the LCD */
+		display: block;
+		width: 100%;
+		height: 100% !important;
+	}
+}
+
+/* 2) Restore your masonry (cancel my previous grid override) */
+@media (min-width: 992px) {
+	.ds-modules {
+		display: block !important;
+		/* back to multicol */
+		column-width: 340px !important;
+		column-gap: 14px !important;
+		column-fill: balance !important;
+	}
+
+	.ds-modules .module {
+		display: inline-block !important;
+		width: 100% !important;
+		margin: 0 0 14px !important;
+		break-inside: avoid !important;
+	}
+
+	.ds-sequencer {
+		grid-column: 1 / -1 !important;
+	}
+}
+
+@media (min-width: 1280px) {
+	.ds-modules {
+		display: block !important;
+		column-width: 360px !important;
+		/* slightly wider cards on xl */
+		column-gap: 16px !important;
+	}
+
+	.ds-sequencer {
+		grid-column: 1 / -1 !important;
+	}
+}
+
+
+@media (min-width: 992px) {
+
+	.ds-visualizer :deep(.mpc-screen) {
+		display: grid;
+		grid-template-rows: 1fr auto;
+		width: 100%;
+		height: 100%;
+		min-height: 0;
+	}
+
+	/* LCD can stretch; canvases fill it */
+	.ds-visualizer :deep(.mpc-screen__lcd) {
+		height: auto !important;
+		min-height: 0;
+	}
+
+	.ds-visualizer :deep(.mpc-screen__lcd canvas) {
+		display: block;
+		width: 100%;
+		height: 100% !important;
+	}
+
+	/* F-key row: 6 columns (side-by-side) */
+	.ds-visualizer :deep(.mpc-screen__fkeys) {
+		display: grid !important;
+		grid-template-columns: repeat(6, 1fr);
+		gap: .4rem;
+		padding: 0 .75rem;
+	}
+}
+
+@media (min-width: 992px) {
+	.ds-visualizer {
+		/* critical */
+		align-self: stretch !important;
+		/* critical */
+		position: sticky;
+		top: 14px;
+		display: flex;
+		min-height: 0;
+		z-index: 999;
+	}
+
+	.ds-visualizer .mpc-wrap {
+		display: flex;
+		height: 100%;
+		min-height: 0;
+		width: 100%;
+	}
+
+	/* One clear layout model for the screen */
+	.ds-visualizer :deep(.mpc-screen) {
+		display: grid !important;
+		grid-template-rows: 1fr auto;
+		height: 100%;
+		min-height: 0;
+		width: 100%;
+	}
+
+	.ds-visualizer :deep(.mpc-screen__lcd) {
+		height: 100% !important;
+		aspect-ratio: auto !important;
+		min-height: 0;
+	}
+
+	.ds-visualizer :deep(.mpc-screen__lcd canvas) {
+		width: 100%;
+		height: 100% !important;
+		display: block;
+
+	}
+
+	.ds-visualizer :deep(.mpc-screen__fkeys) {
+		display: grid !important;
+		grid-template-columns: repeat(6, 1fr);
+		gap: .4rem;
+		padding: 0 .75rem;
+	}
+}
+
+/* Tabs row */
+.gen-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin: 4px 0 0;
+}
+
+/* Divider spacing */
+.gen-divider {
+	margin: 10px 0 12px;
+}
+
+/* Panels */
+.gen-panel {
+	min-width: 0;
+}
+
+/* One-row noise controls */
+.noise-inline {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+/* Inline toggle dot */
+.pt-dot {
+	width: 14px;
+	height: 14px;
+	border-radius: 999px;
+	border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 45%);
+	background: var(--pt-surface-2);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+	cursor: pointer;
+	transition: transform .12s ease, filter .2s ease, box-shadow .25s ease;
+}
+
+.pt-dot:hover {
+	transform: scale(1.06);
+}
+
+.pt-dot.is-on {
+	background: hsl(var(--pt-accent) 80% 60%);
+	box-shadow: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / .18), 0 0 12px var(--pt-btn-glow);
+}
+
+/* --- Reach into NoiseModule to hide its title and lay out controls inline --- */
+.noise-panel :deep(.pt-section-title),
+.noise-panel :deep(.pt-title),
+.noise-panel :deep(.group-title) {
+	display: none !important;
+	/* kills the stray “Noise” label */
+}
+
+/* Keep its buttons + knob on the same row */
+.noise-inline :deep(.pt-btn-group) {
+	display: inline-flex;
+	gap: 8px;
+	margin: 0;
+}
+
+.noise-inline :deep(.pt-subblock),
+.noise-inline :deep(.pt-section) {
+	margin: 0;
+	padding: 0;
+}
+
+/* ==== Generators layout fixes ==== */
+
+/* Tabs → content separator (already there, just keep it) */
+.gen-divider {
+	margin: 10px 0 12px;
+}
+
+/* Waveform row needs a little top air so it doesn't hug the tabs */
+.osc-panel .pt-btn-group {
+	margin-top: 6px;
+}
+
+/* Keep the noise row truly in ONE line (wrap only when narrow) */
+.noise-inline {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	/* allows graceful wrap on very narrow screens */
+}
+
+/* The NoiseModule root in this row must not be width:100% */
+.noise-inline> :not(.pt-dot) {
+	flex: 1 1 auto;
+	width: auto !important;
+	min-width: 0;
+}
+
+/* Its internal wrappers default to width:100% — cancel that here */
+.noise-panel :deep(.knob-group),
+.noise-panel :deep(.pt-subblock),
+.noise-panel :deep(.pt-section) {
+	width: auto !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	display: inline-flex;
+	/* lay out chips + knob inline */
+	align-items: center;
+	gap: 10px;
+}
+
+/* Chips (White/Pink/Brown) inline with the knob */
+.noise-panel :deep(.pt-btn-group) {
+	display: inline-flex;
+	gap: 8px;
+	margin: 0;
+	/* no extra vertical space */
+}
+
+/* Hide the module’s internal header/title so "Noise" disappears */
+.noise-panel :deep(.knob-group-header),
+.noise-panel :deep(.group-title),
+.noise-panel :deep(.pt-section-title),
+.noise-panel :deep(.pt-title) {
+	display: none !important;
+}
+
+/* Our inline dot toggle look */
+.pt-dot {
+	width: 14px;
+	height: 14px;
+	border-radius: 999px;
+	border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 45%);
+	background: var(--pt-surface-2);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+	cursor: pointer;
+	transition: transform .12s ease, filter .2s ease, box-shadow .25s ease;
+}
+
+.pt-dot:hover {
+	transform: scale(1.06);
+}
+
+.pt-dot.is-on {
+	background: hsl(var(--pt-accent) 80% 60%);
+	box-shadow: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / .18), 0 0 12px var(--pt-btn-glow);
 }
 </style>

@@ -17,8 +17,11 @@
         </div>
 
         <div class="mpc-screen__fkeys">
-            <button v-for="n in 6" :key="n" class="fkey" :class="{ active: activeKey === n }" :aria-label="`F${n}`"
+            <!-- <button v-for="n in 6" :key="n" class="fkey" :class="{ active: activeKey === n }" :aria-label="`F${n}`"
                 @click="$emit('fkey', n)">
+            </button> -->
+            <button v-for="n in 6" :key="n" class="fkey" :data-label="`F${n}`" :class="{ active: activeKey === n }"
+                :aria-pressed="activeKey === n ? 'true' : 'false'" :aria-label="`F${n}`" @click="$emit('fkey', n)">
             </button>
         </div>
     </div>
@@ -211,5 +214,46 @@ defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner
 .fkey:active {
     transform: translate(.06rem, .12rem);
     box-shadow: inset .08rem .08rem .35rem rgba(0, 0, 0, .25);
+}
+
+
+/* Better-looking F-keys w/ labels + active press effect */
+.fkey {
+    position: relative;
+    height: 1.1rem;
+    border-radius: .25rem;
+    background: linear-gradient(180deg, #f3f5f7, #e6eaef);
+    border: 1px solid color-mix(in oklab, #000 12%, transparent);
+    box-shadow:
+        0 .12rem .25rem rgba(0, 0, 0, .25),
+        inset 0 0 0 1px rgba(255, 255, 255, .6);
+}
+
+.fkey::after {
+    content: attr(data-label);
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    color: #5f6775;
+    opacity: .9;
+}
+
+.fkey.active,
+.fkey:active {
+    transform: translateY(1px);
+    box-shadow:
+        inset .08rem .08rem .35rem rgba(0, 0, 0, .25),
+        0 0 0 rgba(0, 0, 0, 0);
+}
+
+.fkey:focus-visible {
+    outline: none;
+    box-shadow:
+        0 0 0 3px hsl(var(--pt-accent, 276) 90% 60% / .35),
+        inset 0 0 0 1px rgba(255, 255, 255, .7);
 }
 </style>

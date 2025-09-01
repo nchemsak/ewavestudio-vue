@@ -12,7 +12,7 @@
         <div class="pt-knob-row">
             <!-- Cutoff -->
             <div class="position-relative text-center">
-                <Knob v-model="localCutoff" label="Cutoff" size="medium" :min="minCutoff" :max="maxCutoff"
+                <Knob v-model="localCutoff" label="Cutoff" size="small" :min="minCutoff" :max="maxCutoff"
                     :step="cutoffStep" :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'cutoff'"
                     @knobEnd="activeKnob = null" />
                 <span v-if="activeKnob === 'cutoff'" class="custom-tooltip">
@@ -22,7 +22,7 @@
 
             <!-- Resonance -->
             <div class="position-relative text-center">
-                <Knob v-model="localResonance" label="Resonance" size="medium" :min="minResonance" :max="maxResonance"
+                <Knob v-model="localResonance" label="Resonance" size="small" :min="minResonance" :max="maxResonance"
                     :step="resonanceStep" :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'res'"
                     @knobEnd="activeKnob = null" />
                 <span v-if="activeKnob === 'res'" class="custom-tooltip">

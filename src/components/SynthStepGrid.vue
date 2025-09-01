@@ -189,4 +189,8 @@ const nearestNote = props.nearestNote;
 .pad-settings-dot:hover {
     background: rgba(15, 18, 26, .9)
 }
+
+
+
+
 </style>

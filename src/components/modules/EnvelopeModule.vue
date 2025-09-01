@@ -13,16 +13,8 @@
     <div class="pt-knob-row">
       <!-- Attack -->
       <div class="position-relative text-center">
-        <Knob
-          v-model="attackNorm"
-          label="Attack"
-          size="medium"
-          :min="0" :max="100" :step="1"
-          :disabled="!localEnabled"
-          :color="color"
-          @knobStart="activeKnob = 'attack'"
-          @knobEnd="activeKnob = null"
-        />
+        <Knob v-model="attackNorm" label="Attack" size="small" :min="0" :max="100" :step="1" :disabled="!localEnabled"
+          :color="color" @knobStart="activeKnob = 'attack'" @knobEnd="activeKnob = null" />
         <span v-if="activeKnob === 'attack'" class="custom-tooltip">
           {{ Math.round(attackMsLocal) }} ms
         </span>
@@ -30,16 +22,8 @@
 
       <!-- Decay -->
       <div class="position-relative text-center">
-        <Knob
-          v-model="decayNorm"
-          label="Decay"
-          size="medium"
-          :min="0" :max="100" :step="1"
-          :disabled="!localEnabled"
-          :color="color"
-          @knobStart="activeKnob = 'decay'"
-          @knobEnd="activeKnob = null"
-        />
+        <Knob v-model="decayNorm" label="Decay" size="small" :min="0" :max="100" :step="1" :disabled="!localEnabled"
+          :color="color" @knobStart="activeKnob = 'decay'" @knobEnd="activeKnob = null" />
         <span v-if="activeKnob === 'decay'" class="custom-tooltip">
           {{ Math.round(decayMsLocal) }} ms
         </span>
