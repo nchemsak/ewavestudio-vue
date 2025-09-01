@@ -1,6 +1,6 @@
 <!-- components/modules/FMModule.vue -->
 <template>
-    <KnobGroup v-model="localEnabled" title="FM" :color="color" :showToggle="showToggle">
+    <KnobGroup v-model="localEnabled" :title="title" :color="color" :showToggle="showToggle">
         <!-- header info button -->
         <template #header-content>
             <div class="pt-header-tools">

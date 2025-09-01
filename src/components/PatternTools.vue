@@ -19,7 +19,7 @@
             <div class="pt-section-title">Humanize Presets</div>
             <div class="pt-btn-group" role="group" aria-label="Velocity shapes">
                 <button class="pt-btn" @click="shapePeaks">Peaks</button>
-                <button class="pt-btn" @click="shapeStairs4">Stairs 4</button>
+                <button class="pt-btn" @click="shapeStairs4">Stairs</button>
                 <button class="pt-btn" @click="shapeRamp">Ramp</button>
                 <button class="pt-btn" @click="shapeBackbeat">Backbeat</button>
                 <button class="pt-btn" @click="shapeRandom">Random</button>

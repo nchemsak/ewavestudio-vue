@@ -1,5 +1,5 @@
 <template>
-	<div class="drum-sequencer" :class="currentTheme">
+	<div class="drum-sequencer" :class="currentTheme" :style="padSizeStyle">
 		<!-- MAIN GRID -->
 		<div class="ds-grid">
 
@@ -59,6 +59,42 @@
 							:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
 						<h2 class="pt-title">Step Sequencer</h2>
 
+
+
+						<!-- NEw BEGIN -->
+						<br />
+						<!-- toolbar under the Step Sequencer heading -->
+						<div class="step-toolbar pt-seg pt-seg-sm">
+							<!-- step length -->
+							<button class="pt-seg-btn" :class="{ 'is-active': stepLength === 16 }"
+								@click="setStepLength(16)">16</button>
+							<button class="pt-seg-btn" :class="{ 'is-active': stepLength === 32 }"
+								@click="setStepLength(32)">32</button>
+
+							<!-- separator -->
+							<span class="step-dot">•</span>
+
+
+
+							<!-- per-step overlays -->
+							<div class="pt-seg">
+								<button class="pt-seg-btn" :class="{ 'is-active': showVelocity }"
+									@click="showVelocity = !showVelocity">Velocity</button>
+								<button class="pt-seg-btn" :class="{ 'is-active': showPitch }"
+									@click="showPitch = !showPitch">Pitch</button>
+								<!-- future: Probability, Ratchet, Nudge -->
+							</div>
+
+							<!-- push “Expand all / Collapse all” to the right if you keep them -->
+							<div style="margin-left:auto"></div>
+						</div>
+
+						<!-- thin divider between toolbar and grid -->
+						<div class="pt-rule"></div>
+
+						<!-- New END -->
+
+
 						<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
 							label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
 							@knobEnd="activeKnob = null" />
@@ -82,7 +118,8 @@
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
 						:nearestNote="nearestNote"
-						@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
+						@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)"
+						:showVelocity="showVelocity" :showPitch="showPitch" />
 				</div>
 			</section>
 
@@ -99,25 +136,6 @@
 					</CollapsibleCard>
 				</div>
 
-				<!-- <div class="module generators">
-					<CollapsibleCard id="generators" title="Generators" v-model="collapsibleState['generators']">
-						<section class="pt-section">
-							<div class="pt-section-title">Oscillators</div>
-							<div class="pt-seg pt-seg-sm" role="tablist" aria-label="Waveforms">
-								<button v-for="wave in waves" :key="wave" class="pt-seg-btn"
-									:class="{ 'is-active': selectedWaveform === wave }" role="tab"
-									:aria-pressed="selectedWaveform === wave" @click="selectedWaveform = wave">
-									{{ waveLabel(wave) }}
-								</button>
-							</div>
-						</section>
-
-						<div class="pt-rule" aria-hidden="true"></div>
-
-						<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
-							v-model:amount="noiseAmount" :color="'#9C27B0'" />
-					</CollapsibleCard>
-				</div> -->
 				<div class="module generators">
 					<CollapsibleCard id="generators" title="Generators" v-model="collapsibleState['generators']">
 						<!-- Toolbar directly under heading -->
@@ -190,31 +208,22 @@
 
 				<div class="module pitch">
 					<CollapsibleCard id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
+
 						<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
 							v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
 							v-model:mode="pitchMode" />
 						<div class="pt-rule" aria-hidden="true"></div>
+
 						<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
 							v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
 						<div class="pt-rule" aria-hidden="true"></div>
+
 						<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
 							v-model:detune="detuneCents" v-model:spread="stereoSpread" />
+
 					</CollapsibleCard>
 				</div>
 
-				<!-- <div class="module fx">
-					<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
-						<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
-							v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5" v-model:delayTime="delayTime"
-							v-model:delayFeedback="delayFeedback" v-model:delayMix="delayMix"
-							v-model:toneEnabled="delayToneEnabled" v-model:toneHz="delayToneHz"
-							v-model:toneType="delayToneType" />
-						<div class="pt-rule" aria-hidden="true"></div>
-						<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" v-model:driveType="driveType"
-							v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
-							v-model:driveMix="driveMix" />
-					</CollapsibleCard>
-				</div> -->
 				<div class="module fx">
 					<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
 
@@ -427,6 +436,42 @@ import CollapsibleCard from './CollapsibleCard.vue';
 // IMPORTS END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+
+//SEQUENCER TOOLS START
+// --- Step toolbar state ---
+const stepLength = ref<16 | 32>(16);
+const showVelocity = ref(true);
+const showPitch = ref(true);
+
+// Resize all instrument arrays when switching 16/32
+function setStepLength(len: 16 | 32) {
+	if (stepLength.value === len) return;
+	stepLength.value = len;
+
+	instruments.value.forEach(inst => {
+		const resize = <T,>(arr: T[], fill: T) =>
+		(arr.length === len ? arr :
+			(arr.length < len ? [...arr, ...Array(len - arr.length).fill(fill)]
+				: arr.slice(0, len)));
+
+		inst.steps = resize(inst.steps, false);
+		inst.velocities = resize(inst.velocities, 1.0);
+
+		// only synth has pitches
+		if (inst.pitches) inst.pitches = resize(inst.pitches, currentDefaultHz.value);
+	});
+}
+
+const padSizeStyle = computed(() => ({
+	'--padTEST-size': stepLength.value === 16 ? '41px' : '17px'
+}));
+//SEQUENCER TOOLS END
+
+
+
+
+
 // PANEL MENU START
 
 // UI state for header tabs + menus
@@ -521,7 +566,7 @@ const currentTheme = ref(''); // '', 'theme-light', or 'theme-synthwave'
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // FM Synthesis START
-const fmEnabled = ref(false);
+const fmEnabled = ref(true);
 const fmModFreq = ref(200);     // Hz when not using ratio
 const fmIndex = ref(0);       // 0..50 typical range
 const fmRatio = ref<number | null>(1); // start as 1:1, or null for Hz mode
@@ -926,8 +971,10 @@ const instruments = ref([
 		buffer: null,
 		muted: false,
 		channelVolume: 0.5,
-		steps: Array(16).fill(false),
-		velocities: Array(16).fill(1.0)
+		// steps: Array(16).fill(false),
+		// velocities: Array(16).fill(1.0)
+		steps: Array(stepLength.value).fill(false),
+		velocities: Array(stepLength.value).fill(1.0),
 	},
 	{
 		name: 'snare',
@@ -938,8 +985,10 @@ const instruments = ref([
 		buffer: null,
 		muted: false,
 		channelVolume: 0.5,
-		steps: Array(16).fill(false),
-		velocities: Array(16).fill(1.0)
+		// steps: Array(16).fill(false),
+		// velocities: Array(16).fill(1.0)
+		steps: Array(stepLength.value).fill(false),
+		velocities: Array(stepLength.value).fill(1.0),
 	},
 	{
 		name: 'hihat',
@@ -950,8 +999,10 @@ const instruments = ref([
 		buffer: null,
 		muted: false,
 		channelVolume: 0.5,
-		steps: Array(16).fill(false),
-		velocities: Array(16).fill(1.0)
+		// steps: Array(16).fill(false),
+		// velocities: Array(16).fill(1.0)
+		steps: Array(stepLength.value).fill(false),
+		velocities: Array(stepLength.value).fill(1.0),
 	},
 	{
 		name: 'synth-voice',
@@ -961,8 +1012,10 @@ const instruments = ref([
 		isEditingName: false,
 		muted: false,
 		channelVolume: 0.5,
-		steps: Array(16).fill(false),
-		velocities: Array(16).fill(1.0),
+		// steps: Array(16).fill(false),
+		// velocities: Array(16).fill(1.0),
+		steps: Array(stepLength.value).fill(false),
+		velocities: Array(stepLength.value).fill(1.0),
 		pitches: Array(16).fill(currentDefaultHz.value),
 	},
 ]);
@@ -1133,7 +1186,7 @@ const noiseBuffers: Record<NoiseType, AudioBuffer | null> = {
 const noiseType = ref<NoiseType>('white') // default selection
 
 const noiseAmount = ref(0); // 0 = no noise, 1 = full noise
-const noiseEnabled = ref(false)
+const noiseEnabled = ref(true)
 // Noise END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -1292,8 +1345,8 @@ watch(driveMix, val => {
 
 
 // Unison / Detune START
-const unisonEnabled = ref(false);
-const unisonVoices = ref(3);   // 1–6
+const unisonEnabled = ref(true);
+const unisonVoices = ref(1);   // 1–6
 const detuneCents = ref(12);  // 0–100 cents per step
 const stereoSpread = ref(50);  // 0–100 %
 // Unison / Detune END
@@ -1572,8 +1625,10 @@ function addCustomChannel() {
 		buffer: null,
 		muted: false,
 		channelVolume: 0.5,
-		steps: Array(16).fill(false),
-		velocities: Array(16).fill(1.0),
+		// steps: Array(16).fill(false),
+		// velocities: Array(16).fill(1.0),
+		steps: Array(stepLength.value).fill(false),
+		velocities: Array(stepLength.value).fill(1.0),
 	});
 
 	// Prompt for a file right away
@@ -1640,21 +1695,28 @@ function schedule() {
 
 		instruments.value.forEach(inst => {
 			if (!inst.muted && inst.steps[stepIndex]) {
-				const velocity = inst.velocities[stepIndex];
-				const chanVol = inst.channelVolume ?? 1.0;
+				// const velocity = inst.velocities[stepIndex];
+				// const chanVol = inst.channelVolume ?? 1.0;
+
+				const vel = inst.velocities[stepIndex] ?? 1;
+				const chanVol = inst.channelVolume ?? 1;
+				const amp = Math.min(1, chanVol * vel);
+
 				const pitch = inst.pitches?.[stepIndex] || 220;
 				const safeDecay = (isFinite(synthDecay.value) && synthDecay.value > 0) ? synthDecay.value : 0.1;
 
 				const isEvenStep = stepIndex % 2 === 1;
 				const swingOffset = isEvenStep ? stepDuration * swing.value : 0;
 				const t = startTime + swingOffset;
-				if (inst.type === 'synth') playSynthNote(pitch, velocity * chanVol, safeDecay, t);
-				else if (inst.buffer) playBuffer(inst.buffer, t, velocity * chanVol);
+
+				if (inst.type === 'synth') playSynthNote(pitch, amp, safeDecay, t);
+				else if (inst.buffer) playBuffer(inst.buffer, t, amp);
+
 			}
 		});
 
 		currentStep.value = stepIndex;
-		stepIndex = (stepIndex + 1) % 16;
+		stepIndex = (stepIndex + 1) % stepLength.value;
 		startTime += stepDuration;
 	}
 
@@ -2686,5 +2748,21 @@ driveShaper.curve = (() => {
 .pt-dot.is-on {
 	background: hsl(var(--pt-accent) 80% 60%);
 	box-shadow: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / .18), 0 0 12px var(--pt-btn-glow);
+}
+
+.step-toolbar {
+	margin-top: 4px;
+	margin-bottom: 6px;
+	align-items: center;
+	gap: 8px;
+}
+
+.step-toolbar .pt-seg-btn {
+	min-height: 26px;
+}
+
+.step-toolbar .step-dot {
+	opacity: .4;
+	margin: 0 2px;
 }
 </style>

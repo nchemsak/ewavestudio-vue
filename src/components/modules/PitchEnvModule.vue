@@ -6,7 +6,7 @@
             <div class="pt-header-tools">
                 <InfoPopover title="Pitch Env Explained" aria-label="What is the Pitch Envelope?">
                     Nudges the note’s frequency at start, then returns to normal pitch.
-                    <div class="pt-rule"></div>
+                    <div class="pt-rule"></div> 
                     <ul class="mb-2 ps-3">
                         <li><strong>Mode</strong>:
                             <em>↑ Up</em> rises then settles ·

@@ -1,8 +1,11 @@
 @use "./variables";
 
 :root {
-	--padTEST-size: 40px;
+	// --padTEST-size: 40px;
+		--padTEST-size: 17px;
+
 	--padTEST-radius: 14px;
+	--padTEST-radius: 0px;
 	--bg: #0e1118;
 	--pad-w: 30px;
 	--pad-h: 100px;
@@ -230,26 +233,26 @@
 		margin-top: 0;
 	}
 
-	.pad-settings-dot {
-		position: absolute;
-		top: 4px;
-		right: 4px;
-		width: 16px;
-		height: 16px;
-		border-radius: 50%;
-		border: 1px solid #666;
-		background: #222;
-		color: #9cf;
-		display: grid;
-		place-items: center;
-		font-size: 10px;
-		line-height: 1;
-		cursor: pointer;
-		opacity: 0.85;
-	}
-	.pad-settings-dot:hover {
-		opacity: 1;
-	}
+	// .pad-settings-dot {
+	// 	position: absolute;
+	// 	top: 4px;
+	// 	right: 4px;
+	// 	width: 16px;
+	// 	height: 16px;
+	// 	border-radius: 50%;
+	// 	border: 1px solid #666;
+	// 	background: #222;
+	// 	color: #9cf;
+	// 	display: grid;
+	// 	place-items: center;
+	// 	font-size: 10px;
+	// 	line-height: 1;
+	// 	cursor: pointer;
+	// 	opacity: 0.85;
+	// }
+	// .pad-settings-dot:hover {
+	// 	opacity: 1;
+	// }
 
 	.btn-xs {
 		padding: 2px 6px;
@@ -351,7 +354,10 @@
 
 	.padTEST {
 		inline-size: var(--padTEST-size);
-		block-size: var(--padTEST-size);
+		// block-size: var(--padTEST-size);
+		width: var(--padTEST-size);
+		height: 80px;
+		
 		border-radius: var(--padTEST-radius);
 		position: relative;
 		overflow: hidden;
