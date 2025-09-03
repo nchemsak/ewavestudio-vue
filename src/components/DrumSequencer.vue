@@ -51,6 +51,7 @@
 			</section>
 
 			<!-- Step Sequencer (left, row 2) -->
+			<!-- Step Sequencer (left, row 2) -->
 			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
 				<div class="pt-subheader step-sequencer-subheader">
 					<div class="channel-caption d-flex align-items-center gap-2">
@@ -59,41 +60,15 @@
 							:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
 						<h2 class="pt-title">Step Sequencer</h2>
 
-
-
-						<!-- NEw BEGIN -->
-						<br />
-						<!-- toolbar under the Step Sequencer heading -->
+						<!-- toolbar (keep step length only) -->
 						<div class="step-toolbar pt-seg pt-seg-sm">
-							<!-- step length -->
 							<button class="pt-seg-btn" :class="{ 'is-active': stepLength === 16 }"
 								@click="setStepLength(16)">16</button>
 							<button class="pt-seg-btn" :class="{ 'is-active': stepLength === 32 }"
 								@click="setStepLength(32)">32</button>
-
-							<!-- separator -->
-							<span class="step-dot">•</span>
-
-
-
-							<!-- per-step overlays -->
-							<div class="pt-seg">
-								<button class="pt-seg-btn" :class="{ 'is-active': showVelocity }"
-									@click="showVelocity = !showVelocity">Velocity</button>
-								<button class="pt-seg-btn" :class="{ 'is-active': showPitch }"
-									@click="showPitch = !showPitch">Pitch</button>
-								<!-- future: Probability, Ratchet, Nudge -->
-							</div>
-
-							<!-- push “Expand all / Collapse all” to the right if you keep them -->
-							<div style="margin-left:auto"></div>
 						</div>
 
-						<!-- thin divider between toolbar and grid -->
 						<div class="pt-rule"></div>
-
-						<!-- New END -->
-
 
 						<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
 							label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
@@ -103,25 +78,44 @@
 						</span>
 					</div>
 
+					<!-- RIGHT TOOLS: kebab only -->
 					<div class="pt-header-tools">
-						<div class="d-flex gap-2">
-							<button class="pt-btn pt-btn-sm" :disabled="allOpen"
-								@click="setAllCollapsibles(true)">Expand all</button>
-							<button class="pt-btn pt-btn-sm" :disabled="allClosed"
-								@click="setAllCollapsibles(false)">Collapse all</button>
-						</div>
+						<button class="pt-info-icon" aria-label="Step options"
+							@click="openMenu('steps', $event)">⋯</button>
 					</div>
 				</div>
 
+				<!-- anchored menu + overlay -->
+				<div v-if="ui.menus.steps.open" class="pt-select-overlay" @click="closeMenus"></div>
+				<div v-if="ui.menus.steps.open" class="pt-menu" data-side="right"
+					:style="{ left: ui.menus.steps.x + 'px', top: ui.menus.steps.y + 'px' }">
+					<!-- single checkbox controlling both sliders -->
+					<div class="pt-option" role="menuitemcheckbox" :aria-checked="padSlidersOn"
+						@click="togglePadSliders()">
+						<span class="pt-check" style="width:1.2em;display:inline-block">{{ padSlidersOn ? '✓' : ''
+						}}</span>
+						Pad Velocity/Pitch Sliders
+					</div>
+
+					<div class="pt-rule"></div>
+
+					<!-- expand/collapse all (disabled when already at that state) -->
+					<div class="pt-option" :class="{ 'is-disabled': allOpen }" :aria-disabled="allOpen"
+						@click="!allOpen && setAllCollapsibles(true)">Expand all panels</div>
+					<div class="pt-option" :class="{ 'is-disabled': allClosed }" :aria-disabled="allClosed"
+						@click="!allClosed && setAllCollapsibles(false)">Collapse all panels</div>
+				</div>
+
+				<!-- grid stays the same -->
 				<div class="step-card__grid">
 					<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
-						:nearestNote="nearestNote"
-						@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)"
-						:showVelocity="showVelocity" :showPitch="showPitch" />
+						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
+						@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
 				</div>
 			</section>
+
 
 			<!-- Modules grid (two compact rows) -->
 			<section class="pt-cards controlsWrapper ds-modules">
@@ -466,6 +460,9 @@ function setStepLength(len: 16 | 32) {
 const padSizeStyle = computed(() => ({
 	'--padTEST-size': stepLength.value === 16 ? '41px' : '17px'
 }));
+
+
+
 //SEQUENCER TOOLS END
 
 
@@ -515,6 +512,17 @@ function closeOverlays() {
 	for (const k in info) (info as any)[k].open = false;
 }
 
+// menus
+ui.menus.steps = ui.menus.steps ?? { open: false, x: 0, y: 0 };
+
+// single checkbox state = both velocity & pitch sliders
+const padSlidersOn = computed({
+	get: () => showVelocity.value && showPitch.value,
+	set: (v: boolean) => { showVelocity.value = v; showPitch.value = v; }
+});
+function togglePadSliders() {
+	padSlidersOn.value = !padSlidersOn.value;
+}
 
 // PANEL MENU END
 

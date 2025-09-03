@@ -454,6 +454,7 @@ $dark: map.get($themes, dark);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px); /*  Safari */
     color-scheme: dark;
+    z-index: 1000;
 }
 .pt-option {
     padding: 8px 10px;
@@ -853,5 +854,3 @@ $dark: map.get($themes, dark);
     font-weight: 700;
     font-size: 18px;
 }
-
-
