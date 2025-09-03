@@ -51,6 +51,7 @@
 			</section>
 
 			<!-- Step Sequencer (left, row 2) -->
+
 			<!-- Step Sequencer (left, row 2) -->
 			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
 				<div class="pt-subheader step-sequencer-subheader">
@@ -60,7 +61,7 @@
 							:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
 						<h2 class="pt-title">Step Sequencer</h2>
 
-						<!-- toolbar (keep step length only) -->
+						<!-- 16/32 toggle (kept) -->
 						<div class="step-toolbar pt-seg pt-seg-sm">
 							<button class="pt-seg-btn" :class="{ 'is-active': stepLength === 16 }"
 								@click="setStepLength(16)">16</button>
@@ -78,35 +79,42 @@
 						</span>
 					</div>
 
-					<!-- RIGHT TOOLS: kebab only -->
-					<div class="pt-header-tools">
+					<!-- RIGHT: kebab + anchored absolute menu -->
+					<div class="pt-header-tools step-menu-anchor">
 						<button class="pt-info-icon" aria-label="Step options"
-							@click="openMenu('steps', $event)">⋯</button>
+							@click="ui.menus.steps.open = !ui.menus.steps.open">⋯</button>
+
+						<!-- dropdown -->
+						<div v-if="ui.menus.steps.open" class="pt-menu step-menu" role="menu" @keydown.esc="closeMenus">
+							<!-- Header with title + close button -->
+							<div class="step-menu-header">
+								<div class="pt-menu-title">Step Sequencer Settings</div>
+								<button class="pt-seg-btn pt-seg-sm close-btn" @click.stop="closeMenus">X</button>
+							</div>
+
+							<div class="pt-rule" aria-hidden="true"></div>
+
+							<div class="pt-option" role="menuitemcheckbox" :aria-checked="padSlidersOn"
+								@click="togglePadSliders()">
+								<span class="pt-check" style="width:1.2em;display:inline-block">{{ padSlidersOn ? '✓' :
+									'' }}</span>
+								Pad Velocity/Pitch Sliders
+							</div>
+
+							<div class="pt-rule" aria-hidden="true"></div>
+
+							<div class="pt-option" :class="{ 'is-disabled': allOpen }" :aria-disabled="allOpen"
+								@click="!allOpen && setAllCollapsibles(true)">Expand all panels</div>
+							<div class="pt-option" :class="{ 'is-disabled': allClosed }" :aria-disabled="allClosed"
+								@click="!allClosed && setAllCollapsibles(false)">Collapse all panels</div>
+						</div>
+
 					</div>
 				</div>
 
-				<!-- anchored menu + overlay -->
-				<div v-if="ui.menus.steps.open" class="pt-select-overlay" @click="closeMenus"></div>
-				<div v-if="ui.menus.steps.open" class="pt-menu" data-side="right"
-					:style="{ left: ui.menus.steps.x + 'px', top: ui.menus.steps.y + 'px' }">
-					<!-- single checkbox controlling both sliders -->
-					<div class="pt-option" role="menuitemcheckbox" :aria-checked="padSlidersOn"
-						@click="togglePadSliders()">
-						<span class="pt-check" style="width:1.2em;display:inline-block">{{ padSlidersOn ? '✓' : ''
-						}}</span>
-						Pad Velocity/Pitch Sliders
-					</div>
+				<!-- overlay that scrolls with the card (absolute, not fixed) -->
+				<div v-if="ui.menus.steps.open" class="pt-select-overlay step-menu-overlay" @click="closeMenus"></div>
 
-					<div class="pt-rule"></div>
-
-					<!-- expand/collapse all (disabled when already at that state) -->
-					<div class="pt-option" :class="{ 'is-disabled': allOpen }" :aria-disabled="allOpen"
-						@click="!allOpen && setAllCollapsibles(true)">Expand all panels</div>
-					<div class="pt-option" :class="{ 'is-disabled': allClosed }" :aria-disabled="allClosed"
-						@click="!allClosed && setAllCollapsibles(false)">Collapse all panels</div>
-				</div>
-
-				<!-- grid stays the same -->
 				<div class="step-card__grid">
 					<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
@@ -115,6 +123,7 @@
 						@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
 				</div>
 			</section>
+
 
 
 			<!-- Modules grid (two compact rows) -->
@@ -152,7 +161,7 @@
 						<div class="pt-rule gen-divider" aria-hidden="true"></div>
 
 						<!-- Oscillators -->
-						<div v-show="genTab === 'osc'" class="gen-panel osc-panel">
+						<!-- <div v-show="genTab === 'osc'" class="gen-panel osc-panel">
 							<div class="pt-btn-group" role="group" aria-label="Waveforms">
 								<button v-for="wave in waves" :key="wave" class="pt-btn"
 									:class="{ 'is-active': selectedWaveform === wave }"
@@ -160,7 +169,23 @@
 									{{ waveLabel(wave) }}
 								</button>
 							</div>
+						</div> -->
+
+						<!-- Oscillators -->
+						<div v-show="genTab === 'osc'" class="gen-panel osc-panel">
+							<div class="wave-row" role="radiogroup" aria-label="Waveforms">
+								<WaveButton v-model="selectedWaveform" value="sine" label="SINE"
+									:palette="['#ff7eb3', '#ffd06b', '#7bd0ff']" />
+								<WaveButton v-model="selectedWaveform" value="triangle" label="TRIANGLE"
+									:palette="['#7cf3c9', '#b47aff', '#ffd06b']" />
+								<WaveButton v-model="selectedWaveform" value="sawtooth" label="SAW"
+									:palette="['#ff9a62', '#ffd06b', '#75f0ff']" />
+								<WaveButton v-model="selectedWaveform" value="square" label="SQUARE"
+									:palette="['#a2f5a6', '#7bd0ff', '#ff7eb3']" />
+							</div>
+
 						</div>
+
 
 						<!-- Noise -->
 						<div v-show="genTab === 'noise'" class="gen-panel noise-panel">
@@ -424,6 +449,7 @@ import PadSettingsPopover from './PadSettingsPopover.vue';
 import PatternTools from './PatternTools.vue';
 import SynthStepGrid from './SynthStepGrid.vue'
 import CollapsibleCard from './CollapsibleCard.vue';
+import WaveButton from './WaveButton.vue'
 // import SequencerKeyboard from './SequencerKeyboard.vue';
 
 
@@ -486,7 +512,7 @@ const ui = reactive({
 const genTab = ref<'osc' | 'noise'>('osc');
 const genInfoOpen = ref(false);
 
-function closeMenus() { for (const k in ui.menus) (ui.menus as any)[k].open = false; }
+// function closeMenus() { for (const k in ui.menus) (ui.menus as any)[k].open = false; }
 
 
 // tabs + menus + help popovers
@@ -513,17 +539,39 @@ function closeOverlays() {
 }
 
 // menus
-ui.menus.steps = ui.menus.steps ?? { open: false, x: 0, y: 0 };
+// ui.menus.steps = ui.menus.steps ?? { open: false, x: 0, y: 0 };
 
-// single checkbox state = both velocity & pitch sliders
+// // single checkbox state = both velocity & pitch sliders
+// const padSlidersOn = computed({
+// 	get: () => showVelocity.value && showPitch.value,
+// 	set: (v: boolean) => { showVelocity.value = v; showPitch.value = v; }
+// });
+// function togglePadSliders() {
+// 	padSlidersOn.value = !padSlidersOn.value;
+// }
+
+ui.menus.steps = ui.menus.steps ?? { open: false };
+
+// single checkbox that controls both sliders
 const padSlidersOn = computed({
 	get: () => showVelocity.value && showPitch.value,
 	set: (v: boolean) => { showVelocity.value = v; showPitch.value = v; }
 });
-function togglePadSliders() {
-	padSlidersOn.value = !padSlidersOn.value;
+function togglePadSliders() { padSlidersOn.value = !padSlidersOn.value; }
+
+function closeMenus() {
+	for (const k in ui.menus) (ui.menus as any)[k].open = false;
 }
 
+function onDocClick(e: MouseEvent) {
+	if (!ui.menus.steps.open) return
+	const menuEl = document.querySelector('.pt-menu.step-menu')
+	const btnEl = document.querySelector('.step-menu-anchor button')
+	const target = e.target as Node
+	if (menuEl && !menuEl.contains(target) && btnEl && !btnEl.contains(target)) {
+		closeMenus()
+	}
+}
 // PANEL MENU END
 
 
@@ -892,6 +940,7 @@ onMounted(() => {
 	// window.addEventListener('keydown', onGlobalKeydown);
 	window.addEventListener('keydown', onGlobalKeydown, { capture: true });
 	window.addEventListener('keyup', onGlobalKeyup, { capture: true });
+	document.addEventListener('click', onDocClick, { capture: true })
 
 });
 onBeforeUnmount(() => {
@@ -899,6 +948,7 @@ onBeforeUnmount(() => {
 	window.removeEventListener('mouseup', handleMouseUp);
 	window.removeEventListener('keydown', onGlobalKeydown, { capture: true } as any);
 	window.removeEventListener('keyup', onGlobalKeyup, { capture: true } as any);
+	document.removeEventListener('click', onDocClick, { capture: true })
 
 	if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
 	stopSnh();
@@ -2772,5 +2822,76 @@ driveShaper.curve = (() => {
 .step-toolbar .step-dot {
 	opacity: .4;
 	margin: 0 2px;
+}
+
+/* The Step Sequencer section becomes the containing block for the overlay */
+.ds-steps {
+	position: relative;
+}
+
+/* Anchor the dropdown to the ⋯ button container */
+.step-menu-anchor {
+	position: relative;
+}
+
+/* Absolute dropdown under the button */
+.pt-menu.step-menu {
+	position: absolute;
+	left: 0;
+	top: calc(100% + 6px);
+	min-width: 240px;
+	z-index: 1001;
+	/* above header, below overlay if you add one later */
+}
+
+/* Title inside the menu */
+.pt-menu-title {
+	font-weight: 600;
+	padding: 6px 10px;
+	opacity: .9;
+}
+
+/* Overlay that scrolls with the card (not fixed) */
+.step-menu-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+}
+
+/* Disabled look for menu items */
+.pt-menu .pt-option.is-disabled {
+	opacity: .5;
+	pointer-events: none;
+}
+
+.step-menu-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 4px 8px;
+	position: relative;
+}
+
+.step-menu-header .close-btn {
+	position: absolute;
+	right: 8px;
+	top: 4px;
+}
+
+.wave-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 12px;
+}
+
+.wave-row :deep(.wave-btn) {
+	--w: 96px;
+}
+
+/* size tweak to fit your card */
+@media (max-width: 520px) {
+	.wave-row :deep(.wave-btn) {
+		--w: 84px;
+	}
 }
 </style>
