@@ -59,13 +59,13 @@ const shapeTag = computed(() => {
     }
 })
 
-// geometry
+// geometry 
 const shapeAttrs = computed(() => {
     switch (props.value) {
-        case 'square': return { x: 18, y: 18, width: 64, height: 64, rx: 0 }            // sharp corners
-        case 'triangle': return { points: '50,14 88,86 12,86' }                            // equilateral-ish
-        case 'sawtooth': return { points: '16,84 84,84 16,16' }                            // right angle bottom-left
-        case 'sine': return { cx: 50, cy: 50, r: 32 }                                  // circle avatar
+        case 'square': return { x: 18, y: 18, width: 64, height: 64, rx: 0 }
+        case 'triangle': return { points: '50,14 88,86 12,86' }
+        case 'sawtooth': return { points: '16,84 84,84 16,16' }
+        case 'sine': return { cx: 50, cy: 50, r: 32 }
         default: return { x: 20, y: 20, width: 60, height: 60, rx: 12 }
     }
 })
@@ -78,9 +78,8 @@ const shapeAttrs = computed(() => {
     display: inline-flex;
     flex-direction: column;
     align-items: center;
-    gap: .4rem;
     width: var(--w);
-    padding: 12px 10px 10px;
+    padding: 6px 6px 6px;
     border-radius: 14px;
     background: var(--panel);
     border: 1px solid rgba(255, 255, 255, .06);
@@ -123,6 +122,4 @@ const shapeAttrs = computed(() => {
     opacity: .9;
     user-select: none;
 }
-
-
 </style>

@@ -1,8 +1,7 @@
 <template>
     <div class="d-flex pad-row">
-        <div class="padTEST-grid">
+        <div class="padTEST-grid" data-equal-cols>
             <div v-for="(active, index) in steps" :key="index" class="pad-col" @mouseleave="hovered = null">
-                <!-- NEW: head row above the pad -->
                 <div class="pad-head">
                     <button class="pad-settings-dot" @mousedown.stop @click.stop="emitOpenSettings(index, $event)"
                         aria-label="Pad settings">⋮</button>
@@ -10,7 +9,7 @@
                     <div v-if="showIndices" class="pad-step-num">{{ index + 1 }}</div>
                 </div>
 
-                <!-- body: the original hoverable wrapper -->
+                <!-- body -->
                 <div class="padTESTwrap" @mouseenter="hovered = index" @mouseleave="hovered = null">
                     <div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
                         @mousedown="onMouseDown($event, index)" @mouseenter="onMouseEnter(index)" @dragstart.prevent
@@ -21,7 +20,7 @@
                         {{ nearestNote(pitches[index]) }}
                     </div>
 
-                    <!-- hover sliders (unchanged) -->
+                    <!-- hover sliders -->
                     <div v-if="active && hovered === index && props.showVelocity" class="hover-slider volume-slider">
                         <input type="range" min="0" max="1" step="0.01" :value="velocities[index]"
                             @input="updateVelocity(index, $event)" @mousedown="activeVol = index"
@@ -136,7 +135,7 @@ function hueFor(hz: number, lo = props.minHz, hi = props.maxHz) {
 }
 
 function padStyle(index: number) {
-    if (!props.steps[index]) return { '--pad-on': 0 }; // let CSS show “off” state
+    if (!props.steps[index]) return { '--pad-on': 0 };
     const pct = Math.round(props.velocities[index] * 100);
     const hue = hueFor(props.pitches[index] || props.minHz);
     return {
@@ -167,11 +166,34 @@ const nearestNote = props.nearestNote;
     z-index: 1000;
 }
 
-/* nicer 3-dot settings; hidden until hover */
-/* .pad-settings-dot {
-    position: absolute;
-    top: 4px;
-    right: 4px;
+
+.pad-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-height: 26px;
+}
+
+.pad-head .pad-step-num {
+    position: static;
+    transform: none;
+    top: auto;
+    left: auto;
+    font-size: 10px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, .65);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, .12);
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 0;
+}
+
+.pad-head .pad-settings-dot {
+    position: static;
     width: 18px;
     height: 18px;
     border-radius: 8px;
@@ -183,91 +205,19 @@ const nearestNote = props.nearestNote;
     display: grid;
     place-items: center;
     cursor: pointer;
-    opacity: 0;
-    transform: scale(.9);
     transition: opacity .15s ease, transform .15s ease, background .15s ease;
-}
-
-.padTESTwrap:hover .pad-settings-dot,
-.pad-settings-dot:focus-visible {
-    opacity: 1;
-    transform: scale(1);
-}
-
-.pad-settings-dot:hover {
-    background: rgba(15, 18, 26, .9)
-} */
-
-
-
-/* column layout: head (dot + number) above the bar */
-.pad-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: var(--padTEST-size); /* keeps 32 columns aligned */
-  gap: 4px;
-}
-
-.pad-head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px; /* dot above, number below */
-  min-height: 26px; /* reserve space so layout doesn't jump */
-}
-
-/* the step number is now in normal flow */
-.pad-head .pad-step-num {
-  position: static;
-  transform: none;
-  top: auto;
-  left: auto;
-  font-size: 10px;
-  line-height: 1;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, .65);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,.12);
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 0;
-}
-
-/* settings dot now lives in the head row, not absolutely on the pad */
-.pad-head .pad-settings-dot {
-  position: static;
-  width: 18px;
-  height: 18px;
-  border-radius: 8px;
-  border: 1px solid #2a2f42;
-  background: rgba(15, 18, 26, .78);
-  color: #c9d4ff;
-  font-size: 13px;
-  line-height: 1;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  /* opacity: 0; */
-  /* transform: scale(.9); */
-  transition: opacity .15s ease, transform .15s ease, background .15s ease;
 }
 
 /* reveal dot when you hover the column or focus the button */
 .pad-col:hover .pad-settings-dot,
 .pad-settings-dot:focus-visible {
-  opacity: 1;
-  /* transform: scale(1); */
-}
-.pad-head .pad-settings-dot:hover {
-  /* background: rgba(15, 18, 26, .9); */
+    opacity: 1;
+
 }
 
-/* keep the existing absolute-positioned note chip and sliders working
-   relative to the pad body, not the head */
+.pad-head .pad-settings-dot:hover {}
+
 .padTESTwrap {
-  position: relative;
+    position: relative;
 }
-
 </style>

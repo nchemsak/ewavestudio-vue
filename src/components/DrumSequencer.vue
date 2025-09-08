@@ -51,8 +51,6 @@
 			</section>
 
 			<!-- Step Sequencer (left, row 2) -->
-
-			<!-- Step Sequencer (left, row 2) -->
 			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
 				<div class="pt-subheader step-sequencer-subheader">
 					<div class="channel-caption d-flex align-items-center gap-2">
@@ -2885,7 +2883,7 @@ driveShaper.curve = (() => {
 }
 
 .wave-row :deep(.wave-btn) {
-	--w: 96px;
+	--w: 80px;
 }
 
 /* size tweak to fit your card */

@@ -2,7 +2,7 @@
 
 :root {
 	// --padTEST-size: 40px;
-		--padTEST-size: 17px;
+	--padTEST-size: 17px;
 
 	--padTEST-radius: 14px;
 	--padTEST-radius: 0px;
@@ -11,6 +11,7 @@
 	--pad-h: 100px;
 	--slider-w: 74px;
 	--slider-l: 100px; /* how far sliders extend away from pad */
+	 --slider-hit: 28px;  /* clickable width around the track */
 	--track-thickness: 8px;
 	--thumb-thickness: 10px;
 }
@@ -130,9 +131,11 @@
 		left: 50%;
 		transform: translateX(-50%);
 		height: var(--slider-l);
-		width: var(--padTEST-size);
+		// width: var(--padTEST-size);
+		width: 100%;
 		z-index: 10;
 		display: flex;
+		display: grid;
 		align-items: center;
 		justify-content: center;
 		pointer-events: none;
@@ -168,6 +171,7 @@
 		transform: rotate(-90deg);
 		width: var(--slider-l);
 		height: var(--padTEST-size);
+		height: 100%;
 		position: relative;
 		z-index: 1;
 	}
@@ -327,10 +331,24 @@
 /* ----------------------------------------------------------
    Pad Grid
 ---------------------------------------------------------- */
+.pad-col {
+	width: auto; /* was: width: var(--padTEST-size); */
+	min-width: 0;
+}
 .padTEST-grid {
-	display: flex;
-	justify-content: space-around;
+	// display: flex;
+	// justify-content: space-around;
+	// gap: 8px;
+
+	display: grid;
+	grid-auto-flow: column;
+	grid-auto-columns: minmax(0, 1fr);
 	gap: 8px;
+	align-items: start;
+
+	inline-size: 100%;
+	min-inline-size: 0;
+	flex: 1 1 100%;
 
 	.padTESTwrap {
 		position: relative;
@@ -353,11 +371,12 @@
 	}
 
 	.padTEST {
-		inline-size: var(--padTEST-size);
+		// inline-size: var(--padTEST-size);
+		inline-size: 100%;
 		// block-size: var(--padTEST-size);
-		width: var(--padTEST-size);
+		// width: var(--padTEST-size);
 		height: 80px;
-		
+
 		border-radius: var(--padTEST-radius);
 		position: relative;
 		overflow: hidden;
@@ -430,6 +449,25 @@
 	}
 }
 
+@media (max-width: 640px) {
+	// .padTEST-grid {
+	// 	grid-auto-flow: row;
+	// 	grid-auto-columns: initial;
+	// 	grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+	// }
+	.pad-row {
+		display: block;
+	} /* overrides Bootstrap .d-flex */
+	.padTEST-grid {
+		grid-auto-flow: row;
+		grid-auto-columns: initial;
+		grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+	}
+	.padTEST {
+		height: clamp(60px, 18vw, 96px);
+	}
+}
+
 // Numbers for SynthStepGrid dots
 .step-index {
 	position: absolute;
@@ -461,44 +499,49 @@
 	padding: 0.5rem 0.25rem 0.75rem;
 }
 
-
 /* Toolbar under the Generators heading */
 .gen-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 4px 0 12px; /* <- space below the Osc/Noise buttons */
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin: 4px 0 12px; /* <- space below the Osc/Noise buttons */
 }
 
 /* Give each panel a little breathing room (if you want extra) */
-.gen-panel { /* optional; fine to omit */
-  /* padding-top: 4px; */
+.gen-panel {
+	/* optional; fine to omit */
+	/* padding-top: 4px; */
 }
 
 /* One-row Noise controls */
 .noise-inline {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap; /* wraps nicely on narrow screens */
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap; /* wraps nicely on narrow screens */
 }
 
 /* Minimal on/off dot (matches your theme tokens) */
 .pt-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 45%);
-  background: var(--pt-surface-2);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
-  cursor: pointer;
-  transition: transform .12s ease, filter .2s ease, box-shadow .25s ease;
+	width: 14px;
+	height: 14px;
+	border-radius: 999px;
+	border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 45%);
+	background: var(--pt-surface-2);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+	cursor: pointer;
+	transition:
+		transform 0.12s ease,
+		filter 0.2s ease,
+		box-shadow 0.25s ease;
 }
-.pt-dot:hover { transform: scale(1.06); }
+.pt-dot:hover {
+	transform: scale(1.06);
+}
 .pt-dot.is-on {
-  background: hsl(var(--pt-accent) 80% 60%);
-  box-shadow:
-    0 0 0 3px hsl(var(--pt-accent) 90% 60% / .18),
-    0 0 12px var(--pt-btn-glow);
+	background: hsl(var(--pt-accent) 80% 60%);
+	box-shadow:
+		0 0 0 3px hsl(var(--pt-accent) 90% 60% / 0.18),
+		0 0 12px var(--pt-btn-glow);
 }
