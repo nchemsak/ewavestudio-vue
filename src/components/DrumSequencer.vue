@@ -130,9 +130,21 @@
 				<div class="module pattern-tools">
 					<CollapsibleCard id="pattern-tools" title="Pattern Tools"
 						v-model="collapsibleState['pattern-tools']">
-						<PatternTools :steps="steps" :velocities="velocities" :frequencies="padFrequencies"
-							:min-freq="100" :max-freq="2000" :currentTheme="currentTheme" @update:steps="steps = $event"
-							@update:velocities="velocities = $event" @update:frequencies="padFrequencies = $event"
+						<PatternTools :steps="steps" :velocities="velocities" :currentTheme="currentTheme"
+							@update:steps="steps = $event" @update:velocities="velocities = $event" />
+					</CollapsibleCard>
+				</div>
+				<!-- Melody Maker -->
+				<div class="module melody">
+					<CollapsibleCard id="melody" title="Melody Maker" v-model="collapsibleState['melody']">
+						<!-- header tools: ⋯ advanced -->
+						<template #tools>
+							<button class="pt-info-icon" aria-label="Advanced options"
+								@click="melodyRef?.openAdvanced($event)">⋯</button>
+						</template>
+
+						<MelodyMaker ref="melodyRef" :frequencies="padFrequencies" :steps="steps" :min-freq="100"
+							:max-freq="2000" :currentTheme="currentTheme" @update:frequencies="padFrequencies = $event"
 							@octave-shift="octaveShiftAllSkip($event)" @key-root-change="onKeyRootChange" />
 					</CollapsibleCard>
 				</div>
@@ -296,14 +308,18 @@
 						<div v-if="ui.menus.fx.open" class="pt-menu" data-side="right"
 							:style="{ left: ui.menus.fx.x + 'px', top: ui.menus.fx.y + 'px' }">
 							<div class="pt-option is-active" role="menuitemcheckbox"
-								@click="delayEnabled = !delayEnabled">Toggle Delay</div>
+								@click="delayEnabled = !delayEnabled">Toggle Delay
+							</div>
 							<div class="pt-option is-active" role="menuitemcheckbox"
-								@click="driveEnabled = !driveEnabled">Toggle Drive</div>
+								@click="driveEnabled = !driveEnabled">Toggle Drive
+							</div>
 							<div class="pt-rule"></div>
 							<div class="pt-option" role="menuitem"
-								@click="delayFeedback = 0.3; delayMix = 0.3; delayTime = 0.2">Reset Delay</div>
+								@click="delayFeedback = 0.3; delayMix = 0.3; delayTime = 0.2">Reset
+								Delay</div>
 							<div class="pt-option" role="menuitem"
-								@click="driveAmount = 0.4; driveMix = 0.5; driveTone = 5000">Reset Drive</div>
+								@click="driveAmount = 0.4; driveMix = 0.5; driveTone = 5000">Reset
+								Drive</div>
 						</div>
 					</CollapsibleCard>
 				</div>
@@ -448,6 +464,7 @@ import PatternTools from './PatternTools.vue';
 import SynthStepGrid from './SynthStepGrid.vue'
 import CollapsibleCard from './CollapsibleCard.vue';
 import WaveButton from './WaveButton.vue'
+import MelodyMaker from './MelodyMaker.vue';
 // import SequencerKeyboard from './SequencerKeyboard.vue';
 
 
@@ -461,6 +478,9 @@ import WaveButton from './WaveButton.vue'
 const stepLength = ref<16 | 32>(16);
 const showVelocity = ref(true);
 const showPitch = ref(true);
+
+const melodyRef = ref<InstanceType<typeof MelodyMaker> | null>(null);
+
 
 // Resize all instrument arrays when switching 16/32
 function setStepLength(len: 16 | 32) {
@@ -586,13 +606,14 @@ watch(seqOpen, v => localStorage.setItem('seqOpen', String(v)));
 //Collapsible Cards BEGIN
 
 // Which collapsibles exist on this page (keep ids in one place)
-const collapseIds = ['pattern-tools', 'generators', 'sound', 'pitch', 'mod', 'fx'] as const;
+const collapseIds = ['pattern-tools', 'melody', 'generators', 'sound', 'pitch', 'mod', 'fx'] as const;
 type CollapseId = typeof collapseIds[number];
 
 // Parent-held open state for each card. Start as `undefined` so each card
 // can use its own saved localStorage value on first render.
 const collapsibleState = reactive<Record<CollapseId, boolean | undefined>>({
 	'pattern-tools': undefined,
+	'melody': undefined,
 	'generators': undefined,
 	'sound': undefined,
 	'pitch': undefined,
@@ -691,6 +712,8 @@ function fitCanvasToBox(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D
 	const rect = canvas.getBoundingClientRect();
 	const w = Math.max(1, Math.round(rect.width * dpr));
 	const h = Math.max(1, Math.round(rect.height * dpr));
+	const pxW = canvas.width, pxH = canvas.height;
+	ctx.drawImage(canvas, dpr, 0, pxW - dpr, pxH, 0, 0, pxW - dpr, pxH);
 	if (canvas.width !== w || canvas.height !== h) {
 		canvas.width = w;
 		canvas.height = h;
@@ -819,6 +842,7 @@ function startSpectrogram() {
 		} else {
 			// Scroll existing image left by 1px
 			ctx.drawImage(canvas, 1, 0, W - 1, H, 0, 0, W - 1, H);
+
 		}
 
 		// Fetch spectrum
@@ -989,7 +1013,10 @@ const padSettings = reactive({
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Reuse shared AudioContext
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+// const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+const AC = window.AudioContext || (window as any).webkitAudioContext;
+const audioCtx = new AC();
 const activeKnob = ref(null);
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
@@ -1072,7 +1099,7 @@ const instruments = ref([
 		// velocities: Array(16).fill(1.0),
 		steps: Array(stepLength.value).fill(false),
 		velocities: Array(stepLength.value).fill(1.0),
-		pitches: Array(16).fill(currentDefaultHz.value),
+		pitches: Array(stepLength.value).fill(currentDefaultHz.value),
 	},
 ]);
 
@@ -1734,11 +1761,20 @@ function togglePad(instrumentName, index) {
 	if (instrument) instrument.steps[index] = !instrument.steps[index];
 }
 
-function playBuffer(buffer, time, velocity = 1) {
+// function playBuffer(buffer, time, velocity = 1) {
+// 	const source = audioCtx.createBufferSource();
+// 	source.buffer = buffer;
+// 	const gain = audioCtx.createGain();
+// 	gain.gain.value = volume.value * velocity;
+// 	source.connect(gain).connect(masterGain);
+// 	source.start(time);
+// }
+
+function playBuffer(buffer: AudioBuffer, time: number, amp = 1) {
 	const source = audioCtx.createBufferSource();
 	source.buffer = buffer;
 	const gain = audioCtx.createGain();
-	gain.gain.value = volume.value * velocity;
+	gain.gain.setValueAtTime(Math.max(0.0001, amp), time); // no master volume here
 	source.connect(gain).connect(masterGain);
 	source.start(time);
 }
@@ -2409,28 +2445,7 @@ driveShaper.curve = (() => {
 	}
 }
 
-/* --- Lock the modules into a grid instead of multicol --- */
-@media (min-width: 992px) {
-	.ds-modules {
-		/* replace the multicol setup on lg with a real grid */
-		display: grid !important;
-		grid-template-columns: repeat(8, minmax(0, 1fr));
-		gap: 14px;
-		column-width: auto !important;
-		column-gap: 0 !important;
-		column-fill: balance;
-	}
 
-	.ds-modules .module {
-		/* cancel the inline-block used for masonry */
-		display: block !important;
-		break-inside: auto !important;
-		width: auto !important;
-		margin: 0 !important;
-		grid-column: span 4;
-		/* 2 cards per row on lg */
-	}
-}
 
 /* --- Exact desktop (xl) layout you requested --- */
 @media (min-width: 1280px) {
@@ -2463,7 +2478,7 @@ driveShaper.curve = (() => {
 		column-gap: 0 !important;
 	}
 
-	.ds-modules .module.pattern-tools {
+	/* .ds-modules .module.pattern-tools {
 		grid-column: 1 / span 3 !important;
 	}
 
@@ -2485,7 +2500,7 @@ driveShaper.curve = (() => {
 
 	.ds-modules .module.fx {
 		grid-column: 5 / span 5 !important;
-	}
+	} */
 
 	.ds-sequencer {
 		grid-column: 10 / span 3 !important;
@@ -2890,6 +2905,33 @@ driveShaper.curve = (() => {
 @media (max-width: 520px) {
 	.wave-row :deep(.wave-btn) {
 		--w: 84px;
+	}
+}
+
+/* Masonry modules — single source of truth */
+@media (min-width: 992px) {
+	.ds-modules {
+		display: block !important;
+		/* multicol container */
+		column-width: 340px;
+		column-gap: 14px;
+		column-fill: balance;
+		grid-column: 1 / -1;
+	}
+
+	.ds-modules .module {
+		display: inline-block;
+		/* required for multicol masonry */
+		width: 100%;
+		margin: 0 0 14px;
+		break-inside: avoid;
+	}
+}
+
+@media (min-width: 1280px) {
+	.ds-modules {
+		column-width: 360px;
+		column-gap: 16px;
 	}
 }
 </style>

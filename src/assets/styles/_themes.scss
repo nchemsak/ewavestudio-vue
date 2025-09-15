@@ -854,3 +854,42 @@ $dark: map.get($themes, dark);
     font-weight: 700;
     font-size: 18px;
 }
+
+
+/* Segmented control – pill variant */
+.pt-seg--pill {
+  background: color-mix(in oklab, var(--pt-surface-2), transparent 30%);
+  padding: 4px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--pt-btn-border), transparent 75%);
+}
+.pt-seg--pill .pt-seg-btn {
+  background: transparent;
+  border: 0;
+  min-height: 30px;
+  padding: 6px 12px;
+  line-height: 1;
+  box-shadow: none;
+  transform: none;
+}
+.pt-seg--pill.pt-seg-sm .pt-seg-btn {
+  min-height: 26px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+}
+.pt-seg--pill .pt-seg-btn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--pt-btn-border), transparent 85%);
+  filter: none;
+}
+.pt-seg--pill .pt-seg-btn.is-active,
+.pt-seg--pill .pt-seg-btn[aria-pressed="true"] {
+  color: #fff;
+  background: linear-gradient(
+    145deg,
+    hsl(var(--pt-accent) 84% 60% / .95),
+    hsl(calc(var(--pt-accent) + 10) 84% 60% / .95)
+  );
+  box-shadow:
+    0 0 0 3px hsl(var(--pt-accent) 90% 60% / .18),
+    0 6px 18px hsl(var(--pt-accent) 90% 60% / .22);
+}
