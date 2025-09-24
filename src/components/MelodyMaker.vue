@@ -72,25 +72,34 @@
             </div>
 
             <!-- ============ MODE + PRIMARY ACTIONS ============ -->
-            <div class="mm-line">
-                <div class="mm-mode">
+            <!-- <div class="mm-line"> -->
+                <!-- <div class="mm-mode">
                     <span class="mm-label">Mode</span>
                     <div class="mm-seg">
                         <button :class="{ active: tab === 'gen' }" @click="tab = 'gen'">Melody</button>
                         <button :class="{ active: tab === 'arp' }" @click="tab = 'arp'">Arpeggio</button>
                     </div>
-                </div>
+                </div> -->
 
-                <div class="mm-primary">
+
+
+
+                <!-- <div class="mm-primary">
                     <button class="mm-btn mm-primary-btn" @click="tab === 'gen' ? smartGenerate() : bakeArp()">
                         {{ tab === 'gen' ? 'Generate melody' : 'Generate arpeggio' }}
                     </button>
-                    <!-- <button class="mm-btn mm-ghost-btn" :disabled="!lastFrequencies" @click="undo()">Undo last</button> -->
+                </div> -->
+                <div class="mm-primary">
+                    <button class="mm-btn mm-primary-btn" @click="smartGenerate()">
+                        Generate melody
+                    </button>
                 </div>
-            </div>
+                    <!-- <button class="mm-btn mm-ghost-btn" :disabled="!lastFrequencies" @click="undo()">Undo last</button> -->
+
+            <!-- </div> -->
 
             <!-- ============ ARPEGGIATOR GRID (shows only in arp mode) ============ -->
-            <div class="mm-group" v-show="tab === 'arp'">
+            <div class="mm-group">
                 <div class="mm-grid">
                     <label class="mm-field">
                         <span class="mm-label">Pattern</span>
@@ -111,6 +120,11 @@
                         <span class="mm-label">Tones</span>
                         <PtSelect v-model="arpTones" :options="arpToneOptions" aria-label="Arp tones" />
                     </label>
+                </div>
+                <div class="mm-primary">
+                    <button class="mm-btn mm-primary-btn" @click="bakeArp()">
+                        Generate arpeggio
+                    </button>
                 </div>
             </div>
 
@@ -552,7 +566,7 @@ function bakeArp(): void {
 }
 
 /* ---------- UI state & helpers ---------- */
-const tab = ref<'gen' | 'arp'>('gen');
+// const tab = ref<'gen' | 'arp'>('gen');
 const advancedOpen = ref(false);
 
 // position for the header-anchored menu (viewport coords)
@@ -690,11 +704,14 @@ function resetAdvanced() {
 
 /* Primary buttons */
 .mm-primary {
-    margin-left: auto;
+    /* margin-left: auto;
     display: flex;
-    gap: 8px;
+    display: inline-block; */
+    display: block;
+    /* gap: 8px;
     align-items: center;
-    white-space: nowrap;
+    white-space: nowrap; */
+    margin-top: 10px;
 }
 
 .mm-btn {
@@ -715,6 +732,7 @@ function resetAdvanced() {
     color: #0b0d12;
     background: linear-gradient(180deg, hsl(var(--pt-accent) 80% 60%), hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
     box-shadow: 0 6px 22px hsl(var(--pt-accent) 90% 60% / .25);
+    width: 100%;
 }
 
 .mm-ghost-btn {
@@ -739,6 +757,7 @@ function resetAdvanced() {
 /* Footer actions */
 .mm-actions {
     display: flex;
+    display: inline-block;
     gap: 10px;
     align-items: center;
     margin-top: 12px;

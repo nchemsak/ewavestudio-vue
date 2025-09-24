@@ -219,7 +219,7 @@
 					<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
 						<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
-						<div class="pt-rule"></div>
+						<!-- <div class="pt-rule"></div> -->
 						<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 							v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
 					</CollapsibleCard>
@@ -238,10 +238,10 @@
 				<div class="module pitch">
 					<CollapsibleCard id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
 
-						<PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
+						<!-- <PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
 							v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
 							v-model:mode="pitchMode" />
-						<div class="pt-rule" aria-hidden="true"></div>
+						<div class="pt-rule" aria-hidden="true"></div> -->
 
 						<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
 							v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
@@ -258,19 +258,19 @@
 
 						<!-- header toolbar -->
 						<div class="pt-subheader">
-							<div class="pt-section-title">Delay • Drive</div>
+							<!-- <div class="pt-section-title">Delay • Drive</div> -->
 							<div class="pt-header-tools">
 
 								<!-- segment: which effect is visible -->
-								<div class="pt-seg pt-seg-sm" role="tablist" aria-label="Effects view">
+								<!-- <div class="pt-seg pt-seg-sm" role="tablist" aria-label="Effects view">
 									<button class="pt-seg-btn" :class="{ 'is-active': ui.fxTab === 'delay' }" role="tab"
 										@click="ui.fxTab = 'delay'">Delay</button>
 									<button class="pt-seg-btn" :class="{ 'is-active': ui.fxTab === 'drive' }" role="tab"
 										@click="ui.fxTab = 'drive'">Drive</button>
-								</div>
+								</div> -->
 
 								<!-- quick toggles for the selected effect -->
-								<div class="pt-seg pt-seg-sm" v-if="ui.fxTab === 'delay'">
+								<!-- <div class="pt-seg pt-seg-sm" v-if="ui.fxTab === 'delay'">
 									<button class="pt-seg-btn" :class="{ 'is-active': delaySync }"
 										@click="delaySync = !delaySync">Sync</button>
 									<button class="pt-seg-btn" :class="{ 'is-active': delayToneEnabled }"
@@ -279,7 +279,7 @@
 										@click="delayToneType = (delayToneType === 'highpass' ? 'lowpass' : 'highpass')">
 										{{ delayToneType === 'highpass' ? 'HP' : 'LP' }}
 									</button>
-								</div>
+								</div> -->
 
 								<!-- kebab menu for rare actions -->
 								<button class="pt-info-icon" aria-label="More"
@@ -288,7 +288,7 @@
 						</div>
 
 						<!-- Delay panel -->
-						<section v-show="ui.fxTab === 'delay'" class="pt-section">
+						<section class="pt-section">
 							<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
 								v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5"
 								v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback"
@@ -297,7 +297,7 @@
 						</section>
 
 						<!-- Drive panel -->
-						<section v-show="ui.fxTab === 'drive'" class="pt-section">
+						<section class="pt-section">
 							<DriveEffect :showToggle="false" v-model:enabled="driveEnabled"
 								v-model:driveType="driveType" v-model:driveAmount="driveAmount"
 								v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
