@@ -4,15 +4,9 @@
         <!-- header info button -->
         <template #header-content>
             <div class="pt-header-tools">
-                <InfoPopover title="FM Explained" aria-label="What is FM?">
+                <InfoPopover title="FM" aria-label="What is FM?">
                     FM adds a fast wobble to pitch → new harmonics.
-                    <div class="pt-rule"></div>
-                    <ul class="mb-2 ps-3">
-                        <li><strong>Ratio</strong>: Locks Mod Freq to the note. Consistent tone.</li>
-                        <li><strong>Hz</strong>: Unlocks Mod Freq. Tone varies more between notes.</li>
-                        <li><strong>Mod Freq</strong>: Modulator speed <i>(only active in "Hz" mode)</i></li>
-                        <li><strong>Amount</strong>: Intensity/brightness. Higher = richer/clangier.</li>
-                    </ul>
+             
                 </InfoPopover>
             </div>
         </template>
@@ -62,7 +56,7 @@
 import { ref, watch, computed } from 'vue'
 import Knob from '../Knob.vue'
 import KnobGroup from '../KnobGroup.vue'
-import InfoPopover from '../InfoPopover.vue' // ⬅️ ADD THIS
+import InfoPopover from '../InfoPopover.vue' 
 
 type Ratio = number | null
 

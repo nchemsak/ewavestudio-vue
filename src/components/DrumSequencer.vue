@@ -122,8 +122,6 @@
 				</div>
 			</section>
 
-
-
 			<!-- Modules grid (two compact rows) -->
 			<section class="pt-cards controlsWrapper ds-modules">
 
@@ -151,38 +149,9 @@
 
 				<div class="module generators">
 					<CollapsibleCard id="generators" title="Generators" v-model="collapsibleState['generators']">
-						<!-- Toolbar directly under heading -->
-						<div class="gen-toolbar">
-							<div class="pt-seg pt-seg-sm" role="tablist" aria-label="Generators mode">
-								<button class="pt-seg-btn" :class="{ 'is-active': genTab === 'osc' }" role="tab"
-									:aria-pressed="genTab === 'osc'" @click="genTab = 'osc'">Oscillators</button>
-								<button class="pt-seg-btn" :class="{ 'is-active': genTab === 'noise' }" role="tab"
-									:aria-pressed="genTab === 'noise'" @click="genTab = 'noise'">Noise</button>
-							</div>
-
-							<div class="pt-header-tools">
-								<button class="pt-info-icon" @click="genInfoOpen = !genInfoOpen"
-									aria-label="About generators">i</button>
-								<button class="pt-info-icon" aria-label="More options">⋯</button>
-							</div>
-						</div>
-
-						<!-- Divider under the tabs -->
-						<div class="pt-rule gen-divider" aria-hidden="true"></div>
 
 						<!-- Oscillators -->
-						<!-- <div v-show="genTab === 'osc'" class="gen-panel osc-panel">
-							<div class="pt-btn-group" role="group" aria-label="Waveforms">
-								<button v-for="wave in waves" :key="wave" class="pt-btn"
-									:class="{ 'is-active': selectedWaveform === wave }"
-									:aria-pressed="selectedWaveform === wave" @click="selectedWaveform = wave">
-									{{ waveLabel(wave) }}
-								</button>
-							</div>
-						</div> -->
-
-						<!-- Oscillators -->
-						<div v-show="genTab === 'osc'" class="gen-panel osc-panel">
+						<div class="gen-panel osc-panel">
 							<div class="wave-row" role="radiogroup" aria-label="Waveforms">
 								<WaveButton v-model="selectedWaveform" value="sine" label="SINE"
 									:palette="['#ff7eb3', '#ffd06b', '#7bd0ff']" />
@@ -196,9 +165,10 @@
 
 						</div>
 
+						<div class="pt-rule gen-divider" aria-hidden="true"></div>
 
 						<!-- Noise -->
-						<div v-show="genTab === 'noise'" class="gen-panel noise-panel">
+						<div class="gen-panel noise-panel">
 							<!-- one row: dot + W/P/B + Amount -->
 							<div class="noise-inline">
 								<button class="pt-dot" :class="{ 'is-on': noiseEnabled }" :aria-pressed="noiseEnabled"
@@ -210,10 +180,7 @@
 							</div>
 						</div>
 					</CollapsibleCard>
-
-
 				</div>
-
 
 				<div class="module sound">
 					<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
@@ -226,22 +193,17 @@
 				</div>
 
 				<div class="module mod">
-					<CollapsibleCard id="mod" title="Movement & Modulation" v-model="collapsibleState['mod']">
+					<CollapsibleCard id="mod" title="LFO" v-model="collapsibleState['mod']">
 						<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate"
 							v-model:depth="lfoDepth" v-model:target="lfoTarget" v-model:waveform="lfoWaveform"
 							v-model:syncEnabled="lfoSync" v-model:division="lfoDivision" :depthMax="lfoDepthMax"
-							color="#00BCD4" :targets="['pitch', 'gain', 'filter', 'pan', 'resonance']"
+							color="#00BCD4" :targets="['pitch', 'gain', 'filter', 'pan']"
 							:divisions="['1/1', '1/2', '1/4', '1/8', '1/16', '1/8T', '1/8.']" />
 					</CollapsibleCard>
 				</div>
 
 				<div class="module pitch">
 					<CollapsibleCard id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
-
-						<!-- <PitchEnvModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="pitchEnvEnabled"
-							v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
-							v-model:mode="pitchMode" />
-						<div class="pt-rule" aria-hidden="true"></div> -->
 
 						<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
 							v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
@@ -253,40 +215,13 @@
 					</CollapsibleCard>
 				</div>
 
+
+
+				
 				<div class="module fx">
 					<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
 
-						<!-- header toolbar -->
-						<div class="pt-subheader">
-							<!-- <div class="pt-section-title">Delay • Drive</div> -->
-							<div class="pt-header-tools">
-
-								<!-- segment: which effect is visible -->
-								<!-- <div class="pt-seg pt-seg-sm" role="tablist" aria-label="Effects view">
-									<button class="pt-seg-btn" :class="{ 'is-active': ui.fxTab === 'delay' }" role="tab"
-										@click="ui.fxTab = 'delay'">Delay</button>
-									<button class="pt-seg-btn" :class="{ 'is-active': ui.fxTab === 'drive' }" role="tab"
-										@click="ui.fxTab = 'drive'">Drive</button>
-								</div> -->
-
-								<!-- quick toggles for the selected effect -->
-								<!-- <div class="pt-seg pt-seg-sm" v-if="ui.fxTab === 'delay'">
-									<button class="pt-seg-btn" :class="{ 'is-active': delaySync }"
-										@click="delaySync = !delaySync">Sync</button>
-									<button class="pt-seg-btn" :class="{ 'is-active': delayToneEnabled }"
-										@click="delayToneEnabled = !delayToneEnabled">Tone</button>
-									<button class="pt-seg-btn" :class="{ 'is-active': delayToneType === 'highpass' }"
-										@click="delayToneType = (delayToneType === 'highpass' ? 'lowpass' : 'highpass')">
-										{{ delayToneType === 'highpass' ? 'HP' : 'LP' }}
-									</button>
-								</div> -->
-
-								<!-- kebab menu for rare actions -->
-								<button class="pt-info-icon" aria-label="More"
-									@click="openMenu('fx', $event)">⋯</button>
-							</div>
-						</div>
-
+					
 						<!-- Delay panel -->
 						<section class="pt-section">
 							<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
@@ -323,7 +258,6 @@
 						</div>
 					</CollapsibleCard>
 				</div>
-
 			</section>
 
 			<!-- Bottom Sequencer -->
@@ -2264,8 +2198,8 @@ driveShaper.curve = (() => {
 		grid-column: 6 / -1;
 		grid-row: 1 / span 2;
 		/* spans Transport + Steps */
-		position: sticky;
-		top: 10px;
+		position: relative;
+		/* top: 10px; */
 		align-self: start;
 	}
 
@@ -2308,8 +2242,8 @@ driveShaper.curve = (() => {
 	.ds-visualizer {
 		grid-column: 10 / -1;
 		grid-row: 1 / span 2;
-		position: sticky;
-		top: 14px;
+		position: relative;
+		/* top: 14px; */
 	}
 
 	.pt-card,
@@ -2448,8 +2382,8 @@ driveShaper.curve = (() => {
 	.ds-visualizer {
 		grid-column: 9 / -1 !important;
 		grid-row: 1 / span 2 !important;
-		position: sticky;
-		top: 1rem;
+		position: relative;
+		/* top: 1rem; */
 		/* keep it in view while scrolling */
 		align-self: start;
 	}
@@ -2476,9 +2410,9 @@ driveShaper.curve = (() => {
 	.ds-visualizer {
 		display: flex;
 		align-items: stretch;
-		position: sticky;
+		position: relative;
 		/* keep your sticky behavior */
-		top: 14px;
+		/* top: 14px; */
 	}
 
 	.ds-visualizer .mpc-wrap {
@@ -2591,8 +2525,8 @@ driveShaper.curve = (() => {
 		/* critical */
 		align-self: stretch !important;
 		/* critical */
-		position: sticky;
-		top: 14px;
+		position: relative;
+		/* top: 14px; */
 		display: flex;
 		min-height: 0;
 		z-index: 999;

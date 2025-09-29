@@ -4,10 +4,10 @@
             <button class="pt-collapse-btn" type="button" :id="btnId" :aria-controls="panelId"
                 :aria-expanded="String(open)" @click="open = !open" @keydown.space.prevent="open = !open"
                 @keydown.enter.prevent="open = !open">
-                <svg class="chev" :class="{ open }" viewBox="0 0 24 24" aria-hidden="true">
+                <!-- <svg class="chev" :class="{ open }" viewBox="0 0 24 24" aria-hidden="true">
                     <path
                         d="M8.12 9.29a1 1 0 0 1 1.41 0L12 11.76l2.47-2.47a1 1 0 1 1 1.41 1.41l-3.18 3.18a1 1 0 0 1-1.41 0L8.12 10.7a1 1 0 0 1 0-1.41z" />
-                </svg>
+                </svg> -->
                 <h2 class="pt-title">{{ title }}</h2>
             </button>
 

@@ -18,49 +18,6 @@
                     <span class="mm-label">Range</span>
                     <PtSelect v-model="rangePreset" :options="rangeOptions" aria-label="Register range" />
                 </label>
-
-                <!-- 3-dot advanced menu -->
-                <!-- <div class="mm-three">
-                    <button class="mm-icon" aria-label="Advanced" @click.stop="advancedOpen = !advancedOpen">⋯</button>
-
-                    <div v-if="advancedOpen" class="mm-menu" role="menu">
-                        <div class="mm-menu-title">Advanced</div>
-
-                        <div class="mm-opt">
-                            <span>Apply to active only</span>
-                            <button class="mm-switch" :class="{ on: applyScope === 'active' }"
-                                @click="applyScope = (applyScope === 'active' ? 'all' : 'active')">
-                                <span class="kn"></span>
-                            </button>
-                        </div>
-
-                        <div class="mm-opt">
-                            <span>Start on tonic</span>
-                            <button class="mm-switch" :class="{ on: startOnTonic }"
-                                @click="startOnTonic = !startOnTonic">
-                                <span class="kn"></span>
-                            </button>
-                        </div>
-
-                        <div class="mm-opt">
-                            <span>Emphasize downbeats</span>
-                            <button class="mm-switch" :class="{ on: emphasizeDownbeats }"
-                                @click="emphasizeDownbeats = !emphasizeDownbeats">
-                                <span class="kn"></span>
-                            </button>
-                        </div>
-
-                        <div class="mm-opt">
-                            <span>Include 7th on downbeats (arp)</span>
-                            <button class="mm-switch" :class="{ on: arpSeventhOnDownbeat }"
-                                @click="arpSeventhOnDownbeat = !arpSeventhOnDownbeat">
-                                <span class="kn"></span>
-                            </button>
-                        </div>
-
-                        <div class="mm-reset" role="menuitem" @click.stop="resetAdvanced">Reset to defaults</div>
-                    </div>
-                </div> -->
             </div>
 
             <!-- hint under header -->
@@ -71,34 +28,14 @@
                 <button class="mm-btn mm-ghost-btn" @click="emit('octave-shift', +1)">↑ Octave</button>
             </div>
 
-            <!-- ============ MODE + PRIMARY ACTIONS ============ -->
-            <!-- <div class="mm-line"> -->
-                <!-- <div class="mm-mode">
-                    <span class="mm-label">Mode</span>
-                    <div class="mm-seg">
-                        <button :class="{ active: tab === 'gen' }" @click="tab = 'gen'">Melody</button>
-                        <button :class="{ active: tab === 'arp' }" @click="tab = 'arp'">Arpeggio</button>
-                    </div>
-                </div> -->
+            <div class="mm-primary">
+                <button class="mm-btn mm-primary-btn melody-btn" @click="smartGenerate()">
+                    Generate melody
+                </button>
+            </div>
 
 
-
-
-                <!-- <div class="mm-primary">
-                    <button class="mm-btn mm-primary-btn" @click="tab === 'gen' ? smartGenerate() : bakeArp()">
-                        {{ tab === 'gen' ? 'Generate melody' : 'Generate arpeggio' }}
-                    </button>
-                </div> -->
-                <div class="mm-primary">
-                    <button class="mm-btn mm-primary-btn" @click="smartGenerate()">
-                        Generate melody
-                    </button>
-                </div>
-                    <!-- <button class="mm-btn mm-ghost-btn" :disabled="!lastFrequencies" @click="undo()">Undo last</button> -->
-
-            <!-- </div> -->
-
-            <!-- ============ ARPEGGIATOR GRID (shows only in arp mode) ============ -->
+            <!-- ARPEGGIATOR GRID  -->
             <div class="mm-group">
                 <div class="mm-grid">
                     <label class="mm-field">
@@ -122,17 +59,14 @@
                     </label>
                 </div>
                 <div class="mm-primary">
-                    <button class="mm-btn mm-primary-btn" @click="bakeArp()">
+                    <button class="mm-btn mm-primary-btn arp-btn" @click="bakeArp()">
                         Generate arpeggio
                     </button>
                 </div>
             </div>
 
-
-
-
             <!-- overlay to close menu when clicking outside -->
-            <!-- Advanced menu (now opened from parent header via openAdvanced) -->
+            <!-- Advanced menu -->
             <div v-if="advancedOpen" class="mm-menu" @click.stop
                 :style="{ left: (advPos?.x ?? 0) + 'px', top: (advPos?.y ?? 0) + 'px' }" role="menu">
                 <div class="mm-menu-title">Advanced</div>
@@ -333,11 +267,11 @@ function smartGenerate(): void {
     const center = pool[Math.floor(pool.length / 2)];
     const firstActive = stepsMask.findIndex(Boolean);
 
-    // ===== Random fill (now respects Start on tonic) =====
+    //  Random fill
     if (style.value === 'random') {
         const rand = freshRng();
 
-        // Pin first active step to tonic if requested
+        // Pin first active step to tonic if selected
         if (startOnTonic.value && firstActive >= 0 && tonicCandidates.length) {
             const m = tonicCandidates.reduce(
                 (best, cur) => Math.abs(cur - center) < Math.abs(best - center) ? cur : best,
@@ -357,7 +291,6 @@ function smartGenerate(): void {
         return;
     }
 
-    // ===== “Natural/smart” contour (unchanged, just uses the shared vars) =====
     const baseWeights = defaultWeightsFor(stepsArr.length);
 
     let prevMidi = center;
@@ -481,18 +414,6 @@ function bakeArp(): void {
         return best;
     };
 
-    // const pickByRange = (arr: number[], k: number): number | null => {
-    //     if (!arr || !arr.length) return null;
-    //     switch (rangePreset.value) {
-    //         case 'low': return arr[0];
-    //         case 'high': return arr[arr.length - 1];
-    //         case 'mid': return nearestIn(arr, center)!;
-    //         case 'wide':
-    //         default: return (k % 2 === 0) ? arr[0] : arr[arr.length - 1]; // alternate extremes
-    //     }
-    // };
-
-
     const baseOct = toneSemisArr.map(s => nearestIn(groups[s] ?? [], center)).filter((x): x is number => x !== null);
     let ladder = [...new Set(baseOct)].sort((a, b) => a - b);
 
@@ -525,7 +446,7 @@ function bakeArp(): void {
         }
         case 'random':
         default: {
-            const rand = freshRng();                   // ⟵ was makeRng(seed.value * 97 + 13)
+            const rand = freshRng();
             // Fisher–Yates with our RNG (stable and unbiased)
             orderIdx = idx.slice();
             for (let i = orderIdx.length - 1; i > 0; i--) {
@@ -566,36 +487,41 @@ function bakeArp(): void {
 }
 
 /* ---------- UI state & helpers ---------- */
-// const tab = ref<'gen' | 'arp'>('gen');
 const advancedOpen = ref(false);
 
 // position for the header-anchored menu (viewport coords)
 const advPos = ref<{ x: number; y: number } | null>(null);
 
-/** Called from parent header button: melodyRef?.openAdvanced($event) */
 function openAdvanced(e?: MouseEvent) {
-    const r = (e?.currentTarget as HTMLElement | null)?.getBoundingClientRect?.();
-    // anchor to right edge of the clicked header button
-    advPos.value = r ? { x: Math.round(r.right + 8), y: Math.round(r.top) } : { x: 24, y: 24 };
+    const target = e?.currentTarget as HTMLElement | null;
+    const parent = document.querySelector('.melody-maker') as HTMLElement | null;
+
+    if (target && parent) {
+        const r = target.getBoundingClientRect();
+        const p = parent.getBoundingClientRect();
+
+        advPos.value = {
+            x: Math.round(r.right - p.left + 8),  // offset from parent’s left
+            y: Math.round(r.top - p.top),         // offset from parent’s top
+        };
+    } else {
+        advPos.value = { x: 24, y: 24 };
+    }
+
     advancedOpen.value = true;
 }
 
+
 defineExpose({ openAdvanced });
 
-// Close menu on outside ESC (already present)
-// function onKey(e: KeyboardEvent) { if (e.key === 'Escape') advancedOpen.value = false; }
-// (rest of your script stays the same)
 
-// advanced options (now only here)
 const applyScope = ref<'all' | 'active'>('active');
 const startOnTonic = ref(false);
 const emphasizeDownbeats = ref(true);
-const seed = ref(1); // kept for deterministic “random” internal use
+const seed = ref(1);
 
 let clickNonce = 0;
-// New RNG per click so results change every time
 function freshRng() {
-    // mix user's base seed with a per-click counter + time
     const mixed =
         (seed.value | 0) ^
         (++clickNonce * 0x9e3779b9) ^            // golden ratio odd constant
@@ -618,13 +544,12 @@ function resetAdvanced() {
     startOnTonic.value = false;
     emphasizeDownbeats.value = true;
     arpSeventhOnDownbeat.value = false;
-    //   advancedOpen.value = false;
 }
 </script>
 
 <style scoped>
-/* ========== LOCAL “MOCKUP SKIN” — only inside .mm-skin ========== */
 .melody-maker {
+    position: relative;
     width: 100%;
     max-width: none;
     flex: 1 1 0;
@@ -634,7 +559,6 @@ function resetAdvanced() {
 .mm-head {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    /* was: 1fr 1fr 1fr auto */
     gap: 10px;
     align-items: end;
 }
@@ -704,13 +628,7 @@ function resetAdvanced() {
 
 /* Primary buttons */
 .mm-primary {
-    /* margin-left: auto;
-    display: flex;
-    display: inline-block; */
     display: block;
-    /* gap: 8px;
-    align-items: center;
-    white-space: nowrap; */
     margin-top: 10px;
 }
 
@@ -734,12 +652,16 @@ function resetAdvanced() {
     box-shadow: 0 6px 22px hsl(var(--pt-accent) 90% 60% / .25);
     width: 100%;
     margin: 5px 0px;
+    color: var(--pt-text);
 }
 
 .mm-ghost-btn {
     color: var(--pt-text);
-    background: #1d2030;
-    border: 1px solid rgba(255, 255, 255, .08);
+    /* background: #1d2030;
+    border: 1px solid rgba(255, 255, 255, .08); */
+
+    background: var(--pt-surface-1);
+    border: 1px solid var(--pt-hairline);
 }
 
 /* Arp block */
@@ -784,7 +706,6 @@ function resetAdvanced() {
     font-size: 18px;
 }
 
-
 /* Only wrap the whole row on small widths; otherwise keep single line */
 @media (min-width: 720px) {
     .mm-line {
@@ -792,19 +713,20 @@ function resetAdvanced() {
     }
 }
 
-/* Advanced menu (iOS switches) */
+/* Advanced menu */
 .mm-menu {
-    position: fixed;
-    /* right: 0;
-    top: calc(100% + 8px); */
+    position: absolute;
     min-width: 280px;
-    background: #0e111a;
-    color: var(--pt-text);
-    border: 1px solid rgba(255, 255, 255, .08);
+    /* background: #0e111a; */
+    /* color: var(--pt-text); */
+    /* border: 1px solid rgba(255, 255, 255, .08); */
     border-radius: 12px;
     box-shadow: 0 12px 40px rgb(0 0 0 / .45);
     padding: 10px;
     z-index: 1000;
+    background: var(--pt-panel);
+    color: var(--pt-text);
+    border: 1px solid var(--pt-hairline);
 }
 
 .mm-menu-title {
@@ -847,10 +769,12 @@ function resetAdvanced() {
     width: var(--sw);
     height: 22px;
     border-radius: 999px;
-    background: #2a2f41;
-    border: 1px solid rgba(255, 255, 255, .08);
+    /* background: #2a2f41; */
+    /* border: 1px solid rgba(255, 255, 255, .08); */
     position: relative;
     cursor: pointer;
+    background: var(--pt-surface-2);
+    border: 1px solid var(--pt-hairline);
 }
 
 .mm-switch .kn {
@@ -880,17 +804,19 @@ function resetAdvanced() {
     z-index: 999;
 }
 
-/* ---------- Re-skin your PtSelect + buttons just inside this component ---------- */
 :deep(.pt-selectbtn),
 :deep(select.pt-select) {
     height: 36px;
     border-radius: 12px;
-    background: #1d2030 !important;
-    color: var(--pt-text) !important;
-    border: 1px solid rgba(255, 255, 255, .08) !important;
+    /* background: #1d2030 !important; */
+    /* color: var(--pt-text) !important; */
+    /* border: 1px solid rgba(255, 255, 255, .08) !important; */
     padding: 8px 36px 8px 12px !important;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .03), 0 2px 10px rgb(0 0 0 / .25) !important;
     font-size: .9rem;
+    background: var(--pt-surface-1) !important;
+    color: var(--pt-text) !important;
+    border: 1px solid var(--pt-hairline) !important;
 }
 
 /* Make the caret a simple dim chevron */
@@ -907,7 +833,7 @@ function resetAdvanced() {
     box-shadow: none;
 }
 
-/* Responsive collapse like the mockup */
+/* Responsive collapse */
 @media (max-width: 720px) {
     .mm-head {
         grid-template-columns: 1fr 1fr;
@@ -916,5 +842,15 @@ function resetAdvanced() {
     .mm-grid {
         grid-template-columns: 1fr 1fr;
     }
+}
+
+
+.arp-btn {
+    background: none;
+    border: 1px solid white;
+}
+
+.melody-btn {
+    color: var(--pt-text-strong);
 }
 </style>

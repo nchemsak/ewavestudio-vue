@@ -14,6 +14,8 @@ body {
 *:before,
 *:after {
     box-sizing: border-box;
+    // prevents text from being selected
+    user-select: none;
 }
 
 html,
@@ -25,6 +27,12 @@ body {
 
 body {
     font-family: monospace;
+}
+
+
+::selection {
+  background: transparent;
+  color: inherit;
 }
 
 input[type="range"] {

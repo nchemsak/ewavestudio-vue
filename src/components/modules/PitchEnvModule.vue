@@ -6,17 +6,7 @@
             <div class="pt-header-tools">
                 <InfoPopover title="Pitch Env Explained" aria-label="What is the Pitch Envelope?">
                     Nudges the note’s frequency at start, then returns to normal pitch.
-                    <div class="pt-rule"></div> 
-                    <ul class="mb-2 ps-3">
-                        <li><strong>Mode</strong>:
-                            <em>↑ Up</em> rises then settles ·
-                            <em>↓ Down</em> drops then settles ·
-                            <em>⇵ Random</em> picks up or down each trigger.
-                        </li>
-                        <li><strong>Amount</strong>: Depth in semitones (0–48). Higher = more dramatic sweep.</li>
-                        <li><strong>Decay</strong>: How quickly it returns (ms).
-                        </li>
-                    </ul>
+        
                 </InfoPopover>
             </div>
         </template>

@@ -4,14 +4,9 @@
         <!-- Info button goes in the header tools, just like FM -->
         <template #header-content>
             <div class="pt-header-tools">
-                <InfoPopover title="Unison Explained" aria-label="What is Unison?">
+                <InfoPopover title="Unison" aria-label="What is Unison?">
                     Unison duplicates the oscillator into multiple, slightly detuned voices for a thicker, wider sound.
-                    <div class="pt-rule"></div>
-                    <ul class="mb-2 ps-3">
-                        <li><strong>Voices</strong>: How many copies play at once (1–6).</li>
-                        <li><strong>Detune</strong>: Pitch spread between voices.</li>
-                        <li><strong>Spread</strong>: Stereo width (0% mono → 100% hard L/R).</li>
-                    </ul>
+                 
                 </InfoPopover>
             </div>
         </template>
