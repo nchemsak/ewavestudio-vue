@@ -733,6 +733,7 @@ function resetAdvanced() {
     background: linear-gradient(180deg, hsl(var(--pt-accent) 80% 60%), hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
     box-shadow: 0 6px 22px hsl(var(--pt-accent) 90% 60% / .25);
     width: 100%;
+    margin: 5px 0px;
 }
 
 .mm-ghost-btn {

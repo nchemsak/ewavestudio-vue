@@ -510,9 +510,6 @@ const padSizeStyle = computed(() => ({
 //SEQUENCER TOOLS END
 
 
-
-
-
 // PANEL MENU START
 
 // UI state for header tabs + menus
@@ -529,9 +526,6 @@ const ui = reactive({
 // Generators tab + (optional) info popover
 const genTab = ref<'osc' | 'noise'>('osc');
 const genInfoOpen = ref(false);
-
-// function closeMenus() { for (const k in ui.menus) (ui.menus as any)[k].open = false; }
-
 
 // tabs + menus + help popovers
 ui.generatorsTab ??= 'osc';
@@ -555,18 +549,6 @@ function closeOverlays() {
 	for (const k in ui.menus) (ui.menus as any)[k].open = false;
 	for (const k in info) (info as any)[k].open = false;
 }
-
-// menus
-// ui.menus.steps = ui.menus.steps ?? { open: false, x: 0, y: 0 };
-
-// // single checkbox state = both velocity & pitch sliders
-// const padSlidersOn = computed({
-// 	get: () => showVelocity.value && showPitch.value,
-// 	set: (v: boolean) => { showVelocity.value = v; showPitch.value = v; }
-// });
-// function togglePadSliders() {
-// 	padSlidersOn.value = !padSlidersOn.value;
-// }
 
 ui.menus.steps = ui.menus.steps ?? { open: false };
 
@@ -1022,8 +1004,11 @@ const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
 // const synthDecay = ref(0.4);
 
+
+
 const selectedWaveform = ref("sine");
 const waves = ['sine', 'triangle', 'sawtooth', 'square'] as const;
+
 const waveLabel = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
 
 
@@ -2477,30 +2462,6 @@ driveShaper.curve = (() => {
 		column-width: auto !important;
 		column-gap: 0 !important;
 	}
-
-	/* .ds-modules .module.pattern-tools {
-		grid-column: 1 / span 3 !important;
-	}
-
-	.ds-modules .module.generators {
-		grid-column: 4 / span 3 !important;
-	}
-
-	.ds-modules .module.sound {
-		grid-column: 7 / span 3 !important;
-	}
-
-	.ds-modules .module.mod {
-		grid-column: 10 / span 3 !important;
-	}
-
-	.ds-modules .module.pitch {
-		grid-column: 1 / span 4 !important;
-	}
-
-	.ds-modules .module.fx {
-		grid-column: 5 / span 5 !important;
-	} */
 
 	.ds-sequencer {
 		grid-column: 10 / span 3 !important;
