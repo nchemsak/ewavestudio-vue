@@ -148,7 +148,7 @@
 				</div>
 
 				<div class="module generators">
-					<CollapsibleCard id="generators" title="Generators" v-model="collapsibleState['generators']">
+					<CollapsibleCard id="generators" title="" v-model="collapsibleState['generators']">
 
 						<!-- Oscillators -->
 						<div class="gen-panel osc-panel">
@@ -186,19 +186,28 @@
 					<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
 						<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
-						<!-- <div class="pt-rule"></div> -->
 						<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 							v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
 					</CollapsibleCard>
 				</div>
 
+
+				<!-- LFO -->
 				<div class="module mod">
 					<CollapsibleCard id="mod" title="LFO" v-model="collapsibleState['mod']">
-						<LFOGroup :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate"
+
+						<template #tools>
+							<button class="pt-info-icon" aria-label="Advanced options"
+								@click="lfoRef?.openAdvanced($event)">⋯</button>
+						</template>
+
+						<LFOGroup ref="lfoRef" :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate"
 							v-model:depth="lfoDepth" v-model:target="lfoTarget" v-model:waveform="lfoWaveform"
-							v-model:syncEnabled="lfoSync" v-model:division="lfoDivision" :depthMax="lfoDepthMax"
+							v-model:syncEnabled="lfoSync" v-model:division="lfoDivision"
+							v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
 							color="#00BCD4" :targets="['pitch', 'gain', 'filter', 'pan']"
 							:divisions="['1/1', '1/2', '1/4', '1/8', '1/16', '1/8T', '1/8.']" />
+
 					</CollapsibleCard>
 				</div>
 
@@ -217,11 +226,11 @@
 
 
 
-				
+
 				<div class="module fx">
 					<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
 
-					
+
 						<!-- Delay panel -->
 						<section class="pt-section">
 							<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
@@ -442,6 +451,9 @@ const padSizeStyle = computed(() => ({
 
 
 //SEQUENCER TOOLS END
+const lfoRef = ref<InstanceType<typeof LFOGroup> | null>(null);
+const lfoRetrigger = ref(false)
+const lfoBipolar = ref(false)
 
 
 // PANEL MENU START
@@ -1447,28 +1459,67 @@ function ensureLfoSource() {
 		lfoOsc.start();
 	}
 }
+function startLfoIfNeeded(): void {
+	if (!lfoEnabled.value) return;
+	if (lfoOsc || lfoSnh) return; // already running
+
+	if (audioCtx.state === 'running') {
+		ensureLfoSource();
+		return;
+	}
+
+	// If we’re not running yet, wait for the first resume (user gesture)
+	const onStateChange = () => {
+		if (audioCtx.state === 'running') {
+			ensureLfoSource();
+			audioCtx.removeEventListener?.('statechange', onStateChange);
+		}
+	};
+	audioCtx.addEventListener?.('statechange', onStateChange);
+}
 
 // init + react to changes
-ensureLfoSource();
+// ensureLfoSource();
+
+watch(lfoEnabled, (on) => {
+	if (on) startLfoIfNeeded();
+	else {
+		// stop both possible sources
+		if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
+		stopSnh();
+	}
+});
 
 watch([lfoWaveform, lfoSync, lfoDivision, tempo], () => {
-	// shape or sync parameters changed → rebuild or retune
-	if (lfoWaveform.value === 'random') {
-		stopSnh();
-		ensureLfoSource();
-	} else if (lfoOsc) {
-		lfoOsc.type = lfoWaveform.value;
-		lfoOsc.frequency.setValueAtTime(currentLfoHz(), audioCtx.currentTime);
-	} else {
-		ensureLfoSource();
-	}
+  if (!lfoEnabled.value) return;
+
+  if (!lfoOsc && !lfoSnh) {
+    // Not running yet — try to start if the context is ready
+    startLfoIfNeeded();
+    return;
+  }
+
+  // If we *are* running, adapt/rebuild like before
+  if (lfoWaveform.value === 'random') {
+    stopSnh();
+    if (lfoOsc) { try { lfoOsc.stop(); } catch {} lfoOsc.disconnect(); lfoOsc = null; }
+    ensureLfoSource();
+  } else if (lfoOsc) {
+    lfoOsc.type = lfoWaveform.value;
+    lfoOsc.frequency.setValueAtTime(currentLfoHz(), audioCtx.currentTime);
+  } else {
+    ensureLfoSource();
+  }
 });
 
 watch(lfoRate, (r) => {
-	if (!lfoSync.value && lfoOsc) {
-		lfoOsc.frequency.setValueAtTime(r, audioCtx.currentTime);
-	}
+  if (!lfoEnabled.value) return;
+  if (!lfoSync.value) {
+    if (!lfoOsc && !lfoSnh) startLfoIfNeeded();
+    if (lfoOsc) lfoOsc.frequency.setValueAtTime(r, audioCtx.currentTime);
+  }
 });
+
 
 // scale lfoGain.gain to match the target’s expected unit
 function applyDepthScale() {
@@ -1959,6 +2010,7 @@ async function togglePlay() {
 		if (audioCtx.state === 'suspended') {
 			await audioCtx.resume();
 		}
+		startLfoIfNeeded();
 		startTime = audioCtx.currentTime;
 		stepIndex = 0;
 		isPlaying.value = true;
@@ -2790,6 +2842,7 @@ driveShaper.curve = (() => {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 10px 12px;
+	justify-content: space-evenly;
 }
 
 .wave-row :deep(.wave-btn) {
