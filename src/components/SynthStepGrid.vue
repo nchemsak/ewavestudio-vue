@@ -15,6 +15,31 @@
                         @mousedown="onMouseDown($event, index)" @mouseenter="onMouseEnter(index)" @dragstart.prevent
                         :style="padStyle(index)" />
 
+                    <!-- waveform badge (uniform bg; colored icon via currentColor) -->
+                    <div class="wave-badge" :class="{ 'is-off': !active }" :data-wave="waveFor(index)"
+                        :title="waveFor(index)">
+                        <svg class="wave-ico" viewBox="0 0 12 12" width="12" height="12" fill="none"
+                            stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"
+                            aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+                            <!-- SINE = circle -->
+                            <circle v-if="waveFor(index) === 'sine'" cx="6" cy="6" r="3.6" />
+
+                            <!-- TRIANGLE = peak up -->
+                            <path v-else-if="waveFor(index) === 'triangle'" d="M2 10 L6 2 L10 10 Z" fill="none" />
+
+                            <!-- SAW = right angle bottom-left -->
+                            <!-- Points: bottom-left (right angle) -> top-left -> bottom-right -->
+                            <path v-else-if="waveFor(index) === 'sawtooth'" d="M2 10 L2 2 L10 10 Z" fill="none" />
+
+                            <!-- SQUARE = perfect square -->
+                            <rect v-else-if="waveFor(index) === 'square'" x="2.2" y="2.2" width="7.6" height="7.6"
+                                rx="0.3" ry="0.3" fill="none" />
+
+                            <!-- Fallback (shouldn't hit, but safe) -->
+                            <circle v-else cx="6" cy="6" r="3.6" />
+                        </svg>
+                    </div>
+
                     <!-- per-step note chip -->
                     <div v-if="active" class="note-chip">
                         {{ nearestNote(pitches[index]) }}
@@ -39,15 +64,14 @@
                 </div>
             </div>
         </div>
-
     </div>
 </template>
-
 
 <script setup lang="ts">
 import { ref } from 'vue';
 
 type NoteNameFn = (hz: number) => string;
+type Wave = 'sine' | 'triangle' | 'sawtooth' | 'square';
 
 const props = withDefaults(defineProps<{
     name: string;
@@ -62,8 +86,12 @@ const props = withDefaults(defineProps<{
     nearestNote: NoteNameFn;
 
     showIndices?: boolean;
-    showVelocity?: boolean
-    showPitch?: boolean
+    showVelocity?: boolean;
+    showPitch?: boolean;
+
+    /** Optional per-step waveforms + global default (used for the badge) */
+    waveforms?: Wave[];
+    defaultWave?: Wave;
 }>(), {
     showIndices: true,
     showVelocity: true,
@@ -129,6 +157,7 @@ function emitOpenSettings(index: number, evt: MouseEvent) {
     emit('open-pad-settings', { name: props.name, index, anchorRect: r });
 }
 
+/* --- visuals --- */
 function hueFor(hz: number, lo = props.minHz, hi = props.maxHz) {
     const t = Math.min(1, Math.max(0, (hz - lo) / (hi - lo)));
     return Math.round(220 * (1 - t));
@@ -139,16 +168,90 @@ function padStyle(index: number) {
     const pct = Math.round(props.velocities[index] * 100);
     const hue = hueFor(props.pitches[index] || props.minHz);
     return {
-        '--vol': pct,           // 0..100 (no % sign; CSS uses calc(var(--vol)*1%))
-        '--heat-h': hue,        // 0..360
+        '--vol': pct,
+        '--heat-h': hue,
         '--pad-on': 1
     } as any;
+}
+
+/* waveform indicator helpers */
+function waveFor(i: number): Wave {
+    return (props.waveforms?.[i] ?? props.defaultWave ?? 'sine') as Wave;
 }
 
 const nearestNote = props.nearestNote;
 </script>
 
 <style scoped>
+/* badges stay compact even at 32 steps */
+.wave-badge {
+    --wb-pad-x: 3px;
+    --wb-pad-y: 2px;
+    --wb-radius: 6px;
+
+    position: absolute;
+    top: 3px;
+    left: 3px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+
+    padding: var(--wb-pad-y) var(--wb-pad-x);
+    border-radius: var(--wb-radius);
+
+    /* Uniform background for all waves */
+    background: linear-gradient(145deg, rgba(0, 0, 0, .55), rgba(0, 0, 0, .35));
+    border: 1px solid rgba(255, 255, 255, .14);
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, .25),
+        inset 0 0 0 1px rgba(255, 255, 255, .04);
+
+    color: #fff;
+    /* default; overridden per-wave below */
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+    opacity: .95;
+    z-index: 2;
+}
+
+/* mini icon */
+.wave-ico {
+    width: 11px;
+    height: 11px;
+    display: block;
+}
+
+/* Dim when pad is off */
+.wave-badge.is-off {
+    opacity: .55;
+}
+
+/* Icon colors per wave (background stays uniform) */
+.wave-badge[data-wave="sine"] {
+    color: #7bd0ff;
+}
+
+/* cool blue */
+.wave-badge[data-wave="triangle"] {
+    color: #b47aff;
+}
+
+/* purple */
+.wave-badge[data-wave="sawtooth"] {
+    color: #ffd06b;
+}
+
+/* amber */
+.wave-badge[data-wave="square"] {
+    color: #a2f5a6;
+}
+
+/* mint */
+
+/* --- the rest is unchanged from your file --- */
 .note-chip {
     position: absolute;
     left: 50%;
@@ -165,7 +268,6 @@ const nearestNote = props.nearestNote;
     white-space: nowrap;
     z-index: 1000;
 }
-
 
 .pad-head {
     display: flex;
@@ -188,8 +290,6 @@ const nearestNote = props.nearestNote;
     color: #fff;
     border: 1px solid rgba(255, 255, 255, .12);
     pointer-events: none;
-    white-space: nowrap;
-    z-index: 0;
 }
 
 .pad-head .pad-settings-dot {
@@ -208,14 +308,10 @@ const nearestNote = props.nearestNote;
     transition: opacity .15s ease, transform .15s ease, background .15s ease;
 }
 
-/* reveal dot when you hover the column or focus the button */
 .pad-col:hover .pad-settings-dot,
 .pad-settings-dot:focus-visible {
     opacity: 1;
-
 }
-
-.pad-head .pad-settings-dot:hover {}
 
 .padTESTwrap {
     position: relative;

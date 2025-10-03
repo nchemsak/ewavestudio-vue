@@ -114,11 +114,20 @@
 				<div v-if="ui.menus.steps.open" class="pt-select-overlay step-menu-overlay" @click="closeMenus"></div>
 
 				<div class="step-card__grid">
+					<!-- <SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
+						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
+						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
+						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
+						@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" /> -->
 					<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
 						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
-						@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
+						:waveforms="(synthInstrument as any).waveforms"
+						:defaultWave="selectedWaveform as OscillatorType" @open-pad-settings="({ name, index, anchorRect }) =>
+							openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
+
+
 				</div>
 			</section>
 
@@ -153,17 +162,30 @@
 						<!-- Oscillators -->
 						<div class="gen-panel osc-panel">
 							<div class="wave-row" role="radiogroup" aria-label="Waveforms">
-								<WaveButton v-model="selectedWaveform" value="sine" label="SINE"
-									:palette="['#ff7eb3', '#ffd06b', '#7bd0ff']" />
-								<WaveButton v-model="selectedWaveform" value="triangle" label="TRIANGLE"
-									:palette="['#7cf3c9', '#b47aff', '#ffd06b']" />
-								<WaveButton v-model="selectedWaveform" value="sawtooth" label="SAW"
-									:palette="['#ff9a62', '#ffd06b', '#75f0ff']" />
-								<WaveButton v-model="selectedWaveform" value="square" label="SQUARE"
-									:palette="['#a2f5a6', '#7bd0ff', '#ff7eb3']" />
+								<WaveButton :modelValue="selectedWaveform" value="sine" label="SINE"
+									:palette="['#ff7eb3', '#ffd06b', '#7bd0ff']"
+									@update:modelValue="() => applyWaveToAll('sine')" />
+
+								<WaveButton :modelValue="selectedWaveform" value="triangle" label="TRIANGLE"
+									:palette="['#7cf3c9', '#b47aff', '#ffd06b']"
+									@update:modelValue="() => applyWaveToAll('triangle')" />
+
+								<WaveButton :modelValue="selectedWaveform" value="sawtooth" label="SAW"
+									:palette="['#ff9a62', '#ffd06b', '#75f0ff']"
+									@update:modelValue="() => applyWaveToAll('sawtooth')" />
+
+								<WaveButton :modelValue="selectedWaveform" value="square" label="SQUARE"
+									:palette="['#a2f5a6', '#7bd0ff', '#ff7eb3']"
+									@update:modelValue="() => applyWaveToAll('square')" />
 							</div>
 
+							<div class="pt-btn-group" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+								<button class="pt-btn pt-btn-sm" @click="applyRandomWaves()">
+									Random
+								</button>
+							</div>
 						</div>
+
 
 						<div class="pt-rule gen-divider" aria-hidden="true"></div>
 
@@ -377,11 +399,9 @@
 			</section>
 
 		</div>
-
-		<!-- Popover (unchanged) -->
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
-			v-model:open="padPopover.open" v-model:hz="currentPadHz" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
-			:anchorRect="padPopover.anchorRect" :title="padPopover.title" />
+			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave" :minHz="MIN_PAD_HZ"
+			:maxHz="MAX_PAD_HZ" :anchorRect="padPopover.anchorRect" :title="padPopover.title" />
 	</div>
 </template>
 
@@ -441,6 +461,7 @@ function setStepLength(len: 16 | 32) {
 
 		// only synth has pitches
 		if (inst.pitches) inst.pitches = resize(inst.pitches, currentDefaultHz.value);
+		if ((inst as any).waveforms) (inst as any).waveforms = resize((inst as any).waveforms, selectedWaveform.value as any);
 	});
 }
 
@@ -958,6 +979,43 @@ const waves = ['sine', 'triangle', 'sawtooth', 'square'] as const;
 const waveLabel = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
 
 
+const perPadWavesActive = computed(() => {
+	const inst = synthInstrument.value as any;
+	return !!(inst && inst.waveforms && Array.isArray(inst.waveforms));
+});
+
+function randomizeSynthPadWaves() {
+	const inst = synthInstrument.value as any;
+	if (!inst) return;
+	const len = stepLength.value;
+	inst.waveforms = Array.from({ length: len }, () => waves[Math.floor(Math.random() * waves.length)]) as any;
+}
+
+function clearSynthPadWaves() {
+	const inst = synthInstrument.value as any;
+	if (!inst) return;
+	// Option A: remove array to fully fall back to selectedWaveform
+	// delete inst.waveforms;
+	// Option B (keeps an explicit "all the same" map):
+	inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as any);
+}
+
+function applyWaveToAll(w: OscillatorType) {
+	selectedWaveform.value = w;
+	const inst = synthInstrument.value as any;
+	if (!inst) return;
+	inst.waveforms = Array(stepLength.value).fill(w);
+}
+
+function applyRandomWaves() {
+	const inst = synthInstrument.value as any;
+	if (!inst) return;
+	inst.waveforms = Array.from({ length: stepLength.value }, () =>
+		waves[Math.floor(Math.random() * waves.length)]
+	) as any;
+}
+
+
 const isFineAdjust = ref(false);
 
 function nearestNote(hz) { return midiToNamePref(freqToMidi(hz)); }
@@ -985,8 +1043,6 @@ const instruments = ref([
 		buffer: null,
 		muted: false,
 		channelVolume: 0.5,
-		// steps: Array(16).fill(false),
-		// velocities: Array(16).fill(1.0)
 		steps: Array(stepLength.value).fill(false),
 		velocities: Array(stepLength.value).fill(1.0),
 	},
@@ -999,8 +1055,6 @@ const instruments = ref([
 		buffer: null,
 		muted: false,
 		channelVolume: 0.5,
-		// steps: Array(16).fill(false),
-		// velocities: Array(16).fill(1.0)
 		steps: Array(stepLength.value).fill(false),
 		velocities: Array(stepLength.value).fill(1.0),
 	},
@@ -1013,8 +1067,6 @@ const instruments = ref([
 		buffer: null,
 		muted: false,
 		channelVolume: 0.5,
-		// steps: Array(16).fill(false),
-		// velocities: Array(16).fill(1.0)
 		steps: Array(stepLength.value).fill(false),
 		velocities: Array(stepLength.value).fill(1.0),
 	},
@@ -1026,11 +1078,10 @@ const instruments = ref([
 		isEditingName: false,
 		muted: false,
 		channelVolume: 0.5,
-		// steps: Array(16).fill(false),
-		// velocities: Array(16).fill(1.0),
 		steps: Array(stepLength.value).fill(false),
 		velocities: Array(stepLength.value).fill(1.0),
 		pitches: Array(stepLength.value).fill(currentDefaultHz.value),
+		waveforms: Array(stepLength.value).fill('sine' as OscillatorType),
 	},
 ]);
 
@@ -1059,6 +1110,26 @@ const padFrequencies = computed<number[]>({
 	get: () => synthInstrument.value?.pitches ?? [],
 	set: v => { if (synthInstrument.value) synthInstrument.value.pitches = v; }
 });
+
+const currentPadWave = computed<OscillatorType>({
+	get() {
+		const inst = instruments.value.find(i => i.name === padSettings.name) as any;
+		if (!inst) return selectedWaveform.value as OscillatorType;
+		const i = padSettings.index;
+		// fall back to global selection if array missing
+		return (inst.waveforms?.[i] ?? selectedWaveform.value) as OscillatorType;
+	},
+	set(w) {
+		const inst = instruments.value.find(i => i.name === padSettings.name) as any;
+		if (!inst) return;
+		// ensure per-pad array exists and is correct length
+		if (!Array.isArray(inst.waveforms) || inst.waveforms.length !== stepLength.value) {
+			inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as OscillatorType);
+		}
+		inst.waveforms[padSettings.index] = w;
+	}
+});
+
 
 
 const currentPadHz = computed({
@@ -1491,33 +1562,33 @@ watch(lfoEnabled, (on) => {
 });
 
 watch([lfoWaveform, lfoSync, lfoDivision, tempo], () => {
-  if (!lfoEnabled.value) return;
+	if (!lfoEnabled.value) return;
 
-  if (!lfoOsc && !lfoSnh) {
-    // Not running yet — try to start if the context is ready
-    startLfoIfNeeded();
-    return;
-  }
+	if (!lfoOsc && !lfoSnh) {
+		// Not running yet — try to start if the context is ready
+		startLfoIfNeeded();
+		return;
+	}
 
-  // If we *are* running, adapt/rebuild like before
-  if (lfoWaveform.value === 'random') {
-    stopSnh();
-    if (lfoOsc) { try { lfoOsc.stop(); } catch {} lfoOsc.disconnect(); lfoOsc = null; }
-    ensureLfoSource();
-  } else if (lfoOsc) {
-    lfoOsc.type = lfoWaveform.value;
-    lfoOsc.frequency.setValueAtTime(currentLfoHz(), audioCtx.currentTime);
-  } else {
-    ensureLfoSource();
-  }
+	// If we *are* running, adapt/rebuild like before
+	if (lfoWaveform.value === 'random') {
+		stopSnh();
+		if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
+		ensureLfoSource();
+	} else if (lfoOsc) {
+		lfoOsc.type = lfoWaveform.value;
+		lfoOsc.frequency.setValueAtTime(currentLfoHz(), audioCtx.currentTime);
+	} else {
+		ensureLfoSource();
+	}
 });
 
 watch(lfoRate, (r) => {
-  if (!lfoEnabled.value) return;
-  if (!lfoSync.value) {
-    if (!lfoOsc && !lfoSnh) startLfoIfNeeded();
-    if (lfoOsc) lfoOsc.frequency.setValueAtTime(r, audioCtx.currentTime);
-  }
+	if (!lfoEnabled.value) return;
+	if (!lfoSync.value) {
+		if (!lfoOsc && !lfoSnh) startLfoIfNeeded();
+		if (lfoOsc) lfoOsc.frequency.setValueAtTime(r, audioCtx.currentTime);
+	}
 });
 
 
@@ -1757,9 +1828,6 @@ function schedule() {
 
 		instruments.value.forEach(inst => {
 			if (!inst.muted && inst.steps[stepIndex]) {
-				// const velocity = inst.velocities[stepIndex];
-				// const chanVol = inst.channelVolume ?? 1.0;
-
 				const vel = inst.velocities[stepIndex] ?? 1;
 				const chanVol = inst.channelVolume ?? 1;
 				const amp = Math.min(1, chanVol * vel);
@@ -1768,13 +1836,18 @@ function schedule() {
 				const safeDecay = (isFinite(synthDecay.value) && synthDecay.value > 0) ? synthDecay.value : 0.1;
 
 				const isEvenStep = stepIndex % 2 === 1;
+				const stepDuration = 60 / tempo.value / 4;
 				const swingOffset = isEvenStep ? stepDuration * swing.value : 0;
 				const t = startTime + swingOffset;
 
-				if (inst.type === 'synth') playSynthNote(pitch, amp, safeDecay, t);
-				else if (inst.buffer) playBuffer(inst.buffer, t, amp);
-
+				if (inst.type === 'synth') {
+					const wf = ((inst as any).waveforms?.[stepIndex] ?? selectedWaveform.value) as OscillatorType;
+					playSynthNote(pitch, amp, safeDecay, t, wf);
+				} else if (inst.buffer) {
+					playBuffer(inst.buffer, t, amp);
+				}
 			}
+
 		});
 
 		currentStep.value = stepIndex;
@@ -1785,7 +1858,8 @@ function schedule() {
 	loopId = requestAnimationFrame(schedule);
 }
 
-function playSynthNote(freq, velocity, decayTime, startTime) {
+function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: OscillatorType) {
+
 	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
 	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
 
@@ -1828,8 +1902,8 @@ function playSynthNote(freq, velocity, decayTime, startTime) {
 		const voiceGain = audioCtx.createGain();
 		const panner = audioCtx.createStereoPanner();
 
-		osc.type = selectedWaveform.value;
-
+		// osc.type = selectedWaveform.value;
+		osc.type = waveType;
 		applyPitchEnv(osc, freq, startTime, {
 			enabled: pitchEnvEnabled.value,
 			semitones: pitchEnvSemitones.value,

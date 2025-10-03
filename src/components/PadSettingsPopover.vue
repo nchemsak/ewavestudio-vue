@@ -8,15 +8,28 @@
                 <button class="pt-btn pt-btn-sm" @click="close">Close</button>
             </div>
 
-            <!-- Keyboard-style selector (no readout above to avoid overlap) -->
+            <!-- Per-pad waveform (Sine/Triangle/Saw/Square) -->
+            <div v-if="showWaveRow" class="pad-row">
+                <div class="pad-label">Wave</div>
+                <div class="pt-seg pt-seg-sm wave-seg" role="group" aria-label="Waveform">
+                    <button class="pt-seg-btn" :class="{ 'is-active': waveLocal === 'sine' }"
+                        @click="setWave('sine')">Sine</button>
+                    <button class="pt-seg-btn" :class="{ 'is-active': waveLocal === 'triangle' }"
+                        @click="setWave('triangle')">Triangle</button>
+                    <button class="pt-seg-btn" :class="{ 'is-active': waveLocal === 'sawtooth' }"
+                        @click="setWave('sawtooth')">Saw</button>
+                    <button class="pt-seg-btn" :class="{ 'is-active': waveLocal === 'square' }"
+                        @click="setWave('square')">Square</button>
+                </div>
+            </div>
+
+            <!-- Keyboard -->
             <div class="kb" role="group" aria-label="Note selector">
                 <div v-for="(key, i) in NATURALS" :key="key.n" class="kb-cell" :class="{ 'has-sharp': key.hasSharp }">
-                    <!-- white key -->
                     <button class="pt-seg-btn kb-white" :class="{ 'is-active': (baseMidi % 12) === key.idx }"
                         :disabled="isNoteDisabled(key.idx, octave)"
                         @click="!isNoteDisabled(key.idx, octave) && setSemitone(key.idx)">{{ key.n }}</button>
 
-                    <!-- black key (floats above, space is reserved by padding) -->
                     <button v-if="key.hasSharp" class="pt-seg-btn kb-black"
                         :class="{ 'is-active': (baseMidi % 12) === key.sharpIdx }"
                         :disabled="isNoteDisabled(key.sharpIdx, octave)"
@@ -60,6 +73,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import Knob from './Knob.vue';
 
 type AnchorRect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
+type Wave = 'sine' | 'triangle' | 'sawtooth' | 'square';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 const NATURALS = [
@@ -81,11 +95,15 @@ const props = withDefaults(defineProps<{
     maxHz: number;
     anchorRect?: AnchorRect;
     title?: string;
+
+    /** optional per-pad wave prop; if provided, a wave row is shown */
+    wave?: Wave;
 }>(), { title: 'Pad' });
 
 const emit = defineEmits<{
     (e: 'update:open', v: boolean): void;
     (e: 'update:hz', v: number): void;
+    (e: 'update:wave', v: Wave): void;
     (e: 'close'): void;
 }>();
 
@@ -111,7 +129,7 @@ onBeforeUnmount(() => {
     document.removeEventListener('keydown', onKey, true);
 });
 
-/* positioning (no inner scrollbars) */
+/* positioning */
 const POP_W = 380;
 const EST_H = 300;
 const pos = computed(() => {
@@ -151,41 +169,27 @@ watch([baseMidi, detuneCentsLocal], () => {
     emit('update:hz', currentHz.value);
     queueMicrotask(() => { isFineAdjust.value = false; });
 });
-// Always initialize from the incoming prop and keep it synced,
-// but don't fight the user while they're adjusting knobs in the popover.
-watch(
-    () => props.hz,
-    (hz) => {
-        if (isFineAdjust.value) return;
-        if (Number.isFinite(hz)) syncFromHz(hz);
-    },
-    { immediate: true }
-);
-
-// Also re-sync any time the popover opens (covers any race on open)
-watch(openLocal, (isOpen) => {
-    if (isOpen) syncFromHz(props.hz);
-});
+watch(() => props.hz, (hz) => {
+    if (isFineAdjust.value) return;
+    if (Number.isFinite(hz)) syncFromHz(hz);
+}, { immediate: true });
+watch(openLocal, (isOpen) => { if (isOpen) syncFromHz(props.hz); });
 
 /* UI computeds/actions */
 const displayHz = computed(() => (Math.round(currentHz.value * 100) / 100).toFixed(2));
-
 const octave = computed({
     get: () => Math.floor(baseMidi.value / 12) - 1,
     set: (o: number) => { const s = baseMidi.value % 12; baseMidi.value = (o + 1) * 12 + s; detuneCentsLocal.value = 0; }
 });
-
 function isFreqInRange(f: number) { return f >= props.minHz && f <= props.maxHz; }
 function midiOf(o: number, s: number) { return (o + 1) * 12 + s; }
 function freqOf(o: number, s: number) { return midiToFreq(midiOf(o, s)); }
 function isNoteInRange(o: number, s: number) { return isFreqInRange(freqOf(o, s)); }
-
 const availableOctaves = computed(() => {
     const out: number[] = [];
     for (let o = 0; o <= 8; o++) { for (let s = 0; s < 12; s++) { if (isNoteInRange(o, s)) { out.push(o); break; } } }
     return out;
 });
-
 function setSemitone(i: number) {
     const o = Math.floor(baseMidi.value / 12) - 1;
     baseMidi.value = (o + 1) * 12 + i;
@@ -210,6 +214,13 @@ const hzInput = computed({
         detuneCentsLocal.value = Math.round(1200 * Math.log2(c / midiToFreq(m)));
     }
 });
+
+/* per-pad waveform bindings */
+const showWaveRow = computed(() => props.wave !== undefined);
+const waveLocal = ref<Wave>(props.wave ?? 'sine');
+watch(() => props.wave, (v) => { if (v) waveLocal.value = v; });
+watch(waveLocal, (v) => emit('update:wave', v));
+function setWave(w: Wave) { waveLocal.value = w; }
 </script>
 
 <style scoped>
@@ -221,7 +232,6 @@ const hzInput = computed({
     overflow: visible;
 }
 
-/* Keyboard grid */
 .kb {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -246,8 +256,8 @@ const hzInput = computed({
     right: -14px;
     min-height: 26px;
     padding: 4px 10px;
-    font-size: 0.8rem;
-    opacity: 0.95;
+    font-size: .8rem;
+    opacity: .95;
     z-index: 1;
 }
 
@@ -272,7 +282,6 @@ const hzInput = computed({
     gap: 6px;
 }
 
- /* fine + hz   */
 .fine-row {
     grid-template-columns: 1fr 1fr;
     grid-column: 1 / -1;
@@ -301,12 +310,8 @@ const hzInput = computed({
     border-radius: var(--pt-radius-sm);
     padding: 8px 10px;
     color: var(--pt-text);
-    background:
-        linear-gradient(145deg, var(--pt-surface-1), var(--pt-surface-2)) padding-box,
-        linear-gradient(90deg, hsl(var(--pt-accent) 84% 64% / .95), hsl(calc(var(--pt-accent)+10) 84% 64% / .95)) border-box;
-    box-shadow:
-        inset 0 0 0 1px rgb(255 255 255 / 0.03),
-        0 2px 10px rgb(0 0 0 / 0.25);
+    background: linear-gradient(145deg, var(--pt-surface-1), var(--pt-surface-2)) padding-box, linear-gradient(90deg, hsl(var(--pt-accent) 84% 64% / .95), hsl(calc(var(--pt-accent)+10) 84% 64% / .95)) border-box;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / .03), 0 2px 10px rgb(0 0 0 / .25);
     line-height: 1.2;
 }
 
@@ -314,5 +319,11 @@ const hzInput = computed({
     padding: 4px 10px;
     min-height: 28px;
     font-size: .85rem;
+}
+
+.wave-seg {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
 }
 </style>
