@@ -8,54 +8,44 @@
             </div>
         </template>
 
-        <!-- MODE ROW -->
-        <div class="mode-row">
-            <div class="pt-seg pt-seg-sm" role="group" aria-label="Delay Time Mode">
-                <button class="pt-seg-btn" :class="{ 'is-active': localSync }" :aria-pressed="localSync"
-                    :disabled="!localEnabled" @click="localSync = true">Sync</button>
-                <button class="pt-seg-btn" :class="{ 'is-active': !localSync }" :aria-pressed="!localSync"
-                    :disabled="!localEnabled" @click="localSync = false">Free</button>
+        <!-- Time -->
+        <div class="pt-knob-row">
+            <div class="position-relative text-center">
+                <Knob v-if="!localSync" v-model="localTime" label="Time" :min="0.01" :max="maxSeconds" :step="0.01"
+                    size="small" :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
+                    @knobEnd="activeKnob = null" />
+
+                <Knob v-else v-model="divIndexKnob" label="Time" :min="0" :max="1" :step="knobStep" size="small"
+                    :color="color" :disabled="!localEnabled" :showMarkers="true" :markers="knobMarkers"
+                    :markersOnly="true" :markersOffsetDeg="-90" @knobStart="activeKnob = 'time'"
+                    @knobEnd="activeKnob = null" />
+
+
+                <span v-if="activeKnob === 'time'" class="custom-tooltip">
+                    <template v-if="!localSync">{{ (localTime * 1000).toFixed(0) }} ms</template>
+                    <template v-else>{{ currentDivLabel }} · {{ syncedMs.toFixed(0) }} ms</template>
+                </span>
+            </div>
+
+            <!-- Feedback -->
+            <div class="position-relative text-center">
+                <Knob v-model="localFeedback" label="Feedback" :min="0" :max="0.95" :step="0.01" size="small"
+                    :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'feedback'"
+                    @knobEnd="activeKnob = null" />
+                <span v-if="activeKnob === 'feedback'" class="custom-tooltip">
+                    {{ Math.round(localFeedback * 100) }}%
+                </span>
+            </div>
+
+            <!-- Mix -->
+            <div class="position-relative text-center">
+                <Knob v-model="localMix" label="Mix" :min="0" :max="1" :step="0.01" size="small" :color="color"
+                    :disabled="!localEnabled" @knobStart="activeKnob = 'mix'" @knobEnd="activeKnob = null" />
+                <span v-if="activeKnob === 'mix'" class="custom-tooltip">
+                    {{ Math.round(localMix * 100) }}%
+                </span>
             </div>
         </div>
-
-        <!-- Time -->
-        <div class="position-relative text-center">
-            <Knob v-if="!localSync" v-model="localTime" label="Time" :min="0.01" :max="maxSeconds" :step="0.01"
-                size="small" :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'time'"
-                @knobEnd="activeKnob = null" />
-
-
-            <!-- When Sync is ON -->
-            <Knob v-else v-model="divIndexKnob" label="Time" :min="0" :max="1" :step="knobStep" size="small"
-                :color="color" :disabled="!localEnabled" :showMarkers="true" :markers="knobMarkers" :markersOnly="true"
-                :markersOffsetDeg="-90" @knobStart="activeKnob = 'time'" @knobEnd="activeKnob = null" />
-
-       
-
-            <span v-if="activeKnob === 'time'" class="custom-tooltip">
-                <template v-if="!localSync">{{ (localTime * 1000).toFixed(0) }} ms</template>
-                <template v-else>{{ currentDivLabel }} · {{ syncedMs.toFixed(0) }} ms</template>
-            </span>
-        </div>
-
-        <!-- Feedback -->
-        <div class="position-relative text-center">
-            <Knob v-model="localFeedback" label="Feedback" :min="0" :max="0.95" :step="0.01" size="small" :color="color"
-                :disabled="!localEnabled" @knobStart="activeKnob = 'feedback'" @knobEnd="activeKnob = null" />
-            <span v-if="activeKnob === 'feedback'" class="custom-tooltip">
-                {{ Math.round(localFeedback * 100) }}%
-            </span>
-        </div>
-
-        <!-- Mix -->
-        <div class="position-relative text-center">
-            <Knob v-model="localMix" label="Mix" :min="0" :max="1" :step="0.01" size="small" :color="color"
-                :disabled="!localEnabled" @knobStart="activeKnob = 'mix'" @knobEnd="activeKnob = null" />
-            <span v-if="activeKnob === 'mix'" class="custom-tooltip">
-                {{ Math.round(localMix * 100) }}%
-            </span>
-        </div>
-
         <!-- TONE ROW  -->
         <div class="tone-row">
             <!-- Dot toggle -->

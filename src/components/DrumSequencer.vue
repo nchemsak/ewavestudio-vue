@@ -243,11 +243,13 @@
 
 
 
-
-				<div class="module fx">
+				<div class="module fx fx-adv-anchor" ref="fxAnchor">
+					<!-- <div class="module fx"> -->
 					<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
-
-
+						<template #tools>
+							<button class="pt-info-icon" aria-label="Advanced options"
+								@click="openFxAdvanced($event)">⋯</button>
+						</template>
 						<!-- Delay panel -->
 						<section class="pt-section">
 							<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
@@ -263,25 +265,48 @@
 								v-model:driveType="driveType" v-model:driveAmount="driveAmount"
 								v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
 						</section>
+						<!-- Effects Advanced -->
 
-						<!-- simple anchored menu -->
-						<div v-if="ui.menus.fx.open" class="pt-select-overlay" @click="closeMenus"></div>
-						<div v-if="ui.menus.fx.open" class="pt-menu" data-side="right"
-							:style="{ left: ui.menus.fx.x + 'px', top: ui.menus.fx.y + 'px' }">
-							<div class="pt-option is-active" role="menuitemcheckbox"
-								@click="delayEnabled = !delayEnabled">Toggle Delay
+						<!-- Effects — Advanced (teleported to body) -->
+						<Teleport to="body">
+							<div v-if="fxAdvanced.open">
+								<div class="mm-overlay" @click="fxAdvanced.open = false"></div>
+
+								<div class="mm-menu" :style="{ left: fxAdvanced.x + 'px', top: fxAdvanced.y + 'px' }"
+									@click.stop>
+									<div class="mm-menu-title">Effects — Advanced</div>
+
+									<div class="mm-opt" role="menuitem" @click="delayEnabled = !delayEnabled">
+										<span>Delay enabled</span>
+										<button class="mm-switch" :class="{ on: delayEnabled }"><span
+												class="kn"></span></button>
+									</div>
+
+									<div class="mm-opt" role="menuitem" @click="driveEnabled = !driveEnabled">
+										<span>Drive enabled</span>
+										<button class="mm-switch" :class="{ on: driveEnabled }"><span
+												class="kn"></span></button>
+									</div>
+
+									<div class="pt-rule" aria-hidden="true"></div>
+
+									<div class="mm-opt" role="menuitem" @click="delaySync = !delaySync">
+										<span>Delay: Sync with tempo</span>
+										<button class="mm-switch" :class="{ on: delaySync }"><span
+												class="kn"></span></button>
+									</div>
+
+									<div class="mm-reset" role="menuitem" @click.stop="resetDelayDrive()">
+										Reset Delay & Drive to defaults
+									</div>
+								</div>
 							</div>
-							<div class="pt-option is-active" role="menuitemcheckbox"
-								@click="driveEnabled = !driveEnabled">Toggle Drive
-							</div>
-							<div class="pt-rule"></div>
-							<div class="pt-option" role="menuitem"
-								@click="delayFeedback = 0.3; delayMix = 0.3; delayTime = 0.2">Reset
-								Delay</div>
-							<div class="pt-option" role="menuitem"
-								@click="driveAmount = 0.4; driveMix = 0.5; driveTone = 5000">Reset
-								Drive</div>
-						</div>
+						</Teleport>
+
+
+						<!-- overlay to close -->
+						<div v-if="fxAdvanced.open" class="mm-overlay" @click="fxAdvanced.open = false"></div>
+
 					</CollapsibleCard>
 				</div>
 			</section>
@@ -470,6 +495,44 @@ const padSizeStyle = computed(() => ({
 const lfoRef = ref<InstanceType<typeof LFOGroup> | null>(null);
 const lfoRetrigger = ref(false)
 const lfoBipolar = ref(false)
+
+
+//Effects Panel Advanced Menu BEGIN
+// FX Advanced 
+const fxAdvanced = reactive({ open: false, x: 0, y: 0 });
+
+// script setup
+const fxAnchor = ref<HTMLElement | null>(null);
+
+function openFxAdvanced(e: MouseEvent) {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  fxAdvanced.x = Math.round(r.right + 8);   // viewport coords
+  fxAdvanced.y = Math.round(r.bottom + 8);
+  fxAdvanced.open = true;
+}
+
+function onFxEsc(e: KeyboardEvent) {
+  if (e.key === 'Escape' && fxAdvanced.open) fxAdvanced.open = false;
+}
+onMounted(() => window.addEventListener('keydown', onFxEsc, { capture: true }));
+onBeforeUnmount(() => window.removeEventListener('keydown', onFxEsc, { capture: true } as any));
+
+
+
+function resetDelayDrive() {
+	// Delay defaults
+	delayFeedback.value = 0.3;
+	delayMix.value = 0.3;
+	// Respect current sync mode: if synced, delayTime is computed; if free, set a sane free-time.
+	if (!delaySync.value) delayTime.value = 0.2;
+
+	// Drive defaults
+	driveAmount.value = 0.4;
+	driveMix.value = 0.5;
+	driveTone.value = 5000;
+}
+//Effects Panel Advanced Menu END
+
 
 
 // PANEL MENU START
@@ -2932,5 +2995,94 @@ driveShaper.curve = (() => {
 		column-width: 360px;
 		column-gap: 16px;
 	}
+}
+
+
+.mm-menu {
+	position: fixed;
+	min-width: 280px;
+	border-radius: 12px;
+	box-shadow: 0 12px 40px rgb(0 0 0 / .45);
+	padding: 10px;
+	z-index: 2001;
+	background: var(--pt-panel);
+	color: var(--pt-text);
+	border: 1px solid var(--pt-hairline);
+}
+
+.mm-menu-title {
+	font-weight: 700;
+	color: #c7cee0;
+	opacity: .9;
+	padding: 8px 8px 6px;
+}
+
+.mm-opt {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 8px;
+	border-radius: 8px;
+}
+
+.mm-opt:hover {
+	background: rgba(255, 255, 255, .04);
+	cursor: pointer;
+}
+
+.mm-reset {
+	text-align: center;
+	color: #c7cee0;
+	opacity: .9;
+	padding: 10px 8px 4px;
+	cursor: pointer;
+}
+
+.mm-switch {
+	--sw: 38px;
+	--kn: 18px;
+	width: var(--sw);
+	height: 22px;
+	border-radius: 999px;
+	background: var(--pt-surface-2);
+	border: 1px solid var(--pt-hairline);
+	position: relative;
+	cursor: pointer;
+}
+
+.mm-switch .kn {
+	position: absolute;
+	top: 50%;
+	left: 2px;
+	transform: translateY(-50%);
+	width: var(--kn);
+	height: var(--kn);
+	border-radius: 999px;
+	background: #fff;
+	box-shadow: 0 2px 8px rgb(0 0 0 / .35);
+}
+
+.mm-switch.on {
+	background: linear-gradient(180deg,
+			hsl(var(--pt-accent) 80% 60%),
+			hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
+}
+
+.mm-switch.on .kn {
+	left: calc(100% - var(--kn) - 2px);
+}
+
+
+
+.mm-overlay {
+  position: fixed;      /* was absolute */
+  inset: 0;
+  z-index: 2000;
+}
+
+/* card-only overlay */
+
+.fx-adv-anchor {
+	position: relative;
 }
 </style>
