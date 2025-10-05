@@ -27,7 +27,7 @@
     </div>
 </template>
 
-<script setup>
+<script setup> 
 import { ref, defineExpose } from 'vue'
 
 const props = defineProps({

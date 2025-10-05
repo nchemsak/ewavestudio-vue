@@ -114,4 +114,16 @@ function shapeReset(): void {
 .pattern-tools {
     max-width: 520px;
 }
+
+.pattern-tools .pattern-tools {
+    display: flex;
+}
+
+.pt-btn {
+    min-height: auto;
+    line-height: 1;
+    font-size: 0.65rem;
+    width: 75px;
+    padding: 5px;
+}
 </style>

@@ -129,20 +129,20 @@ $dark: map.get($themes, dark);
     position: relative;
 }
 
-.pt-section+.pt-section {
-    margin-top: 22px;
-    padding-top: 14px;
-}
+// .pt-section+.pt-section {
+//     margin-top: 22px;
+//     padding-top: 14px;
+// }
 
-.pt-section+.pt-section::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--pt-hairline), transparent);
-}
+// .pt-section+.pt-section::before {
+//     content: "";
+//     position: absolute;
+//     left: 0;
+//     right: 0;
+//     top: 0;
+//     height: 1px;
+//     background: linear-gradient(90deg, transparent, var(--pt-hairline), transparent);
+// }
 
 .pt-section-title {
     color: var(--pt-muted);

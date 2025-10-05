@@ -190,8 +190,10 @@ const nearestNote = props.nearestNote;
     --wb-radius: 6px;
 
     position: absolute;
-    top: 3px;
-    left: 3px;
+    bottom: 3px;
+    /* left: 3px; */
+    left: 50%;
+    transform: translateX(-50%);
 
     display: inline-flex;
     align-items: center;
@@ -203,10 +205,10 @@ const nearestNote = props.nearestNote;
 
     /* Uniform background for all waves */
     background: linear-gradient(145deg, rgba(0, 0, 0, .55), rgba(0, 0, 0, .35));
-    border: 1px solid rgba(255, 255, 255, .14);
-    box-shadow:
+    /* border: 1px solid rgba(255, 255, 255, .14); */
+    /* box-shadow:
         0 1px 2px rgba(0, 0, 0, .25),
-        inset 0 0 0 1px rgba(255, 255, 255, .04);
+        inset 0 0 0 1px rgba(255, 255, 255, .04); */
 
     color: #fff;
     /* default; overridden per-wave below */

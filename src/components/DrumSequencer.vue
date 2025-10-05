@@ -114,11 +114,6 @@
 				<div v-if="ui.menus.steps.open" class="pt-select-overlay step-menu-overlay" @click="closeMenus"></div>
 
 				<div class="step-card__grid">
-					<!-- <SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
-						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
-						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
-						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
-						@open-pad-settings="({ name, index, anchorRect }) => openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" /> -->
 					<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
@@ -2449,12 +2444,8 @@ driveShaper.curve = (() => {
 	align-self: start;
 }
 
-
-
-
-/* NEW */
 /* =========================
-   OVERRIDES (append at end)
+   OVERRIDES
    ========================= */
 
 /* --- Visualizer rail fills its grid area --- */
@@ -2489,8 +2480,6 @@ driveShaper.curve = (() => {
 		min-height: 0;
 	}
 }
-
-
 
 /* --- Exact desktop (xl) layout you requested --- */
 @media (min-width: 1280px) {
@@ -2528,9 +2517,6 @@ driveShaper.curve = (() => {
 	}
 }
 
-
-/* ===== SAFE PATCH v2: visualizer fill + restore masonry ===== */
-
 /* 1) Visualizer: fill the two-row rail, stretch the LCD/canvases */
 @media (min-width: 992px) {
 	.ds-visualizer {
@@ -2553,15 +2539,6 @@ driveShaper.curve = (() => {
 		min-height: 0;
 		width: 100%;
 	}
-
-	/* be robust to class names inside <MpcScreen> */
-	/* .ds-visualizer :deep([class*="screen"]) {
-		display: flex;
-		flex-direction: column;
-		min-height: 0;
-		height: 100%;
-		width: 100%;
-	} */
 
 	.ds-visualizer :deep([class*="lcd"]) {
 		/* let the LCD grow to fill */
