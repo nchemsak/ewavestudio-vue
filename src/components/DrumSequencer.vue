@@ -505,14 +505,14 @@ const fxAdvanced = reactive({ open: false, x: 0, y: 0 });
 const fxAnchor = ref<HTMLElement | null>(null);
 
 function openFxAdvanced(e: MouseEvent) {
-  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  fxAdvanced.x = Math.round(r.right + 8);   // viewport coords
-  fxAdvanced.y = Math.round(r.bottom + 8);
-  fxAdvanced.open = true;
+	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+	fxAdvanced.x = Math.round(r.right + 8);   // viewport coords
+	fxAdvanced.y = Math.round(r.bottom + 8);
+	fxAdvanced.open = true;
 }
 
 function onFxEsc(e: KeyboardEvent) {
-  if (e.key === 'Escape' && fxAdvanced.open) fxAdvanced.open = false;
+	if (e.key === 'Escape' && fxAdvanced.open) fxAdvanced.open = false;
 }
 onMounted(() => window.addEventListener('keydown', onFxEsc, { capture: true }));
 onBeforeUnmount(() => window.removeEventListener('keydown', onFxEsc, { capture: true } as any));
@@ -714,21 +714,55 @@ const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner'>('scope');
 const screen = ref<InstanceType<typeof MpcScreen> | null>(null);
 
 /** Fit a canvas to its CSS size (crisp on HiDPI) */
-function fitCanvasToBox(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+// function fitCanvasToBox(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+// 	const dpr = window.devicePixelRatio || 1;
+// 	const rect = canvas.getBoundingClientRect();
+// 	const w = Math.max(1, Math.round(rect.width * dpr));
+// 	const h = Math.max(1, Math.round(rect.height * dpr));
+// 	const pxW = canvas.width, pxH = canvas.height;
+// 	ctx.drawImage(canvas, dpr, 0, pxW - dpr, pxH, 0, 0, pxW - dpr, pxH);
+// 	if (canvas.width !== w || canvas.height !== h) {
+// 		canvas.width = w;
+// 		canvas.height = h;
+// 	}
+// 	ctx.setTransform(1, 0, 0, 1, 0, 0);
+// 	// draw in CSS pixels but with DPR backing store:
+// 	ctx.scale(dpr, dpr);
+// }
+
+function fitCanvasToBox(canvas, ctx) {
 	const dpr = window.devicePixelRatio || 1;
 	const rect = canvas.getBoundingClientRect();
 	const w = Math.max(1, Math.round(rect.width * dpr));
 	const h = Math.max(1, Math.round(rect.height * dpr));
-	const pxW = canvas.width, pxH = canvas.height;
-	ctx.drawImage(canvas, dpr, 0, pxW - dpr, pxH, 0, 0, pxW - dpr, pxH);
+
+	// Only resize when it actually changed.
 	if (canvas.width !== w || canvas.height !== h) {
+		// If you really want to preserve content during a resize,
+		// copy via a temporary offscreen canvas (safe), not self-draw.
+		const prev = document.createElement('canvas');
+		prev.width = canvas.width;
+		prev.height = canvas.height;
+		if (prev.width && prev.height) {
+			const pctx = prev.getContext('2d');
+			pctx && pctx.drawImage(canvas, 0, 0);
+		}
+
 		canvas.width = w;
 		canvas.height = h;
+
+		// Restore transform for DPR drawing
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.scale(dpr, dpr);
+
+		// Optional: redraw previous content stretched; harmless if you skip it.
+		if (prev.width && prev.height) ctx.drawImage(prev, 0, 0, prev.width, prev.height, 0, 0, canvas.clientWidth, canvas.clientHeight);
+	} else {
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.scale(dpr, dpr);
 	}
-	ctx.setTransform(1, 0, 0, 1, 0, 0);
-	// draw in CSS pixels but with DPR backing store:
-	ctx.scale(dpr, dpr);
 }
+
 
 /** Toggle by F-keys */
 function handleFKey(n: number) {
@@ -754,9 +788,10 @@ function startScope() {
 		if (lcdView.value !== 'scope') return;
 
 		fitCanvasToBox(canvas, ctx);
-		const W = canvas.clientWidth;
-		const H = canvas.clientHeight;
-
+		// const W = canvas.clientWidth;
+		// const H = canvas.clientHeight;
+		const W = Math.round(canvas.clientWidth);
+		const H = Math.round(canvas.clientHeight);
 		// theme-aware background + trace style
 		const bg = readVar('--mpc-lcd-bg', '#b9bcba');
 		const trace = readVar('--mpc-scope-trace', '#111');
@@ -848,7 +883,30 @@ function startSpectrogram() {
 			ctx.restore();
 		} else {
 			// Scroll existing image left by 1px
-			ctx.drawImage(canvas, 1, 0, W - 1, H, 0, 0, W - 1, H);
+			// ctx.drawImage(canvas, 1, 0, W - 1, H, 0, 0, W - 1, H);
+			// Scroll existing image left by 1 CSS pixel (DPR-safe)
+			// const dpr = window.devicePixelRatio || 1;
+			// ctx.save();
+			// ctx.setTransform(1, 0, 0, 1, 0, 0);              // device-pixel space
+			// ctx.drawImage(canvas, 1 * dpr, 0, canvas.width - 1 * dpr, canvas.height,
+			// 	0, 0, canvas.width - 1 * dpr, canvas.height);
+			// ctx.restore();
+			// inside startSpectrogram() draw():
+			const dpr = window.devicePixelRatio || 1;
+
+			// copy old image left by *one CSS pixel* without resampling
+			ctx.save();
+			ctx.setTransform(1, 0, 0, 1, 0, 0); // switch to device-pixel space
+			ctx.imageSmoothingEnabled = false;
+			ctx.drawImage(
+				canvas,
+				1 * dpr, 0,                     // src x
+				canvas.width - 1 * dpr, canvas.height,  // src w/h in device px
+				0, 0,
+				canvas.width - 1 * dpr, canvas.height
+			);
+			ctx.restore();
+
 
 		}
 
@@ -863,7 +921,7 @@ function startSpectrogram() {
 		floor = floor / FLOOR_TAP + 3;
 
 		// Column background (silence color)
-		const x = W - 1;
+		const x = (W - 1) | 0; 
 		ctx.fillStyle = theme.bg;
 		ctx.fillRect(x, 0, 1, H);
 
@@ -3075,9 +3133,10 @@ driveShaper.curve = (() => {
 
 
 .mm-overlay {
-  position: fixed;      /* was absolute */
-  inset: 0;
-  z-index: 2000;
+	position: fixed;
+	/* was absolute */
+	inset: 0;
+	z-index: 2000;
 }
 
 /* card-only overlay */
@@ -3085,4 +3144,6 @@ driveShaper.curve = (() => {
 .fx-adv-anchor {
 	position: relative;
 }
+
+.mpc-screen__lcd > canvas { image-rendering: pixelated; }
 </style>

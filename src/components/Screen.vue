@@ -17,9 +17,6 @@
         </div>
 
         <div class="mpc-screen__fkeys">
-            <!-- <button v-for="n in 6" :key="n" class="fkey" :class="{ active: activeKey === n }" :aria-label="`F${n}`"
-                @click="$emit('fkey', n)">
-            </button> -->
             <button v-for="n in 6" :key="n" class="fkey" :data-label="`F${n}`" :class="{ active: activeKey === n }"
                 :aria-pressed="activeKey === n ? 'true' : 'false'" :aria-label="`F${n}`" @click="$emit('fkey', n)">
             </button>
@@ -27,7 +24,7 @@
     </div>
 </template>
 
-<script setup> 
+<script setup>
 import { ref, defineExpose } from 'vue'
 
 const props = defineProps({
@@ -47,11 +44,6 @@ defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner
 
 <style scoped>
 .mpc-screen {
-    /* --screen-w: 22rem; */
-
-    /* --screen-w: min(22rem, 100%); */
-    /* width: var(--screen-w);*/
-
     width: min(22rem, 100%);
     max-width: 100%;
     box-sizing: border-box;
@@ -136,7 +128,6 @@ defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner
     position: relative;
     background: var(--mpc-lcd-bg);
     width: clamp(60%, 82%, 92%);
-    /* height: calc(var(--screen-w) * 0.30); */
     aspect-ratio: 10 / 3;
     margin: 0 auto;
     border-radius: .35rem;
@@ -202,22 +193,11 @@ defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner
     padding: 0 .75rem;
 }
 
-.fkey {
-    height: .9rem;
-    border-radius: .2rem;
-    background: #f9f4ec;
-    border: 1px solid #b7b9b6;
-    box-shadow: .12rem .12rem rgba(130, 128, 128, .9);
-    cursor: pointer;
-}
-
 .fkey:active {
     transform: translate(.06rem, .12rem);
     box-shadow: inset .08rem .08rem .35rem rgba(0, 0, 0, .25);
 }
 
-
-/* Better-looking F-keys w/ labels + active press effect */
 .fkey {
     position: relative;
     height: 1.1rem;
@@ -227,6 +207,7 @@ defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner
     box-shadow:
         0 .12rem .25rem rgba(0, 0, 0, .25),
         inset 0 0 0 1px rgba(255, 255, 255, .6);
+    cursor: pointer;
 }
 
 .fkey::after {
