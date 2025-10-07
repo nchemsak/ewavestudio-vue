@@ -201,8 +201,12 @@
 
 				<div class="module sound">
 					<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
+						<!-- <EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
+							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" /> -->
 						<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
-							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
+							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
+							@attack-knob-start="onEnvKnobStart" @attack-knob-end="onEnvKnobEnd"
+							@decay-knob-start="onEnvKnobStart" @decay-knob-end="onEnvKnobEnd" />
 						<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 							v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
 					</CollapsibleCard>
@@ -710,25 +714,46 @@ function midiToNamePref(m: number, mode: AccidentalMode = accidentalMode.value) 
 // MPC Screen BEGIN
 const lcdText = ref('HARP  2');
 const activeFKey = ref<number>(1);
-const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner'>('scope');
+// const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner'>('scope');
+const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner' | 'env'>('scope');
 const screen = ref<InstanceType<typeof MpcScreen> | null>(null);
 
-/** Fit a canvas to its CSS size (crisp on HiDPI) */
-// function fitCanvasToBox(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
-// 	const dpr = window.devicePixelRatio || 1;
-// 	const rect = canvas.getBoundingClientRect();
-// 	const w = Math.max(1, Math.round(rect.width * dpr));
-// 	const h = Math.max(1, Math.round(rect.height * dpr));
-// 	const pxW = canvas.width, pxH = canvas.height;
-// 	ctx.drawImage(canvas, dpr, 0, pxW - dpr, pxH, 0, 0, pxW - dpr, pxH);
-// 	if (canvas.width !== w || canvas.height !== h) {
-// 		canvas.width = w;
-// 		canvas.height = h;
-// 	}
-// 	ctx.setTransform(1, 0, 0, 1, 0, 0);
-// 	// draw in CSS pixels but with DPR backing store:
-// 	ctx.scale(dpr, dpr);
-// }
+// Remember previous screen so we can restore it after the knob is released
+const prevScreen = ref<{ view: typeof lcdView.value; fkey: number } | null>(null);
+// Support overlapping holds (attack & decay) without flicker
+let envHoldCount = 0;
+// If the user manually changes the screen while holding, don't auto-restore
+let userOverrodeWhileHeld = false;
+
+function jumpToEnv() {
+	// Save once (first hold)
+	if (!prevScreen.value) prevScreen.value = { view: lcdView.value, fkey: activeFKey.value };
+	// Go to F4 (ENV)
+	activeFKey.value = 4;
+	lcdView.value = 'env';
+}
+
+function onEnvKnobStart() {
+	// If user pressed another F-key while already holding, treat that as override
+	if (envHoldCount > 0 && lcdView.value !== 'env') userOverrodeWhileHeld = true;
+	envHoldCount++;
+	jumpToEnv();
+}
+
+function onEnvKnobEnd() {
+	envHoldCount = Math.max(0, envHoldCount - 1);
+	if (envHoldCount === 0) {
+		// Only restore if the user didn't manually change screens during the hold
+		const prev = prevScreen.value;
+		if (prev && !userOverrodeWhileHeld) {
+			lcdView.value = prev.view;
+			activeFKey.value = prev.fkey;
+		}
+		prevScreen.value = null;
+		userOverrodeWhileHeld = false;
+	}
+}
+
 
 function fitCanvasToBox(canvas, ctx) {
 	const dpr = window.devicePixelRatio || 1;
@@ -770,9 +795,9 @@ function handleFKey(n: number) {
 	if (n === 1) lcdView.value = 'scope';
 	else if (n === 2) lcdView.value = 'spec';
 	else if (n === 3) lcdView.value = 'tuner';
-	else lcdView.value = 'text'; // F4–F6 placeholders
+	else if (n === 4) lcdView.value = 'env';
+	else lcdView.value = 'text';
 }
-
 
 function startScope() {
 	const canvas = screen.value!.scopeCanvas as HTMLCanvasElement;
@@ -921,7 +946,7 @@ function startSpectrogram() {
 		floor = floor / FLOOR_TAP + 3;
 
 		// Column background (silence color)
-		const x = (W - 1) | 0; 
+		const x = (W - 1) | 0;
 		ctx.fillStyle = theme.bg;
 		ctx.fillRect(x, 0, 1, H);
 
@@ -1007,6 +1032,197 @@ function startTuner() {
 	draw();
 }
 
+function startEnvViz() {
+	const scr = screen.value;
+	if (!scr) return;
+
+	const canvas = scr.envCanvas as HTMLCanvasElement;
+	if (!canvas) return;
+
+	const ctx = canvas.getContext('2d');
+	if (!ctx) return;
+
+	ctx.imageSmoothingEnabled = false;
+
+	//   function draw() {
+	//     requestAnimationFrame(draw);
+	//     if (lcdView.value !== 'env') return;
+
+	//     fitCanvasToBox(canvas, ctx);
+	//     const W = Math.round(canvas.clientWidth);
+	//     const H = Math.round(canvas.clientHeight);
+	//     ctx.clearRect(0, 0, W, H);
+
+	//     // Theme
+	//     const css = getComputedStyle(canvas);
+	//     const bg = (css.getPropertyValue('--mpc-lcd-bg') || '#0f141b').trim();
+	//     const ink = (css.getPropertyValue('--mpc-scope-trace') || '#c7d6ff').trim();
+
+	//     const L = 14, R = 10, T = 10, B = 16;
+	//     const plotW = Math.max(1, W - L - R);
+	//     const plotH = Math.max(1, H - T - B);
+
+	//     // Fixed time axis (log scale)
+	//     const AXIS_MIN_MS = 1;
+	//     const AXIS_MAX_MS = 2000; // keep constant to make differences obvious
+	//     const logMin = Math.log10(AXIS_MIN_MS);
+	//     const logMax = Math.log10(AXIS_MAX_MS);
+	//     const logSpan = logMax - logMin;
+	//     const timeToX = (ms: number) => {
+	//       const t = Math.max(AXIS_MIN_MS, Math.min(ms, AXIS_MAX_MS));
+	//       const n = (Math.log10(t) - logMin) / logSpan; // 0..1
+	//       return L + n * plotW;
+	//     };
+
+	//     // Values (ms)
+	//     const A = Math.max(1, Math.round(ampEnvAttackMs.value));
+	//     const D = Math.max(1, Math.round(ampEnvDecayMs.value));
+
+	//     // Axes
+	//     ctx.fillStyle = bg;
+	//     ctx.fillRect(0, 0, W, H);
+	//     ctx.strokeStyle = ink;
+	//     ctx.globalAlpha = 0.25;
+	//     ctx.lineWidth = 1;
+	//     ctx.beginPath(); ctx.moveTo(L, T + plotH); ctx.lineTo(L + plotW, T + plotH); ctx.stroke();
+	//     ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L + plotW, T); ctx.stroke();
+	//     ctx.globalAlpha = 1;
+
+	//     // Envelope (attack linear, decay exponential to ~-60 dB)
+	//     const tau = D / Math.log(1000); // if D = time to -60 dB
+	//     const totalMs = AXIS_MAX_MS;
+
+	//     ctx.lineWidth = 2;
+	//     ctx.strokeStyle = ink;
+	//     ctx.beginPath();
+
+	//     // Start at 0 ms
+	//     let first = true;
+
+	//     const SAMPLES = Math.max(200, Math.floor(plotW)); // 1 px-ish sampling
+	//     for (let i = 0; i <= SAMPLES; i++) {
+	//       const ms = (i / SAMPLES) * totalMs; // 0..AXIS_MAX_MS in real ms
+
+	//       let amp = 0;
+	//       if (ms <= A) {
+	//         // linear up to 1.0 during attack
+	//         amp = ms / A;
+	//       } else {
+	//         // exponential decay starting after attack
+	//         const t = ms - A;
+	//         amp = Math.exp(-t / tau); // 1 -> ~0 by D ms
+	//       }
+
+	//       const x = timeToX(ms);
+	//       const y = T + (1 - Math.min(1, Math.max(0, amp))) * plotH;
+
+	//       if (first) { ctx.moveTo(x, y); first = false; }
+	//       else { ctx.lineTo(x, y); }
+	//     }
+	//     ctx.stroke();
+
+	//     // Labels & attack tick
+	//     ctx.font = `700 11px Cousine, ui-monospace, monospace`;
+	//     ctx.fillStyle = ink;
+	//     ctx.globalAlpha = 0.9;
+	//     ctx.textAlign = 'left';
+	//     ctx.fillText('Amplitude Envelope (Attack → Decay)', L, 12);
+
+	//     ctx.globalAlpha = 0.85;
+	//     ctx.textAlign = 'center';
+	//     const ax = timeToX(A);
+	//     ctx.fillText(`${A} ms`, ax, H - 4);
+	//     ctx.globalAlpha = 0.35;
+	//     ctx.beginPath(); ctx.moveTo(ax, T); ctx.lineTo(ax, T + plotH); ctx.stroke();
+	//     ctx.globalAlpha = 1;
+
+	//     // Fixed time scale labels
+	//     ctx.textAlign = 'left';  ctx.fillText('1 ms', L, H - 4);
+	//     ctx.textAlign = 'right'; ctx.fillText('2000 ms', L + plotW, H - 4);
+	//   }
+	function draw() {
+		requestAnimationFrame(draw);
+		if (lcdView.value !== 'env') return;
+
+		fitCanvasToBox(canvas, ctx);
+		const W = Math.round(canvas.clientWidth);
+		const H = Math.round(canvas.clientHeight);
+		ctx.clearRect(0, 0, W, H);
+
+		// Theme
+		const css = getComputedStyle(canvas);
+		const bg = (css.getPropertyValue('--mpc-lcd-bg') || '#0f141b').trim();
+		const ink = (css.getPropertyValue('--mpc-scope-trace') || '#c7d6ff').trim();
+
+		const L = 14, R = 10, T = 10, B = 16;
+		const plotW = Math.max(1, W - L - R);
+		const plotH = Math.max(1, H - T - B);
+
+		// Fixed time axis (log scale)
+		const AXIS_MIN_MS = 1, AXIS_MAX_MS = 2000;
+		const logMin = Math.log10(AXIS_MIN_MS);
+		const logMax = Math.log10(AXIS_MAX_MS);
+		const logSpan = logMax - logMin;
+		const timeToX = (ms: number) => {
+			const t = Math.max(AXIS_MIN_MS, Math.min(ms, AXIS_MAX_MS));
+			const n = (Math.log10(t) - logMin) / logSpan;
+			return L + n * plotW;
+		};
+
+		// Values (ms)
+		const A = Math.max(1, Math.round(ampEnvAttackMs.value));
+		const D = Math.max(1, Math.round(ampEnvDecayMs.value));
+
+		// Axes
+		ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+		ctx.strokeStyle = ink; ctx.globalAlpha = 0.25; ctx.lineWidth = 1;
+		ctx.beginPath(); ctx.moveTo(L, T + plotH); ctx.lineTo(L + plotW, T + plotH); ctx.stroke();
+		ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L + plotW, T); ctx.stroke();
+		ctx.globalAlpha = 1;
+
+		// Envelope: attack (linear), decay (exp to ~-60 dB)
+		const tau = D / Math.log(1000); // D ≈ time to -60 dB
+
+		ctx.lineWidth = 2;
+		ctx.strokeStyle = ink;
+		ctx.beginPath();
+
+		// ---- Attack: draw exact end point so tiny A still moves visibly ----
+		const ax = timeToX(A);
+		ctx.moveTo(L, T + plotH);  // start at baseline (0 ms)
+		ctx.lineTo(ax, T);         // straight up to peak at A ms
+
+		// ---- Decay: dense sampling in time so sub-7ms attacks also look right ----
+		// pick a step that guarantees >= 3–4 samples per CSS pixel in time
+		const STEP_MS = Math.max(0.25, AXIS_MAX_MS / (plotW * 4)); // ~0.5–1.5 ms typical
+		for (let ms = A; ms <= AXIS_MAX_MS; ms += STEP_MS) {
+			const t = ms - A;
+			const amp = Math.exp(-t / tau);                 // 1 -> ~0 by D ms
+			const x = timeToX(ms);
+			const y = T + (1 - Math.min(1, Math.max(0, amp))) * plotH;
+			ctx.lineTo(x, y);
+		}
+		ctx.stroke();
+
+		// Labels & tick
+		ctx.font = `700 11px Cousine, ui-monospace, monospace`;
+		ctx.fillStyle = ink; ctx.globalAlpha = 0.9; ctx.textAlign = 'left';
+		ctx.fillText('Amplitude Envelope (Attack → Decay)', L, 12);
+
+		ctx.globalAlpha = 0.85; ctx.textAlign = 'center';
+		ctx.fillText(`${A} ms`, ax, H - 4);
+		ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(ax, T); ctx.lineTo(ax, T + plotH); ctx.stroke();
+		ctx.globalAlpha = 1;
+
+		// Fixed time scale labels
+		ctx.textAlign = 'left'; ctx.fillText('1 ms', L, H - 4);
+		ctx.textAlign = 'right'; ctx.fillText('2000 ms', L + plotW, H - 4);
+	}
+
+	draw();
+}
+
+
 onMounted(() => {
 	loadAllSamples();
 	generateNoiseBuffers();
@@ -1023,7 +1239,7 @@ onMounted(() => {
 	startScope();
 	startSpectrogram();
 	startTuner();
-
+	startEnvViz();
 	// window.addEventListener('keydown', onGlobalKeydown);
 	window.addEventListener('keydown', onGlobalKeydown, { capture: true });
 	window.addEventListener('keyup', onGlobalKeyup, { capture: true });
@@ -3145,5 +3361,7 @@ driveShaper.curve = (() => {
 	position: relative;
 }
 
-.mpc-screen__lcd > canvas { image-rendering: pixelated; }
+.mpc-screen__lcd>canvas {
+	image-rendering: pixelated;
+}
 </style>

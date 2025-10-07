@@ -13,8 +13,16 @@
     <div class="pt-knob-row">
       <!-- Attack -->
       <div class="position-relative text-center">
-        <Knob v-model="attackNorm" label="Attack" size="small" :min="0" :max="100" :step="1" :disabled="!localEnabled"
-          :color="color" @knobStart="activeKnob = 'attack'" @knobEnd="activeKnob = null" />
+        <Knob
+          v-model="attackNorm"
+          label="Attack"
+          size="small"
+          :min="0" :max="100" :step="1"
+          :disabled="!localEnabled"
+          :color="color"
+          @knobStart="onAttackStart"
+          @knobEnd="onAttackEnd"
+        />
         <span v-if="activeKnob === 'attack'" class="custom-tooltip">
           {{ Math.round(attackMsLocal) }} ms
         </span>
@@ -22,8 +30,16 @@
 
       <!-- Decay -->
       <div class="position-relative text-center">
-        <Knob v-model="decayNorm" label="Decay" size="small" :min="0" :max="100" :step="1" :disabled="!localEnabled"
-          :color="color" @knobStart="activeKnob = 'decay'" @knobEnd="activeKnob = null" />
+        <Knob
+          v-model="decayNorm"
+          label="Decay"
+          size="small"
+          :min="0" :max="100" :step="1"
+          :disabled="!localEnabled"
+          :color="color"
+          @knobStart="onDecayStart"
+          @knobEnd="onDecayEnd"
+        />
         <span v-if="activeKnob === 'decay'" class="custom-tooltip">
           {{ Math.round(decayMsLocal) }} ms
         </span>
@@ -65,6 +81,11 @@ const emit = defineEmits<{
   (e: 'update:enabled', v: boolean): void
   (e: 'update:attackMs', v: number): void
   (e: 'update:decayMs', v: number): void
+  // new: surface knob press/release so parent can react
+  (e: 'attack-knob-start'): void
+  (e: 'attack-knob-end'): void
+  (e: 'decay-knob-start'): void
+  (e: 'decay-knob-end'): void
 }>()
 
 const localEnabled = ref(props.enabled)
@@ -98,6 +119,24 @@ watch(decayNorm, n => {
 })
 
 const activeKnob = ref<null | 'attack' | 'decay'>(null)
+
+// Emitters that also manage the tooltip state
+function onAttackStart() {
+  activeKnob.value = 'attack'
+  emit('attack-knob-start')
+}
+function onAttackEnd() {
+  activeKnob.value = null
+  emit('attack-knob-end')
+}
+function onDecayStart() {
+  activeKnob.value = 'decay'
+  emit('decay-knob-start')
+}
+function onDecayEnd() {
+  activeKnob.value = null
+  emit('decay-knob-end')
+}
 
 // helpers
 function clampMs(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)) }

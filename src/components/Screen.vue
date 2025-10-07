@@ -13,6 +13,10 @@
 
                 <!-- Tuner canvas -->
                 <canvas v-show="view === 'tuner'" ref="lcdTuner" aria-hidden="true"></canvas>
+
+                <!-- Envelope canvas -->
+                <canvas v-show="view === 'env'" ref="lcdEnv" aria-hidden="true"></canvas>
+
             </div>
         </div>
 
@@ -25,21 +29,30 @@
 </template>
 
 <script setup>
-import { ref, defineExpose } from 'vue'
+import { ref, defineExpose, defineEmits, defineProps } from 'vue'
 
 const props = defineProps({
     text: { type: String, default: 'HARP  2' },
-    view: { type: String, default: 'scope' }, // 'text' | 'scope' | 'spec' | 'tuner'
-    activeKey: { type: Number, default: 1 }
+    // includes 'env' in the comment for clarity; runtime is fine with String
+    view: { type: String, default: 'scope' }, // 'text' | 'scope' | 'spec' | 'tuner' | 'env'
+    activeKey: { type: Number, default: 1 }   // ← NEW: fixes the warning and lets F-keys highlight
 })
+
+defineEmits(['fkey']) // optional but nice for clarity/type hints
 
 const lcdScope = ref(null)
 const lcdSpec = ref(null)
 const lcdTuner = ref(null)
-defineExpose({ scopeCanvas: lcdScope, specCanvas: lcdSpec, tunerCanvas: lcdTuner })
+const lcdEnv = ref(null)
 
-
+defineExpose({
+    scopeCanvas: lcdScope,
+    specCanvas: lcdSpec,
+    tunerCanvas: lcdTuner,
+    envCanvas: lcdEnv
+})
 </script>
+
 
 
 <style scoped>
