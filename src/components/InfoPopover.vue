@@ -219,10 +219,6 @@ onBeforeUnmount(() => {
     margin-bottom: 8px;
 }
 
-/* .info-popover__header.is-draggable {
-    cursor: move;
-} */
-
 .info-popover__header.is-draggable {
     cursor: grab;
 }

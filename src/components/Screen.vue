@@ -35,7 +35,7 @@ const props = defineProps({
     text: { type: String, default: 'HARP  2' },
     // includes 'env' in the comment for clarity; runtime is fine with String
     view: { type: String, default: 'scope' }, // 'text' | 'scope' | 'spec' | 'tuner' | 'env'
-    activeKey: { type: Number, default: 1 }   // ← NEW: fixes the warning and lets F-keys highlight
+    activeKey: { type: Number, default: 1 }
 })
 
 defineEmits(['fkey']) // optional but nice for clarity/type hints

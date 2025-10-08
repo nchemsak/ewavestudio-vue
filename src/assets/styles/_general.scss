@@ -21,18 +21,26 @@ body {
 html,
 body {
     width: 100%;
-    min-height: 100%; /* ensures it covers at least viewport */
-    height: auto; /* allows it to grow beyond viewport */
+    min-height: 100%;
+    /* ensures it covers at least viewport */
+    height: auto;
+    /* allows it to grow beyond viewport */
 }
 
 body {
     font-family: monospace;
 }
 
+*:not(input):not(textarea):not([contenteditable="true"])::selection {
+    background: transparent;
+    color: inherit;
+}
 
-::selection {
-  background: transparent;
-  color: inherit;
+input::selection,
+textarea::selection,
+[contenteditable="true"]::selection {
+    background: Highlight;
+    color: HighlightText;
 }
 
 input[type="range"] {
@@ -49,8 +57,10 @@ input[type="range"] {
 
 .preset-banks {
     position: fixed;
-    top: 100px; /* Distance from top of viewport */
-    left: 0px; /* Distance from left of viewport */
+    top: 100px;
+    /* Distance from top of viewport */
+    left: 0px;
+    /* Distance from left of viewport */
     padding: 20px;
     display: block;
     background-color: white;
@@ -70,12 +80,14 @@ input[type="range"] {
     align-items: flex-end;
     gap: 2rem;
     padding: 3rem;
+
     .speaker {
         width: 100px;
         position: relative;
         z-index: 2;
         transform: translateY(-10px);
     }
+
     .speaker::after {
         content: "";
         position: absolute;
@@ -91,6 +103,7 @@ input[type="range"] {
         opacity: 0.6;
     }
 }
+
 .selected {
     background-color: RGBA(95, 186, 255, 1);
     border: 0px;

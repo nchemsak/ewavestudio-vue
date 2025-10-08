@@ -65,7 +65,6 @@
                 </div>
             </div>
 
-            <!-- overlay to close menu when clicking outside -->
             <!-- Advanced menu -->
             <div v-if="advancedOpen" class="mm-menu" @click.stop
                 :style="{ left: (advPos?.x ?? 0) + 'px', top: (advPos?.y ?? 0) + 'px' }" role="menu">
@@ -185,7 +184,7 @@ function buildCandidateMidiPool(root: string, scaleName: string, minOct: number,
             const semi = (rootSemi + step) % 12;
             const midi = base + semi;
             const f = midiToFreq(midi);
-            if (f >= fMin && f <= fMax) pool.push(midi); // ← use fMin/fMax here
+            if (f >= fMin && f <= fMax) pool.push(midi);
         }
     }
     if (!pool.length) {
@@ -555,7 +554,6 @@ function resetAdvanced() {
     flex: 1 1 0;
 }
 
-/* Head grid */
 .mm-head {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -563,7 +561,6 @@ function resetAdvanced() {
     align-items: end;
 }
 
-/* Field stack */
 .mm-field {
     display: flex;
     flex-direction: column;
@@ -577,7 +574,6 @@ function resetAdvanced() {
     font-size: .9rem;
 }
 
-/* Hint text under head */
 .mm-hint {
     margin-top: 6px;
     color: var(--pt-muted);
@@ -600,7 +596,6 @@ function resetAdvanced() {
     min-width: 160px;
 }
 
-/* Segmented control */
 .mm-seg {
     display: flex;
     border-radius: 12px;
@@ -657,14 +652,11 @@ function resetAdvanced() {
 
 .mm-ghost-btn {
     color: var(--pt-text);
-    /* background: #1d2030;
-    border: 1px solid rgba(255, 255, 255, .08); */
-
     background: var(--pt-surface-1);
     border: 1px solid var(--pt-hairline);
 }
 
-/* Arp block */
+/* Arp  */
 .mm-group {
     margin-top: 10px;
     padding-top: 10px;
@@ -717,9 +709,6 @@ function resetAdvanced() {
 .mm-menu {
     position: absolute;
     min-width: 280px;
-    /* background: #0e111a; */
-    /* color: var(--pt-text); */
-    /* border: 1px solid rgba(255, 255, 255, .08); */
     border-radius: 12px;
     box-shadow: 0 12px 40px rgb(0 0 0 / .45);
     padding: 10px;
@@ -769,8 +758,6 @@ function resetAdvanced() {
     width: var(--sw);
     height: 22px;
     border-radius: 999px;
-    /* background: #2a2f41; */
-    /* border: 1px solid rgba(255, 255, 255, .08); */
     position: relative;
     cursor: pointer;
     background: var(--pt-surface-2);
@@ -808,9 +795,6 @@ function resetAdvanced() {
 :deep(select.pt-select) {
     height: 36px;
     border-radius: 12px;
-    /* background: #1d2030 !important; */
-    /* color: var(--pt-text) !important; */
-    /* border: 1px solid rgba(255, 255, 255, .08) !important; */
     padding: 8px 36px 8px 12px !important;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .03), 0 2px 10px rgb(0 0 0 / .25) !important;
     font-size: .9rem;
@@ -843,7 +827,6 @@ function resetAdvanced() {
         grid-template-columns: 1fr 1fr;
     }
 }
-
 
 .arp-btn {
     background: none;

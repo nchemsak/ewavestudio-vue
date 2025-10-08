@@ -1,5 +1,9 @@
 <template>
 	<div class="drum-sequencer" :class="currentTheme" :style="padSizeStyle">
+		<!-- Save/Open/Import/Export toolbar -->
+		<section class="pt-card" style="margin-bottom:12px">
+			<ProjectControls />
+		</section>
 		<!-- MAIN GRID -->
 		<div class="ds-grid">
 
@@ -66,7 +70,6 @@
 							<button class="pt-seg-btn" :class="{ 'is-active': stepLength === 32 }"
 								@click="setStepLength(32)">32</button>
 						</div>
-
 						<div class="pt-rule"></div>
 
 						<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
@@ -121,7 +124,6 @@
 						:waveforms="(synthInstrument as any).waveforms"
 						:defaultWave="selectedWaveform as OscillatorType" @open-pad-settings="({ name, index, anchorRect }) =>
 							openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
-
 
 				</div>
 			</section>
@@ -181,17 +183,13 @@
 							</div>
 						</div>
 
-
 						<div class="pt-rule gen-divider" aria-hidden="true"></div>
 
 						<!-- Noise -->
 						<div class="gen-panel noise-panel">
-							<!-- one row: dot + W/P/B + Amount -->
 							<div class="noise-inline">
 								<button class="pt-dot" :class="{ 'is-on': noiseEnabled }" :aria-pressed="noiseEnabled"
 									title="Toggle noise" @click="noiseEnabled = !noiseEnabled"></button>
-
-								<!-- Keep the module toggle hidden; we control enable via the dot -->
 								<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
 									v-model:amount="noiseAmount" :color="'#9C27B0'" />
 							</div>
@@ -201,8 +199,6 @@
 
 				<div class="module sound">
 					<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
-						<!-- <EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
-							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" /> -->
 						<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
 							@attack-knob-start="onEnvKnobStart" @attack-knob-end="onEnvKnobEnd"
@@ -212,23 +208,19 @@
 					</CollapsibleCard>
 				</div>
 
-
 				<!-- LFO -->
 				<div class="module mod">
 					<CollapsibleCard id="mod" title="LFO" v-model="collapsibleState['mod']">
-
 						<template #tools>
 							<button class="pt-info-icon" aria-label="Advanced options"
 								@click="lfoRef?.openAdvanced($event)">⋯</button>
 						</template>
-
 						<LFOGroup ref="lfoRef" :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate"
 							v-model:depth="lfoDepth" v-model:target="lfoTarget" v-model:waveform="lfoWaveform"
 							v-model:syncEnabled="lfoSync" v-model:division="lfoDivision"
 							v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
 							color="#00BCD4" :targets="['pitch', 'gain', 'filter', 'pan']"
 							:divisions="['1/1', '1/2', '1/4', '1/8', '1/16', '1/8T', '1/8.']" />
-
 					</CollapsibleCard>
 				</div>
 
@@ -245,10 +237,7 @@
 					</CollapsibleCard>
 				</div>
 
-
-
 				<div class="module fx fx-adv-anchor" ref="fxAnchor">
-					<!-- <div class="module fx"> -->
 					<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
 						<template #tools>
 							<button class="pt-info-icon" aria-label="Advanced options"
@@ -269,9 +258,8 @@
 								v-model:driveType="driveType" v-model:driveAmount="driveAmount"
 								v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
 						</section>
-						<!-- Effects Advanced -->
 
-						<!-- Effects — Advanced (teleported to body) -->
+						<!-- Effects — Advanced -->
 						<Teleport to="body">
 							<div v-if="fxAdvanced.open">
 								<div class="mm-overlay" @click="fxAdvanced.open = false"></div>
@@ -306,11 +294,8 @@
 								</div>
 							</div>
 						</Teleport>
-
-
 						<!-- overlay to close -->
 						<div v-if="fxAdvanced.open" class="mm-overlay" @click="fxAdvanced.open = false"></div>
-
 					</CollapsibleCard>
 				</div>
 			</section>
@@ -454,11 +439,17 @@ import WaveButton from './WaveButton.vue'
 import MelodyMaker from './MelodyMaker.vue';
 // import SequencerKeyboard from './SequencerKeyboard.vue';
 
+// Saving Imports
+import { useProjectStore } from "../stores/projectStore";
+import { listProjects as repoList } from "../lib/storage/projects";
+import { downloadJson, importJson } from "../lib/storage/exportImport";
+import { useAutosave } from '../composables/useAutosave';
+import ProjectControls from './ProjectControls.vue';
+
 
 // IMPORTS END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-
 
 //SEQUENCER TOOLS START
 // --- Step toolbar state ---
@@ -493,9 +484,10 @@ const padSizeStyle = computed(() => ({
 	'--padTEST-size': stepLength.value === 16 ? '41px' : '17px'
 }));
 
-
-
 //SEQUENCER TOOLS END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 const lfoRef = ref<InstanceType<typeof LFOGroup> | null>(null);
 const lfoRetrigger = ref(false)
 const lfoBipolar = ref(false)
@@ -505,7 +497,6 @@ const lfoBipolar = ref(false)
 // FX Advanced 
 const fxAdvanced = reactive({ open: false, x: 0, y: 0 });
 
-// script setup
 const fxAnchor = ref<HTMLElement | null>(null);
 
 function openFxAdvanced(e: MouseEvent) {
@@ -521,13 +512,10 @@ function onFxEsc(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onFxEsc, { capture: true }));
 onBeforeUnmount(() => window.removeEventListener('keydown', onFxEsc, { capture: true } as any));
 
-
-
 function resetDelayDrive() {
 	// Delay defaults
 	delayFeedback.value = 0.3;
 	delayMix.value = 0.3;
-	// Respect current sync mode: if synced, delayTime is computed; if free, set a sane free-time.
 	if (!delaySync.value) delayTime.value = 0.2;
 
 	// Drive defaults
@@ -544,15 +532,15 @@ function resetDelayDrive() {
 // UI state for header tabs + menus
 const ui = reactive({
 	generatorsTab: 'osc' as 'osc' | 'noise',
-	soundTab: 'env' as 'env' | 'filter',        // you can wire this next
-	movementTab: 'lfo' as 'lfo' | 'unison',     // you can wire this next
+	soundTab: 'env' as 'env' | 'filter',
+	movementTab: 'lfo' as 'lfo' | 'unison',
 	fxTab: 'delay' as 'delay' | 'drive',
 	menus: {
 		fx: { open: false, x: 0, y: 0 },
 	}
 });
 
-// Generators tab + (optional) info popover
+// Generators tab
 const genTab = ref<'osc' | 'noise'>('osc');
 const genInfoOpen = ref(false);
 
@@ -603,10 +591,10 @@ function onDocClick(e: MouseEvent) {
 }
 // PANEL MENU END
 
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 //Sequencer Accordian BEGIN
+
 const seqOpen = ref(localStorage.getItem('seqOpen') !== 'false');
 watch(seqOpen, v => localStorage.setItem('seqOpen', String(v)));
 
@@ -644,7 +632,6 @@ const allClosed = computed(() => collapseIds.every(id => collapsibleState[id] ==
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-
 // Theming START
 const currentTheme = ref(''); // '', 'theme-light', or 'theme-synthwave'
 // Theming END
@@ -670,7 +657,7 @@ const ROOT_TO_SEMITONE: Record<string, number> = {
 	'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
 };
 
-const defaultOctaveForPads = 3; // A3 was the old default (220 Hz)
+const defaultOctaveForPads = 3;
 const selectedKeyRoot = ref<'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B'>('A');
 
 function midiToFreq(m: number) { return A4 * Math.pow(2, (m - 69) / 12); }
@@ -714,11 +701,10 @@ function midiToNamePref(m: number, mode: AccidentalMode = accidentalMode.value) 
 // MPC Screen BEGIN
 const lcdText = ref('HARP  2');
 const activeFKey = ref<number>(1);
-// const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner'>('scope');
 const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner' | 'env'>('scope');
 const screen = ref<InstanceType<typeof MpcScreen> | null>(null);
 
-// Remember previous screen so we can restore it after the knob is released
+// Remember previous screen so can be restored after the knob is released
 const prevScreen = ref<{ view: typeof lcdView.value; fkey: number } | null>(null);
 // Support overlapping holds (attack & decay) without flicker
 let envHoldCount = 0;
@@ -743,7 +729,6 @@ function onEnvKnobStart() {
 function onEnvKnobEnd() {
 	envHoldCount = Math.max(0, envHoldCount - 1);
 	if (envHoldCount === 0) {
-		// Only restore if the user didn't manually change screens during the hold
 		const prev = prevScreen.value;
 		if (prev && !userOverrodeWhileHeld) {
 			lcdView.value = prev.view;
@@ -754,7 +739,6 @@ function onEnvKnobEnd() {
 	}
 }
 
-
 function fitCanvasToBox(canvas, ctx) {
 	const dpr = window.devicePixelRatio || 1;
 	const rect = canvas.getBoundingClientRect();
@@ -763,8 +747,6 @@ function fitCanvasToBox(canvas, ctx) {
 
 	// Only resize when it actually changed.
 	if (canvas.width !== w || canvas.height !== h) {
-		// If you really want to preserve content during a resize,
-		// copy via a temporary offscreen canvas (safe), not self-draw.
 		const prev = document.createElement('canvas');
 		prev.width = canvas.width;
 		prev.height = canvas.height;
@@ -780,7 +762,6 @@ function fitCanvasToBox(canvas, ctx) {
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.scale(dpr, dpr);
 
-		// Optional: redraw previous content stretched; harmless if you skip it.
 		if (prev.width && prev.height) ctx.drawImage(prev, 0, 0, prev.width, prev.height, 0, 0, canvas.clientWidth, canvas.clientHeight);
 	} else {
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -788,8 +769,7 @@ function fitCanvasToBox(canvas, ctx) {
 	}
 }
 
-
-/** Toggle by F-keys */
+// Toggle by F-keys
 function handleFKey(n: number) {
 	activeFKey.value = n;
 	if (n === 1) lcdView.value = 'scope';
@@ -813,10 +793,9 @@ function startScope() {
 		if (lcdView.value !== 'scope') return;
 
 		fitCanvasToBox(canvas, ctx);
-		// const W = canvas.clientWidth;
-		// const H = canvas.clientHeight;
 		const W = Math.round(canvas.clientWidth);
 		const H = Math.round(canvas.clientHeight);
+
 		// theme-aware background + trace style
 		const bg = readVar('--mpc-lcd-bg', '#b9bcba');
 		const trace = readVar('--mpc-scope-trace', '#111');
@@ -845,8 +824,6 @@ function startScope() {
 	}
 	draw();
 }
-
-
 
 function startSpectrogram() {
 	const scr = screen.value;
@@ -893,30 +870,20 @@ function startSpectrogram() {
 		const W = canvas.clientWidth;
 		const H = canvas.clientHeight;
 
-		// Refresh theme if it changed (e.g., you switched .theme-* class)
+		// Refresh theme if it changed (e.g., switched .theme-* class)
 		const maybeNew = readTheme();
 		const sig = signatureOf(maybeNew);
 		const themeChanged = sig !== lastSig;
 		if (themeChanged) {
 			theme = maybeNew;
 			lastSig = sig;
-			// wipe so old colors don't smear across after the palette swap
 			ctx.save();
 			ctx.setTransform(1, 0, 0, 1, 0, 0); // ensure fillRect uses CSS px after fitCanvasToBox
 			ctx.fillStyle = theme.bg;
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
 			ctx.restore();
 		} else {
-			// Scroll existing image left by 1px
-			// ctx.drawImage(canvas, 1, 0, W - 1, H, 0, 0, W - 1, H);
-			// Scroll existing image left by 1 CSS pixel (DPR-safe)
-			// const dpr = window.devicePixelRatio || 1;
-			// ctx.save();
-			// ctx.setTransform(1, 0, 0, 1, 0, 0);              // device-pixel space
-			// ctx.drawImage(canvas, 1 * dpr, 0, canvas.width - 1 * dpr, canvas.height,
-			// 	0, 0, canvas.width - 1 * dpr, canvas.height);
-			// ctx.restore();
-			// inside startSpectrogram() draw():
+
 			const dpr = window.devicePixelRatio || 1;
 
 			// copy old image left by *one CSS pixel* without resampling
@@ -1003,12 +970,10 @@ function startTuner() {
 				const hz = inst.pitches?.[step] ?? 0;
 				if (hz > 0) {
 					latchedHz = hz;
-					// latchedNote = midiToName(freqToMidi(hz));
 					latchedNote = midiToNamePref(freqToMidi(hz));
 
 				}
 			}
-			// if the step is empty or muted, keep the existing latched values
 		}
 
 		// --- draw using latched values ---
@@ -1044,102 +1009,6 @@ function startEnvViz() {
 
 	ctx.imageSmoothingEnabled = false;
 
-	//   function draw() {
-	//     requestAnimationFrame(draw);
-	//     if (lcdView.value !== 'env') return;
-
-	//     fitCanvasToBox(canvas, ctx);
-	//     const W = Math.round(canvas.clientWidth);
-	//     const H = Math.round(canvas.clientHeight);
-	//     ctx.clearRect(0, 0, W, H);
-
-	//     // Theme
-	//     const css = getComputedStyle(canvas);
-	//     const bg = (css.getPropertyValue('--mpc-lcd-bg') || '#0f141b').trim();
-	//     const ink = (css.getPropertyValue('--mpc-scope-trace') || '#c7d6ff').trim();
-
-	//     const L = 14, R = 10, T = 10, B = 16;
-	//     const plotW = Math.max(1, W - L - R);
-	//     const plotH = Math.max(1, H - T - B);
-
-	//     // Fixed time axis (log scale)
-	//     const AXIS_MIN_MS = 1;
-	//     const AXIS_MAX_MS = 2000; // keep constant to make differences obvious
-	//     const logMin = Math.log10(AXIS_MIN_MS);
-	//     const logMax = Math.log10(AXIS_MAX_MS);
-	//     const logSpan = logMax - logMin;
-	//     const timeToX = (ms: number) => {
-	//       const t = Math.max(AXIS_MIN_MS, Math.min(ms, AXIS_MAX_MS));
-	//       const n = (Math.log10(t) - logMin) / logSpan; // 0..1
-	//       return L + n * plotW;
-	//     };
-
-	//     // Values (ms)
-	//     const A = Math.max(1, Math.round(ampEnvAttackMs.value));
-	//     const D = Math.max(1, Math.round(ampEnvDecayMs.value));
-
-	//     // Axes
-	//     ctx.fillStyle = bg;
-	//     ctx.fillRect(0, 0, W, H);
-	//     ctx.strokeStyle = ink;
-	//     ctx.globalAlpha = 0.25;
-	//     ctx.lineWidth = 1;
-	//     ctx.beginPath(); ctx.moveTo(L, T + plotH); ctx.lineTo(L + plotW, T + plotH); ctx.stroke();
-	//     ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L + plotW, T); ctx.stroke();
-	//     ctx.globalAlpha = 1;
-
-	//     // Envelope (attack linear, decay exponential to ~-60 dB)
-	//     const tau = D / Math.log(1000); // if D = time to -60 dB
-	//     const totalMs = AXIS_MAX_MS;
-
-	//     ctx.lineWidth = 2;
-	//     ctx.strokeStyle = ink;
-	//     ctx.beginPath();
-
-	//     // Start at 0 ms
-	//     let first = true;
-
-	//     const SAMPLES = Math.max(200, Math.floor(plotW)); // 1 px-ish sampling
-	//     for (let i = 0; i <= SAMPLES; i++) {
-	//       const ms = (i / SAMPLES) * totalMs; // 0..AXIS_MAX_MS in real ms
-
-	//       let amp = 0;
-	//       if (ms <= A) {
-	//         // linear up to 1.0 during attack
-	//         amp = ms / A;
-	//       } else {
-	//         // exponential decay starting after attack
-	//         const t = ms - A;
-	//         amp = Math.exp(-t / tau); // 1 -> ~0 by D ms
-	//       }
-
-	//       const x = timeToX(ms);
-	//       const y = T + (1 - Math.min(1, Math.max(0, amp))) * plotH;
-
-	//       if (first) { ctx.moveTo(x, y); first = false; }
-	//       else { ctx.lineTo(x, y); }
-	//     }
-	//     ctx.stroke();
-
-	//     // Labels & attack tick
-	//     ctx.font = `700 11px Cousine, ui-monospace, monospace`;
-	//     ctx.fillStyle = ink;
-	//     ctx.globalAlpha = 0.9;
-	//     ctx.textAlign = 'left';
-	//     ctx.fillText('Amplitude Envelope (Attack → Decay)', L, 12);
-
-	//     ctx.globalAlpha = 0.85;
-	//     ctx.textAlign = 'center';
-	//     const ax = timeToX(A);
-	//     ctx.fillText(`${A} ms`, ax, H - 4);
-	//     ctx.globalAlpha = 0.35;
-	//     ctx.beginPath(); ctx.moveTo(ax, T); ctx.lineTo(ax, T + plotH); ctx.stroke();
-	//     ctx.globalAlpha = 1;
-
-	//     // Fixed time scale labels
-	//     ctx.textAlign = 'left';  ctx.fillText('1 ms', L, H - 4);
-	//     ctx.textAlign = 'right'; ctx.fillText('2000 ms', L + plotW, H - 4);
-	//   }
 	function draw() {
 		requestAnimationFrame(draw);
 		if (lcdView.value !== 'env') return;
@@ -1187,13 +1056,12 @@ function startEnvViz() {
 		ctx.strokeStyle = ink;
 		ctx.beginPath();
 
-		// ---- Attack: draw exact end point so tiny A still moves visibly ----
+		// Attack
 		const ax = timeToX(A);
 		ctx.moveTo(L, T + plotH);  // start at baseline (0 ms)
 		ctx.lineTo(ax, T);         // straight up to peak at A ms
 
-		// ---- Decay: dense sampling in time so sub-7ms attacks also look right ----
-		// pick a step that guarantees >= 3–4 samples per CSS pixel in time
+		// Decay
 		const STEP_MS = Math.max(0.25, AXIS_MAX_MS / (plotW * 4)); // ~0.5–1.5 ms typical
 		for (let ms = A; ms <= AXIS_MAX_MS; ms += STEP_MS) {
 			const t = ms - A;
@@ -1214,21 +1082,18 @@ function startEnvViz() {
 		ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(ax, T); ctx.lineTo(ax, T + plotH); ctx.stroke();
 		ctx.globalAlpha = 1;
 
-		// Fixed time scale labels
+		// time scale labels
 		ctx.textAlign = 'left'; ctx.fillText('1 ms', L, H - 4);
 		ctx.textAlign = 'right'; ctx.fillText('2000 ms', L + plotW, H - 4);
 	}
-
 	draw();
 }
-
 
 onMounted(() => {
 	loadAllSamples();
 	generateNoiseBuffers();
 	initDriveNow();
 
-	// nicer visuals
 	analyser.smoothingTimeConstant = 0.8;
 	analyser.minDecibels = -90;
 	analyser.maxDecibels = -10;
@@ -1240,7 +1105,6 @@ onMounted(() => {
 	startSpectrogram();
 	startTuner();
 	startEnvViz();
-	// window.addEventListener('keydown', onGlobalKeydown);
 	window.addEventListener('keydown', onGlobalKeydown, { capture: true });
 	window.addEventListener('keyup', onGlobalKeyup, { capture: true });
 	document.addEventListener('click', onDocClick, { capture: true })
@@ -1269,7 +1133,6 @@ const padPopover = ref({
 });
 
 function openPadSettings(name: string, index: number, evt: MouseEvent) {
-	// set which pad we’re editing (so currentPadHz points to the right cell)
 	padSettings.name = name;
 	padSettings.index = index;
 
@@ -1293,17 +1156,11 @@ const padSettings = reactive({
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// Reuse shared AudioContext
-// const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
 const AC = window.AudioContext || (window as any).webkitAudioContext;
 const audioCtx = new AC();
 const activeKnob = ref(null);
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
-// const synthDecay = ref(0.4);
-
-
 
 const selectedWaveform = ref("sine");
 const waves = ['sine', 'triangle', 'sawtooth', 'square'] as const;
@@ -1326,9 +1183,6 @@ function randomizeSynthPadWaves() {
 function clearSynthPadWaves() {
 	const inst = synthInstrument.value as any;
 	if (!inst) return;
-	// Option A: remove array to fully fall back to selectedWaveform
-	// delete inst.waveforms;
-	// Option B (keeps an explicit "all the same" map):
 	inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as any);
 }
 
@@ -1353,7 +1207,7 @@ const isFineAdjust = ref(false);
 function nearestNote(hz) { return midiToNamePref(freqToMidi(hz)); }
 
 function midiOf(octave, semitone) {
-	return (octave + 1) * 12 + semitone; // same scheme you're using
+	return (octave + 1) * 12 + semitone;
 }
 function freqOf(octave, semitone) {
 	return midiToFreq(midiOf(octave, semitone));
@@ -1417,7 +1271,6 @@ const instruments = ref([
 	},
 ]);
 
-
 const DEFAULT_CHANNELS = new Set(['kick', 'snare', 'hihat', 'synth-voice']);
 function canDelete(name: string) { return !DEFAULT_CHANNELS.has(name); }
 
@@ -1425,7 +1278,6 @@ function triggerFilePicker(inst: any) {
 	const input = document.getElementById(`file-${inst.name}`) as HTMLInputElement | null;
 	input?.click();
 }
-
 
 const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
 const steps = computed<boolean[]>({
@@ -1462,8 +1314,6 @@ const currentPadWave = computed<OscillatorType>({
 	}
 });
 
-
-
 const currentPadHz = computed({
 	get() {
 		const inst = instruments.value.find(i => i.name === padSettings.name);
@@ -1482,7 +1332,6 @@ const currentPadHzDisplay = computed({
 		}
 	}
 });
-
 
 const availableOctaves = computed(() => {
 	const octs = [];
@@ -1513,8 +1362,6 @@ const orderedChannels = computed(() => {
 	rows.push(ADD_ROW); // Add Channel always after customs
 	return rows;
 });
-
-
 
 // Global Octave controls
 function canShiftOctave(hz, deltaOct) {
@@ -1581,8 +1428,8 @@ const filterEnabled = ref(true);
 const filterCutoff = ref(5000); // Hz, default cutoff
 const filterResonance = ref(0.5); // Q factor
 
-const ampEnvAttackMs = ref(20)   // ~20 ms default (feel free to tweak)
-const ampEnvDecayMs = ref(400)  // ~400 ms
+const ampEnvAttackMs = ref(20)   // 20 ms
+const ampEnvDecayMs = ref(400)  // 400 ms
 
 const synthAttack = computed(() => ampEnvAttackMs.value / 1000)
 const synthDecay = computed(() => ampEnvDecayMs.value / 1000)
@@ -1700,7 +1547,6 @@ function applyDelayEnabled(on) {
 	}
 }
 
-
 //Delay END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -1760,7 +1606,6 @@ watch(driveMix, val => {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-
 // Unison / Detune START
 const unisonEnabled = ref(true);
 const unisonVoices = ref(1);   // 1–6
@@ -1779,7 +1624,7 @@ const currentStep = ref(-1);
 
 // LFO START
 const lfoEnabled = ref(true);
-const lfoRate = ref(5);                  // Hz (when free)
+const lfoRate = ref(5);
 const lfoDepth = ref(0);
 const lfoTarget = ref<'pitch' | 'gain' | 'filter' | 'pan' | 'resonance'>('pitch');
 
@@ -1842,7 +1687,7 @@ function ensureLfoSource() {
 	const hz = currentLfoHz();
 
 	if (lfoWaveform.value === 'random') {
-		// Sample & Hold via ConstantSource + JS timer (lightweight for this use)
+		// Sample & Hold via ConstantSource + JS timer
 		lfoSnh = audioCtx.createConstantSource();
 		lfoSnh.offset.value = (Math.random() * 2 - 1);
 		lfoSnh.connect(lfoGain);
@@ -1864,14 +1709,13 @@ function ensureLfoSource() {
 }
 function startLfoIfNeeded(): void {
 	if (!lfoEnabled.value) return;
-	if (lfoOsc || lfoSnh) return; // already running
+	if (lfoOsc || lfoSnh) return;
 
 	if (audioCtx.state === 'running') {
 		ensureLfoSource();
 		return;
 	}
 
-	// If we’re not running yet, wait for the first resume (user gesture)
 	const onStateChange = () => {
 		if (audioCtx.state === 'running') {
 			ensureLfoSource();
@@ -1881,8 +1725,6 @@ function startLfoIfNeeded(): void {
 	audioCtx.addEventListener?.('statechange', onStateChange);
 }
 
-// init + react to changes
-// ensureLfoSource();
 
 watch(lfoEnabled, (on) => {
 	if (on) startLfoIfNeeded();
@@ -1935,7 +1777,7 @@ function applyDepthScale() {
 			lfoGain.gain.setValueAtTime(lfoDepth.value / 100, t);   // 0..1
 			break;
 		case 'gain':
-			lfoGain.gain.setValueAtTime(1, t); // <-- raw -1..+1 for tremolo mapping
+			lfoGain.gain.setValueAtTime(1, t);
 			break;
 		case 'filter':
 			lfoGain.gain.setValueAtTime(lfoDepth.value, t);         // Hz
@@ -1947,6 +1789,7 @@ function applyDepthScale() {
 }
 watch([lfoDepth, lfoTarget], applyDepthScale);
 applyDepthScale();
+
 // LFO END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -2048,8 +1891,6 @@ function stopEditingLabel(instrument) {
 	hoveredLabel.value = null;
 }
 
-
-
 const masterGain = audioCtx.createGain();
 masterGain.gain.value = volume.value;
 masterGain.connect(audioCtx.destination);
@@ -2058,14 +1899,13 @@ masterGain.connect(audioCtx.destination);
 
 // Oscilloscope BEGIN
 
-// --- scope/spectrogram analyser ---
 const analyser = audioCtx.createAnalyser();
 analyser.fftSize = 2048;
 const dataArray = new Uint8Array(analyser.fftSize);
 masterGain.connect(analyser);
 
-
 // Oscilloscope END
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function addCustomChannel() {
@@ -2081,8 +1921,6 @@ function addCustomChannel() {
 		buffer: null,
 		muted: false,
 		channelVolume: 0.5,
-		// steps: Array(16).fill(false),
-		// velocities: Array(16).fill(1.0),
 		steps: Array(stepLength.value).fill(false),
 		velocities: Array(stepLength.value).fill(1.0),
 	});
@@ -2134,15 +1972,6 @@ function togglePad(instrumentName, index) {
 	if (instrument) instrument.steps[index] = !instrument.steps[index];
 }
 
-// function playBuffer(buffer, time, velocity = 1) {
-// 	const source = audioCtx.createBufferSource();
-// 	source.buffer = buffer;
-// 	const gain = audioCtx.createGain();
-// 	gain.gain.value = volume.value * velocity;
-// 	source.connect(gain).connect(masterGain);
-// 	source.start(time);
-// }
-
 function playBuffer(buffer: AudioBuffer, time: number, amp = 1) {
 	const source = audioCtx.createBufferSource();
 	source.buffer = buffer;
@@ -2155,9 +1984,7 @@ function playBuffer(buffer: AudioBuffer, time: number, amp = 1) {
 function schedule() {
 	const now = audioCtx.currentTime;
 	const stepDuration = 60 / tempo.value / 4;
-
 	while (startTime < now + 0.1) {
-
 		instruments.value.forEach(inst => {
 			if (!inst.muted && inst.steps[stepIndex]) {
 				const vel = inst.velocities[stepIndex] ?? 1;
@@ -2179,14 +2006,12 @@ function schedule() {
 					playBuffer(inst.buffer, t, amp);
 				}
 			}
-
 		});
 
 		currentStep.value = stepIndex;
 		stepIndex = (stepIndex + 1) % stepLength.value;
 		startTime += stepDuration;
 	}
-
 	loopId = requestAnimationFrame(schedule);
 }
 
@@ -2278,7 +2103,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 				const minHz = 30;
 				const maxHz = audioCtx.sampleRate * 0.45; // ~0.45*Nyquist for headroom
 
-				// How far we can swing symmetrically without crossing bounds:
 				const maxDepth = Math.max(0, Math.min(f0 - minHz, maxHz - f0));
 				// Scale down requested depth if it would exceed the safe band:
 				const scale = (lfoDepth.value > 0) ? Math.min(1, maxDepth / lfoDepth.value) : 0;
@@ -2378,7 +2202,7 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		postAmpNode.connect(driveSum);
 	}
 
-	// ===== Noise (unchanged; not tremolo’d) =====
+	// ===== Noise =====
 	if (noiseEnabled.value && noiseAmount.value > 0) {
 		const noiseBuffer = noiseBuffers[noiseType.value];
 		if (noiseBuffer) {
@@ -2476,7 +2300,7 @@ function handleMouseUp() {
 
 async function loadAllSamples() {
 	for (const instrument of instruments.value) {
-		if (instrument.type === 'synth' || instrument.isCustom) continue; // << skip customs
+		if (instrument.type === 'synth' || instrument.isCustom) continue;
 		const path = `audio/${instrument.name}.mp3`;
 		try {
 			instrument.buffer = await loadSample(path);
@@ -2500,7 +2324,6 @@ function getPadStyle(instrument: any, index: number) {
 	if (!instrument.steps[index]) return { '--pad-on': 0 };
 
 	const pct = Math.round(instrument.velocities[index] * 100);
-	// samples don't have pitch; use a calm neutral hue (210 = blue-ish)
 	const hue = instrument.pitches ? hueFor(instrument.pitches[index] || MIN_PAD_HZ)
 		: 210;
 
@@ -2580,7 +2403,7 @@ function initDriveNow() {
 
 	// Ensure the shaper actually has a curve before any audio hits it
 	driveShaper.curve = generateDriveCurve(driveType.value, driveAmount.value);
-	driveShaper.oversample = '2x'; // optional
+	driveShaper.oversample = '2x';
 
 	// Anchor params so setTargetAtTime works consistently in all browsers
 	driveToneFilter.frequency.setValueAtTime(driveTone.value, t);
@@ -2590,7 +2413,6 @@ function initDriveNow() {
 	driveDry.gain.setValueAtTime(1 - driveMix.value, t);
 }
 
-// when the user turns Drive on during playback, pre-warm everything
 watch(driveEnabled, on => {
 	if (on) initDriveNow();
 });
@@ -2604,19 +2426,412 @@ driveShaper.curve = (() => {
 	return c;
 })();
 // Drive effect END
+
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+
+// SAVING BEGIN
+const project = useProjectStore();
+
+// Remember last opened project id
+watch(() => project.projectId, (id) => {
+	if (id) localStorage.setItem('ewave:lastProjectId', id);
+});
+
+watch(() => project.projectId, async () => {
+	// one-shot UI reset if requested by ProjectControls
+	const flag = localStorage.getItem('ewave:reset-ui-next');
+	if (flag === '1') {
+		localStorage.removeItem('ewave:reset-ui-next');
+		resetUiToFactoryDefaults();
+		// replace the blank store snapshot with the fresh UI defaults so autosave is coherent
+		project.data = buildSnapshot();
+		await project.save?.();
+	}
+});
+
+// Build a serializable snapshot
+function buildSnapshot() {
+	return {
+		meta: {
+
+		},
+		ui: {
+			currentTheme: currentTheme.value,
+			stepLength: stepLength.value,
+			collapsibleState: JSON.parse(JSON.stringify(collapsibleState)),
+			seqOpen: seqOpen.value,
+		},
+		transport: {
+			volume: volume.value,
+			tempo: tempo.value,
+			swing: swing.value,
+		},
+		synth: {
+			envelope: {
+				enabled: envelopeEnabled.value,
+				attackMs: ampEnvAttackMs.value,
+				decayMs: ampEnvDecayMs.value,
+			},
+			filter: {
+				enabled: filterEnabled.value,
+				cutoff: filterCutoff.value,
+				resonance: filterResonance.value,
+			},
+			noise: {
+				enabled: noiseEnabled.value,
+				type: (noiseType.value as string),
+				amount: noiseAmount.value,
+			},
+			unison: {
+				enabled: unisonEnabled.value,
+				voices: unisonVoices.value,
+				detuneCents: detuneCents.value,
+				stereoSpread: stereoSpread.value,
+			},
+			lfo: {
+				enabled: lfoEnabled.value,
+				rate: lfoRate.value,
+				depth: lfoDepth.value,
+				target: lfoTarget.value,
+				waveform: lfoWaveform.value,
+				sync: lfoSync.value,
+				division: lfoDivision.value,
+				retrigger: lfoRetrigger.value,
+				bipolar: lfoBipolar.value,
+			},
+			fm: {
+				enabled: fmEnabled.value,
+				modFreq: fmModFreq.value,
+				index: fmIndex.value,
+				ratio: fmRatio.value,
+			},
+			pitchEnv: {
+				enabled: pitchEnvEnabled.value,
+				semitones: pitchEnvSemitones.value,
+				decayMs: pitchEnvDecayMs.value,
+				mode: pitchMode.value
+			},
+			tuning: {
+				selectedKeyRoot: selectedKeyRoot.value,
+				globalOctaveOffset: globalOctaveOffset.value,
+			}
+		},
+		fx: {
+			delay: {
+				enabled: delayEnabled.value,
+				sync: delaySync.value,
+				time: delayTime.value,
+				feedback: delayFeedback.value,
+				mix: delayMix.value,
+				toneEnabled: delayToneEnabled.value,
+				toneHz: delayToneHz.value,
+				toneType: delayToneType.value,
+			},
+			drive: {
+				enabled: driveEnabled.value,
+				type: driveType.value,
+				amount: driveAmount.value,
+				tone: driveTone.value,
+				mix: driveMix.value,
+			}
+		},
+		// Instruments incl. synth pad data
+		instruments: instruments.value.map(i => ({
+			name: i.name,
+			label: i.label,
+			type: i.type,
+			isCustom: i.isCustom,
+			muted: i.muted,
+			channelVolume: i.channelVolume,
+			steps: [...i.steps],
+			velocities: [...i.velocities],
+			pitches: i.pitches ? [...i.pitches] : null,
+			waveforms: (i as any).waveforms ? [...(i as any).waveforms] : null,
+		})),
+		selectedWaveform: selectedWaveform.value,
+	};
+}
+
+function applySnapshot(s: any) {
+	if (!s || typeof s !== 'object') return;
+
+	// UI
+	if (s.ui) {
+		if (typeof s.ui.currentTheme === 'string') currentTheme.value = s.ui.currentTheme;
+		if (s.ui.stepLength === 16 || s.ui.stepLength === 32) {
+			setStepLength(s.ui.stepLength);
+		}
+		if (s.ui.seqOpen != null) seqOpen.value = !!s.ui.seqOpen;
+		if (s.ui.collapsibleState) {
+			Object.keys(collapsibleState).forEach((k) => {
+				if (k in s.ui.collapsibleState) (collapsibleState as any)[k] = !!s.ui.collapsibleState[k];
+			});
+		}
+	}
+
+	// Transport
+	if (s.transport) {
+		if (typeof s.transport.volume === 'number') volume.value = s.transport.volume;
+		if (typeof s.transport.tempo === 'number') tempo.value = s.transport.tempo;
+		if (typeof s.transport.swing === 'number') swing.value = s.transport.swing;
+	}
+
+	// Synth core
+	const syn = s.synth || {};
+	if (syn.envelope) {
+		envelopeEnabled.value = !!syn.envelope.enabled;
+		if (typeof syn.envelope.attackMs === 'number') ampEnvAttackMs.value = syn.envelope.attackMs;
+		if (typeof syn.envelope.decayMs === 'number') ampEnvDecayMs.value = syn.envelope.decayMs;
+	}
+	if (syn.filter) {
+		filterEnabled.value = !!syn.filter.enabled;
+		if (typeof syn.filter.cutoff === 'number') filterCutoff.value = syn.filter.cutoff;
+		if (typeof syn.filter.resonance === 'number') filterResonance.value = syn.filter.resonance;
+	}
+	if (syn.noise) {
+		noiseEnabled.value = !!syn.noise.enabled;
+		if (typeof syn.noise.type === 'string') (noiseType as any).value = syn.noise.type;
+		if (typeof syn.noise.amount === 'number') noiseAmount.value = syn.noise.amount;
+	}
+	if (syn.unison) {
+		unisonEnabled.value = !!syn.unison.enabled;
+		if (typeof syn.unison.voices === 'number') unisonVoices.value = syn.unison.voices;
+		if (typeof syn.unison.detuneCents === 'number') detuneCents.value = syn.unison.detuneCents;
+		if (typeof syn.unison.stereoSpread === 'number') stereoSpread.value = syn.unison.stereoSpread;
+	}
+	if (syn.lfo) {
+		lfoEnabled.value = !!syn.lfo.enabled;
+		if (typeof syn.lfo.rate === 'number') lfoRate.value = syn.lfo.rate;
+		if (typeof syn.lfo.depth === 'number') lfoDepth.value = syn.lfo.depth;
+		if (syn.lfo.target) lfoTarget.value = syn.lfo.target;
+		if (syn.lfo.waveform) lfoWaveform.value = syn.lfo.waveform;
+		if (typeof syn.lfo.sync === 'boolean') lfoSync.value = syn.lfo.sync;
+		if (syn.lfo.division) lfoDivision.value = syn.lfo.division;
+		if (typeof syn.lfo.retrigger === 'boolean') lfoRetrigger.value = syn.lfo.retrigger;
+		if (typeof syn.lfo.bipolar === 'boolean') lfoBipolar.value = syn.lfo.bipolar;
+	}
+	if (syn.fm) {
+		fmEnabled.value = !!syn.fm.enabled;
+		if (typeof syn.fm.modFreq === 'number') fmModFreq.value = syn.fm.modFreq;
+		if (typeof syn.fm.index === 'number') fmIndex.value = syn.fm.index;
+		fmRatio.value = syn.fm.ratio ?? fmRatio.value;
+	}
+	if (syn.pitchEnv) {
+		pitchEnvEnabled.value = !!syn.pitchEnv.enabled;
+		if (typeof syn.pitchEnv.semitones === 'number') pitchEnvSemitones.value = syn.pitchEnv.semitones;
+		if (typeof syn.pitchEnv.decayMs === 'number') pitchEnvDecayMs.value = syn.pitchEnv.decayMs;
+		if (syn.pitchEnv.mode) pitchMode.value = syn.pitchEnv.mode;
+	}
+	if (syn.tuning) {
+		if (typeof syn.tuning.selectedKeyRoot === 'string') (selectedKeyRoot as any).value = syn.tuning.selectedKeyRoot;
+		if (typeof syn.tuning.globalOctaveOffset === 'number') globalOctaveOffset.value = syn.tuning.globalOctaveOffset;
+	}
+
+	// FX
+	if (s.fx?.delay) {
+		delayEnabled.value = !!s.fx.delay.enabled;
+		delaySync.value = !!s.fx.delay.sync;
+		if (typeof s.fx.delay.time === 'number') delayTime.value = s.fx.delay.time;
+		if (typeof s.fx.delay.feedback === 'number') delayFeedback.value = s.fx.delay.feedback;
+		if (typeof s.fx.delay.mix === 'number') delayMix.value = s.fx.delay.mix;
+		delayToneEnabled.value = !!s.fx.delay.toneEnabled;
+		if (typeof s.fx.delay.toneHz === 'number') delayToneHz.value = s.fx.delay.toneHz;
+		if (typeof s.fx.delay.toneType === 'string') delayToneType.value = s.fx.delay.toneType;
+	}
+	if (s.fx?.drive) {
+		driveEnabled.value = !!s.fx.drive.enabled;
+		if (s.fx.drive.type) driveType.value = s.fx.drive.type;
+		if (typeof s.fx.drive.amount === 'number') driveAmount.value = s.fx.drive.amount;
+		if (typeof s.fx.drive.tone === 'number') driveTone.value = s.fx.drive.tone;
+		if (typeof s.fx.drive.mix === 'number') driveMix.value = s.fx.drive.mix;
+	}
+
+	// Instruments
+	if (Array.isArray(s.instruments) && s.instruments.length) {
+		// keep buffers on existing sample instruments; only copy serializable fields
+		const mapByName = new Map(s.instruments.map((i: any) => [i.name, i]));
+		instruments.value.forEach((inst) => {
+			const from = mapByName.get(inst.name);
+			if (!from) return;
+			inst.label = from.label ?? inst.label;
+			inst.isCustom = !!from.isCustom;
+			inst.muted = !!from.muted;
+			inst.channelVolume = typeof from.channelVolume === 'number' ? from.channelVolume : inst.channelVolume;
+
+			if (Array.isArray(from.steps)) inst.steps = [...from.steps];
+			if (Array.isArray(from.velocities)) inst.velocities = [...from.velocities];
+			if (Array.isArray(from.pitches)) (inst as any).pitches = [...from.pitches];
+			if (Array.isArray(from.waveforms)) (inst as any).waveforms = [...from.waveforms];
+		});
+
+		// If there are saved *custom* instruments that don't exist yet, append them
+		s.instruments.forEach((from: any) => {
+			const exists = instruments.value.find(i => i.name === from.name);
+			if (!exists && from.isCustom) {
+				instruments.value.push({
+					name: from.name,
+					label: from.label ?? from.name,
+					type: 'sample',
+					isCustom: true,
+					isEditingName: false,
+					buffer: null,
+					muted: !!from.muted,
+					channelVolume: typeof from.channelVolume === 'number' ? from.channelVolume : 0.5,
+					steps: Array.isArray(from.steps) ? [...from.steps] : Array(stepLength.value).fill(false),
+					velocities: Array.isArray(from.velocities) ? [...from.velocities] : Array(stepLength.value).fill(1),
+				} as any);
+			}
+		});
+	}
+
+	if (typeof s.selectedWaveform === 'string') selectedWaveform.value = s.selectedWaveform as any;
+}
+
+let applyingFromStore = false;
+
+// UI -> Store
+watch(
+	() => buildSnapshot(),
+	(snap) => {
+		if (applyingFromStore) return;
+		try {
+			const a = JSON.stringify(project.data);
+			const b = JSON.stringify(snap);
+			if (a === b) return;
+		} catch { }
+
+		project.data = snap;
+	},
+	{ deep: true }
+);
+
+// Store -> UI
+watch(
+	() => project.data,
+	(data) => {
+		if (!data) return;
+		applyingFromStore = true;
+		try {
+			applySnapshot(data);
+		} finally {
+			nextTick(() => { applyingFromStore = false; });
+		}
+	},
+	{ deep: false, flush: 'sync' }
+);
+
+
+// On first mount, open last project or create a new one from current defaults
+onMounted(async () => {
+	const lastId = localStorage.getItem('ewave:lastProjectId');
+	if (lastId) {
+		const ok = await project.load(lastId);
+		if (!ok) {
+			await project.newProject('Untitled', buildSnapshot());
+		}
+	} else {
+		await project.newProject('Untitled', buildSnapshot());
+	}
+
+	if (project.data) {
+		applyingFromStore = true;
+		try { applySnapshot(project.data); } finally { applyingFromStore = false; }
+	}
+});
+
+
+
+// SAVING END
+
+
+//RESET TO FACTORY DEFAULTS ON NEW PROJECT BEGIN 
+function resetUiToFactoryDefaults() {
+	currentTheme.value = '';
+	seqOpen.value = true;
+	(Object.keys(collapsibleState) as Array<keyof typeof collapsibleState>)
+		.forEach((k) => { collapsibleState[k] = undefined; }); // let cards read their own localStorage
+
+	// grid length
+	setStepLength(16);
+
+	// transport
+	volume.value = 0.75;
+	tempo.value = 80;
+	swing.value = 0;
+
+	// synth
+	envelopeEnabled.value = true;
+	ampEnvAttackMs.value = 20;
+	ampEnvDecayMs.value = 400;
+
+	filterEnabled.value = true;
+	filterCutoff.value = 5000;
+	filterResonance.value = 0.5;
+
+	noiseEnabled.value = true;
+	noiseType.value = 'white';
+	noiseAmount.value = 0;
+
+	unisonEnabled.value = true;
+	unisonVoices.value = 1;
+	detuneCents.value = 12;
+	stereoSpread.value = 50;
+
+	lfoEnabled.value = true;
+	lfoRate.value = 5;
+	lfoDepth.value = 0;
+	lfoTarget.value = 'pitch';
+	lfoWaveform.value = 'sine';
+	lfoSync.value = true;
+	lfoDivision.value = '1/8';
+	lfoRetrigger.value = false;
+	lfoBipolar.value = false;
+
+	fmEnabled.value = true;
+	fmModFreq.value = 200;
+	fmIndex.value = 0;
+	fmRatio.value = 1;
+
+	pitchEnvEnabled.value = true;
+	pitchEnvSemitones.value = 0;
+	pitchEnvDecayMs.value = 300;
+	pitchMode.value = 'up';
+
+	selectedKeyRoot.value = 'A';
+	globalOctaveOffset.value = 0;
+
+	// instruments
+	instruments.value.forEach((i: any) => {
+		i.muted = false;
+		i.channelVolume = 0.5;
+		i.steps = Array(stepLength.value).fill(false);
+		i.velocities = Array(stepLength.value).fill(1);
+		if (i.pitches) i.pitches = Array(stepLength.value).fill(currentDefaultHz.value);
+		if (i.waveforms) i.waveforms = Array(stepLength.value).fill('sine');
+	});
+	// remove custom channels
+	for (let idx = instruments.value.length - 1; idx >= 0; idx--) {
+		if ((instruments.value[idx] as any).isCustom) instruments.value.splice(idx, 1);
+	}
+
+	selectedWaveform.value = 'sine';
+	currentStep.value = -1;
+	isPlaying.value = false;
+}
+//RESET TO FACTORY DEFAULTS ON NEW PROJECT END 
+
 
 </script>
 
 
 
 <style scoped>
-/* ---- Compact widescreen grid ---- */
 .ds-grid {
 	display: grid;
 	gap: 12px;
 	grid-template-columns: 1fr;
-	/* mobile-first stack */
 }
 
 .pt-card .pt-section {
@@ -2655,9 +2870,7 @@ driveShaper.curve = (() => {
 	.ds-visualizer {
 		grid-column: 6 / -1;
 		grid-row: 1 / span 2;
-		/* spans Transport + Steps */
 		position: relative;
-		/* top: 10px; */
 		align-self: start;
 	}
 
@@ -2680,7 +2893,7 @@ driveShaper.curve = (() => {
 	}
 }
 
-/* xl: 12-col grid (final widescreen packing) */
+/* xl: 12-col grid */
 @media (min-width: 1280px) {
 	.ds-grid {
 		grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -2701,7 +2914,6 @@ driveShaper.curve = (() => {
 		grid-column: 10 / -1;
 		grid-row: 1 / span 2;
 		position: relative;
-		/* top: 14px; */
 	}
 
 	.pt-card,
@@ -2736,7 +2948,6 @@ driveShaper.curve = (() => {
 	display: block;
 }
 
-/* --- Density tweaks (compact but readable) --- */
 .pt-card,
 .pt-panel {
 	padding: 12px 14px;
@@ -2746,7 +2957,6 @@ driveShaper.curve = (() => {
 	margin: 0 0 .35rem;
 }
 
-/* transport odds & ends (kept from your file) */
 .transport-row .transport-actions {
 	display: flex;
 	align-items: center;
@@ -2785,10 +2995,8 @@ driveShaper.curve = (() => {
    OVERRIDES
    ========================= */
 
-/* --- Visualizer rail fills its grid area --- */
 @media (min-width: 992px) {
 	.ds-visualizer {
-		/* already row-span:2 in your CSS; add flex so children can stretch */
 		display: flex;
 		min-height: 0;
 	}
@@ -2799,8 +3007,6 @@ driveShaper.curve = (() => {
 		min-height: 0;
 	}
 
-	/* Reach into the MpcScreen component and make its layout "auto / 1fr / auto"
-     so the LCD middle row grows to fill the rail. Works with <style scoped>. */
 	.ds-visualizer :deep(.mpc-screen),
 	.ds-visualizer ::v-deep(.mpc-screen) {
 		display: grid;
@@ -2812,17 +3018,12 @@ driveShaper.curve = (() => {
 
 	.ds-visualizer :deep(.mpc-screen__lcd),
 	.ds-visualizer ::v-deep(.mpc-screen__lcd) {
-		/* neutralize any fixed ratio like height: calc(var(--screen-w)*0.30) */
 		height: auto !important;
 		min-height: 0;
 	}
 }
 
-/* --- Exact desktop (xl) layout you requested --- */
 @media (min-width: 1280px) {
-	/* 12-col grid overall is already set above in your CSS */
-
-	/* Spans: Transport 8, Visualizer 4 (row-span 2), Steps 8 */
 	.ds-transport {
 		grid-column: 1 / span 8 !important;
 	}
@@ -2835,12 +3036,9 @@ driveShaper.curve = (() => {
 		grid-column: 9 / -1 !important;
 		grid-row: 1 / span 2 !important;
 		position: relative;
-		/* top: 1rem; */
-		/* keep it in view while scrolling */
 		align-self: start;
 	}
 
-	/* Modules grid: four 3-col cards, then 4/5/3 */
 	.ds-modules {
 		display: grid !important;
 		grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -2854,14 +3052,11 @@ driveShaper.curve = (() => {
 	}
 }
 
-/* 1) Visualizer: fill the two-row rail, stretch the LCD/canvases */
 @media (min-width: 992px) {
 	.ds-visualizer {
 		display: flex;
 		align-items: stretch;
 		position: relative;
-		/* keep your sticky behavior */
-		/* top: 14px; */
 	}
 
 	.ds-visualizer .mpc-wrap {
@@ -2870,7 +3065,6 @@ driveShaper.curve = (() => {
 		display: flex;
 	}
 
-	/* make the MpcScreen root fill the card */
 	.ds-visualizer .mpc-wrap>* {
 		flex: 1 1 auto;
 		min-height: 0;
@@ -2878,26 +3072,21 @@ driveShaper.curve = (() => {
 	}
 
 	.ds-visualizer :deep([class*="lcd"]) {
-		/* let the LCD grow to fill */
 		flex: 1 1 auto;
 		min-height: 0;
 		height: auto !important;
-		/* neutralize any fixed ratio */
 	}
 
 	.ds-visualizer :deep(canvas) {
-		/* the scope/spec/tuner canvases fill the LCD */
 		display: block;
 		width: 100%;
 		height: 100% !important;
 	}
 }
 
-/* 2) Restore your masonry (cancel my previous grid override) */
 @media (min-width: 992px) {
 	.ds-modules {
 		display: block !important;
-		/* back to multicol */
 		column-width: 340px !important;
 		column-gap: 14px !important;
 		column-fill: balance !important;
@@ -2919,7 +3108,6 @@ driveShaper.curve = (() => {
 	.ds-modules {
 		display: block !important;
 		column-width: 360px !important;
-		/* slightly wider cards on xl */
 		column-gap: 16px !important;
 	}
 
@@ -2939,7 +3127,6 @@ driveShaper.curve = (() => {
 		min-height: 0;
 	}
 
-	/* LCD can stretch; canvases fill it */
 	.ds-visualizer :deep(.mpc-screen__lcd) {
 		height: auto !important;
 		min-height: 0;
@@ -2951,7 +3138,6 @@ driveShaper.curve = (() => {
 		height: 100% !important;
 	}
 
-	/* F-key row: 6 columns (side-by-side) */
 	.ds-visualizer :deep(.mpc-screen__fkeys) {
 		display: grid !important;
 		grid-template-columns: repeat(6, 1fr);
@@ -2962,11 +3148,8 @@ driveShaper.curve = (() => {
 
 @media (min-width: 992px) {
 	.ds-visualizer {
-		/* critical */
 		align-self: stretch !important;
-		/* critical */
 		position: relative;
-		/* top: 14px; */
 		display: flex;
 		min-height: 0;
 		z-index: 999;
@@ -2979,7 +3162,6 @@ driveShaper.curve = (() => {
 		width: 100%;
 	}
 
-	/* One clear layout model for the screen */
 	.ds-visualizer :deep(.mpc-screen) {
 		display: grid !important;
 		grid-template-rows: 1fr auto;
@@ -3009,7 +3191,6 @@ driveShaper.curve = (() => {
 	}
 }
 
-/* Tabs row */
 .gen-toolbar {
 	display: flex;
 	align-items: center;
@@ -3018,17 +3199,14 @@ driveShaper.curve = (() => {
 	margin: 4px 0 0;
 }
 
-/* Divider spacing */
 .gen-divider {
 	margin: 10px 0 12px;
 }
 
-/* Panels */
 .gen-panel {
 	min-width: 0;
 }
 
-/* One-row noise controls */
 .noise-inline {
 	display: flex;
 	align-items: center;
@@ -3036,7 +3214,6 @@ driveShaper.curve = (() => {
 	flex-wrap: wrap;
 }
 
-/* Inline toggle dot */
 .pt-dot {
 	width: 14px;
 	height: 14px;
@@ -3057,15 +3234,12 @@ driveShaper.curve = (() => {
 	box-shadow: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / .18), 0 0 12px var(--pt-btn-glow);
 }
 
-/* --- Reach into NoiseModule to hide its title and lay out controls inline --- */
 .noise-panel :deep(.pt-section-title),
 .noise-panel :deep(.pt-title),
 .noise-panel :deep(.group-title) {
 	display: none !important;
-	/* kills the stray “Noise” label */
 }
 
-/* Keep its buttons + knob on the same row */
 .noise-inline :deep(.pt-btn-group) {
 	display: inline-flex;
 	gap: 8px;
@@ -3078,35 +3252,28 @@ driveShaper.curve = (() => {
 	padding: 0;
 }
 
-/* ==== Generators layout fixes ==== */
 
-/* Tabs → content separator (already there, just keep it) */
 .gen-divider {
 	margin: 10px 0 12px;
 }
 
-/* Waveform row needs a little top air so it doesn't hug the tabs */
 .osc-panel .pt-btn-group {
 	margin-top: 6px;
 }
 
-/* Keep the noise row truly in ONE line (wrap only when narrow) */
 .noise-inline {
 	display: flex;
 	align-items: center;
 	gap: 10px;
 	flex-wrap: wrap;
-	/* allows graceful wrap on very narrow screens */
 }
 
-/* The NoiseModule root in this row must not be width:100% */
 .noise-inline> :not(.pt-dot) {
 	flex: 1 1 auto;
 	width: auto !important;
 	min-width: 0;
 }
 
-/* Its internal wrappers default to width:100% — cancel that here */
 .noise-panel :deep(.knob-group),
 .noise-panel :deep(.pt-subblock),
 .noise-panel :deep(.pt-section) {
@@ -3114,20 +3281,16 @@ driveShaper.curve = (() => {
 	padding: 0 !important;
 	margin: 0 !important;
 	display: inline-flex;
-	/* lay out chips + knob inline */
 	align-items: center;
 	gap: 10px;
 }
 
-/* Chips (White/Pink/Brown) inline with the knob */
 .noise-panel :deep(.pt-btn-group) {
 	display: inline-flex;
 	gap: 8px;
 	margin: 0;
-	/* no extra vertical space */
 }
 
-/* Hide the module’s internal header/title so "Noise" disappears */
 .noise-panel :deep(.knob-group-header),
 .noise-panel :deep(.group-title),
 .noise-panel :deep(.pt-section-title),
@@ -3135,7 +3298,6 @@ driveShaper.curve = (() => {
 	display: none !important;
 }
 
-/* Our inline dot toggle look */
 .pt-dot {
 	width: 14px;
 	height: 14px;
@@ -3172,41 +3334,34 @@ driveShaper.curve = (() => {
 	margin: 0 2px;
 }
 
-/* The Step Sequencer section becomes the containing block for the overlay */
 .ds-steps {
 	position: relative;
 }
 
-/* Anchor the dropdown to the ⋯ button container */
 .step-menu-anchor {
 	position: relative;
 }
 
-/* Absolute dropdown under the button */
 .pt-menu.step-menu {
 	position: absolute;
 	left: 0;
 	top: calc(100% + 6px);
 	min-width: 240px;
 	z-index: 1001;
-	/* above header, below overlay if you add one later */
 }
 
-/* Title inside the menu */
 .pt-menu-title {
 	font-weight: 600;
 	padding: 6px 10px;
 	opacity: .9;
 }
 
-/* Overlay that scrolls with the card (not fixed) */
 .step-menu-overlay {
 	position: absolute;
 	inset: 0;
 	z-index: 10;
 }
 
-/* Disabled look for menu items */
 .pt-menu .pt-option.is-disabled {
 	opacity: .5;
 	pointer-events: none;
@@ -3237,18 +3392,15 @@ driveShaper.curve = (() => {
 	--w: 80px;
 }
 
-/* size tweak to fit your card */
 @media (max-width: 520px) {
 	.wave-row :deep(.wave-btn) {
 		--w: 84px;
 	}
 }
 
-/* Masonry modules — single source of truth */
 @media (min-width: 992px) {
 	.ds-modules {
 		display: block !important;
-		/* multicol container */
 		column-width: 340px;
 		column-gap: 14px;
 		column-fill: balance;
@@ -3257,7 +3409,6 @@ driveShaper.curve = (() => {
 
 	.ds-modules .module {
 		display: inline-block;
-		/* required for multicol masonry */
 		width: 100%;
 		margin: 0 0 14px;
 		break-inside: avoid;
@@ -3270,7 +3421,6 @@ driveShaper.curve = (() => {
 		column-gap: 16px;
 	}
 }
-
 
 .mm-menu {
 	position: fixed;
@@ -3346,16 +3496,11 @@ driveShaper.curve = (() => {
 	left: calc(100% - var(--kn) - 2px);
 }
 
-
-
 .mm-overlay {
 	position: fixed;
-	/* was absolute */
 	inset: 0;
 	z-index: 2000;
 }
-
-/* card-only overlay */
 
 .fx-adv-anchor {
 	position: relative;

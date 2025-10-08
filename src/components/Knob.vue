@@ -10,7 +10,7 @@
 				<div class="dial-rotor" :style="{ transform: `rotate(${rotation}deg)` }"></div>
 			</div>
 
-			<svg class="dial-svg" viewBox="0 0 100 100" aria-hidden="true">
+			<svg class="dial-svg" viewBox="0 0 100 100" aria-hidden="true"> 
 				<defs>
 					<linearGradient :id="gradId" x1="20" y1="76" x2="80" y2="76" gradientUnits="userSpaceOnUse">
 						<stop offset="0%" :stop-color="arcStartColor" />
@@ -101,22 +101,9 @@ function polarXY(t /*0..1*/) {
 	return { x: CX + R * Math.cos(a), y: CY + R * Math.sin(a) }
 }
 
-
-// sweep matches the knob (-132°..+132°)
-// const SWEEP = 264, START = -132
-// function polarXY(t /* 0..1 */) {
-// 	const a = (START + t * SWEEP) * Math.PI / 180
-// 	const R = 44, CX = 50, CY = 50   // SVG viewBox space
-// 	return { x: CX + R * Math.cos(a), y: CY + R * Math.sin(a) }
-// }
-// const markerR = computed(() => (props.size === 'small' ? 2 : props.size === 'medium' ? 2.6 : 3))
-
-
 /* ids for gradient (avoid collisions) */
 const gradId = `kgrad-${Math.random().toString(36).slice(2)}`
 const showArcPaths = computed(() => !props.markersOnly)
-
-
 
 /* colors */
 const trackColor = computed(() =>

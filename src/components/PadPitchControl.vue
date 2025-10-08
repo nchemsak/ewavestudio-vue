@@ -26,11 +26,9 @@
 
         <!-- Existing slider: reused as Fine when locked -->
         <div class="flex-grow-1 ms-3" v-if="noteLocked">
-            <!-- Fine tune (cents) uses your current slider component or <input type="range"> -->
             <input type="range" min="-100" max="100" step="1" v-model.number="detuneCents" />
         </div>
         <div class="flex-grow-1 ms-3" v-else>
-            <!-- Your original Hz slider (100–1000) -->
             <input type="range" min="100" max="1000" step="1" :value="modelValue"
                 @input="onFreeHz($event.target.valueAsNumber)" />
         </div>
