@@ -44,12 +44,25 @@
 						</div>
 
 						<!-- Play/Stop -->
-						<div class="transport-actions">
+						<!-- <div class="transport-actions">
 							<button class="pt-btn" @click="togglePlay">
 								<span v-if="isPlaying">Stop</span>
 								<span v-else>Play</span>
 							</button>
+						</div> -->
+						<div class="transport-actions" style="display:flex; gap:8px;">
+							<button class="pt-btn" @click="togglePlay">
+								<span v-if="isPlaying">Stop</span>
+								<span v-else>Play</span>
+							</button>
+
+							<!-- NEW: Export WAV -->
+							<button class="pt-btn" :disabled="isExporting" @click="exportCurrentPattern">
+								<span v-if="isExporting">Exporting…</span>
+								<span v-else>Export WAV</span>
+							</button>
 						</div>
+
 					</div>
 				</div>
 			</section>
@@ -446,6 +459,9 @@ import { downloadJson, importJson } from "../lib/storage/exportImport";
 import { useAutosave } from '../composables/useAutosave';
 import ProjectControls from './ProjectControls.vue';
 
+// WAV Export
+import { scheduleStepSequencer, type StepSequencerState } from '../audio/export/scheduleStepSequencer';
+import { audioBufferToWavFloat32 } from '../audio/export/encodeWav';
 
 // IMPORTS END
 
@@ -1621,6 +1637,69 @@ const swing = ref(0);
 const isPlaying = ref(false);
 const currentStep = ref(-1);
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// Export to wav file START
+
+// === Export: state ===
+const isExporting = ref(false);
+
+// === Export: computed StepSequencer state (pure data for offline render) ===
+const exportState = computed<StepSequencerState>(() => {
+	const inst = synthInstrument.value!;
+	const stepsCount = stepLength.value;
+	const wf = (idx: number) => (inst as any).waveforms?.[idx] ?? (selectedWaveform.value as OscillatorType);
+
+	// Derive LFO rate in Hz if synced
+	const rateHz = lfoSync.value ? divisionToHz(lfoDivision.value, tempo.value) : lfoRate.value;
+
+	return {
+		bpm: tempo.value,
+		stepsCount: stepsCount as 16 | 32,
+		swing: swing.value,
+		masterVolume: volume.value,
+		channelVolume: inst.channelVolume,
+
+		pattern: {
+			active: [...inst.steps],
+			velocities: [...inst.velocities],
+			pitches: [...(inst.pitches ?? Array(stepsCount).fill(currentDefaultHz.value))],
+			waveforms: Array.from({ length: stepsCount }, (_, i) => wf(i)),
+		},
+
+		synth: {
+			envelope: { enabled: envelopeEnabled.value, attackMs: ampEnvAttackMs.value, decayMs: ampEnvDecayMs.value },
+			filter: { enabled: filterEnabled.value, cutoff: filterCutoff.value, resonance: filterResonance.value },
+			noise: { enabled: noiseEnabled.value, type: noiseType.value, amount: noiseAmount.value },
+			unison: { enabled: unisonEnabled.value, voices: unisonVoices.value, detuneCents: detuneCents.value, stereoSpread: stereoSpread.value },
+			lfo: {
+				enabled: lfoEnabled.value,
+				target: lfoTarget.value as any,
+				waveform: lfoWaveform.value as any,
+				depth: lfoDepth.value,
+				rateHz,
+				division: lfoDivision.value,
+				retrigger: lfoRetrigger.value,
+				bipolar: lfoBipolar.value,
+			},
+			fm: { enabled: fmEnabled.value, modFreq: fmModFreq.value, index: fmIndex.value, ratio: fmRatio.value },
+			pitchEnv: { enabled: pitchEnvEnabled.value, semitones: pitchEnvSemitones.value, decayMs: pitchEnvDecayMs.value, mode: pitchMode.value },
+		},
+
+		fx: {
+			delay: { enabled: delayEnabled.value, sync: delaySync.value, time: delayTime.value, feedback: delayFeedback.value, mix: delayMix.value, toneEnabled: delayToneEnabled.value, toneHz: delayToneHz.value, toneType: delayToneType.value },
+			drive: { enabled: driveEnabled.value, type: driveType.value as any, amount: driveAmount.value, tone: driveTone.value, mix: driveMix.value },
+		},
+
+		sampleRate: audioCtx?.sampleRate || 48000,
+		tailSeconds: 5.0,
+	};
+});
+
+
+// Export to wav file END
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 
 // LFO START
 const lfoEnabled = ref(true);
@@ -2247,6 +2326,69 @@ async function togglePlay() {
 		schedule();
 	}
 }
+
+async function exportCurrentPattern() {
+	if (!synthInstrument.value) return;
+
+	// Compute safe render length
+	const bpm = tempo.value;
+	const steps = stepLength.value;
+	const bars = steps / 16;
+	const secondsPerBeat = 60 / bpm;
+	const patternDuration = bars * secondsPerBeat * 4;
+	const tail = exportState.value.tailSeconds;
+	const renderSeconds = patternDuration + tail;
+
+	// Guard against extreme cases (>30s for MVP)
+	if (renderSeconds > 30) {
+		const ok = confirm(`This export will be ~${renderSeconds.toFixed(1)}s long. Continue?`);
+		if (!ok) return;
+	}
+
+	try {
+		isExporting.value = true;
+
+		// Prepare OfflineAudioContext
+		const sampleRate = Math.max(3000, Math.min(192000, exportState.value.sampleRate || 48000));
+		const totalFrames = Math.ceil(renderSeconds * sampleRate);
+		const OfflineAC = (window as any).OfflineAudioContext || (window as any).webkitOfflineAudioContext;
+		const off = new OfflineAC(2, totalFrames, sampleRate);
+
+		// Schedule the step sequencer synth only
+		scheduleStepSequencer(off, exportState.value, 0);
+
+		// Render!
+		const rendered: AudioBuffer = await off.startRendering();
+
+		// Encode to 32-bit float WAV
+		const wav = audioBufferToWavFloat32(rendered);
+		const blob = new Blob([wav], { type: "audio/wav" });
+
+		// Filename
+		const nameGuess = (project as any)?.name || (project as any)?.projectName || "Untitled";
+		const pad = (n: number) => String(n).padStart(2, "0");
+		const d = new Date();
+		const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+		const fname = `${nameGuess}_stepseq_${steps}stp_${bpm}bpm_${stamp}.wav`;
+
+		// Download
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = fname;
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+		setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+	} catch (err) {
+		console.error("Export failed:", err);
+		alert("Export failed. See console for details.");
+	} finally {
+		isExporting.value = false;
+	}
+}
+
 
 async function loadSample(url) {
 	try {
