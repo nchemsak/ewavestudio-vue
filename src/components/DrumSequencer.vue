@@ -44,19 +44,34 @@
 						</div>
 
 						<!-- Play/Stop -->
-						<!-- <div class="transport-actions">
-							<button class="pt-btn" @click="togglePlay">
-								<span v-if="isPlaying">Stop</span>
-								<span v-else>Play</span>
-							</button>
-						</div> -->
-						<div class="transport-actions" style="display:flex; gap:8px;">
-							<button class="pt-btn" @click="togglePlay">
-								<span v-if="isPlaying">Stop</span>
-								<span v-else>Play</span>
-							</button>
+						<!-- <button type="button" class="pt-btn btn btn-primary btn-lg btn3d" @click="togglePlay"><span
+								class="glyphicon glyphicon-thumbs-up"></span><span v-if="isPlaying">Stop</span>
+							<span v-else>Play</span></button> -->
 
-							<!-- NEW: Export WAV -->
+						<button type="button" class="pt-btn btn-lg btn3d" @click="togglePlay"
+							:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
+							:aria-pressed="isPlaying">
+							<span class="btn-face">
+								<!-- Play -->
+								<svg v-if="!isPlaying" viewBox="0 0 24 24" aria-hidden="true">
+									<path d="M8 6v12l10-6-10-6z" />
+								</svg>
+								<!-- Stop -->
+								<svg v-else viewBox="0 0 24 24" aria-hidden="true">
+									<rect x="7" y="7" width="10" height="10" rx="1.5" />
+								</svg>
+							</span>
+							<span class="visually-hidden">{{ isPlaying ? 'Stop' : 'Play' }}</span>
+						</button>
+
+
+						<div class="transport-actions" style="display:flex; gap:8px;">
+							<!-- <button class="pt-btn" @click="togglePlay">
+								<span v-if="isPlaying">Stop</span>
+								<span v-else>Play</span>
+							</button> -->
+
+							<!-- Export WAV -->
 							<button class="pt-btn" :disabled="isExporting" @click="exportCurrentPattern">
 								<span v-if="isExporting">Exporting…</span>
 								<span v-else>Export WAV</span>
@@ -3650,5 +3665,118 @@ function resetUiToFactoryDefaults() {
 
 .mpc-screen__lcd>canvas {
 	image-rendering: pixelated;
+}
+
+
+/* Top-down 3D: inner bevel only */
+.pt-btn.btn3d {
+	--r: 14px;
+	--bg-top: #5f8df1;
+	--bg-bot: #3f6ddc;
+
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 72px;
+	min-height: 56px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--r);
+	color: #fff;
+	background: linear-gradient(180deg, var(--bg-top), var(--bg-bot));
+	box-shadow: 0 10px 20px rgba(0, 0, 0, .35);
+	/* soft outer glow */
+	transition: background 90ms ease, box-shadow 90ms ease;
+}
+
+/* inner ring + bevel */
+.pt-btn.btn3d::before {
+	content: "";
+	position: absolute;
+	inset: 2px;
+	border-radius: calc(var(--r) - 2px);
+	box-shadow:
+		inset 0 0 0 2px rgba(255, 255, 255, .16),
+		/* thin ring */
+		inset 0 8px 16px rgba(255, 255, 255, .10),
+		/* top highlight */
+		inset 0 -10px 22px rgba(0, 0, 0, .28);
+	/* bottom cavity */
+	pointer-events: none;
+	transition: box-shadow 90ms ease, opacity 90ms ease;
+}
+
+/* pressed: deepen the cavity, reduce highlight, slightly dim face */
+/* .pt-btn.btn3d:active,
+.pt-btn.btn3d.active {
+	background: linear-gradient(180deg,
+			color-mix(in srgb, var(--bg-top) 82%, black 18%),
+			color-mix(in srgb, var(--bg-bot) 82%, black 18%));
+	box-shadow: 0 6px 14px rgba(0, 0, 0, .28);
+}
+
+.pt-btn.btn3d:active::before,
+.pt-btn.btn3d.active::before {
+	box-shadow:
+		inset 0 0 0 2px rgba(255, 255, 255, .12),
+		inset 0 2px 6px rgba(255, 255, 255, .06),
+		inset 0 12px 26px rgba(0, 0, 0, .55);
+} */
+
+/* Subtle pressed look */
+.pt-btn.btn3d:active,
+.pt-btn.btn3d.active{
+  /* darker by ~8–10% instead of ~18% */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-top) 92%, black 8%),
+    color-mix(in srgb, var(--bg-bot) 92%, black 8%)
+  );
+  /* keep the outer shadow almost the same */
+  box-shadow: 0 9px 18px rgba(0,0,0,.32);
+}
+
+.pt-btn.btn3d:active::before,
+.pt-btn.btn3d.active::before{
+  /* lighten the change vs default */
+  box-shadow:
+    inset 0 0 0 2px rgba(255,255,255,.14),   /* was .16 on default, .12 on active */
+    inset 0 6px 12px rgba(255,255,255,.09), /* slightly less highlight reduction */
+    inset 0 -12px 22px rgba(0,0,0,.38);     /* was .55 — much softer cavity */
+}
+
+/* Optional: smoother feel */
+.pt-btn.btn3d,
+.pt-btn.btn3d::before{
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+
+/* face/icon stays put (no translate) */
+.pt-btn.btn3d .btn-face {
+	position: relative;
+	z-index: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
+	padding: 14px 18px;
+}
+
+.pt-btn.btn3d svg {
+	width: 2.2em;
+	height: 2.2em;
+	fill: currentColor;
+}
+
+/* focus */
+.pt-btn.btn3d:focus {
+	outline: none;
+}
+
+.pt-btn.btn3d:focus-visible {
+	outline: 3px solid #fff;
+	outline-offset: 2px;
 }
 </style>
