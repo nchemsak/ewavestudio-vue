@@ -4,7 +4,6 @@
         <button class="pt-btn" :class="{ 'is-active': theme === 'light' }" @click="setTheme('light')">Light</button>
         <button class="pt-btn" :class="{ 'is-active': theme === 'synthwave' }"
             @click="setTheme('synthwave')">Synthwave</button>
-        <button class="pt-btn" :class="{ 'is-active': theme === 'system' }" @click="setTheme('system')">System</button>
     </div>
 </template>
 

@@ -129,21 +129,6 @@ $dark: map.get($themes, dark);
     position: relative;
 }
 
-// .pt-section+.pt-section {
-//     margin-top: 22px;
-//     padding-top: 14px;
-// }
-
-// .pt-section+.pt-section::before {
-//     content: "";
-//     position: absolute;
-//     left: 0;
-//     right: 0;
-//     top: 0;
-//     height: 1px;
-//     background: linear-gradient(90deg, transparent, var(--pt-hairline), transparent);
-// }
-
 .pt-section-title {
     color: var(--pt-muted);
     font-size: 0.95rem;
@@ -509,8 +494,6 @@ $dark: map.get($themes, dark);
 
 }
 
-
-
 @media (min-width: 992px) {
     .pt-subblock {
         margin-top: 0px;
@@ -726,8 +709,6 @@ $dark: map.get($themes, dark);
 }
 
 .pt-info-icon:hover {
-    // color: var(--pt-text);
-    // transform: scale(1.06);
     color: hsl(var(--pt-accent-2), 82%, 68%);
     text-shadow: 0 0 10px var(--pt-btn-glow);
 }
@@ -806,7 +787,6 @@ $dark: map.get($themes, dark);
 .pt-cards.controlsWrapper>* {
     /* fallback selector for your CollapsibleCard root */
     flex: 1 1 380px;
-    /* preferred width ~380px */
     min-width: 300px;
     /* when narrower, wrap to next line */
     max-width: 520px;
@@ -903,15 +883,10 @@ $dark: map.get($themes, dark);
     cursor: default;
 }
 
-.pt-card.collapsible .pt-collapse-btn {
-    cursor: pointer;
-}
-
 .pt-info-icon.kebab {
     font-weight: 700;
     font-size: 18px;
 }
-
 
 /* Segmented control – pill variant */
 .pt-seg--pill {

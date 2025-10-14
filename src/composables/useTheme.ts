@@ -1,22 +1,19 @@
 import { ref, computed, watchEffect, onMounted } from 'vue';
 
-export type ThemeName = 'dark' | 'light' | 'synthwave' | 'system';
+export type ThemeName = 'dark' | 'light' | 'synthwave';
 
 const THEME_KEY = 'ui-theme';
 
-function systemPrefersDark() {
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-}
-
 export function useTheme() {
-  const stored = (localStorage.getItem(THEME_KEY) as ThemeName | null) ?? 'system';
-  const theme = ref<ThemeName>(stored);
+  // Read stored theme; migrate old "system" to "dark"
+  const raw = localStorage.getItem(THEME_KEY) as (ThemeName | 'system' | null);
+  const initial: ThemeName = (raw === 'light' || raw === 'synthwave') ? raw : 'dark';
 
-  // Resolved theme = explicit selection, or system choice
-  const resolved = computed<'dark' | 'light' | 'synthwave'>(() => {
-    if (theme.value === 'system') return systemPrefersDark() ? 'dark' : 'light';
-    return theme.value;
-  });
+  const theme = ref<ThemeName>(initial);
+
+  // For compatibility with existing uses of `resolved`, keep the computed,
+  // but it now simply reflects the current theme (no system logic).
+  const resolved = computed<'dark' | 'light' | 'synthwave'>(() => theme.value);
 
   // CSS applied to <html>
   const themeClass = computed(() => `theme-${resolved.value}`);
@@ -33,15 +30,14 @@ export function useTheme() {
   }
 
   onMounted(() => {
+    // One-time migration if a legacy "system" was stored
+    if (raw === 'system') {
+      localStorage.setItem(THEME_KEY, 'dark');
+    }
     apply();
-    // keep in sync if user changes OS theme and we’re on “system”
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = () => { if (theme.value === 'system') apply(); };
-    mq.addEventListener?.('change', handler);
   });
 
   watchEffect(apply);
 
   return { theme, resolved, themeClass, setTheme };
 }
-    

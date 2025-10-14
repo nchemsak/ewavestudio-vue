@@ -28,11 +28,24 @@
 							}}%</span>
 						</div>
 
-						<!-- Tempo -->
-						<div class="position-relative text-center">
+						<!-- Tempo (Knob + Stepper) -->
+						<div class="position-relative text-center tempo-wrap">
 							<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
 							<span v-if="activeKnob === 'tempo'" class="custom-tooltip">{{ tempo }} BPM</span>
+
+							<!-- Tiny stepper (always visible) -->
+							<div class="tempo-stepper" role="group" aria-label="Tempo">
+								<button class="stepper-btn" type="button" title="Tempo −1"
+									@mousedown.prevent="startTempoRepeat(-1)" @touchstart.prevent="startTempoRepeat(-1)"
+									@mouseup.prevent="stopTempoRepeat" @mouseleave="stopTempoRepeat">−</button>
+
+								<div class="stepper-value" aria-live="polite" :title="`${tempo} BPM`">{{ tempo }}</div>
+
+								<button class="stepper-btn" type="button" title="Tempo +1"
+									@mousedown.prevent="startTempoRepeat(1)" @touchstart.prevent="startTempoRepeat(1)"
+									@mouseup.prevent="stopTempoRepeat" @mouseleave="stopTempoRepeat">+</button>
+							</div>
 						</div>
 
 						<!-- Swing -->
@@ -44,10 +57,6 @@
 						</div>
 
 						<!-- Play/Stop -->
-						<!-- <button type="button" class="pt-btn btn btn-primary btn-lg btn3d" @click="togglePlay"><span
-								class="glyphicon glyphicon-thumbs-up"></span><span v-if="isPlaying">Stop</span>
-							<span v-else>Play</span></button> -->
-
 						<button type="button" class="pt-btn btn-lg btn3d" @click="togglePlay"
 							:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
 							:aria-pressed="isPlaying">
@@ -64,12 +73,7 @@
 							<span class="visually-hidden">{{ isPlaying ? 'Stop' : 'Play' }}</span>
 						</button>
 
-
 						<div class="transport-actions" style="display:flex; gap:8px;">
-							<!-- <button class="pt-btn" @click="togglePlay">
-								<span v-if="isPlaying">Stop</span>
-								<span v-else>Play</span>
-							</button> -->
 
 							<!-- Export WAV -->
 							<button class="pt-btn" :disabled="isExporting" @click="exportCurrentPattern">
@@ -108,41 +112,30 @@
 						</span>
 					</div>
 
-					<!-- RIGHT: kebab + anchored absolute menu -->
 					<div class="pt-header-tools step-menu-anchor">
-						<button class="pt-info-icon" aria-label="Step options"
-							@click="ui.menus.steps.open = !ui.menus.steps.open">⋯</button>
+						<button class="pt-info-icon" aria-label="Advanced options"
+							@click="stepsAdvanced.open = !stepsAdvanced.open">⋯</button>
 
-						<!-- dropdown -->
-						<div v-if="ui.menus.steps.open" class="pt-menu step-menu" role="menu" @keydown.esc="closeMenus">
-							<!-- Header with title + close button -->
-							<div class="step-menu-header">
-								<div class="pt-menu-title">Step Sequencer Settings</div>
-								<button class="pt-seg-btn pt-seg-sm close-btn" @click.stop="closeMenus">X</button>
+						<div v-if="stepsAdvanced.open" class="mm-menu is-local" @click.stop>
+							<div class="mm-menu-title">Step Sequencer — Advanced</div>
+
+							<div class="mm-opt" role="menuitem" @click="togglePadSliders()">
+								<span>Pad Velocity/Pitch Sliders</span>
+								<button class="mm-switch" :class="{ on: padSlidersOn }"><span
+										class="kn"></span></button>
 							</div>
 
 							<div class="pt-rule" aria-hidden="true"></div>
 
-							<div class="pt-option" role="menuitemcheckbox" :aria-checked="padSlidersOn"
-								@click="togglePadSliders()">
-								<span class="pt-check" style="width:1.2em;display:inline-block">{{ padSlidersOn ? '✓' :
-									'' }}</span>
-								Pad Velocity/Pitch Sliders
+							<div class="mm-reset" role="menuitem" @click.stop="resetStepSeqAdvanced()">
+								Reset Step Sequencer UI
 							</div>
-
-							<div class="pt-rule" aria-hidden="true"></div>
-
-							<div class="pt-option" :class="{ 'is-disabled': allOpen }" :aria-disabled="allOpen"
-								@click="!allOpen && setAllCollapsibles(true)">Expand all panels</div>
-							<div class="pt-option" :class="{ 'is-disabled': allClosed }" :aria-disabled="allClosed"
-								@click="!allClosed && setAllCollapsibles(false)">Collapse all panels</div>
 						</div>
-
 					</div>
-				</div>
 
-				<!-- overlay that scrolls with the card (absolute, not fixed) -->
-				<div v-if="ui.menus.steps.open" class="pt-select-overlay step-menu-overlay" @click="closeMenus"></div>
+					<!-- overlay stays anywhere in the tree -->
+					<div v-if="stepsAdvanced.open" class="mm-overlay" @click="stepsAdvanced.open = false"></div>
+				</div>
 
 				<div class="step-card__grid">
 					<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
@@ -152,7 +145,6 @@
 						:waveforms="(synthInstrument as any).waveforms"
 						:defaultWave="selectedWaveform as OscillatorType" @open-pad-settings="({ name, index, anchorRect }) =>
 							openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
-
 				</div>
 			</section>
 
@@ -160,16 +152,14 @@
 			<section class="pt-cards controlsWrapper ds-modules">
 
 				<div class="module pattern-tools">
-					<CollapsibleCard id="pattern-tools" title="Pattern Tools"
-						v-model="collapsibleState['pattern-tools']">
+					<SectionWrap id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
 						<PatternTools :steps="steps" :velocities="velocities" :currentTheme="currentTheme"
 							@update:steps="steps = $event" @update:velocities="velocities = $event" />
-					</CollapsibleCard>
+					</SectionWrap>
 				</div>
 				<!-- Melody Maker -->
 				<div class="module melody">
-					<CollapsibleCard id="melody" title="Melody Maker" v-model="collapsibleState['melody']">
-						<!-- header tools: ⋯ advanced -->
+					<SectionWrap id="melody" title="Melody Maker" v-model="collapsibleState['melody']">
 						<template #tools>
 							<button class="pt-info-icon" aria-label="Advanced options"
 								@click="melodyRef?.openAdvanced($event)">⋯</button>
@@ -178,17 +168,17 @@
 						<MelodyMaker ref="melodyRef" :frequencies="padFrequencies" :steps="steps" :min-freq="100"
 							:max-freq="2000" :currentTheme="currentTheme" @update:frequencies="padFrequencies = $event"
 							@octave-shift="octaveShiftAllSkip($event)" @key-root-change="onKeyRootChange" />
-					</CollapsibleCard>
+					</SectionWrap>
 				</div>
 
 				<div class="module generators">
-					<CollapsibleCard id="generators" title="" v-model="collapsibleState['generators']">
+					<SectionWrap id="generators" title="" v-model="collapsibleState['generators']">
 
 						<!-- Oscillators -->
 						<div class="gen-panel osc-panel">
 							<div class="wave-row" role="radiogroup" aria-label="Waveforms">
 								<WaveButton :modelValue="selectedWaveform" value="sine" label="SINE"
-									:palette="['#ff7eb3', '#ffd06b', '#7bd0ff']"
+									:palette="['#fff', '#7bd0ff', '#666']"
 									@update:modelValue="() => applyWaveToAll('sine')" />
 
 								<WaveButton :modelValue="selectedWaveform" value="triangle" label="TRIANGLE"
@@ -222,23 +212,23 @@
 									v-model:amount="noiseAmount" :color="'#9C27B0'" />
 							</div>
 						</div>
-					</CollapsibleCard>
+					</SectionWrap>
 				</div>
 
 				<div class="module sound">
-					<CollapsibleCard id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
+					<SectionWrap id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
 						<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
 							@attack-knob-start="onEnvKnobStart" @attack-knob-end="onEnvKnobEnd"
 							@decay-knob-start="onEnvKnobStart" @decay-knob-end="onEnvKnobEnd" />
 						<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 							v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
-					</CollapsibleCard>
+					</SectionWrap>
 				</div>
 
 				<!-- LFO -->
 				<div class="module mod">
-					<CollapsibleCard id="mod" title="LFO" v-model="collapsibleState['mod']">
+					<SectionWrap id="mod" title="LFO" v-model="collapsibleState['mod']">
 						<template #tools>
 							<button class="pt-info-icon" aria-label="Advanced options"
 								@click="lfoRef?.openAdvanced($event)">⋯</button>
@@ -249,11 +239,11 @@
 							v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
 							color="#00BCD4" :targets="['pitch', 'gain', 'filter', 'pan']"
 							:divisions="['1/1', '1/2', '1/4', '1/8', '1/16', '1/8T', '1/8.']" />
-					</CollapsibleCard>
+					</SectionWrap>
 				</div>
 
 				<div class="module pitch">
-					<CollapsibleCard id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
+					<SectionWrap id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
 
 						<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
 							v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
@@ -262,11 +252,11 @@
 						<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
 							v-model:detune="detuneCents" v-model:spread="stereoSpread" />
 
-					</CollapsibleCard>
+					</SectionWrap>
 				</div>
 
 				<div class="module fx fx-adv-anchor" ref="fxAnchor">
-					<CollapsibleCard id="fx" title="Effects" v-model="collapsibleState['fx']">
+					<SectionWrap id="fx" title="Effects" v-model="collapsibleState['fx']">
 						<template #tools>
 							<button class="pt-info-icon" aria-label="Advanced options"
 								@click="openFxAdvanced($event)">⋯</button>
@@ -324,7 +314,7 @@
 						</Teleport>
 						<!-- overlay to close -->
 						<div v-if="fxAdvanced.open" class="mm-overlay" @click="fxAdvanced.open = false"></div>
-					</CollapsibleCard>
+					</SectionWrap>
 				</div>
 			</section>
 
@@ -462,7 +452,7 @@ import NoiseModule from './modules/NoiseModule.vue';
 import PadSettingsPopover from './PadSettingsPopover.vue';
 import PatternTools from './PatternTools.vue';
 import SynthStepGrid from './SynthStepGrid.vue'
-import CollapsibleCard from './CollapsibleCard.vue';
+import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
 import MelodyMaker from './MelodyMaker.vue';
 // import SequencerKeyboard from './SequencerKeyboard.vue';
@@ -483,7 +473,6 @@ import { audioBufferToWavFloat32 } from '../audio/export/encodeWav';
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 //SEQUENCER TOOLS START
-// --- Step toolbar state ---
 const stepLength = ref<16 | 32>(16);
 const showVelocity = ref(true);
 const showPitch = ref(true);
@@ -523,9 +512,9 @@ const lfoRef = ref<InstanceType<typeof LFOGroup> | null>(null);
 const lfoRetrigger = ref(false)
 const lfoBipolar = ref(false)
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 //Effects Panel Advanced Menu BEGIN
-// FX Advanced 
 const fxAdvanced = reactive({ open: false, x: 0, y: 0 });
 
 const fxAnchor = ref<HTMLElement | null>(null);
@@ -538,8 +527,12 @@ function openFxAdvanced(e: MouseEvent) {
 }
 
 function onFxEsc(e: KeyboardEvent) {
-	if (e.key === 'Escape' && fxAdvanced.open) fxAdvanced.open = false;
+	if (e.key === 'Escape') {
+		if (fxAdvanced.open) fxAdvanced.open = false;
+		if (stepsAdvanced.open) stepsAdvanced.open = false;
+	}
 }
+
 onMounted(() => window.addEventListener('keydown', onFxEsc, { capture: true }));
 onBeforeUnmount(() => window.removeEventListener('keydown', onFxEsc, { capture: true } as any));
 
@@ -556,7 +549,25 @@ function resetDelayDrive() {
 }
 //Effects Panel Advanced Menu END
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
+// Step Sequencer — Advanced BEGIN
+const stepsAdvanced = reactive({ open: false, x: 0, y: 0 });
+
+function openStepsAdvanced(e: MouseEvent) {
+	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+	stepsAdvanced.x = Math.round(r.right + 8);
+	stepsAdvanced.y = Math.round(r.bottom + 8);
+	stepsAdvanced.open = true;
+}
+
+function resetStepSeqAdvanced() {
+	showVelocity.value = true;
+	showPitch.value = true;
+}
+// Step Sequencer — Advanced END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 // PANEL MENU START
 
@@ -598,7 +609,7 @@ function closeOverlays() {
 	for (const k in info) (info as any)[k].open = false;
 }
 
-ui.menus.steps = ui.menus.steps ?? { open: false };
+// ui.menus.steps = ui.menus.steps ?? { open: false };
 
 // single checkbox that controls both sliders
 const padSlidersOn = computed({
@@ -611,15 +622,6 @@ function closeMenus() {
 	for (const k in ui.menus) (ui.menus as any)[k].open = false;
 }
 
-function onDocClick(e: MouseEvent) {
-	if (!ui.menus.steps.open) return
-	const menuEl = document.querySelector('.pt-menu.step-menu')
-	const btnEl = document.querySelector('.step-menu-anchor button')
-	const target = e.target as Node
-	if (menuEl && !menuEl.contains(target) && btnEl && !btnEl.contains(target)) {
-		closeMenus()
-	}
-}
 // PANEL MENU END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -881,7 +883,7 @@ function startSpectrogram() {
 		return { bg, low, mid, high, peak };
 	};
 
-	// Make a tiny signature so we can detect when theme vars change
+	// Make a tiny signature to detect when theme vars change
 	const signatureOf = (t: ReturnType<typeof readTheme>) =>
 		`${t.bg}|${t.low}|${t.mid}|${t.high}|${t.peak}`;
 
@@ -917,9 +919,8 @@ function startSpectrogram() {
 
 			const dpr = window.devicePixelRatio || 1;
 
-			// copy old image left by *one CSS pixel* without resampling
 			ctx.save();
-			ctx.setTransform(1, 0, 0, 1, 0, 0); // switch to device-pixel space
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.imageSmoothingEnabled = false;
 			ctx.drawImage(
 				canvas,
@@ -929,8 +930,6 @@ function startSpectrogram() {
 				canvas.width - 1 * dpr, canvas.height
 			);
 			ctx.restore();
-
-
 		}
 
 		// Fetch spectrum
@@ -1138,7 +1137,10 @@ onMounted(() => {
 	startEnvViz();
 	window.addEventListener('keydown', onGlobalKeydown, { capture: true });
 	window.addEventListener('keyup', onGlobalKeyup, { capture: true });
-	document.addEventListener('click', onDocClick, { capture: true })
+	// document.addEventListener('click', onDocClick, { capture: true })
+
+	window.addEventListener('mouseup', stopTempoRepeat);
+	window.addEventListener('touchend', stopTempoRepeat);
 
 });
 onBeforeUnmount(() => {
@@ -1146,10 +1148,14 @@ onBeforeUnmount(() => {
 	window.removeEventListener('mouseup', handleMouseUp);
 	window.removeEventListener('keydown', onGlobalKeydown, { capture: true } as any);
 	window.removeEventListener('keyup', onGlobalKeyup, { capture: true } as any);
-	document.removeEventListener('click', onDocClick, { capture: true })
+	// document.removeEventListener('click', onDocClick, { capture: true })
 
 	if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
 	stopSnh();
+
+	window.removeEventListener('mouseup', stopTempoRepeat as any);
+	window.removeEventListener('touchend', stopTempoRepeat as any);
+	clearTempoRepeat();
 
 });
 // MPC Screen END
@@ -1373,7 +1379,6 @@ const availableOctaves = computed(() => {
 	}
 	return octs;
 });
-
 
 //  sampler channels only (kick/snare/hihat + customs) with the “Add Channel” row
 const ADD_ROW = { key: 'add-row', isAddButton: true } as const;
@@ -1653,6 +1658,56 @@ const isPlaying = ref(false);
 const currentStep = ref(-1);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+
+// TEMPO Controls START
+
+// --- Tempo helpers (whole-number BPM only) ---
+const MIN_BPM = 20;
+const MAX_BPM = 300;
+
+function setTempoClamp(v: number) {
+	// force integers, clamp to range
+	tempo.value = Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(v)));
+}
+
+function nudgeTempo(delta: number) {
+	setTempoClamp(tempo.value + delta);
+}
+
+// Hold-to-repeat (click-and-hold on +/-)
+let tempoRepeatTimer: number | null = null;
+let tempoRepeatInterval: number | null = null;
+
+function startTempoRepeat(delta: number) {
+	// immediate nudge for a single tap
+	nudgeTempo(delta);
+
+	// start repeating after a brief delay, then repeat quickly
+	clearTempoRepeat();
+	tempoRepeatTimer = window.setTimeout(() => {
+		tempoRepeatInterval = window.setInterval(() => nudgeTempo(delta), 60);
+	}, 350);
+}
+
+function stopTempoRepeat() {
+	clearTempoRepeat();
+}
+
+function clearTempoRepeat() {
+	if (tempoRepeatTimer != null) { clearTimeout(tempoRepeatTimer); tempoRepeatTimer = null; }
+	if (tempoRepeatInterval != null) { clearInterval(tempoRepeatInterval); tempoRepeatInterval = null; }
+}
+
+// Guard: if something ever sets a non-integer, normalize it.
+watch(tempo, (v) => {
+	if (!Number.isInteger(v)) setTempoClamp(v);
+});
+
+
+// TEMPO Controls END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 
 // Export to wav file START
 
@@ -2372,7 +2427,7 @@ async function exportCurrentPattern() {
 		// Schedule the step sequencer synth only
 		scheduleStepSequencer(off, exportState.value, 0);
 
-		// Render!
+		// Render
 		const rendered: AudioBuffer = await off.startRendering();
 
 		// Encode to 32-bit float WAV
@@ -2978,11 +3033,7 @@ function resetUiToFactoryDefaults() {
 	isPlaying.value = false;
 }
 //RESET TO FACTORY DEFAULTS ON NEW PROJECT END 
-
-
 </script>
-
-
 
 <style scoped>
 .ds-grid {
@@ -3091,8 +3142,6 @@ function resetUiToFactoryDefaults() {
 	.pt-btn-group .pt-btn {
 		min-height: 28px;
 	}
-
-
 
 	.pt-knob-row {
 		gap: 10px;
@@ -3499,43 +3548,15 @@ function resetUiToFactoryDefaults() {
 	position: relative;
 }
 
-.pt-menu.step-menu {
-	position: absolute;
-	left: 0;
-	top: calc(100% + 6px);
-	min-width: 240px;
-	z-index: 1001;
-}
-
 .pt-menu-title {
 	font-weight: 600;
 	padding: 6px 10px;
 	opacity: .9;
 }
 
-.step-menu-overlay {
-	position: absolute;
-	inset: 0;
-	z-index: 10;
-}
-
 .pt-menu .pt-option.is-disabled {
 	opacity: .5;
 	pointer-events: none;
-}
-
-.step-menu-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 4px 8px;
-	position: relative;
-}
-
-.step-menu-header .close-btn {
-	position: absolute;
-	right: 8px;
-	top: 4px;
 }
 
 .wave-row {
@@ -3580,8 +3601,8 @@ function resetUiToFactoryDefaults() {
 }
 
 .mm-menu {
-	position: fixed;
-	min-width: 280px;
+	position: absolute;
+	min-width: 330px;
 	border-radius: 12px;
 	box-shadow: 0 12px 40px rgb(0 0 0 / .45);
 	padding: 10px;
@@ -3653,6 +3674,13 @@ function resetUiToFactoryDefaults() {
 	left: calc(100% - var(--kn) - 2px);
 }
 
+.mm-menu.is-local {
+	left: calc(100% + 8px);
+	top: 0;
+	right: auto;
+	bottom: auto;
+}
+
 .mm-overlay {
 	position: fixed;
 	inset: 0;
@@ -3686,7 +3714,6 @@ function resetUiToFactoryDefaults() {
 	color: #fff;
 	background: linear-gradient(180deg, var(--bg-top), var(--bg-bot));
 	box-shadow: 0 10px 20px rgba(0, 0, 0, .35);
-	/* soft outer glow */
 	transition: background 90ms ease, box-shadow 90ms ease;
 }
 
@@ -3698,62 +3725,33 @@ function resetUiToFactoryDefaults() {
 	border-radius: calc(var(--r) - 2px);
 	box-shadow:
 		inset 0 0 0 2px rgba(255, 255, 255, .16),
-		/* thin ring */
 		inset 0 8px 16px rgba(255, 255, 255, .10),
-		/* top highlight */
 		inset 0 -10px 22px rgba(0, 0, 0, .28);
-	/* bottom cavity */
 	pointer-events: none;
 	transition: box-shadow 90ms ease, opacity 90ms ease;
 }
 
-/* pressed: deepen the cavity, reduce highlight, slightly dim face */
-/* .pt-btn.btn3d:active,
+.pt-btn.btn3d:active,
 .pt-btn.btn3d.active {
 	background: linear-gradient(180deg,
-			color-mix(in srgb, var(--bg-top) 82%, black 18%),
-			color-mix(in srgb, var(--bg-bot) 82%, black 18%));
-	box-shadow: 0 6px 14px rgba(0, 0, 0, .28);
+			color-mix(in srgb, var(--bg-top) 92%, black 8%),
+			color-mix(in srgb, var(--bg-bot) 92%, black 8%));
+	box-shadow: 0 9px 18px rgba(0, 0, 0, .32);
 }
 
 .pt-btn.btn3d:active::before,
 .pt-btn.btn3d.active::before {
 	box-shadow:
-		inset 0 0 0 2px rgba(255, 255, 255, .12),
-		inset 0 2px 6px rgba(255, 255, 255, .06),
-		inset 0 12px 26px rgba(0, 0, 0, .55);
-} */
-
-/* Subtle pressed look */
-.pt-btn.btn3d:active,
-.pt-btn.btn3d.active{
-  /* darker by ~8–10% instead of ~18% */
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-top) 92%, black 8%),
-    color-mix(in srgb, var(--bg-bot) 92%, black 8%)
-  );
-  /* keep the outer shadow almost the same */
-  box-shadow: 0 9px 18px rgba(0,0,0,.32);
+		inset 0 0 0 2px rgba(255, 255, 255, .14),
+		inset 0 6px 12px rgba(255, 255, 255, .09),
+		inset 0 -12px 22px rgba(0, 0, 0, .38);
 }
 
-.pt-btn.btn3d:active::before,
-.pt-btn.btn3d.active::before{
-  /* lighten the change vs default */
-  box-shadow:
-    inset 0 0 0 2px rgba(255,255,255,.14),   /* was .16 on default, .12 on active */
-    inset 0 6px 12px rgba(255,255,255,.09), /* slightly less highlight reduction */
-    inset 0 -12px 22px rgba(0,0,0,.38);     /* was .55 — much softer cavity */
-}
-
-/* Optional: smoother feel */
 .pt-btn.btn3d,
-.pt-btn.btn3d::before{
-  transition: background 140ms ease, box-shadow 140ms ease;
+.pt-btn.btn3d::before {
+	transition: background 140ms ease, box-shadow 140ms ease;
 }
 
-
-/* face/icon stays put (no translate) */
 .pt-btn.btn3d .btn-face {
 	position: relative;
 	z-index: 1;
@@ -3770,7 +3768,6 @@ function resetUiToFactoryDefaults() {
 	fill: currentColor;
 }
 
-/* focus */
 .pt-btn.btn3d:focus {
 	outline: none;
 }
@@ -3778,5 +3775,46 @@ function resetUiToFactoryDefaults() {
 .pt-btn.btn3d:focus-visible {
 	outline: 3px solid #fff;
 	outline-offset: 2px;
+}
+
+.tempo-wrap {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+}
+
+.tempo-stepper {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 2px;
+	user-select: none;
+}
+
+.stepper-btn {
+	min-width: 26px;
+	min-height: 26px;
+	border-radius: 8px;
+	border: 1px solid var(--pt-hairline, #2a2f3a);
+	background: var(--pt-surface-2, #1c202b);
+	color: var(--pt-text, #e9e9ef);
+	line-height: 1;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.stepper-value {
+	min-width: 42px;
+	padding: 2px 8px;
+	border-radius: 8px;
+	border: 1px solid var(--pt-hairline, #2a2f3a);
+	background: var(--pt-surface-1, #232733);
+	color: var(--pt-text, #e9e9ef);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+	font-weight: 700;
+	font-size: 13px;
+	line-height: 1.2;
+	text-align: center;
 }
 </style>
