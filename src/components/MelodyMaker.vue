@@ -68,7 +68,7 @@
             <!-- Advanced menu -->
             <div v-if="advancedOpen" class="mm-menu" @click.stop
                 :style="{ left: (advPos?.x ?? 0) + 'px', top: (advPos?.y ?? 0) + 'px' }" role="menu">
-                <div class="mm-menu-title">Advanced</div>
+                <div class="mm-menu-title">Advanced Options</div>
 
                 <div class="mm-opt" role="menuitem" @click="applyScope = (applyScope === 'active' ? 'all' : 'active')">
                     <span>Apply to active only</span>

@@ -65,7 +65,7 @@
             <!-- ===== Advanced menu (positioned like Melody) ===== -->
             <div v-if="advancedOpen" class="mm-menu" role="menu" @click.stop
                 :style="{ left: (advPos?.x ?? 0) + 'px', top: (advPos?.y ?? 0) + 'px' }">
-                <div class="mm-menu-title">Advanced</div>
+                <div class="mm-menu-title">Advanced Options</div>
 
                 <!-- Retrigger -->
                 <div class="mm-opt" role="menuitem" @click="retriggerLocal = !retriggerLocal">

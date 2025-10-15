@@ -21,12 +21,19 @@
 					<h2 class="pt-title mb-2">Ephemeral Wave</h2>
 					<div class="pt-knob-row transport-row">
 						<!-- Volume -->
-						<div class="position-relative text-center">
+						<div class="position-relative text-center knob-wrap">
 							<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
-							<span v-if="activeKnob === 'volume'" class="custom-tooltip">{{ Math.round(volume * 100)
-							}}%</span>
+							<span v-if="activeKnob === 'volume'" class="custom-tooltip">
+								{{ Math.round(volume * 100) }}%
+							</span>
+
+					
+							<div class="stepper-value" aria-live="polite" :title="`${Math.round(volume * 100)}%`">
+								{{ Math.round(volume * 100) }}%
+							</div>
 						</div>
+
 
 						<!-- Tempo (Knob + Stepper) -->
 						<div class="position-relative text-center tempo-wrap">
@@ -49,12 +56,18 @@
 						</div>
 
 						<!-- Swing -->
-						<div class="position-relative text-center">
+						<div class="position-relative text-center knob-wrap">
 							<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
-							<span v-if="activeKnob === 'swing'" class="custom-tooltip">{{ Math.round(swing * 100)
-							}}%</span>
+							<span v-if="activeKnob === 'swing'" class="custom-tooltip">
+								{{ Math.round(swing * 100) }}%
+							</span>
+
+							<div class="stepper-value" aria-live="polite" :title="`${Math.round(swing * 100)}% swing`">
+								{{ Math.round(swing * 100) }}%
+							</div>
 						</div>
+
 
 						<!-- Play/Stop -->
 						<button type="button" class="pt-btn btn-lg btn3d" @click="togglePlay"
@@ -117,7 +130,7 @@
 							@click="stepsAdvanced.open = !stepsAdvanced.open">⋯</button>
 
 						<div v-if="stepsAdvanced.open" class="mm-menu is-local" @click.stop>
-							<div class="mm-menu-title">Step Sequencer — Advanced</div>
+							<div class="mm-menu-title">Advanced Options</div>
 
 							<div class="mm-opt" role="menuitem" @click="togglePadSliders()">
 								<span>Pad Velocity/Pitch Sliders</span>
@@ -127,9 +140,10 @@
 
 							<div class="pt-rule" aria-hidden="true"></div>
 
-							<div class="mm-reset" role="menuitem" @click.stop="resetStepSeqAdvanced()">
-								Reset Step Sequencer UI
+							<div class="mm-reset" role="menuitem" @click.stop="resetSynthPadsToDefaults()">
+								Reset Pads
 							</div>
+
 						</div>
 					</div>
 
@@ -284,7 +298,7 @@
 
 								<div class="mm-menu" :style="{ left: fxAdvanced.x + 'px', top: fxAdvanced.y + 'px' }"
 									@click.stop>
-									<div class="mm-menu-title">Effects — Advanced</div>
+									<div class="mm-menu-title">Advanced Options</div>
 
 									<div class="mm-opt" role="menuitem" @click="delayEnabled = !delayEnabled">
 										<span>Delay enabled</span>
@@ -561,10 +575,30 @@ function openStepsAdvanced(e: MouseEvent) {
 	stepsAdvanced.open = true;
 }
 
-function resetStepSeqAdvanced() {
-	showVelocity.value = true;
-	showPitch.value = true;
+function resetSynthPadsToDefaults() {
+	const inst = synthInstrument.value as any;
+	if (!inst) return;
+
+	// Force the baseline back to A3 as requested
+	selectedKeyRoot.value = 'A';
+	globalOctaveOffset.value = 0;
+
+	const len = stepLength.value;
+	const baseHz = freqForRootAtOct('A', defaultOctaveForPads); // A3
+
+	// Clear selection, reset per-pad volume, melody, and waveform
+	inst.steps = Array(len).fill(false);
+	inst.velocities = Array(len).fill(1.0);                     // 100%
+	inst.pitches = Array(len).fill(baseHz);                  // A3
+	inst.waveforms = Array(len).fill('sine' as OscillatorType);
+
+	// Keep the global waveform selector consistent with pad defaults
+	selectedWaveform.value = 'sine';
+
+	// Close the menu after resetting
+	stepsAdvanced.open = false;
 }
+
 // Step Sequencer — Advanced END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -3781,7 +3815,6 @@ function resetUiToFactoryDefaults() {
 	display: inline-flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 6px;
 }
 
 .tempo-stepper {
@@ -3794,7 +3827,7 @@ function resetUiToFactoryDefaults() {
 
 .stepper-btn {
 	min-width: 26px;
-	min-height: 26px;
+	/* min-height: 26px; */
 	border-radius: 8px;
 	border: 1px solid var(--pt-hairline, #2a2f3a);
 	background: var(--pt-surface-2, #1c202b);
@@ -3816,5 +3849,19 @@ function resetUiToFactoryDefaults() {
 	font-size: 13px;
 	line-height: 1.2;
 	text-align: center;
+}
+
+
+.knob-wrap {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+
+
+}
+
+.knob-wrap .stepper-value {
+	font-variant-numeric: tabular-nums;
+	min-width: 42px;
 }
 </style>

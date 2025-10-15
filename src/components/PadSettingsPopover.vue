@@ -232,6 +232,7 @@ function setWave(w: Wave) { waveLocal.value = w; }
     overflow: visible;
 }
 
+/* 
 .kb {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -263,7 +264,7 @@ function setWave(w: Wave) { waveLocal.value = w; }
 
 .kb-cell.has-sharp {
     padding-top: 12px;
-}
+} */
 
 .pad-row {
     display: grid;
@@ -325,5 +326,168 @@ function setWave(w: Wave) { waveLocal.value = w; }
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
+}
+
+
+/* ==== Piano keyboard (drop-in) ========================================= */
+
+.kb {
+    --gap: 2px;
+    /* space between white keys */
+    --whiteH: 108px;
+    /* white key height */
+    --blackH: 66px;
+    /* black key height */
+    --radius: 8px;
+
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--gap);
+    margin: 8px 0 16px;
+    padding: 8px 6px 10px;
+    border-radius: var(--pt-radius-md);
+    background: linear-gradient(180deg, transparent, rgb(0 0 0 / .06));
+    position: relative;
+    /* piano colors derived from theme, with fallbacks */
+    --white1: color-mix(in oklab, white 94%, var(--pt-panel) 6%);
+    --white2: color-mix(in oklab, white 82%, var(--pt-panel) 18%);
+    --black1: color-mix(in oklab, #0b0f1a 90%, var(--pt-panel) 10%);
+    --black2: color-mix(in oklab, #070a12 95%, var(--pt-panel) 5%);
+}
+
+@supports not (color: color-mix(in oklab, white, black)) {
+    .kb {
+        --white1: #eceff4;
+        --white2: #cfd6e1;
+        --black1: #0c111d;
+        --black2: #080b13;
+    }
+}
+
+
+/* each natural (C D E F G A B) is a white key cell */
+.kb-cell {
+    position: relative;
+    height: var(--whiteH);
+}
+
+.kb :where(.pt-seg-btn) {
+    all: unset;
+    /* nuke pill styles */
+    line-height: 1;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+/* ---------------- White keys ---------------- */
+.kb-white {
+    width: 100%;
+    height: 100%;
+    border-radius: 0 0 var(--radius) var(--radius);
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / .06),
+        0 3px 0 rgb(0 0 0 / .55),
+        0 8px 18px rgb(0 0 0 / .25);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 6px;
+    font-weight: 700;
+    /* color: var(--pt-text); */
+    color: #000;
+    cursor: pointer;
+    transition: transform .03s ease, box-shadow .12s ease, filter .12s ease;
+    background:
+        linear-gradient(180deg, var(--white1), var(--white2)) padding-box,
+        linear-gradient(145deg, rgb(0 0 0 / .22), rgb(255 255 255 / .06)) border-box;
+    border: 1px solid rgb(0 0 0 / .55);
+}
+
+.kb-white:is(:hover, :focus-visible) {
+    filter: brightness(1.04);
+    outline: none;
+}
+
+.kb-white:active {
+    transform: translateY(1px);
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / .04),
+        0 2px 0 rgb(0 0 0 / .55),
+        0 6px 14px rgb(0 0 0 / .25);
+}
+
+.kb-white.is-active {
+    box-shadow:
+        inset 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .9),
+        inset 0 1px 0 rgb(255 255 255 / .05),
+        0 3px 0 rgb(0 0 0 / .55),
+        0 10px 20px rgb(0 0 0 / .3);
+}
+
+/* disabled note (out of Hz range) */
+.kb-white:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+/* ---------------- Black keys ---------------- */
+.kb-black {
+    --whiteW: 100%;
+    width: calc(0.6 * var(--whiteW));
+    height: var(--blackH);
+    position: absolute;
+    top: 0;
+    right: calc(-0.3 * var(--whiteW) - var(--gap) / 2);
+    border-radius: 0 0 6px 6px;
+
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / .05),
+        0 2px 0 rgb(0 0 0 / .8),
+        0 8px 14px rgb(0 0 0 / .35);
+    z-index: 2;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 4px;
+    font-size: .75rem;
+    font-weight: 700;
+    color: #dfe7ff;
+    cursor: pointer;
+    transition: transform .03s ease, box-shadow .12s ease, filter .12s ease;
+
+    background:
+        linear-gradient(180deg, var(--black1), var(--black2)) padding-box,
+        linear-gradient(145deg, #1a2334, #0b0f1a) border-box;
+    border: 1px solid rgb(0 0 0 / .7);
+}
+
+.kb-black:is(:hover, :focus-visible) {
+    filter: brightness(1.08);
+    outline: none;
+}
+
+.kb-black:active {
+    transform: translateY(1px);
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / .04),
+        0 1px 0 rgb(0 0 0 / .8),
+        0 6px 12px rgb(0 0 0 / .35);
+}
+
+.kb-black.is-active {
+    box-shadow:
+        0 0 0 2px hsl(var(--pt-accent) 90% 60% / .9),
+        inset 0 1px 0 rgb(255 255 255 / .05),
+        0 2px 0 rgb(0 0 0 / .8),
+        0 10px 18px rgb(0 0 0 / .4);
+}
+
+.kb-black:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.kb-cell.has-sharp {
+    padding-top: 0;
 }
 </style>
