@@ -68,14 +68,17 @@
             <!-- Advanced menu -->
             <div v-if="advancedOpen" class="mm-menu" @click.stop
                 :style="{ left: (advPos?.x ?? 0) + 'px', top: (advPos?.y ?? 0) + 'px' }" role="menu">
+
                 <div class="mm-menu-title">Advanced Options</div>
+
+                <!-- ===== Melody Maker ===== -->
+                <div class="mm-subtitle">Melody</div>
 
                 <div class="mm-opt" role="menuitem" @click="applyScope = (applyScope === 'active' ? 'all' : 'active')">
                     <span>Apply to active only</span>
-                    <button class="mm-switch" :class="{ on: applyScope === 'active' }">
-                        <span class="kn"></span>
-                    </button>
+                    <button class="mm-switch" :class="{ on: applyScope === 'active' }"><span class="kn"></span></button>
                 </div>
+
                 <div class="mm-opt" role="menuitem" @click="startOnTonic = !startOnTonic">
                     <span>Start on tonic</span>
                     <button class="mm-switch" :class="{ on: startOnTonic }"><span class="kn"></span></button>
@@ -86,16 +89,54 @@
                     <button class="mm-switch" :class="{ on: emphasizeDownbeats }"><span class="kn"></span></button>
                 </div>
 
+                <div class="mm-sep"></div>
+
+                <!-- ===== Arpeggio ===== -->
+                <div class="mm-subtitle">Arpeggio</div>
+
                 <div class="mm-opt" role="menuitem" @click="arpSeventhOnDownbeat = !arpSeventhOnDownbeat">
-                    <span>Include 7th on downbeats (arp)</span>
+                    <span>Include 7th on downbeats</span>
                     <button class="mm-switch" :class="{ on: arpSeventhOnDownbeat }"><span class="kn"></span></button>
                 </div>
+
+                <div class="mm-opt" role="menuitem" @click.stop="
+                    arpStart = arpStart === 'low' ? 'center' :
+                        arpStart === 'center' ? 'high' :
+                            arpStart === 'high' ? 'random' : 'low'
+                    ">
+                    <span>Arp start: {{ arpStart }}</span>
+                </div>
+
+                <div class="mm-opt" role="menuitem"
+                    @click.stop="arpRepeat = (arpRepeat === 3 ? 1 : (arpRepeat + 1 as 1 | 2 | 3))">
+                    <span>Repeat each note: ×{{ arpRepeat }}</span>
+                </div>
+
+                <div class="mm-opt" role="menuitem" @click.stop="arpStride = (arpStride === 1 ? 2 : 1)">
+                    <span>Skip every other tone</span>
+                    <button class="mm-switch" :class="{ on: arpStride === 2 }"><span class="kn"></span></button>
+                </div>
+
+                <div class="mm-opt" role="menuitem" @click.stop="arpHop = !arpHop">
+                    <span>Occasional octave hops</span>
+                    <button class="mm-switch" :class="{ on: arpHop }"><span class="kn"></span></button>
+                </div>
+
+                <div class="mm-sep"></div>
+
+                <!-- ===== Utilities ===== -->
+                <div class="mm-subtitle">Utilities</div>
+
                 <div class="mm-opt" role="menuitem" :aria-disabled="!lastFrequencies"
                     :class="{ 'is-disabled': !lastFrequencies }" @click.stop="lastFrequencies && undo()">
-                    Undo last melody (expand later)
+                    Undo last melody
                 </div>
-                <div class="mm-reset" role="menuitem" @click.stop="resetAdvanced">Reset Settings to defaults</div>
+
+                <div class="mm-reset" role="menuitem" @click.stop="resetAdvanced">
+                    Reset settings to defaults
+                </div>
             </div>
+
 
             <!-- overlay to close menu when clicking outside -->
             <div v-if="advancedOpen" class="mm-overlay" @click="advancedOpen = false"></div>
@@ -115,6 +156,27 @@ const props = defineProps<{
     maxFreq?: number;
     currentTheme?: string;
 }>();
+
+// Centralized defaults so the reset can't drift later
+const DEFAULTS_MELODY = {
+    applyScope: 'active' as 'active' | 'all',
+    startOnTonic: false,
+    emphasizeDownbeats: true,
+};
+
+const DEFAULTS_ARP = {
+    pattern: 'up' as 'up' | 'down' | 'updown' | 'random',
+    rate: '1/16' as '1/4' | '1/8' | '1/16',
+    octaves: 1 as 1 | 2 | 3 | 4,
+    tones: 'chord' as 'chord' | 'scale',
+    seventhOnDownbeat: false,
+    start: 'center' as 'low' | 'center' | 'high' | 'random',
+    repeat: 1 as 1 | 2 | 3,
+    stride: 1 as 1 | 2,
+    hop: false,
+};
+
+
 
 type Style = 'random' | 'natural' | 'up' | 'down' | 'arch' | 'zigzag';
 const style = ref<Style>('random'); // internal (smart melody)
@@ -356,10 +418,16 @@ function smartGenerate(): void {
 
 /* ---------- Arpeggiator ---------- */
 const arpPattern = ref<'up' | 'down' | 'updown' | 'random'>('up');
-const arpRate = ref<'1/16' | '1/8'>('1/16');
-const arpOctaves = ref<1 | 2>(1);
+const arpRate = ref<'1/4' | '1/8' | '1/16'>('1/16');
+const arpOctaves = ref<1 | 2 | 3 | 4>(1);                       // expanded
 const arpTones = ref<'chord' | 'scale'>('chord');
 const arpSeventhOnDownbeat = ref(false);
+
+/* Simple, useful “power” knobs */
+const arpStart = ref<'low' | 'center' | 'high' | 'random'>('center');
+const arpRepeat = ref<1 | 2 | 3>(1);
+const arpStride = ref<1 | 2>(1);         // 1 = consecutive (current), 2 = skip one
+const arpHop = ref(false);               // occasional +/- 1 octave hop
 
 const arpPatternOptions = [
     { label: 'Up', value: 'up' },
@@ -367,12 +435,55 @@ const arpPatternOptions = [
     { label: 'Up/Down', value: 'updown' },
     { label: 'Random', value: 'random' },
 ] as const;
+
 const arpRateOptions = [
-    { label: '1/16', value: '1/16' },
+    { label: '1/4', value: '1/4' },
     { label: '1/8', value: '1/8' },
+    { label: '1/16', value: '1/16' },
 ] as const;
-const arpOctaveOptions = [{ label: '1', value: 1 }, { label: '2', value: 2 }] as const;
-const arpToneOptions = [{ label: 'Chord', value: 'chord' }, { label: 'Scale', value: 'scale' }] as const;
+
+const arpOctaveOptions = [
+    { label: '1', value: 1 },
+    { label: '2', value: 2 },
+    { label: '3', value: 3 },
+    { label: '4', value: 4 },
+] as const;
+
+const arpToneOptions = [
+    { label: 'Chord', value: 'chord' },
+    { label: 'Scale', value: 'scale' },
+] as const;
+
+/* Small helpers */
+function rotate<T>(arr: T[], n: number) {
+    if (!arr.length) return arr;
+    const k = ((n % arr.length) + arr.length) % arr.length;
+    return arr.slice(k).concat(arr.slice(0, k));
+}
+function indicesWithStride(L: number, stride: number) {
+    if (stride <= 1) return Array.from({ length: L }, (_, i) => i);
+    // Interleave groups to still cover all items: 0,2,4,...,1,3,5,...
+    const out: number[] = [];
+    for (let start = 0; start < stride; start++) {
+        for (let i = start; i < L; i += stride) out.push(i);
+    }
+    return out;
+}
+function nearestIndexIn(arr: number[], base: number): number | null {
+    if (!arr.length) return null;
+    let best = 0, d = Math.abs(arr[0] - base);
+    for (let i = 1; i < arr.length; i++) {
+        const dd = Math.abs(arr[i] - base);
+        if (dd < d) { d = dd; best = i; }
+    }
+    return best;
+}
+function outwardOffsets(n: number) {
+    // 1 => [1], 2 => [1,-1], 3 => [1,-1,2], 4 => [1,-1,2,-2], ...
+    const out: number[] = [];
+    for (let k = 1; k <= n; k++) out.push(k * (k % 2 ? 1 : -1));
+    return out;
+}
 
 function bakeArp(): void {
     if (!props.frequencies || !props.frequencies.length) return;
@@ -384,19 +495,25 @@ function bakeArp(): void {
 
     const fMin = props.minFreq ?? 100;
     const fMax = props.maxFreq ?? 2000;
-    const pool = buildCandidateMidiPool(keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, fMin, fMax).sort((a, b) => a - b);
+
+    const pool = buildCandidateMidiPool(
+        keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, fMin, fMax
+    ).sort((a, b) => a - b);
     if (!pool.length) return;
 
     const stepsArr = SCALES[keyScale.value] ?? SCALES.major;
     const rootSemi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
 
+    // Tone inventory for chord/scale modes
     const toneSemitones = (mode: 'chord' | 'scale'): number[] => {
         if (mode === 'scale') return Array.from(new Set(stepsArr.map(s => (rootSemi + s) % 12)));
-        const chordIdx = [0, 2, 4].filter(i => i < stepsArr.length);
-        return chordIdx.map(i => (rootSemi + stepsArr[i]) % 12);
+        const chordIdx = [0, 2, 4]; // 1-3-5
+        const semis = chordIdx.filter(i => i < stepsArr.length).map(i => (rootSemi + stepsArr[i]) % 12);
+        return Array.from(new Set(semis));
     };
     const toneSemisArr = toneSemitones(arpTones.value);
 
+    // Group pool by semitone class
     const groups: Record<number, number[]> = {};
     for (const s of toneSemisArr) groups[s] = [];
     for (const m of pool) {
@@ -406,76 +523,124 @@ function bakeArp(): void {
     for (const s of toneSemisArr) groups[s].sort((a, b) => a - b);
 
     const center = pool[Math.floor(pool.length / 2)];
-    const nearestIn = (arr: number[], base: number): number | null => {
-        if (!arr.length) return null;
-        let best = arr[0], d = Math.abs(arr[0] - base);
-        for (let i = 1; i < arr.length; i++) { const dd = Math.abs(arr[i] - base); if (dd < d) { d = dd; best = arr[i]; } }
-        return best;
-    };
 
-    const baseOct = toneSemisArr.map(s => nearestIn(groups[s] ?? [], center)).filter((x): x is number => x !== null);
-    let ladder = [...new Set(baseOct)].sort((a, b) => a - b);
+    // Build the “ladder” across N octaves around center
+    let ladder: number[] = [];
+    for (const s of toneSemisArr) {
+        const g = groups[s] || [];
+        if (!g.length) continue;
 
-    if (arpOctaves.value === 2) {
-        const second: number[] = [];
-        for (const s of toneSemisArr) {
-            const g = groups[s] || []; const base = nearestIn(g, center);
-            if (!g.length || base === null) continue;
-            let higher = g.find(m => m > base);
-            if (!higher) {
-                const lower = g.slice().reverse().find(m => m < base);
-                if (lower) higher = lower;
-            }
-            if (higher) second.push(higher);
+        const i0 = nearestIndexIn(g, center);
+        if (i0 == null) continue;
+
+        const picks: number[] = [g[i0]];
+        const need = (arpOctaves.value - 1);
+        const offs = outwardOffsets(need);
+
+        for (const off of offs) {
+            const idx = i0 + off * 1; // each step in g is typically ~one octave apart for same pitch class
+            if (idx >= 0 && idx < g.length) picks.push(g[idx]);
+            if (picks.length >= arpOctaves.value) break;
         }
-        ladder = [...new Set([...ladder, ...second])].sort((a, b) => a - b);
+
+        ladder.push(...picks);
     }
+    ladder = [...new Set(ladder)].sort((a, b) => a - b);
     if (!ladder.length) return;
 
-    const idx = ladder.map((_, i) => i);
+    // Where to START in the ladder
+    let startIdx = 0;
+    if (arpStart.value === 'low') startIdx = 0;
+    else if (arpStart.value === 'high') startIdx = ladder.length - 1;
+    else if (arpStart.value === 'center') startIdx = Math.floor(ladder.length / 2);
+    else { const rand = freshRng(); startIdx = Math.floor(rand() * ladder.length); }
+
+    // Index order with stride
+    const baseIdx = indicesWithStride(ladder.length, arpStride.value); // e.g., 0,2,4,6,1,3,5,7 for stride=2
+    const posOfStart = baseIdx.indexOf(startIdx);
+    const rotated = posOfStart >= 0 ? rotate(baseIdx, posOfStart) : baseIdx;
+
     let orderIdx: number[] = [];
     switch (arpPattern.value) {
-        case 'up': orderIdx = idx; break;
-        case 'down': orderIdx = idx.slice().reverse(); break;
+        case 'up':
+            orderIdx = rotated;
+            break;
+        case 'down':
+            orderIdx = rotated.slice().reverse();
+            break;
         case 'updown': {
-            const up = idx;
-            const down = idx.slice().reverse().slice(1, -1);
+            const up = rotated;
+            const down = rotated.slice().reverse().slice(1, -1);
             orderIdx = up.concat(down.length ? down : []);
             break;
         }
         case 'random':
         default: {
             const rand = freshRng();
-            // Fisher–Yates with our RNG (stable and unbiased)
-            orderIdx = idx.slice();
+            orderIdx = rotated.slice();
             for (let i = orderIdx.length - 1; i > 0; i--) {
                 const j = Math.floor(rand() * (i + 1));
                 [orderIdx[i], orderIdx[j]] = [orderIdx[j], orderIdx[i]];
             }
-            break;
         }
     }
     const order = orderIdx.map(i => ladder[i]);
     if (!order.length) return;
 
-    const groupSize = arpRate.value === '1/8' ? 2 : 1;
+    // Map to the grid by rate
+
+    const RATE_TO_GROUP: Record<string, number> = {
+        '1/4': 4,
+        '1/8': 2,
+        '1/16': 1,
+    }; const groupSize = RATE_TO_GROUP[arpRate.value] ?? 1;
+
     const groupsOfIdx: number[][] = [];
     for (let k = 0; k < activeIdx.length; k += groupSize) groupsOfIdx.push(activeIdx.slice(k, k + groupSize));
 
+    // 7th on downbeats
     const seventhSemi = stepsArr.length >= 7 ? (rootSemi + stepsArr[6]) % 12 : null;
     const seventhCandidates = (seventhSemi != null) ? pool.filter(m => (((m % 12) + 12) % 12) === seventhSemi) : [];
+    const rand = freshRng();
 
+    function maybeHop(midi: number): number {
+        if (!arpHop.value) return midi;
+        if (rand() < 0.2) { // ~20%
+            const s = ((midi % 12) + 12) % 12;
+            const g = groups[s] || [];
+            if (!g.length) return midi;
+            const dir = rand() < 0.5 ? -1 : +1;
+            if (dir > 0) {
+                const higher = g.find(x => x > midi);
+                if (higher != null) return higher;
+            } else {
+                const lower = g.slice().reverse().find(x => x < midi);
+                if (lower != null) return lower;
+            }
+        }
+        return midi;
+    }
+
+    // Write into the sequence (repeat each note ×N)
     let p = 0;
+    let repeatsLeft = arpRepeat.value;
+
     for (const g of groupsOfIdx) {
         if (!g.length) continue;
         const firstStep = g[0];
         let midi: number | undefined;
 
         if (arpSeventhOnDownbeat.value && seventhCandidates.length && (firstStep % 4 === 0)) {
-            const m7 = nearestIn(seventhCandidates, center);
-            if (m7 != null) midi = m7;
+            const i = nearestIndexIn(seventhCandidates, center);
+            if (i != null) midi = seventhCandidates[i];
         }
-        if (midi === undefined) { midi = order[p % order.length]; p++; }
+
+        if (midi === undefined) {
+            if (repeatsLeft <= 0) { p++; repeatsLeft = arpRepeat.value; }
+            repeatsLeft--;
+            midi = order[p % order.length];
+            midi = maybeHop(midi);
+        }
 
         const hz = midiToFreq(midi);
         for (const stepIndex of g) out[stepIndex] = hz;
@@ -484,6 +649,8 @@ function bakeArp(): void {
     rememberBeforeWrite();
     emit('update:frequencies', out);
 }
+
+
 
 /* ---------- UI state & helpers ---------- */
 const advancedOpen = ref(false);
@@ -539,11 +706,24 @@ window.addEventListener('keydown', onKey, { capture: true });
 onUnmounted(() => window.removeEventListener('keydown', onKey));
 
 function resetAdvanced() {
-    applyScope.value = 'active';
-    startOnTonic.value = false;
-    emphasizeDownbeats.value = true;
-    arpSeventhOnDownbeat.value = false;
+    // Melody defaults
+    applyScope.value = DEFAULTS_MELODY.applyScope;
+    startOnTonic.value = DEFAULTS_MELODY.startOnTonic;
+    emphasizeDownbeats.value = DEFAULTS_MELODY.emphasizeDownbeats;
+
+    // Arpeggio defaults
+    arpPattern.value = DEFAULTS_ARP.pattern;
+    arpRate.value = DEFAULTS_ARP.rate;
+    arpOctaves.value = DEFAULTS_ARP.octaves;
+    arpTones.value = DEFAULTS_ARP.tones;
+
+    arpSeventhOnDownbeat.value = DEFAULTS_ARP.seventhOnDownbeat;
+    arpStart.value = DEFAULTS_ARP.start;
+    arpRepeat.value = DEFAULTS_ARP.repeat;
+    arpStride.value = DEFAULTS_ARP.stride;
+    arpHop.value = DEFAULTS_ARP.hop;
 }
+
 </script>
 
 <style scoped>
@@ -835,5 +1015,23 @@ function resetAdvanced() {
 
 .melody-btn {
     color: var(--pt-text-strong);
+}
+
+
+.mm-subtitle {
+    font-weight: 700;
+    font-size: .85rem;
+    letter-spacing: .02em;
+    color: #c7cee0;
+    opacity: .9;
+    padding: 8px 8px 4px;
+}
+
+.mm-sep {
+    height: 1px;
+    background: var(--pt-hairline);
+    opacity: .6;
+    margin: 8px 6px;
+    border-radius: 1px;
 }
 </style>
