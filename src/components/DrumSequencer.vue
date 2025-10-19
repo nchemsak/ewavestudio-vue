@@ -34,7 +34,6 @@
 							</div>
 						</div>
 
-
 						<!-- Tempo (Knob + Stepper) -->
 						<div class="position-relative text-center tempo-wrap">
 							<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium"
@@ -68,7 +67,6 @@
 							</div>
 						</div>
 
-
 						<!-- Play/Stop -->
 						<button type="button" class="pt-btn btn-lg btn3d" @click="togglePlay"
 							:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
@@ -94,7 +92,6 @@
 								<span v-else>Export WAV</span>
 							</button>
 						</div>
-
 					</div>
 				</div>
 			</section>
@@ -225,8 +222,9 @@
 							<div class="noise-inline">
 								<button class="pt-dot" :class="{ 'is-on': noiseEnabled }" :aria-pressed="noiseEnabled"
 									title="Toggle noise" @click="noiseEnabled = !noiseEnabled"></button>
-								<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled" v-model:type="noiseType"
-									v-model:amount="noiseAmount" :color="'#9C27B0'" />
+								<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
+									v-model:amount="noiseAmount" v-model:colorMorph="noiseColor" :color="'#9C27B0'" />
+
 							</div>
 						</div>
 					</SectionWrap>
@@ -1519,11 +1517,25 @@ const pitchEnvDecay = computed(() => pitchEnvDecayMs.value / 1000)  // seconds
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Noise START
-type NoiseType = 'white' | 'pink' | 'brown'
-const noiseBuffers: Record<NoiseType, AudioBuffer | null> = {
-	white: null, pink: null, brown: null
+// type NoiseType = 'white' | 'pink' | 'brown'
+// const noiseBuffers: Record<NoiseType, AudioBuffer | null> = {
+// 	white: null, pink: null, brown: null
+// }
+// const noiseType = ref<NoiseType>('white') // default selection
+
+type NoiseKey = 'brown' | 'pink' | 'white' | 'blue' | 'violet'
+const NOISE_STOPS: { key: NoiseKey; pos: number }[] = [
+	{ key: 'brown', pos: 0.00 },
+	{ key: 'pink', pos: 0.25 },
+	{ key: 'white', pos: 0.50 },
+	{ key: 'blue', pos: 0.75 },
+	{ key: 'violet', pos: 1.00 },
+]
+const noiseBuffers: Record<NoiseKey, AudioBuffer | null> = {
+	brown: null, pink: null, white: null, blue: null, violet: null
 }
-const noiseType = ref<NoiseType>('white') // default selection
+// continuous color morph 0..1  (0=brown → 1=violet)
+const noiseColor = ref(0.5)
 
 const noiseAmount = ref(0); // 0 = no noise, 1 = full noise
 const noiseEnabled = ref(true)
@@ -1748,7 +1760,6 @@ watch(tempo, (v) => {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-
 // Export to wav file START
 
 // === Export: state ===
@@ -1780,7 +1791,19 @@ const exportState = computed<StepSequencerState>(() => {
 		synth: {
 			envelope: { enabled: envelopeEnabled.value, attackMs: ampEnvAttackMs.value, decayMs: ampEnvDecayMs.value },
 			filter: { enabled: filterEnabled.value, cutoff: filterCutoff.value, resonance: filterResonance.value },
-			noise: { enabled: noiseEnabled.value, type: noiseType.value, amount: noiseAmount.value },
+			noise: {
+				enabled: noiseEnabled.value,
+				color: noiseColor.value,
+				type: (() => {
+					const t = noiseColor.value;
+					if (t < 0.125) return 'brown';
+					if (t < 0.375) return 'pink';
+					if (t < 0.625) return 'white';
+					if (t < 0.875) return 'blue';
+					return 'violet';
+				})(),
+				amount: noiseAmount.value
+			},
 			unison: { enabled: unisonEnabled.value, voices: unisonVoices.value, detuneCents: detuneCents.value, stereoSpread: stereoSpread.value },
 			lfo: {
 				enabled: lfoEnabled.value,
@@ -2332,7 +2355,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 			}
 		}
 
-
 		// voice chain into the shared envelope
 		osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
 
@@ -2393,27 +2415,61 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 
 	// ===== Noise =====
 	if (noiseEnabled.value && noiseAmount.value > 0) {
-		const noiseBuffer = noiseBuffers[noiseType.value];
-		if (noiseBuffer) {
-			const noiseSource = audioCtx.createBufferSource();
-			noiseSource.buffer = noiseBuffer;
+		// map morph 0..1 into two adjacent stops
+		const t = Math.min(1, Math.max(0, noiseColor.value));
+		let lower = NOISE_STOPS[0], upper = NOISE_STOPS[NOISE_STOPS.length - 1];
+		for (let i = 0; i < NOISE_STOPS.length - 1; i++) {
+			const a = NOISE_STOPS[i], b = NOISE_STOPS[i + 1];
+			if (t >= a.pos && t <= b.pos) { lower = a; upper = b; break; }
+		}
+		const span = Math.max(1e-6, upper.pos - lower.pos);
+		const w = (t - lower.pos) / span;         // 0..1
+		const wA = 1 - w, wB = w;                 // crossfade
+
+		const bufA = noiseBuffers[lower.key];
+		const bufB = noiseBuffers[upper.key];
+
+		if (bufA || bufB) {
+			const mix = audioCtx.createGain(); mix.gain.setValueAtTime(1, startTime);
+
+			if (bufA) {
+				const sA = audioCtx.createBufferSource();
+				sA.buffer = bufA;
+				const gA = audioCtx.createGain();
+				gA.gain.setValueAtTime(wA, startTime);
+				sA.connect(gA).connect(mix);
+				sA.start(startTime); sA.stop(noteEnd);
+			}
+			if (bufB) {
+				const sB = audioCtx.createBufferSource();
+				sB.buffer = bufB;
+				const gB = audioCtx.createGain();
+				gB.gain.setValueAtTime(wB, startTime);
+				sB.connect(gB).connect(mix);
+				sB.start(startTime); sB.stop(noteEnd);
+			}
+
+			// single shared envelope for the mixed noise
+			const noiseEnvGain = audioCtx.createGain();
+			const attackEnd = startTime + attackTime;
+
+			const blend = Math.min(Math.max(noiseAmount.value, 0), 1);
+			const safeNoiseGain = Math.max(0.0001, velocity * blend);
 
 			noiseEnvGain.gain.setValueAtTime(0.0001, startTime);
 			noiseEnvGain.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd);
 			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
 
+			// OPTIONAL: keep your existing bandpass if you like the character
 			const noiseFilter = audioCtx.createBiquadFilter();
 			noiseFilter.type = 'bandpass';
 			noiseFilter.frequency.setValueAtTime(8000, startTime);
 			noiseFilter.Q.setValueAtTime(1, startTime);
 
-			noiseSource.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain);
-			noiseSource.start(startTime);
-			noiseSource.stop(noteEnd);
+			mix.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain);
 		}
 	}
 }
-
 
 delayDry.connect(masterGain);
 delayWet.connect(masterGain);
@@ -2585,46 +2641,129 @@ function getPadStyle(instrument: any, index: number) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Noise Generator START
+// function generateNoiseBuffers() {
+
+// 	const length = audioCtx.sampleRate * 2; // 2 seconds
+// 	const createBuffer = () => audioCtx.createBuffer(1, length, audioCtx.sampleRate);
+
+// 	// White Noise
+// 	const white = createBuffer();
+// 	const whiteData = white.getChannelData(0);
+// 	for (let i = 0; i < length; i++) {
+// 		whiteData[i] = Math.random() * 2 - 1;
+// 	}
+// 	noiseBuffers.white = white;
+
+// 	// Pink Noise
+// 	const pink = createBuffer();
+// 	const pinkData = pink.getChannelData(0);
+// 	let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+// 	for (let i = 0; i < length; i++) {
+// 		const white = Math.random() * 2 - 1;
+// 		b0 = 0.99886 * b0 + white * 0.0555179;
+// 		b1 = 0.99332 * b1 + white * 0.0750759;
+// 		b2 = 0.96900 * b2 + white * 0.1538520;
+// 		b3 = 0.86650 * b3 + white * 0.3104856;
+// 		b4 = 0.55000 * b4 + white * 0.5329522;
+// 		b5 = -0.7616 * b5 - white * 0.0168980;
+// 		pinkData[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+// 		b6 = white * 0.115926;
+// 	}
+// 	noiseBuffers.pink = pink;
+
+// 	// Brown Noise
+// 	const brown = createBuffer();
+// 	const brownData = brown.getChannelData(0);
+// 	let lastOut = 0;
+// 	for (let i = 0; i < length; i++) {
+// 		const white = Math.random() * 2 - 1;
+// 		lastOut = (lastOut + (0.02 * white)) / 1.02;
+// 		brownData[i] = lastOut * 3.5;
+// 	}
+// 	noiseBuffers.brown = brown;
+// }
 function generateNoiseBuffers() {
 	const length = audioCtx.sampleRate * 2; // 2 seconds
 	const createBuffer = () => audioCtx.createBuffer(1, length, audioCtx.sampleRate);
 
-	// White Noise
+	// === Base white ===
 	const white = createBuffer();
-	const whiteData = white.getChannelData(0);
-	for (let i = 0; i < length; i++) {
-		whiteData[i] = Math.random() * 2 - 1;
-	}
-	noiseBuffers.white = white;
+	const wd = white.getChannelData(0);
+	for (let i = 0; i < length; i++) wd[i] = Math.random() * 2 - 1;
 
-	// Pink Noise
+	// === Pink (~ -3 dB/oct) === (Voss-McCartney-ish)
 	const pink = createBuffer();
-	const pinkData = pink.getChannelData(0);
+	const pd = pink.getChannelData(0);
 	let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
 	for (let i = 0; i < length; i++) {
-		const white = Math.random() * 2 - 1;
-		b0 = 0.99886 * b0 + white * 0.0555179;
-		b1 = 0.99332 * b1 + white * 0.0750759;
-		b2 = 0.96900 * b2 + white * 0.1538520;
-		b3 = 0.86650 * b3 + white * 0.3104856;
-		b4 = 0.55000 * b4 + white * 0.5329522;
-		b5 = -0.7616 * b5 - white * 0.0168980;
-		pinkData[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-		b6 = white * 0.115926;
+		const w = wd[i];
+		b0 = 0.99886 * b0 + w * 0.0555179;
+		b1 = 0.99332 * b1 + w * 0.0750759;
+		b2 = 0.96900 * b2 + w * 0.1538520;
+		b3 = 0.86650 * b3 + w * 0.3104856;
+		b4 = 0.55000 * b4 + w * 0.5329522;
+		b5 = -0.7616 * b5 - w * 0.0168980;
+		pd[i] = b0 + b1 + b2 + b3 + b4 + b5 + (w * 0.5362);
+		b6 = w * 0.115926;
 	}
-	noiseBuffers.pink = pink;
+	// normalize pink
+	(function norm(buf: Float32Array) {
+		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
+		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
+	})(pd);
 
-	// Brown Noise
+	// === Brown (~ -6 dB/oct) === (integrated white)
 	const brown = createBuffer();
-	const brownData = brown.getChannelData(0);
+	const bd = brown.getChannelData(0);
 	let lastOut = 0;
 	for (let i = 0; i < length; i++) {
-		const white = Math.random() * 2 - 1;
-		lastOut = (lastOut + (0.02 * white)) / 1.02;
-		brownData[i] = lastOut * 3.5;
+		const w = wd[i];
+		lastOut = (lastOut + (0.02 * w)) / 1.02;
+		bd[i] = lastOut * 3.5;
 	}
+	// normalize brown
+	(function norm(buf: Float32Array) {
+		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
+		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
+	})(bd);
+
+	// === Blue (~ +3 dB/oct) === (first difference of white)
+	const blue = createBuffer();
+	const bud = blue.getChannelData(0);
+	let prev = 0;
+	for (let i = 0; i < length; i++) {
+		const x = wd[i] - prev;
+		prev = wd[i];
+		bud[i] = x;
+	}
+	// normalize
+	(function norm(buf: Float32Array) {
+		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
+		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
+	})(bud);
+
+	// === Violet (~ +6 dB/oct) === (second difference of white)
+	const violet = createBuffer();
+	const vd = violet.getChannelData(0);
+	let prev1 = 0, prev2 = 0;
+	for (let i = 0; i < length; i++) {
+		const d1 = wd[i] - prev1; prev1 = wd[i];
+		const d2 = d1 - prev2; prev2 = d1;
+		vd[i] = d2;
+	}
+	(function norm(buf: Float32Array) {
+		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
+		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
+	})(vd);
+
+	// store
+	noiseBuffers.white = white;
+	noiseBuffers.pink = pink;
 	noiseBuffers.brown = brown;
+	noiseBuffers.blue = blue;
+	noiseBuffers.violet = violet;
 }
+
 // Noise Generator END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -2732,8 +2871,12 @@ function buildSnapshot() {
 				resonance: filterResonance.value,
 			},
 			noise: {
+				// enabled: noiseEnabled.value,
+				// type: (noiseType.value as string),
+				// amount: noiseAmount.value,
 				enabled: noiseEnabled.value,
-				type: (noiseType.value as string),
+				type: 'legacy',                 // keep placeholder for backward compat
+				color: noiseColor.value,        // NEW
 				amount: noiseAmount.value,
 			},
 			unison: {
@@ -2844,7 +2987,15 @@ function applySnapshot(s: any) {
 	}
 	if (syn.noise) {
 		noiseEnabled.value = !!syn.noise.enabled;
-		if (typeof syn.noise.type === 'string') (noiseType as any).value = syn.noise.type;
+		// if (typeof syn.noise.type === 'string') (noiseType as any).value = syn.noise.type;
+		if (typeof syn.noise.color === 'number') {
+			noiseColor.value = Math.max(0, Math.min(1, syn.noise.color));
+		} else {
+			// fallback: map old 'type' to a nearby color
+			const legacy = (syn.noise.type || '').toLowerCase();
+			const map: Record<string, number> = { brown: 0.0, pink: 0.25, white: 0.5, blue: 0.75, violet: 1.0 };
+			noiseColor.value = map[legacy] ?? 0.5;
+		}
 		if (typeof syn.noise.amount === 'number') noiseAmount.value = syn.noise.amount;
 	}
 	if (syn.unison) {
@@ -3023,7 +3174,8 @@ function resetUiToFactoryDefaults() {
 	filterResonance.value = 0.5;
 
 	noiseEnabled.value = true;
-	noiseType.value = 'white';
+	// noiseType.value = 'white';
+	noiseColor.value = 0.5;
 	noiseAmount.value = 0;
 
 	unisonEnabled.value = true;
