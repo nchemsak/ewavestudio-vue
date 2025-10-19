@@ -131,9 +131,10 @@ $dark: map.get($themes, dark);
 
 .pt-section-title {
     color: var(--pt-muted);
-    font-size: 0.95rem;
+    // font-size: 0.95rem;
+    font-size: 13px;
     font-weight: 600;
-    margin-bottom: 0px;
+    margin-bottom: 4px;
 }
 
 .pt-panel--card {

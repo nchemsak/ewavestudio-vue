@@ -28,7 +28,7 @@
 								{{ Math.round(volume * 100) }}%
 							</span>
 
-					
+
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(volume * 100)}%`">
 								{{ Math.round(volume * 100) }}%
 							</div>
@@ -166,9 +166,11 @@
 			<section class="pt-cards controlsWrapper ds-modules">
 
 				<div class="module pattern-tools">
+					<!-- Pattern Tools -->
 					<SectionWrap id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
 						<PatternTools :steps="steps" :velocities="velocities" :currentTheme="currentTheme"
-							@update:steps="steps = $event" @update:velocities="velocities = $event" />
+							@update:steps="steps = $event" @update:velocities="velocities = $event"
+							@octave-shift="onPatternOctaveShift" />
 					</SectionWrap>
 				</div>
 				<!-- Melody Maker -->
@@ -214,9 +216,10 @@
 								</button>
 							</div>
 						</div>
-
-						<div class="pt-rule gen-divider" aria-hidden="true"></div>
-
+					</SectionWrap>
+				</div>
+				<div class="module noise">
+					<SectionWrap id="noise" title="" v-model="collapsibleState['noise']">
 						<!-- Noise -->
 						<div class="gen-panel noise-panel">
 							<div class="noise-inline">
@@ -228,7 +231,6 @@
 						</div>
 					</SectionWrap>
 				</div>
-
 				<div class="module sound">
 					<SectionWrap id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
 						<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
@@ -1471,7 +1473,11 @@ function isNoteDisabled(semitone, octave) {
 
 function freqToMidi(f) { return Math.round(69 + 12 * Math.log2(f / A4)); }
 
-
+function onPatternOctaveShift(payload: number | { delta: number; onlyActive?: boolean }) {
+	const delta = typeof payload === 'number' ? payload : payload.delta;
+	const onlyActive = typeof payload === 'object' && !!payload.onlyActive;
+	octaveShiftAllSkip(delta, { onlyActive });
+}
 // Called when PatternTools reports a new key root
 function onKeyRootChange(root: typeof selectedKeyRoot.value) {
 	const inst = synthInstrument.value;

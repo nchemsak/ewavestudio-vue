@@ -23,10 +23,10 @@
             <!-- hint under header -->
             <div class="mm-hint">{{ poolSummary }}</div>
 
-            <div class="mm-actions">
+            <!-- <div class="mm-actions">
                 <button class="mm-btn mm-ghost-btn" @click="emit('octave-shift', -1)">↓ Octave</button>
                 <button class="mm-btn mm-ghost-btn" @click="emit('octave-shift', +1)">↑ Octave</button>
-            </div>
+            </div> -->
 
             <div class="mm-primary">
                 <button class="mm-btn mm-primary-btn melody-btn" @click="smartGenerate()">
