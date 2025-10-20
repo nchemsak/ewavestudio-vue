@@ -220,11 +220,10 @@
 						<!-- Noise -->
 						<div class="gen-panel noise-panel">
 							<div class="noise-inline">
-								<button class="pt-dot" :class="{ 'is-on': noiseEnabled }" :aria-pressed="noiseEnabled"
-									title="Toggle noise" @click="noiseEnabled = !noiseEnabled"></button>
 								<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
-									v-model:amount="noiseAmount" v-model:colorMorph="noiseColor" :color="'#9C27B0'" />
-
+									v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
+									v-model:mask="noiseMask" v-model:attackBurst="noiseAttackBurst"
+									v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
 							</div>
 						</div>
 					</SectionWrap>
@@ -512,6 +511,8 @@ function setStepLength(len: 16 | 32) {
 		if (inst.pitches) inst.pitches = resize(inst.pitches, currentDefaultHz.value);
 		if ((inst as any).waveforms) (inst as any).waveforms = resize((inst as any).waveforms, selectedWaveform.value as any);
 	});
+	noiseMask.value = resize(noiseMask.value, true);
+
 }
 
 const padSizeStyle = computed(() => ({
@@ -1517,11 +1518,7 @@ const pitchEnvDecay = computed(() => pitchEnvDecayMs.value / 1000)  // seconds
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Noise START
-// type NoiseType = 'white' | 'pink' | 'brown'
-// const noiseBuffers: Record<NoiseType, AudioBuffer | null> = {
-// 	white: null, pink: null, brown: null
-// }
-// const noiseType = ref<NoiseType>('white') // default selection
+
 
 type NoiseKey = 'brown' | 'pink' | 'white' | 'blue' | 'violet'
 const NOISE_STOPS: { key: NoiseKey; pos: number }[] = [
@@ -1539,6 +1536,11 @@ const noiseColor = ref(0.5)
 
 const noiseAmount = ref(0); // 0 = no noise, 1 = full noise
 const noiseEnabled = ref(true)
+
+const noiseMask = ref<boolean[]>(Array(stepLength.value).fill(true))
+
+const noiseAttackBurst = ref(false);
+const noiseBurstMs = ref(80); // ms
 // Noise END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -1802,8 +1804,12 @@ const exportState = computed<StepSequencerState>(() => {
 					if (t < 0.875) return 'blue';
 					return 'violet';
 				})(),
-				amount: noiseAmount.value
-			},
+				amount: noiseAmount.value,
+				mask: [...noiseMask.value],
+				attackBurst: noiseAttackBurst.value,
+				burstMs: noiseBurstMs.value,
+			} as any,
+
 			unison: { enabled: unisonEnabled.value, voices: unisonVoices.value, detuneCents: detuneCents.value, stereoSpread: stereoSpread.value },
 			lfo: {
 				enabled: lfoEnabled.value,
@@ -2213,7 +2219,11 @@ function schedule() {
 
 				if (inst.type === 'synth') {
 					const wf = ((inst as any).waveforms?.[stepIndex] ?? selectedWaveform.value) as OscillatorType;
-					playSynthNote(pitch, amp, safeDecay, t, wf);
+					const padNoiseOn = noiseMask.value?.[stepIndex] ?? true;
+
+					// pass the mask to playSynthNote so noise can be per-step enabled/disabled
+					playSynthNote(pitch, amp, safeDecay, t, wf, { addNoise: padNoiseOn });
+
 				} else if (inst.buffer) {
 					playBuffer(inst.buffer, t, amp);
 				}
@@ -2227,14 +2237,13 @@ function schedule() {
 	loopId = requestAnimationFrame(schedule);
 }
 
-function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: OscillatorType) {
+function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: OscillatorType, opts: { addNoise?: boolean } = {}) {
 
 	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
 	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
 
 	// ENV sums all unison voices
 	const oscEnvGain = audioCtx.createGain();
-	const noiseEnvGain = audioCtx.createGain();
 
 	// Shared envelope timings
 	const attackEnd = startTime + attackTime;
@@ -2242,14 +2251,18 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 	const gateEnd = startTime + Math.max(0.02, ampEnvDecayMs.value / 1000);
 	const noteEnd = envelopeEnabled.value ? naturalEnd : gateEnd;
 
-	// Compute blends BEFORE using safeOscGain
-	const blend = noiseEnabled.value ? Math.min(Math.max(noiseAmount.value, 0), 1) : 0;
+	// ---- Per-step blend (masked) ----
+	const addNoiseForThisPad = opts.addNoise !== false;
+	const blend = (addNoiseForThisPad && noiseEnabled.value)
+		? Math.min(Math.max(noiseAmount.value, 0), 1)
+		: 0;
+
 	const oscBlend = 1 - blend;
 	const noiseBlend = blend;
 	const safeOscGain = Math.max(0.0001, velocity * oscBlend);
 	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
 
-	// Single amplitude envelope
+	// Single amplitude envelope for the OSC path
 	if (envelopeEnabled.value) {
 		oscEnvGain.gain.setValueAtTime(0.0001, startTime);
 		oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
@@ -2414,7 +2427,8 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 	}
 
 	// ===== Noise =====
-	if (noiseEnabled.value && noiseAmount.value > 0) {
+	// if (noiseEnabled.value && noiseAmount.value > 0) {
+	if (noiseBlend > 0) {
 		// map morph 0..1 into two adjacent stops
 		const t = Math.min(1, Math.max(0, noiseColor.value));
 		let lower = NOISE_STOPS[0], upper = NOISE_STOPS[NOISE_STOPS.length - 1];
@@ -2453,20 +2467,32 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 			const noiseEnvGain = audioCtx.createGain();
 			const attackEnd = startTime + attackTime;
 
-			const blend = Math.min(Math.max(noiseAmount.value, 0), 1);
-			const safeNoiseGain = Math.max(0.0001, velocity * blend);
+			// use the *already-masked* blend
+			const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
 
 			noiseEnvGain.gain.setValueAtTime(0.0001, startTime);
 			noiseEnvGain.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd);
-			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
 
-			// OPTIONAL: keep your existing bandpass if you like the character
+			// Treat max knob value as "no burst" => follow full decay
+			const BURST_MAX_MS = 250; // keep in sync with NoiseModule knob max
+
+			const burstActive = noiseAttackBurst.value && (noiseBurstMs.value < BURST_MAX_MS);
+
+			const burstEnd = burstActive
+				? Math.min(noteEnd, attackEnd + Math.max(0.005, noiseBurstMs.value / 1000))
+				: noteEnd; // full decay
+
+
+			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, burstEnd);
+			noiseEnvGain.gain.setTargetAtTime(0.0001, burstEnd, 0.01);
+
 			const noiseFilter = audioCtx.createBiquadFilter();
 			noiseFilter.type = 'bandpass';
 			noiseFilter.frequency.setValueAtTime(8000, startTime);
 			noiseFilter.Q.setValueAtTime(1, startTime);
 
 			mix.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain);
+
 		}
 	}
 }
@@ -2641,47 +2667,7 @@ function getPadStyle(instrument: any, index: number) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Noise Generator START
-// function generateNoiseBuffers() {
 
-// 	const length = audioCtx.sampleRate * 2; // 2 seconds
-// 	const createBuffer = () => audioCtx.createBuffer(1, length, audioCtx.sampleRate);
-
-// 	// White Noise
-// 	const white = createBuffer();
-// 	const whiteData = white.getChannelData(0);
-// 	for (let i = 0; i < length; i++) {
-// 		whiteData[i] = Math.random() * 2 - 1;
-// 	}
-// 	noiseBuffers.white = white;
-
-// 	// Pink Noise
-// 	const pink = createBuffer();
-// 	const pinkData = pink.getChannelData(0);
-// 	let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-// 	for (let i = 0; i < length; i++) {
-// 		const white = Math.random() * 2 - 1;
-// 		b0 = 0.99886 * b0 + white * 0.0555179;
-// 		b1 = 0.99332 * b1 + white * 0.0750759;
-// 		b2 = 0.96900 * b2 + white * 0.1538520;
-// 		b3 = 0.86650 * b3 + white * 0.3104856;
-// 		b4 = 0.55000 * b4 + white * 0.5329522;
-// 		b5 = -0.7616 * b5 - white * 0.0168980;
-// 		pinkData[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-// 		b6 = white * 0.115926;
-// 	}
-// 	noiseBuffers.pink = pink;
-
-// 	// Brown Noise
-// 	const brown = createBuffer();
-// 	const brownData = brown.getChannelData(0);
-// 	let lastOut = 0;
-// 	for (let i = 0; i < length; i++) {
-// 		const white = Math.random() * 2 - 1;
-// 		lastOut = (lastOut + (0.02 * white)) / 1.02;
-// 		brownData[i] = lastOut * 3.5;
-// 	}
-// 	noiseBuffers.brown = brown;
-// }
 function generateNoiseBuffers() {
 	const length = audioCtx.sampleRate * 2; // 2 seconds
 	const createBuffer = () => audioCtx.createBuffer(1, length, audioCtx.sampleRate);
@@ -2871,13 +2857,14 @@ function buildSnapshot() {
 				resonance: filterResonance.value,
 			},
 			noise: {
-				// enabled: noiseEnabled.value,
-				// type: (noiseType.value as string),
-				// amount: noiseAmount.value,
+
 				enabled: noiseEnabled.value,
-				type: 'legacy',                 // keep placeholder for backward compat
-				color: noiseColor.value,        // NEW
+				type: 'legacy',
+				color: noiseColor.value,
 				amount: noiseAmount.value,
+				mask: [...noiseMask.value],
+				attackBurst: noiseAttackBurst.value,
+				burstMs: noiseBurstMs.value,
 			},
 			unison: {
 				enabled: unisonEnabled.value,
@@ -2985,9 +2972,12 @@ function applySnapshot(s: any) {
 		if (typeof syn.filter.cutoff === 'number') filterCutoff.value = syn.filter.cutoff;
 		if (typeof syn.filter.resonance === 'number') filterResonance.value = syn.filter.resonance;
 	}
+
+
 	if (syn.noise) {
 		noiseEnabled.value = !!syn.noise.enabled;
-		// if (typeof syn.noise.type === 'string') (noiseType as any).value = syn.noise.type;
+
+		// color or legacy type → color
 		if (typeof syn.noise.color === 'number') {
 			noiseColor.value = Math.max(0, Math.min(1, syn.noise.color));
 		} else {
@@ -2996,8 +2986,29 @@ function applySnapshot(s: any) {
 			const map: Record<string, number> = { brown: 0.0, pink: 0.25, white: 0.5, blue: 0.75, violet: 1.0 };
 			noiseColor.value = map[legacy] ?? 0.5;
 		}
-		if (typeof syn.noise.amount === 'number') noiseAmount.value = syn.noise.amount;
+
+		if (typeof syn.noise.amount === 'number') {
+			noiseAmount.value = syn.noise.amount;
+		}
+
+		// Restore per-step noise mask (length-safe)
+		if (Array.isArray(syn.noise.mask)) {
+			const len = stepLength.value;
+			const src = syn.noise.mask as boolean[];
+			noiseMask.value = (src.length === len)
+				? [...src]
+				: [...src.slice(0, len), ...Array(Math.max(0, len - src.length)).fill(true)];
+		} else if (!noiseMask.value?.length) {
+			// if no mask in save and ours is empty, create a full-true mask
+			noiseMask.value = Array(stepLength.value).fill(true);
+		}
+		if (typeof syn.noise.attackBurst === 'boolean') noiseAttackBurst.value = syn.noise.attackBurst;
+		if (typeof syn.noise.burstMs === 'number') noiseBurstMs.value = syn.noise.burstMs;
+
 	}
+
+
+
 	if (syn.unison) {
 		unisonEnabled.value = !!syn.unison.enabled;
 		if (typeof syn.unison.voices === 'number') unisonVoices.value = syn.unison.voices;
@@ -3175,8 +3186,11 @@ function resetUiToFactoryDefaults() {
 
 	noiseEnabled.value = true;
 	// noiseType.value = 'white';
+	noiseMask.value = Array(stepLength.value).fill(true);
 	noiseColor.value = 0.5;
 	noiseAmount.value = 0;
+	noiseAttackBurst.value = false;
+	noiseBurstMs.value = 80;
 
 	unisonEnabled.value = true;
 	unisonVoices.value = 1;
@@ -3610,6 +3624,7 @@ function resetUiToFactoryDefaults() {
 	align-items: center;
 	gap: 10px;
 	flex-wrap: wrap;
+	/* flex-wrap: nowrap; */
 }
 
 .pt-dot {
@@ -3638,11 +3653,11 @@ function resetUiToFactoryDefaults() {
 	display: none !important;
 }
 
-.noise-inline :deep(.pt-btn-group) {
+/* .noise-inline :deep(.pt-btn-group) {
 	display: inline-flex;
 	gap: 8px;
 	margin: 0;
-}
+} */
 
 .noise-inline :deep(.pt-subblock),
 .noise-inline :deep(.pt-section) {
@@ -3678,16 +3693,17 @@ function resetUiToFactoryDefaults() {
 	width: auto !important;
 	padding: 0 !important;
 	margin: 0 !important;
-	display: inline-flex;
+	/* display: inline-flex; */
 	align-items: center;
-	gap: 10px;
+	/* gap: 10px; */
+	min-width: 0;
 }
 
-.noise-panel :deep(.pt-btn-group) {
+/* .noise-panel :deep(.pt-btn-group) {
 	display: inline-flex;
 	gap: 8px;
 	margin: 0;
-}
+} */
 
 .noise-panel :deep(.knob-group-header),
 .noise-panel :deep(.group-title),
