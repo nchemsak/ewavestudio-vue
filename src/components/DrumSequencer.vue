@@ -189,8 +189,8 @@
 
 						<!-- Oscillators -->
 						<div class="gen-panel osc-panel">
-							<div class="wave-row" role="radiogroup" aria-label="Waveforms">
-								<WaveButton :modelValue="selectedWaveform" value="sine" label="SINE"
+							<!-- <div class="wave-row" role="radiogroup" aria-label="Waveforms"> -->
+								<!-- <WaveButton :modelValue="selectedWaveform" value="sine" label="SINE"
 									:palette="['#fff', '#7bd0ff', '#666']"
 									@update:modelValue="() => applyWaveToAll('sine')" />
 
@@ -204,11 +204,37 @@
 
 								<WaveButton :modelValue="selectedWaveform" value="square" label="SQUARE"
 									:palette="['#a2f5a6', '#7bd0ff', '#ff7eb3']"
-									@update:modelValue="() => applyWaveToAll('square')" />
-							</div>
+									@update:modelValue="() => applyWaveToAll('square')" /> -->
+								<div class="wave-row" role="radiogroup" aria-label="Waveforms">
+									<WaveButton :modelValue="selectedWaveform" value="sine" label="SINE"
+										:palette="['#fff', '#7bd0ff', '#666']" :randomIncluded="randomPool['sine']"
+										@toggle-random="onToggleRandom"
+										@update:modelValue="() => applyWaveToAll('sine')" />
+
+									<WaveButton :modelValue="selectedWaveform" value="triangle" label="TRIANGLE"
+										:palette="['#7cf3c9', '#b47aff', '#ffd06b']"
+										:randomIncluded="randomPool['triangle']" @toggle-random="onToggleRandom"
+										@update:modelValue="() => applyWaveToAll('triangle')" />
+
+									<WaveButton :modelValue="selectedWaveform" value="sawtooth" label="SAW"
+										:palette="['#ff9a62', '#ffd06b', '#75f0ff']"
+										:randomIncluded="randomPool['sawtooth']" @toggle-random="onToggleRandom"
+										@update:modelValue="() => applyWaveToAll('sawtooth')" />
+
+									<WaveButton :modelValue="selectedWaveform" value="square" label="SQUARE"
+										:palette="['#a2f5a6', '#7bd0ff', '#ff7eb3']"
+										:randomIncluded="randomPool['square']" @toggle-random="onToggleRandom"
+										@update:modelValue="() => applyWaveToAll('square')" />
+								</div>
+
+							<!-- </div> -->
 
 							<div class="pt-btn-group" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-								<button class="pt-btn pt-btn-sm" @click="applyRandomWaves()">
+								<!-- <button class="pt-btn pt-btn-sm" @click="applyRandomWaves()">
+									Random
+								</button> -->
+								<button class="pt-btn pt-btn-sm" :disabled="!randomPoolArray.length"
+									:title="randomTooltip" @click="applyRandomWaves()">
 									Random
 								</button>
 							</div>
@@ -1237,6 +1263,30 @@ const hoveredLabel = ref(null);
 const selectedWaveform = ref("sine");
 const waves = ['sine', 'triangle', 'sawtooth', 'square'] as const;
 
+const randomPool = reactive<Record<OscillatorType, boolean>>({
+	sine: true, triangle: true, sawtooth: true, square: true
+});
+
+const randomPoolArray = computed<OscillatorType[]>(() =>
+	(['sine', 'triangle', 'sawtooth', 'square'] as OscillatorType[]).filter(w => randomPool[w])
+);
+
+function onToggleRandom(w: OscillatorType, next: boolean, only = false) {
+	if (only) {
+		(['sine', 'triangle', 'sawtooth', 'square'] as OscillatorType[])
+			.forEach(k => randomPool[k] = false);
+		randomPool[w] = true;
+	} else {
+		randomPool[w] = next;
+	}
+}
+
+const randomTooltip = computed(() =>
+	randomPoolArray.value.length
+		? `Random from: ${randomPoolArray.value.map(w => w[0].toUpperCase() + w.slice(1)).join(', ')}`
+		: 'Select at least one wave using the little dice badges'
+);
+
 const waveLabel = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
 
 
@@ -1268,8 +1318,13 @@ function applyWaveToAll(w: OscillatorType) {
 function applyRandomWaves() {
 	const inst = synthInstrument.value as any;
 	if (!inst) return;
+
+	const pool = randomPoolArray.value.length
+		? randomPoolArray.value
+		: (['sine', 'triangle', 'sawtooth', 'square'] as OscillatorType[]); // fallback
+
 	inst.waveforms = Array.from({ length: stepLength.value }, () =>
-		waves[Math.floor(Math.random() * waves.length)]
+		pool[Math.floor(Math.random() * pool.length)]
 	) as any;
 }
 

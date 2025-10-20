@@ -32,8 +32,8 @@
       <section class="pt-section">
         <div class="pt-section-title">Tuning</div>
         <div class="pt-btn-group" role="group" aria-label="Tuning">
-          <button class="pt-btn" @click="shiftOctave(-1)">↓ Octave</button>
-          <button class="pt-btn" @click="shiftOctave(+1)">↑ Octave</button>
+          <button class="pt-btn octave-btn" @click="shiftOctave(-1)">↓ Octave</button>
+          <button class="pt-btn octave-btn" @click="shiftOctave(+1)">↑ Octave</button>
         </div>
         <div class="pt-inline">
           <label class="pt-inline-check">
@@ -168,6 +168,11 @@ function shapeReset(): void {
   font-size: 0.65rem;
   width: 56px;
   padding: 4px;
+
+}
+
+.octave-btn {
+  height: 50px;
 }
 
 /* small inline checkbox row */
@@ -176,6 +181,7 @@ function shapeReset(): void {
   color: var(--pt-muted);
   font-size: 0.8rem;
 }
+
 .pt-inline-check {
   display: inline-flex;
   align-items: center;
