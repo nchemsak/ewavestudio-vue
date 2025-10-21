@@ -97,30 +97,43 @@ function onDiceKey(e) {
     if (e.key === ' ' || e.key === 'Enter') toggleDice()
 }
 </script>
-
 <style scoped>
 .wave-btn {
-    --panel: #1a1e27;
-    --w: 100px;
+    /* Theme-driven tile surface (replaces the hard-coded --panel) */
+    /* --tile-1: var(--pt-surface-1);
+  --tile-2: var(--pt-surface-2); */
+    --tile-1: var(--pt-tile-1, var(--pt-surface-1));
+    --tile-2: var(--pt-tile-2, var(--pt-surface-2));
     position: relative;
-    /* needed for dice position */
     display: inline-flex;
     flex-direction: column;
     align-items: center;
-    width: var(--w);
+    width: var(--w, 100px);
     padding: 6px 6px 6px;
     border-radius: 14px;
-    background: var(--panel);
-    border: 1px solid rgba(255, 255, 255, .06);
+
+    /* themed background + border */
+    background: linear-gradient(145deg, var(--tile-1), var(--tile-2));
+    border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 70%);
+
+    /* themed text + shadow */
+    color: var(--pt-text);
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, .06),
-        0 8px 22px rgba(0, 0, 0, .55);
-    transition: transform .08s ease, box-shadow .12s ease, background .2s ease;
+        inset 0 1px 0 rgb(255 255 255 / 0.05),
+        0 8px 22px rgb(0 0 0 / 0.35);
+
+    transition: transform .08s ease, box-shadow .12s ease, background .2s ease, filter .2s ease;
     cursor: pointer;
 }
 
 .wave-btn:hover {
-    background: color-mix(in oklab, var(--panel) 92%, white);
+    /* gentle lift toward accent glow + a touch lighter */
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.06),
+        0 10px 24px var(--pt-btn-glow);
+    background: linear-gradient(145deg,
+            color-mix(in oklab, var(--tile-1), white 6%),
+            color-mix(in oklab, var(--tile-2), white 6%));
 }
 
 .wave-btn:active {
@@ -128,10 +141,14 @@ function onDiceKey(e) {
 }
 
 .wave-btn.is-active {
+    /* accent ring + brighter surface */
     box-shadow:
-        0 0 0 2px rgba(125, 200, 255, .25),
-        inset 0 1px 0 rgba(255, 255, 255, .06),
-        0 12px 28px rgba(0, 0, 0, .6);
+        0 0 0 2px hsl(var(--pt-accent) 80% 60% / .25),
+        inset 0 1px 0 rgb(255 255 255 / 0.06),
+        0 12px 28px var(--pt-btn-glow);
+    background: linear-gradient(145deg,
+            color-mix(in oklab, var(--tile-2), white 3%),
+            color-mix(in oklab, var(--tile-1), white 3%));
 }
 
 .wave-btn.is-disabled {
@@ -139,6 +156,7 @@ function onDiceKey(e) {
     pointer-events: none;
 }
 
+/* Icon size unchanged */
 .wave-svg {
     display: block;
     width: 72px;
@@ -152,7 +170,7 @@ function onDiceKey(e) {
     user-select: none;
 }
 
-/* --- dice badge --- */
+/* --- dice badge, themed --- */
 .dice-badge {
     position: absolute;
     top: 6px;
@@ -160,17 +178,15 @@ function onDiceKey(e) {
     width: 22px;
     height: 22px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, .06);
-    border: 1px solid rgba(255, 255, 255, .18);
-    border: none;
+    background: color-mix(in oklab, var(--pt-surface-2), transparent 10%);
+    border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 65%);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
-    opacity: .9;
+    box-shadow: 0 2px 8px rgb(0 0 0 / .25);
+    opacity: .95;
 }
 
-/* Icon defaults: outlined die + light pips */
 .dice-badge svg {
     width: 20px;
     height: 20px;
@@ -178,32 +194,25 @@ function onDiceKey(e) {
 
 .dice-badge svg rect {
     fill: none;
-    stroke: rgba(255, 255, 255, .9);
+    stroke: color-mix(in oklab, var(--pt-text) 90%, transparent);
     stroke-width: 1.6px;
 }
 
 .dice-badge svg circle {
-
-    fill: #0c1220;
+    fill: var(--pt-surface-1);
 }
 
-/* Selected: darker pips so it reads instantly */
 .dice-badge.on {
-    /* box-shadow:
-        0 0 0 2px rgba(125, 200, 255, .35),
-        0 0 10px rgba(125, 200, 255, .35); */
-    background: color-mix(in oklab, #7dc8ff 14%, rgba(255, 255, 255, .08));
-    border-color: rgba(125, 200, 255, .6);
+    background: hsl(var(--pt-accent) 80% 60% / .15);
+    border-color: hsl(var(--pt-accent) 80% 60% / .55);
 }
 
 .dice-badge.on svg circle {
-    fill: rgba(255, 255, 255, .9);
+    fill: color-mix(in oklab, var(--pt-text) 92%, transparent);
 }
 
-/* darker pips when ON */
-
 .dice-badge:focus-visible {
-    outline: 2px solid #fff;
+    outline: 2px solid hsl(var(--pt-accent) 80% 60%);
     outline-offset: 2px;
 }
 </style>

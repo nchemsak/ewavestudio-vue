@@ -6,13 +6,17 @@
             <div class="pt-header-tools">
                 <InfoPopover title="FM" aria-label="What is FM?">
                     FM adds a fast wobble to pitch → new harmonics.
-             
                 </InfoPopover>
             </div>
         </template>
 
-        <!-- stack: buttons row, then knobs row -->
         <div class="pt-stack">
+            <!-- big square FM toggle, matching WaveButton style -->
+            <div class="fm-top">
+                <FmTowerButton v-model="localEnabled" label="FM" />
+            </div>
+
+            <!-- Ratio preset buttons -->
             <div class="pt-seg pt-seg-sm pt-seg-row" role="group" aria-label="FM Ratio Presets">
                 <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 1 }" :aria-pressed="localRatio === 1"
                     :disabled="!localEnabled" @click="setRatio(1)">
@@ -32,6 +36,7 @@
                 </button>
             </div>
 
+            <!-- Knobs -->
             <div class="pt-knob-row">
                 <div class="position-relative text-center" :class="{ 'is-disabled': modFreqDisabled }"
                     aria-disabled="true">
@@ -56,7 +61,8 @@
 import { ref, watch, computed } from 'vue'
 import Knob from '../Knob.vue'
 import KnobGroup from '../KnobGroup.vue'
-import InfoPopover from '../InfoPopover.vue' 
+import InfoPopover from '../InfoPopover.vue'
+import FmTowerButton from '../FmTowerButton.vue'
 
 type Ratio = number | null
 
@@ -133,8 +139,11 @@ const activeKnob = ref<null | 'mf' | 'ix'>(null)
     flex-wrap: wrap;
 }
 
-.fm-li strong {
-    border-bottom: 1px dotted white;
+/* centers the tower tile like your wave buttons */
+.fm-top {
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .is-disabled :deep(.knob-label) {

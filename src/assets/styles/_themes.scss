@@ -50,6 +50,22 @@ $themes: (
         --pt-btn-border: hsl(var(--pt-accent) 80% 60%);
         --pt-btn-glow: hsl(var(--pt-accent) 90% 60% / 0.4);
         --cc-chevron: #{map.get($t, chevron)};
+
+        /* default: same as surfaces */
+        --pt-tile-1: #{map.get($t, surface1)};
+        --pt-tile-2: #{map.get($t, surface2)};
+
+        /* darker tiles in dark & synthwave so they pop from panels */
+        @if $name ==dark {
+            --pt-tile-1: #{mix(#000, map.get($t, surface1), 12%)};
+            --pt-tile-2: #{mix(#000, map.get($t, surface2), 16%)};
+        }
+
+        @if $name ==synthwave {
+            /* synthwave a hair stronger */
+            --pt-tile-1: #{mix(#000, map.get($t, surface1), 14%)};
+            --pt-tile-2: #{mix(#000, map.get($t, surface2), 18%)};
+        }
     }
 }
 
@@ -83,6 +99,9 @@ $dark: map.get($themes, dark);
     --pt-focus-ring: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / 0.35);
 
     --cc-chevron: #{map.get($dark, chevron)};
+
+    --pt-tile-1: #{mix(#000, map.get($dark, surface1), 12%)};
+    --pt-tile-2: #{mix(#000, map.get($dark, surface2), 16%)};
 }
 
 @each $name, $t in $themes {
