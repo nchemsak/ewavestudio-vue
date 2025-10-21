@@ -51,3 +51,8 @@ export async function deleteProject(projectId: string) {
     const db = await getDb();
     await db.delete('projects', projectId);
 }
+
+export async function clearAllProjects() {
+  const db = await getDb();
+  await db.clear('projects'); // wipes the entire 'projects' object store
+}

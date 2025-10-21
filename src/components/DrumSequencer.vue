@@ -27,8 +27,6 @@
 							<span v-if="activeKnob === 'volume'" class="custom-tooltip">
 								{{ Math.round(volume * 100) }}%
 							</span>
-
-
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(volume * 100)}%`">
 								{{ Math.round(volume * 100) }}%
 							</div>
@@ -177,10 +175,11 @@
 							<button class="pt-info-icon" aria-label="Advanced options"
 								@click="melodyRef?.openAdvanced($event)">⋯</button>
 						</template>
+						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
+							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
+							@update:frequencies="padFrequencies = $event" @octave-shift="octaveShiftAllSkip($event)"
+							@key-root-change="onKeyRootChange" />
 
-						<MelodyMaker ref="melodyRef" :frequencies="padFrequencies" :steps="steps" :min-freq="100"
-							:max-freq="2000" :currentTheme="currentTheme" @update:frequencies="padFrequencies = $event"
-							@octave-shift="octaveShiftAllSkip($event)" @key-root-change="onKeyRootChange" />
 					</SectionWrap>
 				</div>
 
@@ -189,50 +188,27 @@
 
 						<!-- Oscillators -->
 						<div class="gen-panel osc-panel">
-							<!-- <div class="wave-row" role="radiogroup" aria-label="Waveforms"> -->
-								<!-- <WaveButton :modelValue="selectedWaveform" value="sine" label="SINE"
-									:palette="['#fff', '#7bd0ff', '#666']"
-									@update:modelValue="() => applyWaveToAll('sine')" />
+							<div class="wave-row" role="radiogroup" aria-label="Waveforms">
+								<WaveButton :modelValue="selectedWaveform" value="sine" label="SINE"
+									:palette="['#fff', '#7bd0ff', '#666']" :randomIncluded="randomPool['sine']"
+									@toggle-random="onToggleRandom" @update:modelValue="() => applyWaveToAll('sine')" />
 
 								<WaveButton :modelValue="selectedWaveform" value="triangle" label="TRIANGLE"
 									:palette="['#7cf3c9', '#b47aff', '#ffd06b']"
+									:randomIncluded="randomPool['triangle']" @toggle-random="onToggleRandom"
 									@update:modelValue="() => applyWaveToAll('triangle')" />
 
 								<WaveButton :modelValue="selectedWaveform" value="sawtooth" label="SAW"
 									:palette="['#ff9a62', '#ffd06b', '#75f0ff']"
+									:randomIncluded="randomPool['sawtooth']" @toggle-random="onToggleRandom"
 									@update:modelValue="() => applyWaveToAll('sawtooth')" />
 
 								<WaveButton :modelValue="selectedWaveform" value="square" label="SQUARE"
-									:palette="['#a2f5a6', '#7bd0ff', '#ff7eb3']"
-									@update:modelValue="() => applyWaveToAll('square')" /> -->
-								<div class="wave-row" role="radiogroup" aria-label="Waveforms">
-									<WaveButton :modelValue="selectedWaveform" value="sine" label="SINE"
-										:palette="['#fff', '#7bd0ff', '#666']" :randomIncluded="randomPool['sine']"
-										@toggle-random="onToggleRandom"
-										@update:modelValue="() => applyWaveToAll('sine')" />
-
-									<WaveButton :modelValue="selectedWaveform" value="triangle" label="TRIANGLE"
-										:palette="['#7cf3c9', '#b47aff', '#ffd06b']"
-										:randomIncluded="randomPool['triangle']" @toggle-random="onToggleRandom"
-										@update:modelValue="() => applyWaveToAll('triangle')" />
-
-									<WaveButton :modelValue="selectedWaveform" value="sawtooth" label="SAW"
-										:palette="['#ff9a62', '#ffd06b', '#75f0ff']"
-										:randomIncluded="randomPool['sawtooth']" @toggle-random="onToggleRandom"
-										@update:modelValue="() => applyWaveToAll('sawtooth')" />
-
-									<WaveButton :modelValue="selectedWaveform" value="square" label="SQUARE"
-										:palette="['#a2f5a6', '#7bd0ff', '#ff7eb3']"
-										:randomIncluded="randomPool['square']" @toggle-random="onToggleRandom"
-										@update:modelValue="() => applyWaveToAll('square')" />
-								</div>
-
-							<!-- </div> -->
-
+									:palette="['#a2f5a6', '#7bd0ff', '#ff7eb3']" :randomIncluded="randomPool['square']"
+									@toggle-random="onToggleRandom"
+									@update:modelValue="() => applyWaveToAll('square')" />
+							</div>
 							<div class="pt-btn-group" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-								<!-- <button class="pt-btn pt-btn-sm" @click="applyRandomWaves()">
-									Random
-								</button> -->
 								<button class="pt-btn pt-btn-sm" :disabled="!randomPoolArray.length"
 									:title="randomTooltip" @click="applyRandomWaves()">
 									Random
@@ -463,7 +439,6 @@
 					</div>
 				</div>
 			</section>
-
 		</div>
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave" :minHz="MIN_PAD_HZ"
@@ -500,7 +475,7 @@ import MelodyMaker from './MelodyMaker.vue';
 import { useProjectStore } from "../stores/projectStore";
 import { listProjects as repoList } from "../lib/storage/projects";
 import { downloadJson, importJson } from "../lib/storage/exportImport";
-import { useAutosave } from '../composables/useAutosave';
+// import { useAutosave } from '../composables/useAutosave';
 import ProjectControls from './ProjectControls.vue';
 
 // WAV Export
@@ -508,7 +483,7 @@ import { scheduleStepSequencer, type StepSequencerState } from '../audio/export/
 import { audioBufferToWavFloat32 } from '../audio/export/encodeWav';
 
 // IMPORTS END
-
+const resetNonce = ref(0);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 //SEQUENCER TOOLS START
@@ -3292,6 +3267,34 @@ function resetUiToFactoryDefaults() {
 	selectedWaveform.value = 'sine';
 	currentStep.value = -1;
 	isPlaying.value = false;
+
+
+
+
+	// ---- FX: Delay ----
+	delayEnabled.value = false;
+	delaySync.value = true;
+	delayTime.value = 0.2;
+	delayFeedback.value = 0.3;
+	delayMix.value = 0.3;
+	delayToneEnabled.value = true;
+	delayToneHz.value = 5000;
+	delayToneType.value = 'lowpass';
+
+	// ---- FX: Drive ----
+	driveEnabled.value = false;
+	driveType.value = 'overdrive';
+	driveAmount.value = 0.4;
+	driveTone.value = 5000;
+	driveMix.value = 0.5;
+
+	// Close any open menus/popovers so the UI looks fresh
+	fxAdvanced.open = false;
+	stepsAdvanced.open = false;
+	closeOverlays?.();
+
+	// Force-reset components that hold local state (e.g., Melody Maker)
+	resetNonce.value++;
 }
 //RESET TO FACTORY DEFAULTS ON NEW PROJECT END 
 </script>
