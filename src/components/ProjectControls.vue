@@ -361,19 +361,6 @@ onMounted(() => {
     position: relative;
 }
 
-/* .pc-menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    min-width: 320px;
-    max-width: 460px;
-    background: var(--panel, #171a21);
-    border: 1px solid var(--surface1, #232733);
-    border-radius: .5rem;
-    box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
-    padding: .25rem;
-    z-index: 1001;
-} */
 .pc-menu {
     position: absolute;
     top: calc(100% + 6px);
@@ -407,22 +394,6 @@ onMounted(() => {
     gap: .35rem;
     align-items: center;
 }
-
-/* Keep meta (date) on one line; title truncates with ellipsis */
-/* .pc-menu-item {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) max-content;
-    column-gap: .75rem;
-    align-items: center;
-    width: 100%;
-    text-align: left;
-    padding: .5rem .6rem;
-    border-radius: .35rem;
-    border: none;
-    background: transparent;
-    color: var(--text, #e9e9ef);
-    cursor: pointer;
-} */
 
 .pc-menu-item {
     display: grid;

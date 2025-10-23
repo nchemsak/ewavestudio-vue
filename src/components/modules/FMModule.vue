@@ -1,17 +1,8 @@
 <!-- components/modules/FMModule.vue -->
 <template>
-    <KnobGroup v-model="localEnabled" :title="title" :color="color" :showToggle="showToggle">
-        <!-- header info button -->
-        <template #header-content>
-            <div class="pt-header-tools">
-                <InfoPopover title="FM" aria-label="What is FM?">
-                    FM adds a fast wobble to pitch → new harmonics.
-                </InfoPopover>
-            </div>
-        </template>
+    <KnobGroup class="pitch-col" v-model="localEnabled" :showHeader="false">
 
         <div class="pt-stack">
-            <!-- big square FM toggle, matching WaveButton style -->
             <div class="fm-top">
                 <FmTowerButton v-model="localEnabled" label="FM" />
             </div>
@@ -61,7 +52,6 @@
 import { ref, watch, computed } from 'vue'
 import Knob from '../Knob.vue'
 import KnobGroup from '../KnobGroup.vue'
-import InfoPopover from '../InfoPopover.vue'
 import FmTowerButton from '../FmTowerButton.vue'
 
 type Ratio = number | null
@@ -88,31 +78,31 @@ const emit = defineEmits<{
 }>()
 
 /* local mirrors */
-const localEnabled = ref(props.enabled)
-const localModFreq = ref(props.modFreq ?? 200)
-const localIndex = ref(props.index ?? 0)
-const localRatio = ref<Ratio>(props.ratio ?? null)
+const localEnabled = ref(props.enabled);
+const localModFreq = ref(props.modFreq ?? 200);
+const localIndex = ref(props.index ?? 4.0);
+const localRatio = ref<Ratio>(props.ratio ?? null);
 
 /* sync down */
-watch(() => props.enabled, v => (localEnabled.value = v))
-watch(() => props.modFreq, v => (localModFreq.value = v ?? 200))
-watch(() => props.index, v => (localIndex.value = v ?? 0))
-watch(() => props.ratio, v => (localRatio.value = v ?? null))
+watch(() => props.enabled, v => (localEnabled.value = v));
+watch(() => props.modFreq, v => (localModFreq.value = v ?? 200));
+watch(() => props.index, v => (localIndex.value = v ?? 4.0));
+watch(() => props.ratio, v => (localRatio.value = v ?? null));
 
 /* emit up */
-watch(localEnabled, v => emit('update:enabled', v))
-watch(localModFreq, v => emit('update:modFreq', Math.max(1, Math.min(5000, Math.round(v)))))
-watch(localIndex, v => emit('update:index', Math.max(0, Math.min(50, +v))))
+watch(localEnabled, v => emit('update:enabled', v));
+watch(localModFreq, v => emit('update:modFreq', Math.max(1, Math.min(5000, Math.round(v)))));
+watch(localIndex, v => emit('update:index', Math.max(0, Math.min(50, +v))));
 
 function setRatio(r: Ratio) {
     localRatio.value = r
     emit('update:ratio', r)
 }
 
-const modFreqDisabled = computed(() => !localEnabled.value || localRatio.value !== null)
+const modFreqDisabled = computed(() => !localEnabled.value || localRatio.value !== null);
 
 /* knob tooltip state */
-const activeKnob = ref<null | 'mf' | 'ix'>(null)
+const activeKnob = ref<null | 'mf' | 'ix'>(null);
 </script>
 
 <style scoped>
@@ -139,7 +129,6 @@ const activeKnob = ref<null | 'mf' | 'ix'>(null)
     flex-wrap: wrap;
 }
 
-/* centers the tower tile like your wave buttons */
 .fm-top {
     display: flex;
     justify-content: center;

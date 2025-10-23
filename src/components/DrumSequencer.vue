@@ -259,14 +259,10 @@
 
 				<div class="module pitch">
 					<SectionWrap id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
-
 						<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
 							v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
-						<div class="pt-rule" aria-hidden="true"></div>
-
 						<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
 							v-model:detune="detuneCents" v-model:spread="stereoSpread" />
-
 					</SectionWrap>
 				</div>
 
@@ -708,9 +704,9 @@ const currentTheme = ref(''); // '', 'theme-light', or 'theme-synthwave'
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // FM Synthesis START
-const fmEnabled = ref(true);
+const fmEnabled = ref(false);
 const fmModFreq = ref(200);     // Hz when not using ratio
-const fmIndex = ref(0);       // 0..50 typical range
+const fmIndex = ref(4.0);       // 0..50 typical range
 const fmRatio = ref<number | null>(1); // start as 1:1, or null for Hz mode
 // FM Synthesis END
 
@@ -1727,8 +1723,8 @@ watch(driveMix, val => {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Unison / Detune START
-const unisonEnabled = ref(true);
-const unisonVoices = ref(1);   // 1–6
+const unisonEnabled = ref(false);
+const unisonVoices = ref(3);   // 1–6
 const detuneCents = ref(12);  // 0–100 cents per step
 const stereoSpread = ref(50);  // 0–100 %
 // Unison / Detune END
@@ -3222,8 +3218,8 @@ function resetUiToFactoryDefaults() {
 	noiseAttackBurst.value = false;
 	noiseBurstMs.value = 80;
 
-	unisonEnabled.value = true;
-	unisonVoices.value = 1;
+	unisonEnabled.value = false;
+	unisonVoices.value = 3;
 	detuneCents.value = 12;
 	stereoSpread.value = 50;
 
@@ -3237,9 +3233,9 @@ function resetUiToFactoryDefaults() {
 	lfoRetrigger.value = false;
 	lfoBipolar.value = false;
 
-	fmEnabled.value = true;
+	fmEnabled.value = false;
 	fmModFreq.value = 200;
-	fmIndex.value = 0;
+	fmIndex.value = 4.0;
 	fmRatio.value = 1;
 
 	pitchEnvEnabled.value = true;
@@ -4095,5 +4091,22 @@ function resetUiToFactoryDefaults() {
 .knob-wrap .stepper-value {
 	font-variant-numeric: tabular-nums;
 	min-width: 42px;
+}
+
+
+/* FM + Unison side-by-side within the Pitch section */
+.module.pitch :deep(.knob-group.pitch-col) {
+	margin-top: 0;
+	width: 50%;
+	display: inline-block;
+	vertical-align: top;
+}
+
+/* responsive fall-back */
+@media (max-width: 900px) {
+	.module.pitch :deep(.knob-group.pitch-col) {
+		width: 100%;
+		display: block;
+	}
 }
 </style>
