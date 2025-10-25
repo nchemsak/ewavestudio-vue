@@ -1,3 +1,4 @@
+<!-- components/PatternTools.vue -->
 <template>
   <div class="pattern-tools" :class="props.currentTheme">
     <!-- 3-up grid -->
@@ -22,7 +23,7 @@
           <button class="pt-btn" @click="shapePeaks">Peaks</button>
           <button class="pt-btn" @click="shapeStairs4">Stairs</button>
           <button class="pt-btn" @click="shapeRamp">Ramp</button>
-          <button class="pt-btn" @click="shapeBackbeat">Backbeat</button>
+          <button class="pt-btn" @click="shapeDnb">dNb</button>
           <button class="pt-btn" @click="shapeRandom">Random</button>
           <button class="pt-btn pt-danger" @click="shapeReset">Reset</button>
         </div>
@@ -98,13 +99,25 @@ function fillRandom(arg?: unknown): void {
   emit('update:steps', out);
 }
 
-/* ---------- Velocity Shapes ---------- */
+/* ---------- Velocity application helpers ---------- */
 function applyVelocityPattern(fn: (i: number, len: number) => number): void {
   if (!props.velocities) return;
   const len = props.velocities.length;
   const out = Array.from({ length: len }, (_, i) => clamp01(fn(i, len)));
   emit('update:velocities', out);
 }
+
+/** Map a reference cycle (e.g., 16 steps) to current length by stretching. */
+function applyCycle(cycle: number[]): void {
+  applyVelocityPattern((i, len) => {
+    if (len <= 1) return cycle[0] ?? 1;
+    const t = i / (len - 1); // 0..1
+    const idx = Math.round(t * (cycle.length - 1));
+    return cycle[idx];
+  });
+}
+
+/* ---------- Velocity Shapes ---------- */
 function shapePeaks(): void {
   const cycle = [1.0, 0.55, 0.25, 0.55];
   applyVelocityPattern(i => cycle[i % 4]);
@@ -122,9 +135,22 @@ function shapeRamp(): void {
     return minV + (1 - minV) * dist;
   });
 }
-function shapeBackbeat(): void {
-  applyVelocityPattern(i => ((i % 4 === 1) || (i % 4 === 3)) ? 1.0 : 0.5);
+
+/** New DnB preset (accent strongest on step 7, matching your screenshot). */
+function shapeDnb(): void {
+  // 16-step reference cycle, normalized 0..1
+  // tuned to the provided image: medium -> high -> medium -> high,
+  // then a dip, lift into a very strong #7 accent, a few highs,
+  // and another lift near the end.
+  const dnb16 = [
+    0.60, 0.32, 0.50, 0.32,
+    0.50, 0.50, 0.90, 0.22,
+    0.50, 0.32, 0.60, 0.40,
+    0.40, 0.30, 0.60, 0.40
+  ];
+  applyCycle(dnb16);
 }
+
 function shapeRandom(): void {
   const minV = 0.15, maxV = 1.0;
   applyVelocityPattern(() => minV + Math.random() * (maxV - minV));
@@ -168,7 +194,6 @@ function shapeReset(): void {
   font-size: 0.65rem;
   width: 56px;
   padding: 4px;
-
 }
 
 .octave-btn {

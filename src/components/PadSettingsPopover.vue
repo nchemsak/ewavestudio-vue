@@ -232,40 +232,6 @@ function setWave(w: Wave) { waveLocal.value = w; }
     overflow: visible;
 }
 
-/* 
-.kb {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 10px;
-    margin: 6px 0 16px;
-    padding-top: 28px;
-}
-
-.kb-cell {
-    position: relative;
-}
-
-.kb-white {
-    width: 100%;
-    min-height: 34px;
-    font-weight: 600;
-}
-
-.kb-black {
-    position: absolute;
-    top: -22px;
-    right: -14px;
-    min-height: 26px;
-    padding: 4px 10px;
-    font-size: .8rem;
-    opacity: .95;
-    z-index: 1;
-}
-
-.kb-cell.has-sharp {
-    padding-top: 12px;
-} */
-
 .pad-row {
     display: grid;
     grid-template-columns: 74px 1fr;
@@ -328,8 +294,7 @@ function setWave(w: Wave) { waveLocal.value = w; }
     flex-wrap: wrap;
 }
 
-
-/* ==== Piano keyboard (drop-in) ========================================= */
+/* ==== Piano keyboard ========================================= */
 
 .kb {
     --gap: 2px;
