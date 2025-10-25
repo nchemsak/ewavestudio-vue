@@ -3214,7 +3214,7 @@ function resetUiToFactoryDefaults() {
 	// noiseType.value = 'white';
 	noiseMask.value = Array(stepLength.value).fill(true);
 	noiseColor.value = 0.5;
-	noiseAmount.value = 0;
+	noiseAmount.value = 0.25;
 	noiseAttackBurst.value = false;
 	noiseBurstMs.value = 80;
 

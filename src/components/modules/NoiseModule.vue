@@ -91,7 +91,7 @@ const props = withDefaults(defineProps<{
     showToggle?: boolean
 }>(), {
     enabled: false,
-    amount: 0.25,
+    amount: .5,
     colorMorph: 0.5,
     attackBurst: false,
     burstMs: 80,
