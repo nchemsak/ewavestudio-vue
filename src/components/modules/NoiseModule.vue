@@ -3,7 +3,7 @@
         <div class="noise-layout">
             <!-- LEFT: one row = Dot, Burst(ms), Amount, Color (with swatch) -->
             <div class="controls-row">
-                <!-- Enable dot (also means “Burst on”) -->
+                <!-- Enable dot (“Burst on”) -->
                 <button class="pt-dot" :class="{ 'is-on': enabledLocal }" :aria-pressed="enabledLocal"
                     title="Toggle noise" @click="enabledLocal = !enabledLocal" />
 
@@ -211,14 +211,6 @@ function maskBackbeat() {
         return isDownbeatStep && (beatIdx === 2 || beatIdx === 4)
     })
 }
-// function maskBeats23() {
-//     updateMask((i, len) => {
-//         const perBeat = Math.max(1, Math.round(len / 4))
-//         const beatIdx = Math.floor(i / perBeat) + 1
-//         const isDownbeatStep = (i % perBeat) === 0
-//         return isDownbeatStep && (beatIdx === 2 || beatIdx === 3)
-//     })
-// }
 </script>
 
 <style scoped>

@@ -3,31 +3,44 @@
         <section class="pt-section">
 
             <!-- ============ TOP: Mini keyboard row ============ -->
-            <div class="mm-kb-wrap">
-                <label class="mm-field">
-                    <span class="mm-label">Key</span>
+<!-- ============ TOP: Mini keyboard row ============ -->
+<div class="mm-kb-wrap">
+  <div class="mm-field">
+    <!-- Use a non-label element and give it an id -->
+    <div class="mm-label" id="mm-key-label">Key</div>
 
-                    <!-- Mini keyboard selector -->
-                    <div class="mm-kb" role="radiogroup" aria-label="Key selector">
-                        <div v-for="k in NATURALS" :key="k.n" class="kb-cell" :class="{ 'has-sharp': k.hasSharp }">
-                            <!-- White key -->
-                            <button class="kb-white" :class="{ 'is-active': keyRoot === k.n }" role="radio"
-                                :aria-checked="keyRoot === k.n ? 'true' : 'false'" @click="keyRoot = k.n"
-                                :title="`Set key: ${k.n}`">
-                                <span class="wlabel">{{ k.n }}</span>
-                            </button>
+    <!-- Link the radiogroup to the label text -->
+    <div class="mm-kb" role="radiogroup" :aria-labelledby="'mm-key-label'">
+      <div v-for="k in NATURALS" :key="k.n" class="kb-cell" :class="{ 'has-sharp': k.hasSharp }">
+        <!-- White key -->
+        <button
+          type="button"
+          class="kb-white"
+          :class="{ 'is-active': keyRoot === k.n }"
+          role="radio"
+          :aria-checked="keyRoot === k.n ? 'true' : 'false'"
+          @click="keyRoot = k.n"
+          :title="`Set key: ${k.n}`">
+          <span class="wlabel">{{ k.n }}</span>
+        </button>
 
-                            <!-- Black key -->
-                            <button v-if="k.hasSharp && k.sharp" class="kb-black"
-                                :class="{ 'is-active': keyRoot === k.sharp }" role="radio"
-                                :aria-checked="keyRoot === k.sharp ? 'true' : 'false'" @click="keyRoot = k.sharp"
-                                :title="`Set key: ${k.sharp}`">
-                                <span class="blabel">{{ k.sharp }}</span>
-                            </button>
-                        </div>
-                    </div>
-                </label>
-            </div>
+        <!-- Black key -->
+        <button
+          v-if="k.hasSharp && k.sharp"
+          type="button"
+          class="kb-black"
+          :class="{ 'is-active': keyRoot === k.sharp }"
+          role="radio"
+          :aria-checked="keyRoot === k.sharp ? 'true' : 'false'"
+          @click="keyRoot = k.sharp"
+          :title="`Set key: ${k.sharp}`">
+          <span class="blabel">{{ k.sharp }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 
             <!-- Row 2: Scale + Range at 50% each -->
             <div class="mm-head-row2">

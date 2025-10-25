@@ -1558,12 +1558,12 @@ const noiseBuffers: Record<NoiseKey, AudioBuffer | null> = {
 	brown: null, pink: null, white: null, blue: null, violet: null
 }
 // continuous color morph 0..1  (0=brown → 1=violet)
-const noiseColor = ref(0.5)
+const noiseColor = ref(0.5);
 
 const noiseAmount = ref(0); // 0 = no noise, 1 = full noise
-const noiseEnabled = ref(true)
+const noiseEnabled = ref(false);
 
-const noiseMask = ref<boolean[]>(Array(stepLength.value).fill(true))
+const noiseMask = ref<boolean[]>(Array(stepLength.value).fill(true));
 
 const noiseAttackBurst = ref(false);
 const noiseBurstMs = ref(80); // ms
@@ -3210,7 +3210,7 @@ function resetUiToFactoryDefaults() {
 	filterCutoff.value = 5000;
 	filterResonance.value = 0.5;
 
-	noiseEnabled.value = true;
+	noiseEnabled.value = false;
 	// noiseType.value = 'white';
 	noiseMask.value = Array(stepLength.value).fill(true);
 	noiseColor.value = 0.5;
