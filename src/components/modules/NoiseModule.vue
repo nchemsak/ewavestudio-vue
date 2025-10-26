@@ -42,7 +42,7 @@
                 </div>
             </div>
 
-            <!-- RIGHT: stacked mask button groups -->
+            <!-- RIGHT: masks only -->
             <div v-if="hasMask" class="mask-col">
                 <div class="pt-section-title">Apply to Pads</div>
 
@@ -54,7 +54,6 @@
                     </div>
 
                     <div class="pt-btn-group" role="group" aria-label="Noise mask group 2">
-                        <!-- <button class="pt-btn" @click="maskBeats23">Beats 2 &amp; 3</button> -->
                         <button class="pt-btn" @click="maskRandom">Random</button>
                         <button class="pt-btn" @click="maskInvert">Invert</button>
                         <button class="pt-btn pt-danger" @click="maskClear">Clear</button>
@@ -76,7 +75,7 @@ import KnobGroup from '../KnobGroup.vue'
  *  - v-model:amount
  *  - v-model:colorMorph   0..1
  *  - v-model:mask         boolean[]
- *  - v-model:attackBurst  boolean  (mirrors enabled)
+ *  - v-model:attackBurst  boolean
  *  - v-model:burstMs      number (ms)
  */
 
@@ -91,12 +90,12 @@ const props = withDefaults(defineProps<{
     showToggle?: boolean
 }>(), {
     enabled: false,
-    amount: .5,
+    amount: .25,
     colorMorph: 0.5,
     attackBurst: false,
     burstMs: 80,
     color: '#9C27B0',
-    showToggle: true
+    showToggle: true,
 })
 
 const emit = defineEmits<{
@@ -122,18 +121,13 @@ watch(() => props.colorMorph, v => colorLocal.value = v)
 watch(() => props.burstMs, v => { if (typeof v === 'number') burstMsLocal.value = v })
 
 // emit locals -> parent
-watch(enabledLocal, v => {
-    emit('update:enabled', v)
-    emit('update:attackBurst', v) // Burst always follows enabled
-})
+watch(enabledLocal, v => { emit('update:enabled', v); emit('update:attackBurst', v) })
 watch(amountLocal, v => emit('update:amount', Math.max(0, Math.min(1, v))))
 watch(colorLocal, v => emit('update:colorMorph', Math.max(0, Math.min(1, v))))
 watch(burstMsLocal, v => emit('update:burstMs', Math.max(5, Math.min(250, Math.round(v)))))
 
 // also on mount, ensure parent gets synced burst state once
-if (props.attackBurst !== props.enabled) {
-    emit('update:attackBurst', props.enabled)
-}
+if (props.attackBurst !== props.enabled) emit('update:attackBurst', props.enabled)
 
 // misc
 const accent = computed(() => props.color)
@@ -192,16 +186,17 @@ const swatchHex = computed(() => {
 /* ---------- Per-Pad Noise mask helpers ---------- */
 const hasMask = computed(() => Array.isArray(props.mask) && props.mask.length > 0)
 
+const emitMask = (out: boolean[]) => emit('update:mask', out)
 function updateMask(make: (i: number, len: number) => boolean) {
     const len = props.mask?.length ?? 0
     if (len <= 0) return
     const out = Array.from({ length: len }, (_, i) => !!make(i, len))
-    emit('update:mask', out)
+    emitMask(out)
 }
 function maskAll() { updateMask(() => true) }
 function maskClear() { updateMask(() => false) }
 function maskEvery2() { updateMask((i) => i % 2 === 0) }
-function maskInvert() { if (!props.mask) return; emit('update:mask', props.mask.map(v => !v)) }
+function maskInvert() { if (!props.mask) return; emitMask(props.mask.map(v => !v)) }
 function maskRandom() { updateMask(() => Math.random() < 0.5) }
 function maskBackbeat() {
     updateMask((i, len) => {
@@ -217,28 +212,20 @@ function maskBackbeat() {
 /* Layout: left controls row + right mask tools */
 .noise-layout {
     display: grid;
-    /* FR units avoid % + gap overflow. Right rail capped so it wraps nicely. */
-    /* grid-template-columns: minmax(0, 3fr) minmax(220px, 340px); */
     grid-template-columns: minmax(0, 3fr) minmax(204px, 204px);
-
     gap: 12px;
     align-items: start;
     min-width: 0;
-    /* allow children to shrink inside */
 }
 
-/* Four compact columns: dot + 3 knobs */
 .controls-row {
     display: grid;
     grid-auto-flow: column;
-    /* grid-template-columns: auto repeat(3, minmax(64px, 1fr)); */
     justify-content: start;
-    /* keep the knobs left-aligned */
     align-items: center;
     gap: 10px;
     min-width: 0;
 }
-
 
 .control-block {
     display: flex;
@@ -253,7 +240,6 @@ function maskBackbeat() {
 }
 
 .swatch {
-
     height: 9px;
     border-radius: 1px;
     border: none;

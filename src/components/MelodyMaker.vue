@@ -167,12 +167,24 @@
 import { ref, computed, watch, onUnmounted, defineExpose } from 'vue';
 import PtSelect from './PtSelect.vue';
 
+/* ---------- PROPS (added initial* props for persistence) ---------- */
 const props = defineProps<{
     frequencies?: number[];
     steps?: boolean[];
     minFreq?: number;
     maxFreq?: number;
     currentTheme?: string;
+
+    // NEW: initial values (so parent can hydrate on load)
+    initialKeyRoot?: 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B';
+    initialKeyScale?: 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'wholeTone' | 'dorian' | 'lydian' | 'egyptian';
+    initialRangePreset?: 'low' | 'mid' | 'high' | 'wide';
+
+    // Also accept the arp initial props you pass (benign if unused)
+    initialArpPattern?: 'up' | 'down' | 'updown' | 'random';
+    initialArpRate?: '1/4' | '1/8' | '1/16';
+    initialArpOctaves?: 1 | 2 | 3 | 4;
+    initialArpTones?: 'chord' | 'scale';
 }>();
 
 /* ---------- Defaults ---------- */
@@ -200,6 +212,9 @@ const emit = defineEmits<{
     (e: 'update:frequencies', v: number[]): void;
     (e: 'octave-shift', delta: number): void;
     (e: 'key-root-change', root: typeof ROOTS[number]): void;
+    // NEW emits so parent can persist:
+    (e: 'key-scale-change', scale: keyof typeof SCALES): void;
+    (e: 'range-preset-change', preset: PresetKey): void;
 }>();
 
 /* ---------- Theory ---------- */
@@ -221,8 +236,10 @@ const SCALE_LABELS: Record<string, string> = {
     wholeTone: 'Whole-tone', dorian: 'Dorian', lydian: 'Lydian', egyptian: 'Egyptian Pentatonic'
 };
 
-const keyRoot = ref<RootNote>('A');
-const keyScale = ref<keyof typeof SCALES>('major');
+/* ---------- PERSISTED UI (Key/Scale/Range) ---------- */
+// Initialize from props.* if provided, else your defaults
+const keyRoot = ref<RootNote>(props.initialKeyRoot ?? 'A');
+const keyScale = ref<keyof typeof SCALES>(props.initialKeyScale ?? 'major');
 
 /* Mini keyboard layout (like PadSettingsPopover but compact) */
 const NATURALS: Array<{ n: Extract<RootNote, 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B'>; hasSharp: boolean; sharp?: RootNote }> = [
@@ -237,7 +254,7 @@ const NATURALS: Array<{ n: Extract<RootNote, 'C' | 'D' | 'E' | 'F' | 'G' | 'A' |
 
 /* Naming helpers used elsewhere */
 const SHARP_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
-const FLAT_NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+const FLAT_NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
 const FLAT_KEYS = new Set(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb']);
 const preferFlat = computed(() => keyRoot.value.includes('b') || FLAT_KEYS.has(keyRoot.value));
 const NAMES = computed(() => preferFlat.value ? FLAT_NOTE_NAMES : SHARP_NOTE_NAMES);
@@ -250,7 +267,8 @@ const PRESETS: Record<PresetKey, { minOct: number; maxOct: number; label: string
     high: { minOct: 4, maxOct: 5, label: 'High' },
     wide: { minOct: 2, maxOct: 6, label: 'Wide' },
 };
-const rangePreset = ref<PresetKey>('wide');
+// Initialize from props.initialRangePreset if provided
+const rangePreset = ref<PresetKey>(props.initialRangePreset ?? 'wide');
 const minOctave = ref(3);
 const maxOctave = ref(6);
 watch(rangePreset, (k) => { const p = PRESETS[k]; minOctave.value = p.minOct; maxOctave.value = p.maxOct; }, { immediate: true });
@@ -298,7 +316,15 @@ const scaleOptions = Object.keys(SCALES).map(name => ({ label: SCALE_LABELS[name
 const rangeOptions = (Object.entries(PRESETS) as [PresetKey, typeof PRESETS[PresetKey]][])
     .map(([value, def]) => ({ label: def.label, value }));
 
+// emits for persistence
 watch(keyRoot, (v) => emit('key-root-change', v), { immediate: true });
+watch(keyScale, (v) => emit('key-scale-change', v), { immediate: true });
+watch(rangePreset, (v) => emit('range-preset-change', v), { immediate: true });
+
+// respond to parent pushing new initial props (e.g., after load)
+watch(() => props.initialKeyRoot, (v) => { if (v && v !== keyRoot.value) keyRoot.value = v as RootNote; });
+watch(() => props.initialKeyScale, (v) => { if (v && v !== keyScale.value) keyScale.value = v as keyof typeof SCALES; });
+watch(() => props.initialRangePreset, (v) => { if (v && v !== rangePreset.value) rangePreset.value = v as PresetKey; });
 
 /* ---------- Smart generator ---------- */
 function contourAt(i: number, n: number, kind: Style) {
@@ -327,6 +353,16 @@ function degreeIndexFor(semiAbs: number, rootSemi: number, steps: number[]) {
 }
 function makeRng(s: number) {
     return () => { s |= 0; s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+let clickNonce = 0;
+const seed = ref(1);
+function freshRng() {
+    const mixed =
+        (seed.value | 0) ^
+        (++clickNonce * 0x9e3779b9) ^
+        (Date.now() & 0xffffffff);
+    return makeRng(mixed);
 }
 
 function smartGenerate(): void {
@@ -440,10 +476,12 @@ function smartGenerate(): void {
 }
 
 /* ---------- Arpeggiator ---------- */
-const arpPattern = ref<'up' | 'down' | 'updown' | 'random'>('up');
-const arpRate = ref<'1/4' | '1/8' | '1/16'>('1/16');
-const arpOctaves = ref<1 | 2 | 3 | 4>(1);
-const arpTones = ref<'chord' | 'scale'>('chord');
+// initialize arp UI from optional initial props to keep your parent happy
+const arpPattern = ref<'up' | 'down' | 'updown' | 'random'>(props.initialArpPattern ?? 'up');
+const arpRate = ref<'1/4' | '1/8' | '1/16'>(props.initialArpRate ?? '1/16');
+const arpOctaves = ref<1 | 2 | 3 | 4>(props.initialArpOctaves ?? 1);
+const arpTones = ref<'chord' | 'scale'>(props.initialArpTones ?? 'chord');
+
 const arpSeventhOnDownbeat = ref(false);
 const arpStart = ref<'low' | 'center' | 'high' | 'random'>('center');
 const arpRepeat = ref<1 | 2 | 3>(1);
@@ -480,7 +518,6 @@ function rotate<T>(arr: T[], n: number) {
 
 function indicesWithStride(L: number, stride: number) {
     if (stride <= 1) return Array.from({ length: L }, (_, i) => i);
-    // Interleave groups to still cover all items: 0,2,4,...,1,3,5,...
     const out: number[] = [];
     for (let start = 0; start < stride; start++) {
         for (let i = start; i < L; i += stride) out.push(i);
@@ -499,7 +536,6 @@ function nearestIndexIn(arr: number[], base: number): number | null {
 }
 
 function outwardOffsets(n: number) {
-    // 1 => [1], 2 => [1,-1], 3 => [1,-1,2], 4 => [1,-1,2,-2], ...
     const out: number[] = [];
     for (let k = 1; k <= n; k++) out.push(k * (k % 2 ? 1 : -1));
     return out;
@@ -510,7 +546,6 @@ function bakeArp(): void {
 
     const out = props.frequencies.slice();
 
-    // Scope: if "Apply to active only" is on, honor it here. Otherwise, affect all steps.
     const scopeMask =
         (applyScope.value === 'active' && props.steps && props.steps.length === out.length)
             ? props.steps
@@ -522,7 +557,6 @@ function bakeArp(): void {
     const fMin = props.minFreq ?? 100;
     const fMax = props.maxFreq ?? 2000;
 
-    // Full in-range pool for the current key/scale + min/max octaves
     const pool = buildCandidateMidiPool(
         keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, fMin, fMax
     ).sort((a, b) => a - b);
@@ -532,7 +566,6 @@ function bakeArp(): void {
     const rootSemi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
     const center = pool[Math.floor(pool.length / 2)];
 
-    // Tone inventory (Chord: 1–3–5; Scale: all degrees)
     const toneSemitones = (mode: 'chord' | 'scale'): number[] => {
         if (mode === 'scale') return Array.from(new Set(stepsArr.map(s => (rootSemi + s) % 12)));
         const chordIdx = [0, 2, 4]; // 1,3,5
@@ -541,7 +574,6 @@ function bakeArp(): void {
     };
     const toneSemisArr = toneSemitones(arpTones.value);
 
-    // Group the pool by pitch class (semitone)
     const groupsBySemi: Record<number, number[]> = {};
     for (const s of toneSemisArr) groupsBySemi[s] = [];
     for (const m of pool) {
@@ -550,7 +582,6 @@ function bakeArp(): void {
     }
     for (const s of toneSemisArr) groupsBySemi[s].sort((a, b) => a - b);
 
-    // Build a center-anchored "ladder" across arpOctaves for each chosen pitch class
     let ladder: number[] = [];
     for (const s of toneSemisArr) {
         const g = groupsBySemi[s] || [];
@@ -561,7 +592,7 @@ function bakeArp(): void {
 
         const picks: number[] = [g[i0]];
         const need = (arpOctaves.value - 1);
-        const offs = outwardOffsets(need); // 1,-1,2,-2,...
+        const offs = outwardOffsets(need);
 
         for (const off of offs) {
             const idx = i0 + off;
@@ -574,10 +605,8 @@ function bakeArp(): void {
     ladder = [...new Set(ladder)].sort((a, b) => a - b);
     if (!ladder.length) return;
 
-    // Degree stride over the ladder (e.g., skip every other tone)
-    const baseIdx = indicesWithStride(ladder.length, arpStride.value); // e.g., 0,2,4,6,1,3,5,7 for stride=2
+    const baseIdx = indicesWithStride(ladder.length, arpStride.value);
 
-    // Start position
     let startIdx = 0;
     if (arpStart.value === 'low') startIdx = 0;
     else if (arpStart.value === 'high') startIdx = ladder.length - 1;
@@ -587,7 +616,6 @@ function bakeArp(): void {
     const posOfStart = baseIdx.indexOf(startIdx);
     const rotated = posOfStart >= 0 ? rotate(baseIdx, posOfStart) : baseIdx;
 
-    // Order by pattern
     let orderIdx: number[] = [];
     switch (arpPattern.value) {
         case 'up':
@@ -615,7 +643,6 @@ function bakeArp(): void {
     const order = orderIdx.map(i => ladder[i]);
     if (!order.length) return;
 
-    // Map musical rate (quarters/eighths/sixteenths) to step groups
     const RATE_TO_GROUP: Record<string, number> = { '1/4': 4, '1/8': 2, '1/16': 1 };
     const groupSize = RATE_TO_GROUP[arpRate.value] ?? 1;
 
@@ -624,7 +651,6 @@ function bakeArp(): void {
         groupsOfIdx.push(activeIdx.slice(k, k + groupSize));
     }
 
-    // 7th on downbeats
     const seventhSemi = stepsArr.length >= 7 ? (rootSemi + stepsArr[6]) % 12 : null;
     const seventhCandidates = (seventhSemi != null)
         ? pool.filter(m => (((m % 12) + 12) % 12) === seventhSemi)
@@ -634,7 +660,7 @@ function bakeArp(): void {
 
     function maybeHop(midi: number): number {
         if (!arpHop.value) return midi;
-        if (rgen() < 0.2) { // ~20%
+        if (rgen() < 0.2) {
             const s = ((midi % 12) + 12) % 12;
             const g = groupsBySemi[s] || [];
             if (!g.length) return midi;
@@ -650,8 +676,7 @@ function bakeArp(): void {
         return midi;
     }
 
-    // Write into the sequence with repeats ×N and downbeat-7ths
-    let p = 0;                       // pointer in 'order'
+    let p = 0;
     let repeatsLeft = arpRepeat.value;
 
     for (const g of groupsOfIdx) {
@@ -660,7 +685,6 @@ function bakeArp(): void {
         const firstStep = g[0];
         let midi: number | undefined;
 
-        // 7th on downbeats (every 4 steps of the sequence grid)
         if (arpSeventhOnDownbeat.value && seventhCandidates.length && (firstStep % 4 === 0)) {
             const i = nearestIndexIn(seventhCandidates, center);
             if (i != null) midi = seventhCandidates[i];
@@ -680,10 +704,7 @@ function bakeArp(): void {
 
     rememberBeforeWrite();
     emit('update:frequencies', out);
-    // If you want the Advanced menu to close after generating, uncomment:
-    // advancedOpen.value = false;
 }
-
 
 /* ---------- UI state & helpers ---------- */
 const advancedOpen = ref(false);
@@ -703,21 +724,10 @@ function openAdvanced(e?: MouseEvent) {
     }
     advancedOpen.value = true;
 }
-defineExpose({ openAdvanced });
 
 const applyScope = ref<'all' | 'active'>('active');
 const startOnTonic = ref(false);
 const emphasizeDownbeats = ref(true);
-const seed = ref(1);
-
-let clickNonce = 0;
-function freshRng() {
-    const mixed =
-        (seed.value | 0) ^
-        (++clickNonce * 0x9e3779b9) ^
-        (Date.now() & 0xffffffff);
-    return makeRng(mixed);
-}
 
 // Undo buffer
 const lastFrequencies = ref<number[] | null>(null);
@@ -746,149 +756,45 @@ function resetAdvanced() {
     arpHop.value = DEFAULTS_ARP.hop;
 }
 
+/* ---------- EXPOSE for parent save/load ---------- */
+type UiSnapshot = {
+    keyRoot: RootNote;
+    keyScale: keyof typeof SCALES;
+    rangePreset: PresetKey;
+    arpPattern: 'up' | 'down' | 'updown' | 'random';
+    arpRate: '1/4' | '1/8' | '1/16';
+    arpOctaves: 1 | 2 | 3 | 4;
+    arpTones: 'chord' | 'scale';
+};
 
-// function bakeArp(): void {
+function getUi(): UiSnapshot {
+    return {
+        keyRoot: keyRoot.value,
+        keyScale: keyScale.value,
+        rangePreset: rangePreset.value,
+        arpPattern: arpPattern.value,
+        arpRate: arpRate.value,
+        arpOctaves: arpOctaves.value,
+        arpTones: arpTones.value,
+    };
+}
 
-//     if (!props.frequencies || !props.frequencies.length) return;
+function setUi(u: Partial<UiSnapshot>) {
+    if (u.keyRoot) keyRoot.value = u.keyRoot;
+    if (u.keyScale) keyScale.value = u.keyScale as keyof typeof SCALES;
+    if (u.rangePreset) rangePreset.value = u.rangePreset as PresetKey;
 
-//     const out = props.frequencies.slice();
-//     const stepsMask =
-//         (applyScope.value === 'active' && props.steps && props.steps.length === out.length)
-//             ? props.steps
-//             : out.map(() => true);
+    if (u.arpPattern) arpPattern.value = u.arpPattern;
+    if (u.arpRate) arpRate.value = u.arpRate;
+    if (u.arpOctaves) arpOctaves.value = u.arpOctaves as 1 | 2 | 3 | 4;
+    if (u.arpTones) arpTones.value = u.arpTones;
+}
 
-//     const freqMin = props.minFreq ?? 100;
-//     const freqMax = props.maxFreq ?? 2000;
-
-//     // Scale + root
-//     const stepsArr = SCALES[keyScale.value] ?? SCALES.major;
-//     const rootSemi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
-
-//     // Build degree set (chord triad vs whole scale), apply "Skip every other tone"
-//     let degreeIdxs: number[] =
-//         (arpTones.value === 'chord')
-//             ? [0, 2, 4].filter(i => i < stepsArr.length) // 1-3-5
-//             : stepsArr.map((_, i) => i);
-//     if (arpStride.value === 2) degreeIdxs = degreeIdxs.filter((_, i) => i % 2 === 0);
-//     if (!degreeIdxs.length) degreeIdxs = [0];
-
-//     const midiFrom = (semiAbs: number, oct: number) => 12 * (oct + 1) + semiAbs;
-//     const clampMidiToRange = (m: number) => {
-//         let f = midiToFreq(m);
-//         if (f < freqMin) {
-//             while (m + 12 <= 127 && midiToFreq(m + 12) <= freqMax) m += 12, f = midiToFreq(m);
-//         } else if (f > freqMax) {
-//             while (m - 12 >= 0 && midiToFreq(m - 12) >= freqMin) m -= 12, f = midiToFreq(m);
-//         }
-//         return m;
-//     };
-
-//     // Choose an octave window based on range preset + arpOctaves
-//     const loOct = Math.min(minOctave.value, maxOctave.value);
-//     const hiOct = Math.max(minOctave.value, maxOctave.value);
-//     const centerOct = Math.floor((loOct + hiOct) / 2);
-//     const startOct = Math.max(loOct, Math.min(hiOct, centerOct - Math.floor((arpOctaves.value - 1) / 2)));
-//     const endOct = Math.min(hiOct, startOct + arpOctaves.value - 1);
-
-//     // Build ascending pool of usable MIDI tones across octaves
-//     const tonesMidi: number[] = [];
-//     for (let oct = startOct; oct <= endOct; oct++) {
-//         for (const di of degreeIdxs) {
-//             const semi = (rootSemi + stepsArr[di]) % 12;
-//             const m = clampMidiToRange(midiFrom(semi, oct));
-//             const f = midiToFreq(m);
-//             if (f >= freqMin && f <= freqMax) tonesMidi.push(m);
-//         }
-//     }
-//     tonesMidi.sort((a, b) => a - b);
-//     if (!tonesMidi.length) return;
-
-//     // Pattern order
-//     function orderIndices(N: number): number[] {
-//         switch (arpPattern.value) {
-//             case 'down': return Array.from({ length: N }, (_, i) => N - 1 - i);
-//             case 'updown': {
-//                 const up = [...Array(N).keys()];
-//                 const dn = [...Array(Math.max(0, N - 2)).keys()].reverse().map(i => i + 1);
-//                 return up.concat(dn);
-//             }
-//             case 'random': {
-//                 const arr = [...Array(N).keys()];
-//                 const r = freshRng();
-//                 for (let i = arr.length - 1; i > 0; i--) {
-//                     const j = Math.floor(r() * (i + 1));
-//                     [arr[i], arr[j]] = [arr[j], arr[i]];
-//                 }
-//                 return arr;
-//             }
-//             case 'up':
-//             default: return [...Array(N).keys()];
-//         }
-//     }
-
-//     let seqIdx = orderIndices(tonesMidi.length);
-
-//     // Start position
-//     let startIndex = 0;
-//     if (arpStart.value === 'low') startIndex = 0;
-//     else if (arpStart.value === 'high') startIndex = seqIdx.length - 1;
-//     else if (arpStart.value === 'center') startIndex = Math.floor(seqIdx.length / 2);
-//     else startIndex = Math.floor(freshRng()() * seqIdx.length);
-
-//     if (startIndex > 0) seqIdx = seqIdx.slice(startIndex).concat(seqIdx.slice(0, startIndex));
-
-//     // Base run with repeats applied
-//     const baseRun: number[] = seqIdx.map(i => tonesMidi[i]);
-//     let run: number[] = [];
-//     for (const m of baseRun) for (let r = 0; r < arpRepeat.value; r++) run.push(m);
-//     if (!run.length) run = baseRun.slice();
-
-//     // Rate -> step stride
-//     const stepStride = (arpRate.value === '1/4') ? 4 : (arpRate.value === '1/8') ? 2 : 1;
-
-//     const rgen = freshRng();
-//     const firstActive = stepsMask.findIndex(Boolean);
-
-//     const seventhMidiAtOct = (oct: number) => {
-//         const di = Math.min(6, stepsArr.length - 1); // diatonic 7th (or last available)
-//         const semi7 = (rootSemi + stepsArr[di]) % 12;
-//         return midiFrom(semi7, oct);
-//     };
-
-//     // Write across timeline
-//     let cursor = 0;
-//     for (let i = 0; i < out.length; i++) {
-//         if (!stepsMask[i]) continue;
-//         if (firstActive >= 0 && ((i - firstActive) % stepStride !== 0)) continue;
-
-//         let m = run[cursor % run.length];
-
-//         // Optional octave hop
-//         if (arpHop.value && rgen() < 0.18) {
-//             m += (rgen() < 0.5 ? -12 : 12);
-//             m = clampMidiToRange(m);
-//         }
-
-//         // Optional 7th on downbeats (every 4 steps)
-//         if (arpSeventhOnDownbeat.value && (i % 4 === 0)) {
-//             const oct = Math.floor(m / 12) - 1;
-//             const m7 = clampMidiToRange(seventhMidiAtOct(oct));
-//             const f7 = midiToFreq(m7);
-//             if (f7 >= freqMin && f7 <= freqMax) m = m7;
-//         }
-
-//         out[i] = midiToFreq(m);
-//         cursor++;
-//     }
-
-//     rememberBeforeWrite();
-//     emit('update:frequencies', out);
-//     advancedOpen.value = false;
-// }
-
+defineExpose({ openAdvanced, getUi, setUi });
 </script>
 
 <style scoped>
+/* ---- your original styles unchanged ---- */
 .melody-maker {
     position: relative;
     width: 100%;
@@ -896,7 +802,6 @@ function resetAdvanced() {
     flex: 1 1 0;
 }
 
-/* Keep existing field styles */
 .mm-field {
     display: flex;
     flex-direction: column;
@@ -915,7 +820,6 @@ function resetAdvanced() {
     color: var(--pt-muted);
 }
 
-/* Row 2 layout */
 .mm-head-row2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -923,7 +827,6 @@ function resetAdvanced() {
     align-items: end;
 }
 
-/* Primary buttons */
 .mm-primary {
     display: block;
     margin-top: 10px;
@@ -957,7 +860,6 @@ function resetAdvanced() {
     border: 1px solid var(--pt-hairline);
 }
 
-/* Arp grid */
 .mm-group {
     margin-top: 10px;
     padding-top: 10px;
@@ -970,7 +872,6 @@ function resetAdvanced() {
     gap: 10px;
 }
 
-/* Advanced menu */
 .mm-menu {
     position: absolute;
     min-width: 280px;
@@ -1016,7 +917,6 @@ function resetAdvanced() {
     cursor: pointer;
 }
 
-/* iOS-like switch */
 .mm-switch {
     --sw: 38px;
     --kn: 18px;
@@ -1049,14 +949,12 @@ function resetAdvanced() {
     left: calc(100% - var(--kn) - 2px);
 }
 
-/* overlay to close */
 .mm-overlay {
     position: fixed;
     inset: 0;
     z-index: 999;
 }
 
-/* Select */
 :deep(.pt-selectbtn),
 :deep(select.pt-select) {
     height: 36px;
@@ -1075,7 +973,6 @@ function resetAdvanced() {
     opacity: .95;
 }
 
-/* Responsive collapse */
 @media (max-width: 720px) {
     .mm-grid {
         grid-template-columns: 1fr 1fr;
@@ -1086,7 +983,6 @@ function resetAdvanced() {
     }
 }
 
-/* Melody button emphasis */
 .arp-btn {
     background: none;
     border: 1px solid white;
@@ -1113,27 +1009,19 @@ function resetAdvanced() {
     border-radius: 1px;
 }
 
-/* ===========================================================
-   Mini keyboard (distinct but related to PadSettingsPopover)
-   =========================================================== */
 .mm-kb-wrap {
     margin-bottom: 8px;
 }
 
-/* reset pill styles for the mini keyboard scope only */
 .mm-kb :where(.pt-seg-btn) {
     all: unset;
 }
 
 .mm-kb {
     --gap: 1px;
-    /* space between white keys */
     --whiteH: 88px;
-    /* compact white height */
     --blackH: 54px;
-    /* compact black height */
     --radius: 7px;
-
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: var(--gap);
@@ -1141,8 +1029,6 @@ function resetAdvanced() {
     padding: 6px 6px 8px;
     border-radius: var(--pt-radius-md);
     background: linear-gradient(180deg, transparent, rgb(0 0 0 / .05));
-
-    /* theme-aware piano colors with fallbacks */
     --white1: color-mix(in oklab, white 94%, var(--pt-panel) 6%);
     --white2: color-mix(in oklab, white 83%, var(--pt-panel) 17%);
     --black1: color-mix(in oklab, #0b0f1a 90%, var(--pt-panel) 10%);
@@ -1163,7 +1049,6 @@ function resetAdvanced() {
     height: var(--whiteH);
 }
 
-/* White keys: subtle 3D */
 .kb-white {
     width: 100%;
     height: 100%;
@@ -1186,14 +1071,6 @@ function resetAdvanced() {
         0 6px 14px rgb(0 0 0 / .22);
 }
 
-.kb-white:hover {
-    /* filter: brightness(1.045); */
-}
-
-.kb-white:active {
-    /* transform: translateY(1px); */
-}
-
 .kb-white.is-active {
     box-shadow:
         inset 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .85),
@@ -1201,14 +1078,11 @@ function resetAdvanced() {
         0 2px 0 rgb(0 0 0 / .5),
         0 8px 18px rgb(0 0 0 / .28);
     background: radial-gradient(circle at center, #d9a0c3 0%, #9b8cb4 75%, #736c92 100%);
-
 }
-
 
 .kb-white.is-active .wlabel {
     color: white;
     font-size: 1rem;
-
 }
 
 .kb-white .wlabel {
@@ -1219,7 +1093,6 @@ function resetAdvanced() {
     opacity: .9;
 }
 
-/* Black keys: overlay and centered between whites */
 .kb-black {
     --whiteW: 100%;
     width: calc(0.6 * var(--whiteW));
@@ -1248,15 +1121,6 @@ function resetAdvanced() {
     z-index: 2;
 }
 
-.kb-black:hover {
-    filter: brightness(1.08);
-}
-
-.kb-black:active {
-    /* transform: translateY(1px); */
-
-}
-
 .kb-black.is-active {
     box-shadow:
         0 0 0 2px hsl(var(--pt-accent) 90% 60% / .9),
@@ -1269,19 +1133,16 @@ function resetAdvanced() {
 .kb-black.is-active .blabel {
     color: white;
     font-size: 1rem;
-
 }
 
 .kb-cell.has-sharp {
     padding-top: 0;
 }
 
-/* Make sure selects look right, even in dark themes */
 .mm-kb :where(button) {
     outline: none;
 }
 
-/* Small screens: slightly shorter keys */
 @media (max-width: 560px) {
     .mm-kb {
         --whiteH: 50px;

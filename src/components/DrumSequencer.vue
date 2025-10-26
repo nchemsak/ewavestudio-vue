@@ -175,10 +175,23 @@
 							<button class="pt-info-icon" aria-label="Advanced options"
 								@click="melodyRef?.openAdvanced($event)">⋯</button>
 						</template>
-						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
+						<!-- <MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
 							@update:frequencies="padFrequencies = $event" @octave-shift="octaveShiftAllSkip($event)"
-							@key-root-change="onKeyRootChange" />
+							@key-root-change="onKeyRootChange" /> -->
+
+						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
+							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
+							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
+							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
+							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
+							:initial-arp-tones="melodyUi.arpTones" @update:frequencies="padFrequencies = $event"
+							@octave-shift="octaveShiftAllSkip($event)"
+							@key-root-change="(r) => { onKeyRootChange(r); melodyUi.keyRoot = r as any; }"
+							@key-scale-change="(s) => { melodyUi.keyScale = s as any }"
+							@range-preset-change="(p) => { melodyUi.rangePreset = p as any }" />
+
+
 
 					</SectionWrap>
 				</div>
@@ -226,6 +239,7 @@
 									v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
 									v-model:mask="noiseMask" v-model:attackBurst="noiseAttackBurst"
 									v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
+
 							</div>
 						</div>
 					</SectionWrap>
@@ -487,8 +501,31 @@ const stepLength = ref<16 | 32>(16);
 const showVelocity = ref(true);
 const showPitch = ref(true);
 
-const melodyRef = ref<InstanceType<typeof MelodyMaker> | null>(null);
+// const melodyRef = ref<InstanceType<typeof MelodyMaker> | null>(null);
+const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
+	getUi?: () => any;
+	setUi?: (u: any) => void;
+}) | null>(null);
 
+type MelodyUi = {
+	keyRoot: 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B';
+	keyScale: 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'wholeTone' | 'dorian' | 'lydian' | 'egyptian';
+	rangePreset: 'low' | 'mid' | 'high' | 'wide';
+	arpPattern: 'up' | 'down' | 'updown' | 'random';
+	arpRate: '1/4' | '1/8' | '1/16';
+	arpOctaves: 1 | 2 | 3 | 4;
+	arpTones: 'chord' | 'scale';
+};
+
+const melodyUi = reactive<MelodyUi>({
+	keyRoot: 'A',
+	keyScale: 'major',
+	rangePreset: 'wide',
+	arpPattern: 'up',
+	arpRate: '1/16',
+	arpOctaves: 1,
+	arpTones: 'chord',
+});
 
 // Resize all instrument arrays when switching 16/32
 function setStepLength(len: 16 | 32) {
@@ -1567,6 +1604,9 @@ const noiseMask = ref<boolean[]>(Array(stepLength.value).fill(true));
 
 const noiseAttackBurst = ref(false);
 const noiseBurstMs = ref(80); // ms
+
+// const noiseStereoWidth = ref(0.7);
+
 // Noise END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -1834,6 +1874,7 @@ const exportState = computed<StepSequencerState>(() => {
 				mask: [...noiseMask.value],
 				attackBurst: noiseAttackBurst.value,
 				burstMs: noiseBurstMs.value,
+				// stereoWidth: noiseStereoWidth.value,
 			} as any,
 
 			unison: { enabled: unisonEnabled.value, voices: unisonVoices.value, detuneCents: detuneCents.value, stereoSpread: stereoSpread.value },
@@ -2452,8 +2493,8 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		postAmpNode.connect(driveSum);
 	}
 
+
 	// ===== Noise =====
-	// if (noiseEnabled.value && noiseAmount.value > 0) {
 	if (noiseBlend > 0) {
 		// map morph 0..1 into two adjacent stops
 		const t = Math.min(1, Math.max(0, noiseColor.value));
@@ -2463,64 +2504,63 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 			if (t >= a.pos && t <= b.pos) { lower = a; upper = b; break; }
 		}
 		const span = Math.max(1e-6, upper.pos - lower.pos);
-		const w = (t - lower.pos) / span;         // 0..1
-		const wA = 1 - w, wB = w;                 // crossfade
+		const wMorph = (t - lower.pos) / span;  // 0..1 within the two stops
+		const wA = 1 - wMorph, wB = wMorph;
 
 		const bufA = noiseBuffers[lower.key];
 		const bufB = noiseBuffers[upper.key];
 
 		if (bufA || bufB) {
-			const mix = audioCtx.createGain(); mix.gain.setValueAtTime(1, startTime);
+			// Color mix (mono)
+			const mix = audioCtx.createGain();
+			mix.gain.setValueAtTime(1, startTime);
 
 			if (bufA) {
 				const sA = audioCtx.createBufferSource();
-				sA.buffer = bufA;
-				const gA = audioCtx.createGain();
-				gA.gain.setValueAtTime(wA, startTime);
+				sA.buffer = bufA; sA.loop = false;
+				const gA = audioCtx.createGain(); gA.gain.setValueAtTime(wA, startTime);
 				sA.connect(gA).connect(mix);
-				sA.start(startTime); sA.stop(noteEnd);
+				sA.start(startTime);
+				sA.stop(noteEnd);
 			}
 			if (bufB) {
 				const sB = audioCtx.createBufferSource();
-				sB.buffer = bufB;
-				const gB = audioCtx.createGain();
-				gB.gain.setValueAtTime(wB, startTime);
+				sB.buffer = bufB; sB.loop = false;
+				const gB = audioCtx.createGain(); gB.gain.setValueAtTime(wB, startTime);
 				sB.connect(gB).connect(mix);
-				sB.start(startTime); sB.stop(noteEnd);
+				sB.start(startTime);
+				sB.stop(noteEnd);
 			}
 
-			// single shared envelope for the mixed noise
+			// Envelope & burst
 			const noiseEnvGain = audioCtx.createGain();
 			const attackEnd = startTime + attackTime;
 
-			// use the *already-masked* blend
-			const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
-
+			const safePeak = Math.max(0.0001, velocity * noiseBlend);
 			noiseEnvGain.gain.setValueAtTime(0.0001, startTime);
-			noiseEnvGain.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd);
+			noiseEnvGain.gain.exponentialRampToValueAtTime(safePeak, attackEnd);
 
-			// Treat max knob value as "no burst" => follow full decay
-			const BURST_MAX_MS = 250; // keep in sync with NoiseModule knob max
-
+			const BURST_MAX_MS = 250; // keep in sync with UI max
 			const burstActive = noiseAttackBurst.value && (noiseBurstMs.value < BURST_MAX_MS);
-
 			const burstEnd = burstActive
 				? Math.min(noteEnd, attackEnd + Math.max(0.005, noiseBurstMs.value / 1000))
-				: noteEnd; // full decay
-
+				: noteEnd;
 
 			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, burstEnd);
 			noiseEnvGain.gain.setTargetAtTime(0.0001, burstEnd, 0.01);
 
+			// Gentle bandpass to keep the noise bright but contained
 			const noiseFilter = audioCtx.createBiquadFilter();
 			noiseFilter.type = 'bandpass';
 			noiseFilter.frequency.setValueAtTime(8000, startTime);
 			noiseFilter.Q.setValueAtTime(1, startTime);
 
+			// Mono path to master
 			mix.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain);
-
 		}
 	}
+
+
 }
 
 delayDry.connect(masterGain);
@@ -2856,6 +2896,8 @@ watch(() => project.projectId, async () => {
 
 // Build a serializable snapshot
 function buildSnapshot() {
+	const mm = melodyRef?.getUi?.() ?? null;
+
 	return {
 		meta: {
 
@@ -2891,6 +2933,7 @@ function buildSnapshot() {
 				mask: [...noiseMask.value],
 				attackBurst: noiseAttackBurst.value,
 				burstMs: noiseBurstMs.value,
+				// stereoWidth: noiseStereoWidth.value,
 			},
 			unison: {
 				enabled: unisonEnabled.value,
@@ -2958,6 +3001,16 @@ function buildSnapshot() {
 			pitches: i.pitches ? [...i.pitches] : null,
 			waveforms: (i as any).waveforms ? [...(i as any).waveforms] : null,
 		})),
+
+		melody: {
+			keyRoot: mm?.keyRoot ?? melodyUi.keyRoot,
+			keyScale: mm?.keyScale ?? melodyUi.keyScale,
+			rangePreset: mm?.rangePreset ?? melodyUi.rangePreset,
+			arpPattern: mm?.arpPattern ?? melodyUi.arpPattern,
+			arpRate: mm?.arpRate ?? melodyUi.arpRate,
+			arpOctaves: mm?.arpOctaves ?? melodyUi.arpOctaves,
+			arpTones: mm?.arpTones ?? melodyUi.arpTones,
+		},
 		selectedWaveform: selectedWaveform.value,
 	};
 }
@@ -3016,7 +3069,9 @@ function applySnapshot(s: any) {
 		if (typeof syn.noise.amount === 'number') {
 			noiseAmount.value = syn.noise.amount;
 		}
-
+		// if (typeof syn.noise.stereoWidth === 'number') {
+		// 	noiseStereoWidth.value = Math.max(0, Math.min(1, syn.noise.stereoWidth));
+		// }
 		// Restore per-step noise mask (length-safe)
 		if (Array.isArray(syn.noise.mask)) {
 			const len = stepLength.value;
@@ -3087,6 +3142,46 @@ function applySnapshot(s: any) {
 		if (typeof s.fx.drive.tone === 'number') driveTone.value = s.fx.drive.tone;
 		if (typeof s.fx.drive.mix === 'number') driveMix.value = s.fx.drive.mix;
 	}
+
+
+	// // Restore Melody Maker dropdowns
+	// if (s.melody) {
+	// 	Object.assign(melodyUi, {
+	// 		keyRoot: s.melody.keyRoot ?? melodyUi.keyRoot,
+	// 		keyScale: s.melody.keyScale ?? melodyUi.keyScale,
+	// 		rangePreset: s.melody.rangePreset ?? melodyUi.rangePreset,
+	// 		arpPattern: s.melody.arpPattern ?? melodyUi.arpPattern,
+	// 		arpRate: s.melody.arpRate ?? melodyUi.arpRate,
+	// 		arpOctaves: s.melody.arpOctaves ?? melodyUi.arpOctaves,
+	// 		arpTones: s.melody.arpTones ?? melodyUi.arpTones,
+	// 	});
+
+	// 	// Push into child if it's already mounted
+	// 	nextTick(() => melodyRef?.setUi?.(melodyUi));
+	// }
+if (s.melody) {
+  if (s.melody.keyRoot)      melodyUi.keyRoot = s.melody.keyRoot;
+  if (s.melody.keyScale)     melodyUi.keyScale = s.melody.keyScale;
+  if (s.melody.rangePreset)  melodyUi.rangePreset = s.melody.rangePreset;
+
+  // Also keep arp aligned if present
+  if (s.melody.arpPattern)   melodyUi.arpPattern = s.melody.arpPattern;
+  if (s.melody.arpRate)      melodyUi.arpRate = s.melody.arpRate;
+  if (s.melody.arpOctaves)   melodyUi.arpOctaves = s.melody.arpOctaves;
+  if (s.melody.arpTones)     melodyUi.arpTones = s.melody.arpTones;
+
+  // Push into the child so its UI updates without remount
+  melodyRef?.setUi?.({
+    keyRoot: melodyUi.keyRoot,
+    keyScale: melodyUi.keyScale,
+    rangePreset: melodyUi.rangePreset,
+    arpPattern: melodyUi.arpPattern,
+    arpRate: melodyUi.arpRate,
+    arpOctaves: melodyUi.arpOctaves,
+    arpTones: melodyUi.arpTones,
+  });
+}
+
 
 	// Instruments
 	if (Array.isArray(s.instruments) && s.instruments.length) {
@@ -3217,6 +3312,7 @@ function resetUiToFactoryDefaults() {
 	noiseAmount.value = 0.25;
 	noiseAttackBurst.value = false;
 	noiseBurstMs.value = 80;
+	// noiseStereoWidth.value = 0.7;
 
 	unisonEnabled.value = false;
 	unisonVoices.value = 3;
@@ -3245,6 +3341,14 @@ function resetUiToFactoryDefaults() {
 
 	selectedKeyRoot.value = 'A';
 	globalOctaveOffset.value = 0;
+
+	melodyUi.keyRoot = 'A';
+	melodyUi.keyScale = 'major';
+	melodyUi.rangePreset = 'wide';
+	melodyUi.arpPattern = 'up';
+	melodyUi.arpRate = '1/16';
+	melodyUi.arpOctaves = 1;
+	melodyUi.arpTones = 'chord';
 
 	// instruments
 	instruments.value.forEach((i: any) => {
