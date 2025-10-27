@@ -175,7 +175,6 @@ const props = defineProps<{
     maxFreq?: number;
     currentTheme?: string;
 
-    // NEW: initial values (so parent can hydrate on load)
     initialKeyRoot?: 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B';
     initialKeyScale?: 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'wholeTone' | 'dorian' | 'lydian' | 'egyptian';
     initialRangePreset?: 'low' | 'mid' | 'high' | 'wide';
@@ -315,7 +314,7 @@ const keyOptions = ROOTS.map(r => ({ label: r, value: r }));
 const scaleOptions = Object.keys(SCALES).map(name => ({ label: SCALE_LABELS[name] ?? name, value: name }));
 const rangeOptions = (Object.entries(PRESETS) as [PresetKey, typeof PRESETS[PresetKey]][])
     .map(([value, def]) => ({ label: def.label, value }));
-
+    
 // emits for persistence
 watch(keyRoot, (v) => emit('key-root-change', v), { immediate: true });
 watch(keyScale, (v) => emit('key-scale-change', v), { immediate: true });

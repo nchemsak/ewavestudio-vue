@@ -1,46 +1,91 @@
 <!-- src/components/ProjectControls.vue -->
 <template>
     <div class="pc-toolbar" role="region" aria-label="Project controls">
+        <!-- LEFT: File (advanced menu) -->
         <div class="pc-left">
-            <input v-model="nameDraft" class="pc-name" :disabled="!store.loaded" @change="rename"
-                @keydown.enter.prevent="rename" placeholder="Untitled" aria-label="Project name" />
-
-            <button class="pc-btn" title="Shift-click to duplicate current" @click="newProject($event)">
-                New
-            </button>
-
-            <div class="pc-open" ref="openWrap">
-                <button class="pc-btn" @click="toggleOpenMenu" :aria-expanded="showOpen ? 'true' : 'false'"
+            <div class="pc-file" ref="fileWrap">
+                <button class="pc-btn" @click="toggleFileMenu" :aria-expanded="showFile ? 'true' : 'false'"
                     aria-haspopup="menu">
-                    Open ▾
+                    File ▾
                 </button>
 
-                <div v-if="showOpen" ref="openMenu" class="pc-menu" role="menu" @keydown.escape="showOpen = false"
-                    tabindex="0">
-                    <div v-if="projects.length === 0" class="pc-empty">No saved projects yet.</div>
+                <!-- FILE MENU -->
+                <div v-if="showFile" ref="fileMenu" class="pc-menu pc-file-menu" role="menu" tabindex="0"
+                    @keydown.escape.stop.prevent="closeAllMenus">
+                    <!-- a. New -->
+                    <button class="pc-menu-row" role="menuitem" title="Shift-click to duplicate current"
+                        @click="newProject($event)">
+                        New
+                    </button>
 
-                    <div v-else class="pc-list">
-                        <div v-for="p in projects" :key="p.projectId" class="pc-row">
-                            <button class="pc-menu-item" role="menuitem" @click="openProject(p.projectId)"
-                                :title="(p.meta?.name || 'Untitled') + ' • ' + formatDate(p.meta?.updatedAt)">
-                                <span class="pc-title">{{ truncateTitle(p.meta?.name || 'Untitled') }}</span>
-                                <span class="pc-meta">{{ formatDate(p.meta?.updatedAt) }}</span>
-                            </button>
+                    <!-- b. Open (submenu) -->
+                    <div class="pc-menu-row pc-has-sub" role="menuitem" aria-haspopup="menu"
+                        :aria-expanded="showOpen ? 'true' : 'false'" @mouseenter="openSub(true)"
+                        @mouseleave="openSub(false)">
+                        <button class="pc-sub-btn" @click.stop="toggleOpenMenu">
+                            Open ▸
+                        </button>
 
-                            <button class="pc-del" title="Delete" @click.stop="deleteOne(p.projectId, p.meta?.name)"
-                                aria-label="Delete project">
-                                🗑
-                            </button>
+                        <!-- OPEN SUBMENU (list of saves) -->
+                        <div v-if="showOpen" ref="openMenu" class="pc-menu pc-open-submenu" role="menu" tabindex="0"
+                            @keydown.escape.stop.prevent="showOpen = false">
+                            <div v-if="projects.length === 0" class="pc-empty">
+                                No named projects yet.
+                            </div>
+
+                            <div v-else class="pc-list">
+                                <div v-for="p in projects" :key="p.projectId" class="pc-row">
+                                    <button class="pc-menu-item" role="menuitem" @click="openProject(p.projectId)"
+                                        :title="(p.meta?.name || 'Untitled') + ' • ' + formatDate(p.meta?.updatedAt)">
+                                        <span class="pc-title">
+                                            {{ truncateTitle(p.meta?.name || 'Untitled') }}
+                                        </span>
+                                        <span class="pc-meta">{{ formatDate(p.meta?.updatedAt) }}</span>
+                                    </button>
+
+                                    <button class="pc-del" title="Delete"
+                                        @click.stop="deleteOne(p.projectId, p.meta?.name)" aria-label="Delete project">
+                                        🗑
+                                    </button>
+                                </div>
+
+                                <div class="pc-menu-divider"></div>
+
+                                <button class="pc-menu-danger" role="menuitem" @click="clearAll">
+                                    Clear all saves…
+                                </button>
+                            </div>
                         </div>
-
-                        <div class="pc-menu-divider"></div>
-
-                        <button class="pc-menu-danger" role="menuitem" @click="clearAll">Clear all saves…</button>
                     </div>
+
+                    <!-- c. Export file -->
+                    <button class="pc-menu-row" role="menuitem" @click="exportJson" :disabled="!store.loaded">
+                        Export file
+                    </button>
+
+                    <!-- d. Import file -->
+                    <button class="pc-menu-row" role="menuitem" @click="triggerImport">
+                        Import file
+                    </button>
+                    <button class="pc-menu-row" role="menuitem" @click="exportWavFromMenu"
+                        :disabled="!store.loaded || props.exporting" :aria-busy="props.exporting ? 'true' : 'false'">
+                        <span v-if="props.exporting">Exporting…</span>
+                        <span v-else>Export WAV</span>
+                    </button>
                 </div>
             </div>
+
+            <!-- hidden file input for Import -->
+            <input ref="fileInput" type="file" accept="application/json" class="pc-hidden" @change="onImport" />
         </div>
 
+        <!-- CENTER: Project name -->
+        <div class="pc-center">
+            <input v-model="nameDraft" class="pc-name" :disabled="!store.loaded" @change="rename"
+                @keydown.enter.prevent="rename" aria-label="Project name" />
+        </div>
+
+        <!-- RIGHT: Save + status dot -->
         <div class="pc-right">
             <div class="pc-actions">
                 <button class="pc-btn pc-primary" :disabled="!store.loaded || !dirty || status === 'saving'"
@@ -49,11 +94,6 @@
                     <span v-else-if="dirty">Save</span>
                     <span v-else>Saved</span>
                 </button>
-
-                <button class="pc-btn" @click="exportJson" :disabled="!store.loaded">Export</button>
-
-                <input ref="fileInput" type="file" accept="application/json" class="pc-hidden" @change="onImport" />
-                <button class="pc-btn" @click="triggerImport">Import</button>
             </div>
 
             <span class="pc-status" aria-live="polite" aria-atomic="true">
@@ -77,29 +117,68 @@ const TITLE_MAX_CHARS = 28;
 const store = useProjectStore();
 
 const nameDraft = ref<string>(store.name);
-watch(() => store.name, (v) => (nameDraft.value = v || 'Untitled'));
+watch(() => store.name, (v) => (nameDraft.value = v || ''));
 
 const projects = ref<any[]>([]);
+const showFile = ref(false);
 const showOpen = ref(false);
+
 const fileInput = ref<HTMLInputElement | null>(null);
-const openWrap = ref<HTMLElement | null>(null);
+const fileWrap = ref<HTMLElement | null>(null);
+const fileMenu = ref<HTMLElement | null>(null);
 const openMenu = ref<HTMLElement | null>(null);
+
+const isNewUnsaved = ref<boolean>(false);
+const lastSavedHash = ref<string>('');
+const lastSavedName = ref<string>('');
+
+const props = defineProps<{ exporting?: boolean }>();
+const emit = defineEmits<{ (e: 'export-wav'): void }>();
+
+function exportWavFromMenu() {
+    closeAllMenus();
+    emit('export-wav');
+}
 
 function formatDate(ms?: number) {
     if (!ms || Number.isNaN(ms)) return '';
     try { return new Date(ms).toLocaleString(); } catch { return ''; }
 }
-async function refreshList() { projects.value = await repoList(); }
 
+/** Filter helper: keep only projects with a non-empty, non-"Untitled" name */
+function isNamedProject(p: any) {
+    const n = (p?.meta?.name ?? '').trim();
+    return n.length > 0 && n.toLowerCase() !== 'untitled';
+}
+
+async function refreshList() {
+    const all = await repoList();
+    projects.value = (Array.isArray(all) ? all : []).filter(isNamedProject);
+}
+
+function toggleFileMenu() {
+    showFile.value = !showFile.value;
+    if (!showFile.value) showOpen.value = false;
+    if (showFile.value) refreshList();
+}
+function closeAllMenus() { showOpen.value = false; showFile.value = false; }
 function toggleOpenMenu() {
     showOpen.value = !showOpen.value;
     if (showOpen.value) refreshList();
 }
+function openSub(visible: boolean) {
+    showOpen.value = visible;
+    if (visible) refreshList();
+}
 
 async function openProject(id: string) {
     await store.load(id);
-    showOpen.value = false;
-    nextTick(() => { lastSavedHash.value = hashOf(store.data); });
+    isNewUnsaved.value = false;
+    closeAllMenus();
+    nextTick(() => {
+        lastSavedHash.value = hashOf(store.data);
+        lastSavedName.value = store.name || '';
+    });
 }
 
 function truncateTitle(name: string) {
@@ -108,9 +187,12 @@ function truncateTitle(name: string) {
 }
 
 function onDocPointerDown(e: Event) {
-    if (!showOpen.value) return;
+    if (!showFile.value && !showOpen.value) return;
     const t = e.target as Node;
-    if (openWrap.value && !openWrap.value.contains(t)) showOpen.value = false;
+    const inFile = fileWrap.value && fileWrap.value.contains(t);
+    const inOpen = openMenu.value && openMenu.value.contains(t);
+    const inFileMenu = fileMenu.value && fileMenu.value.contains(t);
+    if (!inFile && !inOpen && !inFileMenu) closeAllMenus();
 }
 onMounted(() => { document.addEventListener('pointerdown', onDocPointerDown, true); });
 onUnmounted(() => { document.removeEventListener('pointerdown', onDocPointerDown, true); });
@@ -123,8 +205,14 @@ async function deleteOne(id: string, name?: string) {
     await repoRemove(id);
 
     if (deletingCurrent) {
-        await store.newProject('Untitled', {});
-        nextTick(() => { lastSavedHash.value = hashOf(store.data); });
+        await store.newProject('', {}); // blank state
+        localStorage.setItem('ewave:reset-ui-next', '1');
+        isNewUnsaved.value = true;
+        nextTick(() => {
+            lastSavedHash.value = '__new__';
+            lastSavedName.value = '';
+            nameDraft.value = '';
+        });
     }
     await refreshList();
 }
@@ -132,17 +220,19 @@ async function deleteOne(id: string, name?: string) {
 async function clearAll() {
     if (!confirm('Delete ALL saved projects? This cannot be undone.')) return;
     await repoClearAll();
-    await store.newProject('Untitled', {});
-    nextTick(() => { lastSavedHash.value = hashOf(store.data); });
+    await store.newProject('', {}); // blank state
+    localStorage.setItem('ewave:reset-ui-next', '1');
+    isNewUnsaved.value = true;
+    nextTick(() => {
+        lastSavedHash.value = '__new__';
+        lastSavedName.value = '';
+        nameDraft.value = '';
+    });
     await refreshList();
-    showOpen.value = false;
+    closeAllMenus();
 }
 
 async function newProject(evt?: MouseEvent) {
-    const proposed = (store.name && store.name !== 'Untitled') ? store.name + ' copy' : 'Untitled';
-    const name = prompt('Name your new project:', proposed);
-    if (name === null) return;
-
     const duplicate = !!evt?.shiftKey;
     localStorage.setItem('ewave:reset-ui-next', duplicate ? '0' : '1');
 
@@ -155,45 +245,87 @@ async function newProject(evt?: MouseEvent) {
         }
         initialData = cloned;
     }
-    await store.newProject(name.trim() || 'Untitled', initialData);
-    nextTick(() => { lastSavedHash.value = hashOf(store.data); });
-    showOpen.value = false;
+
+    await store.newProject('', initialData);
+    isNewUnsaved.value = true;
+    nextTick(() => {
+        lastSavedHash.value = '__new__';
+        lastSavedName.value = '';
+        nameDraft.value = '';
+    });
+
+    closeAllMenus();
 }
 
+/** Renaming does not auto-save; user clicks Save to persist */
 async function rename() {
-    store.name = nameDraft.value || 'Untitled';
-    await saveNow();
+    store.name = (nameDraft.value || '').trim();
 }
 
 type Status = 'saving' | 'saved';
 const status = ref<Status>('saved');
-const lastSavedHash = ref<string>('');
+
 const hotkeyTitle = computed(() => {
     const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
     return isMac ? 'Save (⌘S)' : 'Save (Ctrl+S)';
 });
 function hashOf(obj: unknown): string { try { return JSON.stringify(obj); } catch { return ''; } }
 const currentHash = computed(() => hashOf(store.data));
-const dirty = computed(() => store.loaded && currentHash.value !== lastSavedHash.value);
+const nameDirty = computed(() => (store.name || '') !== (lastSavedName.value || ''));
+const dirty = computed(() =>
+    store.loaded && (isNewUnsaved.value || currentHash.value !== lastSavedHash.value || nameDirty.value)
+);
 const dotClass = computed(() => (dirty.value ? 'unsaved' : 'saved'));
+
 
 async function saveNow() {
     if (!store.loaded) return;
     if (!dirty.value && status.value !== 'saving') return;
+
+    let nameToUse = (store.name || '').trim();
+    if (!nameToUse) {
+        const proposed = '';
+        const entered = prompt('Name your project:', proposed);
+        if (entered === null) return; // user cancelled
+        const clean = (entered ?? '').trim();
+        if (!clean) return; // abort save if blank
+        nameToUse = clean;
+        store.name = nameToUse;
+        nameDraft.value = nameToUse;
+    }
+
     try {
         status.value = 'saving';
         await store.save();
         lastSavedHash.value = currentHash.value;
+        lastSavedName.value = store.name || '';
+        isNewUnsaved.value = false;
         status.value = 'saved';
+        // Refresh Open list so any newly saved "Untitled" stays hidden
+        if (showOpen.value || showFile.value) await refreshList();
     } catch (err) {
         console.error('Save failed:', err);
         alert('Save failed. See console for details.');
         status.value = 'saved';
     }
 }
+
 onMounted(() => {
-    if (store.loaded) lastSavedHash.value = hashOf(store.data);
-    watch(() => store.projectId, () => { nextTick(() => { lastSavedHash.value = hashOf(store.data); }); });
+    if (store.loaded) {
+        lastSavedHash.value = hashOf(store.data);
+        lastSavedName.value = store.name || '';
+        if (!store.name) {
+            isNewUnsaved.value = true;
+            lastSavedHash.value = '__new__';
+        }
+    }
+    watch(() => store.projectId, () => {
+        nextTick(() => {
+            lastSavedHash.value = hashOf(store.data);
+            lastSavedName.value = store.name || '';
+            isNewUnsaved.value = !store.name;
+        });
+    });
 });
 
 function exportJson() {
@@ -210,8 +342,13 @@ async function onImport(e: Event) {
         const fromFilename = file.name.replace(/\.json$/i, '').trim();
         const insideData = typeof normalized?.data?.meta?.name === 'string' ? normalized.data.meta.name.trim() : '';
         const importedName = topLevel || fromFilename || insideData || 'Imported';
+
         await store.newProject(importedName, normalized.data);
-        nextTick(() => { lastSavedHash.value = hashOf(store.data); });
+        isNewUnsaved.value = false;
+        nextTick(() => {
+            lastSavedHash.value = hashOf(store.data);
+            lastSavedName.value = store.name || '';
+        });
     } catch (err) {
         console.error('Import failed:', err);
         alert('Import failed: invalid or unsupported file.');
@@ -232,35 +369,27 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 <style scoped>
 /* =========================================================
    THEME-AWARE TOKENS
-   - Uses your app's --pt-* variables so it follows
-     light / dark / synthwave automatically.
-   - Fallbacks keep dark sane if a token is missing.
    ========================================================= */
 .pc-toolbar {
-    /* pull from your global theme tokens */
     --pc-text: var(--pt-text, #e9e9ef);
     --pc-panel: var(--pt-panel, #171a21);
     --pc-border: var(--pt-hairline, #2b2f3b);
     --pc-surface-1: var(--pt-surface-1, #232733);
     --pc-surface-2: var(--pt-surface-2, #1c202b);
-    /* accent: your design seems to store the hue in --pt-accent */
     --pc-accent-h: var(--pt-accent, 230);
-    /* hue fallback */
     --pc-accent-1: hsl(var(--pc-accent-h) 86% 62%);
     --pc-accent-2: hsl(var(--pc-accent-h) 82% 52%);
+    --status-reserved: 2rem;
 
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
-    justify-content: space-between;
     gap: .75rem;
     padding: .5rem .75rem;
     border: 1px solid var(--pc-border);
     border-radius: .75rem;
     background: var(--pc-panel);
     color: var(--pc-text);
-
-    /* reserve dot space */
-    --status-reserved: 2rem;
 }
 
 .pc-left,
@@ -270,9 +399,16 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     gap: .5rem;
 }
 
+/* Center column (true centered name) */
+.pc-center {
+    justify-self: center;
+    text-align: center;
+    min-width: 0;
+}
+
 .pc-name {
-    width: 18ch;
-    max-width: 40vw;
+    width: 22ch;
+    max-width: 48vw;
     padding: .35rem .5rem;
     border-radius: .5rem;
     border: 1px solid var(--pc-surface-1);
@@ -280,6 +416,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     color: var(--pc-text);
 }
 
+/* Buttons */
 .pc-btn {
     padding: .35rem .65rem;
     border-radius: .5rem;
@@ -287,7 +424,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     background: var(--pc-surface-2);
     color: var(--pc-text);
     cursor: pointer;
-    width: 80px;
+    min-width: 82px;
 }
 
 .pc-btn:hover {
@@ -299,7 +436,6 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     cursor: not-allowed;
 }
 
-/* Use theme accent (works in all themes) */
 .pc-btn.pc-primary {
     border-color: color-mix(in oklch, var(--pc-surface-1), white 12%);
     background: linear-gradient(180deg, var(--pc-accent-1), var(--pc-accent-2));
@@ -312,7 +448,8 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     opacity: .6;
 }
 
-.pc-open {
+/* Menus */
+.pc-file {
     position: relative;
 }
 
@@ -320,7 +457,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
-    inline-size: clamp(420px, 42vw, 560px);
+    inline-size: clamp(260px, 36vw, 420px);
     background: var(--pc-panel);
     color: var(--pc-text);
     border: 1px solid var(--pc-border);
@@ -328,6 +465,53 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
     padding: .25rem;
     z-index: 1001;
+}
+
+.pc-file-menu {
+    inline-size: 220px;
+}
+
+.pc-menu-row {
+    width: 100%;
+    text-align: left;
+    padding: .55rem .6rem;
+    border-radius: .35rem;
+    border: none;
+    background: transparent;
+    color: var(--pc-text);
+    cursor: pointer;
+}
+
+.pc-menu-row:hover {
+    background: color-mix(in oklch, var(--pc-surface-2), white 4%);
+}
+
+/* Open submenu trigger */
+.pc-has-sub {
+    position: relative;
+    padding: 0;
+}
+
+.pc-sub-btn {
+    width: 100%;
+    text-align: left;
+    padding: .55rem .6rem;
+    border-radius: .35rem;
+    border: none;
+    background: transparent;
+    color: var(--pc-text);
+    cursor: pointer;
+}
+
+.pc-sub-btn:hover {
+    background: color-mix(in oklch, var(--pc-surface-2), white 4%);
+}
+
+/* Submenu panel */
+.pc-open-submenu {
+    top: -.25rem;
+    left: calc(100% + 6px);
+    inline-size: clamp(420px, 42vw, 560px);
 }
 
 .pc-empty {
@@ -417,6 +601,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     filter: brightness(1.05);
 }
 
+/* Right cluster: Save + dot */
 .pc-right {
     position: relative;
 }

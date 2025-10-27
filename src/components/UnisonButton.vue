@@ -55,9 +55,6 @@ defineEmits(['update:modelValue'])
 }
 
 .wave-btn:hover {
-    box-shadow:
-        inset 0 1px 0 rgb(255 255 255 / 0.06),
-        0 10px 24px var(--pt-btn-glow);
     background: linear-gradient(145deg,
             color-mix(in oklab, var(--tile-1), white 6%),
             color-mix(in oklab, var(--tile-2), white 6%));

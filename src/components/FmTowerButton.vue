@@ -54,7 +54,7 @@ const props = defineProps({
     disabled: { type: Boolean, default: false },
     palette: {
         type: Array,
-        default: () => ['#ff7eb3', '#ffd06b', '#7bd0ff'] // matches WaveButton default
+        default: () => ['#ff7eb3', '#ffd06b', '#7bd0ff']
     }
 })
 
@@ -69,10 +69,7 @@ const gid = `grad-${uid}`
 </script>
 
 <style scoped>
-/* Match WaveButton tile styling, but theme-driven */
 .wave-btn {
-    /* --tile-1: var(--pt-surface-1);
-    --tile-2: var(--pt-surface-2); */
     --tile-1: var(--pt-tile-1, var(--pt-surface-1));
     --tile-2: var(--pt-tile-2, var(--pt-surface-2));
     position: relative;
@@ -95,9 +92,6 @@ const gid = `grad-${uid}`
 }
 
 .wave-btn:hover {
-    box-shadow:
-        inset 0 1px 0 rgb(255 255 255 / 0.06),
-        0 10px 24px var(--pt-btn-glow);
     background: linear-gradient(145deg,
             color-mix(in oklab, var(--tile-1), white 6%),
             color-mix(in oklab, var(--tile-2), white 6%));
@@ -135,7 +129,6 @@ const gid = `grad-${uid}`
     user-select: none;
 }
 
-/* “On-air” pulse when active stays the same */
 .wave-btn.is-active .wave {
     animation: radiate 1.6s cubic-bezier(.2, .6, .3, 1) infinite;
     opacity: .35;

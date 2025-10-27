@@ -2,7 +2,7 @@
 	<div class="drum-sequencer" :class="currentTheme" :style="padSizeStyle">
 		<!-- Save/Open/Import/Export toolbar -->
 		<section class="pt-card" style="margin-bottom:12px">
-			<ProjectControls />
+			<ProjectControls :exporting="isExporting" @export-wav="exportCurrentPattern" />
 		</section>
 		<!-- MAIN GRID -->
 		<div class="ds-grid">
@@ -85,10 +85,10 @@
 						<div class="transport-actions" style="display:flex; gap:8px;">
 
 							<!-- Export WAV -->
-							<button class="pt-btn" :disabled="isExporting" @click="exportCurrentPattern">
+							<!-- <button class="pt-btn" :disabled="isExporting" @click="exportCurrentPattern">
 								<span v-if="isExporting">Exporting…</span>
 								<span v-else>Export WAV</span>
-							</button>
+							</button> -->
 						</div>
 					</div>
 				</div>
@@ -3159,28 +3159,28 @@ function applySnapshot(s: any) {
 	// 	// Push into child if it's already mounted
 	// 	nextTick(() => melodyRef?.setUi?.(melodyUi));
 	// }
-if (s.melody) {
-  if (s.melody.keyRoot)      melodyUi.keyRoot = s.melody.keyRoot;
-  if (s.melody.keyScale)     melodyUi.keyScale = s.melody.keyScale;
-  if (s.melody.rangePreset)  melodyUi.rangePreset = s.melody.rangePreset;
+	if (s.melody) {
+		if (s.melody.keyRoot) melodyUi.keyRoot = s.melody.keyRoot;
+		if (s.melody.keyScale) melodyUi.keyScale = s.melody.keyScale;
+		if (s.melody.rangePreset) melodyUi.rangePreset = s.melody.rangePreset;
 
-  // Also keep arp aligned if present
-  if (s.melody.arpPattern)   melodyUi.arpPattern = s.melody.arpPattern;
-  if (s.melody.arpRate)      melodyUi.arpRate = s.melody.arpRate;
-  if (s.melody.arpOctaves)   melodyUi.arpOctaves = s.melody.arpOctaves;
-  if (s.melody.arpTones)     melodyUi.arpTones = s.melody.arpTones;
+		// Also keep arp aligned if present
+		if (s.melody.arpPattern) melodyUi.arpPattern = s.melody.arpPattern;
+		if (s.melody.arpRate) melodyUi.arpRate = s.melody.arpRate;
+		if (s.melody.arpOctaves) melodyUi.arpOctaves = s.melody.arpOctaves;
+		if (s.melody.arpTones) melodyUi.arpTones = s.melody.arpTones;
 
-  // Push into the child so its UI updates without remount
-  melodyRef?.setUi?.({
-    keyRoot: melodyUi.keyRoot,
-    keyScale: melodyUi.keyScale,
-    rangePreset: melodyUi.rangePreset,
-    arpPattern: melodyUi.arpPattern,
-    arpRate: melodyUi.arpRate,
-    arpOctaves: melodyUi.arpOctaves,
-    arpTones: melodyUi.arpTones,
-  });
-}
+		// Push into the child so its UI updates without remount
+		melodyRef?.setUi?.({
+			keyRoot: melodyUi.keyRoot,
+			keyScale: melodyUi.keyScale,
+			rangePreset: melodyUi.rangePreset,
+			arpPattern: melodyUi.arpPattern,
+			arpRate: melodyUi.arpRate,
+			arpOctaves: melodyUi.arpOctaves,
+			arpTones: melodyUi.arpTones,
+		});
+	}
 
 
 	// Instruments
