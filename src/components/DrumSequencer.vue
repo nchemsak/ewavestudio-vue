@@ -81,14 +81,7 @@
 							</span>
 							<span class="visually-hidden">{{ isPlaying ? 'Stop' : 'Play' }}</span>
 						</button>
-
 						<div class="transport-actions" style="display:flex; gap:8px;">
-
-							<!-- Export WAV -->
-							<!-- <button class="pt-btn" :disabled="isExporting" @click="exportCurrentPattern">
-								<span v-if="isExporting">Exporting…</span>
-								<span v-else>Export WAV</span>
-							</button> -->
 						</div>
 					</div>
 				</div>
@@ -123,22 +116,17 @@
 					<div class="pt-header-tools step-menu-anchor">
 						<button class="pt-info-icon" aria-label="Advanced options"
 							@click="stepsAdvanced.open = !stepsAdvanced.open">⋯</button>
-
 						<div v-if="stepsAdvanced.open" class="mm-menu is-local" @click.stop>
 							<div class="mm-menu-title">Advanced Options</div>
-
 							<div class="mm-opt" role="menuitem" @click="togglePadSliders()">
 								<span>Pad Velocity/Pitch Sliders</span>
 								<button class="mm-switch" :class="{ on: padSlidersOn }"><span
 										class="kn"></span></button>
 							</div>
-
 							<div class="pt-rule" aria-hidden="true"></div>
-
 							<div class="mm-reset" role="menuitem" @click.stop="resetSynthPadsToDefaults()">
 								Reset Pads
 							</div>
-
 						</div>
 					</div>
 
@@ -175,11 +163,6 @@
 							<button class="pt-info-icon" aria-label="Advanced options"
 								@click="melodyRef?.openAdvanced($event)">⋯</button>
 						</template>
-						<!-- <MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
-							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
-							@update:frequencies="padFrequencies = $event" @octave-shift="octaveShiftAllSkip($event)"
-							@key-root-change="onKeyRootChange" /> -->
-
 						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
@@ -190,9 +173,6 @@
 							@key-root-change="(r) => { onKeyRootChange(r); melodyUi.keyRoot = r as any; }"
 							@key-scale-change="(s) => { melodyUi.keyScale = s as any }"
 							@range-preset-change="(p) => { melodyUi.rangePreset = p as any }" />
-
-
-
 					</SectionWrap>
 				</div>
 
@@ -239,7 +219,6 @@
 									v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
 									v-model:mask="noiseMask" v-model:attackBurst="noiseAttackBurst"
 									v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
-
 							</div>
 						</div>
 					</SectionWrap>
@@ -301,6 +280,11 @@
 								v-model:driveType="driveType" v-model:driveAmount="driveAmount"
 								v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
 						</section>
+						<!-- Reverb panel -->
+						<section class="pt-section">
+							<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
+								v-model:mix="reverbMix" v-model:decay="reverbDecay" />
+						</section>
 
 						<!-- Effects — Advanced -->
 						<Teleport to="body">
@@ -330,7 +314,11 @@
 										<button class="mm-switch" :class="{ on: delaySync }"><span
 												class="kn"></span></button>
 									</div>
-
+									<div class="mm-opt" role="menuitem" @click="reverbEnabled = !reverbEnabled">
+										<span>Reverb enabled</span>
+										<button class="mm-switch" :class="{ on: reverbEnabled }"><span
+												class="kn"></span></button>
+									</div>
 									<div class="mm-reset" role="menuitem" @click.stop="resetDelayDrive()">
 										Reset Delay & Drive to defaults
 									</div>
@@ -491,6 +479,10 @@ import ProjectControls from './ProjectControls.vue';
 // WAV Export
 import { scheduleStepSequencer, type StepSequencerState } from '../audio/export/scheduleStepSequencer';
 import { audioBufferToWavFloat32 } from '../audio/export/encodeWav';
+
+// Reverb
+import ReverbEffect from './modules/ReverbEffect.vue';
+import { generateReverbIR } from '../audio/reverb/generateIr';
 
 // IMPORTS END
 const resetNonce = ref(0);
@@ -1261,9 +1253,33 @@ const padSettings = reactive({
 // Pad settings popover END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+const volume = ref(0.75);
+const tempo = ref(80);
+const swing = ref(0);
+const isPlaying = ref(false);
+const currentStep = ref(-1);
 
 const AC = window.AudioContext || (window as any).webkitAudioContext;
 const audioCtx = new AC();
+
+
+
+
+const masterGain = audioCtx.createGain();
+masterGain.gain.value = volume.value;
+masterGain.connect(audioCtx.destination);
+
+// Oscilloscope / analyser
+const analyser = audioCtx.createAnalyser();
+analyser.fftSize = 2048;
+const dataArray = new Uint8Array(analyser.fftSize);
+masterGain.connect(analyser);
+
+
+
+
 const activeKnob = ref(null);
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
@@ -1762,20 +1778,58 @@ watch(driveMix, val => {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+// Reverb START
+const reverbEnabled = ref(false);
+const reverbMix = ref(0.18);            // 0..1
+const reverbDecay = ref(1.4);           // seconds
+
+// ==== Reverb ====
+const reverbConvolver = audioCtx.createConvolver();
+const reverbWet = audioCtx.createGain();
+
+driveSum.connect(reverbConvolver);
+reverbConvolver.connect(reverbWet);
+reverbWet.connect(masterGain);
+
+reverbWet.gain.value = 0;
+
+function ensureReverbIR() {
+	const buf = generateReverbIR(audioCtx as any, {
+		decaySeconds: reverbDecay.value,
+		sampleRate: audioCtx.sampleRate,
+		stereo: true,
+		seed: 1337,
+	});
+	reverbConvolver.buffer = buf;
+}
+
+watch(reverbDecay, () => { ensureReverbIR(); });
+
+watch(reverbEnabled, (on) => {
+	const t = audioCtx.currentTime;
+	if (on) {
+		if (!reverbConvolver.buffer) ensureReverbIR();
+		reverbWet.gain.setTargetAtTime(reverbMix.value, t, 0.03);
+	} else {
+		reverbWet.gain.setTargetAtTime(0, t, 0.03);
+	}
+});
+
+watch(reverbMix, (v) => {
+	const t = audioCtx.currentTime;
+	reverbWet.gain.setTargetAtTime(reverbEnabled.value ? v : 0, t, 0.03);
+});
+
+// Reverb END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 // Unison / Detune START
 const unisonEnabled = ref(false);
 const unisonVoices = ref(3);   // 1–6
 const detuneCents = ref(12);  // 0–100 cents per step
 const stereoSpread = ref(50);  // 0–100 %
 // Unison / Detune END
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-const volume = ref(0.75);
-const tempo = ref(80);
-const swing = ref(0);
-const isPlaying = ref(false);
-const currentStep = ref(-1);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1822,7 +1876,6 @@ function clearTempoRepeat() {
 watch(tempo, (v) => {
 	if (!Number.isInteger(v)) setTempoClamp(v);
 });
-
 
 // TEMPO Controls END
 
@@ -1895,17 +1948,21 @@ const exportState = computed<StepSequencerState>(() => {
 		fx: {
 			delay: { enabled: delayEnabled.value, sync: delaySync.value, time: delayTime.value, feedback: delayFeedback.value, mix: delayMix.value, toneEnabled: delayToneEnabled.value, toneHz: delayToneHz.value, toneType: delayToneType.value },
 			drive: { enabled: driveEnabled.value, type: driveType.value as any, amount: driveAmount.value, tone: driveTone.value, mix: driveMix.value },
+			reverb: {
+				enabled: reverbEnabled.value,
+				mix: reverbMix.value,
+				decay: reverbDecay.value,
+			},
+
 		},
 
 		sampleRate: audioCtx?.sampleRate || 48000,
 		tailSeconds: 5.0,
 	};
 });
-
-
 // Export to wav file END
-// -----------------------------------------------------------------------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 // LFO START
 const lfoEnabled = ref(true);
@@ -2010,7 +2067,6 @@ function startLfoIfNeeded(): void {
 	audioCtx.addEventListener?.('statechange', onStateChange);
 }
 
-
 watch(lfoEnabled, (on) => {
 	if (on) startLfoIfNeeded();
 	else {
@@ -2049,7 +2105,6 @@ watch(lfoRate, (r) => {
 		if (lfoOsc) lfoOsc.frequency.setValueAtTime(r, audioCtx.currentTime);
 	}
 });
-
 
 // scale lfoGain.gain to match the target’s expected unit
 function applyDepthScale() {
@@ -2091,7 +2146,6 @@ function setPadHz(hz) {
 // Pad Settings END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-
 
 // Space Bar play/stop controls BEGIN
 
@@ -2153,7 +2207,6 @@ function onGlobalKeyup(e: KeyboardEvent) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-
 const displayHz = computed(() =>
 	(Math.round(currentPadHz.value * 100) / 100).toFixed(2)
 );
@@ -2175,21 +2228,6 @@ function stopEditingLabel(instrument) {
 	instrument.isEditingName = false;
 	hoveredLabel.value = null;
 }
-
-const masterGain = audioCtx.createGain();
-masterGain.gain.value = volume.value;
-masterGain.connect(audioCtx.destination);
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-// Oscilloscope BEGIN
-
-const analyser = audioCtx.createAnalyser();
-analyser.fftSize = 2048;
-const dataArray = new Uint8Array(analyser.fftSize);
-masterGain.connect(analyser);
-
-// Oscilloscope END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2493,7 +2531,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		postAmpNode.connect(driveSum);
 	}
 
-
 	// ===== Noise =====
 	if (noiseBlend > 0) {
 		// map morph 0..1 into two adjacent stops
@@ -2559,8 +2596,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 			mix.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain);
 		}
 	}
-
-
 }
 
 delayDry.connect(masterGain);
@@ -2647,7 +2682,6 @@ async function exportCurrentPattern() {
 	}
 }
 
-
 async function loadSample(url) {
 	try {
 		const res = await fetch(url);
@@ -2695,8 +2729,8 @@ function handleMouseUp() {
 	dragMode.value = null;
 }
 // click and drag END
-// -----------------------------------------------------------------------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------------------------------------------------------------------
 
 async function loadAllSamples() {
 	for (const instrument of instruments.value) {
@@ -2709,7 +2743,6 @@ async function loadAllSamples() {
 		}
 	}
 }
-
 
 watch(volume, val => {
 	masterGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
@@ -2870,9 +2903,7 @@ driveShaper.curve = (() => {
 })();
 // Drive effect END
 
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
-
 
 // SAVING BEGIN
 const project = useProjectStore();
@@ -2986,7 +3017,13 @@ function buildSnapshot() {
 				amount: driveAmount.value,
 				tone: driveTone.value,
 				mix: driveMix.value,
-			}
+			},
+			reverb: {
+				enabled: reverbEnabled.value,
+				mix: reverbMix.value,
+				decay: reverbDecay.value,
+			},
+
 		},
 		// Instruments incl. synth pad data
 		instruments: instruments.value.map(i => ({
@@ -3052,7 +3089,6 @@ function applySnapshot(s: any) {
 		if (typeof syn.filter.resonance === 'number') filterResonance.value = syn.filter.resonance;
 	}
 
-
 	if (syn.noise) {
 		noiseEnabled.value = !!syn.noise.enabled;
 
@@ -3069,10 +3105,7 @@ function applySnapshot(s: any) {
 		if (typeof syn.noise.amount === 'number') {
 			noiseAmount.value = syn.noise.amount;
 		}
-		// if (typeof syn.noise.stereoWidth === 'number') {
-		// 	noiseStereoWidth.value = Math.max(0, Math.min(1, syn.noise.stereoWidth));
-		// }
-		// Restore per-step noise mask (length-safe)
+
 		if (Array.isArray(syn.noise.mask)) {
 			const len = stepLength.value;
 			const src = syn.noise.mask as boolean[];
@@ -3087,8 +3120,6 @@ function applySnapshot(s: any) {
 		if (typeof syn.noise.burstMs === 'number') noiseBurstMs.value = syn.noise.burstMs;
 
 	}
-
-
 
 	if (syn.unison) {
 		unisonEnabled.value = !!syn.unison.enabled;
@@ -3142,23 +3173,12 @@ function applySnapshot(s: any) {
 		if (typeof s.fx.drive.tone === 'number') driveTone.value = s.fx.drive.tone;
 		if (typeof s.fx.drive.mix === 'number') driveMix.value = s.fx.drive.mix;
 	}
+	if (s.fx?.reverb) {
+		reverbEnabled.value = !!s.fx.reverb.enabled;
+		if (typeof s.fx.reverb.mix === 'number') reverbMix.value = s.fx.reverb.mix;
+		if (typeof s.fx.reverb.decay === 'number') reverbDecay.value = s.fx.reverb.decay;
+	}
 
-
-	// // Restore Melody Maker dropdowns
-	// if (s.melody) {
-	// 	Object.assign(melodyUi, {
-	// 		keyRoot: s.melody.keyRoot ?? melodyUi.keyRoot,
-	// 		keyScale: s.melody.keyScale ?? melodyUi.keyScale,
-	// 		rangePreset: s.melody.rangePreset ?? melodyUi.rangePreset,
-	// 		arpPattern: s.melody.arpPattern ?? melodyUi.arpPattern,
-	// 		arpRate: s.melody.arpRate ?? melodyUi.arpRate,
-	// 		arpOctaves: s.melody.arpOctaves ?? melodyUi.arpOctaves,
-	// 		arpTones: s.melody.arpTones ?? melodyUi.arpTones,
-	// 	});
-
-	// 	// Push into child if it's already mounted
-	// 	nextTick(() => melodyRef?.setUi?.(melodyUi));
-	// }
 	if (s.melody) {
 		if (s.melody.keyRoot) melodyUi.keyRoot = s.melody.keyRoot;
 		if (s.melody.keyScale) melodyUi.keyScale = s.melody.keyScale;
@@ -3181,7 +3201,6 @@ function applySnapshot(s: any) {
 			arpTones: melodyUi.arpTones,
 		});
 	}
-
 
 	// Instruments
 	if (Array.isArray(s.instruments) && s.instruments.length) {
@@ -3257,7 +3276,6 @@ watch(
 	{ deep: false, flush: 'sync' }
 );
 
-
 // On first mount, open last project or create a new one from current defaults
 onMounted(async () => {
 	const lastId = localStorage.getItem('ewave:lastProjectId');
@@ -3276,10 +3294,7 @@ onMounted(async () => {
 	}
 });
 
-
-
 // SAVING END
-
 
 //RESET TO FACTORY DEFAULTS ON NEW PROJECT BEGIN 
 function resetUiToFactoryDefaults() {
@@ -3368,9 +3383,6 @@ function resetUiToFactoryDefaults() {
 	currentStep.value = -1;
 	isPlaying.value = false;
 
-
-
-
 	// ---- FX: Delay ----
 	delayEnabled.value = false;
 	delaySync.value = true;
@@ -3387,6 +3399,11 @@ function resetUiToFactoryDefaults() {
 	driveAmount.value = 0.4;
 	driveTone.value = 5000;
 	driveMix.value = 0.5;
+
+	// ---- FX: Reverb ----
+	reverbEnabled.value = false;
+	reverbMix.value = 0.18;
+	reverbDecay.value = 1.4;
 
 	// Close any open menus/popovers so the UI looks fresh
 	fxAdvanced.open = false;
@@ -3476,11 +3493,9 @@ function resetUiToFactoryDefaults() {
 		grid-column: 1 / span 9;
 	}
 
-
 	.ds-steps {
 		grid-column: 1 / span 9;
 	}
-
 
 	.ds-visualizer {
 		grid-column: 10 / -1;
@@ -3811,12 +3826,6 @@ function resetUiToFactoryDefaults() {
 	display: none !important;
 }
 
-/* .noise-inline :deep(.pt-btn-group) {
-	display: inline-flex;
-	gap: 8px;
-	margin: 0;
-} */
-
 .noise-inline :deep(.pt-subblock),
 .noise-inline :deep(.pt-section) {
 	margin: 0;
@@ -3856,12 +3865,6 @@ function resetUiToFactoryDefaults() {
 	/* gap: 10px; */
 	min-width: 0;
 }
-
-/* .noise-panel :deep(.pt-btn-group) {
-	display: inline-flex;
-	gap: 8px;
-	margin: 0;
-} */
 
 .noise-panel :deep(.knob-group-header),
 .noise-panel :deep(.group-title),
@@ -4061,7 +4064,6 @@ function resetUiToFactoryDefaults() {
 	image-rendering: pixelated;
 }
 
-
 /* Top-down 3D: inner bevel only */
 .pt-btn.btn3d {
 	--r: 14px;
@@ -4183,20 +4185,16 @@ function resetUiToFactoryDefaults() {
 	text-align: center;
 }
 
-
 .knob-wrap {
 	display: inline-flex;
 	flex-direction: column;
 	align-items: center;
-
-
 }
 
 .knob-wrap .stepper-value {
 	font-variant-numeric: tabular-nums;
 	min-width: 42px;
 }
-
 
 /* FM + Unison side-by-side within the Pitch section */
 .module.pitch :deep(.knob-group.pitch-col) {
