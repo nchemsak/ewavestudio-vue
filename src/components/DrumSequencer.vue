@@ -140,8 +140,12 @@
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
 						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
 						:waveforms="(synthInstrument as any).waveforms"
-						:defaultWave="selectedWaveform as OscillatorType" @open-pad-settings="({ name, index, anchorRect }) =>
+						:defaultWave="selectedWaveform as OscillatorType" :noiseMask="noiseMask"
+						:noiseTint="noiseHexFromMorph(noiseColor)" noise-mode="static" :noise-alpha="0.32"
+						:noise-fps="14" :noise-speed="40" :noise-enabled="noiseEnabled" :pepper-alpha="0.2"
+						:pepper-scale="6" @open-pad-settings="({ name, index, anchorRect }) =>
 							openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
+
 				</div>
 			</section>
 
@@ -1607,6 +1611,41 @@ const NOISE_STOPS: { key: NoiseKey; pos: number }[] = [
 	{ key: 'blue', pos: 0.75 },
 	{ key: 'violet', pos: 1.00 },
 ]
+
+// Visual swatch colors for each noise key (match NoiseModule’s swatch look)
+const NOISE_HEX: Record<NoiseKey, string> = {
+	brown: '#6a4b2f',
+	pink: '#f5a3bd',
+	white: '#ffffff',
+	blue: '#7bbcff',
+	violet: '#c7a4ff',
+};
+
+// tiny local util (unique name to avoid collisions)
+function __mixHex(a: string, b: string, w: number) {
+	const toRgb = (h: string) => [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
+	const pad = (n: number) => Math.round(n).toString(16).padStart(2, '0');
+	const [ar, ag, ab] = toRgb(a.replace('#', ''));
+	const [br, bg, bb] = toRgb(b.replace('#', ''));
+	const r = ar + (br - ar) * w, g = ag + (bg - ag) * w, b2 = ab + (bb - ab) * w;
+	return `#${pad(r)}${pad(g)}${pad(b2)}`;
+}
+
+// Given morph t (0..1), pick adjacent NOISE_STOPS and blend their hexes.
+// Uses your existing NOISE_STOPS and noise keys.
+function noiseHexFromMorph(t: number) {
+	t = Math.max(0, Math.min(1, t));
+	let a = NOISE_STOPS[0], b = NOISE_STOPS[NOISE_STOPS.length - 1];
+	for (let i = 0; i < NOISE_STOPS.length - 1; i++) {
+		const s0 = NOISE_STOPS[i], s1 = NOISE_STOPS[i + 1];
+		if (t >= s0.pos && t <= s1.pos) { a = s0; b = s1; break; }
+	}
+	const span = Math.max(1e-6, b.pos - a.pos);
+	const w = (t - a.pos) / span;
+	return __mixHex(NOISE_HEX[a.key], NOISE_HEX[b.key], w);
+}
+
+
 const noiseBuffers: Record<NoiseKey, AudioBuffer | null> = {
 	brown: null, pink: null, white: null, blue: null, violet: null
 }

@@ -1,3 +1,4 @@
+<!-- src/components/SynthStepGrid.vue -->
 <template>
     <div class="d-flex pad-row">
         <div class="padTEST-grid" data-equal-cols>
@@ -11,31 +12,57 @@
 
                 <!-- body -->
                 <div class="padTESTwrap" @mouseenter="hovered = index" @mouseleave="hovered = null">
-                    <div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
-                        @mousedown="onMouseDown($event, index)" @mouseenter="onMouseEnter(index)" @dragstart.prevent
-                        :style="padStyle(index)" />
+                    <div :class="[
+                        'padTEST', 'liquid',
+                        { selected: active },
+                        { playing: index === currentStep },
+                        // { 'has-noise': !!noiseMask?.[index] }
+                        { 'has-noise': noiseOn(index) }
+                    ]" @mousedown="onMouseDown($event, index)" @mouseenter="onMouseEnter(index)" @dragstart.prevent
+                        :style="padStyle(index)">
+                        <div v-if="noiseOn(index)" class="noise-overlay" :class="[`mode-${noiseMode}`]"
+                            :style="noiseStyle(index)" aria-hidden="true">
+                            <div v-if="noiseMode === 'static'" class="grain" />
 
-                    <!-- waveform badge (uniform bg; colored icon via currentColor) -->
+                            <!-- SVG turbulence TV static -->
+                            <div v-else-if="noiseMode === 'svg'" class="svg-noise">
+                                <svg class="svg-filter" width="0" height="0" aria-hidden="true" focusable="false">
+                                    <filter :id="`tvNoise-${uid}-${index}`">
+                                        <feTurbulence type="fractalNoise" :baseFrequency="svgBase" numOctaves="2"
+                                            stitchTiles="stitch" seed="2" result="noise">
+                                            <animate attributeName="baseFrequency" :dur="svgDur"
+                                                values="0.65;0.8;0.7;0.9;0.65" repeatCount="indefinite" />
+                                            <animate attributeName="seed" :dur="svgDur" values="2;3;4;5;6;7;8;2"
+                                                repeatCount="indefinite" />
+                                        </feTurbulence>
+                                        <feColorMatrix type="matrix" values="0 0 0 0 1
+                              0 0 0 0 1
+                              0 0 0 0 1
+                              0 0 0 1 0" result="noisergb" />
+                                    </filter>
+                                </svg>
+                                <div class="svg-noise-fill" :style="{ filter: `url(#tvNoise-${uid}-${index})` }" />
+                            </div>
+
+                            <!-- GIF / video -->
+                            <img v-else-if="noiseMode === 'gif' && noiseGifUrl" class="noise-gif" :src="noiseGifUrl"
+                                alt="" aria-hidden="true" decoding="async" loading="lazy" />
+
+                            <div class="pepper" />
+                        </div>
+                    </div>
+
+                    <!-- waveform badge -->
                     <div class="wave-badge" :class="{ 'is-off': !active }" :data-wave="waveFor(index)"
                         :title="waveFor(index)">
                         <svg class="wave-ico" viewBox="0 0 12 12" width="12" height="12" fill="none"
                             stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"
                             aria-hidden="true" preserveAspectRatio="xMidYMid meet">
-                            <!-- SINE = circle -->
                             <circle v-if="waveFor(index) === 'sine'" cx="6" cy="6" r="3.6" />
-
-                            <!-- TRIANGLE = peak up -->
                             <path v-else-if="waveFor(index) === 'triangle'" d="M2 10 L6 2 L10 10 Z" fill="none" />
-
-                            <!-- SAW = right angle bottom-left -->
-                            <!-- Points: bottom-left (right angle) -> top-left -> bottom-right -->
                             <path v-else-if="waveFor(index) === 'sawtooth'" d="M2 10 L2 2 L10 10 Z" fill="none" />
-
-                            <!-- SQUARE = perfect square -->
                             <rect v-else-if="waveFor(index) === 'square'" x="2.2" y="2.2" width="7.6" height="7.6"
                                 rx="0.3" ry="0.3" fill="none" />
-
-                            <!-- Fallback (shouldn't hit, but safe) -->
                             <circle v-else cx="6" cy="6" r="3.6" />
                         </svg>
                     </div>
@@ -92,10 +119,37 @@ const props = withDefaults(defineProps<{
     /** Optional per-step waveforms + global default (used for the badge) */
     waveforms?: Wave[];
     defaultWave?: Wave;
+
+    /** per-step noise participation + tint controls */
+    noiseMask?: boolean[];
+    noiseTint?: string;     // e.g. '#3ec2cc'
+    noiseAlpha?: number;    // 0..1
+
+    noiseEnabled?: boolean;
+    noiseMode?: 'wash' | 'static' | 'svg' | 'gif';
+
+    /** for noiseMode='gif' */
+    noiseGifUrl?: string;
+
+    /** animation tuning */
+    noiseFps?: number;      // for CSS static (steps)
+    noiseSpeed?: number;    // for CSS static (px/sec)
+
+
+    pepperAlpha?: number;  // 0..1 opacity of black speckles
+    pepperScale?: number;  // px density cell for the repeating micro-speck layer
+
 }>(), {
     showIndices: true,
     showVelocity: true,
-    showPitch: true
+    showPitch: true,
+    noiseMode: 'wash',
+    noiseFps: 12,
+    noiseSpeed: 60,
+    noiseEnabled: true,
+    pepperAlpha: 0.16,
+    pepperScale: 6,
+
 });
 
 const emit = defineEmits<{
@@ -112,6 +166,10 @@ const hovered = ref<number | null>(null);
 const activeVol = ref<number | null>(null);
 const activePitch = ref<number | null>(null);
 
+/** simple uid so multiple grids can coexist without filter id collisions */
+const uid = Math.random().toString(36).slice(2);
+
+/* interactions */
 function clone<T>(arr: T[]): T[] { return arr.slice(); }
 
 function onMouseDown(evt: MouseEvent, index: number) {
@@ -164,54 +222,73 @@ function hueFor(hz: number, lo = props.minHz, hi = props.maxHz) {
 }
 
 function padStyle(index: number) {
-    if (!props.steps[index]) return { '--pad-on': 0 };
-    const pct = Math.round(props.velocities[index] * 100);
+    if (!props.steps[index]) return { '--pad-on': 0 } as any;
+    const pct = Math.round((props.velocities[index] ?? 0) * 100);
     const hue = hueFor(props.pitches[index] || props.minHz);
+
     return {
         '--vol': pct,
         '--heat-h': hue,
-        '--pad-on': 1
+        '--pad-on': 1,
+        '--noise-alpha': String(typeof props.noiseAlpha === 'number' ? props.noiseAlpha : 0.28) // boosted default
     } as any;
 }
 
-/* waveform indicator helpers */
+/** per-step noise overlay styling */
+function noiseStyle(index: number) {
+    const tint = props.noiseTint || '#9bf3ff'; // brighter default so it "reads"
+    const a = typeof props.noiseAlpha === 'number' ? props.noiseAlpha : 0.28;
+    const fps = Math.max(1, props.noiseFps || 12);
+    const speed = Math.max(1, props.noiseSpeed || 60); // px/sec
+
+    return {
+        '--noise-tint': tint,
+        '--noise-alpha': String(a),
+        '--noise-fps': String(fps),
+        '--noise-speed': String(speed),
+        '--pepper-alpha': String(
+            typeof (props as any).pepperAlpha === 'number' ? (props as any).pepperAlpha : 0.16
+        ),
+        '--pepper-scale': String(
+            Math.max(2, (props as any).pepperScale ?? 6)
+        ),
+
+    } as any;
+}
+
+function noiseOn(i: number) {
+    return !!props.noiseEnabled && !!props.steps?.[i] && !!props.noiseMask?.[i];
+    // (optional) also gate by velocity if you want: && (props.velocities?.[i] ?? 0) > 0
+}
+
+/* SVG noise timing */
+const svgDur = '0.6s';
+const svgBase = 0.8;
+
 function waveFor(i: number): Wave {
     return (props.waveforms?.[i] ?? props.defaultWave ?? 'sine') as Wave;
 }
-
 const nearestNote = props.nearestNote;
 </script>
 
 <style scoped>
-/* badges stay compact even at 32 steps */
+/* =================== badge (unchanged) =================== */
 .wave-badge {
     --wb-pad-x: 3px;
     --wb-pad-y: 2px;
     --wb-radius: 6px;
-
     position: absolute;
     bottom: 3px;
-    /* left: 3px; */
     left: 50%;
     transform: translateX(-50%);
-
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 4px;
-
     padding: var(--wb-pad-y) var(--wb-pad-x);
     border-radius: var(--wb-radius);
-
-    /* Uniform background for all waves */
     background: linear-gradient(145deg, rgba(0, 0, 0, .55), rgba(0, 0, 0, .35));
-    /* border: 1px solid rgba(255, 255, 255, .14); */
-    /* box-shadow:
-        0 1px 2px rgba(0, 0, 0, .25),
-        inset 0 0 0 1px rgba(255, 255, 255, .04); */
-
     color: #fff;
-    /* default; overridden per-wave below */
     line-height: 1;
     pointer-events: none;
     user-select: none;
@@ -219,41 +296,33 @@ const nearestNote = props.nearestNote;
     z-index: 2;
 }
 
-/* mini icon */
 .wave-ico {
     width: 11px;
     height: 11px;
     display: block;
 }
 
-/* Dim when pad is off */
 .wave-badge.is-off {
     opacity: .55;
 }
 
-/* Icon colors per wave (background stays uniform) */
 .wave-badge[data-wave="sine"] {
     color: #7bd0ff;
 }
 
-/* cool blue */
 .wave-badge[data-wave="triangle"] {
     color: #b47aff;
 }
 
-/* purple */
 .wave-badge[data-wave="sawtooth"] {
     color: #ffd06b;
 }
 
-/* amber */
 .wave-badge[data-wave="square"] {
     color: #a2f5a6;
 }
 
-/* mint */
-
-/* --- the rest is unchanged from your file --- */
+/* =================== note chip (unchanged) =================== */
 .note-chip {
     position: absolute;
     left: 50%;
@@ -271,6 +340,7 @@ const nearestNote = props.nearestNote;
     z-index: 1000;
 }
 
+/* =================== head (unchanged) =================== */
 .pad-head {
     display: flex;
     flex-direction: column;
@@ -318,4 +388,212 @@ const nearestNote = props.nearestNote;
 .padTESTwrap {
     position: relative;
 }
+
+/* =================== NOISE OVERLAY ===================
+   Layer order: padTEST::before (volume hue wash, z=1) -> .noise-overlay (z=1, drawn after) -> padTEST::after (bevel z=2) */
+/* .padTEST .noise-overlay{
+  position:absolute; inset:0; border-radius:inherit; z-index:1; pointer-events:none;
+  opacity:1;
+} */
+.padTEST .noise-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    z-index: 1;
+    pointer-events: none;
+
+    /* Tweakables */
+    --grain-unit: 8px;
+    /* ↑ Bigger = chunkier grain (try 10px, 12px) */
+    --grain-alpha: var(--noise-alpha, 0.24);
+
+    background:
+        /* angled wash */
+        linear-gradient(135deg,
+            color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent calc(100% - (var(--grain-alpha) * 100%))) 0%,
+            transparent 60%),
+        /* “static” grain — thicker stripes now */
+        repeating-linear-gradient(0deg,
+            color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent 92%) 0px,
+            color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent 92%) 3px,
+            transparent 6px,
+            transparent 9px);
+
+    /* Make the grain tiles larger on the second background only */
+    background-size:
+        auto,
+        var(--grain-unit) var(--grain-unit);
+
+    mix-blend-mode: screen;
+    opacity: 1;
+
+    /* Optional: a little punch */
+    /* filter: contrast(130%) brightness(105%); */
+    animation: noise-shift 700ms steps(6) infinite;
+    background-position:
+        0 0,
+        /* wash layer stays put */
+        0 0;
+    /* grain layer animates via keyframes */
+}
+
+/* Mode: wash (your original subtle gradient + faint lines, cranked slightly) */
+.padTEST .noise-overlay.mode-wash {
+    background:
+        linear-gradient(135deg,
+            color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 0%,
+            transparent 60%),
+        repeating-linear-gradient(0deg,
+            color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent 88%) 0px,
+            color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent 88%) 1px,
+            transparent 2px, transparent 3px);
+    mix-blend-mode: screen;
+}
+
+/* Mode: static (CSS-only animated grain) */
+.padTEST .noise-overlay.mode-static {
+    mix-blend-mode: screen;
+}
+
+.padTEST .noise-overlay.mode-static .grain {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    /* stack 3 noisy layers with different scales so it feels organic */
+    background:
+        radial-gradient(1px 1px at 20% 30%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 40%, transparent 41%),
+        radial-gradient(1px 1px at 60% 80%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 45%, transparent 46%),
+        radial-gradient(1px 1px at 80% 10%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 35%, transparent 36%),
+        repeating-conic-gradient(from 0deg,
+            color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 0% 1%,
+            transparent 1% 2%);
+    background-size: 60px 60px, 90px 90px, 120px 120px, 6px 6px;
+    animation:
+        noise-shift var(--noise-anim-dur, 1s) steps(var(--noise-fps, 12)) infinite,
+        noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
+    filter: contrast(110%) brightness(105%);
+    opacity: 1;
+}
+
+/* jittery frame stepping */
+@keyframes noise-shift {
+    0% {
+        transform: translate3d(0, 0, 0) scale(1.0);
+    }
+
+    25% {
+        transform: translate3d(-1px, 1px, 0) scale(1.01);
+    }
+
+    50% {
+        transform: translate3d(1px, -1px, 0) scale(0.99);
+    }
+
+    75% {
+        transform: translate3d(0.5px, -0.5px, 0) scale(1.0);
+    }
+
+    100% {
+        transform: translate3d(0, 0, 0) scale(1.0);
+    }
+}
+
+/* slow pan for parallax */
+@keyframes noise-pan {
+    from {
+        background-position: 0 0, 0 0, 0 0, 0 0;
+    }
+
+    to {
+        background-position: 60px 30px, -40px 60px, 80px -30px, 12px -12px;
+    }
+}
+
+/* Mode: svg (procedural TV static) */
+.padTEST .noise-overlay.mode-svg {
+    mix-blend-mode: screen;
+}
+
+.padTEST .noise-overlay.mode-svg .svg-noise {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+}
+
+.padTEST .noise-overlay.mode-svg .svg-filter {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+.padTEST .noise-overlay.mode-svg .svg-noise-fill {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%)));
+    /* paint a layer then distort it with turbulence filter */
+    filter: none;
+    /* the actual filter url() is injected inline to avoid scoping issues */
+    /* apply the filter via style attr to ensure correct URL scoping */
+}
+
+/* Mode: gif (bring your own loop) */
+.padTEST .noise-overlay.mode-gif {
+    mix-blend-mode: screen;
+}
+
+.padTEST .noise-overlay.mode-gif .noise-gif {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+    opacity: calc(var(--noise-alpha, .28) + 0.08);
+}
+
+/* Black “pepper” speckles that read on any background */
+.padTEST .noise-overlay .pepper {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+
+    /* Darken underlying content without killing color */
+    mix-blend-mode: multiply;
+
+    /* Overall strength */
+    opacity: var(--pepper-alpha, 0.16);
+
+    /* A few larger, pseudo-random dots + a very fine repeating bed */
+    background:
+        radial-gradient(1px 1px at 18% 22%, rgba(0, 0, 0, 0.85) 40%, transparent 41%),
+        radial-gradient(1px 1px at 36% 76%, rgba(0, 0, 0, 0.85) 42%, transparent 43%),
+        radial-gradient(1px 1px at 66% 48%, rgba(0, 0, 0, 0.85) 38%, transparent 39%),
+        radial-gradient(1px 1px at 84% 16%, rgba(0, 0, 0, 0.85) 40%, transparent 41%),
+        /* micro-speck bed */
+        repeating-conic-gradient(from 0deg,
+            rgba(0, 0, 0, 0.7) 0% 0.5%,
+            transparent 0.5% 1.6%);
+
+    /* Scale the larger dots independently from the micro-bed */
+    background-size:
+        80px 80px,
+        110px 110px,
+        140px 140px,
+        170px 170px,
+        var(--pepper-scale, 6px) var(--pepper-scale, 6px);
+
+    /* Animate subtly with the same jitter so it feels alive */
+    animation:
+        noise-shift var(--noise-anim-dur, 1s) steps(var(--noise-fps, 12)) infinite,
+        noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
+
+    /* Slight clarity bump so specks don’t blur out on light pads */
+    filter: contrast(115%);
+}
+
+
+
+/* keep all other visuals in your SCSS (_drumSequencer.scss) */
 </style>
