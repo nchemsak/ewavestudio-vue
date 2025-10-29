@@ -48,15 +48,17 @@
 
                 <div class="mask-stack">
                     <div class="pt-btn-group" role="group" aria-label="Noise mask group 1">
-                        <button class="pt-btn" @click="maskAll">All</button>
                         <button class="pt-btn" @click="maskEvery2">Every 2</button>
+                        <button class="pt-btn" @click="maskEvery4">Every 4</button>
                         <button class="pt-btn" @click="maskBackbeat">Backbeat</button>
+                       
                     </div>
 
                     <div class="pt-btn-group" role="group" aria-label="Noise mask group 2">
-                        <button class="pt-btn" @click="maskRandom">Random</button>
+                         <button class="pt-btn" @click="maskRandom">Random</button>
                         <button class="pt-btn" @click="maskInvert">Invert</button>
-                        <button class="pt-btn pt-danger" @click="maskClear">Clear</button>
+                        <button class="pt-btn" @click="maskAll">All</button>
+                        <!-- Removed Clear button -->
                     </div>
                 </div>
             </div>
@@ -65,9 +67,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
-import Knob from '../Knob.vue'
-import KnobGroup from '../KnobGroup.vue'
+import { ref, watch, computed } from 'vue';
+import Knob from '../Knob.vue';
+import KnobGroup from '../KnobGroup.vue';
 
 /**
  * Exposed v-models:
@@ -80,57 +82,57 @@ import KnobGroup from '../KnobGroup.vue'
  */
 
 const props = withDefaults(defineProps<{
-    enabled: boolean
-    amount: number
-    colorMorph: number
-    mask?: boolean[]
-    attackBurst?: boolean
-    burstMs?: number
-    color?: string
-    showToggle?: boolean
+    enabled: boolean;
+    amount: number;
+    colorMorph: number;
+    mask?: boolean[];
+    attackBurst?: boolean;
+    burstMs?: number;
+    color?: string;
+    showToggle?: boolean;
 }>(), {
     enabled: false,
-    amount: .25,
+    amount: 0.25,
     colorMorph: 0.5,
     attackBurst: false,
     burstMs: 80,
     color: '#9C27B0',
     showToggle: true,
-})
+});
 
 const emit = defineEmits<{
-    (e: 'update:enabled', v: boolean): void
-    (e: 'update:amount', v: number): void
-    (e: 'update:colorMorph', v: number): void
-    (e: 'update:mask', v: boolean[]): void
-    (e: 'update:attackBurst', v: boolean): void
-    (e: 'update:burstMs', v: number): void
-}>()
+    (e: 'update:enabled', v: boolean): void;
+    (e: 'update:amount', v: number): void;
+    (e: 'update:colorMorph', v: number): void;
+    (e: 'update:mask', v: boolean[]): void;
+    (e: 'update:attackBurst', v: boolean): void;
+    (e: 'update:burstMs', v: number): void;
+}>();
 
 // locals
-const enabledLocal = ref(props.enabled)
-const amountLocal = ref(props.amount)
-const colorLocal = ref(props.colorMorph)
-const burstMsLocal = ref(props.burstMs ?? 80)
-const activeKnob = ref<null | 'noiseAmount' | 'colorMorph' | 'burstMs'>(null)
+const enabledLocal = ref(props.enabled);
+const amountLocal = ref(props.amount);
+const colorLocal = ref(props.colorMorph);
+const burstMsLocal = ref(props.burstMs ?? 80);
+const activeKnob = ref<null | 'noiseAmount' | 'colorMorph' | 'burstMs'>(null);
 
 // sync props -> locals
-watch(() => props.enabled, v => enabledLocal.value = v)
-watch(() => props.amount, v => amountLocal.value = v)
-watch(() => props.colorMorph, v => colorLocal.value = v)
-watch(() => props.burstMs, v => { if (typeof v === 'number') burstMsLocal.value = v })
+watch(() => props.enabled, v => { enabledLocal.value = v; });
+watch(() => props.amount, v => { amountLocal.value = v; });
+watch(() => props.colorMorph, v => { colorLocal.value = v; });
+watch(() => props.burstMs, v => { if (typeof v === 'number') burstMsLocal.value = v; });
 
 // emit locals -> parent
-watch(enabledLocal, v => { emit('update:enabled', v); emit('update:attackBurst', v) })
-watch(amountLocal, v => emit('update:amount', Math.max(0, Math.min(1, v))))
-watch(colorLocal, v => emit('update:colorMorph', Math.max(0, Math.min(1, v))))
-watch(burstMsLocal, v => emit('update:burstMs', Math.max(5, Math.min(250, Math.round(v)))))
+watch(enabledLocal, v => { emit('update:enabled', v); emit('update:attackBurst', v); });
+watch(amountLocal, v => { emit('update:amount', Math.max(0, Math.min(1, v))); });
+watch(colorLocal, v => { emit('update:colorMorph', Math.max(0, Math.min(1, v))); });
+watch(burstMsLocal, v => { emit('update:burstMs', Math.max(5, Math.min(250, Math.round(v)))); });
 
 // also on mount, ensure parent gets synced burst state once
-if (props.attackBurst !== props.enabled) emit('update:attackBurst', props.enabled)
+if (props.attackBurst !== props.enabled) { emit('update:attackBurst', props.enabled); }
 
 // misc
-const accent = computed(() => props.color)
+const accent = computed(() => props.color);
 
 /* ---------- Color stops & swatch ---------- */
 const stops = [
@@ -139,72 +141,73 @@ const stops = [
     { pos: 0.50, name: 'White', hex: '#ffffff' },
     { pos: 0.75, name: 'Blue', hex: '#7bbcff' },
     { pos: 1.00, name: 'Violet', hex: '#c7a4ff' },
-] as const
+] as const;
 
 const colorLabel = computed(() => {
-    const t = colorLocal.value
-    let nearest = stops[0], best = Infinity
+    const t = colorLocal.value;
+    let nearest = stops[0], best = Infinity;
     for (const s of stops) {
-        const d = Math.abs(s.pos - t)
-        if (d < best) { best = d; nearest = s }
+        const d = Math.abs(s.pos - t);
+        if (d < best) { best = d; nearest = s; }
     }
-    return nearest.name
-})
+    return nearest.name;
+});
 
 function hexToRgb(hex: string): [number, number, number] {
-    const h = hex.replace('#', '').trim()
-    const r = parseInt(h.slice(0, 2), 16)
-    const g = parseInt(h.slice(2, 4), 16)
-    const b = parseInt(h.slice(4, 6), 16)
-    return [r, g, b]
+    const h = hex.replace('#', '').trim();
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return [r, g, b];
 }
 function rgbToHex(r: number, g: number, b: number): string {
-    const to2 = (n: number) => n.toString(16).padStart(2, '0')
-    return `#${to2(Math.round(r))}${to2(Math.round(g))}${to2(Math.round(b))}`
+    const to2 = (n: number) => n.toString(16).padStart(2, '0');
+    return `#${to2(Math.round(r))}${to2(Math.round(g))}${to2(Math.round(b))}`;
 }
 function mixHex(a: string, b: string, w: number): string {
-    const [ar, ag, ab] = hexToRgb(a)
-    const [br, bg, bb] = hexToRgb(b)
-    const ir = ar + (br - ar) * w
-    const ig = ag + (bg - ag) * w
-    const ib = ab + (bb - ab) * w
-    return rgbToHex(ir, ig, ib)
+    const [ar, ag, ab] = hexToRgb(a);
+    const [br, bg, bb] = hexToRgb(b);
+    const ir = ar + (br - ar) * w;
+    const ig = ag + (bg - ag) * w;
+    const ib = ab + (bb - ab) * w;
+    return rgbToHex(ir, ig, ib);
 }
 
 const swatchHex = computed(() => {
-    const t = Math.min(1, Math.max(0, colorLocal.value))
-    let a = stops[0], b = stops[stops.length - 1]
+    const t = Math.min(1, Math.max(0, colorLocal.value));
+    let a = stops[0], b = stops[stops.length - 1];
     for (let i = 0; i < stops.length - 1; i++) {
-        const s0 = stops[i], s1 = stops[i + 1]
-        if (t >= s0.pos && t <= s1.pos) { a = s0; b = s1; break }
+        const s0 = stops[i], s1 = stops[i + 1];
+        if (t >= s0.pos && t <= s1.pos) { a = s0; b = s1; break; }
     }
-    const span = Math.max(1e-6, b.pos - a.pos)
-    const w = (t - a.pos) / span
-    return mixHex(a.hex, b.hex, w)
-})
+    const span = Math.max(1e-6, b.pos - a.pos);
+    const w = (t - a.pos) / span;
+    return mixHex(a.hex, b.hex, w);
+});
 
 /* ---------- Per-Pad Noise mask helpers ---------- */
-const hasMask = computed(() => Array.isArray(props.mask) && props.mask.length > 0)
+const hasMask = computed(() => Array.isArray(props.mask) && props.mask.length > 0);
 
-const emitMask = (out: boolean[]) => emit('update:mask', out)
-function updateMask(make: (i: number, len: number) => boolean) {
-    const len = props.mask?.length ?? 0
-    if (len <= 0) return
-    const out = Array.from({ length: len }, (_, i) => !!make(i, len))
-    emitMask(out)
+const emitMask = (out: boolean[]) => { emit('update:mask', out); };
+function updateMask(make: (i: number, len: number) => boolean): void {
+    const len = props.mask?.length ?? 0;
+    if (len <= 0) { return; }
+    const out = Array.from({ length: len }, (_, i) => !!make(i, len));
+    emitMask(out);
 }
-function maskAll() { updateMask(() => true) }
-function maskClear() { updateMask(() => false) }
-function maskEvery2() { updateMask((i) => i % 2 === 0) }
-function maskInvert() { if (!props.mask) return; emitMask(props.mask.map(v => !v)) }
-function maskRandom() { updateMask(() => Math.random() < 0.5) }
-function maskBackbeat() {
+function maskAll(): void { updateMask(() => true); }
+// removed maskClear
+function maskEvery2(): void { updateMask((i) => i % 2 === 0); }
+function maskEvery4(): void { updateMask((i) => i % 4 === 0); }
+function maskInvert(): void { if (!props.mask) { return; } emitMask(props.mask.map(v => !v)); }
+function maskRandom(): void { updateMask(() => Math.random() < 0.5); }
+function maskBackbeat(): void {
     updateMask((i, len) => {
-        const perBeat = Math.max(1, Math.round(len / 4))
-        const beatIdx = Math.floor(i / perBeat) + 1
-        const isDownbeatStep = (i % perBeat) === 0
-        return isDownbeatStep && (beatIdx === 2 || beatIdx === 4)
-    })
+        const perBeat = Math.max(1, Math.round(len / 4));
+        const isDownbeatStep = (i % perBeat) === 0;
+        const beatIdx = Math.floor(i / perBeat) + 1; // 1..4
+        return isDownbeatStep && (beatIdx === 2 || beatIdx === 4);
+    });
 }
 </script>
 
