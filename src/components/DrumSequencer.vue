@@ -333,6 +333,7 @@
 						<div v-if="fxAdvanced.open" class="mm-overlay" @click="fxAdvanced.open = false"></div>
 					</SectionWrap>
 				</div>
+
 			</section>
 
 			<!-- Bottom Sequencer -->
@@ -627,7 +628,7 @@ function resetSynthPadsToDefaults() {
 	selectedWaveform.value = 'sine';
 
 	// Close the menu after resetting
-	stepsAdvanced.open = false;
+	stepsAdvanced.open = false; 
 }
 
 // Step Sequencer — Advanced END
@@ -737,10 +738,12 @@ const currentTheme = ref(''); // '', 'theme-light', or 'theme-synthwave'
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // FM Synthesis START
+
 const fmEnabled = ref(false);
 const fmModFreq = ref(200);     // Hz when not using ratio
 const fmIndex = ref(4.0);       // 0..50 typical range
 const fmRatio = ref<number | null>(1); // start as 1:1, or null for Hz mode
+
 // FM Synthesis END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -764,7 +767,6 @@ function freqForRootAtOct(root: string, oct: number) {
 	return midiToFreq((oct + 1) * 12 + semi);
 }
 const defaultPadHz = computed(() => freqForRootAtOct(selectedKeyRoot.value, defaultOctaveForPads));
-
 
 const globalOctaveOffset = ref(0);
 
@@ -1994,7 +1996,6 @@ const exportState = computed<StepSequencerState>(() => {
 			},
 
 		},
-
 		sampleRate: audioCtx?.sampleRate || 48000,
 		tailSeconds: 5.0,
 	};
@@ -2769,6 +2770,7 @@ function handleMouseUp() {
 }
 // click and drag END
 
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 async function loadAllSamples() {
@@ -3087,6 +3089,8 @@ function buildSnapshot() {
 			arpOctaves: mm?.arpOctaves ?? melodyUi.arpOctaves,
 			arpTones: mm?.arpTones ?? melodyUi.arpTones,
 		},
+
+
 		selectedWaveform: selectedWaveform.value,
 	};
 }
@@ -3278,6 +3282,7 @@ function applySnapshot(s: any) {
 			}
 		});
 	}
+
 
 	if (typeof s.selectedWaveform === 'string') selectedWaveform.value = s.selectedWaveform as any;
 }
