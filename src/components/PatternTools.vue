@@ -10,15 +10,15 @@
           <button class="pt-btn" @click="fillAll">All</button>
           <button class="pt-btn" @click="fillEvery2">Every 2</button>
           <button class="pt-btn" @click="fillEvery4">Every 4</button>
-          <button class="pt-btn" @click="fillRandom()">Random</button>
           <button class="pt-btn" @click="invert">Invert</button>
+          <button class="pt-btn" @click="fillRandom()">Random</button>
           <button class="pt-btn pt-danger" @click="clear">Clear</button>
         </div>
       </section>
 
       <!-- Humanize Presets -->
       <section class="pt-section" v-if="props.velocities">
-        <div class="pt-section-title">Humanize Presets</div>
+        <div class="pt-section-title">Humanize</div>
         <div class="pt-btn-group" role="group" aria-label="Velocity shapes">
           <button class="pt-btn" @click="shapePeaks">Peaks</button>
           <button class="pt-btn" @click="shapeStairs4">Stairs</button>
@@ -31,10 +31,10 @@
 
       <!-- Tuning -->
       <section class="pt-section">
-        <div class="pt-section-title">Tuning</div>
-        <div class="pt-btn-group" role="group" aria-label="Tuning">
-          <button class="pt-btn octave-btn" @click="shiftOctave(-1)">↓ Octave</button>
-          <button class="pt-btn octave-btn" @click="shiftOctave(+1)">↑ Octave</button>
+        <div class="pt-section-title">Octave</div>
+        <div class="pt-btn-group" role="group" aria-label="Octave">
+          <button class="pt-btn octave-btn" @click="shiftOctave(-1)">↓</button>
+          <button class="pt-btn octave-btn" @click="shiftOctave(+1)">↑</button>
         </div>
         <div class="pt-inline">
           <label class="pt-inline-check">
@@ -186,6 +186,7 @@ function shapeReset(): void {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: space-between;
+  background-color: rgba(15, 18, 26, .50);
 }
 
 .pt-btn {
@@ -198,6 +199,7 @@ function shapeReset(): void {
 
 .octave-btn {
   height: 50px;
+  font-size: 30px;
 }
 
 /* small inline checkbox row */

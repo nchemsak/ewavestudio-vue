@@ -1,43 +1,55 @@
 <!-- components/LFOGroup.vue -->
 <template>
     <KnobGroup v-model="localEnabled" :color="color" :showToggle="showToggle" :showHeader="false">
-        <!-- LFO body -->
         <div class="lfo-root lfo-container">
-            <!-- (kept) simple inline info popover -->
-            <InfoPopover title="LFO" aria-label="What is the LFO?">
-                A Low Frequency Oscillator (LFO) is a slow modulation source that changes a target parameter.
-            </InfoPopover>
-
             <div class="pt-stack">
-                <div class="lfo-controls" role="group" aria-label="LFO Controls">
-                    <!-- Sync / Free -->
-                    <div class="pt-seg pt-seg-sm" role="group" aria-label="LFO Rate Mode"
-                        :class="{ disabled: !localEnabled }">
-                        <button class="pt-seg-btn" :class="{ 'is-active': localSync }" :disabled="!localEnabled"
-                            @click="setSync(true)">Sync</button>
-                        <button class="pt-seg-btn" :class="{ 'is-active': !localSync }" :disabled="!localEnabled"
-                            @click="setSync(false)">Free</button>
-                    </div>
+                <!-- Header: Power Tile + Wave Tiles -->
+                <div class="lfo-header" role="group" aria-label="LFO Header">
+                    <!-- Power tile -->
+                    <button class="lfo-power-tile" :class="{ on: localEnabled }" :aria-pressed="localEnabled"
+                        title="Toggle LFO" @click="localEnabled = !localEnabled" @contextmenu.prevent="openAdvanced">
+                        <span class="lfo-power-wave">
+                            <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
+                                <path :d="wavePath(localWaveform || 'sine')" class="wv" />
+                            </svg>
+                        </span>
+                        <span class="lfo-power-label">LFO</span>
+                    </button>
 
-                    <!-- Waveform -->
-                    <div class="pt-seg pt-seg-sm" role="group" aria-label="LFO Wave"
-                        :class="{ disabled: !localEnabled }">
-                        <button v-for="w in waves" :key="w" class="pt-seg-btn"
-                            :class="{ 'is-active': localWaveform === w }" :aria-pressed="localWaveform === w"
-                            :disabled="!localEnabled" @click="setWave(w)">
-                            {{ waveLabel(w) }}
-                            <span class="selector-tooltip">{{ waveLong(w) }}</span>
+                    <!-- Wave tiles (static icons, no animation) -->
+                    <div class="lfo-waves" role="radiogroup" aria-label="LFO Waveform">
+                        <button v-for="w in waves" :key="w" class="lfo-wave-btn"
+                            :class="{ active: localWaveform === w, disabled: !localEnabled }" role="radio"
+                            :aria-checked="localWaveform === w ? 'true' : 'false'" :disabled="!localEnabled"
+                            @click="setWave(w)" :title="waveLong(w)">
+                            <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
+                                <path :d="wavePath(w)" class="wv" />
+                            </svg>
+                            <span class="label">{{ waveLabel(w) }}</span>
                         </button>
                     </div>
+                </div>
 
-                    <!-- Target dots -->
-                    <div class="lfo-target-selector" role="group" aria-label="LFO Target">
-                        <span v-for="t in targets" :key="t" class="lfo-type-dot"
-                            :class="{ selected: currentTarget === t, disabled: !localEnabled }"
-                            @click="localEnabled && updateTarget(t)">
-                            <span class="selector-tooltip">{{ labelFor(t) }}</span>
-                        </span>
-                    </div>
+                <!-- Quick Target row (Pitch / Filter in main area) -->
+                <div class="lfo-target-quick" role="radiogroup" aria-label="LFO Target">
+                    <button class="mm-pill" :class="{ active: currentTarget === 'pitch', disabled: !localEnabled }"
+                        :disabled="!localEnabled" role="radio"
+                        :aria-checked="currentTarget === 'pitch' ? 'true' : 'false'" @click="updateTarget('pitch')"
+                        title="Modulate Pitch">
+                        Pitch
+                    </button>
+                    <button class="mm-pill" :class="{ active: currentTarget === 'filter', disabled: !localEnabled }"
+                        :disabled="!localEnabled" role="radio"
+                        :aria-checked="currentTarget === 'filter' ? 'true' : 'false'" @click="updateTarget('filter')"
+                        title="Modulate Filter">
+                        Filter
+                    </button>
+
+                    <!-- Advanced menu button (optional helper) -->
+                    <!-- <button class="lfo-adv-btn" :class="{ disabled: !localEnabled }" :disabled="!localEnabled" title="Advanced"
+                  @click.stop="openAdvanced">
+            ⋯
+          </button> -->
                 </div>
 
                 <!-- Knobs -->
@@ -62,18 +74,33 @@
                 </div>
             </div>
 
-            <!-- ===== Advanced menu (positioned like Melody) ===== -->
+            <!-- Advanced menu -->
             <div v-if="advancedOpen" class="mm-menu" role="menu" @click.stop
                 :style="{ left: (advPos?.x ?? 0) + 'px', top: (advPos?.y ?? 0) + 'px' }">
                 <div class="mm-menu-title">Advanced Options</div>
 
-                <!-- Retrigger -->
+                <!-- Rate Mode -->
+                <div class="mm-opt" role="menuitem" @click="setSync(!localSync)">
+                    <span>Free rate (Hz)</span>
+                    <button class="mm-switch" :class="{ on: !localSync }"><span class="kn"></span></button>
+                </div>
+
+                <!-- Target selection (other targets live here; Pitch/Filter have quick access above) -->
+                <div class="mm-opt-column" aria-label="LFO Target">
+                    <div class="mm-subtitle">Other Targets</div>
+                    <div class="mm-pill-row">
+                        <button v-for="t in visibleTargetsAdvanced" :key="t" class="mm-pill"
+                            :class="{ active: currentTarget === t }" @click="updateTarget(t)">
+                            {{ labelFor(t) }}
+                        </button>
+                    </div>
+                </div>
+
                 <div class="mm-opt" role="menuitem" @click="retriggerLocal = !retriggerLocal">
                     <span>Retrigger on note-on</span>
                     <button class="mm-switch" :class="{ on: retriggerLocal }"><span class="kn"></span></button>
                 </div>
 
-                <!-- Bipolar -->
                 <div class="mm-opt" role="menuitem" @click="bipolarLocal = !bipolarLocal">
                     <span>Bipolar depth</span>
                     <button class="mm-switch" :class="{ on: bipolarLocal }"><span class="kn"></span></button>
@@ -84,7 +111,6 @@
                 </div>
             </div>
 
-            <!-- overlay to close -->
             <div v-if="advancedOpen" class="mm-overlay" @click="advancedOpen = false"></div>
         </div>
     </KnobGroup>
@@ -94,14 +120,10 @@
 import { ref, watch, computed, onUnmounted } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
-import InfoPopover from '../InfoPopover.vue';
 
-type Target = 'pitch' | 'gain' | 'filter' | 'pan';
+type Target = 'pitch' | 'gain' | 'filter' | 'pan' | 'spectralTilt' | 'dubGlue';
 type Wave = 'sine' | 'square' | 'random';
 
-/* --------------------------------
-   Type-based props (withDefaults OK)
------------------------------------ */
 const props = withDefaults(defineProps<{
     modelValue: boolean;
     rate: number;
@@ -116,21 +138,21 @@ const props = withDefaults(defineProps<{
     waves?: Wave[];
     divisions?: string[];
     showToggle?: boolean;
-    retrigger?: boolean;   // NEW
-    bipolar?: boolean;     // NEW
+    retrigger?: boolean;
+    bipolar?: boolean;
 }>(), {
     modelValue: false,
     rate: 2,
     depth: 0,
-    target: 'gain',
+    target: 'spectralTilt',
     waveform: 'sine',
     syncEnabled: true,
     division: '1/8',
     depthMax: 100,
     color: '#00BCD4',
-    targets: () => ['pitch', 'gain', 'filter', 'pan'],
+    targets: () => ['spectralTilt', 'dubGlue', 'filter', 'pitch'],
     waves: () => ['sine', 'square', 'random'],
-    divisions: () => ['1/1', '1/2', '1/4', '1/8', '1/16', '1/8T', '1/8.'],
+    divisions: () => ['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32'],
     showToggle: false,
     retrigger: false,
     bipolar: false
@@ -144,26 +166,27 @@ const emit = defineEmits<{
     (e: 'update:waveform', v: Wave): void;
     (e: 'update:syncEnabled', v: boolean): void;
     (e: 'update:division', v: string): void;
-    (e: 'update:retrigger', v: boolean): void; // NEW
-    (e: 'update:bipolar', v: boolean): void;   // NEW
+    (e: 'update:retrigger', v: boolean): void;
+    (e: 'update:bipolar', v: boolean): void;
 }>();
 
-/* ------------- labels ------------- */
+/* Labels */
 function waveLabel(w: Wave | string): string {
-    return w === 'random' ? 'Rnd' : w.charAt(0).toUpperCase() + w.slice(1);
+    return w === 'random' ? 'S&H' : w.charAt(0).toUpperCase() + w.slice(1);
 }
 function waveLong(w: Wave | string): string {
-    return w === 'random' ? 'Random (Sample & Hold)' : waveLabel(w);
+    return w === 'random' ? 'Sample & Hold' : waveLabel(w);
 }
 function labelFor(t: Target | string): string {
-    return t === 'gain' ? 'Amplitude' : t.charAt(0).toUpperCase() + t.slice(1);
+    if (t === 'spectralTilt') return 'Spectral Tilt';
+    if (t === 'dubGlue') return 'Dub Glue';
+    return t === 'gain' ? 'Amplitude' : (t.charAt(0).toUpperCase() + t.slice(1));
 }
 
-/* ------------- Advanced menu ------------- */
+/* Advanced menu state */
 const advancedOpen = ref(false);
 const advPos = ref<{ x: number; y: number } | null>(null);
 
-// Local mirrors for advanced toggles → emit outwards
 const retriggerLocal = ref<boolean>(props.retrigger);
 watch(() => props.retrigger, v => { retriggerLocal.value = v; });
 watch(retriggerLocal, v => emit('update:retrigger', v));
@@ -174,35 +197,29 @@ watch(bipolarLocal, v => emit('update:bipolar', v));
 
 function openAdvanced(e?: MouseEvent): void {
     const target = e?.currentTarget as HTMLElement | null;
-    const parent = document.querySelector('.lfo-container') as HTMLElement | null; // anchor to this section
+    const parent = document.querySelector('.lfo-container') as HTMLElement | null;
     if (target && parent) {
         const r = target.getBoundingClientRect();
         const p = parent.getBoundingClientRect();
-        advPos.value = {
-            x: Math.round(r.right - p.left + 8),
-            y: Math.round(r.top - p.top)
-        };
+        advPos.value = { x: Math.round(r.right - p.left + 8), y: Math.round(r.top - p.top) };
     } else {
         advPos.value = { x: 24, y: 24 };
     }
     advancedOpen.value = true;
 }
-
 function resetAdvanced(): void {
     retriggerLocal.value = false;
     bipolarLocal.value = false;
 }
-
 function onKey(e: KeyboardEvent): void {
     if (e.key === 'Escape') advancedOpen.value = false;
 }
 window.addEventListener('keydown', onKey, { capture: true });
 onUnmounted(() => window.removeEventListener('keydown', onKey));
 
-// Expose so parent can call lfoRef.openAdvanced($event) from its ⋯ button
 defineExpose({ openAdvanced });
 
-/* ------------- Locals (snappy knobs) ------------- */
+/* Locals */
 const localEnabled = ref<boolean>(props.modelValue);
 watch(() => props.modelValue, v => { localEnabled.value = v; });
 watch(localEnabled, v => emit('update:modelValue', v));
@@ -236,12 +253,15 @@ function setDivision(d: string): void { emit('update:division', d); }
 
 const activeKnob = ref<null | 'rate' | 'depth'>(null);
 
+/* Per-target depth step + readout */
 const depthStep = computed<number>(() => {
     switch (currentTarget.value) {
-        case 'pitch': return 1;
-        case 'gain': return 1;
-        case 'pan': return 1;
         case 'filter': return 10;
+        case 'spectralTilt':
+        case 'dubGlue':
+        case 'pitch':
+        case 'gain':
+        case 'pan':
         default: return 1;
     }
 });
@@ -252,10 +272,14 @@ const depthReadout = computed<string>(() => {
         case 'gain': return `${Math.round(v)}%`;
         case 'pan': return `${Math.round(v)}%`;
         case 'filter': return `${Math.round(v)} Hz`;
+        case 'spectralTilt':
+        case 'dubGlue':
+            return `${Math.round(v)}%`;
         default: return String(v);
     }
 });
 
+/* Rate controls */
 const rateMin = computed<number>(() => (localSync.value ? 0 : 0.1));
 const rateMax = computed<number>(() => (localSync.value ? (props.divisions.length - 1) : 20));
 const rateStep = computed<number>(() => (localSync.value ? 1 : 0.1));
@@ -264,7 +288,6 @@ const rateMarkers = computed<number[]>(() => {
     const n = props.divisions.length;
     return n <= 1 ? [0.5] : props.divisions.map((_, i) => i / (n - 1));
 });
-
 const divisionIndex = computed<number>({
     get() {
         const idx = props.divisions.indexOf(localDivision.value || '');
@@ -277,7 +300,6 @@ const divisionIndex = computed<number>({
         setDivision(d);
     }
 });
-
 const rateKnobModel = computed<number>({
     get() {
         return localSync.value ? divisionIndex.value : localRate.value;
@@ -287,44 +309,186 @@ const rateKnobModel = computed<number>({
         else localRate.value = v;
     }
 });
+
+/* SVG paths for waves (S&H now a stair-step shape) */
+function wavePath(w: Wave | string): string {
+    switch (w) {
+        case 'square':
+            return 'M0 16 L25 16 L25 0 L75 0 L75 32 L100 32';
+        case 'random': // Sample & Hold: stepped (stairsteps)
+            return 'M0 24 H15 V10 H35 V22 H55 V6 H75 V18 H90 V4 H100';
+        case 'sine':
+        default:
+            return 'M0 16 C12 0 12 0 25 16 C37 32 37 32 50 16 C62 0 62 0 75 16 C87 32 87 32 100 16';
+    }
+}
+
+/* Advanced: hide Pitch/Filter from this list since they have quick buttons in main area.
+   Also hide gain/pan like before. */
+const visibleTargetsAdvanced = computed<Target[]>(() =>
+    (props.targets || []).filter(t => t !== 'gain' && t !== 'pan' && t !== 'pitch' && t !== 'filter')
+);
 </script>
 
 <style scoped>
-.lfo-header {
-    display: flex;
-    align-items: center;
-}
-
-.lfo-info-wrap {
-    margin-left: auto;
-}
-
-.lfo-controls {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-}
-
-.lfo-target-selector {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-.pt-seg.disabled,
-.lfo-type-dot.disabled {
-    opacity: .5;
-    pointer-events: none;
-}
-
-/* anchor container for absolute menu math */
 .lfo-root {
     position: relative;
 }
 
-/* Reuse Melody Maker’s menu styles for pixel-perfect match */
+/*  Header  */
+.lfo-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.lfo-power-tile {
+    --sz: 72px;
+    width: var(--sz);
+    height: var(--sz);
+    border-radius: 14px;
+    border: 1px solid var(--pt-hairline);
+    background: var(--pt-surface-2);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .03);
+    transition: box-shadow .2s, transform .05s;
+}
+
+.lfo-power-tile.on {
+    box-shadow: 0 8px 24px rgb(0 0 0 / .35), inset 0 0 0 1px rgba(255, 255, 255, .08);
+    outline: 2px solid hsl(var(--pt-accent) 70% 60% / .6);
+}
+
+.lfo-power-tile:active {
+    transform: translateY(1px);
+}
+
+.lfo-power-wave {
+    width: 52px;
+    height: 20px;
+    display: block;
+}
+
+.lfo-power-label {
+    font-weight: 700;
+    font-size: 12px;
+    color: #c7cee0;
+    opacity: .9;
+}
+
+/* Static waveform strokes (no animation) */
+svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.wv {
+    fill: none;
+    stroke: hsl(var(--pt-accent) 80% 65%);
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* Wave buttons */
+.lfo-waves {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lfo-wave-btn {
+    --w: 94px;
+    --h: 40px;
+    width: var(--w);
+    height: var(--h);
+    border-radius: 12px;
+    background: var(--pt-surface-2);
+    border: 1px solid var(--pt-hairline);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+}
+
+.lfo-wave-btn .label {
+    font-size: 12px;
+    color: #c7cee0;
+    opacity: .95;
+}
+
+.lfo-wave-btn svg {
+    width: 56px;
+    height: 20px;
+}
+
+.lfo-wave-btn.active {
+    background: linear-gradient(180deg, hsl(var(--pt-accent) 70% 18% / .35), transparent);
+    border-color: hsl(var(--pt-accent) 70% 55% / .65);
+}
+
+.lfo-wave-btn.disabled {
+    opacity: .5;
+    pointer-events: none;
+}
+
+.lfo-wave-btn:active {
+    transform: translateY(1px);
+}
+
+/* Quick Target row */
+.lfo-target-quick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 4px;
+}
+
+.lfo-adv-btn {
+    width: 40px;
+    height: 32px;
+    border-radius: 10px;
+    background: var(--pt-surface-2);
+    border: 1px solid var(--pt-hairline);
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.lfo-adv-btn.disabled {
+    opacity: .5;
+    pointer-events: none;
+}
+
+/* Shared pill style */
+.mm-pill {
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--pt-hairline);
+    background: var(--pt-surface-2);
+    color: #c7cee0;
+    font-size: 12px;
+}
+
+.mm-pill.active {
+    border-color: hsl(var(--pt-accent) 70% 55% / .7);
+    background: linear-gradient(180deg, hsl(var(--pt-accent) 70% 18% / .35), transparent);
+}
+
+.mm-pill.disabled {
+    opacity: .5;
+    pointer-events: none;
+}
+
+/* Advanced  */
 .mm-menu {
     position: absolute;
     min-width: 280px;
@@ -402,4 +566,6 @@ const rateKnobModel = computed<number>({
     inset: 0;
     z-index: 999;
 }
+
+/* Keep your existing knob row / tooltip styles if defined elsewhere */
 </style>

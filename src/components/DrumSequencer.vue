@@ -214,9 +214,8 @@
 						</div>
 					</SectionWrap>
 				</div>
-				<div class="module noise">
+				<!-- <div class="module noise">
 					<SectionWrap id="noise" title="" v-model="collapsibleState['noise']">
-						<!-- Noise -->
 						<div class="gen-panel noise-panel">
 							<div class="noise-inline">
 								<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
@@ -226,7 +225,31 @@
 							</div>
 						</div>
 					</SectionWrap>
+				</div> -->
+
+				<div class="module noise">
+					<!-- Wrap adds the animated TV-noise background when noiseEnabled is true -->
+					<div class="noise-tv-bg" :class="{ 'on': noiseEnabled }" :style="noiseModuleStyle">
+						<!-- Background overlay (same system as SynthStepGrid.vue, mode=static) -->
+						<div v-if="noiseEnabled" class="noise-overlay mode-static" aria-hidden="true">
+							<div class="grain"></div>
+							<!-- <div class="pepper"></div> -->
+						</div>
+
+						<!-- Foreground content stays exactly the same -->
+						<SectionWrap id="noise" title="" v-model="collapsibleState['noise']">
+							<div class="gen-panel noise-panel">
+								<div class="noise-inline">
+									<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
+										v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
+										v-model:mask="noiseMask" v-model:attackBurst="noiseAttackBurst"
+										v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
+								</div>
+							</div>
+						</SectionWrap>
+					</div>
 				</div>
+
 				<div class="module sound">
 					<SectionWrap id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
 						<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
@@ -250,7 +273,7 @@
 							v-model:syncEnabled="lfoSync" v-model:division="lfoDivision"
 							v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
 							color="#00BCD4" :targets="['pitch', 'gain', 'filter', 'pan']"
-							:divisions="['1/1', '1/2', '1/4', '1/8', '1/16', '1/8T', '1/8.']" />
+							:divisions="['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16/', '1/32']" />
 					</SectionWrap>
 				</div>
 
@@ -628,7 +651,7 @@ function resetSynthPadsToDefaults() {
 	selectedWaveform.value = 'sine';
 
 	// Close the menu after resetting
-	stepsAdvanced.open = false; 
+	stepsAdvanced.open = false;
 }
 
 // Step Sequencer — Advanced END
@@ -1646,6 +1669,24 @@ function noiseHexFromMorph(t: number) {
 	const w = (t - a.pos) / span;
 	return __mixHex(NOISE_HEX[a.key], NOISE_HEX[b.key], w);
 }
+
+const noiseModuleStyle = computed(() => {
+	// Use the same defaults/tunings as your SynthStepGrid instance
+	const tint = noiseHexFromMorph(noiseColor.value);
+	const alpha = 0.32;
+	const fps = 14;
+	const speed = 40;
+	const pepperA = 0.20;
+	const pepperScale = 6;
+	return {
+		'--noise-tint': tint,
+		'--noise-alpha': String(alpha),
+		'--noise-fps': String(fps),
+		'--noise-speed': String(speed),
+		'--pepper-alpha': String(pepperA),
+		'--pepper-scale': String(pepperScale)
+	} as Record<string, string>;
+});
 
 
 const noiseBuffers: Record<NoiseKey, AudioBuffer | null> = {
@@ -4254,5 +4295,141 @@ function resetUiToFactoryDefaults() {
 		width: 100%;
 		display: block;
 	}
+}
+
+
+/* === Noise Module TV static background === */
+.module.noise .noise-tv-bg {
+	position: relative;
+	border-radius: var(--pt-card-radius, 12px);
+	overflow: hidden;
+}
+
+/* Keep all foreground content above the overlay */
+.module.noise .noise-tv-bg>*:not(.noise-overlay) {
+	position: relative;
+	z-index: 1;
+}
+
+/* Core overlay container (ported from SynthStepGrid.vue) */
+.module.noise .noise-overlay {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	z-index: 0;
+	pointer-events: none;
+
+	/* Tweakables (same names as pads) */
+	--grain-unit: 8px;
+	--grain-alpha: var(--noise-alpha, 0.24);
+
+	background:
+		linear-gradient(135deg,
+			color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent calc(100% - (var(--grain-alpha) * 100%))) 0%,
+			transparent 60%),
+		repeating-linear-gradient(0deg,
+			color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent 92%) 0px,
+			color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent 92%) 3px,
+			transparent 6px,
+			transparent 9px);
+
+	background-size:
+		auto,
+		var(--grain-unit) var(--grain-unit);
+
+	mix-blend-mode: screen;
+	opacity: 1;
+
+	/* animation: noise-shift 700ms steps(6) infinite; */
+	background-position: 0 0, 0 0;
+}
+
+/* Mode: static */
+.module.noise .noise-overlay.mode-static {
+	mix-blend-mode: screen;
+}
+
+.module.noise .noise-overlay.mode-static .grain {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background:
+		radial-gradient(1px 1px at 20% 30%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 40%, transparent 41%),
+		radial-gradient(1px 1px at 60% 80%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 45%, transparent 46%),
+		radial-gradient(1px 1px at 80% 10%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 35%, transparent 36%),
+		repeating-conic-gradient(from 0deg,
+			color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 0% 1%,
+			transparent 1% 2%);
+	background-size: 60px 60px, 90px 90px, 120px 120px, 6px 6px;
+	animation:
+		/* noise-shift var(--noise-anim-dur, 1s) steps(var(--noise-fps, 12)) infinite, */
+		noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
+	filter: contrast(110%) brightness(105%);
+	opacity: 1;
+}
+
+/* Black “pepper” speckles for readability */
+.module.noise .noise-overlay .pepper {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	pointer-events: none;
+	mix-blend-mode: multiply;
+	opacity: var(--pepper-alpha, 0.16);
+	background:
+		radial-gradient(1px 1px at 18% 22%, rgba(0, 0, 0, 0.85) 40%, transparent 41%),
+		radial-gradient(1px 1px at 36% 76%, rgba(0, 0, 0, 0.85) 42%, transparent 43%),
+		radial-gradient(1px 1px at 66% 48%, rgba(0, 0, 0, 0.85) 38%, transparent 39%),
+		radial-gradient(1px 1px at 84% 16%, rgba(0, 0, 0, 0.85) 40%, transparent 41%),
+		repeating-conic-gradient(from 0deg,
+			rgba(0, 0, 0, 0.7) 0% 0.5%,
+			transparent 0.5% 1.6%);
+	background-size:
+		80px 80px,
+		110px 110px,
+		140px 140px,
+		170px 170px,
+		var(--pepper-scale, 6px) var(--pepper-scale, 6px);
+	animation:
+		noise-shift var(--noise-anim-dur, 1s) steps(var(--noise-fps, 12)) infinite,
+		noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
+	filter: contrast(115%);
+}
+
+/* Animations (copied from SynthStepGrid.vue) */
+@keyframes noise-shift {
+	0% {
+		transform: translate3d(0, 0, 0) scale(1.0);
+	}
+
+	25% {
+		transform: translate3d(-1px, 1px, 0) scale(1.01);
+	}
+
+	50% {
+		transform: translate3d(1px, -1px, 0) scale(0.99);
+	}
+
+	75% {
+		transform: translate3d(0.5px, -0.5px, 0) scale(1.0);
+	}
+
+	100% {
+		transform: translate3d(0, 0, 0) scale(1.0);
+	}
+}
+
+@keyframes noise-pan {
+	from {
+		background-position: 0 0, 0 0, 0 0, 0 0;
+	}
+
+	to {
+		background-position: 60px 30px, -40px 60px, 80px -30px, 12px -12px;
+	}
+}
+
+.noise-tv-bg .pt-card {
+	background: none;
 }
 </style>

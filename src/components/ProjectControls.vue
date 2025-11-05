@@ -510,7 +510,8 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 /* Submenu panel */
 .pc-open-submenu {
     top: -.25rem;
-    left: calc(100% + 6px);
+    /* left: calc(100% + 6px); */
+    left: 100%;
     inline-size: clamp(420px, 42vw, 560px);
 }
 
