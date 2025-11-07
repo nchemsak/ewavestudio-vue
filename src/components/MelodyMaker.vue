@@ -1,15 +1,10 @@
 <template>
     <div class="melody-maker mm-skin" :class="props.currentTheme">
         <section class="pt-section">
-
-            <!-- ============ TOP: Mini keyboard row ============ -->
-
             <div class="mm-kb-wrap">
                 <div class="mm-field">
-                    <!-- Use a non-label element and give it an id -->
                     <div class="mm-label" id="mm-key-label">Key</div>
 
-                    <!-- Link the radiogroup to the label text -->
                     <div class="mm-kb" role="radiogroup" :aria-labelledby="'mm-key-label'">
                         <div v-for="k in NATURALS" :key="k.n" class="kb-cell" :class="{ 'has-sharp': k.hasSharp }">
                             <!-- White key -->
@@ -32,7 +27,6 @@
             </div>
 
 
-            <!-- Row 2: Scale + Range at 50% each -->
             <div class="mm-head-row2">
                 <label class="mm-field">
                     <span class="mm-label">Scale</span>
@@ -45,7 +39,6 @@
                 </label>
             </div>
 
-            <!-- hint under header -->
             <div class="mm-hint">{{ poolSummary }}</div>
 
             <div class="mm-primary">
@@ -89,8 +82,6 @@
                 :style="{ left: (advPos?.x ?? 0) + 'px', top: (advPos?.y ?? 0) + 'px' }" role="menu">
 
                 <div class="mm-menu-title">Advanced Options</div>
-
-                <!-- ===== Melody ===== -->
                 <div class="mm-subtitle">Melody</div>
 
                 <div class="mm-opt" role="menuitem" @click="applyScope = (applyScope === 'active' ? 'all' : 'active')">
@@ -110,7 +101,7 @@
 
                 <div class="mm-sep"></div>
 
-                <!-- ===== Arpeggio ===== -->
+                <!-- Arpeggio -->
                 <div class="mm-subtitle">Arpeggio</div>
 
                 <div class="mm-opt" role="menuitem" @click="arpSeventhOnDownbeat = !arpSeventhOnDownbeat">
@@ -143,7 +134,6 @@
 
                 <div class="mm-sep"></div>
 
-                <!-- ===== Utilities ===== -->
                 <div class="mm-subtitle">Utilities</div>
 
                 <div class="mm-opt" role="menuitem" :aria-disabled="!lastFrequencies"
@@ -156,7 +146,6 @@
                 </div>
             </div>
 
-            <!-- overlay to close menu -->
             <div v-if="advancedOpen" class="mm-overlay" @click="advancedOpen = false"></div>
 
         </section>
@@ -167,7 +156,6 @@
 import { ref, computed, watch, onUnmounted, defineExpose } from 'vue';
 import PtSelect from './PtSelect.vue';
 
-/* ---------- PROPS (added initial* props for persistence) ---------- */
 const props = defineProps<{
     frequencies?: number[];
     steps?: boolean[];
@@ -176,22 +164,23 @@ const props = defineProps<{
     currentTheme?: string;
 
     initialKeyRoot?: 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B';
-    initialKeyScale?: 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'wholeTone' | 'dorian' | 'lydian' | 'egyptian';
+    initialKeyScale?: 'none' | 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'wholeTone' | 'dorian' | 'lydian' | 'egyptian';
     initialRangePreset?: 'low' | 'mid' | 'high' | 'wide';
 
-    // Also accept the arp initial props you pass (benign if unused)
     initialArpPattern?: 'up' | 'down' | 'updown' | 'random';
     initialArpRate?: '1/4' | '1/8' | '1/16';
     initialArpOctaves?: 1 | 2 | 3 | 4;
     initialArpTones?: 'chord' | 'scale';
 }>();
 
-/* ---------- Defaults ---------- */
+
+/*  Defaults  */
 const DEFAULTS_MELODY = {
     applyScope: 'active' as 'active' | 'all',
     startOnTonic: false,
     emphasizeDownbeats: true,
 };
+
 const DEFAULTS_ARP = {
     pattern: 'up' as 'up' | 'down' | 'updown' | 'random',
     rate: '1/16' as '1/4' | '1/8' | '1/16',
@@ -211,12 +200,12 @@ const emit = defineEmits<{
     (e: 'update:frequencies', v: number[]): void;
     (e: 'octave-shift', delta: number): void;
     (e: 'key-root-change', root: typeof ROOTS[number]): void;
-    // NEW emits so parent can persist:
-    (e: 'key-scale-change', scale: keyof typeof SCALES): void;
+    (e: 'key-scale-change', scale: KeyScale): void;
     (e: 'range-preset-change', preset: PresetKey): void;
 }>();
 
-/* ---------- Theory ---------- */
+
+/*  Theory  */
 const ROOTS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
 type RootNote = typeof ROOTS[number];
 
@@ -235,23 +224,23 @@ const SCALE_LABELS: Record<string, string> = {
     wholeTone: 'Whole-tone', dorian: 'Dorian', lydian: 'Lydian', egyptian: 'Egyptian Pentatonic'
 };
 
-/* ---------- PERSISTED UI (Key/Scale/Range) ---------- */
-// Initialize from props.* if provided, else your defaults
-const keyRoot = ref<RootNote>(props.initialKeyRoot ?? 'A');
-const keyScale = ref<keyof typeof SCALES>(props.initialKeyScale ?? 'major');
 
-/* Mini keyboard layout (like PadSettingsPopover but compact) */
+const keyRoot = ref<RootNote>(props.initialKeyRoot ?? 'A');
+type KeyScale = 'none' | keyof typeof SCALES;
+const keyScale = ref<KeyScale>(props.initialKeyScale ?? 'none');
+
+
+/* Mini keyboard layout */
 const NATURALS: Array<{ n: Extract<RootNote, 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B'>; hasSharp: boolean; sharp?: RootNote }> = [
     { n: 'C', hasSharp: true, sharp: 'C#' },
-    { n: 'D', hasSharp: true, sharp: 'Eb' },  // project decides Eb over D#
+    { n: 'D', hasSharp: true, sharp: 'Eb' },
     { n: 'E', hasSharp: false },
     { n: 'F', hasSharp: true, sharp: 'F#' },
-    { n: 'G', hasSharp: true, sharp: 'Ab' },  // Ab over G#
-    { n: 'A', hasSharp: true, sharp: 'Bb' },  // Bb over A#
+    { n: 'G', hasSharp: true, sharp: 'Ab' },
+    { n: 'A', hasSharp: true, sharp: 'Bb' },
     { n: 'B', hasSharp: false },
 ];
 
-/* Naming helpers used elsewhere */
 const SHARP_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 const FLAT_NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
 const FLAT_KEYS = new Set(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb']);
@@ -266,13 +255,12 @@ const PRESETS: Record<PresetKey, { minOct: number; maxOct: number; label: string
     high: { minOct: 4, maxOct: 5, label: 'High' },
     wide: { minOct: 2, maxOct: 6, label: 'Wide' },
 };
-// Initialize from props.initialRangePreset if provided
+
 const rangePreset = ref<PresetKey>(props.initialRangePreset ?? 'wide');
 const minOctave = ref(3);
 const maxOctave = ref(6);
 watch(rangePreset, (k) => { const p = PRESETS[k]; minOctave.value = p.minOct; maxOctave.value = p.maxOct; }, { immediate: true });
 
-/* ---------- Freq helpers ---------- */
 const NOTE_TO_SEMITONE: Record<string, number> = {
     'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
 };
@@ -305,27 +293,56 @@ function buildCandidateMidiPool(root: string, scaleName: string, minOct: number,
 const poolSummary = computed(() => {
     const fMin = props.minFreq ?? 100;
     const fMax = props.maxFreq ?? 2000;
+
+    if (keyScale.value === 'none') {
+        const pref = preferredOctaveForPreset(rangePreset.value);
+        if (pref === 'random') {
+            return `${keyRoot.value} random octaves (${PRESETS.wide.minOct}–${PRESETS.wide.maxOct})`;
+        }
+        // Clamp the chosen octave into the frequency window if needed
+        const semi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
+        let oct = pref;
+        const inRange = (o: number) => {
+            const m = 12 * (o + 1) + semi;
+            const f = midiToFreq(m);
+            return f >= fMin && f <= fMax;
+        };
+        if (!inRange(oct)) {
+            // Nudge toward a nearby octave that fits (simple fallbacks)
+            for (const tryOct of [oct - 1, oct + 1, oct - 2, oct + 2]) {
+                if (tryOct >= 0 && inRange(tryOct)) { oct = tryOct; break; }
+            }
+        }
+        const m = 12 * (oct + 1) + semi;
+        return `${midiToName(m)} only`;
+    }
+
+    // Original summary for scale modes
     const pool = buildCandidateMidiPool(keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, fMin, fMax);
     if (!pool.length) return '';
     return `${midiToName(pool[0])}–${midiToName(pool[pool.length - 1])} • ${pool.length} notes`;
 });
 
+
 const keyOptions = ROOTS.map(r => ({ label: r, value: r }));
-const scaleOptions = Object.keys(SCALES).map(name => ({ label: SCALE_LABELS[name] ?? name, value: name }));
+const scaleOptions = [
+    { label: 'None', value: 'none' },
+    ...Object.keys(SCALES).map(name => ({ label: SCALE_LABELS[name] ?? name, value: name }))
+];
+
 const rangeOptions = (Object.entries(PRESETS) as [PresetKey, typeof PRESETS[PresetKey]][])
     .map(([value, def]) => ({ label: def.label, value }));
-    
+
 // emits for persistence
 watch(keyRoot, (v) => emit('key-root-change', v), { immediate: true });
 watch(keyScale, (v) => emit('key-scale-change', v), { immediate: true });
 watch(rangePreset, (v) => emit('range-preset-change', v), { immediate: true });
 
-// respond to parent pushing new initial props (e.g., after load)
 watch(() => props.initialKeyRoot, (v) => { if (v && v !== keyRoot.value) keyRoot.value = v as RootNote; });
-watch(() => props.initialKeyScale, (v) => { if (v && v !== keyScale.value) keyScale.value = v as keyof typeof SCALES; });
+watch(() => props.initialKeyScale, (v) => { if (v && v !== keyScale.value) keyScale.value = v as KeyScale; });
 watch(() => props.initialRangePreset, (v) => { if (v && v !== rangePreset.value) rangePreset.value = v as PresetKey; });
 
-/* ---------- Smart generator ---------- */
+/*  Smart generator  */
 function contourAt(i: number, n: number, kind: Style) {
     const t = n > 1 ? i / (n - 1) : 0;
     switch (kind) {
@@ -340,22 +357,26 @@ function contourAt(i: number, n: number, kind: Style) {
         }
     }
 }
+
 function defaultWeightsFor(scaleLen: number) {
     if (scaleLen >= 7) return [80, 35, 60, 35, 70, 45, 30];
     if (scaleLen === 5) return [80, 60, 70, 60, 65];
     return Array.from({ length: scaleLen }, (_, i) => (i === 0 ? 80 : i % 4 === 0 ? 70 : 45));
 }
+
 function degreeIndexFor(semiAbs: number, rootSemi: number, steps: number[]) {
     const rel = (semiAbs - rootSemi + 120) % 12;
     const di = steps.indexOf(rel);
     return di >= 0 ? di : 0;
 }
+
 function makeRng(s: number) {
     return () => { s |= 0; s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
 let clickNonce = 0;
 const seed = ref(1);
+
 function freshRng() {
     const mixed =
         (seed.value | 0) ^
@@ -367,19 +388,65 @@ function freshRng() {
 function smartGenerate(): void {
     if (!props.frequencies || !props.frequencies.length) return;
 
-    const freqMin = props.minFreq ?? 100;
-    const freqMax = props.maxFreq ?? 2000;
-    const pool = buildCandidateMidiPool(
-        keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, freqMin, freqMax
-    ).sort((a, b) => a - b);
-    if (!pool.length) return;
-
     const out = props.frequencies.slice();
 
     const stepsMask =
         (applyScope.value === 'active' && props.steps && props.steps.length === out.length)
             ? props.steps
             : out.map(() => true);
+
+    if (keyScale.value === 'none') {
+        const fMin = props.minFreq ?? 100;
+        const fMax = props.maxFreq ?? 2000;
+
+        const pickOct = (): number => {
+            const pref = preferredOctaveForPreset(rangePreset.value);
+            if (pref === 'random') {
+                const lo = PRESETS.wide.minOct;
+                const hi = PRESETS.wide.maxOct;
+                return Math.floor(lo + Math.random() * (hi - lo + 1));
+            }
+            return pref;
+        };
+
+        const semi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
+
+        for (let i = 0; i < out.length; i++) {
+            if (!stepsMask[i]) continue;
+
+            let oct = pickOct();
+
+            const clampIntoRange = (o: number): number => {
+                const midi = 12 * (o + 1) + semi;
+                const f = midiToFreq(midi);
+                if (f >= fMin && f <= fMax) return o;
+                for (const tryOct of [o - 1, o + 1, o - 2, o + 2, o - 3, o + 3]) {
+                    if (tryOct < 0) continue;
+                    const m = 12 * (tryOct + 1) + semi;
+                    const ff = midiToFreq(m);
+                    if (ff >= fMin && ff <= fMax) return tryOct;
+                }
+                return o;
+            };
+
+            oct = clampIntoRange(oct);
+            const midi = 12 * (oct + 1) + semi;
+            const hz = midiToFreq(midi);
+            out[i] = Math.max(fMin, Math.min(fMax, hz));
+        }
+
+        rememberBeforeWrite();
+        emit('update:frequencies', out);
+        return;
+    }
+
+    // Scale modes 
+    const freqMin = props.minFreq ?? 100;
+    const freqMax = props.maxFreq ?? 2000;
+    const pool = buildCandidateMidiPool(
+        keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, freqMin, freqMax
+    ).sort((a, b) => a - b);
+    if (!pool.length) return;
 
     const stepsArr = SCALES[keyScale.value] ?? SCALES.major;
     const rootSemi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
@@ -474,8 +541,16 @@ function smartGenerate(): void {
     emit('update:frequencies', out);
 }
 
-/* ---------- Arpeggiator ---------- */
-// initialize arp UI from optional initial props to keep your parent happy
+
+function preferredOctaveForPreset(p: PresetKey): number | 'random' {
+    if (p === 'low') return 3;
+    if (p === 'mid') return 4;
+    if (p === 'high') return 5;
+    return 'random'; // 'wide'
+}
+
+
+// Arpeggiator 
 const arpPattern = ref<'up' | 'down' | 'updown' | 'random'>(props.initialArpPattern ?? 'up');
 const arpRate = ref<'1/4' | '1/8' | '1/16'>(props.initialArpRate ?? '1/16');
 const arpOctaves = ref<1 | 2 | 3 | 4>(props.initialArpOctaves ?? 1);
@@ -508,7 +583,7 @@ const arpToneOptions = [
     { label: 'Chord', value: 'chord' },
     { label: 'Scale', value: 'scale' },
 ] as const;
-// ---------- Arp helpers ----------
+
 function rotate<T>(arr: T[], n: number) {
     if (!arr.length) return arr;
     const k = ((n % arr.length) + arr.length) % arr.length;
@@ -705,7 +780,7 @@ function bakeArp(): void {
     emit('update:frequencies', out);
 }
 
-/* ---------- UI state & helpers ---------- */
+//  UI state
 const advancedOpen = ref(false);
 const advPos = ref<{ x: number; y: number } | null>(null);
 function openAdvanced(e?: MouseEvent) {
@@ -755,10 +830,9 @@ function resetAdvanced() {
     arpHop.value = DEFAULTS_ARP.hop;
 }
 
-/* ---------- EXPOSE for parent save/load ---------- */
 type UiSnapshot = {
     keyRoot: RootNote;
-    keyScale: keyof typeof SCALES;
+    keyScale: KeyScale;
     rangePreset: PresetKey;
     arpPattern: 'up' | 'down' | 'updown' | 'random';
     arpRate: '1/4' | '1/8' | '1/16';
@@ -780,7 +854,7 @@ function getUi(): UiSnapshot {
 
 function setUi(u: Partial<UiSnapshot>) {
     if (u.keyRoot) keyRoot.value = u.keyRoot;
-    if (u.keyScale) keyScale.value = u.keyScale as keyof typeof SCALES;
+    if (u.keyScale) keyScale.value = u.keyScale as KeyScale;
     if (u.rangePreset) rangePreset.value = u.rangePreset as PresetKey;
 
     if (u.arpPattern) arpPattern.value = u.arpPattern;
@@ -793,7 +867,6 @@ defineExpose({ openAdvanced, getUi, setUi });
 </script>
 
 <style scoped>
-/* ---- your original styles unchanged ---- */
 .melody-maker {
     position: relative;
     width: 100%;

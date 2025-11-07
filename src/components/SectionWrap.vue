@@ -7,7 +7,7 @@
             </div>
 
             <div class="pt-header-tools">
-                <slot name="tools" />
+                <slot name="tools" /> 
             </div>
         </div>
 

@@ -1,14 +1,12 @@
 <template>
     <KnobGroup v-model="enabledLocal" title="Noise" :color="accent" :showToggle="showToggle">
         <div class="noise-layout">
-            <!-- LEFT: one row = Dot, Burst(ms), Amount, Color (with swatch) -->
             <div class="controls-row">
-                <!-- Enable dot (“Burst on”) -->
                 <button class="pt-dot" :class="{ 'is-on': enabledLocal }" :aria-pressed="enabledLocal"
                     title="Toggle noise" @click="enabledLocal = !enabledLocal" />
 
-                <!-- Burst time -->
-                <div class="control-block">
+                <!-- Burst -->
+                <div class="control-block knob-wrap">
                     <Knob v-model="burstMsLocal" label="Burst" :min="5" :max="250" :step="1" size="small"
                         :color="accent" :disabled="!enabledLocal" @knobStart="activeKnob = 'burstMs'"
                         @knobEnd="activeKnob = null" />
@@ -18,7 +16,7 @@
                 </div>
 
                 <!-- Amount -->
-                <div class="control-block">
+                <div class="control-block knob-wrap">
                     <Knob v-model="amountLocal" label="Amount" :min="0" :max="1" :step="0.01" size="small"
                         :color="accent" :disabled="!enabledLocal" @knobStart="activeKnob = 'noiseAmount'"
                         @knobEnd="activeKnob = null" />
@@ -27,22 +25,18 @@
                     </span>
                 </div>
 
-                <!-- Color morph (swatch + knob) -->
-                <div class="control-block color-block">
+                <!-- Color morph -->
+                <div class="control-block color-block knob-wrap">
                     <div class="swatch-wrap" :aria-label="`Noise color swatch: ${colorLabel}`" :title="colorLabel">
                         <div class="swatch" :style="{ backgroundColor: swatchHex }">Color</div>
                     </div>
 
                     <Knob v-model="colorLocal" aria-label="Noise color morph" :min="0" :max="1" :step="0.01"
-                        size="small" :color="accent" :disabled="!enabledLocal" @knobStart="activeKnob = 'colorMorph'"
-                        @knobEnd="activeKnob = null" />
-                    <span v-if="activeKnob === 'colorMorph'" class="custom-tooltip">
-                        {{ Math.round(colorLocal * 100) }}%
-                    </span>
+                        size="small" :color="accent" :disabled="!enabledLocal" />
                 </div>
+
             </div>
 
-            <!-- RIGHT: masks only -->
             <div v-if="hasMask" class="mask-col">
                 <div class="pt-section-title">Apply to Pads</div>
 
@@ -51,14 +45,11 @@
                         <button class="pt-btn" @click="maskEvery2">Every 2</button>
                         <button class="pt-btn" @click="maskEvery4">Every 4</button>
                         <button class="pt-btn" @click="maskBackbeat">Backbeat</button>
-                       
                     </div>
-
                     <div class="pt-btn-group" role="group" aria-label="Noise mask group 2">
-                         <button class="pt-btn" @click="maskRandom">Random</button>
+                        <button class="pt-btn" @click="maskRandom">Random</button>
                         <button class="pt-btn" @click="maskInvert">Invert</button>
                         <button class="pt-btn" @click="maskAll">All</button>
-                        <!-- Removed Clear button -->
                     </div>
                 </div>
             </div>
@@ -70,16 +61,6 @@
 import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
-
-/**
- * Exposed v-models:
- *  - v-model:enabled
- *  - v-model:amount
- *  - v-model:colorMorph   0..1
- *  - v-model:mask         boolean[]
- *  - v-model:attackBurst  boolean
- *  - v-model:burstMs      number (ms)
- */
 
 const props = withDefaults(defineProps<{
     enabled: boolean;
@@ -109,32 +90,27 @@ const emit = defineEmits<{
     (e: 'update:burstMs', v: number): void;
 }>();
 
-// locals
 const enabledLocal = ref(props.enabled);
 const amountLocal = ref(props.amount);
 const colorLocal = ref(props.colorMorph);
 const burstMsLocal = ref(props.burstMs ?? 80);
-const activeKnob = ref<null | 'noiseAmount' | 'colorMorph' | 'burstMs'>(null);
 
-// sync props -> locals
+const activeKnob = ref<null | 'noiseAmount' | 'burstMs'>(null);
+
 watch(() => props.enabled, v => { enabledLocal.value = v; });
 watch(() => props.amount, v => { amountLocal.value = v; });
 watch(() => props.colorMorph, v => { colorLocal.value = v; });
 watch(() => props.burstMs, v => { if (typeof v === 'number') burstMsLocal.value = v; });
 
-// emit locals -> parent
 watch(enabledLocal, v => { emit('update:enabled', v); emit('update:attackBurst', v); });
 watch(amountLocal, v => { emit('update:amount', Math.max(0, Math.min(1, v))); });
 watch(colorLocal, v => { emit('update:colorMorph', Math.max(0, Math.min(1, v))); });
 watch(burstMsLocal, v => { emit('update:burstMs', Math.max(5, Math.min(250, Math.round(v)))); });
 
-// also on mount, ensure parent gets synced burst state once
 if (props.attackBurst !== props.enabled) { emit('update:attackBurst', props.enabled); }
 
-// misc
 const accent = computed(() => props.color);
 
-/* ---------- Color stops & swatch ---------- */
 const stops = [
     { pos: 0.00, name: 'Brown', hex: '#6a4b2f' },
     { pos: 0.25, name: 'Pink', hex: '#f5a3bd' },
@@ -185,7 +161,7 @@ const swatchHex = computed(() => {
     return mixHex(a.hex, b.hex, w);
 });
 
-/* ---------- Per-Pad Noise mask helpers ---------- */
+// Per-Pad Noise mask  
 const hasMask = computed(() => Array.isArray(props.mask) && props.mask.length > 0);
 
 const emitMask = (out: boolean[]) => { emit('update:mask', out); };
@@ -196,7 +172,6 @@ function updateMask(make: (i: number, len: number) => boolean): void {
     emitMask(out);
 }
 function maskAll(): void { updateMask(() => true); }
-// removed maskClear
 function maskEvery2(): void { updateMask((i) => i % 2 === 0); }
 function maskEvery4(): void { updateMask((i) => i % 4 === 0); }
 function maskInvert(): void { if (!props.mask) { return; } emitMask(props.mask.map(v => !v)); }
@@ -212,7 +187,6 @@ function maskBackbeat(): void {
 </script>
 
 <style scoped>
-/* Layout: left controls row + right mask tools */
 .noise-layout {
     display: grid;
     grid-template-columns: minmax(0, 3fr) minmax(204px, 204px);
@@ -237,7 +211,11 @@ function maskBackbeat(): void {
     min-width: auto;
 }
 
-/* Swatch */
+.knob-wrap {
+    position: relative;
+    text-align: center;
+}
+
 .swatch-wrap {
     width: 100%;
 }
@@ -254,7 +232,23 @@ function maskBackbeat(): void {
     text-align: center;
 }
 
-/* Right column: stacked groups */
+.custom-tooltip {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -22px;
+    padding: 2px 6px;
+    font-size: 12px;
+    line-height: 1.2;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+    z-index: 2;
+}
+
 .mask-col {
     min-width: 0;
     max-width: 340px;
@@ -281,7 +275,6 @@ function maskBackbeat(): void {
     padding: 4px;
 }
 
-/* The inline dot lives in this component now */
 .pt-dot {
     width: 14px;
     height: 14px;
@@ -304,7 +297,6 @@ function maskBackbeat(): void {
         0 0 12px var(--pt-btn-glow);
 }
 
-/* Stack on narrow screens */
 @media (max-width: 640px) {
     .noise-layout {
         grid-template-columns: 1fr;

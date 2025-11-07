@@ -39,7 +39,7 @@
         <div class="pt-inline">
           <label class="pt-inline-check">
             <input type="checkbox" v-model="applyActiveOnly" />
-            Active only
+            Active Pads Only
           </label>
         </div>
       </section>
@@ -52,7 +52,7 @@ import { ref } from 'vue';
 
 const props = defineProps<{
   steps: boolean[];
-  velocities?: number[];       // 0..1
+  velocities?: number[];     
   currentTheme?: string;
 }>();
 
@@ -62,8 +62,8 @@ const emit = defineEmits<{
   (e: 'octave-shift', payload: number | { delta: number; onlyActive?: boolean }): void;
 }>();
 
-/* ---------- NEW: tuning helpers ---------- */
-const applyActiveOnly = ref(false);
+/* ---------- tuning helpers ---------- */
+const applyActiveOnly = ref(true);
 function shiftOctave(delta: number): void {
   emit('octave-shift', { delta, onlyActive: applyActiveOnly.value });
 }
@@ -204,9 +204,10 @@ function shapeReset(): void {
 
 /* small inline checkbox row */
 .pt-inline {
-  margin-top: 6px;
+  margin-top: 12px;
   color: var(--pt-muted);
-  font-size: 0.8rem;
+  font-size: 0.7rem;
+  line-height: normal;
 }
 
 .pt-inline-check {

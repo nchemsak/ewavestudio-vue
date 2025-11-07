@@ -9,8 +9,8 @@
 
 			<!-- Right rail: Visualizer (sticky) -->
 			<aside class="pt-card ds-visualizer">
-				<div class="mpc-wrap">
-					<MpcScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey"
+				<div class="nac-wrap">
+					<nacScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey"
 						@fkey="handleFKey" />
 				</div>
 			</aside>
@@ -129,8 +129,6 @@
 							</div>
 						</div>
 					</div>
-
-					<!-- overlay stays anywhere in the tree -->
 					<div v-if="stepsAdvanced.open" class="mm-overlay" @click="stepsAdvanced.open = false"></div>
 				</div>
 
@@ -214,29 +212,12 @@
 						</div>
 					</SectionWrap>
 				</div>
-				<!-- <div class="module noise">
-					<SectionWrap id="noise" title="" v-model="collapsibleState['noise']">
-						<div class="gen-panel noise-panel">
-							<div class="noise-inline">
-								<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
-									v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
-									v-model:mask="noiseMask" v-model:attackBurst="noiseAttackBurst"
-									v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
-							</div>
-						</div>
-					</SectionWrap>
-				</div> -->
 
 				<div class="module noise">
-					<!-- Wrap adds the animated TV-noise background when noiseEnabled is true -->
 					<div class="noise-tv-bg" :class="{ 'on': noiseEnabled }" :style="noiseModuleStyle">
-						<!-- Background overlay (same system as SynthStepGrid.vue, mode=static) -->
 						<div v-if="noiseEnabled" class="noise-overlay mode-static" aria-hidden="true">
 							<div class="grain"></div>
-							<!-- <div class="pepper"></div> -->
 						</div>
-
-						<!-- Foreground content stays exactly the same -->
 						<SectionWrap id="noise" title="" v-model="collapsibleState['noise']">
 							<div class="gen-panel noise-panel">
 								<div class="noise-inline">
@@ -322,32 +303,14 @@
 									@click.stop>
 									<div class="mm-menu-title">Advanced Options</div>
 
-									<div class="mm-opt" role="menuitem" @click="delayEnabled = !delayEnabled">
-										<span>Delay enabled</span>
-										<button class="mm-switch" :class="{ on: delayEnabled }"><span
-												class="kn"></span></button>
-									</div>
-
-									<div class="mm-opt" role="menuitem" @click="driveEnabled = !driveEnabled">
-										<span>Drive enabled</span>
-										<button class="mm-switch" :class="{ on: driveEnabled }"><span
-												class="kn"></span></button>
-									</div>
-
-									<div class="pt-rule" aria-hidden="true"></div>
-
 									<div class="mm-opt" role="menuitem" @click="delaySync = !delaySync">
 										<span>Delay: Sync with tempo</span>
 										<button class="mm-switch" :class="{ on: delaySync }"><span
 												class="kn"></span></button>
 									</div>
-									<div class="mm-opt" role="menuitem" @click="reverbEnabled = !reverbEnabled">
-										<span>Reverb enabled</span>
-										<button class="mm-switch" :class="{ on: reverbEnabled }"><span
-												class="kn"></span></button>
-									</div>
+
 									<div class="mm-reset" role="menuitem" @click.stop="resetDelayDrive()">
-										Reset Delay & Drive to defaults
+										Reset to defaults
 									</div>
 								</div>
 							</div>
@@ -372,7 +335,7 @@
 
 						<div id="seqPanel" class="accordion-collapse collapse" :class="{ show: seqOpen }">
 							<div class="accordion-body p-3">
-								<!-- Channels (unchanged) -->
+								<!-- Channels  -->
 								<section class="channels-section">
 									<div v-for="inst in orderedChannels" :key="inst.key || inst.name"
 										class="mb-3 channel-wrap">
@@ -481,7 +444,7 @@ import DelayEffect from './modules/DelayEffect.vue';
 import DriveEffect from './modules/DriveEffect.vue';
 import UnisonEffect from './modules/UnisonEffect.vue';
 import LFOGroup from './modules/LFOGroup.vue';
-import MpcScreen from './Screen.vue';
+import nacScreen from './Screen.vue';
 import PitchEnvModule from './modules/PitchEnvModule.vue';
 import { applyPitchEnv } from '../audio/pitchEnv';
 import FMModule from './modules/FMModule.vue';
@@ -501,7 +464,6 @@ import MelodyMaker from './MelodyMaker.vue';
 import { useProjectStore } from "../stores/projectStore";
 import { listProjects as repoList } from "../lib/storage/projects";
 import { downloadJson, importJson } from "../lib/storage/exportImport";
-// import { useAutosave } from '../composables/useAutosave';
 import ProjectControls from './ProjectControls.vue';
 
 // WAV Export
@@ -521,7 +483,6 @@ const stepLength = ref<16 | 32>(16);
 const showVelocity = ref(true);
 const showPitch = ref(true);
 
-// const melodyRef = ref<InstanceType<typeof MelodyMaker> | null>(null);
 const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 	getUi?: () => any;
 	setUi?: (u: any) => void;
@@ -529,7 +490,7 @@ const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 
 type MelodyUi = {
 	keyRoot: 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B';
-	keyScale: 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'wholeTone' | 'dorian' | 'lydian' | 'egyptian';
+	keyScale: 'none' | 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'wholeTone' | 'dorian' | 'lydian' | 'egyptian';
 	rangePreset: 'low' | 'mid' | 'high' | 'wide';
 	arpPattern: 'up' | 'down' | 'updown' | 'random';
 	arpRate: '1/4' | '1/8' | '1/16';
@@ -539,7 +500,7 @@ type MelodyUi = {
 
 const melodyUi = reactive<MelodyUi>({
 	keyRoot: 'A',
-	keyScale: 'major',
+	keyScale: 'none',
 	rangePreset: 'wide',
 	arpPattern: 'up',
 	arpRate: '1/16',
@@ -698,8 +659,6 @@ function closeOverlays() {
 	for (const k in info) (info as any)[k].open = false;
 }
 
-// ui.menus.steps = ui.menus.steps ?? { open: false };
-
 // single checkbox that controls both sliders
 const padSlidersOn = computed({
 	get: () => showVelocity.value && showPitch.value,
@@ -717,7 +676,8 @@ function closeMenus() {
 
 //Sequencer Accordian BEGIN
 
-const seqOpen = ref(localStorage.getItem('seqOpen') !== 'false');
+// const seqOpen = ref(localStorage.getItem('seqOpen') !== 'false');
+const seqOpen = ref(localStorage.getItem('seqOpen') === 'true');
 watch(seqOpen, v => localStorage.setItem('seqOpen', String(v)));
 
 //Sequencer Accordian END
@@ -755,7 +715,7 @@ const allClosed = computed(() => collapseIds.every(id => collapsibleState[id] ==
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Theming START
-const currentTheme = ref(''); // '', 'theme-light', or 'theme-synthwave'
+const currentTheme = ref('');
 // Theming END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -763,9 +723,9 @@ const currentTheme = ref(''); // '', 'theme-light', or 'theme-synthwave'
 // FM Synthesis START
 
 const fmEnabled = ref(false);
-const fmModFreq = ref(200);     // Hz when not using ratio
-const fmIndex = ref(4.0);       // 0..50 typical range
-const fmRatio = ref<number | null>(1); // start as 1:1, or null for Hz mode
+const fmModFreq = ref(200);
+const fmIndex = ref(4.0);
+const fmRatio = ref<number | null>(1);
 
 // FM Synthesis END
 
@@ -821,11 +781,11 @@ function midiToNamePref(m: number, mode: AccidentalMode = accidentalMode.value) 
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// MPC Screen BEGIN
+// nac Screen BEGIN
 const lcdText = ref('HARP  2');
 const activeFKey = ref<number>(1);
 const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner' | 'env'>('scope');
-const screen = ref<InstanceType<typeof MpcScreen> | null>(null);
+const screen = ref<InstanceType<typeof nacScreen> | null>(null);
 
 // Remember previous screen so can be restored after the knob is released
 const prevScreen = ref<{ view: typeof lcdView.value; fkey: number } | null>(null);
@@ -843,7 +803,6 @@ function jumpToEnv() {
 }
 
 function onEnvKnobStart() {
-	// If user pressed another F-key while already holding, treat that as override
 	if (envHoldCount > 0 && lcdView.value !== 'env') userOverrodeWhileHeld = true;
 	envHoldCount++;
 	jumpToEnv();
@@ -919,10 +878,9 @@ function startScope() {
 		const W = Math.round(canvas.clientWidth);
 		const H = Math.round(canvas.clientHeight);
 
-		// theme-aware background + trace style
-		const bg = readVar('--mpc-lcd-bg', '#b9bcba');
-		const trace = readVar('--mpc-scope-trace', '#111');
-		const width = parseFloat(readVar('--mpc-scope-width', '2')) || 2;
+		const bg = readVar('--nac-lcd-bg', '#b9bcba');
+		const trace = readVar('--nac-scope-trace', '#111');
+		const width = parseFloat(readVar('--nac-scope-width', '2')) || 2;
 
 		ctx.fillStyle = bg;
 		ctx.fillRect(0, 0, W, H);
@@ -965,11 +923,11 @@ function startSpectrogram() {
 	// Helper to read current theme vars from CSS
 	const readTheme = () => {
 		const s = getComputedStyle(canvas);
-		const bg = (s.getPropertyValue('--mpc-lcd-bg') || '#b9bcba').trim();
-		const low = (s.getPropertyValue('--mpc-spec-low') || '#4fc3f7').trim();
-		const mid = (s.getPropertyValue('--mpc-spec-mid') || '#00e676').trim();
-		const high = (s.getPropertyValue('--mpc-spec-high') || '#ffc400').trim();
-		const peak = (s.getPropertyValue('--mpc-spec-peak') || '#ffffff').trim();
+		const bg = (s.getPropertyValue('--nac-lcd-bg') || '#b9bcba').trim();
+		const low = (s.getPropertyValue('--nac-spec-low') || '#4fc3f7').trim();
+		const mid = (s.getPropertyValue('--nac-spec-mid') || '#00e676').trim();
+		const high = (s.getPropertyValue('--nac-spec-high') || '#ffc400').trim();
+		const peak = (s.getPropertyValue('--nac-spec-peak') || '#ffffff').trim();
 		return { bg, low, mid, high, peak };
 	};
 
@@ -1014,8 +972,8 @@ function startSpectrogram() {
 			ctx.imageSmoothingEnabled = false;
 			ctx.drawImage(
 				canvas,
-				1 * dpr, 0,                     // src x
-				canvas.width - 1 * dpr, canvas.height,  // src w/h in device px
+				1 * dpr, 0,
+				canvas.width - 1 * dpr, canvas.height,
 				0, 0,
 				canvas.width - 1 * dpr, canvas.height
 			);
@@ -1067,7 +1025,7 @@ function startTuner() {
 	// LATCH: persist last played note until a new one plays
 	let latchedHz = 0;
 	let latchedNote = '—';
-	let prevStep = -999; // track step changes so we only update once per step
+	let prevStep = -999; // track step changes - only update once per step
 
 	function draw() {
 		requestAnimationFrame(draw);
@@ -1077,10 +1035,10 @@ function startTuner() {
 		const W = canvas.clientWidth, H = canvas.clientHeight;
 
 		const css = getComputedStyle(canvas);
-		const bg = (css.getPropertyValue('--mpc-lcd-bg') || '#0f141b').trim();
-		const ink = (css.getPropertyValue('--mpc-scope-trace') || '#c7d6ff').trim();
+		const bg = (css.getPropertyValue('--nac-lcd-bg') || '#0f141b').trim();
+		const ink = (css.getPropertyValue('--nac-scope-trace') || '#c7d6ff').trim();
 
-		// --- update latch ONLY when we advance to a new step that actually plays ---
+		//  update latch ONLY when we advance to a new step that actually plays 
 		const inst = synthInstrument.value;
 		const step = currentStep.value;
 
@@ -1096,7 +1054,7 @@ function startTuner() {
 			}
 		}
 
-		// --- draw using latched values ---
+		//  draw using latched values 
 		ctx.fillStyle = bg;
 		ctx.fillRect(0, 0, W, H);
 
@@ -1140,10 +1098,10 @@ function startEnvViz() {
 
 		// Theme
 		const css = getComputedStyle(canvas);
-		const bg = (css.getPropertyValue('--mpc-lcd-bg') || '#0f141b').trim();
-		const ink = (css.getPropertyValue('--mpc-scope-trace') || '#c7d6ff').trim();
+		const bg = (css.getPropertyValue('--nac-lcd-bg') || '#0f141b').trim();
+		const ink = (css.getPropertyValue('--nac-scope-trace') || '#c7d6ff').trim();
 
-		const L = 14, R = 10, T = 10, B = 16;
+		const L = 14, R = 10, T = 25, B = 16;
 		const plotW = Math.max(1, W - L - R);
 		const plotH = Math.max(1, H - T - B);
 
@@ -1169,8 +1127,7 @@ function startEnvViz() {
 		ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L + plotW, T); ctx.stroke();
 		ctx.globalAlpha = 1;
 
-		// Envelope: attack (linear), decay (exp to ~-60 dB)
-		const tau = D / Math.log(1000); // D ≈ time to -60 dB
+		const tau = D / Math.log(1000);
 
 		ctx.lineWidth = 2;
 		ctx.strokeStyle = ink;
@@ -1178,14 +1135,14 @@ function startEnvViz() {
 
 		// Attack
 		const ax = timeToX(A);
-		ctx.moveTo(L, T + plotH);  // start at baseline (0 ms)
-		ctx.lineTo(ax, T);         // straight up to peak at A ms
+		ctx.moveTo(L, T + plotH);
+		ctx.lineTo(ax, T);
 
 		// Decay
-		const STEP_MS = Math.max(0.25, AXIS_MAX_MS / (plotW * 4)); // ~0.5–1.5 ms typical
+		const STEP_MS = Math.max(0.25, AXIS_MAX_MS / (plotW * 4));
 		for (let ms = A; ms <= AXIS_MAX_MS; ms += STEP_MS) {
 			const t = ms - A;
-			const amp = Math.exp(-t / tau);                 // 1 -> ~0 by D ms
+			const amp = Math.exp(-t / tau);
 			const x = timeToX(ms);
 			const y = T + (1 - Math.min(1, Math.max(0, amp))) * plotH;
 			ctx.lineTo(x, y);
@@ -1227,8 +1184,6 @@ onMounted(() => {
 	startEnvViz();
 	window.addEventListener('keydown', onGlobalKeydown, { capture: true });
 	window.addEventListener('keyup', onGlobalKeyup, { capture: true });
-	// document.addEventListener('click', onDocClick, { capture: true })
-
 	window.addEventListener('mouseup', stopTempoRepeat);
 	window.addEventListener('touchend', stopTempoRepeat);
 
@@ -1238,7 +1193,6 @@ onBeforeUnmount(() => {
 	window.removeEventListener('mouseup', handleMouseUp);
 	window.removeEventListener('keydown', onGlobalKeydown, { capture: true } as any);
 	window.removeEventListener('keyup', onGlobalKeyup, { capture: true } as any);
-	// document.removeEventListener('click', onDocClick, { capture: true })
 
 	if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
 	stopSnh();
@@ -1248,7 +1202,7 @@ onBeforeUnmount(() => {
 	clearTempoRepeat();
 
 });
-// MPC Screen END
+// nac Screen END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1282,7 +1236,6 @@ const padSettings = reactive({
 // Pad settings popover END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------------------------------------------------------
 
 const volume = ref(0.75);
 const tempo = ref(80);
@@ -1293,9 +1246,6 @@ const currentStep = ref(-1);
 const AC = window.AudioContext || (window as any).webkitAudioContext;
 const audioCtx = new AC();
 
-
-
-
 const masterGain = audioCtx.createGain();
 masterGain.gain.value = volume.value;
 masterGain.connect(audioCtx.destination);
@@ -1305,9 +1255,6 @@ const analyser = audioCtx.createAnalyser();
 analyser.fftSize = 2048;
 const dataArray = new Uint8Array(analyser.fftSize);
 masterGain.connect(analyser);
-
-
-
 
 const activeKnob = ref(null);
 const hoveredPad = ref(null);
@@ -1380,7 +1327,6 @@ function applyRandomWaves() {
 		pool[Math.floor(Math.random() * pool.length)]
 	) as any;
 }
-
 
 const isFineAdjust = ref(false);
 
@@ -1480,13 +1426,11 @@ const currentPadWave = computed<OscillatorType>({
 		const inst = instruments.value.find(i => i.name === padSettings.name) as any;
 		if (!inst) return selectedWaveform.value as OscillatorType;
 		const i = padSettings.index;
-		// fall back to global selection if array missing
 		return (inst.waveforms?.[i] ?? selectedWaveform.value) as OscillatorType;
 	},
 	set(w) {
 		const inst = instruments.value.find(i => i.name === padSettings.name) as any;
 		if (!inst) return;
-		// ensure per-pad array exists and is correct length
 		if (!Array.isArray(inst.waveforms) || inst.waveforms.length !== stepLength.value) {
 			inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as OscillatorType);
 		}
@@ -1600,28 +1544,29 @@ function onKeyRootChange(root: typeof selectedKeyRoot.value) {
 		(!inst.steps[i] && Math.abs(hz - oldBaseline) <= EPS) ? newBaseline : hz
 	);
 }
+
 // Pad pitch and volume sliders
-const activeVolumePad = ref(null); // format: `${instrumentName}-${index}`
+const activeVolumePad = ref(null);
 const activePitchPad = ref(null);
 
 const pitchEnvEnabled = ref(true);
 const envelopeEnabled = ref(true);
 const filterEnabled = ref(true);
 
-const filterCutoff = ref(5000); // Hz, default cutoff
-const filterResonance = ref(0.5); // Q factor
+const filterCutoff = ref(5000);
+const filterResonance = ref(0.5);
 
-const ampEnvAttackMs = ref(20)   // 20 ms
-const ampEnvDecayMs = ref(400)  // 400 ms
+const ampEnvAttackMs = ref(20);
+const ampEnvDecayMs = ref(400);
 
-const synthAttack = computed(() => ampEnvAttackMs.value / 1000)
-const synthDecay = computed(() => ampEnvDecayMs.value / 1000)
+const synthAttack = computed(() => ampEnvAttackMs.value / 1000);
+const synthDecay = computed(() => ampEnvDecayMs.value / 1000);
 
-const pitchEnvSemitones = ref(0); // Default = 1 octave up
+const pitchEnvSemitones = ref(0);
 const pitchEnvDecayMs = ref(300);
 
-const pitchMode = ref<'up' | 'down' | 'random'>('up')
-const pitchEnvDecay = computed(() => pitchEnvDecayMs.value / 1000)  // seconds
+const pitchMode = ref<'up' | 'down' | 'random'>('up');
+const pitchEnvDecay = computed(() => pitchEnvDecayMs.value / 1000);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1657,7 +1602,7 @@ function __mixHex(a: string, b: string, w: number) {
 }
 
 // Given morph t (0..1), pick adjacent NOISE_STOPS and blend their hexes.
-// Uses your existing NOISE_STOPS and noise keys.
+// Uses existing NOISE_STOPS and noise keys.
 function noiseHexFromMorph(t: number) {
 	t = Math.max(0, Math.min(1, t));
 	let a = NOISE_STOPS[0], b = NOISE_STOPS[NOISE_STOPS.length - 1];
@@ -1671,7 +1616,7 @@ function noiseHexFromMorph(t: number) {
 }
 
 const noiseModuleStyle = computed(() => {
-	// Use the same defaults/tunings as your SynthStepGrid instance
+	// Use the same defaults/tunings as SynthStepGrid instance
 	const tint = noiseHexFromMorph(noiseColor.value);
 	const alpha = 0.32;
 	const fps = 14;
@@ -1701,9 +1646,7 @@ const noiseEnabled = ref(false);
 const noiseMask = ref<boolean[]>(Array(stepLength.value).fill(true));
 
 const noiseAttackBurst = ref(false);
-const noiseBurstMs = ref(80); // ms
-
-// const noiseStereoWidth = ref(0.7);
+const noiseBurstMs = ref(80);
 
 // Noise END
 
@@ -1747,7 +1690,6 @@ wetTone.connect(delayWet);
 
 watch(delayTime, val => {
 	const t = audioCtx.currentTime;
-	// cancel any pending ramps, set current, then glide ~30ms
 	const current = delayNode.delayTime.value;
 	delayNode.delayTime.cancelScheduledValues(t);
 	delayNode.delayTime.setValueAtTime(current, t);
@@ -1762,7 +1704,7 @@ watch(delayMix, val => {
 		delayWet.gain.setTargetAtTime(val, t, 0.02);
 		delayDry.gain.setTargetAtTime(1 - val, t, 0.02);
 	} else {
-		// keep fully dry when disabled
+		// keep dry when disabled
 		delayWet.gain.setValueAtTime(0, t);
 		delayDry.gain.setValueAtTime(1, t);
 	}
@@ -1771,7 +1713,7 @@ watch(delayMix, val => {
 function applyDelayToneState() {
 	const type = delayToneEnabled.value
 		? (delayToneType.value === 'highpass' ? 'highpass' : 'lowpass')
-		: 'allpass'; // simple, click-free bypass
+		: 'allpass'; // click-free bypass
 
 	fbTone.type = type;
 	wetTone.type = type;
@@ -1784,7 +1726,6 @@ function applyDelayToneState() {
 
 watch([delayToneEnabled, delayToneType, delayToneHz], applyDelayToneState);
 onMounted(applyDelayToneState);
-
 
 watch(delayEnabled, on => {
 	applyDelayEnabled(on);
@@ -1834,7 +1775,7 @@ driveMakeup.connect(driveWet);
 driveWet.gain.value = driveMix.value;
 driveDry.gain.value = 1 - driveMix.value;
 
-// —— IMPORTANT: feed the sum, not the delay directly —— //
+//  IMPORTANT: feed the sum, not the delay directly
 driveDry.connect(driveSum);
 driveWet.connect(driveSum);
 
@@ -1864,15 +1805,12 @@ watch(driveMix, val => {
 const reverbEnabled = ref(false);
 const reverbMix = ref(0.18);            // 0..1
 const reverbDecay = ref(1.4);           // seconds
-
-// ==== Reverb ====
 const reverbConvolver = audioCtx.createConvolver();
 const reverbWet = audioCtx.createGain();
 
 driveSum.connect(reverbConvolver);
 reverbConvolver.connect(reverbWet);
 reverbWet.connect(masterGain);
-
 reverbWet.gain.value = 0;
 
 function ensureReverbIR() {
@@ -1907,17 +1845,19 @@ watch(reverbMix, (v) => {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Unison / Detune START
+
 const unisonEnabled = ref(false);
 const unisonVoices = ref(3);   // 1–6
 const detuneCents = ref(12);  // 0–100 cents per step
 const stereoSpread = ref(50);  // 0–100 %
+
 // Unison / Detune END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // TEMPO Controls START
 
-// --- Tempo helpers (whole-number BPM only) ---
+//  Tempo helpers (whole-number BPM only) 
 const MIN_BPM = 20;
 const MAX_BPM = 300;
 
@@ -1965,10 +1905,10 @@ watch(tempo, (v) => {
 
 // Export to wav file START
 
-// === Export: state ===
+//  Export: state 
 const isExporting = ref(false);
 
-// === Export: computed StepSequencer state (pure data for offline render) ===
+//  Export: computed StepSequencer state (pure data for offline render) 
 const exportState = computed<StepSequencerState>(() => {
 	const inst = synthInstrument.value!;
 	const stepsCount = stepLength.value;
@@ -2009,7 +1949,6 @@ const exportState = computed<StepSequencerState>(() => {
 				mask: [...noiseMask.value],
 				attackBurst: noiseAttackBurst.value,
 				burstMs: noiseBurstMs.value,
-				// stereoWidth: noiseStereoWidth.value,
 			} as any,
 
 			unison: { enabled: unisonEnabled.value, voices: unisonVoices.value, detuneCents: detuneCents.value, stereoSpread: stereoSpread.value },
@@ -2067,7 +2006,7 @@ const lfoDepthMax = computed(() => {
 	}
 });
 
-// --- LFO source + core gain ---
+//  LFO source + core gain 
 let lfoOsc: OscillatorNode | null = null;          // for sine/tri/saw/square
 let lfoSnh: ConstantSourceNode | null = null;      // for random (sample & hold)
 let snhTimer: number | null = null;
@@ -2437,7 +2376,7 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 	const gateEnd = startTime + Math.max(0.02, ampEnvDecayMs.value / 1000);
 	const noteEnd = envelopeEnabled.value ? naturalEnd : gateEnd;
 
-	// ---- Per-step blend (masked) ----
+	//  Per-step blend (masked) 
 	const addNoiseForThisPad = opts.addNoise !== false;
 	const blend = (addNoiseForThisPad && noiseEnabled.value)
 		? Math.min(Math.max(noiseAmount.value, 0), 1)
@@ -2458,7 +2397,7 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005);
 	}
 
-	// ===== UNISON =====
+	//  UNISON 
 	const voices = unisonEnabled.value ? Math.max(1, Math.min(6, unisonVoices.value)) : 1;
 	const detuneStep = (voices > 1) ? detuneCents.value : 0;
 	const spreadPct = (voices > 1) ? stereoSpread.value : 0;
@@ -2469,9 +2408,8 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		const voiceFilter = audioCtx.createBiquadFilter();
 		const voiceGain = audioCtx.createGain();
 		const panner = audioCtx.createStereoPanner();
-
-		// osc.type = selectedWaveform.value;
 		osc.type = waveType;
+
 		applyPitchEnv(osc, freq, startTime, {
 			enabled: pitchEnvEnabled.value,
 			semitones: pitchEnvSemitones.value,
@@ -2502,14 +2440,14 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		voiceGain.gain.setValueAtTime(1 / voices, startTime);
 		panner.pan.setValueAtTime((dNorm * spreadPct) / 100, startTime);
 
-		// ===== LFO routing per target (except 'gain' — handled post-envelope below) =====
+		//  LFO routing per target (except 'gain' — handled post-envelope below) 
 		if (lfoEnabled.value) {
 			if (lfoTarget.value === 'pitch') {
 				const lfoTap = audioCtx.createGain(); lfoTap.gain.value = 1;
 				lfoGain.connect(lfoTap).connect(osc.detune);
 
 			} else if (lfoTarget.value === 'filter') {
-				// --- keep cutoff in a safe band and smooth the control ---
+				//  keep cutoff in a safe band and smooth the control 
 				const f0 = filterEnabled.value ? filterCutoff.value : 20000;
 				const minHz = 30;
 				const maxHz = audioCtx.sampleRate * 0.45; // ~0.45*Nyquist for headroom
@@ -2521,7 +2459,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 				const lfoTap = audioCtx.createGain();
 				lfoTap.gain.value = scale;      // shrink to stay within [minHz, maxHz]
 
-				// Light smoothing to avoid "fast automation" spikes (control-rate ~ 120 Hz)
 				const ctrlLP = audioCtx.createBiquadFilter();
 				ctrlLP.type = 'lowpass';
 				ctrlLP.frequency.value = 120;
@@ -2529,7 +2466,7 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 				lfoGain.connect(lfoTap).connect(ctrlLP).connect(voiceFilter.frequency);
 
 			} else if (lfoTarget.value === 'resonance') {
-				// --- keep Q >= 0 and <= sensible cap, with smoothing ---
+				//  keep Q >= 0 and <= sensible cap, with smoothing 
 				const qBase = filterEnabled.value ? filterResonance.value : 0.0001;
 				const qMin = 0.0001, qMax = 20; // wide but safe musical range
 
@@ -2562,7 +2499,7 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		if (fmHandle) fmHandle.stop(noteEnd);
 	}
 
-	// ===== AMPLITUDE LFO (tremolo) — multiplicative, post-envelope =====
+	//  AMPLITUDE LFO (tremolo) — multiplicative, post-envelope 
 	// Assumes applyDepthScale() sets lfoGain.gain = 1 for 'gain' target (raw −1..+1)
 	let postAmpNode = oscEnvGain;
 
@@ -2604,7 +2541,7 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		postAmpNode = tremoloVca;
 	}
 
-	// ===== Route to the rest of the chain using postAmpNode =====
+	//  Route to the rest of the chain using postAmpNode 
 	if (driveEnabled.value) {
 		postAmpNode.connect(driveDry);
 		postAmpNode.connect(driveShaper);
@@ -2612,7 +2549,7 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		postAmpNode.connect(driveSum);
 	}
 
-	// ===== Noise =====
+	//  Noise 
 	if (noiseBlend > 0) {
 		// map morph 0..1 into two adjacent stops
 		const t = Math.min(1, Math.max(0, noiseColor.value));
@@ -2629,7 +2566,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		const bufB = noiseBuffers[upper.key];
 
 		if (bufA || bufB) {
-			// Color mix (mono)
 			const mix = audioCtx.createGain();
 			mix.gain.setValueAtTime(1, startTime);
 
@@ -2713,7 +2649,7 @@ async function exportCurrentPattern() {
 	const tail = exportState.value.tailSeconds;
 	const renderSeconds = patternDuration + tail;
 
-	// Guard against extreme cases (>30s for MVP)
+	// Guard against extreme cases
 	if (renderSeconds > 30) {
 		const ok = confirm(`This export will be ~${renderSeconds.toFixed(1)}s long. Continue?`);
 		if (!ok) return;
@@ -2853,12 +2789,12 @@ function generateNoiseBuffers() {
 	const length = audioCtx.sampleRate * 2; // 2 seconds
 	const createBuffer = () => audioCtx.createBuffer(1, length, audioCtx.sampleRate);
 
-	// === Base white ===
+	// white 
 	const white = createBuffer();
 	const wd = white.getChannelData(0);
 	for (let i = 0; i < length; i++) wd[i] = Math.random() * 2 - 1;
 
-	// === Pink (~ -3 dB/oct) === (Voss-McCartney-ish)
+	//Pink
 	const pink = createBuffer();
 	const pd = pink.getChannelData(0);
 	let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
@@ -2873,13 +2809,14 @@ function generateNoiseBuffers() {
 		pd[i] = b0 + b1 + b2 + b3 + b4 + b5 + (w * 0.5362);
 		b6 = w * 0.115926;
 	}
+
 	// normalize pink
 	(function norm(buf: Float32Array) {
 		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
 		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
 	})(pd);
 
-	// === Brown (~ -6 dB/oct) === (integrated white)
+	//  Brown
 	const brown = createBuffer();
 	const bd = brown.getChannelData(0);
 	let lastOut = 0;
@@ -2888,13 +2825,14 @@ function generateNoiseBuffers() {
 		lastOut = (lastOut + (0.02 * w)) / 1.02;
 		bd[i] = lastOut * 3.5;
 	}
+
 	// normalize brown
 	(function norm(buf: Float32Array) {
 		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
 		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
 	})(bd);
 
-	// === Blue (~ +3 dB/oct) === (first difference of white)
+	//  Blue (+3 dB/oct)
 	const blue = createBuffer();
 	const bud = blue.getChannelData(0);
 	let prev = 0;
@@ -2903,13 +2841,14 @@ function generateNoiseBuffers() {
 		prev = wd[i];
 		bud[i] = x;
 	}
-	// normalize
+
+	// normalize blue
 	(function norm(buf: Float32Array) {
 		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
 		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
 	})(bud);
 
-	// === Violet (~ +6 dB/oct) === (second difference of white)
+	//  Violet (~ +6 dB/oct)
 	const violet = createBuffer();
 	const vd = violet.getChannelData(0);
 	let prev1 = 0, prev2 = 0;
@@ -2918,6 +2857,7 @@ function generateNoiseBuffers() {
 		const d2 = d1 - prev2; prev2 = d1;
 		vd[i] = d2;
 	}
+	// normalize violet
 	(function norm(buf: Float32Array) {
 		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
 		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
@@ -3038,7 +2978,6 @@ function buildSnapshot() {
 				resonance: filterResonance.value,
 			},
 			noise: {
-
 				enabled: noiseEnabled.value,
 				type: 'legacy',
 				color: noiseColor.value,
@@ -3046,7 +2985,6 @@ function buildSnapshot() {
 				mask: [...noiseMask.value],
 				attackBurst: noiseAttackBurst.value,
 				burstMs: noiseBurstMs.value,
-				// stereoWidth: noiseStereoWidth.value,
 			},
 			unison: {
 				enabled: unisonEnabled.value,
@@ -3107,7 +3045,6 @@ function buildSnapshot() {
 			},
 
 		},
-		// Instruments incl. synth pad data
 		instruments: instruments.value.map(i => ({
 			name: i.name,
 			label: i.label,
@@ -3384,7 +3321,7 @@ onMounted(async () => {
 //RESET TO FACTORY DEFAULTS ON NEW PROJECT BEGIN 
 function resetUiToFactoryDefaults() {
 	currentTheme.value = '';
-	seqOpen.value = true;
+	seqOpen.value = false;
 	(Object.keys(collapsibleState) as Array<keyof typeof collapsibleState>)
 		.forEach((k) => { collapsibleState[k] = undefined; }); // let cards read their own localStorage
 
@@ -3406,13 +3343,11 @@ function resetUiToFactoryDefaults() {
 	filterResonance.value = 0.5;
 
 	noiseEnabled.value = false;
-	// noiseType.value = 'white';
 	noiseMask.value = Array(stepLength.value).fill(true);
 	noiseColor.value = 0.5;
 	noiseAmount.value = 0.25;
 	noiseAttackBurst.value = false;
 	noiseBurstMs.value = 80;
-	// noiseStereoWidth.value = 0.7;
 
 	unisonEnabled.value = false;
 	unisonVoices.value = 3;
@@ -3443,7 +3378,7 @@ function resetUiToFactoryDefaults() {
 	globalOctaveOffset.value = 0;
 
 	melodyUi.keyRoot = 'A';
-	melodyUi.keyScale = 'major';
+	melodyUi.keyScale = 'none';
 	melodyUi.rangePreset = 'wide';
 	melodyUi.arpPattern = 'up';
 	melodyUi.arpRate = '1/16';
@@ -3468,7 +3403,7 @@ function resetUiToFactoryDefaults() {
 	currentStep.value = -1;
 	isPlaying.value = false;
 
-	// ---- FX: Delay ----
+	// FX: Delay 
 	delayEnabled.value = false;
 	delaySync.value = true;
 	delayTime.value = 0.2;
@@ -3478,19 +3413,19 @@ function resetUiToFactoryDefaults() {
 	delayToneHz.value = 5000;
 	delayToneType.value = 'lowpass';
 
-	// ---- FX: Drive ----
+	// FX: Drive 
 	driveEnabled.value = false;
 	driveType.value = 'overdrive';
 	driveAmount.value = 0.4;
 	driveTone.value = 5000;
 	driveMix.value = 0.5;
 
-	// ---- FX: Reverb ----
+	// FX: Reverb 
 	reverbEnabled.value = false;
 	reverbMix.value = 0.18;
 	reverbDecay.value = 1.4;
 
-	// Close any open menus/popovers so the UI looks fresh
+	// Close any open menus/popovers
 	fxAdvanced.open = false;
 	stepsAdvanced.open = false;
 	closeOverlays?.();
@@ -3634,7 +3569,7 @@ function resetUiToFactoryDefaults() {
 	min-width: 96px;
 }
 
-.mpc-wrap {
+.nac-wrap {
 	margin-top: 0;
 }
 
@@ -3661,9 +3596,7 @@ function resetUiToFactoryDefaults() {
 	align-self: start;
 }
 
-/* =========================
-   OVERRIDES
-   ========================= */
+/* OVERRIDES */
 
 @media (min-width: 992px) {
 	.ds-visualizer {
@@ -3671,14 +3604,14 @@ function resetUiToFactoryDefaults() {
 		min-height: 0;
 	}
 
-	.ds-visualizer .mpc-wrap {
+	.ds-visualizer .nac-wrap {
 		flex: 1 1 auto;
 		display: flex;
 		min-height: 0;
 	}
 
-	.ds-visualizer :deep(.mpc-screen),
-	.ds-visualizer ::v-deep(.mpc-screen) {
+	.ds-visualizer :deep(.nac-screen),
+	.ds-visualizer ::v-deep(.nac-screen) {
 		display: grid;
 		grid-template-rows: auto 1fr auto;
 		width: 100%;
@@ -3686,8 +3619,8 @@ function resetUiToFactoryDefaults() {
 		min-height: 0;
 	}
 
-	.ds-visualizer :deep(.mpc-screen__lcd),
-	.ds-visualizer ::v-deep(.mpc-screen__lcd) {
+	.ds-visualizer :deep(.nac-screen__lcd),
+	.ds-visualizer ::v-deep(.nac-screen__lcd) {
 		height: auto !important;
 		min-height: 0;
 	}
@@ -3729,13 +3662,13 @@ function resetUiToFactoryDefaults() {
 		position: relative;
 	}
 
-	.ds-visualizer .mpc-wrap {
+	.ds-visualizer .nac-wrap {
 		flex: 1 1 auto;
 		min-height: 0;
 		display: flex;
 	}
 
-	.ds-visualizer .mpc-wrap>* {
+	.ds-visualizer .nac-wrap>* {
 		flex: 1 1 auto;
 		min-height: 0;
 		width: 100%;
@@ -3787,9 +3720,9 @@ function resetUiToFactoryDefaults() {
 }
 
 
-@media (min-width: 992px) {
+/* @media (min-width: 992px) {
 
-	.ds-visualizer :deep(.mpc-screen) {
+	.ds-visualizer :deep(.nac-screen) {
 		display: grid;
 		grid-template-rows: 1fr auto;
 		width: 100%;
@@ -3797,24 +3730,24 @@ function resetUiToFactoryDefaults() {
 		min-height: 0;
 	}
 
-	.ds-visualizer :deep(.mpc-screen__lcd) {
+	.ds-visualizer :deep(.nac-screen__lcd) {
 		height: auto !important;
 		min-height: 0;
 	}
 
-	.ds-visualizer :deep(.mpc-screen__lcd canvas) {
+	.ds-visualizer :deep(.nac-screen__lcd canvas) {
 		display: block;
 		width: 100%;
 		height: 100% !important;
 	}
 
-	.ds-visualizer :deep(.mpc-screen__fkeys) {
+	.ds-visualizer :deep(.nac-screen__fkeys) {
 		display: grid !important;
 		grid-template-columns: repeat(6, 1fr);
 		gap: .4rem;
 		padding: 0 .75rem;
 	}
-}
+} */
 
 @media (min-width: 992px) {
 	.ds-visualizer {
@@ -3825,14 +3758,14 @@ function resetUiToFactoryDefaults() {
 		z-index: 999;
 	}
 
-	.ds-visualizer .mpc-wrap {
+	.ds-visualizer .nac-wrap {
 		display: flex;
 		height: 100%;
 		min-height: 0;
 		width: 100%;
 	}
 
-	.ds-visualizer :deep(.mpc-screen) {
+	.ds-visualizer :deep(.nac-screen) {
 		display: grid !important;
 		grid-template-rows: 1fr auto;
 		height: 100%;
@@ -3840,22 +3773,22 @@ function resetUiToFactoryDefaults() {
 		width: 100%;
 	}
 
-	.ds-visualizer :deep(.mpc-screen__lcd) {
+	.ds-visualizer :deep(.nac-screen__lcd) {
 		height: 100% !important;
 		aspect-ratio: auto !important;
 		min-height: 0;
 	}
 
-	.ds-visualizer :deep(.mpc-screen__lcd canvas) {
+	.ds-visualizer :deep(.nac-screen__lcd canvas) {
 		width: 100%;
 		height: 100% !important;
 		display: block;
 
 	}
 
-	.ds-visualizer :deep(.mpc-screen__fkeys) {
+	.ds-visualizer :deep(.nac-screen__fkeys) {
 		display: grid !important;
-		grid-template-columns: repeat(6, 1fr);
+		grid-template-columns: repeat(4, 1fr);
 		gap: .4rem;
 		padding: 0 .75rem;
 	}
@@ -3882,7 +3815,6 @@ function resetUiToFactoryDefaults() {
 	align-items: center;
 	gap: 10px;
 	flex-wrap: wrap;
-	/* flex-wrap: nowrap; */
 }
 
 .pt-dot {
@@ -3945,9 +3877,7 @@ function resetUiToFactoryDefaults() {
 	width: auto !important;
 	padding: 0 !important;
 	margin: 0 !important;
-	/* display: inline-flex; */
 	align-items: center;
-	/* gap: 10px; */
 	min-width: 0;
 }
 
@@ -4145,7 +4075,7 @@ function resetUiToFactoryDefaults() {
 	position: relative;
 }
 
-.mpc-screen__lcd>canvas {
+.nac-screen__lcd>canvas {
 	image-rendering: pixelated;
 }
 
@@ -4246,7 +4176,6 @@ function resetUiToFactoryDefaults() {
 
 .stepper-btn {
 	min-width: 26px;
-	/* min-height: 26px; */
 	border-radius: 8px;
 	border: 1px solid var(--pt-hairline, #2a2f3a);
 	background: var(--pt-surface-2, #1c202b);
@@ -4298,7 +4227,7 @@ function resetUiToFactoryDefaults() {
 }
 
 
-/* === Noise Module TV static background === */
+/*  Noise Module TV static background  */
 .module.noise .noise-tv-bg {
 	position: relative;
 	border-radius: var(--pt-card-radius, 12px);
@@ -4311,7 +4240,7 @@ function resetUiToFactoryDefaults() {
 	z-index: 1;
 }
 
-/* Core overlay container (ported from SynthStepGrid.vue) */
+
 .module.noise .noise-overlay {
 	position: absolute;
 	inset: 0;
@@ -4319,7 +4248,6 @@ function resetUiToFactoryDefaults() {
 	z-index: 0;
 	pointer-events: none;
 
-	/* Tweakables (same names as pads) */
 	--grain-unit: 8px;
 	--grain-alpha: var(--noise-alpha, 0.24);
 
@@ -4340,7 +4268,6 @@ function resetUiToFactoryDefaults() {
 	mix-blend-mode: screen;
 	opacity: 1;
 
-	/* animation: noise-shift 700ms steps(6) infinite; */
 	background-position: 0 0, 0 0;
 }
 
@@ -4368,7 +4295,7 @@ function resetUiToFactoryDefaults() {
 	opacity: 1;
 }
 
-/* Black “pepper” speckles for readability */
+/* Black “pepper” speckles */
 .module.noise .noise-overlay .pepper {
 	position: absolute;
 	inset: 0;
@@ -4396,7 +4323,7 @@ function resetUiToFactoryDefaults() {
 	filter: contrast(115%);
 }
 
-/* Animations (copied from SynthStepGrid.vue) */
+/* Animations  */
 @keyframes noise-shift {
 	0% {
 		transform: translate3d(0, 0, 0) scale(1.0);

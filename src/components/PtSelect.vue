@@ -130,7 +130,7 @@ function selectIndex(i: number) {
     if (!opt || opt.disabled) return;
     emit('update:modelValue', opt.value);
     close();
-}
+} 
 
 /* Keyboard: button */
 function onKeyDownRoot(e: KeyboardEvent) {

@@ -1,12 +1,6 @@
 <!-- components/modules/DelayModule.vue -->
 <template>
     <KnobGroup v-model="localEnabled" title="Delay" :color="color" :showToggle="showToggle">
-        <!-- Header -->
-        <template #header-content>
-            <div class="pt-header-tools">
-                <span v-if="localSync" class="info"><i>{{ currentDivLabel }}</i></span>
-            </div>
-        </template>
 
         <!-- Time -->
         <div class="pt-knob-row">
@@ -253,15 +247,6 @@ watch(localSync, on => {
 });
 </script>
 <style scoped>
-/* Small readout on the right of the header */
-.info {
-    font-size: 10px;
-    font-style: italic;
-    position: absolute;
-    right: 6px;
-    top: 0;
-}
-
 .pt-header-tools {
     position: relative;
     min-height: 18px;
@@ -299,7 +284,7 @@ watch(localSync, on => {
 
 .tone-knob {
     flex: 0 0 auto;
-}
+} 
 
 .pt-dot::after {
     transition: background .2s ease, box-shadow .2s ease;
@@ -317,4 +302,6 @@ watch(localSync, on => {
 .pt-dot:active {
     transform: translateY(1px) scale(0.98);
 }
+
+
 </style>

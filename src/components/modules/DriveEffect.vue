@@ -115,4 +115,6 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     background: #FF4081;
     box-shadow: 0 0 6px #FF4081;
 }
+
+
 </style>

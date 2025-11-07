@@ -20,12 +20,20 @@
                 <!-- emitter -->
                 <circle cx="50" cy="26" r="4" />
                 <!-- broadcast waves -->
-                <path class="wave w1r" d="M50 26 a14 14 0 0 1 14 14" />
+                <!-- <path class="wave w1r" d="M50 26 a14 14 0 0 1 14 14" />
                 <path class="wave w1l" d="M50 26 a14 14 0 0 0 -14 14" />
                 <path class="wave w2r" d="M50 26 a26 26 0 0 1 26 26" />
                 <path class="wave w2l" d="M50 26 a26 26 0 0 0 -26 26" />
                 <path class="wave w3r" d="M50 26 a38 38 0 0 1 38 38" />
-                <path class="wave w3l" d="M50 26 a38 38 0 0 0 -38 38" />
+                <path class="wave w3l" d="M50 26 a38 38 0 0 0 -38 38" /> -->
+                <g class="waves" :key="animNonce" :class="{ on: modelValue }">
+                    <path class="wave w1r" d="M50 26 a14 14 0 0 1 14 14" />
+                    <path class="wave w1l" d="M50 26 a14 14 0 0 0 -14 14" />
+                    <path class="wave w2r" d="M50 26 a26 26 0 0 1 26 26" />
+                    <path class="wave w2l" d="M50 26 a26 26 0 0 0 -26 26" />
+                    <path class="wave w3r" d="M50 26 a38 38 0 0 1 38 38" />
+                    <path class="wave w3l" d="M50 26 a38 38 0 0 0 -38 38" />
+                </g>
                 <!-- tower + base -->
                 <path d="M30 84h40" />
                 <path d="M38 84L50 34l12 50" />
@@ -46,7 +54,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+// import { computed } from 'vue'
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     modelValue: { type: Boolean, default: false },
@@ -66,6 +75,11 @@ const colors = computed(() =>
 
 const uid = Math.random().toString(36).slice(2)
 const gid = `grad-${uid}`
+
+const animNonce = ref(0)
+watch(() => props.modelValue, (v) => {
+    if (v) animNonce.value++   // remounts the <g> so animation starts at 0%
+})
 </script>
 
 <style scoped>
@@ -156,5 +170,31 @@ const gid = `grad-${uid}`
     100% {
         opacity: 0;
     }
+}
+
+
+/* default: no rays visible */
+.waves .wave {
+  opacity: 0;
+}
+
+/* animate only when enabled, and start at 0% of the cycle */
+.waves.on .wave {
+  animation: radiate 1.6s cubic-bezier(.2,.6,.3,1) infinite both;
+  opacity: .35; /* will be overridden by keyframes, kept for mid-cycle look */
+}
+
+/* keep your staggering */
+.waves.on .w2r,
+.waves.on .w2l { animation-delay: .15s; }
+
+.waves.on .w3r,
+.waves.on .w3l { animation-delay: .30s; }
+
+/* keyframes ensure the first frames have zero opacity */
+@keyframes radiate {
+  0%   { opacity: 0; }
+  15%  { opacity: .55; }
+  100% { opacity: 0; }
 }
 </style>
