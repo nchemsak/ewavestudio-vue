@@ -66,6 +66,14 @@ $themes: (
             --pt-tile-1: #{mix(#000, map.get($t, surface1), 14%)};
             --pt-tile-2: #{mix(#000, map.get($t, surface2), 18%)};
         }
+
+        @if $name ==light {
+            --pt-tile-1: #{mix(#000, map.get($t, surface1), 6%)};
+            --pt-tile-2: #{mix(#000, map.get($t, surface2), 10%)};
+            /* slightly cooler, stronger accent ring on light */
+            --pt-btn-border: hsl(var(--pt-accent) 72% 46%);
+            --pt-btn-glow: hsl(var(--pt-accent) 90% 55% / 0.32);
+        }
     }
 }
 
@@ -596,7 +604,7 @@ $dark: map.get($themes, dark);
 
 .pt-seg.pt-seg-sm .pt-seg-btn {
     padding: 4px 8px;
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     min-height: 28px;
 }
 
@@ -690,7 +698,6 @@ $dark: map.get($themes, dark);
     transform: translateX(-50%) translateY(0) scale(1);
 }
 
-/* Header utilities */
 .knob-group-header {
     position: relative;
     overflow: visible;
@@ -706,7 +713,6 @@ $dark: map.get($themes, dark);
     white-space: normal;
 }
 
-/* Minimal info icon */
 .pt-info-icon {
     border: none;
     background: transparent;
@@ -788,7 +794,6 @@ $dark: map.get($themes, dark);
     border-left-color: var(--pt-panel);
 }
 
-// Flatten any accidental panel-in-panel
 .pt-panel .pt-panel {
     background: transparent;
     box-shadow: none;
@@ -805,14 +810,10 @@ $dark: map.get($themes, dark);
 
 .pt-cards.controlsWrapper>.pt-card,
 .pt-cards.controlsWrapper>* {
-    /* fallback selector for your CollapsibleCard root */
     flex: 1 1 380px;
     min-width: 300px;
-    /* when narrower, wrap to next line */
     max-width: 520px;
-    /* keep any single card from getting huge */
     min-inline-size: 0;
-    /* allow children to shrink */
 }
 
 .knob-group,
@@ -908,7 +909,6 @@ $dark: map.get($themes, dark);
     font-size: 18px;
 }
 
-/* Segmented control – pill variant */
 .pt-seg--pill {
     background: color-mix(in oklab, var(--pt-surface-2), transparent 30%);
     padding: 4px;
@@ -946,4 +946,81 @@ $dark: map.get($themes, dark);
     box-shadow:
         0 0 0 3px hsl(var(--pt-accent) 90% 60% / .18),
         0 6px 18px hsl(var(--pt-accent) 90% 60% / .22);
+}
+
+
+
+.theme-light {
+    --pad-wash-base: .22;
+    --pad-wash-scale: .70;
+    --pad-wash-sat: 88%;
+    --pad-wash-lit: 52%;
+
+    .padTEST {
+        background:
+            linear-gradient(145deg,
+                color-mix(in oklab, var(--pt-tile-1), black 6%),
+                color-mix(in oklab, var(--pt-tile-2), black 8%));
+        box-shadow:
+            inset 0 0 0 1px rgba(0, 0, 0, .06),
+            0 1px 0 rgba(0, 0, 0, .04);
+    }
+
+    .padTEST.selected::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+
+        --fill: calc(var(--vol, 0) * 1%);
+        --feather: 0.6%;
+
+        --_a: calc(var(--pad-wash-base, .22) + (var(--pad-wash-scale, .70) * (var(--vol, 0) / 100)));
+        background: hsl(var(--heat-h) var(--pad-wash-sat, 88%) var(--pad-wash-lit, 52%) / var(--_a));
+        mix-blend-mode: multiply;
+
+        -webkit-mask-image: linear-gradient(to top,
+                #000 0%,
+                #000 calc(var(--fill) - var(--feather)),
+                #000 var(--fill),
+                transparent calc(var(--fill) + var(--feather)),
+                transparent 100%);
+        mask-image: linear-gradient(to top,
+                #000 0%,
+                #000 calc(var(--fill) - var(--feather)),
+                #000 var(--fill),
+                transparent calc(var(--fill) + var(--feather)),
+                transparent 100%);
+
+        box-shadow: inset 0 calc(var(--feather) * -1) 0 rgba(0, 0, 0, .04);
+        z-index: 0;
+    }
+
+    .padTEST.playing {
+        outline: 2px solid hsl(var(--pt-accent) 82% 52% / .9);
+        outline-offset: -2px;
+        box-shadow:
+            0 0 0 4px hsl(var(--pt-accent) 90% 60% / .2),
+            inset 0 0 0 1px rgba(0, 0, 0, .06);
+    }
+
+    /* Noise tints were getting lost on white; make them cooperate with the wash */
+    .padTEST .noise-overlay {
+        mix-blend-mode: overlay !important;
+    }
+
+    .padTEST .noise-overlay.mode-static,
+    .padTEST .noise-overlay.mode-svg,
+    .padTEST .noise-overlay.mode-gif {
+        mix-blend-mode: multiply !important;
+        filter: saturate(1.12) contrast(1.05);
+    }
+
+    /* Keep tiny badges legible */
+    .wave-badge,
+    .pad-head .pad-step-num {
+        background: linear-gradient(145deg, rgba(0, 0, 0, .68), rgba(0, 0, 0, .42));
+        border-color: rgba(255, 255, 255, .16);
+    }
 }

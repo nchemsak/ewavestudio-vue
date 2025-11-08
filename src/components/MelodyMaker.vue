@@ -26,7 +26,6 @@
                 </div>
             </div>
 
-
             <div class="mm-head-row2">
                 <label class="mm-field">
                     <span class="mm-label">Scale</span>
@@ -89,15 +88,7 @@
                     <button class="mm-switch" :class="{ on: applyScope === 'active' }"><span class="kn"></span></button>
                 </div>
 
-                <div class="mm-opt" role="menuitem" @click="startOnTonic = !startOnTonic">
-                    <span>Start on tonic</span>
-                    <button class="mm-switch" :class="{ on: startOnTonic }"><span class="kn"></span></button>
-                </div>
-
-                <div class="mm-opt" role="menuitem" @click="emphasizeDownbeats = !emphasizeDownbeats">
-                    <span>Emphasize downbeats</span>
-                    <button class="mm-switch" :class="{ on: emphasizeDownbeats }"><span class="kn"></span></button>
-                </div>
+                <!-- Removed: Start on tonic toggle -->
 
                 <div class="mm-sep"></div>
 
@@ -105,21 +96,8 @@
                 <div class="mm-subtitle">Arpeggio</div>
 
                 <div class="mm-opt" role="menuitem" @click="arpSeventhOnDownbeat = !arpSeventhOnDownbeat">
-                    <span>Include 7th on downbeats</span>
+                    <span>7th on downbeats</span>
                     <button class="mm-switch" :class="{ on: arpSeventhOnDownbeat }"><span class="kn"></span></button>
-                </div>
-
-                <div class="mm-opt" role="menuitem" @click.stop="
-                    arpStart = arpStart === 'low' ? 'center' :
-                        arpStart === 'center' ? 'high' :
-                            arpStart === 'high' ? 'random' : 'low'
-                    ">
-                    <span>Arp start: {{ arpStart }}</span>
-                </div>
-
-                <div class="mm-opt" role="menuitem"
-                    @click.stop="arpRepeat = (arpRepeat === 3 ? 1 : (arpRepeat + 1 as 1 | 2 | 3))">
-                    <span>Repeat each note: ×{{ arpRepeat }}</span>
                 </div>
 
                 <div class="mm-opt" role="menuitem" @click.stop="arpStride = (arpStride === 1 ? 2 : 1)">
@@ -173,12 +151,10 @@ const props = defineProps<{
     initialArpTones?: 'chord' | 'scale';
 }>();
 
-
 /*  Defaults  */
 const DEFAULTS_MELODY = {
     applyScope: 'active' as 'active' | 'all',
-    startOnTonic: false,
-    emphasizeDownbeats: true,
+    // removed: startOnTonic from defaults (always on now)
 };
 
 const DEFAULTS_ARP = {
@@ -187,8 +163,6 @@ const DEFAULTS_ARP = {
     octaves: 1 as 1 | 2 | 3 | 4,
     tones: 'chord' as 'chord' | 'scale',
     seventhOnDownbeat: false,
-    start: 'center' as 'low' | 'center' | 'high' | 'random',
-    repeat: 1 as 1 | 2 | 3,
     stride: 1 as 1 | 2,
     hop: false,
 };
@@ -203,7 +177,6 @@ const emit = defineEmits<{
     (e: 'key-scale-change', scale: KeyScale): void;
     (e: 'range-preset-change', preset: PresetKey): void;
 }>();
-
 
 /*  Theory  */
 const ROOTS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
@@ -224,11 +197,9 @@ const SCALE_LABELS: Record<string, string> = {
     wholeTone: 'Whole-tone', dorian: 'Dorian', lydian: 'Lydian', egyptian: 'Egyptian Pentatonic'
 };
 
-
 const keyRoot = ref<RootNote>(props.initialKeyRoot ?? 'A');
 type KeyScale = 'none' | keyof typeof SCALES;
 const keyScale = ref<KeyScale>(props.initialKeyScale ?? 'none');
-
 
 /* Mini keyboard layout */
 const NATURALS: Array<{ n: Extract<RootNote, 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B'>; hasSharp: boolean; sharp?: RootNote }> = [
@@ -299,7 +270,6 @@ const poolSummary = computed(() => {
         if (pref === 'random') {
             return `${keyRoot.value} random octaves (${PRESETS.wide.minOct}–${PRESETS.wide.maxOct})`;
         }
-        // Clamp the chosen octave into the frequency window if needed
         const semi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
         let oct = pref;
         const inRange = (o: number) => {
@@ -308,7 +278,6 @@ const poolSummary = computed(() => {
             return f >= fMin && f <= fMax;
         };
         if (!inRange(oct)) {
-            // Nudge toward a nearby octave that fits (simple fallbacks)
             for (const tryOct of [oct - 1, oct + 1, oct - 2, oct + 2]) {
                 if (tryOct >= 0 && inRange(tryOct)) { oct = tryOct; break; }
             }
@@ -317,12 +286,10 @@ const poolSummary = computed(() => {
         return `${midiToName(m)} only`;
     }
 
-    // Original summary for scale modes
     const pool = buildCandidateMidiPool(keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, fMin, fMax);
     if (!pool.length) return '';
     return `${midiToName(pool[0])}–${midiToName(pool[pool.length - 1])} • ${pool.length} notes`;
 });
-
 
 const keyOptions = ROOTS.map(r => ({ label: r, value: r }));
 const scaleOptions = [
@@ -371,7 +338,7 @@ function degreeIndexFor(semiAbs: number, rootSemi: number, steps: number[]) {
 }
 
 function makeRng(s: number) {
-    return () => { s |= 0; s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    return () => { s |= 0; s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t ^= t + Math.imul(t ^ (t >>> 7), 61 | s); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
 let clickNonce = 0;
@@ -384,6 +351,9 @@ function freshRng() {
         (Date.now() & 0xffffffff);
     return makeRng(mixed);
 }
+
+// Always-on: start on tonic
+const startOnTonic = ref(true);
 
 function smartGenerate(): void {
     if (!props.frequencies || !props.frequencies.length) return;
@@ -515,7 +485,7 @@ function smartGenerate(): void {
             const di = degreeIndexFor(semiAbs, rootSemi, stepsArr);
 
             let w = baseWeights[di];
-            if (emphasizeDownbeats.value && (i % 4 === 0)) {
+            if (i % 4 === 0) {
                 const isTonic = di === 0;
                 const isFifth = stepsArr[di] === 7;
                 if (isTonic || isFifth) w *= 1.3;
@@ -541,14 +511,12 @@ function smartGenerate(): void {
     emit('update:frequencies', out);
 }
 
-
 function preferredOctaveForPreset(p: PresetKey): number | 'random' {
     if (p === 'low') return 3;
     if (p === 'mid') return 4;
     if (p === 'high') return 5;
     return 'random'; // 'wide'
 }
-
 
 // Arpeggiator 
 const arpPattern = ref<'up' | 'down' | 'updown' | 'random'>(props.initialArpPattern ?? 'up');
@@ -557,8 +525,6 @@ const arpOctaves = ref<1 | 2 | 3 | 4>(props.initialArpOctaves ?? 1);
 const arpTones = ref<'chord' | 'scale'>(props.initialArpTones ?? 'chord');
 
 const arpSeventhOnDownbeat = ref(false);
-const arpStart = ref<'low' | 'center' | 'high' | 'random'>('center');
-const arpRepeat = ref<1 | 2 | 3>(1);
 const arpStride = ref<1 | 2>(1);
 const arpHop = ref(false);
 
@@ -609,10 +575,21 @@ function nearestIndexIn(arr: number[], base: number): number | null {
     return best;
 }
 
-function outwardOffsets(n: number) {
-    const out: number[] = [];
-    for (let k = 1; k <= n; k++) out.push(k * (k % 2 ? 1 : -1));
-    return out;
+function pickBaseTonicByRange(tonicGroup: number[], centerMidi: number): number {
+    if (!tonicGroup.length) return centerMidi;
+    switch (rangePreset.value) {
+        case 'low': return tonicGroup[0];
+        case 'high': return tonicGroup[tonicGroup.length - 1];
+        case 'mid': {
+            const idx = Math.min(tonicGroup.length - 1, Math.ceil((tonicGroup.length - 1) / 2));
+            return tonicGroup[idx];
+        }
+        case 'wide':
+        default: {
+            const i0 = nearestIndexIn(tonicGroup, centerMidi) ?? 0;
+            return tonicGroup[i0];
+        }
+    }
 }
 
 function bakeArp(): void {
@@ -646,67 +623,103 @@ function bakeArp(): void {
         const semis = chordIdx.filter(i => i < stepsArr.length).map(i => (rootSemi + stepsArr[i]) % 12);
         return Array.from(new Set(semis));
     };
-    const toneSemisArr = toneSemitones(arpTones.value);
+    const degreeSemis = toneSemitones(arpTones.value);
 
     const groupsBySemi: Record<number, number[]> = {};
-    for (const s of toneSemisArr) groupsBySemi[s] = [];
+    for (const s of degreeSemis) groupsBySemi[s] = [];
     for (const m of pool) {
         const s = ((m % 12) + 12) % 12;
         if (groupsBySemi[s]) groupsBySemi[s].push(m);
     }
-    for (const s of toneSemisArr) groupsBySemi[s].sort((a, b) => a - b);
+    for (const s of degreeSemis) groupsBySemi[s].sort((a, b) => a - b);
+
+    const tonicSemi = (rootSemi + (stepsArr[0] ?? 0)) % 12;
+    const tonicGroup = groupsBySemi[tonicSemi] || [];
+
+    // ceiling pick helper
+    const pickAtOrAbove = (g: number[], targetBase: number): number | null => {
+        if (!g.length) return null;
+        const idx = g.findIndex(m => m >= targetBase);
+        if (idx !== -1) return g[idx];
+        return g[g.length - 1];
+    };
 
     let ladder: number[] = [];
-    for (const s of toneSemisArr) {
-        const g = groupsBySemi[s] || [];
-        if (!g.length) continue;
+    let startTonicPick: number | null = null;
 
-        const i0 = nearestIndexIn(g, center);
-        if (i0 == null) continue;
+    if (tonicGroup.length) {
+        const baseTonic = pickBaseTonicByRange(tonicGroup, center);
 
-        const picks: number[] = [g[i0]];
-        const need = (arpOctaves.value - 1);
-        const offs = outwardOffsets(need);
+        for (let oct = 0; oct < arpOctaves.value; oct++) {
+            const targetBase = baseTonic + 12 * oct;
 
-        for (const off of offs) {
-            const idx = i0 + off;
-            if (idx >= 0 && idx < g.length) picks.push(g[idx]);
-            if (picks.length >= arpOctaves.value) break;
+            for (const s of degreeSemis) {
+                const g = groupsBySemi[s] || [];
+                if (!g.length) continue;
+
+                const pick = pickAtOrAbove(g, targetBase);
+                if (pick == null) continue;
+
+                if (s === tonicSemi && oct === 0 && startTonicPick == null) {
+                    startTonicPick = pick;
+                }
+                ladder.push(pick);
+            }
         }
 
-        ladder.push(...picks);
+        ladder = [...new Set(ladder)].sort((a, b) => a - b);
+        if (!ladder.length) return;
+    } else {
+        for (const s of degreeSemis) {
+            const g = groupsBySemi[s] || [];
+            if (!g.length) continue;
+            const i0 = nearestIndexIn(g, center);
+            if (i0 != null) ladder.push(g[i0]);
+        }
+        ladder = [...new Set(ladder)].sort((a, b) => a - b);
+        if (!ladder.length) return;
     }
-    ladder = [...new Set(ladder)].sort((a, b) => a - b);
-    if (!ladder.length) return;
 
-    const baseIdx = indicesWithStride(ladder.length, arpStride.value);
+    // Stride then rotate to start on tonic
+    const baseIdxRaw = indicesWithStride(ladder.length, arpStride.value);
 
-    let startIdx = 0;
-    if (arpStart.value === 'low') startIdx = 0;
-    else if (arpStart.value === 'high') startIdx = ladder.length - 1;
-    else if (arpStart.value === 'center') startIdx = Math.floor(ladder.length / 2);
-    else { const r = freshRng(); startIdx = Math.floor(r() * ladder.length); }
+    const tonicIdxInLadder = (() => {
+        if (startTonicPick != null) {
+            const exact = ladder.indexOf(startTonicPick);
+            if (exact !== -1) return exact;
+            const near = nearestIndexIn(ladder, startTonicPick);
+            return near ?? 0;
+        }
+        return 0;
+    })();
 
-    const posOfStart = baseIdx.indexOf(startIdx);
-    const rotated = posOfStart >= 0 ? rotate(baseIdx, posOfStart) : baseIdx;
+    const posInStrided = baseIdxRaw.indexOf(tonicIdxInLadder);
+    const rotateBy = (posInStrided !== -1)
+        ? posInStrided
+        : (nearestIndexIn(baseIdxRaw, tonicIdxInLadder) ?? 0);
 
+    const baseIdx = rotate(baseIdxRaw, rotateBy);
+
+    // Pattern ordering
     let orderIdx: number[] = [];
     switch (arpPattern.value) {
-        case 'up':
-            orderIdx = rotated;
+        case 'up': {
+            orderIdx = baseIdx;
             break;
-        case 'down':
-            orderIdx = rotated.slice().reverse();
+        }
+        case 'down': {
+            orderIdx = baseIdx.slice().reverse();
             break;
+        }
         case 'updown': {
-            const up = rotated;
-            const down = rotated.slice().reverse().slice(1, -1);
+            const up = baseIdx;
+            const down = baseIdx.slice().reverse().slice(1, -1);
             orderIdx = up.concat(down.length ? down : []);
             break;
         }
         case 'random':
         default: {
-            orderIdx = rotated.slice();
+            orderIdx = baseIdx.slice();
             const r = freshRng();
             for (let i = orderIdx.length - 1; i > 0; i--) {
                 const j = Math.floor(r() * (i + 1));
@@ -717,6 +730,7 @@ function bakeArp(): void {
     const order = orderIdx.map(i => ladder[i]);
     if (!order.length) return;
 
+    // Grouping by rate
     const RATE_TO_GROUP: Record<string, number> = { '1/4': 4, '1/8': 2, '1/16': 1 };
     const groupSize = RATE_TO_GROUP[arpRate.value] ?? 1;
 
@@ -751,7 +765,6 @@ function bakeArp(): void {
     }
 
     let p = 0;
-    let repeatsLeft = arpRepeat.value;
 
     for (const g of groupsOfIdx) {
         if (!g.length) continue;
@@ -765,14 +778,11 @@ function bakeArp(): void {
         }
 
         if (midi === undefined) {
-            if (repeatsLeft <= 0) { p++; repeatsLeft = arpRepeat.value; }
-            repeatsLeft--;
-
-            midi = order[p % order.length];
+            midi = order[(p++) % order.length];
             midi = maybeHop(midi);
         }
 
-        const hz = midiToFreq(midi);
+        const hz = 440 * Math.pow(2, (midi - 69) / 12);
         for (const stepIndex of g) out[stepIndex] = hz;
     }
 
@@ -800,8 +810,6 @@ function openAdvanced(e?: MouseEvent) {
 }
 
 const applyScope = ref<'all' | 'active'>('active');
-const startOnTonic = ref(false);
-const emphasizeDownbeats = ref(true);
 
 // Undo buffer
 const lastFrequencies = ref<number[] | null>(null);
@@ -815,8 +823,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 
 function resetAdvanced() {
     applyScope.value = DEFAULTS_MELODY.applyScope;
-    startOnTonic.value = DEFAULTS_MELODY.startOnTonic;
-    emphasizeDownbeats.value = DEFAULTS_MELODY.emphasizeDownbeats;
 
     arpPattern.value = DEFAULTS_ARP.pattern;
     arpRate.value = DEFAULTS_ARP.rate;
@@ -824,8 +830,6 @@ function resetAdvanced() {
     arpTones.value = DEFAULTS_ARP.tones;
 
     arpSeventhOnDownbeat.value = DEFAULTS_ARP.seventhOnDownbeat;
-    arpStart.value = DEFAULTS_ARP.start;
-    arpRepeat.value = DEFAULTS_ARP.repeat;
     arpStride.value = DEFAULTS_ARP.stride;
     arpHop.value = DEFAULTS_ARP.hop;
 }
@@ -867,6 +871,7 @@ defineExpose({ openAdvanced, getUi, setUi });
 </script>
 
 <style scoped>
+/* (styles unchanged) */
 .melody-maker {
     position: relative;
     width: 100%;
@@ -1133,22 +1138,13 @@ defineExpose({ openAdvanced, getUi, setUi });
     color: #111;
     cursor: pointer;
     transition: transform .03s ease, box-shadow .12s ease, filter .12s ease;
-    background:
-        linear-gradient(180deg, var(--white1), var(--white2)) padding-box,
-        linear-gradient(145deg, rgb(0 0 0 / .18), rgb(255 255 255 / .06)) border-box;
+    background: linear-gradient(180deg, var(--white1), var(--white2)) padding-box, linear-gradient(145deg, rgb(0 0 0 / .18), rgb(255 255 255 / .06)) border-box;
     border: 1px solid rgb(0 0 0 / .48);
-    box-shadow:
-        inset 0 1px 0 rgb(255 255 255 / .06),
-        0 2px 0 rgb(0 0 0 / .5),
-        0 6px 14px rgb(0 0 0 / .22);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .06), 0 2px 0 rgb(0 0 0 / .5), 0 6px 14px rgb(0 0 0 / .22);
 }
 
 .kb-white.is-active {
-    box-shadow:
-        inset 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .85),
-        inset 0 1px 0 rgb(255 255 255 / .05),
-        0 2px 0 rgb(0 0 0 / .5),
-        0 8px 18px rgb(0 0 0 / .28);
+    box-shadow: inset 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .85), inset 0 1px 0 rgb(255 255 255 / .05), 0 2px 0 rgb(0 0 0 / .5), 0 8px 18px rgb(0 0 0 / .28);
     background: radial-gradient(circle at center, #d9a0c3 0%, #9b8cb4 75%, #736c92 100%);
 }
 
@@ -1182,23 +1178,14 @@ defineExpose({ openAdvanced, getUi, setUi });
     color: #e7ecff;
     cursor: pointer;
     transition: transform .03s ease, box-shadow .12s ease, filter .12s ease;
-    background:
-        linear-gradient(180deg, var(--black1), var(--black2)) padding-box,
-        linear-gradient(145deg, #1a2334, #0b0f1a) border-box;
+    background: linear-gradient(180deg, var(--black1), var(--black2)) padding-box, linear-gradient(145deg, #1a2334, #0b0f1a) border-box;
     border: 1px solid rgb(0 0 0 / .7);
-    box-shadow:
-        inset 0 1px 0 rgb(255 255 255 / .05),
-        0 2px 0 rgb(0 0 0 / .78),
-        0 6px 12px rgb(0 0 0 / .32);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .05), 0 2px 0 rgb(0 0 0 / .78), 0 6px 12px rgb(0 0 0 / .32);
     z-index: 2;
 }
 
 .kb-black.is-active {
-    box-shadow:
-        0 0 0 2px hsl(var(--pt-accent) 90% 60% / .9),
-        inset 0 1px 0 rgb(255 255 255 / .05),
-        0 2px 0 rgb(0 0 0 / .8),
-        0 8px 16px rgb(0 0 0 / .4);
+    box-shadow: 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .9), inset 0 1px 0 rgb(255 255 255 / .05), 0 2px 0 rgb(0 0 0 / .8), 0 8px 16px rgb(0 0 0 / .4);
     background: radial-gradient(circle at center, #d9a0c3 0%, #9b8cb4 75%, #736c92 100%);
 }
 
