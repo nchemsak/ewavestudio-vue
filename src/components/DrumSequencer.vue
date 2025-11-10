@@ -429,9 +429,14 @@
 				</div>
 			</section>
 		</div>
-		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
+		<!-- <PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave" :minHz="MIN_PAD_HZ"
-			:maxHz="MAX_PAD_HZ" :anchorRect="padPopover.anchorRect" :title="padPopover.title" />
+			:maxHz="MAX_PAD_HZ" :anchorRect="padPopover.anchorRect" :title="padPopover.title" /> -->
+
+		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
+			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
+			v-model:noiseEnabled="padNoiseEnabled" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
+			:anchorRect="padPopover.anchorRect" :title="padPopover.title" />
 	</div>
 </template>
 
@@ -1438,6 +1443,27 @@ const currentPadWave = computed<OscillatorType>({
 	}
 });
 
+// Per-pad Noise toggle for the pad settings popover
+const padNoiseEnabled = computed<boolean>({
+  get() {
+    const i = padSettings.index;
+    // default "true" (noise allowed) if out of range or not set yet
+    return (i >= 0 && i < noiseMask.value.length)
+      ? (noiseMask.value[i] ?? true)
+      : true;
+  },
+  set(v: boolean) {
+    const i = padSettings.index;
+    if (i < 0) return;
+    // ensure mask exists & sized (should already be handled by your setStepLength, but keep it safe)
+    if (!Array.isArray(noiseMask.value) || noiseMask.value.length !== stepLength.value) {
+      noiseMask.value = Array(stepLength.value).fill(true);
+    }
+    noiseMask.value[i] = !!v;
+  }
+});
+
+
 const currentPadHz = computed({
 	get() {
 		const inst = instruments.value.find(i => i.name === padSettings.name);
@@ -2249,6 +2275,23 @@ function stopEditingLabel(instrument) {
 	hoveredLabel.value = null;
 }
 
+
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// Equalize waveform volume
+
+function waveformGain(type: OscillatorType): number {
+	switch (type) {
+		case 'square': return 0.5011872336;
+		case 'sawtooth': return 0.7079457844;
+		case 'triangle':
+		case 'sine':
+		default: return 1.0;
+	}
+}
+
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 function addCustomChannel() {
@@ -2382,10 +2425,21 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		? Math.min(Math.max(noiseAmount.value, 0), 1)
 		: 0;
 
+	// const oscBlend = 1 - blend;
+	// const noiseBlend = blend;
+	// const safeOscGain = Math.max(0.0001, velocity * oscBlend);
+	// const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
+
 	const oscBlend = 1 - blend;
 	const noiseBlend = blend;
-	const safeOscGain = Math.max(0.0001, velocity * oscBlend);
+
+	// Apply waveform loudness compensation to the TONAL path only
+	const wfComp = waveformGain(waveType);
+	const safeOscGain = Math.max(0.0001, velocity * oscBlend * wfComp);
+
 	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
+
+
 
 	// Single amplitude envelope for the OSC path
 	if (envelopeEnabled.value) {

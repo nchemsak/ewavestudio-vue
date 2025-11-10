@@ -1,6 +1,4 @@
 // src/audio/export/scheduleStepSequencer.ts
-// Pure offline scheduler for the Step Sequencer synth.
-// Rebuilds a minimal version of your live graph inside any BaseAudioContext.
 
 import { applyPitchEnv } from "../pitchEnv";
 import { startFM } from "../fm";
@@ -8,33 +6,29 @@ import { startFM } from "../fm";
 export type StepSequencerState = {
   bpm: number;
   stepsCount: 16 | 32;
-  swing: number;                // 0..0.5
-  masterVolume: number;         // 0..1
-  channelVolume: number;        // 0..1
+  swing: number;
+  masterVolume: number;
+  channelVolume: number;
 
   pattern: {
     active: boolean[];
-    velocities: number[];        // 0..1
-    pitches: number[];           // Hz
-    waveforms: OscillatorType[]; // per-step wave type (fallback already applied)
+    velocities: number[];
+    pitches: number[];
+    waveforms: OscillatorType[];
   };
 
   synth: {
     envelope: { enabled: boolean; attackMs: number; decayMs: number; };
     filter: { enabled: boolean; cutoff: number; resonance: number; };
 
-    // NEW noise shape to match DrumSequencer.vue exportState
     noise: {
       enabled: boolean;
-      // Continuous color morph 0..1. If provided, we crossfade between adjacent stops.
-      // If omitted, we fall back to discrete 'type'.
       color?: number;
-      // Legacy/discrete type; supported values extended to include blue & violet.
       type?: "white" | "pink" | "brown" | "blue" | "violet";
-      amount: number;                 // 0..1
-      mask?: boolean[];               // per-step enable; default = all true
-      attackBurst?: boolean;          // if true, clamp noise to short burst after attack
-      burstMs?: number;               // 5..250 (250 ≈ full decay, i.e., no burst clamp)
+      amount: number;
+      mask?: boolean[];
+      attackBurst?: boolean;
+      burstMs?: number;
     };
 
     unison: { enabled: boolean; voices: number; detuneCents: number; stereoSpread: number; };
@@ -43,10 +37,10 @@ export type StepSequencerState = {
       enabled: boolean;
       target: "pitch" | "gain" | "filter" | "pan" | "resonance";
       waveform: "sine" | "triangle" | "sawtooth" | "square" | "random";
-      depth: number;              // units depend on target
-      rateHz: number;             // already derived from division if sync
+      depth: number;
+      rateHz: number;
       division: string;
-      retrigger: boolean;         // present for parity; global LFO here (no per-note reset)
+      retrigger: boolean;
       bipolar: boolean;
     };
 
@@ -88,7 +82,6 @@ function generateDriveCurve(type: "overdrive" | "distortion", amount = 0.5) {
   return curve;
 }
 
-/** Build 5 noise spectra similar to live generator */
 function createAllNoiseBuffers(ctx: BaseAudioContext) {
   const length = Math.max(1, Math.floor(ctx.sampleRate * 2)); // 2s
   const mk = () => ctx.createBuffer(1, length, ctx.sampleRate);
@@ -98,7 +91,7 @@ function createAllNoiseBuffers(ctx: BaseAudioContext) {
   const wd = white.getChannelData(0);
   for (let i = 0; i < length; i++) wd[i] = Math.random() * 2 - 1;
 
-  // Pink (~ -3 dB/oct) — Voss/McCartney-ish
+  // Pink (~ -3 dB/oct)
   const pink = mk();
   const pd = pink.getChannelData(0);
   let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
@@ -162,12 +155,24 @@ function normIndex(i: number, n: number) {
 
 type NoiseKey = "brown" | "pink" | "white" | "blue" | "violet";
 const NOISE_STOPS: { key: NoiseKey; pos: number }[] = [
-  { key: "brown",  pos: 0.00 },
-  { key: "pink",   pos: 0.25 },
-  { key: "white",  pos: 0.50 },
-  { key: "blue",   pos: 0.75 },
+  { key: "brown", pos: 0.00 },
+  { key: "pink", pos: 0.25 },
+  { key: "white", pos: 0.50 },
+  { key: "blue", pos: 0.75 },
   { key: "violet", pos: 1.00 },
 ];
+
+// Waveform loudness compensation for offline export
+// square: −6 dB, sawtooth: −2 dB, sine/triangle: 0 dB
+function waveformGain(type: OscillatorType): number {
+  switch (type) {
+    case 'square': return 0.5011872336;
+    case 'sawtooth': return 0.7079457844;
+    case "triangle":
+    case "sine":
+    default: return 1.0;
+  }
+}
 
 export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequencerState, t0 = 0): void {
   const stepDur = stepDurationSeconds(state.bpm);
@@ -175,12 +180,12 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
   const patternDuration = bars * (60 / state.bpm) * 4;
   const tEnd = t0 + patternDuration + state.tailSeconds;
 
-  // -------- Master gain
+  // Master gain
   const master = ctx.createGain();
   master.gain.setValueAtTime(Math.max(0, Math.min(1, state.masterVolume)), t0);
   (master as any).connect((ctx as any).destination ?? (ctx as OfflineAudioContext).destination);
 
-  // -------- Drive & Delay chain (shared bus)
+  // Drive & Delay chain
   // Drive
   const driveShaper = ctx.createWaveShaper();
   driveShaper.curve = generateDriveCurve(state.fx.drive.type, state.fx.drive.amount);
@@ -240,13 +245,13 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
   delayDry.connect(master);
   delayWet.connect(master);
 
-  // -------- Shared bus that notes feed into (pre-drive)
+  // Shared bus that notes feed into (pre-drive)
   const busIn = ctx.createGain();
   // If drive disabled, go straight to driveSum (which will pass mostly dry)
   busIn.connect(driveDry);
   busIn.connect(driveShaper);
 
-  // -------- LFO (shared)
+  // LFO (shared)
   const lfo = {
     enabled: state.synth.lfo.enabled,
     osc: null as OscillatorNode | null,
@@ -255,7 +260,7 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
   };
 
   if (state.synth.lfo.enabled) {
-    const wf = state.synth.lfo.waveform === "random" ? "triangle" : state.synth.lfo.waveform; // offline MVP: random→triangle
+    const wf = state.synth.lfo.waveform === "random" ? "triangle" : state.synth.lfo.waveform;
     const osc = ctx.createOscillator();
     osc.type = wf as OscillatorType;
     osc.frequency.setValueAtTime(Math.max(0.01, state.synth.lfo.rateHz || 1), t0);
@@ -284,7 +289,7 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
     }
   }
 
-  // -------- Noise buffers (all 5 colors) & helpers
+  // Noise buffers
   const noiseBufs = createAllNoiseBuffers(ctx);
   const BURST_MAX_MS = 250; // keep in sync with UI
 
@@ -294,7 +299,7 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
       ? state.synth.noise.mask
       : Array(state.stepsCount).fill(true);
 
-  // -------- Schedule all steps
+  // Schedule all steps
   const voices = Math.max(1, Math.min(6, state.synth.unison.enabled ? state.synth.unison.voices : 1));
   const detuneStep = state.synth.unison.enabled ? state.synth.unison.detuneCents : 0;
   const spreadPct = state.synth.unison.enabled ? state.synth.unison.stereoSpread : 0;
@@ -316,7 +321,10 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
     const attackEnd = tOn + attack;
     const naturalEnd = attackEnd + decay;
 
-    const safeOscGain = Math.max(0.0001, Math.min(1, vel * state.channelVolume));
+    const wfComp = waveformGain(wave);
+    const safeOscGain = Math.max(0.0001, Math.min(1, vel * state.channelVolume * wfComp));
+
+
     const noteEnd = state.synth.envelope.enabled ? naturalEnd : (tOn + Math.max(0.02, state.synth.envelope.decayMs / 1000));
 
     // Sum of unison voices before AM LFO
@@ -405,7 +413,6 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
         }
       }
 
-      // Chain voice → env
       if (panner) {
         (osc as any).connect(vFilter).connect(vGain).connect(panner).connect(oscEnvGain);
       } else {
@@ -433,7 +440,7 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
         (scale as any).connect((trem as GainNode).gain);
         (base as any).start?.(tOn);
         (base as any).stop?.(noteEnd + 0.05);
-      } // else: leave gain at 1
+      }
 
       (oscEnvGain as any).connect(trem);
       postNode = trem;
@@ -442,7 +449,7 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
     // Route to FX bus
     (postNode as any).connect(busIn);
 
-    // ===== Noise (optional) — matches live path: bypasses drive/delay and goes to master
+    // Noise
     const noiseEnabled = !!state.synth.noise.enabled && state.synth.noise.amount > 0;
     const maskOn = !!mask[step];
     if (noiseEnabled && maskOn && vel > 0) {
@@ -465,7 +472,7 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
       } else {
         // discrete/legacy
         const k = (state.synth.noise.type || "white") as NoiseKey;
-        keyA = keyB = (["brown","pink","white","blue","violet"].includes(k) ? k : "white") as NoiseKey;
+        keyA = keyB = (["brown", "pink", "white", "blue", "violet"].includes(k) ? k : "white") as NoiseKey;
         wA = 1; wB = 0;
       }
 
@@ -503,10 +510,10 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
       nEnv.gain.setValueAtTime(0.0001, tOn);
       nEnv.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd);
 
-      // Attack Burst behavior
+      // Attack Burst
       const burstActive = !!state.synth.noise.attackBurst &&
-                          typeof state.synth.noise.burstMs === "number" &&
-                          state.synth.noise.burstMs < BURST_MAX_MS;
+        typeof state.synth.noise.burstMs === "number" &&
+        state.synth.noise.burstMs < BURST_MAX_MS;
 
       const burstEnd = burstActive
         ? Math.min(noteEnd, attackEnd + Math.max(0.005, (state.synth.noise.burstMs || 80) / 1000))

@@ -23,6 +23,21 @@
                 </div>
             </div>
 
+            <!-- NEW: Per-pad Noise toggle (optional) -->
+            <div v-if="showNoiseRow" class="pad-row">
+                <div class="pad-label">Noise</div>
+                <div class="noise-toggle-wrap">
+                    <button
+                        class="pt-dot"
+                        :class="{ 'is-on': noiseLocal }"
+                        :aria-pressed="noiseLocal"
+                        :title="noiseLocal ? 'Noise: On' : 'Noise: Off'"
+                        @click="noiseLocal = !noiseLocal"
+                    />
+                    <span class="noise-state">{{ noiseLocal ? 'On' : 'Off' }}</span>
+                </div>
+            </div>
+
             <!-- Keyboard -->
             <div class="kb" role="group" aria-label="Note selector">
                 <div v-for="(key, i) in NATURALS" :key="key.n" class="kb-cell" :class="{ 'has-sharp': key.hasSharp }">
@@ -33,8 +48,7 @@
                     <button v-if="key.hasSharp" class="pt-seg-btn kb-black"
                         :class="{ 'is-active': (baseMidi % 12) === key.sharpIdx }"
                         :disabled="isNoteDisabled(key.sharpIdx, octave)"
-                        @click="!isNoteDisabled(key.sharpIdx, octave) && setSemitone(key.sharpIdx)">{{ key.n
-                        }}#</button>
+                        @click="!isNoteDisabled(key.sharpIdx, octave) && setSemitone(key.sharpIdx)">{{ key.n }}#</button>
                 </div>
             </div>
 
@@ -98,12 +112,16 @@ const props = withDefaults(defineProps<{
 
     /** optional per-pad wave prop; if provided, a wave row is shown */
     wave?: Wave;
+
+    /** NEW: optional per-pad noise toggle; if provided, a Noise row is shown */
+    noiseEnabled?: boolean;
 }>(), { title: 'Pad' });
 
 const emit = defineEmits<{
     (e: 'update:open', v: boolean): void;
     (e: 'update:hz', v: number): void;
     (e: 'update:wave', v: Wave): void;
+    (e: 'update:noiseEnabled', v: boolean): void;
     (e: 'close'): void;
 }>();
 
@@ -111,14 +129,14 @@ const emit = defineEmits<{
 const openLocal = ref(props.open);
 watch(() => props.open, v => (openLocal.value = v));
 watch(openLocal, v => emit('update:open', v));
-function close() { openLocal.value = false; emit('close'); }
+function close(): void { openLocal.value = false; emit('close'); }
 
 const rootEl = ref<HTMLElement | null>(null);
-function onDocClick(e: MouseEvent) {
+function onDocClick(e: MouseEvent): void {
     const t = e.target as Node | null;
     if (rootEl.value && t && !rootEl.value.contains(t)) close();
 }
-function onKey(e: KeyboardEvent) { if (e.key === 'Escape') close(); }
+function onKey(e: KeyboardEvent): void { if (e.key === 'Escape') close(); }
 
 onMounted(() => {
     document.addEventListener('mousedown', onDocClick, true);
@@ -147,9 +165,9 @@ const pos = computed(() => {
 });
 
 /* pitch helpers */
-function midiToFreq(m: number) { return A4 * Math.pow(2, (m - 69) / 12); }
-function freqToMidi(f: number) { return Math.round(69 + 12 * Math.log2(f / A4)); }
-function midiToName(m: number) { const n = m % 12, o = Math.floor(m / 12) - 1; return `${NOTE_NAMES[n]}${o}`; }
+function midiToFreq(m: number): number { return A4 * Math.pow(2, (m - 69) / 12); }
+function freqToMidi(f: number): number { return Math.round(69 + 12 * Math.log2(f / A4)); }
+function midiToName(m: number): string { const n = m % 12, o = Math.floor(m / 12) - 1; return `${NOTE_NAMES[n]}${o}`; }
 const clampHz = (hz: number) => Math.max(props.minHz, Math.min(props.maxHz, hz));
 
 const baseMidi = ref(0);
@@ -157,7 +175,7 @@ const detuneCentsLocal = ref(0);
 const isFineAdjust = ref(false);
 const activeKnob = ref<null | 'fine'>(null);
 
-function syncFromHz(hz: number) {
+function syncFromHz(hz: number): void {
     const c = clampHz(hz);
     const m = freqToMidi(c);
     baseMidi.value = m;
@@ -181,27 +199,27 @@ const octave = computed({
     get: () => Math.floor(baseMidi.value / 12) - 1,
     set: (o: number) => { const s = baseMidi.value % 12; baseMidi.value = (o + 1) * 12 + s; detuneCentsLocal.value = 0; }
 });
-function isFreqInRange(f: number) { return f >= props.minHz && f <= props.maxHz; }
-function midiOf(o: number, s: number) { return (o + 1) * 12 + s; }
-function freqOf(o: number, s: number) { return midiToFreq(midiOf(o, s)); }
-function isNoteInRange(o: number, s: number) { return isFreqInRange(freqOf(o, s)); }
+function isFreqInRange(f: number): boolean { return f >= props.minHz && f <= props.maxHz; }
+function midiOf(o: number, s: number): number { return (o + 1) * 12 + s; }
+function freqOf(o: number, s: number): number { return midiToFreq(midiOf(o, s)); }
+function isNoteInRange(o: number, s: number): boolean { return isFreqInRange(freqOf(o, s)); }
 const availableOctaves = computed(() => {
     const out: number[] = [];
     for (let o = 0; o <= 8; o++) { for (let s = 0; s < 12; s++) { if (isNoteInRange(o, s)) { out.push(o); break; } } }
     return out;
 });
-function setSemitone(i: number) {
+function setSemitone(i: number): void {
     const o = Math.floor(baseMidi.value / 12) - 1;
     baseMidi.value = (o + 1) * 12 + i;
     detuneCentsLocal.value = 0;
 }
-function setOctave(o: number) {
+function setOctave(o: number): void {
     const s = baseMidi.value % 12;
     baseMidi.value = (o + 1) * 12 + s;
     detuneCentsLocal.value = 0;
 }
-function isNoteDisabled(semi: number, o: number) { return !isNoteInRange(o, semi); }
-function nearestNote(hz: number) { return midiToName(freqToMidi(hz)); }
+function isNoteDisabled(semi: number, o: number): boolean { return !isNoteInRange(o, semi); }
+function nearestNote(hz: number): string { return midiToName(freqToMidi(hz)); }
 
 /* Hz input */
 const hzInput = computed({
@@ -220,7 +238,15 @@ const showWaveRow = computed(() => props.wave !== undefined);
 const waveLocal = ref<Wave>(props.wave ?? 'sine');
 watch(() => props.wave, (v) => { if (v) waveLocal.value = v; });
 watch(waveLocal, (v) => emit('update:wave', v));
-function setWave(w: Wave) { waveLocal.value = w; }
+function setWave(w: Wave): void { waveLocal.value = w; }
+
+/* NEW: per-pad noise toggle bindings */
+const showNoiseRow = computed(() => typeof props.noiseEnabled === 'boolean');
+const noiseLocal = ref<boolean>(props.noiseEnabled ?? false);
+watch(() => props.noiseEnabled, (v) => {
+    if (typeof v === 'boolean') noiseLocal.value = v;
+});
+watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
 </script>
 
 <style scoped>
@@ -294,15 +320,42 @@ function setWave(w: Wave) { waveLocal.value = w; }
     flex-wrap: wrap;
 }
 
-/* ==== Piano keyboard ========================================= */
+/* ==== NEW: Noise toggle styles (mirrors your NoiseModule dot) ===== */
+.noise-toggle-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
 
+.noise-state {
+    font-size: 0.9rem;
+    color: var(--pt-text);
+    opacity: 0.85;
+}
+
+.pt-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 45%);
+    background: var(--pt-surface-2);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+    cursor: pointer;
+    transition: transform .12s ease, filter .2s ease, box-shadow .25s ease;
+}
+.pt-dot:hover { transform: scale(1.06); }
+.pt-dot.is-on {
+    background: hsl(var(--pt-accent) 80% 60%);
+    box-shadow:
+        0 0 0 3px hsl(var(--pt-accent) 90% 60% / .18),
+        0 0 12px var(--pt-btn-glow);
+}
+
+/* ==== Piano keyboard ========================================= */
 .kb {
     --gap: 2px;
-    /* space between white keys */
     --whiteH: 108px;
-    /* white key height */
     --blackH: 66px;
-    /* black key height */
     --radius: 8px;
 
     display: grid;
@@ -313,7 +366,6 @@ function setWave(w: Wave) { waveLocal.value = w; }
     border-radius: var(--pt-radius-md);
     background: linear-gradient(180deg, transparent, rgb(0 0 0 / .06));
     position: relative;
-    /* piano colors derived from theme, with fallbacks */
     --white1: color-mix(in oklab, white 94%, var(--pt-panel) 6%);
     --white2: color-mix(in oklab, white 82%, var(--pt-panel) 18%);
     --black1: color-mix(in oklab, #0b0f1a 90%, var(--pt-panel) 10%);
@@ -329,22 +381,10 @@ function setWave(w: Wave) { waveLocal.value = w; }
     }
 }
 
+.kb-cell { position: relative; height: var(--whiteH); }
+.kb :where(.pt-seg-btn) { all: unset; line-height: 1; box-sizing: border-box; cursor: pointer; }
 
-/* each natural (C D E F G A B) is a white key cell */
-.kb-cell {
-    position: relative;
-    height: var(--whiteH);
-}
-
-.kb :where(.pt-seg-btn) {
-    all: unset;
-    /* nuke pill styles */
-    line-height: 1;
-    box-sizing: border-box;
-    cursor: pointer;
-}
-
-/* ---------------- White keys ---------------- */
+/* White keys */
 .kb-white {
     width: 100%;
     height: 100%;
@@ -358,7 +398,6 @@ function setWave(w: Wave) { waveLocal.value = w; }
     justify-content: center;
     padding-bottom: 6px;
     font-weight: 700;
-    /* color: var(--pt-text); */
     color: #000;
     cursor: pointer;
     transition: transform .03s ease, box-shadow .12s ease, filter .12s ease;
@@ -367,35 +406,19 @@ function setWave(w: Wave) { waveLocal.value = w; }
         linear-gradient(145deg, rgb(0 0 0 / .22), rgb(255 255 255 / .06)) border-box;
     border: 1px solid rgb(0 0 0 / .55);
 }
-
-.kb-white:is(:hover, :focus-visible) {
-    filter: brightness(1.04);
-    outline: none;
-}
-
-.kb-white:active {
-    transform: translateY(1px);
-    box-shadow:
+.kb-white:is(:hover, :focus-visible) { filter: brightness(1.04); outline: none; }
+.kb-white:active { transform: translateY(1px); box-shadow:
         inset 0 1px 0 rgb(255 255 255 / .04),
         0 2px 0 rgb(0 0 0 / .55),
-        0 6px 14px rgb(0 0 0 / .25);
-}
-
-.kb-white.is-active {
-    box-shadow:
+        0 6px 14px rgb(0 0 0 / .25); }
+.kb-white.is-active { box-shadow:
         inset 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .9),
         inset 0 1px 0 rgb(255 255 255 / .05),
         0 3px 0 rgb(0 0 0 / .55),
-        0 10px 20px rgb(0 0 0 / .3);
-}
+        0 10px 20px rgb(0 0 0 / .3); }
+.kb-white:disabled { opacity: .35; cursor: not-allowed; }
 
-/* disabled note (out of Hz range) */
-.kb-white:disabled {
-    opacity: .35;
-    cursor: not-allowed;
-}
-
-/* ---------------- Black keys ---------------- */
+/* Black keys */
 .kb-black {
     --whiteW: 100%;
     width: calc(0.6 * var(--whiteW));
@@ -404,7 +427,6 @@ function setWave(w: Wave) { waveLocal.value = w; }
     top: 0;
     right: calc(-0.3 * var(--whiteW) - var(--gap) / 2);
     border-radius: 0 0 6px 6px;
-
     box-shadow:
         inset 0 1px 0 rgb(255 255 255 / .05),
         0 2px 0 rgb(0 0 0 / .8),
@@ -419,40 +441,22 @@ function setWave(w: Wave) { waveLocal.value = w; }
     color: #dfe7ff;
     cursor: pointer;
     transition: transform .03s ease, box-shadow .12s ease, filter .12s ease;
-
     background:
         linear-gradient(180deg, var(--black1), var(--black2)) padding-box,
         linear-gradient(145deg, #1a2334, #0b0f1a) border-box;
     border: 1px solid rgb(0 0 0 / .7);
 }
-
-.kb-black:is(:hover, :focus-visible) {
-    filter: brightness(1.08);
-    outline: none;
-}
-
-.kb-black:active {
-    transform: translateY(1px);
-    box-shadow:
+.kb-black:is(:hover, :focus-visible) { filter: brightness(1.08); outline: none; }
+.kb-black:active { transform: translateY(1px); box-shadow:
         inset 0 1px 0 rgb(255 255 255 / .04),
         0 1px 0 rgb(0 0 0 / .8),
-        0 6px 12px rgb(0 0 0 / .35);
-}
-
-.kb-black.is-active {
-    box-shadow:
+        0 6px 12px rgb(0 0 0 / .35); }
+.kb-black.is-active { box-shadow:
         0 0 0 2px hsl(var(--pt-accent) 90% 60% / .9),
         inset 0 1px 0 rgb(255 255 255 / .05),
         0 2px 0 rgb(0 0 0 / .8),
-        0 10px 18px rgb(0 0 0 / .4);
-}
+        0 10px 18px rgb(0 0 0 / .4); }
+.kb-black:disabled { opacity: .45; cursor: not-allowed; }
 
-.kb-black:disabled {
-    opacity: .45;
-    cursor: not-allowed;
-}
-
-.kb-cell.has-sharp {
-    padding-top: 0;
-}
+.kb-cell.has-sharp { padding-top: 0; }
 </style>
