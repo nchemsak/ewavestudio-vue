@@ -3,9 +3,7 @@
     <KnobGroup v-model="localEnabled" :color="color" :showToggle="showToggle" :showHeader="false">
         <div class="lfo-root lfo-container">
             <div class="pt-stack">
-                <!-- Header: Power Tile + Wave Tiles -->
                 <div class="lfo-header" role="group" aria-label="LFO Header">
-                    <!-- Power tile -->
                     <button class="lfo-power-tile" :class="{ on: localEnabled }" :aria-pressed="localEnabled"
                         title="Toggle LFO" @click="localEnabled = !localEnabled" @contextmenu.prevent="openAdvanced">
                         <span class="lfo-power-wave">
@@ -16,7 +14,6 @@
                         <span class="lfo-power-label">LFO</span>
                     </button>
 
-                    <!-- Wave tiles (static icons, no animation) -->
                     <div class="lfo-waves" role="radiogroup" aria-label="LFO Waveform">
                         <button v-for="w in waves" :key="w" class="lfo-wave-btn"
                             :class="{ active: localWaveform === w, disabled: !localEnabled }" role="radio"
@@ -30,7 +27,6 @@
                     </div>
                 </div>
 
-                <!-- Quick Target row (Pitch / Filter in main area) -->
                 <div class="lfo-target-quick" role="radiogroup" aria-label="LFO Target">
                     <button class="mm-pill" :class="{ active: currentTarget === 'pitch', disabled: !localEnabled }"
                         :disabled="!localEnabled" role="radio"
@@ -44,15 +40,8 @@
                         title="Modulate Filter">
                         Filter
                     </button>
-
-                    <!-- Advanced menu button (optional helper) -->
-                    <!-- <button class="lfo-adv-btn" :class="{ disabled: !localEnabled }" :disabled="!localEnabled" title="Advanced"
-                  @click.stop="openAdvanced">
-            ⋯
-          </button> -->
                 </div>
 
-                <!-- Knobs -->
                 <div class="pt-knob-row">
                     <div class="position-relative text-center">
                         <Knob v-model="rateKnobModel" size="small" :min="rateMin" :max="rateMax" :step="rateStep"
@@ -73,39 +62,15 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Advanced menu -->
+       
             <div v-if="advancedOpen" class="mm-menu" role="menu" @click.stop
                 :style="{ left: (advPos?.x ?? 0) + 'px', top: (advPos?.y ?? 0) + 'px' }">
                 <div class="mm-menu-title">Advanced Options</div>
 
-                <!-- Rate Mode -->
                 <div class="mm-opt" role="menuitem" @click="setSync(!localSync)">
                     <span>Free rate (Hz)</span>
                     <button class="mm-switch" :class="{ on: !localSync }"><span class="kn"></span></button>
                 </div>
-
-                <!-- Target selection (other targets live here; Pitch/Filter have quick access above) -->
-                <div class="mm-opt-column" aria-label="LFO Target">
-                    <div class="mm-subtitle">Other Targets</div>
-                    <div class="mm-pill-row">
-                        <button v-for="t in visibleTargetsAdvanced" :key="t" class="mm-pill"
-                            :class="{ active: currentTarget === t }" @click="updateTarget(t)">
-                            {{ labelFor(t) }}
-                        </button>
-                    </div>
-                </div>
-
-                <div class="mm-opt" role="menuitem" @click="retriggerLocal = !retriggerLocal">
-                    <span>Retrigger on note-on</span>
-                    <button class="mm-switch" :class="{ on: retriggerLocal }"><span class="kn"></span></button>
-                </div>
-
-                <div class="mm-opt" role="menuitem" @click="bipolarLocal = !bipolarLocal">
-                    <span>Bipolar depth</span>
-                    <button class="mm-switch" :class="{ on: bipolarLocal }"><span class="kn"></span></button>
-                </div>
-
                 <div class="mm-reset" role="menuitem" @click.stop="resetAdvanced">
                     Reset Settings to defaults
                 </div>
@@ -121,8 +86,8 @@ import { ref, watch, computed, onUnmounted } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 
-type Target = 'pitch' | 'gain' | 'filter' | 'pan' | 'spectralTilt' | 'dubGlue';
-type Wave = 'sine' | 'square' | 'random';
+type Target = 'pitch' | 'filter';
+type Wave = 'sine' | 'square';
 
 const props = withDefaults(defineProps<{
     modelValue: boolean;
@@ -134,7 +99,6 @@ const props = withDefaults(defineProps<{
     division?: string;
     depthMax?: number;
     color?: string;
-    targets?: Target[];
     waves?: Wave[];
     divisions?: string[];
     showToggle?: boolean;
@@ -144,14 +108,13 @@ const props = withDefaults(defineProps<{
     modelValue: false,
     rate: 2,
     depth: 0,
-    target: 'spectralTilt',
+    target: 'pitch',
     waveform: 'sine',
     syncEnabled: true,
     division: '1/8',
     depthMax: 100,
     color: '#00BCD4',
-    targets: () => ['spectralTilt', 'dubGlue', 'filter', 'pitch'],
-    waves: () => ['sine', 'square', 'random'],
+    waves: () => ['sine', 'square'],
     divisions: () => ['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32'],
     showToggle: false,
     retrigger: false,
@@ -172,28 +135,15 @@ const emit = defineEmits<{
 
 /* Labels */
 function waveLabel(w: Wave | string): string {
-    return w === 'random' ? 'S&H' : w.charAt(0).toUpperCase() + w.slice(1);
+    return w.charAt(0).toUpperCase() + w.slice(1);
 }
 function waveLong(w: Wave | string): string {
-    return w === 'random' ? 'Sample & Hold' : waveLabel(w);
-}
-function labelFor(t: Target | string): string {
-    if (t === 'spectralTilt') return 'Spectral Tilt';
-    if (t === 'dubGlue') return 'Dub Glue';
-    return t === 'gain' ? 'Amplitude' : (t.charAt(0).toUpperCase() + t.slice(1));
+    return waveLabel(w);
 }
 
 /* Advanced menu state */
 const advancedOpen = ref(false);
 const advPos = ref<{ x: number; y: number } | null>(null);
-
-const retriggerLocal = ref<boolean>(props.retrigger);
-watch(() => props.retrigger, v => { retriggerLocal.value = v; });
-watch(retriggerLocal, v => emit('update:retrigger', v));
-
-const bipolarLocal = ref<boolean>(props.bipolar);
-watch(() => props.bipolar, v => { bipolarLocal.value = v; });
-watch(bipolarLocal, v => emit('update:bipolar', v));
 
 function openAdvanced(e?: MouseEvent): void {
     const target = e?.currentTarget as HTMLElement | null;
@@ -207,10 +157,7 @@ function openAdvanced(e?: MouseEvent): void {
     }
     advancedOpen.value = true;
 }
-function resetAdvanced(): void {
-    retriggerLocal.value = false;
-    bipolarLocal.value = false;
-}
+
 function onKey(e: KeyboardEvent): void {
     if (e.key === 'Escape') advancedOpen.value = false;
 }
@@ -219,7 +166,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 
 defineExpose({ openAdvanced });
 
-/* Locals */
 const localEnabled = ref<boolean>(props.modelValue);
 watch(() => props.modelValue, v => { localEnabled.value = v; });
 watch(localEnabled, v => emit('update:modelValue', v));
@@ -253,29 +199,18 @@ function setDivision(d: string): void { emit('update:division', d); }
 
 const activeKnob = ref<null | 'rate' | 'depth'>(null);
 
-/* Per-target depth step + readout */
 const depthStep = computed<number>(() => {
     switch (currentTarget.value) {
-        case 'filter': return 10;
-        case 'spectralTilt':
-        case 'dubGlue':
+        case 'filter': return 10;     
         case 'pitch':
-        case 'gain':
-        case 'pan':
-        default: return 1;
+        default: return 1;            
     }
 });
 const depthReadout = computed<string>(() => {
     const v = localDepth.value;
     switch (currentTarget.value) {
         case 'pitch': return `${Math.round(v)} cents`;
-        case 'gain': return `${Math.round(v)}%`;
-        case 'pan': return `${Math.round(v)}%`;
         case 'filter': return `${Math.round(v)} Hz`;
-        case 'spectralTilt':
-        case 'dubGlue':
-            return `${Math.round(v)}%`;
-        default: return String(v);
     }
 });
 
@@ -310,24 +245,15 @@ const rateKnobModel = computed<number>({
     }
 });
 
-/* SVG paths for waves (S&H now a stair-step shape) */
 function wavePath(w: Wave | string): string {
     switch (w) {
         case 'square':
             return 'M0 16 L25 16 L25 0 L75 0 L75 32 L100 32';
-        case 'random': // Sample & Hold: stepped (stairsteps)
-            return 'M0 24 H15 V10 H35 V22 H55 V6 H75 V18 H90 V4 H100';
         case 'sine':
         default:
             return 'M0 16 C12 0 12 0 25 16 C37 32 37 32 50 16 C62 0 62 0 75 16 C87 32 87 32 100 16';
     }
 }
-
-/* Advanced: hide Pitch/Filter from this list since they have quick buttons in main area.
-   Also hide gain/pan like before. */
-const visibleTargetsAdvanced = computed<Target[]>(() =>
-    (props.targets || []).filter(t => t !== 'gain' && t !== 'pan' && t !== 'pitch' && t !== 'filter')
-);
 </script>
 
 <style scoped>
@@ -335,7 +261,6 @@ const visibleTargetsAdvanced = computed<Target[]>(() =>
     position: relative;
 }
 
-/*  Header  */
 .lfo-header {
     display: flex;
     align-items: center;
@@ -382,7 +307,6 @@ const visibleTargetsAdvanced = computed<Target[]>(() =>
     opacity: .9;
 }
 
-/* Static waveform strokes (no animation) */
 svg {
     display: block;
     width: 100%;
@@ -397,7 +321,6 @@ svg {
     stroke-linejoin: round;
 }
 
-/* Wave buttons */
 .lfo-waves {
     display: flex;
     align-items: center;
@@ -443,7 +366,6 @@ svg {
     transform: translateY(1px);
 }
 
-/* Quick Target row */
 .lfo-target-quick {
     display: flex;
     align-items: center;
@@ -452,23 +374,6 @@ svg {
     margin-top: 4px;
 }
 
-.lfo-adv-btn {
-    width: 40px;
-    height: 32px;
-    border-radius: 10px;
-    background: var(--pt-surface-2);
-    border: 1px solid var(--pt-hairline);
-    font-weight: 700;
-    font-size: 18px;
-    line-height: 1;
-}
-
-.lfo-adv-btn.disabled {
-    opacity: .5;
-    pointer-events: none;
-}
-
-/* Shared pill style */
 .mm-pill {
     padding: 6px 10px;
     border-radius: 999px;
@@ -488,7 +393,6 @@ svg {
     pointer-events: none;
 }
 
-/* Advanced  */
 .mm-menu {
     position: absolute;
     min-width: 280px;
@@ -566,6 +470,4 @@ svg {
     inset: 0;
     z-index: 999;
 }
-
-/* Keep your existing knob row / tooltip styles if defined elsewhere */
 </style>

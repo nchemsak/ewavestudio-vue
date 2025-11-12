@@ -71,7 +71,7 @@ const props = withDefaults(defineProps<{
     burstMs?: number;
     color?: string;
     showToggle?: boolean;
-}>(), {
+}>(), { 
     enabled: false,
     amount: 0.25,
     colorMorph: 0.5,

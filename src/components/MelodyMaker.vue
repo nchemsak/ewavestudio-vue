@@ -84,7 +84,7 @@
                 <div class="mm-subtitle">Melody</div>
 
                 <div class="mm-opt" role="menuitem" @click="applyScope = (applyScope === 'active' ? 'all' : 'active')">
-                    <span>Apply to active only</span>
+                    <span>Active Pads Only</span>
                     <button class="mm-switch" :class="{ on: applyScope === 'active' }"><span class="kn"></span></button>
                 </div>
 

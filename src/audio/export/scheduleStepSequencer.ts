@@ -5,7 +5,7 @@ import { startFM } from "../fm";
 
 export type StepSequencerState = {
   bpm: number;
-  stepsCount: 16 | 32;
+  stepsCount: 16; // locked to 16
   swing: number;
   masterVolume: number;
   channelVolume: number;
@@ -49,7 +49,10 @@ export type StepSequencerState = {
   };
 
   fx: {
-    delay: { enabled: boolean; sync: boolean; time: number; feedback: number; mix: number; toneEnabled: boolean; toneHz: number; toneType: "lowpass" | "highpass" };
+    delay: {
+      enabled: boolean; sync: boolean; time: number; feedback: number; mix: number;
+      toneEnabled: boolean; toneHz: number; toneType: "lowpass" | "highpass"
+    };
     drive: { enabled: boolean; type: "overdrive" | "distortion"; amount: number; tone: number; mix: number };
   };
 
@@ -166,17 +169,44 @@ const NOISE_STOPS: { key: NoiseKey; pos: number }[] = [
 // square: −6 dB, sawtooth: −2 dB, sine/triangle: 0 dB
 function waveformGain(type: OscillatorType): number {
   switch (type) {
-    case 'square': return 0.5011872336;
-    case 'sawtooth': return 0.7079457844;
+    case "square": return 0.5011872336;
+    case "sawtooth": return 0.7079457844;
     case "triangle":
     case "sine":
     default: return 1.0;
   }
 }
 
-export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequencerState, t0 = 0): void {
+// --- NEW: array coercion helpers to guarantee 16 steps ---
+function coerceTo16<T>(arr: T[] | undefined, fill: T): T[] {
+  if (!Array.isArray(arr)) return Array(16).fill(fill);
+  if (arr.length === 16) return arr.slice();
+  return arr.length > 16 ? arr.slice(0, 16) : arr.concat(Array(16 - arr.length).fill(fill));
+}
+
+export function scheduleStepSequencer(ctx: BaseAudioContext, incoming: StepSequencerState, t0 = 0): void {
+  // Lock to 16 steps and sanitize arrays
+  const STEPS = 16 as const;
+  const state: StepSequencerState = {
+    ...incoming,
+    stepsCount: 16,
+    pattern: {
+      active: coerceTo16(incoming.pattern.active, false),
+      velocities: coerceTo16(incoming.pattern.velocities, 1),
+      pitches: coerceTo16(incoming.pattern.pitches, 220),
+      waveforms: coerceTo16<OscillatorType>(incoming.pattern.waveforms, "sine"),
+    },
+    synth: {
+      ...incoming.synth,
+      noise: {
+        ...incoming.synth.noise,
+        mask: coerceTo16(incoming.synth.noise.mask, true),
+      },
+    },
+  };
+
   const stepDur = stepDurationSeconds(state.bpm);
-  const bars = state.stepsCount / 16;
+  const bars = 1; // 16 steps * 1/16 = 1 bar
   const patternDuration = bars * (60 / state.bpm) * 4;
   const tEnd = t0 + patternDuration + state.tailSeconds;
 
@@ -293,18 +323,18 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
   const noiseBufs = createAllNoiseBuffers(ctx);
   const BURST_MAX_MS = 250; // keep in sync with UI
 
-  // Precompute mask with sane default
+  // Precompute mask with sane default (already coerced; keep fallback for safety)
   const mask =
     Array.isArray(state.synth.noise.mask) && state.synth.noise.mask.length
       ? state.synth.noise.mask
-      : Array(state.stepsCount).fill(true);
+      : Array(STEPS).fill(true);
 
   // Schedule all steps
   const voices = Math.max(1, Math.min(6, state.synth.unison.enabled ? state.synth.unison.voices : 1));
   const detuneStep = state.synth.unison.enabled ? state.synth.unison.detuneCents : 0;
   const spreadPct = state.synth.unison.enabled ? state.synth.unison.stereoSpread : 0;
 
-  for (let step = 0; step < state.stepsCount; step++) {
+  for (let step = 0; step < STEPS; step++) {
     const isOn = !!(state.pattern.active[step]);
     if (!isOn) continue;
 
@@ -323,7 +353,6 @@ export function scheduleStepSequencer(ctx: BaseAudioContext, state: StepSequence
 
     const wfComp = waveformGain(wave);
     const safeOscGain = Math.max(0.0001, Math.min(1, vel * state.channelVolume * wfComp));
-
 
     const noteEnd = state.synth.envelope.enabled ? naturalEnd : (tOn + Math.max(0.02, state.synth.envelope.decayMs / 1000));
 

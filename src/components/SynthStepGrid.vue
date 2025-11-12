@@ -10,13 +10,11 @@
                     <div v-if="showIndices" class="pad-step-num">{{ index + 1 }}</div>
                 </div>
 
-                <!-- body -->
                 <div class="padTESTwrap" @mouseenter="hovered = index" @mouseleave="hovered = null">
                     <div :class="[
                         'padTEST', 'liquid',
                         { selected: active },
                         { playing: index === currentStep },
-                        // { 'has-noise': !!noiseMask?.[index] }
                         { 'has-noise': noiseOn(index) }
                     ]" @mousedown="onMouseDown($event, index)" @mouseenter="onMouseEnter(index)" @dragstart.prevent
                         :style="padStyle(index)">
@@ -116,28 +114,24 @@ const props = withDefaults(defineProps<{
     showVelocity?: boolean;
     showPitch?: boolean;
 
-    /** Optional per-step waveforms + global default (used for the badge) */
     waveforms?: Wave[];
     defaultWave?: Wave;
 
-    /** per-step noise participation + tint controls */
     noiseMask?: boolean[];
-    noiseTint?: string;     // e.g. '#3ec2cc'
-    noiseAlpha?: number;    // 0..1
+    noiseTint?: string;
+    noiseAlpha?: number;
 
     noiseEnabled?: boolean;
     noiseMode?: 'wash' | 'static' | 'svg' | 'gif';
 
-    /** for noiseMode='gif' */
     noiseGifUrl?: string;
 
-    /** animation tuning */
-    noiseFps?: number;      // for CSS static (steps)
-    noiseSpeed?: number;    // for CSS static (px/sec)
+    noiseFps?: number;
+    noiseSpeed?: number;
 
 
-    pepperAlpha?: number;  // 0..1 opacity of black speckles
-    pepperScale?: number;  // px density cell for the repeating micro-speck layer
+    pepperAlpha?: number;
+    pepperScale?: number;
 
 }>(), {
     showIndices: true,
@@ -159,17 +153,14 @@ const emit = defineEmits<{
     (e: 'open-pad-settings', payload: { name: string; index: number; anchorRect: DOMRect }): void;
 }>();
 
-/* local UI state, independent of parent */
 const isMouseDown = ref(false);
 const dragMode = ref<'on' | 'off' | null>(null);
 const hovered = ref<number | null>(null);
 const activeVol = ref<number | null>(null);
 const activePitch = ref<number | null>(null);
 
-/** simple uid so multiple grids can coexist without filter id collisions */
 const uid = Math.random().toString(36).slice(2);
 
-/* interactions */
 function clone<T>(arr: T[]): T[] { return arr.slice(); }
 
 function onMouseDown(evt: MouseEvent, index: number) {
@@ -236,10 +227,10 @@ function padStyle(index: number) {
 
 /** per-step noise overlay styling */
 function noiseStyle(index: number) {
-    const tint = props.noiseTint || '#9bf3ff'; // brighter default so it "reads"
+    const tint = props.noiseTint || '#9bf3ff';
     const a = typeof props.noiseAlpha === 'number' ? props.noiseAlpha : 0.28;
     const fps = Math.max(1, props.noiseFps || 12);
-    const speed = Math.max(1, props.noiseSpeed || 60); // px/sec
+    const speed = Math.max(1, props.noiseSpeed || 60);
 
     return {
         '--noise-tint': tint,
@@ -258,7 +249,6 @@ function noiseStyle(index: number) {
 
 function noiseOn(i: number) {
     return !!props.noiseEnabled && !!props.steps?.[i] && !!props.noiseMask?.[i];
-    // (optional) also gate by velocity if you want: && (props.velocities?.[i] ?? 0) > 0
 }
 
 /* SVG noise timing */
@@ -272,7 +262,6 @@ const nearestNote = props.nearestNote;
 </script>
 
 <style scoped>
-/* =================== badge (unchanged) =================== */
 .wave-badge {
     --wb-pad-x: 3px;
     --wb-pad-y: 2px;
@@ -322,7 +311,6 @@ const nearestNote = props.nearestNote;
     color: #a2f5a6;
 }
 
-/* =================== note chip (unchanged) =================== */
 .note-chip {
     position: absolute;
     left: 50%;
@@ -340,7 +328,6 @@ const nearestNote = props.nearestNote;
     z-index: 1000;
 }
 
-/* =================== head (unchanged) =================== */
 .pad-head {
     display: flex;
     flex-direction: column;
@@ -389,55 +376,39 @@ const nearestNote = props.nearestNote;
     position: relative;
 }
 
-/* =================== NOISE OVERLAY ===================
-   Layer order: padTEST::before (volume hue wash, z=1) -> .noise-overlay (z=1, drawn after) -> padTEST::after (bevel z=2) */
-/* .padTEST .noise-overlay{
-  position:absolute; inset:0; border-radius:inherit; z-index:1; pointer-events:none;
-  opacity:1;
-} */
+/*  NOISE OVERLAY Layer order: padTEST::before (volume hue wash, z=1) -> .noise-overlay (z=1, drawn after) -> padTEST::after (bevel z=2) */
+
 .padTEST .noise-overlay {
     position: absolute;
     inset: 0;
     border-radius: inherit;
     z-index: 1;
     pointer-events: none;
-
-    /* Tweakables */
     --grain-unit: 8px;
-    /* ↑ Bigger = chunkier grain (try 10px, 12px) */
     --grain-alpha: var(--noise-alpha, 0.24);
 
     background:
-        /* angled wash */
         linear-gradient(135deg,
             color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent calc(100% - (var(--grain-alpha) * 100%))) 0%,
             transparent 60%),
-        /* “static” grain — thicker stripes now */
         repeating-linear-gradient(0deg,
             color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent 92%) 0px,
             color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent 92%) 3px,
             transparent 6px,
             transparent 9px);
 
-    /* Make the grain tiles larger on the second background only */
     background-size:
         auto,
         var(--grain-unit) var(--grain-unit);
 
     mix-blend-mode: screen;
     opacity: 1;
-
-    /* Optional: a little punch */
-    /* filter: contrast(130%) brightness(105%); */
     animation: noise-shift 700ms steps(6) infinite;
     background-position:
         0 0,
-        /* wash layer stays put */
         0 0;
-    /* grain layer animates via keyframes */
 }
 
-/* Mode: wash (your original subtle gradient + faint lines, cranked slightly) */
 .padTEST .noise-overlay.mode-wash {
     background:
         linear-gradient(135deg,
@@ -450,7 +421,6 @@ const nearestNote = props.nearestNote;
     mix-blend-mode: screen;
 }
 
-/* Mode: static (CSS-only animated grain) */
 .padTEST .noise-overlay.mode-static {
     mix-blend-mode: screen;
 }
@@ -459,7 +429,6 @@ const nearestNote = props.nearestNote;
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    /* stack 3 noisy layers with different scales so it feels organic */
     background:
         radial-gradient(1px 1px at 20% 30%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 40%, transparent 41%),
         radial-gradient(1px 1px at 60% 80%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 45%, transparent 46%),
@@ -475,22 +444,21 @@ const nearestNote = props.nearestNote;
     opacity: 1;
 }
 
-/* jittery frame stepping */
 @keyframes noise-shift {
     0% {
         transform: translate3d(0, 0, 0) scale(1.0);
     }
 
     25% {
-        transform: translate3d(-1px, 1px, 0) scale(1.01);
+        transform: translate3d(-0.5px, 0.5px, 0) scale(1.01);
     }
 
     50% {
-        transform: translate3d(1px, -1px, 0) scale(0.99);
+        transform: translate3d(0.5px, -0.5px, 0) scale(0.99);
     }
 
     75% {
-        transform: translate3d(0.5px, -0.5px, 0) scale(1.0);
+        transform: translate3d(0px, -0px, 0) scale(1.0);
     }
 
     100% {
@@ -498,7 +466,6 @@ const nearestNote = props.nearestNote;
     }
 }
 
-/* slow pan for parallax */
 @keyframes noise-pan {
     from {
         background-position: 0 0, 0 0, 0 0, 0 0;
@@ -509,7 +476,6 @@ const nearestNote = props.nearestNote;
     }
 }
 
-/* Mode: svg (procedural TV static) */
 .padTEST .noise-overlay.mode-svg {
     mix-blend-mode: screen;
 }
@@ -531,13 +497,9 @@ const nearestNote = props.nearestNote;
     inset: 0;
     border-radius: inherit;
     background: color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%)));
-    /* paint a layer then distort it with turbulence filter */
     filter: none;
-    /* the actual filter url() is injected inline to avoid scoping issues */
-    /* apply the filter via style attr to ensure correct URL scoping */
 }
 
-/* Mode: gif (bring your own loop) */
 .padTEST .noise-overlay.mode-gif {
     mix-blend-mode: screen;
 }
@@ -552,31 +514,25 @@ const nearestNote = props.nearestNote;
     opacity: calc(var(--noise-alpha, .28) + 0.08);
 }
 
-/* Black “pepper” speckles that read on any background */
 .padTEST .noise-overlay .pepper {
     position: absolute;
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
 
-    /* Darken underlying content without killing color */
     mix-blend-mode: multiply;
 
-    /* Overall strength */
     opacity: var(--pepper-alpha, 0.16);
 
-    /* A few larger, pseudo-random dots + a very fine repeating bed */
     background:
         radial-gradient(1px 1px at 18% 22%, rgba(0, 0, 0, 0.85) 40%, transparent 41%),
         radial-gradient(1px 1px at 36% 76%, rgba(0, 0, 0, 0.85) 42%, transparent 43%),
         radial-gradient(1px 1px at 66% 48%, rgba(0, 0, 0, 0.85) 38%, transparent 39%),
         radial-gradient(1px 1px at 84% 16%, rgba(0, 0, 0, 0.85) 40%, transparent 41%),
-        /* micro-speck bed */
         repeating-conic-gradient(from 0deg,
             rgba(0, 0, 0, 0.7) 0% 0.5%,
             transparent 0.5% 1.6%);
 
-    /* Scale the larger dots independently from the micro-bed */
     background-size:
         80px 80px,
         110px 110px,
@@ -584,16 +540,13 @@ const nearestNote = props.nearestNote;
         170px 170px,
         var(--pepper-scale, 6px) var(--pepper-scale, 6px);
 
-    /* Animate subtly with the same jitter so it feels alive */
     animation:
         noise-shift var(--noise-anim-dur, 1s) steps(var(--noise-fps, 12)) infinite,
         noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
-
-    /* Slight clarity bump so specks don’t blur out on light pads */
     filter: contrast(115%);
 }
 
 
 
-/* keep all other visuals in your SCSS (_drumSequencer.scss) */
+/* all other visuals in SCSS (_drumSequencer.scss) */
 </style>

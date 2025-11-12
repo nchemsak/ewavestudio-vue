@@ -96,15 +96,6 @@
 							:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
 						<h2 class="pt-title">Step Sequencer</h2>
 
-						<!-- 16/32 toggle (kept) -->
-						<div class="step-toolbar pt-seg pt-seg-sm">
-							<button class="pt-seg-btn" :class="{ 'is-active': stepLength === 16 }"
-								@click="setStepLength(16)">16</button>
-							<button class="pt-seg-btn" :class="{ 'is-active': stepLength === 32 }"
-								@click="setStepLength(32)">32</button>
-						</div>
-						<div class="pt-rule"></div>
-
 						<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
 							label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
 							@knobEnd="activeKnob = null" />
@@ -119,7 +110,7 @@
 						<div v-if="stepsAdvanced.open" class="mm-menu is-local" @click.stop>
 							<div class="mm-menu-title">Advanced Options</div>
 							<div class="mm-opt" role="menuitem" @click="togglePadSliders()">
-								<span>Pad Velocity/Pitch Sliders</span>
+								<span>Individual Pad Sliders</span>
 								<button class="mm-switch" :class="{ on: padSlidersOn }"><span
 										class="kn"></span></button>
 							</div>
@@ -231,15 +222,21 @@
 					</div>
 				</div>
 
+				<!-- Envelope + Filter -->
 				<div class="module sound">
-					<SectionWrap id="sound" title="Sound Shaping" v-model="collapsibleState['sound']">
-						<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
-							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
-							@attack-knob-start="onEnvKnobStart" @attack-knob-end="onEnvKnobEnd"
-							@decay-knob-start="onEnvKnobStart" @decay-knob-end="onEnvKnobEnd" />
-						<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
-							v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
-					</SectionWrap>
+					<div class="split-two">
+						<SectionWrap id="envelope" title="Envelope" v-model="collapsibleState['envelope']">
+							<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
+								v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
+								@attack-knob-start="onEnvKnobStart" @attack-knob-end="onEnvKnobEnd"
+								@decay-knob-start="onEnvKnobStart" @decay-knob-end="onEnvKnobEnd" />
+						</SectionWrap>
+
+						<SectionWrap id="filter" title="Filter" v-model="collapsibleState['filter']">
+							<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
+								v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
+						</SectionWrap>
+					</div>
 				</div>
 
 				<!-- LFO -->
@@ -253,8 +250,7 @@
 							v-model:depth="lfoDepth" v-model:target="lfoTarget" v-model:waveform="lfoWaveform"
 							v-model:syncEnabled="lfoSync" v-model:division="lfoDivision"
 							v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
-							color="#00BCD4" :targets="['pitch', 'gain', 'filter', 'pan']"
-							:divisions="['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16/', '1/32']" />
+							color="#00BCD4" :divisions="['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32']" />
 					</SectionWrap>
 				</div>
 
@@ -283,17 +279,26 @@
 						</section>
 
 						<!-- Drive panel -->
-						<section class="pt-section">
-							<DriveEffect :showToggle="false" v-model:enabled="driveEnabled"
-								v-model:driveType="driveType" v-model:driveAmount="driveAmount"
-								v-model:driveTone="driveTone" v-model:driveMix="driveMix" />
+						<!-- <section class="pt-section">
+							<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" :driveType="'overdrive'"
+								v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
+								v-model:driveMix="driveMix" />
 						</section>
-						<!-- Reverb panel -->
 						<section class="pt-section">
 							<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 								v-model:mix="reverbMix" v-model:decay="reverbDecay" />
-						</section>
+						</section> -->
+						<!-- Drive + Reverb row -->
+						<section class="pt-section">
+							<div class="fx-pair">
+								<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" :driveType="'overdrive'"
+									v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
+									v-model:driveMix="driveMix" />
 
+								<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
+									v-model:mix="reverbMix" v-model:decay="reverbDecay" />
+							</div>
+						</section>
 						<!-- Effects — Advanced -->
 						<Teleport to="body">
 							<div v-if="fxAdvanced.open">
@@ -484,9 +489,11 @@ const resetNonce = ref(0);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 //SEQUENCER TOOLS START
-const stepLength = ref<16 | 32>(16);
-const showVelocity = ref(true);
-const showPitch = ref(true);
+const STEP_COUNT = 16 as const;
+const stepLength = ref<typeof STEP_COUNT>(STEP_COUNT);
+
+const showVelocity = ref(false);
+const showPitch = ref(false);
 
 const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 	getUi?: () => any;
@@ -513,31 +520,32 @@ const melodyUi = reactive<MelodyUi>({
 	arpTones: 'chord',
 });
 
-// Resize all instrument arrays when switching 16/32
 function setStepLength(len: 16 | 32) {
-	if (stepLength.value === len) return;
-	stepLength.value = len;
+	const target = STEP_COUNT;
+
+	const resize = <T,>(arr: T[], fill: T) =>
+	(arr.length === target
+		? arr
+		: (arr.length < target
+			? [...arr, ...Array(target - arr.length).fill(fill)]
+			: arr.slice(0, target)));
 
 	instruments.value.forEach(inst => {
-		const resize = <T,>(arr: T[], fill: T) =>
-		(arr.length === len ? arr :
-			(arr.length < len ? [...arr, ...Array(len - arr.length).fill(fill)]
-				: arr.slice(0, len)));
-
 		inst.steps = resize(inst.steps, false);
 		inst.velocities = resize(inst.velocities, 1.0);
 
-		// only synth has pitches
 		if (inst.pitches) inst.pitches = resize(inst.pitches, currentDefaultHz.value);
-		if ((inst as any).waveforms) (inst as any).waveforms = resize((inst as any).waveforms, selectedWaveform.value as any);
+		if ((inst as any).waveforms)
+			(inst as any).waveforms = resize((inst as any).waveforms, selectedWaveform.value as any);
 	});
-	noiseMask.value = resize(noiseMask.value, true);
 
+	noiseMask.value = resize(noiseMask.value, true);
+	stepLength.value = target;
 }
 
-const padSizeStyle = computed(() => ({
-	'--padTEST-size': stepLength.value === 16 ? '41px' : '17px'
-}));
+
+const padSizeStyle = computed(() => ({ '--padTEST-size': '41px' }));
+
 
 //SEQUENCER TOOLS END
 
@@ -605,12 +613,12 @@ function resetSynthPadsToDefaults() {
 	globalOctaveOffset.value = 0;
 
 	const len = stepLength.value;
-	const baseHz = freqForRootAtOct('A', defaultOctaveForPads); // A3
+	const baseHz = freqForRootAtOct('A', defaultOctaveForPads);
 
 	// Clear selection, reset per-pad volume, melody, and waveform
 	inst.steps = Array(len).fill(false);
-	inst.velocities = Array(len).fill(1.0);                     // 100%
-	inst.pitches = Array(len).fill(baseHz);                  // A3
+	inst.velocities = Array(len).fill(1.0);
+	inst.pitches = Array(len).fill(baseHz);
 	inst.waveforms = Array(len).fill('sine' as OscillatorType);
 
 	// Keep the global waveform selector consistent with pad defaults
@@ -692,16 +700,25 @@ watch(seqOpen, v => localStorage.setItem('seqOpen', String(v)));
 //Collapsible Cards BEGIN
 
 // Which collapsibles exist on this page (keep ids in one place)
-const collapseIds = ['pattern-tools', 'melody', 'generators', 'sound', 'pitch', 'mod', 'fx'] as const;
+const collapseIds = [
+	'pattern-tools',
+	'melody',
+	'generators',
+	'envelope',   // was 'sound'
+	'filter',     // new
+	'pitch',
+	'mod',
+	'fx',
+] as const;
+
 type CollapseId = typeof collapseIds[number];
 
-// Parent-held open state for each card. Start as `undefined` so each card
-// can use its own saved localStorage value on first render.
 const collapsibleState = reactive<Record<CollapseId, boolean | undefined>>({
 	'pattern-tools': undefined,
 	'melody': undefined,
 	'generators': undefined,
-	'sound': undefined,
+	'envelope': undefined,
+	'filter': undefined,
 	'pitch': undefined,
 	'mod': undefined,
 	'fx': undefined,
@@ -1200,7 +1217,6 @@ onBeforeUnmount(() => {
 	window.removeEventListener('keyup', onGlobalKeyup, { capture: true } as any);
 
 	if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
-	stopSnh();
 
 	window.removeEventListener('mouseup', stopTempoRepeat as any);
 	window.removeEventListener('touchend', stopTempoRepeat as any);
@@ -1445,22 +1461,22 @@ const currentPadWave = computed<OscillatorType>({
 
 // Per-pad Noise toggle for the pad settings popover
 const padNoiseEnabled = computed<boolean>({
-  get() {
-    const i = padSettings.index;
-    // default "true" (noise allowed) if out of range or not set yet
-    return (i >= 0 && i < noiseMask.value.length)
-      ? (noiseMask.value[i] ?? true)
-      : true;
-  },
-  set(v: boolean) {
-    const i = padSettings.index;
-    if (i < 0) return;
-    // ensure mask exists & sized (should already be handled by your setStepLength, but keep it safe)
-    if (!Array.isArray(noiseMask.value) || noiseMask.value.length !== stepLength.value) {
-      noiseMask.value = Array(stepLength.value).fill(true);
-    }
-    noiseMask.value[i] = !!v;
-  }
+	get() {
+		const i = padSettings.index;
+		// default "true" (noise allowed) if out of range or not set yet
+		return (i >= 0 && i < noiseMask.value.length)
+			? (noiseMask.value[i] ?? true)
+			: true;
+	},
+	set(v: boolean) {
+		const i = padSettings.index;
+		if (i < 0) return;
+		// ensure mask exists & sized (should already be handled by your setStepLength, but keep it safe)
+		if (!Array.isArray(noiseMask.value) || noiseMask.value.length !== stepLength.value) {
+			noiseMask.value = Array(stepLength.value).fill(true);
+		}
+		noiseMask.value[i] = !!v;
+	}
 });
 
 
@@ -1994,7 +2010,7 @@ const exportState = computed<StepSequencerState>(() => {
 
 		fx: {
 			delay: { enabled: delayEnabled.value, sync: delaySync.value, time: delayTime.value, feedback: delayFeedback.value, mix: delayMix.value, toneEnabled: delayToneEnabled.value, toneHz: delayToneHz.value, toneType: delayToneType.value },
-			drive: { enabled: driveEnabled.value, type: driveType.value as any, amount: driveAmount.value, tone: driveTone.value, mix: driveMix.value },
+			drive: { enabled: driveEnabled.value, type: 'overdrive', amount: driveAmount.value, tone: driveTone.value, mix: driveMix.value },
 			reverb: {
 				enabled: reverbEnabled.value,
 				mix: reverbMix.value,
@@ -2014,36 +2030,29 @@ const exportState = computed<StepSequencerState>(() => {
 const lfoEnabled = ref(true);
 const lfoRate = ref(5);
 const lfoDepth = ref(0);
-const lfoTarget = ref<'pitch' | 'gain' | 'filter' | 'pan' | 'resonance'>('pitch');
+const lfoTarget = ref<'pitch' | 'filter'>('pitch');
 
-const lfoWaveform = ref<'sine' | 'triangle' | 'sawtooth' | 'square' | 'random'>('sine');
+const lfoWaveform = ref<'sine' | 'square'>('sine');
 const lfoSync = ref(true);
 const lfoDivision = ref('1/8');
 
 // sensible depth caps per target
 const lfoDepthMax = computed(() => {
 	switch (lfoTarget.value) {
-		case 'pitch': return 1200;     // cents (±1 octave)
-		case 'gain': return 100;       // %
-		case 'pan': return 100;        // %
-		case 'filter': return 5000;    // Hz swing
-		case 'resonance': return 10;   // Q
+		case 'pitch': return 1200;
+
+		case 'filter': return 5000;
 		default: return 100;
 	}
 });
 
 //  LFO source + core gain 
-let lfoOsc: OscillatorNode | null = null;          // for sine/tri/saw/square
-let lfoSnh: ConstantSourceNode | null = null;      // for random (sample & hold)
-let snhTimer: number | null = null;
-
-const lfoGain = audioCtx.createGain(); // raw depth scaler (units depend on target)
+let lfoOsc: OscillatorNode | null = null;
+const lfoGain = audioCtx.createGain();
 lfoGain.gain.value = 0;
 
 // helper: compute Hz when synced
 function divisionToHz(div: string, bpm: number): number {
-	// period in beats: 1/1=4 beats, 1/2=2 beats, 1/4=1 beat, 1/8=0.5, 1/16=0.25
-	// dotted (.) = ×1.5 length, triplet (T) = ×2/3 length
 	const parts = div.replace(/\s+/g, '');
 	const dotted = parts.endsWith('.');
 	const trip = parts.endsWith('T');
@@ -2062,48 +2071,26 @@ function currentLfoHz() {
 	return lfoSync.value ? divisionToHz(lfoDivision.value, tempo.value) : lfoRate.value;
 }
 
-function stopSnh() {
-	if (snhTimer) { clearInterval(snhTimer as any); snhTimer = null; }
-	if (lfoSnh) { try { lfoSnh.stop(); } catch { } lfoSnh.disconnect(); lfoSnh = null; }
-}
-
 function ensureLfoSource() {
-	// clean up both
+	// clean up
 	if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
-	stopSnh();
 
 	const hz = currentLfoHz();
-
-	if (lfoWaveform.value === 'random') {
-		// Sample & Hold via ConstantSource + JS timer
-		lfoSnh = audioCtx.createConstantSource();
-		lfoSnh.offset.value = (Math.random() * 2 - 1);
-		lfoSnh.connect(lfoGain);
-		lfoSnh.start();
-
-		const ms = Math.max(15, Math.round(1000 / hz));
-		snhTimer = window.setInterval(() => {
-			const t = audioCtx.currentTime;
-			const v = (Math.random() * 2 - 1);
-			lfoSnh!.offset.setTargetAtTime(v, t, 0.005);
-		}, ms) as unknown as number;
-	} else {
-		lfoOsc = audioCtx.createOscillator();
-		lfoOsc.type = lfoWaveform.value;
-		lfoOsc.frequency.setValueAtTime(hz, audioCtx.currentTime);
-		lfoOsc.connect(lfoGain);
-		lfoOsc.start();
-	}
+	lfoOsc = audioCtx.createOscillator();
+	lfoOsc.type = lfoWaveform.value;
+	lfoOsc.frequency.setValueAtTime(hz, audioCtx.currentTime);
+	lfoOsc.connect(lfoGain);
+	lfoOsc.start();
 }
+
 function startLfoIfNeeded(): void {
 	if (!lfoEnabled.value) return;
-	if (lfoOsc || lfoSnh) return;
+	if (lfoOsc) return;
 
 	if (audioCtx.state === 'running') {
 		ensureLfoSource();
 		return;
 	}
-
 	const onStateChange = () => {
 		if (audioCtx.state === 'running') {
 			ensureLfoSource();
@@ -2115,62 +2102,49 @@ function startLfoIfNeeded(): void {
 
 watch(lfoEnabled, (on) => {
 	if (on) startLfoIfNeeded();
-	else {
-		// stop both possible sources
-		if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
-		stopSnh();
-	}
+	else if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
 });
 
 watch([lfoWaveform, lfoSync, lfoDivision, tempo], () => {
 	if (!lfoEnabled.value) return;
 
-	if (!lfoOsc && !lfoSnh) {
-		// Not running yet — try to start if the context is ready
+	if (!lfoOsc) {
 		startLfoIfNeeded();
 		return;
 	}
 
-	// If we *are* running, adapt/rebuild like before
-	if (lfoWaveform.value === 'random') {
-		stopSnh();
-		if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
-		ensureLfoSource();
-	} else if (lfoOsc) {
-		lfoOsc.type = lfoWaveform.value;
-		lfoOsc.frequency.setValueAtTime(currentLfoHz(), audioCtx.currentTime);
-	} else {
-		ensureLfoSource();
-	}
+	lfoOsc.type = lfoWaveform.value;
+	lfoOsc.frequency.setValueAtTime(currentLfoHz(), audioCtx.currentTime);
 });
 
 watch(lfoRate, (r) => {
 	if (!lfoEnabled.value) return;
 	if (!lfoSync.value) {
-		if (!lfoOsc && !lfoSnh) startLfoIfNeeded();
+		if (!lfoOsc) startLfoIfNeeded();
 		if (lfoOsc) lfoOsc.frequency.setValueAtTime(r, audioCtx.currentTime);
 	}
 });
+
 
 // scale lfoGain.gain to match the target’s expected unit
 function applyDepthScale() {
 	const t = audioCtx.currentTime;
 	switch (lfoTarget.value) {
 		case 'pitch':
-			lfoGain.gain.setValueAtTime(lfoDepth.value, t);         // cents
+			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
 			break;
-		case 'pan':
-			lfoGain.gain.setValueAtTime(lfoDepth.value / 100, t);   // 0..1
-			break;
-		case 'gain':
-			lfoGain.gain.setValueAtTime(1, t);
-			break;
+		// case 'pan':
+		// 	lfoGain.gain.setValueAtTime(lfoDepth.value / 100, t);   
+		// 	break;
+		// case 'gain':
+		// 	lfoGain.gain.setValueAtTime(1, t);
+		// 	break;
 		case 'filter':
-			lfoGain.gain.setValueAtTime(lfoDepth.value, t);         // Hz
+			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
 			break;
-		case 'resonance':
-			lfoGain.gain.setValueAtTime(lfoDepth.value, t);         // Q
-			break;
+		// case 'resonance':
+		// 	lfoGain.gain.setValueAtTime(lfoDepth.value, t);         
+		// 	break;
 	}
 }
 watch([lfoDepth, lfoTarget], applyDepthScale);
@@ -2424,12 +2398,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 	const blend = (addNoiseForThisPad && noiseEnabled.value)
 		? Math.min(Math.max(noiseAmount.value, 0), 1)
 		: 0;
-
-	// const oscBlend = 1 - blend;
-	// const noiseBlend = blend;
-	// const safeOscGain = Math.max(0.0001, velocity * oscBlend);
-	// const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
-
 	const oscBlend = 1 - blend;
 	const noiseBlend = blend;
 
@@ -2438,8 +2406,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 	const safeOscGain = Math.max(0.0001, velocity * oscBlend * wfComp);
 
 	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
-
-
 
 	// Single amplitude envelope for the OSC path
 	if (envelopeEnabled.value) {
@@ -2519,29 +2485,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 
 				lfoGain.connect(lfoTap).connect(ctrlLP).connect(voiceFilter.frequency);
 
-			} else if (lfoTarget.value === 'resonance') {
-				//  keep Q >= 0 and <= sensible cap, with smoothing 
-				const qBase = filterEnabled.value ? filterResonance.value : 0.0001;
-				const qMin = 0.0001, qMax = 20; // wide but safe musical range
-
-				const maxUp = qMax - qBase;     // upward headroom
-				const maxDown = qBase - qMin;     // downward headroom
-				const maxSym = Math.max(0, Math.min(maxUp, maxDown));
-
-				const qScale = (lfoDepth.value > 0) ? Math.min(1, maxSym / lfoDepth.value) : 0;
-
-				const qTap = audioCtx.createGain();
-				qTap.gain.value = qScale;
-
-				const qLP = audioCtx.createBiquadFilter();
-				qLP.type = 'lowpass';
-				qLP.frequency.value = 120;
-
-				lfoGain.connect(qTap).connect(qLP).connect(voiceFilter.Q);
-
-			} else if (lfoTarget.value === 'pan') {
-				const lfoTap = audioCtx.createGain(); lfoTap.gain.value = 1;
-				lfoGain.connect(lfoTap).connect(panner.pan);
 			}
 		}
 
@@ -2553,59 +2496,15 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		if (fmHandle) fmHandle.stop(noteEnd);
 	}
 
-	//  AMPLITUDE LFO (tremolo) — multiplicative, post-envelope 
-	// Assumes applyDepthScale() sets lfoGain.gain = 1 for 'gain' target (raw −1..+1)
-	let postAmpNode = oscEnvGain;
-
-	if (lfoEnabled.value && lfoTarget.value === 'gain') {
-		const tremoloVca = audioCtx.createGain();
-		tremoloVca.gain.setValueAtTime(1, startTime);
-
-		// Map LFO −1..+1 → 0..1
-		const half = audioCtx.createGain(); half.gain.value = 0.5;
-		const offset = audioCtx.createConstantSource(); offset.offset.value = 0.5;
-
-		const lfoUni = audioCtx.createGain(); // 0..1 unipolar LFO
-		lfoGain.connect(half).connect(lfoUni);
-		offset.connect(lfoUni);
-		offset.start(startTime);
-		offset.stop(noteEnd + 0.05);
-
-		// Depth 0..1 from lfoDepth (0..100)
-		const d = Math.min(1, Math.max(0, lfoDepth.value / 100));
-
-		// Gain = (1 - d) + d * lfoUni
-		const scale = audioCtx.createGain();                // d * lfoUni
-		scale.gain.setValueAtTime(d, startTime);
-		lfoUni.connect(scale);
-
-		const base = audioCtx.createConstantSource();       // (1 - d)
-		base.offset.setValueAtTime(1 - d, startTime);
-		base.start(startTime);
-		base.stop(noteEnd + 0.05);
-
-		const ampSum = audioCtx.createGain();
-		scale.connect(ampSum);
-		base.connect(ampSum);
-
-		ampSum.connect(tremoloVca.gain);
-
-		// audio through the VCA
-		oscEnvGain.connect(tremoloVca);
-		postAmpNode = tremoloVca;
-	}
-
-	//  Route to the rest of the chain using postAmpNode 
 	if (driveEnabled.value) {
-		postAmpNode.connect(driveDry);
-		postAmpNode.connect(driveShaper);
+		oscEnvGain.connect(driveDry);
+		oscEnvGain.connect(driveShaper);
 	} else {
-		postAmpNode.connect(driveSum);
+		oscEnvGain.connect(driveSum);
 	}
 
 	//  Noise 
 	if (noiseBlend > 0) {
-		// map morph 0..1 into two adjacent stops
 		const t = Math.min(1, Math.max(0, noiseColor.value));
 		let lower = NOISE_STOPS[0], upper = NOISE_STOPS[NOISE_STOPS.length - 1];
 		for (let i = 0; i < NOISE_STOPS.length - 1; i++) {
@@ -2613,7 +2512,7 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 			if (t >= a.pos && t <= b.pos) { lower = a; upper = b; break; }
 		}
 		const span = Math.max(1e-6, upper.pos - lower.pos);
-		const wMorph = (t - lower.pos) / span;  // 0..1 within the two stops
+		const wMorph = (t - lower.pos) / span;
 		const wA = 1 - wMorph, wB = wMorph;
 
 		const bufA = noiseBuffers[lower.key];
@@ -2648,7 +2547,7 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 			noiseEnvGain.gain.setValueAtTime(0.0001, startTime);
 			noiseEnvGain.gain.exponentialRampToValueAtTime(safePeak, attackEnd);
 
-			const BURST_MAX_MS = 250; // keep in sync with UI max
+			const BURST_MAX_MS = 250;
 			const burstActive = noiseAttackBurst.value && (noiseBurstMs.value < BURST_MAX_MS);
 			const burstEnd = burstActive
 				? Math.min(noteEnd, attackEnd + Math.max(0.005, noiseBurstMs.value / 1000))
@@ -2930,26 +2829,18 @@ function generateNoiseBuffers() {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Drive effect START
-function generateDriveCurve(type, amount = 0.5) {
+function generateDriveCurve(type: string, amount = 0.5) {
 	const samples = 1024;
 	const curve = new Float32Array(samples);
-	const deg = Math.PI / 180;
-
 	for (let i = 0; i < samples; ++i) {
 		const x = (i * 2) / samples - 1;
-		switch (type) {
-			case 'distortion':
-				curve[i] = (3 + amount * 30) * x * 20 * deg / (Math.PI + amount * Math.abs(x));
-				break;
-			case 'overdrive':
-			default:
-				curve[i] = Math.tanh(x * (1 + amount * 25));
-				break;
-		}
-
+		// force overdrive behavior
+		curve[i] = Math.tanh(x * (1 + amount * 25));
 	}
 	return curve;
 }
+
+
 function initDriveNow() {
 	const t = audioCtx.currentTime;
 
@@ -3133,9 +3024,7 @@ function applySnapshot(s: any) {
 	// UI
 	if (s.ui) {
 		if (typeof s.ui.currentTheme === 'string') currentTheme.value = s.ui.currentTheme;
-		if (s.ui.stepLength === 16 || s.ui.stepLength === 32) {
-			setStepLength(s.ui.stepLength);
-		}
+		setStepLength(16);
 		if (s.ui.seqOpen != null) seqOpen.value = !!s.ui.seqOpen;
 		if (s.ui.collapsibleState) {
 			Object.keys(collapsibleState).forEach((k) => {
@@ -3167,11 +3056,9 @@ function applySnapshot(s: any) {
 	if (syn.noise) {
 		noiseEnabled.value = !!syn.noise.enabled;
 
-		// color or legacy type → color
 		if (typeof syn.noise.color === 'number') {
 			noiseColor.value = Math.max(0, Math.min(1, syn.noise.color));
 		} else {
-			// fallback: map old 'type' to a nearby color
 			const legacy = (syn.noise.type || '').toLowerCase();
 			const map: Record<string, number> = { brown: 0.0, pink: 0.25, white: 0.5, blue: 0.75, violet: 1.0 };
 			noiseColor.value = map[legacy] ?? 0.5;
@@ -3188,7 +3075,6 @@ function applySnapshot(s: any) {
 				? [...src]
 				: [...src.slice(0, len), ...Array(Math.max(0, len - src.length)).fill(true)];
 		} else if (!noiseMask.value?.length) {
-			// if no mask in save and ours is empty, create a full-true mask
 			noiseMask.value = Array(stepLength.value).fill(true);
 		}
 		if (typeof syn.noise.attackBurst === 'boolean') noiseAttackBurst.value = syn.noise.attackBurst;
@@ -3206,7 +3092,13 @@ function applySnapshot(s: any) {
 		lfoEnabled.value = !!syn.lfo.enabled;
 		if (typeof syn.lfo.rate === 'number') lfoRate.value = syn.lfo.rate;
 		if (typeof syn.lfo.depth === 'number') lfoDepth.value = syn.lfo.depth;
-		if (syn.lfo.target) lfoTarget.value = syn.lfo.target;
+
+		if (syn.lfo.target) {
+			lfoTarget.value = (syn.lfo.target === 'filter' || syn.lfo.target === 'pitch')
+				? syn.lfo.target
+				: 'pitch';
+		}
+
 		if (syn.lfo.waveform) lfoWaveform.value = syn.lfo.waveform;
 		if (typeof syn.lfo.sync === 'boolean') lfoSync.value = syn.lfo.sync;
 		if (syn.lfo.division) lfoDivision.value = syn.lfo.division;
@@ -3438,6 +3330,9 @@ function resetUiToFactoryDefaults() {
 	melodyUi.arpRate = '1/16';
 	melodyUi.arpOctaves = 1;
 	melodyUi.arpTones = 'chord';
+
+	showVelocity.value = false;
+	showPitch.value = false;
 
 	// instruments
 	instruments.value.forEach((i: any) => {
@@ -4325,7 +4220,6 @@ function resetUiToFactoryDefaults() {
 	background-position: 0 0, 0 0;
 }
 
-/* Mode: static */
 .module.noise .noise-overlay.mode-static {
 	mix-blend-mode: screen;
 }
@@ -4343,7 +4237,6 @@ function resetUiToFactoryDefaults() {
 			transparent 1% 2%);
 	background-size: 60px 60px, 90px 90px, 120px 120px, 6px 6px;
 	animation:
-		/* noise-shift var(--noise-anim-dur, 1s) steps(var(--noise-fps, 12)) infinite, */
 		noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
 	filter: contrast(110%) brightness(105%);
 	opacity: 1;
@@ -4412,5 +4305,37 @@ function resetUiToFactoryDefaults() {
 
 .noise-tv-bg .pt-card {
 	background: none;
+}
+
+.module.sound .split-two {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 12px;
+}
+
+@media (min-width: 720px) {
+	.module.sound .split-two {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+@media (min-width: 1280px) {
+	.module.sound .split-two {
+		gap: 14px;
+	}
+}
+
+
+/* Side-by-side layout for Drive + Reverb */
+.fx-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;               /* matches your effects spacing */
+  align-items: start;
+}
+
+/* Collapse to single column on narrow screens */
+@media (max-width: 720px) {
+  .fx-pair { grid-template-columns: 1fr; }
 }
 </style>
