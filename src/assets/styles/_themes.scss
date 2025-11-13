@@ -832,10 +832,6 @@ $dark: map.get($themes, dark);
     box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.05);
     min-width: 0;
     color: var(--pt-text);
-
-    .step-sequencer-subheader {
-        margin-bottom: 25px;
-    }
 }
 
 .pt-card .pt-title {

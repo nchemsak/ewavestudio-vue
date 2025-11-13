@@ -270,13 +270,13 @@
 								@click="openFxAdvanced($event)">⋯</button>
 						</template>
 						<!-- Delay panel -->
-						<section class="pt-section">
+						<!-- <section class="pt-section">
 							<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
 								v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5"
 								v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback"
 								v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled"
 								v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" />
-						</section>
+						</section> -->
 
 						<!-- Drive panel -->
 						<!-- <section class="pt-section">
@@ -291,12 +291,18 @@
 						<!-- Drive + Reverb row -->
 						<section class="pt-section">
 							<div class="fx-pair">
+								<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
+									v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5"
+									v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback"
+									v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled"
+									v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" />
 								<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" :driveType="'overdrive'"
 									v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
 									v-model:driveMix="driveMix" />
 
 								<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
-									v-model:mix="reverbMix" v-model:decay="reverbDecay" />
+									v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone" />
+
 							</div>
 						</section>
 						<!-- Effects — Advanced -->
@@ -1843,30 +1849,150 @@ watch(driveMix, val => {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+
+// Reverb START
+// const reverbEnabled = ref(false);
+// const reverbMix = ref(0.18);      // 0..1
+// const reverbDecay = ref(1.4);     // seconds
+
+// // 0 = dark, 1 = bright
+// const reverbTone = ref(0.6);      // normalized tone control
+
+// const reverbConvolver = audioCtx.createConvolver();
+// const reverbToneFilter = audioCtx.createBiquadFilter();
+// reverbToneFilter.type = 'lowpass';
+
+// const reverbWet = audioCtx.createGain();
+
 // Reverb START
 const reverbEnabled = ref(false);
-const reverbMix = ref(0.18);            // 0..1
-const reverbDecay = ref(1.4);           // seconds
-const reverbConvolver = audioCtx.createConvolver();
-const reverbWet = audioCtx.createGain();
+const reverbMix = ref(0.18);      // 0..1
+const reverbDecay = ref(1.4);     // seconds
 
-driveSum.connect(reverbConvolver);
+// 0 = dark, 1 = bright
+const reverbTone = ref(0.6);      // normalized tone control
+
+let reverbConvolver = audioCtx.createConvolver();   // was const
+const reverbToneFilter = audioCtx.createBiquadFilter();
+reverbToneFilter.type = 'lowpass';
+
+let reverbWet = audioCtx.createGain();              // was const
+
+// Track whether we've initialized the IR at least once
+let reverbIrReady = false;
+
+// Debounce handle so we don't regenerate on every tiny knob tick
+let reverbIrUpdateTimer: number | null = null;
+
+// Cross-fade between old and new IR to avoid chopping tails
+function swapReverbIRSmooth(newBuffer: AudioBuffer) {
+  const oldConvolver = reverbConvolver;
+  const oldWet = reverbWet;
+
+  // New convolver + wet gain
+  const newConvolver = audioCtx.createConvolver();
+  newConvolver.buffer = newBuffer;
+
+  const newWet = audioCtx.createGain();
+  newWet.gain.value = 0;
+
+  // Wire in parallel
+  reverbToneFilter.connect(newConvolver);
+  newConvolver.connect(newWet);
+  newWet.connect(masterGain);
+
+  const fadeTime = 0.25; // seconds
+  const now = audioCtx.currentTime;
+  const targetWet = reverbEnabled.value ? reverbMix.value : 0;
+
+  // Fade new IR up
+  newWet.gain.setValueAtTime(0, now);
+  newWet.gain.linearRampToValueAtTime(targetWet, now + fadeTime);
+
+  // Fade old IR down
+  oldWet.gain.setValueAtTime(oldWet.gain.value, now);
+  oldWet.gain.linearRampToValueAtTime(0, now + fadeTime);
+
+  // After fade, disconnect old chain and update references
+  setTimeout(() => {
+    try { reverbToneFilter.disconnect(oldConvolver); } catch { /* no-op */ }
+    try { oldConvolver.disconnect(); } catch { /* no-op */ }
+    try { oldWet.disconnect(); } catch { /* no-op */ }
+
+    reverbConvolver = newConvolver;
+    reverbWet = newWet;
+  }, fadeTime * 1000 + 50);
+}
+
+
+
+// Drive sum → tone filter → convolver → wet gain → master
+driveSum.connect(reverbToneFilter);
+reverbToneFilter.connect(reverbConvolver);
 reverbConvolver.connect(reverbWet);
 reverbWet.connect(masterGain);
 reverbWet.gain.value = 0;
 
+// Generate IR based on decay
+// function ensureReverbIR() {
+// 	const buf = generateReverbIR(audioCtx as any, {
+// 		decaySeconds: reverbDecay.value,
+// 		sampleRate: audioCtx.sampleRate,
+// 		stereo: true,
+// 		seed: 1337,
+// 	});
+// 	reverbConvolver.buffer = buf;
+// }
+
+// watch(reverbDecay, () => { ensureReverbIR(); });
+
 function ensureReverbIR() {
-	const buf = generateReverbIR(audioCtx as any, {
-		decaySeconds: reverbDecay.value,
-		sampleRate: audioCtx.sampleRate,
-		stereo: true,
-		seed: 1337,
-	});
-	reverbConvolver.buffer = buf;
+  const buf = generateReverbIR(audioCtx as any, {
+    decaySeconds: reverbDecay.value,
+    sampleRate: audioCtx.sampleRate,
+    stereo: true,
+    seed: 1337,
+  });
+
+  // First-time init: no need to cross-fade, just assign
+  if (!reverbIrReady || !reverbConvolver.buffer) {
+    reverbConvolver.buffer = buf;
+    reverbIrReady = true;
+    return;
+  }
+
+  // Subsequent changes: smooth swap so the current tail isn't chopped
+  swapReverbIRSmooth(buf);
 }
 
-watch(reverbDecay, () => { ensureReverbIR(); });
+// Debounce decay changes so we only rebuild IR once the knob slows down
+watch(reverbDecay, () => {
+  if (reverbIrUpdateTimer != null) {
+    clearTimeout(reverbIrUpdateTimer);
+  }
+  reverbIrUpdateTimer = window.setTimeout(() => {
+    reverbIrUpdateTimer = null;
+    ensureReverbIR();
+  }, 120); // ~1–2 frames of pause before rebuilding
+});
 
+
+// Map 0..1 tone → lowpass frequency (dark → bright)
+function applyReverbTone() {
+	const t = Math.max(0, Math.min(1, reverbTone.value));
+	const minHz = 800;
+	const maxHz = 12000;
+	const freq = minHz * Math.pow(maxHz / minHz, t); // exponential-ish
+	const now = audioCtx.currentTime;
+	reverbToneFilter.frequency.setTargetAtTime(freq, now, 0.05);
+}
+
+watch(reverbTone, applyReverbTone);
+onMounted(() => {
+	applyReverbTone();
+});
+
+// Enable/disable reverb
 watch(reverbEnabled, (on) => {
 	const t = audioCtx.currentTime;
 	if (on) {
@@ -1877,12 +2003,14 @@ watch(reverbEnabled, (on) => {
 	}
 });
 
+// Mix changes
 watch(reverbMix, (v) => {
 	const t = audioCtx.currentTime;
 	reverbWet.gain.setTargetAtTime(reverbEnabled.value ? v : 0, t, 0.03);
 });
-
 // Reverb END
+
+
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2015,6 +2143,7 @@ const exportState = computed<StepSequencerState>(() => {
 				enabled: reverbEnabled.value,
 				mix: reverbMix.value,
 				decay: reverbDecay.value,
+				tone: reverbTone.value,
 			},
 
 		},
@@ -2987,7 +3116,9 @@ function buildSnapshot() {
 				enabled: reverbEnabled.value,
 				mix: reverbMix.value,
 				decay: reverbDecay.value,
+				tone: reverbTone.value,
 			},
+
 
 		},
 		instruments: instruments.value.map(i => ({
@@ -3144,7 +3275,9 @@ function applySnapshot(s: any) {
 		reverbEnabled.value = !!s.fx.reverb.enabled;
 		if (typeof s.fx.reverb.mix === 'number') reverbMix.value = s.fx.reverb.mix;
 		if (typeof s.fx.reverb.decay === 'number') reverbDecay.value = s.fx.reverb.decay;
+		if (typeof s.fx.reverb.tone === 'number') reverbTone.value = s.fx.reverb.tone;
 	}
+
 
 	if (s.melody) {
 		if (s.melody.keyRoot) melodyUi.keyRoot = s.melody.keyRoot;
@@ -3373,6 +3506,7 @@ function resetUiToFactoryDefaults() {
 	reverbEnabled.value = false;
 	reverbMix.value = 0.18;
 	reverbDecay.value = 1.4;
+	reverbTone.value = 0.6;
 
 	// Close any open menus/popovers
 	fxAdvanced.open = false;
@@ -4328,14 +4462,17 @@ function resetUiToFactoryDefaults() {
 
 /* Side-by-side layout for Drive + Reverb */
 .fx-pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;               /* matches your effects spacing */
-  align-items: start;
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	gap: 12px;
+	/* matches your effects spacing */
+	align-items: start;
 }
 
 /* Collapse to single column on narrow screens */
 @media (max-width: 720px) {
-  .fx-pair { grid-template-columns: 1fr; }
+	.fx-pair {
+		grid-template-columns: 1fr;
+	}
 }
 </style>

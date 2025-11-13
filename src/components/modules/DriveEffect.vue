@@ -6,15 +6,15 @@
                 <span class="check-led" :class="{ on: localEnabled }" aria-hidden="true"></span>
 
                 <div class="knob-cell level">
-                    <Knob v-model="localMix" label="Level" :min="0" :max="1" :step="0.01" size="small" :color="color"
+                    <Knob v-model="localMix" label="LEVEL" :min="0" :max="1" :step="0.01" size="small" :color="color"
                         :disabled="!localEnabled" @knobStart="activeKnob = 'mix'" @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'mix'" class="custom-tooltip">
                         {{ Math.round(localMix * 100) }}%
                     </span>
                 </div>
-
+ 
                 <div class="knob-cell drive">
-                    <Knob v-model="localAmount" label="Drive" :min="0" :max="1" :step="0.01" size="small" :color="color"
+                    <Knob v-model="localAmount" label="DRIVE" :min="0" :max="1" :step="0.01" size="small" :color="color"
                         :disabled="!localEnabled" @knobStart="activeKnob = 'amount'" @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'amount'" class="custom-tooltip">
                         {{ Math.round(localAmount * 100) }}%
@@ -22,7 +22,7 @@
                 </div>
 
                 <div class="knob-cell tone">
-                    <Knob v-model="localTone" label="Tone" :min="100" :max="10000" :step="10" size="small"
+                    <Knob v-model="localTone" label="TONE" :min="100" :max="10000" :step="10" size="small"
                         :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'tone'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'tone'" class="custom-tooltip">
@@ -127,7 +127,7 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
 .panel-top {
     position: relative;
     border-radius: 8px 8px 0px 0px;
-    padding: 12px 12px 10px;
+    padding: 12px 0px 10px;
     background: linear-gradient(#f1df8f, #ebbd54);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, .35),
@@ -164,6 +164,8 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
 .level {
     grid-area: level;
 }
+
+
 
 .drive {
     grid-area: drive;
@@ -240,4 +242,6 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
     transform: translateY(1px);
     filter: brightness(.96);
 }
+
+
 </style>

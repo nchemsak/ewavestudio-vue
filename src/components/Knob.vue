@@ -10,7 +10,7 @@
 				<div class="dial-rotor" :style="{ transform: `rotate(${rotation}deg)` }"></div>
 			</div>
 
-			<svg class="dial-svg" viewBox="0 0 100 100" aria-hidden="true"> 
+			<svg class="dial-svg" viewBox="0 0 100 100" aria-hidden="true">
 				<defs>
 					<linearGradient :id="gradId" x1="20" y1="76" x2="80" y2="76" gradientUnits="userSpaceOnUse">
 						<stop offset="0%" :stop-color="arcStartColor" />
@@ -34,6 +34,7 @@
 					stroke-width="6" :style="{ strokeDashoffset: 184 - 184 * ((rotation + 132) / 264) }" />
 			</svg>
 		</div>
+
 	</div>
 </template>
 
@@ -154,3 +155,44 @@ function startDrag(e, isTouch = false) {
 	window.addEventListener(end, onUp)
 }
 </script>
+<style scoped>
+.drive-pedal .level .knob-label,
+.drive-pedal .drive .knob-label {
+	position: absolute;
+	bottom: -10px;
+	width: 40px;
+
+}
+
+.drive-pedal .knob-label,
+.reverb-pedal .knob-label,
+.delay-pedal .knob-label {
+	color: black;
+	font-weight: bold;
+}
+
+
+.drive-pedal .tone .knob-label,
+.reverb-pedal .tone .knob-label,
+.delay-pedal .tone .knob-label {
+	position: absolute;
+	top: -14px;
+	width: 40px;
+}
+
+.reverb-pedal .mix .knob-label,
+.reverb-pedal .decay .knob-label {
+	position: absolute;
+	bottom: -10px;
+	width: 40px;
+}
+
+.delay-pedal .time .knob-label,
+.delay-pedal .feedback .knob-label,
+.delay-pedal .mix .knob-label,
+.delay-pedal .cutoff .knob-label {
+	position: absolute;
+	bottom: -10px;
+	width: 40px;
+}
+</style>
