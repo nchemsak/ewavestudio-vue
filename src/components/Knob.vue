@@ -195,4 +195,5 @@ function startDrag(e, isTouch = false) {
 	bottom: -10px;
 	width: 40px;
 }
+
 </style>

@@ -5,54 +5,27 @@
 				<span class="check-led" :class="{ on: localEnabled }" aria-hidden="true"></span>
 
 				<div class="knob-cell mix">
-					<Knob
-						v-model="localMix"
-						label="MIX"
-						:min="0"
-						:max="1"
-						:step="0.01"
-						size="small"
-						:disabled="!localEnabled"
-						:color="color"
-						@knobStart="activeKnob = 'mix'"
-						@knobEnd="activeKnob = null"
-					/>
+					<Knob v-model="localMix" label="MIX" :min="0" :max="1" :step="0.01" size="small"
+						:disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'mix'"
+						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'mix'" class="custom-tooltip">
 						{{ Math.round(localMix * 100) }}%
 					</span>
 				</div>
 
 				<div class="knob-cell decay">
-					<Knob
-						v-model="localDecay"
-						label="DECAY"
-						:min="0.2"
-						:max="4.0"
-						:step="0.05"
-						size="small"
-						:disabled="!localEnabled"
-						:color="color"
-						@knobStart="activeKnob = 'decay'"
-						@knobEnd="activeKnob = null"
-					/>
+					<Knob v-model="localDecay" label="DECAY" :min="0.2" :max="4.0" :step="0.05" size="small"
+						:disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'decay'"
+						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'decay'" class="custom-tooltip">
 						{{ localDecay.toFixed(2) }} s
 					</span>
 				</div>
 
 				<div class="knob-cell tone">
-					<Knob
-						v-model="localTone"
-						label="TONE"
-						:min="0"
-						:max="1"
-						:step="0.01"
-						size="small"
-						:disabled="!localEnabled"
-						:color="color"
-						@knobStart="activeKnob = 'tone'"
-						@knobEnd="activeKnob = null"
-					/>
+					<Knob v-model="localTone" label="TONE" :min="0" :max="1" :step="0.01" size="small"
+						:disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'tone'"
+						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'tone'" class="custom-tooltip">
 						{{ toneLabel }}
 					</span>
@@ -62,14 +35,10 @@
 			<div class="panel-seam" aria-hidden="true"></div>
 
 			<div class="panel-bottom">
-				<button
-					class="footswitch"
-					type="button"
-					:aria-pressed="localEnabled"
-					@click="localEnabled = !localEnabled"
-					@keydown.space.prevent="localEnabled = !localEnabled"
-					@keydown.enter.prevent="localEnabled = !localEnabled"
-				/>
+				<div class="effect-label">reverb</div>
+				<button class="footswitch" type="button" :aria-pressed="localEnabled"
+					@click="localEnabled = !localEnabled" @keydown.space.prevent="localEnabled = !localEnabled"
+					@keydown.enter.prevent="localEnabled = !localEnabled" />
 			</div>
 		</div>
 	</KnobGroup>
@@ -108,7 +77,6 @@ const localTone = ref<number>(props.tone);
 
 const activeKnob = ref<null | 'mix' | 'decay' | 'tone'>(null);
 
-/* Tooltip label for tone */
 const toneLabel = computed(() => {
 	const t = localTone.value;
 	if (t <= 0.25) return 'Dark';
@@ -116,13 +84,11 @@ const toneLabel = computed(() => {
 	return 'Neutral';
 });
 
-/* Emits */
 watch(localEnabled, v => emit('update:enabled', v));
 watch(localMix, v => emit('update:mix', Math.max(0, Math.min(1, v))));
 watch(localDecay, v => emit('update:decay', Math.max(0.2, Math.min(4.0, v))));
 watch(localTone, v => emit('update:tone', Math.max(0, Math.min(1, v))));
 
-/* Props → local mirrors */
 watch(() => props.enabled, v => (localEnabled.value = v));
 watch(() => props.mix, v => { if (v !== localMix.value) localMix.value = v; });
 watch(() => props.decay, v => { if (v !== localDecay.value) localDecay.value = v; });
@@ -132,7 +98,6 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 <style scoped>
 .reverb-pedal {
 	display: grid;
-	/* Match Drive: top, seam, footswitch */
 	grid-template-rows: auto 8px auto;
 	width: 100%;
 }
@@ -141,7 +106,9 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	position: relative;
 	border-radius: 8px 8px 0 0;
 	padding: 12px 0px 10px;
-	background: linear-gradient(#f1df8f, #ebbd54);
+
+	background: linear-gradient(#ccc5b4, #a39277);
+
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, .35),
 		0 1px 0 rgba(0, 0, 0, .35);
@@ -151,7 +118,7 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	grid-template-rows: auto auto auto;
 	grid-template-areas:
 		"led   led"
-		"mix   decay"
+		"decay   mix"
 		"tone  tone";
 	align-items: center;
 	justify-items: center;
@@ -210,17 +177,23 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	user-select: none;
 }
 
+.tone .custom-tooltip {
+    top:initial;
+    bottom:-18px;
+}
+
 .panel-seam {
 	height: 25px;
 	border-radius: 2px;
-	background: linear-gradient(#efe18a, #e1b952);
+
+	background: linear-gradient(#ccc5b4, #a39277);
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
 }
 
 .panel-bottom {
 	border-radius: 8px;
 	padding: 8px;
-	background: linear-gradient(#f0d367, #ebbd54);
+	background: linear-gradient(#ccc5b4, #a39277);
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, .3),
 		0 1px 0 rgba(0, 0, 0, .35);
@@ -229,7 +202,7 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 .footswitch {
 	display: block;
 	width: 100%;
-	height: 96px;
+	height: 75px;
 	border: 0;
 	border-radius: 8px;
 	background: linear-gradient(#3f3c3f, #2d2b2f);
@@ -245,7 +218,7 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	position: absolute;
 	inset: 8px;
 	border-radius: 8px;
-	box-shadow: 0 0 0 2px #caa84a inset;
+	box-shadow: 0 0 0 2px #2d2b2f inset;
 	opacity: .8;
 	pointer-events: none;
 }
@@ -253,5 +226,13 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 .footswitch:active {
 	transform: translateY(1px);
 	filter: brightness(.96);
+}
+
+.effect-label {
+	text-align: center;
+	line-height: 1;
+	padding-bottom: 8px;
+    text-shadow: 0px 0px 8px black;
+    color: white;
 }
 </style>

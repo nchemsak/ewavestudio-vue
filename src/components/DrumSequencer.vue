@@ -265,30 +265,11 @@
 
 				<div class="module fx fx-adv-anchor" ref="fxAnchor">
 					<SectionWrap id="fx" title="Effects" v-model="collapsibleState['fx']">
-						<template #tools>
+						<!-- <template #tools>
 							<button class="pt-info-icon" aria-label="Advanced options"
 								@click="openFxAdvanced($event)">⋯</button>
-						</template>
-						<!-- Delay panel -->
-						<!-- <section class="pt-section">
-							<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
-								v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5"
-								v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback"
-								v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled"
-								v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" />
-						</section> -->
+						</template> -->
 
-						<!-- Drive panel -->
-						<!-- <section class="pt-section">
-							<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" :driveType="'overdrive'"
-								v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
-								v-model:driveMix="driveMix" />
-						</section>
-						<section class="pt-section">
-							<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
-								v-model:mix="reverbMix" v-model:decay="reverbDecay" />
-						</section> -->
-						<!-- Drive + Reverb row -->
 						<section class="pt-section">
 							<div class="fx-pair">
 								<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
@@ -440,10 +421,6 @@
 				</div>
 			</section>
 		</div>
-		<!-- <PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
-			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave" :minHz="MIN_PAD_HZ"
-			:maxHz="MAX_PAD_HZ" :anchorRect="padPopover.anchorRect" :title="padPopover.title" /> -->
-
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
 			v-model:noiseEnabled="padNoiseEnabled" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
@@ -568,12 +545,12 @@ const fxAdvanced = reactive({ open: false, x: 0, y: 0 });
 
 const fxAnchor = ref<HTMLElement | null>(null);
 
-function openFxAdvanced(e: MouseEvent) {
-	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-	fxAdvanced.x = Math.round(r.right + 8);   // viewport coords
-	fxAdvanced.y = Math.round(r.bottom + 8);
-	fxAdvanced.open = true;
-}
+// function openFxAdvanced(e: MouseEvent) {
+// 	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+// 	fxAdvanced.x = Math.round(r.right + 8);   // viewport coords
+// 	fxAdvanced.y = Math.round(r.bottom + 8);
+// 	fxAdvanced.open = true;
+// }
 
 function onFxEsc(e: KeyboardEvent) {
 	if (e.key === 'Escape') {
@@ -695,7 +672,6 @@ function closeMenus() {
 
 //Sequencer Accordian BEGIN
 
-// const seqOpen = ref(localStorage.getItem('seqOpen') !== 'false');
 const seqOpen = ref(localStorage.getItem('seqOpen') === 'true');
 watch(seqOpen, v => localStorage.setItem('seqOpen', String(v)));
 
@@ -743,7 +719,9 @@ const allClosed = computed(() => collapseIds.every(id => collapsibleState[id] ==
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Theming START
+
 const currentTheme = ref('');
+
 // Theming END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -1217,7 +1195,8 @@ onMounted(() => {
 
 });
 onBeforeUnmount(() => {
-	cancelAnimationFrame(loopId);
+	// cancelAnimationFrame(loopId);
+	hardStopSequencer();
 	window.removeEventListener('mouseup', handleMouseUp);
 	window.removeEventListener('keydown', onGlobalKeydown, { capture: true } as any);
 	window.removeEventListener('keyup', onGlobalKeyup, { capture: true } as any);
@@ -1849,21 +1828,6 @@ watch(driveMix, val => {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-
-// Reverb START
-// const reverbEnabled = ref(false);
-// const reverbMix = ref(0.18);      // 0..1
-// const reverbDecay = ref(1.4);     // seconds
-
-// // 0 = dark, 1 = bright
-// const reverbTone = ref(0.6);      // normalized tone control
-
-// const reverbConvolver = audioCtx.createConvolver();
-// const reverbToneFilter = audioCtx.createBiquadFilter();
-// reverbToneFilter.type = 'lowpass';
-
-// const reverbWet = audioCtx.createGain();
-
 // Reverb START
 const reverbEnabled = ref(false);
 const reverbMix = ref(0.18);      // 0..1
@@ -1886,45 +1850,43 @@ let reverbIrUpdateTimer: number | null = null;
 
 // Cross-fade between old and new IR to avoid chopping tails
 function swapReverbIRSmooth(newBuffer: AudioBuffer) {
-  const oldConvolver = reverbConvolver;
-  const oldWet = reverbWet;
+	const oldConvolver = reverbConvolver;
+	const oldWet = reverbWet;
 
-  // New convolver + wet gain
-  const newConvolver = audioCtx.createConvolver();
-  newConvolver.buffer = newBuffer;
+	// New convolver + wet gain
+	const newConvolver = audioCtx.createConvolver();
+	newConvolver.buffer = newBuffer;
 
-  const newWet = audioCtx.createGain();
-  newWet.gain.value = 0;
+	const newWet = audioCtx.createGain();
+	newWet.gain.value = 0;
 
-  // Wire in parallel
-  reverbToneFilter.connect(newConvolver);
-  newConvolver.connect(newWet);
-  newWet.connect(masterGain);
+	// Wire in parallel
+	reverbToneFilter.connect(newConvolver);
+	newConvolver.connect(newWet);
+	newWet.connect(masterGain);
 
-  const fadeTime = 0.25; // seconds
-  const now = audioCtx.currentTime;
-  const targetWet = reverbEnabled.value ? reverbMix.value : 0;
+	const fadeTime = 0.25; // seconds
+	const now = audioCtx.currentTime;
+	const targetWet = reverbEnabled.value ? reverbMix.value : 0;
 
-  // Fade new IR up
-  newWet.gain.setValueAtTime(0, now);
-  newWet.gain.linearRampToValueAtTime(targetWet, now + fadeTime);
+	// Fade new IR up
+	newWet.gain.setValueAtTime(0, now);
+	newWet.gain.linearRampToValueAtTime(targetWet, now + fadeTime);
 
-  // Fade old IR down
-  oldWet.gain.setValueAtTime(oldWet.gain.value, now);
-  oldWet.gain.linearRampToValueAtTime(0, now + fadeTime);
+	// Fade old IR down
+	oldWet.gain.setValueAtTime(oldWet.gain.value, now);
+	oldWet.gain.linearRampToValueAtTime(0, now + fadeTime);
 
-  // After fade, disconnect old chain and update references
-  setTimeout(() => {
-    try { reverbToneFilter.disconnect(oldConvolver); } catch { /* no-op */ }
-    try { oldConvolver.disconnect(); } catch { /* no-op */ }
-    try { oldWet.disconnect(); } catch { /* no-op */ }
+	// After fade, disconnect old chain and update references
+	setTimeout(() => {
+		try { reverbToneFilter.disconnect(oldConvolver); } catch { /* no-op */ }
+		try { oldConvolver.disconnect(); } catch { /* no-op */ }
+		try { oldWet.disconnect(); } catch { /* no-op */ }
 
-    reverbConvolver = newConvolver;
-    reverbWet = newWet;
-  }, fadeTime * 1000 + 50);
+		reverbConvolver = newConvolver;
+		reverbWet = newWet;
+	}, fadeTime * 1000 + 50);
 }
-
-
 
 // Drive sum → tone filter → convolver → wet gain → master
 driveSum.connect(reverbToneFilter);
@@ -1933,47 +1895,34 @@ reverbConvolver.connect(reverbWet);
 reverbWet.connect(masterGain);
 reverbWet.gain.value = 0;
 
-// Generate IR based on decay
-// function ensureReverbIR() {
-// 	const buf = generateReverbIR(audioCtx as any, {
-// 		decaySeconds: reverbDecay.value,
-// 		sampleRate: audioCtx.sampleRate,
-// 		stereo: true,
-// 		seed: 1337,
-// 	});
-// 	reverbConvolver.buffer = buf;
-// }
-
-// watch(reverbDecay, () => { ensureReverbIR(); });
-
 function ensureReverbIR() {
-  const buf = generateReverbIR(audioCtx as any, {
-    decaySeconds: reverbDecay.value,
-    sampleRate: audioCtx.sampleRate,
-    stereo: true,
-    seed: 1337,
-  });
+	const buf = generateReverbIR(audioCtx as any, {
+		decaySeconds: reverbDecay.value,
+		sampleRate: audioCtx.sampleRate,
+		stereo: true,
+		seed: 1337,
+	});
 
-  // First-time init: no need to cross-fade, just assign
-  if (!reverbIrReady || !reverbConvolver.buffer) {
-    reverbConvolver.buffer = buf;
-    reverbIrReady = true;
-    return;
-  }
+	// First-time init: no need to cross-fade, just assign
+	if (!reverbIrReady || !reverbConvolver.buffer) {
+		reverbConvolver.buffer = buf;
+		reverbIrReady = true;
+		return;
+	}
 
-  // Subsequent changes: smooth swap so the current tail isn't chopped
-  swapReverbIRSmooth(buf);
+	// Subsequent changes: smooth swap so the current tail isn't chopped
+	swapReverbIRSmooth(buf);
 }
 
 // Debounce decay changes so we only rebuild IR once the knob slows down
 watch(reverbDecay, () => {
-  if (reverbIrUpdateTimer != null) {
-    clearTimeout(reverbIrUpdateTimer);
-  }
-  reverbIrUpdateTimer = window.setTimeout(() => {
-    reverbIrUpdateTimer = null;
-    ensureReverbIR();
-  }, 120); // ~1–2 frames of pause before rebuilding
+	if (reverbIrUpdateTimer != null) {
+		clearTimeout(reverbIrUpdateTimer);
+	}
+	reverbIrUpdateTimer = window.setTimeout(() => {
+		reverbIrUpdateTimer = null;
+		ensureReverbIR();
+	}, 120); // ~1–2 frames of pause before rebuilding
 });
 
 
@@ -2201,7 +2150,6 @@ function currentLfoHz() {
 }
 
 function ensureLfoSource() {
-	// clean up
 	if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
 
 	const hz = currentLfoHz();
@@ -2255,25 +2203,16 @@ watch(lfoRate, (r) => {
 });
 
 
-// scale lfoGain.gain to match the target’s expected unit
 function applyDepthScale() {
 	const t = audioCtx.currentTime;
 	switch (lfoTarget.value) {
 		case 'pitch':
 			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
 			break;
-		// case 'pan':
-		// 	lfoGain.gain.setValueAtTime(lfoDepth.value / 100, t);   
-		// 	break;
-		// case 'gain':
-		// 	lfoGain.gain.setValueAtTime(1, t);
-		// 	break;
 		case 'filter':
 			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
 			break;
-		// case 'resonance':
-		// 	lfoGain.gain.setValueAtTime(lfoDepth.value, t);         
-		// 	break;
+
 	}
 }
 watch([lfoDepth, lfoTarget], applyDepthScale);
@@ -2317,7 +2256,6 @@ function onGlobalKeydown(e: KeyboardEvent) {
 	// If typing, ignore
 	if (isTypingTarget(el)) return;
 
-	// If focus is on a button (or role=button), hijack the spacebar
 	const onButton = el?.closest('button, [role="button"]');
 	if (onButton) {
 		e.preventDefault();
@@ -2326,7 +2264,6 @@ function onGlobalKeydown(e: KeyboardEvent) {
 		return;
 	}
 
-	// Number keys 1..6 switch F-keys (avoid while typing)
 	if (!isTypingTarget(el) && /^[1-6]$/.test(e.key)) {
 		const n = Number(e.key);
 		activeFKey.value = n;
@@ -2336,12 +2273,10 @@ function onGlobalKeydown(e: KeyboardEvent) {
 		return;
 	}
 
-	// Global toggle elsewhere
-	e.preventDefault(); // avoid page scroll
+	e.preventDefault();
 	togglePlay();
 }
 
-// Prevent the button’s default "space => click" on keyup too
 function onGlobalKeyup(e: KeyboardEvent) {
 	const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
 	if (!isSpace) return;
@@ -2378,8 +2313,6 @@ function stopEditingLabel(instrument) {
 	hoveredLabel.value = null;
 }
 
-
-
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Equalize waveform volume
@@ -2393,7 +2326,6 @@ function waveformGain(type: OscillatorType): number {
 		default: return 1.0;
 	}
 }
-
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2422,7 +2354,7 @@ function addCustomChannel() {
 }
 
 function deleteChannel(name: string) {
-	if (!canDelete(name)) return; // protect defaults + synth
+	if (!canDelete(name)) return;
 	const index = instruments.value.findIndex(i => i.name === name);
 	if (index !== -1) {
 		const label = instruments.value[index].label || name;
@@ -2452,9 +2384,21 @@ function loadUserSample(event: Event, instrument: any) {
 	reader.readAsArrayBuffer(file);
 }
 
-let loopId = null;
+let loopId: number | null = null;
 let startTime = 0;
 let stepIndex = 0;
+
+function hardStopSequencer() {
+	if (loopId != null) {
+		cancelAnimationFrame(loopId);
+		loopId = null;
+	}
+	isPlaying.value = false;
+	currentStep.value = -1;
+	stepIndex = 0;
+	startTime = audioCtx.currentTime;
+}
+
 
 function togglePad(instrumentName, index) {
 	const instrument = instruments.value.find(i => i.name === instrumentName);
@@ -2702,12 +2646,11 @@ delayWet.connect(masterGain);
 
 async function togglePlay() {
 	if (isPlaying.value) {
-
-		cancelAnimationFrame(loopId);
-		isPlaying.value = false;
-		currentStep.value = -1;
+		// STOP
+		hardStopSequencer();
 		return;
 	} else {
+		// START
 		if (audioCtx.state === 'suspended') {
 			await audioCtx.resume();
 		}
@@ -2718,6 +2661,7 @@ async function togglePlay() {
 		schedule();
 	}
 }
+
 
 async function exportCurrentPattern() {
 	if (!synthInstrument.value) return;
@@ -3399,10 +3343,13 @@ onMounted(async () => {
 
 //RESET TO FACTORY DEFAULTS ON NEW PROJECT BEGIN 
 function resetUiToFactoryDefaults() {
+
+	hardStopSequencer();
+
 	currentTheme.value = '';
 	seqOpen.value = false;
 	(Object.keys(collapsibleState) as Array<keyof typeof collapsibleState>)
-		.forEach((k) => { collapsibleState[k] = undefined; }); // let cards read their own localStorage
+		.forEach((k) => { collapsibleState[k] = undefined; });
 
 	// grid length
 	setStepLength(16);
@@ -3482,8 +3429,6 @@ function resetUiToFactoryDefaults() {
 	}
 
 	selectedWaveform.value = 'sine';
-	currentStep.value = -1;
-	isPlaying.value = false;
 
 	// FX: Delay 
 	delayEnabled.value = false;
@@ -3801,36 +3746,6 @@ function resetUiToFactoryDefaults() {
 		grid-column: 1 / -1 !important;
 	}
 }
-
-
-/* @media (min-width: 992px) {
-
-	.ds-visualizer :deep(.nac-screen) {
-		display: grid;
-		grid-template-rows: 1fr auto;
-		width: 100%;
-		height: 100%;
-		min-height: 0;
-	}
-
-	.ds-visualizer :deep(.nac-screen__lcd) {
-		height: auto !important;
-		min-height: 0;
-	}
-
-	.ds-visualizer :deep(.nac-screen__lcd canvas) {
-		display: block;
-		width: 100%;
-		height: 100% !important;
-	}
-
-	.ds-visualizer :deep(.nac-screen__fkeys) {
-		display: grid !important;
-		grid-template-columns: repeat(6, 1fr);
-		gap: .4rem;
-		padding: 0 .75rem;
-	}
-} */
 
 @media (min-width: 992px) {
 	.ds-visualizer {
@@ -4460,16 +4375,13 @@ function resetUiToFactoryDefaults() {
 }
 
 
-/* Side-by-side layout for Drive + Reverb */
 .fx-pair {
 	display: grid;
 	grid-template-columns: 1fr 1fr 1fr;
 	gap: 12px;
-	/* matches your effects spacing */
 	align-items: start;
 }
 
-/* Collapse to single column on narrow screens */
 @media (max-width: 720px) {
 	.fx-pair {
 		grid-template-columns: 1fr;

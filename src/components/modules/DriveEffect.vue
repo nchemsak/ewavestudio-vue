@@ -6,13 +6,13 @@
                 <span class="check-led" :class="{ on: localEnabled }" aria-hidden="true"></span>
 
                 <div class="knob-cell level">
-                    <Knob v-model="localMix" label="LEVEL" :min="0" :max="1" :step="0.01" size="small" :color="color"
+                    <Knob v-model="localMix" label="MIX" :min="0" :max="1" :step="0.01" size="small" :color="color"
                         :disabled="!localEnabled" @knobStart="activeKnob = 'mix'" @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'mix'" class="custom-tooltip">
                         {{ Math.round(localMix * 100) }}%
                     </span>
                 </div>
- 
+
                 <div class="knob-cell drive">
                     <Knob v-model="localAmount" label="DRIVE" :min="0" :max="1" :step="0.01" size="small" :color="color"
                         :disabled="!localEnabled" @knobStart="activeKnob = 'amount'" @knobEnd="activeKnob = null" />
@@ -34,6 +34,7 @@
             <div class="panel-seam" aria-hidden="true"></div>
 
             <div class="panel-bottom">
+                <div class="effect-label">overdrive</div>
                 <button class="footswitch" type="button" :aria-pressed="localEnabled"
                     @click="localEnabled = !localEnabled" @keydown.space.prevent="localEnabled = !localEnabled"
                     @keydown.enter.prevent="localEnabled = !localEnabled" />
@@ -128,6 +129,7 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
     position: relative;
     border-radius: 8px 8px 0px 0px;
     padding: 12px 0px 10px;
+
     background: linear-gradient(#f1df8f, #ebbd54);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, .35),
@@ -137,7 +139,7 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
     grid-template-rows: auto auto auto;
     grid-template-areas:
         "led  led"
-        "level drive"
+        "drive level"
         "tone  tone";
     align-items: center;
     justify-items: center;
@@ -164,8 +166,6 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
 .level {
     grid-area: level;
 }
-
-
 
 .drive {
     grid-area: drive;
@@ -198,17 +198,22 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
     user-select: none;
 }
 
+.tone .custom-tooltip {
+    top:initial;
+    bottom:-18px;
+}
+
 .panel-seam {
     height: 25px;
     border-radius: 2px;
-    background: linear-gradient(#efe18a, #e1b952);
+    background: linear-gradient(#f1df8f, #ebbd54);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
 }
 
 .panel-bottom {
     border-radius: 8px;
     padding: 8px;
-    background: linear-gradient(#f0d367, #ebbd54);
+    background: linear-gradient(#f1df8f, #ebbd54);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, .3),
         0 1px 0 rgba(0, 0, 0, .35);
@@ -217,7 +222,7 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
 .footswitch {
     display: block;
     width: 100%;
-    height: 96px;
+    height: 75px;
     border: 0;
     border-radius: 8px;
     background: linear-gradient(#3f3c3f, #2d2b2f);
@@ -233,7 +238,7 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
     position: absolute;
     inset: 8px;
     border-radius: 8px;
-    box-shadow: 0 0 0 2px #caa84a inset;
+    box-shadow: 0 0 0 2px #2d2b2f inset;
     opacity: .8;
     pointer-events: none;
 }
@@ -243,5 +248,11 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
     filter: brightness(.96);
 }
 
-
+.effect-label {
+    text-align: center;
+    line-height: 1;
+    padding-bottom: 8px;
+    text-shadow: 0px 0px 8px black;
+    color: white;
+}
 </style>
