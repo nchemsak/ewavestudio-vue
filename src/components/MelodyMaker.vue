@@ -147,7 +147,7 @@ const props = defineProps<{
 
     initialArpPattern?: 'up' | 'down' | 'updown' | 'random';
     initialArpRate?: '1/4' | '1/8' | '1/16';
-    initialArpOctaves?: 1 | 2 | 3 | 4;
+    initialArpOctaves?: 1 | 2 | 3;
     initialArpTones?: 'chord' | 'scale';
 }>();
 
@@ -160,7 +160,7 @@ const DEFAULTS_MELODY = {
 const DEFAULTS_ARP = {
     pattern: 'up' as 'up' | 'down' | 'updown' | 'random',
     rate: '1/16' as '1/4' | '1/8' | '1/16',
-    octaves: 1 as 1 | 2 | 3 | 4,
+    octaves: 1 as 1 | 2 | 3,
     tones: 'chord' as 'chord' | 'scale',
     seventhOnDownbeat: false,
     stride: 1 as 1 | 2,
@@ -518,10 +518,17 @@ function preferredOctaveForPreset(p: PresetKey): number | 'random' {
     return 'random'; // 'wide'
 }
 
+// helper to clamp arp octaves to 1–3
+function clampArpOctaves(v: number | undefined): 1 | 2 | 3 {
+    if (!v || v <= 1) return 1;
+    if (v >= 3) return 3;
+    return 2;
+}
+
 // Arpeggiator 
 const arpPattern = ref<'up' | 'down' | 'updown' | 'random'>(props.initialArpPattern ?? 'up');
 const arpRate = ref<'1/4' | '1/8' | '1/16'>(props.initialArpRate ?? '1/16');
-const arpOctaves = ref<1 | 2 | 3 | 4>(props.initialArpOctaves ?? 1);
+const arpOctaves = ref<1 | 2 | 3>(clampArpOctaves(props.initialArpOctaves));
 const arpTones = ref<'chord' | 'scale'>(props.initialArpTones ?? 'chord');
 
 const arpSeventhOnDownbeat = ref(false);
@@ -543,7 +550,6 @@ const arpOctaveOptions = [
     { label: '1', value: 1 },
     { label: '2', value: 2 },
     { label: '3', value: 3 },
-    { label: '4', value: 4 },
 ] as const;
 const arpToneOptions = [
     { label: 'Chord', value: 'chord' },
@@ -840,7 +846,7 @@ type UiSnapshot = {
     rangePreset: PresetKey;
     arpPattern: 'up' | 'down' | 'updown' | 'random';
     arpRate: '1/4' | '1/8' | '1/16';
-    arpOctaves: 1 | 2 | 3 | 4;
+    arpOctaves: 1 | 2 | 3;
     arpTones: 'chord' | 'scale';
 };
 
@@ -863,7 +869,7 @@ function setUi(u: Partial<UiSnapshot>) {
 
     if (u.arpPattern) arpPattern.value = u.arpPattern;
     if (u.arpRate) arpRate.value = u.arpRate;
-    if (u.arpOctaves) arpOctaves.value = u.arpOctaves as 1 | 2 | 3 | 4;
+    if (u.arpOctaves) arpOctaves.value = clampArpOctaves(u.arpOctaves);
     if (u.arpTones) arpTones.value = u.arpTones;
 }
 

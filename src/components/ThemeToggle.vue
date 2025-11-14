@@ -1,7 +1,7 @@
 <template>
     <div class="pt-btn-group" role="group" aria-label="Theme">
         <button class="pt-btn" :class="{ 'is-active': theme === 'dark' }" @click="setTheme('dark')">Dark</button>
-        <button class="pt-btn" :class="{ 'is-active': theme === 'light' }" @click="setTheme('light')">Light</button>
+        <!-- <button class="pt-btn" :class="{ 'is-active': theme === 'light' }" @click="setTheme('light')">Light</button> -->
         <button class="pt-btn" :class="{ 'is-active': theme === 'synthwave' }"
             @click="setTheme('synthwave')">Synthwave</button>
     </div>

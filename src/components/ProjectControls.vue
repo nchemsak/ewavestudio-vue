@@ -1,7 +1,6 @@
 <!-- src/components/ProjectControls.vue -->
 <template>
     <div class="pc-toolbar" role="region" aria-label="Project controls">
-        <!-- LEFT: File (advanced menu) -->
         <div class="pc-left">
             <div class="pc-file" ref="fileWrap">
                 <button class="pc-btn" @click="toggleFileMenu" :aria-expanded="showFile ? 'true' : 'false'"
@@ -9,16 +8,13 @@
                     File ▾
                 </button>
 
-                <!-- FILE MENU -->
                 <div v-if="showFile" ref="fileMenu" class="pc-menu pc-file-menu" role="menu" tabindex="0"
                     @keydown.escape.stop.prevent="closeAllMenus">
-                    <!-- a. New -->
                     <button class="pc-menu-row" role="menuitem" title="Shift-click to duplicate current"
                         @click="newProject($event)">
                         New
                     </button>
 
-                    <!-- b. Open (submenu) -->
                     <div class="pc-menu-row pc-has-sub" role="menuitem" aria-haspopup="menu"
                         :aria-expanded="showOpen ? 'true' : 'false'" @mouseenter="openSub(true)"
                         @mouseleave="openSub(false)">
@@ -26,7 +22,6 @@
                             Open ▸
                         </button>
 
-                        <!-- OPEN SUBMENU (list of saves) -->
                         <div v-if="showOpen" ref="openMenu" class="pc-menu pc-open-submenu" role="menu" tabindex="0"
                             @keydown.escape.stop.prevent="showOpen = false">
                             <div v-if="projects.length === 0" class="pc-empty">
@@ -58,12 +53,10 @@
                         </div>
                     </div>
 
-                    <!-- c. Export file -->
                     <button class="pc-menu-row" role="menuitem" @click="exportJson" :disabled="!store.loaded">
                         Export file
                     </button>
 
-                    <!-- d. Import file -->
                     <button class="pc-menu-row" role="menuitem" @click="triggerImport">
                         Import file
                     </button>
@@ -75,17 +68,14 @@
                 </div>
             </div>
 
-            <!-- hidden file input for Import -->
             <input ref="fileInput" type="file" accept="application/json" class="pc-hidden" @change="onImport" />
         </div>
 
-        <!-- CENTER: Project name -->
         <div class="pc-center">
             <input v-model="nameDraft" class="pc-name" :disabled="!store.loaded" @change="rename"
                 @keydown.enter.prevent="rename" aria-label="Project name" />
         </div>
 
-        <!-- RIGHT: Save + status dot -->
         <div class="pc-right">
             <div class="pc-actions">
                 <button class="pc-btn pc-primary" :disabled="!store.loaded || !dirty || status === 'saving'"
@@ -205,7 +195,7 @@ async function deleteOne(id: string, name?: string) {
     await repoRemove(id);
 
     if (deletingCurrent) {
-        await store.newProject('', {}); // blank state
+        await store.newProject('', {});
         localStorage.setItem('ewave:reset-ui-next', '1');
         isNewUnsaved.value = true;
         nextTick(() => {
@@ -220,7 +210,7 @@ async function deleteOne(id: string, name?: string) {
 async function clearAll() {
     if (!confirm('Delete ALL saved projects? This cannot be undone.')) return;
     await repoClearAll();
-    await store.newProject('', {}); // blank state
+    await store.newProject('', {});
     localStorage.setItem('ewave:reset-ui-next', '1');
     isNewUnsaved.value = true;
     nextTick(() => {
@@ -257,7 +247,6 @@ async function newProject(evt?: MouseEvent) {
     closeAllMenus();
 }
 
-/** Renaming does not auto-save; user clicks Save to persist */
 async function rename() {
     store.name = (nameDraft.value || '').trim();
 }
@@ -286,9 +275,9 @@ async function saveNow() {
     if (!nameToUse) {
         const proposed = '';
         const entered = prompt('Name your project:', proposed);
-        if (entered === null) return; // user cancelled
+        if (entered === null) return;
         const clean = (entered ?? '').trim();
-        if (!clean) return; // abort save if blank
+        if (!clean) return;
         nameToUse = clean;
         store.name = nameToUse;
         nameDraft.value = nameToUse;
@@ -301,7 +290,6 @@ async function saveNow() {
         lastSavedName.value = store.name || '';
         isNewUnsaved.value = false;
         status.value = 'saved';
-        // Refresh Open list so any newly saved "Untitled" stays hidden
         if (showOpen.value || showFile.value) await refreshList();
     } catch (err) {
         console.error('Save failed:', err);
@@ -367,9 +355,6 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 </script>
 
 <style scoped>
-/* =========================================================
-   THEME-AWARE TOKENS
-   ========================================================= */
 .pc-toolbar {
     --pc-text: var(--pt-text, #e9e9ef);
     --pc-panel: var(--pt-panel, #171a21);
@@ -399,7 +384,6 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     gap: .5rem;
 }
 
-/* Center column (true centered name) */
 .pc-center {
     justify-self: center;
     text-align: center;
@@ -416,7 +400,6 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     color: var(--pc-text);
 }
 
-/* Buttons */
 .pc-btn {
     padding: .35rem .65rem;
     border-radius: .5rem;
@@ -448,7 +431,6 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     opacity: .6;
 }
 
-/* Menus */
 .pc-file {
     position: relative;
 }
@@ -486,7 +468,6 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     background: color-mix(in oklch, var(--pc-surface-2), white 4%);
 }
 
-/* Open submenu trigger */
 .pc-has-sub {
     position: relative;
     padding: 0;
@@ -507,10 +488,8 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     background: color-mix(in oklch, var(--pc-surface-2), white 4%);
 }
 
-/* Submenu panel */
 .pc-open-submenu {
     top: -.25rem;
-    /* left: calc(100% + 6px); */
     left: 100%;
     inline-size: clamp(420px, 42vw, 560px);
 }
@@ -602,7 +581,6 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     filter: brightness(1.05);
 }
 
-/* Right cluster: Save + dot */
 .pc-right {
     position: relative;
 }

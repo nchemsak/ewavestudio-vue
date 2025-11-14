@@ -208,6 +208,7 @@
 					<div class="noise-tv-bg" :class="{ 'on': noiseEnabled }" :style="noiseModuleStyle">
 						<div v-if="noiseEnabled" class="noise-overlay mode-static" aria-hidden="true">
 							<div class="grain"></div>
+
 						</div>
 						<SectionWrap id="noise" title="" v-model="collapsibleState['noise']">
 							<div class="gen-panel noise-panel">
@@ -542,15 +543,7 @@ const lfoBipolar = ref(false)
 
 //Effects Panel Advanced Menu BEGIN
 const fxAdvanced = reactive({ open: false, x: 0, y: 0 });
-
 const fxAnchor = ref<HTMLElement | null>(null);
-
-// function openFxAdvanced(e: MouseEvent) {
-// 	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-// 	fxAdvanced.x = Math.round(r.right + 8);   // viewport coords
-// 	fxAdvanced.y = Math.round(r.bottom + 8);
-// 	fxAdvanced.open = true;
-// }
 
 function onFxEsc(e: KeyboardEvent) {
 	if (e.key === 'Escape') {
