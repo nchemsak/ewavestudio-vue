@@ -178,8 +178,8 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 }
 
 .tone .custom-tooltip {
-    top:initial;
-    bottom:-18px;
+	top: initial;
+	bottom: -18px;
 }
 
 .panel-seam {
@@ -232,7 +232,7 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	text-align: center;
 	line-height: 1;
 	padding-bottom: 8px;
-    text-shadow: 0px 0px 8px black;
-    color: white;
+	text-shadow: 0px 0px 8px black;
+	color: white;
 }
 </style>

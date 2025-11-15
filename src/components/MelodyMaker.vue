@@ -28,7 +28,7 @@
 
             <div class="mm-head-row2">
                 <label class="mm-field">
-                    <span class="mm-label">Scale</span>
+                    <span class="mm-label">Scale / Mode</span>
                     <PtSelect v-model="keyScale" :options="scaleOptions" aria-label="Scale" />
                 </label>
 
@@ -142,7 +142,9 @@ const props = defineProps<{
     currentTheme?: string;
 
     initialKeyRoot?: 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B';
-    initialKeyScale?: 'none' | 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'wholeTone' | 'dorian' | 'lydian' | 'egyptian';
+    // initialKeyScale?: 'none' | 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'wholeTone' | 'dorian' | 'lydian' | 'egyptian';
+    initialKeyScale?: 'none' | 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'dorian' | 'lydian' | 'mixolydian';
+
     initialRangePreset?: 'low' | 'mid' | 'high' | 'wide';
 
     initialArpPattern?: 'up' | 'down' | 'updown' | 'random';
@@ -187,21 +189,26 @@ const SCALES: Record<string, number[]> = {
     naturalMinor: [0, 2, 3, 5, 7, 8, 10],
     pentMajor: [0, 2, 4, 7, 9],
     pentMinor: [0, 3, 5, 7, 10],
-    wholeTone: [0, 2, 4, 6, 8, 10],
     dorian: [0, 2, 3, 5, 7, 9, 10],
     lydian: [0, 2, 4, 6, 7, 9, 11],
-    egyptian: [0, 2, 5, 7, 10],
+    mixolydian: [0, 2, 4, 5, 7, 9, 10],
 };
+
 const SCALE_LABELS: Record<string, string> = {
-    major: 'Major', naturalMinor: 'Minor', pentMajor: 'Pentatonic Major', pentMinor: 'Pentatonic Minor',
-    wholeTone: 'Whole-tone', dorian: 'Dorian', lydian: 'Lydian', egyptian: 'Egyptian Pentatonic'
+    major: 'Major',
+    naturalMinor: 'Minor',
+    pentMajor: 'Pentatonic Major',
+    pentMinor: 'Pentatonic Minor',
+    lydian: 'Major / Lydian',
+    dorian: 'Minor / Dorian',
+    mixolydian: 'Major / Mixolydian',
 };
+
 
 const keyRoot = ref<RootNote>(props.initialKeyRoot ?? 'A');
 type KeyScale = 'none' | keyof typeof SCALES;
 const keyScale = ref<KeyScale>(props.initialKeyScale ?? 'none');
 
-/* Mini keyboard layout */
 const NATURALS: Array<{ n: Extract<RootNote, 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B'>; hasSharp: boolean; sharp?: RootNote }> = [
     { n: 'C', hasSharp: true, sharp: 'C#' },
     { n: 'D', hasSharp: true, sharp: 'Eb' },
@@ -292,15 +299,22 @@ const poolSummary = computed(() => {
 });
 
 const keyOptions = ROOTS.map(r => ({ label: r, value: r }));
+
 const scaleOptions = [
     { label: 'None', value: 'none' },
-    ...Object.keys(SCALES).map(name => ({ label: SCALE_LABELS[name] ?? name, value: name }))
+    { label: SCALE_LABELS.major, value: 'major' },
+    { label: SCALE_LABELS.naturalMinor, value: 'naturalMinor' },
+    { label: SCALE_LABELS.pentMajor, value: 'pentMajor' },
+    { label: SCALE_LABELS.pentMinor, value: 'pentMinor' },
+    { label: SCALE_LABELS.lydian, value: 'lydian' },
+    { label: SCALE_LABELS.dorian, value: 'dorian' },
+    { label: SCALE_LABELS.mixolydian, value: 'mixolydian' },
 ];
+
 
 const rangeOptions = (Object.entries(PRESETS) as [PresetKey, typeof PRESETS[PresetKey]][])
     .map(([value, def]) => ({ label: def.label, value }));
 
-// emits for persistence
 watch(keyRoot, (v) => emit('key-root-change', v), { immediate: true });
 watch(keyScale, (v) => emit('key-scale-change', v), { immediate: true });
 watch(rangePreset, (v) => emit('range-preset-change', v), { immediate: true });
@@ -309,7 +323,7 @@ watch(() => props.initialKeyRoot, (v) => { if (v && v !== keyRoot.value) keyRoot
 watch(() => props.initialKeyScale, (v) => { if (v && v !== keyScale.value) keyScale.value = v as KeyScale; });
 watch(() => props.initialRangePreset, (v) => { if (v && v !== rangePreset.value) rangePreset.value = v as PresetKey; });
 
-/*  Smart generator  */
+// Smart generator  
 function contourAt(i: number, n: number, kind: Style) {
     const t = n > 1 ? i / (n - 1) : 0;
     switch (kind) {

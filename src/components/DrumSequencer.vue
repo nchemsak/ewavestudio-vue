@@ -4,10 +4,9 @@
 		<section class="pt-card" style="margin-bottom:12px">
 			<ProjectControls :exporting="isExporting" @export-wav="exportCurrentPattern" />
 		</section>
-		<!-- MAIN GRID -->
 		<div class="ds-grid">
 
-			<!-- Right rail: Visualizer (sticky) -->
+			<!-- Visualizer Screen -->
 			<aside class="pt-card ds-visualizer">
 				<div class="nac-wrap">
 					<nacScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey"
@@ -15,7 +14,7 @@
 				</div>
 			</aside>
 
-			<!-- Transport (left, row 1) -->
+			<!-- Transport -->
 			<section class="pt-card transport-card ds-transport">
 				<div class="transport-left">
 					<h2 class="pt-title mb-2">Ephemeral Wave</h2>
@@ -24,21 +23,16 @@
 						<div class="position-relative text-center knob-wrap">
 							<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
-							<span v-if="activeKnob === 'volume'" class="custom-tooltip">
-								{{ Math.round(volume * 100) }}%
-							</span>
+
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(volume * 100)}%`">
 								{{ Math.round(volume * 100) }}%
 							</div>
 						</div>
 
-						<!-- Tempo (Knob + Stepper) -->
+						<!-- Tempo -->
 						<div class="position-relative text-center tempo-wrap">
 							<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
-							<span v-if="activeKnob === 'tempo'" class="custom-tooltip">{{ tempo }} BPM</span>
-
-							<!-- Tiny stepper (always visible) -->
 							<div class="tempo-stepper" role="group" aria-label="Tempo">
 								<button class="stepper-btn" type="button" title="Tempo −1"
 									@mousedown.prevent="startTempoRepeat(-1)" @touchstart.prevent="startTempoRepeat(-1)"
@@ -56,9 +50,7 @@
 						<div class="position-relative text-center knob-wrap">
 							<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
-							<span v-if="activeKnob === 'swing'" class="custom-tooltip">
-								{{ Math.round(swing * 100) }}%
-							</span>
+
 
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(swing * 100)}% swing`">
 								{{ Math.round(swing * 100) }}%
@@ -87,7 +79,7 @@
 				</div>
 			</section>
 
-			<!-- Step Sequencer (left, row 2) -->
+			<!-- Step Sequencer -->
 			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
 				<div class="pt-subheader step-sequencer-subheader">
 					<div class="channel-caption d-flex align-items-center gap-2">

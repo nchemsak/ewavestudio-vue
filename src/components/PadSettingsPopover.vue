@@ -2,13 +2,11 @@
     <teleport to="body">
         <div v-if="openLocal" class="pt-popover pad-popover" :style="{ left: `${pos.x}px`, top: `${pos.y}px` }"
             role="dialog" aria-modal="true" @click.stop ref="rootEl">
-            <!-- Header -->
             <div class="pt-subheader">
                 <strong class="pt-section-title">{{ title || 'Pad' }}</strong>
                 <button class="pt-btn pt-btn-sm" @click="close">Close</button>
             </div>
 
-            <!-- Per-pad waveform (Sine/Triangle/Saw/Square) -->
             <div v-if="showWaveRow" class="pad-row">
                 <div class="pad-label">Wave</div>
                 <div class="pt-seg pt-seg-sm wave-seg" role="group" aria-label="Waveform">
@@ -23,22 +21,15 @@
                 </div>
             </div>
 
-            <!-- NEW: Per-pad Noise toggle (optional) -->
             <div v-if="showNoiseRow" class="pad-row">
                 <div class="pad-label">Noise</div>
                 <div class="noise-toggle-wrap">
-                    <button
-                        class="pt-dot"
-                        :class="{ 'is-on': noiseLocal }"
-                        :aria-pressed="noiseLocal"
-                        :title="noiseLocal ? 'Noise: On' : 'Noise: Off'"
-                        @click="noiseLocal = !noiseLocal"
-                    />
+                    <button class="pt-dot" :class="{ 'is-on': noiseLocal }" :aria-pressed="noiseLocal"
+                        :title="noiseLocal ? 'Noise: On' : 'Noise: Off'" @click="noiseLocal = !noiseLocal" />
                     <span class="noise-state">{{ noiseLocal ? 'On' : 'Off' }}</span>
                 </div>
             </div>
 
-            <!-- Keyboard -->
             <div class="kb" role="group" aria-label="Note selector">
                 <div v-for="(key, i) in NATURALS" :key="key.n" class="kb-cell" :class="{ 'has-sharp': key.hasSharp }">
                     <button class="pt-seg-btn kb-white" :class="{ 'is-active': (baseMidi % 12) === key.idx }"
@@ -48,11 +39,11 @@
                     <button v-if="key.hasSharp" class="pt-seg-btn kb-black"
                         :class="{ 'is-active': (baseMidi % 12) === key.sharpIdx }"
                         :disabled="isNoteDisabled(key.sharpIdx, octave)"
-                        @click="!isNoteDisabled(key.sharpIdx, octave) && setSemitone(key.sharpIdx)">{{ key.n }}#</button>
+                        @click="!isNoteDisabled(key.sharpIdx, octave) && setSemitone(key.sharpIdx)">{{ key.n
+                        }}#</button>
                 </div>
             </div>
 
-            <!-- Octave -->
             <div class="pad-row">
                 <div class="pad-label">Octave</div>
                 <div class="pt-seg pt-seg-sm octave-seg" role="group" aria-label="Octave">
@@ -61,7 +52,6 @@
                 </div>
             </div>
 
-            <!-- Fine + Hz -->
             <div class="pad-row fine-row">
                 <div class="fine">
                     <div class="fine-label">Fine (¢)</div>
@@ -109,11 +99,7 @@ const props = withDefaults(defineProps<{
     maxHz: number;
     anchorRect?: AnchorRect;
     title?: string;
-
-    /** optional per-pad wave prop; if provided, a wave row is shown */
     wave?: Wave;
-
-    /** NEW: optional per-pad noise toggle; if provided, a Noise row is shown */
     noiseEnabled?: boolean;
 }>(), { title: 'Pad' });
 
@@ -125,7 +111,7 @@ const emit = defineEmits<{
     (e: 'close'): void;
 }>();
 
-/* open/close */
+// open/close 
 const openLocal = ref(props.open);
 watch(() => props.open, v => (openLocal.value = v));
 watch(openLocal, v => emit('update:open', v));
@@ -147,24 +133,37 @@ onBeforeUnmount(() => {
     document.removeEventListener('keydown', onKey, true);
 });
 
-/* positioning */
+// positioning
+// positioning
 const POP_W = 380;
 const EST_H = 300;
+const OFFSET_X = 40;
+
 const pos = computed(() => {
     const r = props.anchorRect;
     const m = 8;
+
+    // Fallback: center in viewport, nudged slightly to the right
     if (!r) {
-        const x = Math.max(m, (window.innerWidth - POP_W) / 2);
-        const y = Math.max(m, (window.innerHeight - EST_H) / 2);
+        let x = (window.innerWidth - POP_W) / 2 + OFFSET_X;
+        x = Math.min(window.innerWidth - POP_W - m, Math.max(m, x));
+
+        let y = Math.max(m, (window.innerHeight - EST_H) / 2);
         return { x, y };
     }
-    let x = Math.min(window.innerWidth - POP_W - m, Math.max(m, r.left));
+
+    // Anchor case: place popover relative to pad, shifted right
+    let x = r.left + OFFSET_X;
+    x = Math.min(window.innerWidth - POP_W - m, Math.max(m, x));
+
     let y = r.bottom + m;
-    if (y + EST_H > window.innerHeight) y = Math.max(m, r.top - EST_H - m);
+    if (y + EST_H > window.innerHeight) {
+        y = Math.max(m, r.top - EST_H - m);
+    }
+
     return { x, y };
 });
 
-/* pitch helpers */
 function midiToFreq(m: number): number { return A4 * Math.pow(2, (m - 69) / 12); }
 function freqToMidi(f: number): number { return Math.round(69 + 12 * Math.log2(f / A4)); }
 function midiToName(m: number): string { const n = m % 12, o = Math.floor(m / 12) - 1; return `${NOTE_NAMES[n]}${o}`; }
@@ -193,7 +192,6 @@ watch(() => props.hz, (hz) => {
 }, { immediate: true });
 watch(openLocal, (isOpen) => { if (isOpen) syncFromHz(props.hz); });
 
-/* UI computeds/actions */
 const displayHz = computed(() => (Math.round(currentHz.value * 100) / 100).toFixed(2));
 const octave = computed({
     get: () => Math.floor(baseMidi.value / 12) - 1,
@@ -221,7 +219,6 @@ function setOctave(o: number): void {
 function isNoteDisabled(semi: number, o: number): boolean { return !isNoteInRange(o, semi); }
 function nearestNote(hz: number): string { return midiToName(freqToMidi(hz)); }
 
-/* Hz input */
 const hzInput = computed({
     get: () => +displayHz.value,
     set: (v: number) => {
@@ -233,14 +230,12 @@ const hzInput = computed({
     }
 });
 
-/* per-pad waveform bindings */
 const showWaveRow = computed(() => props.wave !== undefined);
 const waveLocal = ref<Wave>(props.wave ?? 'sine');
 watch(() => props.wave, (v) => { if (v) waveLocal.value = v; });
 watch(waveLocal, (v) => emit('update:wave', v));
 function setWave(w: Wave): void { waveLocal.value = w; }
 
-/* NEW: per-pad noise toggle bindings */
 const showNoiseRow = computed(() => typeof props.noiseEnabled === 'boolean');
 const noiseLocal = ref<boolean>(props.noiseEnabled ?? false);
 watch(() => props.noiseEnabled, (v) => {
@@ -320,7 +315,6 @@ watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
     flex-wrap: wrap;
 }
 
-/* ==== NEW: Noise toggle styles (mirrors your NoiseModule dot) ===== */
 .noise-toggle-wrap {
     display: inline-flex;
     align-items: center;
@@ -343,7 +337,11 @@ watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
     cursor: pointer;
     transition: transform .12s ease, filter .2s ease, box-shadow .25s ease;
 }
-.pt-dot:hover { transform: scale(1.06); }
+
+.pt-dot:hover {
+    transform: scale(1.06);
+}
+
 .pt-dot.is-on {
     background: hsl(var(--pt-accent) 80% 60%);
     box-shadow:
@@ -351,7 +349,6 @@ watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
         0 0 12px var(--pt-btn-glow);
 }
 
-/* ==== Piano keyboard ========================================= */
 .kb {
     --gap: 2px;
     --whiteH: 108px;
@@ -381,10 +378,18 @@ watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
     }
 }
 
-.kb-cell { position: relative; height: var(--whiteH); }
-.kb :where(.pt-seg-btn) { all: unset; line-height: 1; box-sizing: border-box; cursor: pointer; }
+.kb-cell {
+    position: relative;
+    height: var(--whiteH);
+}
 
-/* White keys */
+.kb :where(.pt-seg-btn) {
+    all: unset;
+    line-height: 1;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
 .kb-white {
     width: 100%;
     height: 100%;
@@ -406,19 +411,33 @@ watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
         linear-gradient(145deg, rgb(0 0 0 / .22), rgb(255 255 255 / .06)) border-box;
     border: 1px solid rgb(0 0 0 / .55);
 }
-.kb-white:is(:hover, :focus-visible) { filter: brightness(1.04); outline: none; }
-.kb-white:active { transform: translateY(1px); box-shadow:
+
+.kb-white:is(:hover, :focus-visible) {
+    filter: brightness(1.04);
+    outline: none;
+}
+
+.kb-white:active {
+    transform: translateY(1px);
+    box-shadow:
         inset 0 1px 0 rgb(255 255 255 / .04),
         0 2px 0 rgb(0 0 0 / .55),
-        0 6px 14px rgb(0 0 0 / .25); }
-.kb-white.is-active { box-shadow:
+        0 6px 14px rgb(0 0 0 / .25);
+}
+
+.kb-white.is-active {
+    box-shadow:
         inset 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .9),
         inset 0 1px 0 rgb(255 255 255 / .05),
         0 3px 0 rgb(0 0 0 / .55),
-        0 10px 20px rgb(0 0 0 / .3); }
-.kb-white:disabled { opacity: .35; cursor: not-allowed; }
+        0 10px 20px rgb(0 0 0 / .3);
+}
 
-/* Black keys */
+.kb-white:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
 .kb-black {
     --whiteW: 100%;
     width: calc(0.6 * var(--whiteW));
@@ -446,17 +465,34 @@ watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
         linear-gradient(145deg, #1a2334, #0b0f1a) border-box;
     border: 1px solid rgb(0 0 0 / .7);
 }
-.kb-black:is(:hover, :focus-visible) { filter: brightness(1.08); outline: none; }
-.kb-black:active { transform: translateY(1px); box-shadow:
+
+.kb-black:is(:hover, :focus-visible) {
+    filter: brightness(1.08);
+    outline: none;
+}
+
+.kb-black:active {
+    transform: translateY(1px);
+    box-shadow:
         inset 0 1px 0 rgb(255 255 255 / .04),
         0 1px 0 rgb(0 0 0 / .8),
-        0 6px 12px rgb(0 0 0 / .35); }
-.kb-black.is-active { box-shadow:
+        0 6px 12px rgb(0 0 0 / .35);
+}
+
+.kb-black.is-active {
+    box-shadow:
         0 0 0 2px hsl(var(--pt-accent) 90% 60% / .9),
         inset 0 1px 0 rgb(255 255 255 / .05),
         0 2px 0 rgb(0 0 0 / .8),
-        0 10px 18px rgb(0 0 0 / .4); }
-.kb-black:disabled { opacity: .45; cursor: not-allowed; }
+        0 10px 18px rgb(0 0 0 / .4);
+}
 
-.kb-cell.has-sharp { padding-top: 0; }
+.kb-black:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.kb-cell.has-sharp {
+    padding-top: 0;
+}
 </style>

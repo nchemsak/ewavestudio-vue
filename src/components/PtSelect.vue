@@ -130,7 +130,7 @@ function selectIndex(i: number) {
     if (!opt || opt.disabled) return;
     emit('update:modelValue', opt.value);
     close();
-} 
+}
 
 /* Keyboard: button */
 function onKeyDownRoot(e: KeyboardEvent) {
@@ -182,3 +182,9 @@ onBeforeUnmount(() => {
     window.removeEventListener('resize', onWindowResizeScroll);
 });
 </script>
+<style scoped>
+.pt-menu {
+    max-height: 350px;
+    overflow-y: auto;
+}
+</style>

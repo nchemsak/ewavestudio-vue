@@ -769,7 +769,7 @@ $dark: map.get($themes, dark);
     width: clamp(260px, 44vw, 420px);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    background: rgba(149, 165, 166, 0.1);
+    // background: rgba(149, 165, 166, 0.1);
 }
 
 .pt-popover::after {

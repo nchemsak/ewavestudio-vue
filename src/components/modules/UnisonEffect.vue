@@ -6,23 +6,29 @@
 				label="Unison" />
 		</div>
 
-		<div class="pt-knob-row">
+		<div class="pt-knob-row" :class="{ 'is-unison-off': !localEnabled }">
 			<div class="position-relative text-center">
 				<Knob v-model="localVoices" size="small" :min="1" :max="6" :step="1" label="Voices" :color="color"
-					:disabled="!localEnabled" @knobStart="activeKnob = 'voices'" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === 'voices'" class="custom-tooltip">{{ localVoices }}</span>
+					@knobStart="activeKnob = 'voices'" @knobEnd="activeKnob = null" />
+				<span v-if="activeKnob === 'voices'" class="custom-tooltip">
+					{{ localVoices }}
+				</span>
 			</div>
 
 			<div class="position-relative text-center">
 				<Knob v-model="localDetune" size="small" :min="0" :max="100" :step="1" label="Detune" :color="color"
-					:disabled="!localEnabled" @knobStart="activeKnob = 'detune'" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === 'detune'" class="custom-tooltip">{{ localDetune }}¢</span>
+					@knobStart="activeKnob = 'detune'" @knobEnd="activeKnob = null" />
+				<span v-if="activeKnob === 'detune'" class="custom-tooltip">
+					{{ localDetune }}¢
+				</span>
 			</div>
 
 			<div class="position-relative text-center">
 				<Knob v-model="localSpread" size="small" :min="0" :max="100" :step="1" label="Spread" :color="color"
-					:disabled="!localEnabled" @knobStart="activeKnob = 'spread'" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === 'spread'" class="custom-tooltip">{{ localSpread }}%</span>
+					@knobStart="activeKnob = 'spread'" @knobEnd="activeKnob = null" />
+				<span v-if="activeKnob === 'spread'" class="custom-tooltip">
+					{{ localSpread }}%
+				</span>
 			</div>
 		</div>
 	</KnobGroup>
@@ -37,8 +43,8 @@ import UnisonButton from '../UnisonButton.vue'
 const props = withDefaults(defineProps<{
 	enabled: boolean
 	voices: number
-	detune: number     // cents
-	spread: number     // percent
+	detune: number
+	spread: number
 	color?: string
 	showToggle?: boolean
 }>(), {
@@ -58,8 +64,6 @@ const emit = defineEmits<{
 }>()
 
 const activeKnob = ref<null | 'voices' | 'detune' | 'spread'>(null)
-
-/* local mirrors for smooth knob UX */
 const localEnabled = ref(props.enabled)
 const localVoices = ref(props.voices)
 const localDetune = ref(props.detune)
@@ -71,7 +75,7 @@ watch(localVoices, v => emit('update:voices', Math.max(1, Math.min(6, Math.round
 watch(localDetune, v => emit('update:detune', Math.max(0, Math.min(100, Math.round(v)))))
 watch(localSpread, v => emit('update:spread', Math.max(0, Math.min(100, Math.round(v)))))
 
-/* sync down from parent */
+// sync down from parent
 watch(() => props.enabled, v => (localEnabled.value = v))
 watch(() => props.voices, v => (localVoices.value = v))
 watch(() => props.detune, v => (localDetune.value = v))
@@ -83,5 +87,11 @@ watch(() => props.spread, v => (localSpread.value = v))
 	display: flex;
 	justify-content: center;
 	margin: 0px 0 4px;
+}
+
+.is-unison-off :deep(.knob-label),
+.is-unison-off :deep(.knob-readout),
+.is-unison-off :deep(.knob-value) {
+	opacity: 0.7;
 }
 </style>
