@@ -1,557 +1,702 @@
 // src/audio/export/scheduleStepSequencer.ts
+// Pure offline scheduler for the Step Sequencer synth.
+// Rebuilds a minimal version of your live graph inside any BaseAudioContext.
 
 import { applyPitchEnv } from "../pitchEnv";
 import { startFM } from "../fm";
+import { generateReverbIR } from "../reverb/generateIr";
 
 export type StepSequencerState = {
-  bpm: number;
-  stepsCount: 16; // locked to 16
-  swing: number;
-  masterVolume: number;
-  channelVolume: number;
+	bpm: number;
+	stepsCount: 16 | 32;
+	swing: number;                // 0..0.5
+	masterVolume: number;         // 0..1
+	channelVolume: number;        // 0..1
 
-  pattern: {
-    active: boolean[];
-    velocities: number[];
-    pitches: number[];
-    waveforms: OscillatorType[];
-  };
+	pattern: {
+		active: boolean[];
+		velocities: number[];        // 0..1
+		pitches: number[];           // Hz
+		waveforms: OscillatorType[]; // per-step wave type
+	};
 
-  synth: {
-    envelope: { enabled: boolean; attackMs: number; decayMs: number; };
-    filter: { enabled: boolean; cutoff: number; resonance: number; };
+	synth: {
+		envelope: { enabled: boolean; attackMs: number; decayMs: number; };
+		filter: { enabled: boolean; cutoff: number; resonance: number; };
 
-    noise: {
-      enabled: boolean;
-      color?: number;
-      type?: "white" | "pink" | "brown" | "blue" | "violet";
-      amount: number;
-      mask?: boolean[];
-      attackBurst?: boolean;
-      burstMs?: number;
-    };
+		noise: {
+			enabled: boolean;
+			color: number;             // 0..1 morph along Brown→Pink→White→Blue→Violet
+			type?: "brown" | "pink" | "white" | "blue" | "violet" | string;
+			amount: number;            // 0..1  (crossfade between tone & noise)
+			mask: boolean[];
+			attackBurst: boolean;
+			burstMs: number;
+		};
 
-    unison: { enabled: boolean; voices: number; detuneCents: number; stereoSpread: number; };
+		unison: { enabled: boolean; voices: number; detuneCents: number; stereoSpread: number; };
 
-    lfo: {
-      enabled: boolean;
-      target: "pitch" | "gain" | "filter" | "pan" | "resonance";
-      waveform: "sine" | "triangle" | "sawtooth" | "square" | "random";
-      depth: number;
-      rateHz: number;
-      division: string;
-      retrigger: boolean;
-      bipolar: boolean;
-    };
+		lfo: {
+			enabled: boolean;
+			target: "pitch" | "filter";
+			waveform: "sine" | "square";
+			depth: number;       // detune cents for pitch, Hz for filter
+			rateHz: number;      // resolved from sync/division in the UI
+			division: string;
+			retrigger: boolean;
+			bipolar: boolean;
+		};
 
-    fm: { enabled: boolean; modFreq: number; index: number; ratio: number | null; };
-    pitchEnv: { enabled: boolean; semitones: number; decayMs: number; mode: "up" | "down" | "random"; };
-  };
+		fm: { enabled: boolean; modFreq: number; index: number; ratio: number | null; };
 
-  fx: {
-    delay: {
-      enabled: boolean; sync: boolean; time: number; feedback: number; mix: number;
-      toneEnabled: boolean; toneHz: number; toneType: "lowpass" | "highpass"
-    };
-    drive: { enabled: boolean; type: "overdrive" | "distortion"; amount: number; tone: number; mix: number };
-  };
+		pitchEnv: {
+			enabled: boolean;
+			semitones: number;
+			decayMs: number;
+			mode: "up" | "down" | "random";
+		};
+	};
 
-  sampleRate: number;
-  tailSeconds: number;
+	fx: {
+		delay: {
+			enabled: boolean;
+			sync: boolean;
+			time: number;
+			feedback: number;
+			mix: number;
+			toneEnabled: boolean;
+			toneHz: number;
+			toneType: "lowpass" | "highpass" | "allpass";
+		};
+		drive: {
+			enabled: boolean;
+			type: "overdrive" | string;
+			amount: number;   // 0..1
+			tone: number;     // Hz
+			mix: number;      // 0..1
+		};
+		reverb: {
+			enabled: boolean;
+			mix: number;      // 0..1
+			decay: number;    // seconds
+			tone: number;     // 0..1 (dark→bright)
+		};
+	};
+
+	sampleRate: number;
+	tailSeconds: number;
 };
 
-function stepDurationSeconds(bpm: number) {
-  // 1/16th
-  return (60 / bpm) / 4;
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function clamp01(x: number) {
+	return Math.max(0, Math.min(1, x));
 }
 
-function generateDriveCurve(type: "overdrive" | "distortion", amount = 0.5) {
-  const samples = 1024;
-  const curve = new Float32Array(samples);
-  const deg = Math.PI / 180;
-
-  for (let i = 0; i < samples; ++i) {
-    const x = (i * 2) / samples - 1;
-    switch (type) {
-      case "distortion":
-        curve[i] = (3 + amount * 30) * x * 20 * deg / (Math.PI + amount * Math.abs(x));
-        break;
-      case "overdrive":
-      default:
-        curve[i] = Math.tanh(x * (1 + amount * 25));
-        break;
-    }
-  }
-  return curve;
+// Match your live waveform gain compensation
+function waveformGain(type: OscillatorType): number {
+	switch (type) {
+		case "square": return 0.5011872336;
+		case "sawtooth": return 0.7079457844;
+		case "triangle":
+		case "sine":
+		default: return 1.0;
+	}
 }
 
-function createAllNoiseBuffers(ctx: BaseAudioContext) {
-  const length = Math.max(1, Math.floor(ctx.sampleRate * 2)); // 2s
-  const mk = () => ctx.createBuffer(1, length, ctx.sampleRate);
-
-  // Base white
-  const white = mk();
-  const wd = white.getChannelData(0);
-  for (let i = 0; i < length; i++) wd[i] = Math.random() * 2 - 1;
-
-  // Pink (~ -3 dB/oct)
-  const pink = mk();
-  const pd = pink.getChannelData(0);
-  let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-  for (let i = 0; i < length; i++) {
-    const w = wd[i];
-    b0 = 0.99886 * b0 + w * 0.0555179;
-    b1 = 0.99332 * b1 + w * 0.0750759;
-    b2 = 0.96900 * b2 + w * 0.1538520;
-    b3 = 0.86650 * b3 + w * 0.3104856;
-    b4 = 0.55000 * b4 + w * 0.5329522;
-    b5 = -0.7616 * b5 - w * 0.0168980;
-    pd[i] = b0 + b1 + b2 + b3 + b4 + b5 + (w * 0.5362);
-    b6 = w * 0.115926;
-  }
-  normalize(pd);
-
-  // Brown (~ -6 dB/oct) — integrated white
-  const brown = mk();
-  const bd = brown.getChannelData(0);
-  let lastOut = 0;
-  for (let i = 0; i < length; i++) {
-    const w = wd[i];
-    lastOut = (lastOut + (0.02 * w)) / 1.02;
-    bd[i] = lastOut * 3.5;
-  }
-  normalize(bd);
-
-  // Blue (~ +3 dB/oct) — first difference of white
-  const blue = mk();
-  const bud = blue.getChannelData(0);
-  let prev = 0;
-  for (let i = 0; i < length; i++) {
-    const x = wd[i] - prev;
-    prev = wd[i];
-    bud[i] = x;
-  }
-  normalize(bud);
-
-  // Violet (~ +6 dB/oct) — second difference of white
-  const violet = mk();
-  const vd = violet.getChannelData(0);
-  let prev1 = 0, prev2 = 0;
-  for (let i = 0; i < length; i++) {
-    const d1 = wd[i] - prev1; prev1 = wd[i];
-    const d2 = d1 - prev2; prev2 = d1;
-    vd[i] = d2;
-  }
-  normalize(vd);
-
-  return { white, pink, brown, blue, violet } as const;
-}
-
-function normalize(buf: Float32Array) {
-  let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
-  if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
-}
-
-function normIndex(i: number, n: number) {
-  return n === 1 ? 0 : (i / (n - 1)) * 2 - 1; // [-1..+1]
-}
+// Noise setup (same stops + loudness behavior as DrumSequencer.vue)
 
 type NoiseKey = "brown" | "pink" | "white" | "blue" | "violet";
+
 const NOISE_STOPS: { key: NoiseKey; pos: number }[] = [
-  { key: "brown", pos: 0.00 },
-  { key: "pink", pos: 0.25 },
-  { key: "white", pos: 0.50 },
-  { key: "blue", pos: 0.75 },
-  { key: "violet", pos: 1.00 },
+	{ key: "brown", pos: 0.00 },
+	{ key: "pink", pos: 0.25 },
+	{ key: "white", pos: 0.50 },
+	{ key: "blue", pos: 0.75 },
+	{ key: "violet", pos: 1.00 },
 ];
 
-// Waveform loudness compensation for offline export
-// square: −6 dB, sawtooth: −2 dB, sine/triangle: 0 dB
-function waveformGain(type: OscillatorType): number {
-  switch (type) {
-    case "square": return 0.5011872336;
-    case "sawtooth": return 0.7079457844;
-    case "triangle":
-    case "sine":
-    default: return 1.0;
-  }
+const NOISE_LOUDNESS: Record<NoiseKey, number> = {
+	brown: 2.5,
+	pink: 2.0,
+	white: 1.0,
+	blue: 1.5,
+	violet: 2.0,
+};
+
+function generateNoiseBuffers(ctx: BaseAudioContext): Record<NoiseKey, AudioBuffer> {
+	const length = ctx.sampleRate * 2; // 2 seconds
+	const createBuffer = () => ctx.createBuffer(1, length, ctx.sampleRate);
+
+	const white = createBuffer();
+	const wd = white.getChannelData(0);
+	for (let i = 0; i < length; i++) wd[i] = Math.random() * 2 - 1;
+
+	// Normalize helper
+	const norm = (buf: Float32Array) => {
+		let m = 0;
+		for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
+		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
+	};
+
+	// Pink
+	const pink = createBuffer();
+	const pd = pink.getChannelData(0);
+	let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+	for (let i = 0; i < length; i++) {
+		const w = wd[i];
+		b0 = 0.99886 * b0 + w * 0.0555179;
+		b1 = 0.99332 * b1 + w * 0.0750759;
+		b2 = 0.96900 * b2 + w * 0.1538520;
+		b3 = 0.86650 * b3 + w * 0.3104856;
+		b4 = 0.55000 * b4 + w * 0.5329522;
+		b5 = -0.7616 * b5 - w * 0.0168980;
+		pd[i] = b0 + b1 + b2 + b3 + b4 + b5 + (w * 0.5362);
+		b6 = w * 0.115926;
+	}
+	norm(pd);
+
+	// Brown
+	const brown = createBuffer();
+	const bd = brown.getChannelData(0);
+	let lastOut = 0;
+	for (let i = 0; i < length; i++) {
+		const w = wd[i];
+		lastOut = (lastOut + (0.02 * w)) / 1.02;
+		bd[i] = lastOut * 3.5;
+	}
+	norm(bd);
+
+	// Blue (+3 dB/oct)
+	const blue = createBuffer();
+	const bud = blue.getChannelData(0);
+	let prev = 0;
+	for (let i = 0; i < length; i++) {
+		const x = wd[i] - prev;
+		prev = wd[i];
+		bud[i] = x;
+	}
+	norm(bud);
+
+	// Violet (~ +6 dB/oct)
+	const violet = createBuffer();
+	const vd = violet.getChannelData(0);
+	let prev1 = 0, prev2 = 0;
+	for (let i = 0; i < length; i++) {
+		const d1 = wd[i] - prev1; prev1 = wd[i];
+		const d2 = d1 - prev2; prev2 = d1;
+		vd[i] = d2;
+	}
+	norm(vd);
+
+	return { white, pink, brown, blue, violet };
 }
 
-// --- NEW: array coercion helpers to guarantee 16 steps ---
-function coerceTo16<T>(arr: T[] | undefined, fill: T): T[] {
-  if (!Array.isArray(arr)) return Array(16).fill(fill);
-  if (arr.length === 16) return arr.slice();
-  return arr.length > 16 ? arr.slice(0, 16) : arr.concat(Array(16 - arr.length).fill(fill));
+function pickNoiseStops(morph: number) {
+	let t = clamp01(morph);
+	let lower = NOISE_STOPS[0];
+	let upper = NOISE_STOPS[NOISE_STOPS.length - 1];
+
+	for (let i = 0; i < NOISE_STOPS.length - 1; i++) {
+		const a = NOISE_STOPS[i];
+		const b = NOISE_STOPS[i + 1];
+		if (t >= a.pos && t <= b.pos) {
+			lower = a;
+			upper = b;
+			break;
+		}
+	}
+
+	const span = Math.max(1e-6, upper.pos - lower.pos);
+	const wMorph = (t - lower.pos) / span;
+	const wA = 1 - wMorph;
+	const wB = wMorph;
+
+	return { lower, upper, wA, wB };
 }
 
-export function scheduleStepSequencer(ctx: BaseAudioContext, incoming: StepSequencerState, t0 = 0): void {
-  // Lock to 16 steps and sanitize arrays
-  const STEPS = 16 as const;
-  const state: StepSequencerState = {
-    ...incoming,
-    stepsCount: 16,
-    pattern: {
-      active: coerceTo16(incoming.pattern.active, false),
-      velocities: coerceTo16(incoming.pattern.velocities, 1),
-      pitches: coerceTo16(incoming.pattern.pitches, 220),
-      waveforms: coerceTo16<OscillatorType>(incoming.pattern.waveforms, "sine"),
-    },
-    synth: {
-      ...incoming.synth,
-      noise: {
-        ...incoming.synth.noise,
-        mask: coerceTo16(incoming.synth.noise.mask, true),
-      },
-    },
-  };
+// Drive curve (same behavior as live generateDriveCurve)
+function generateDriveCurve(type: string, amount = 0.5) {
+	const samples = 1024;
+	const curve = new Float32Array(samples);
+	for (let i = 0; i < samples; ++i) {
+		const x = (i * 2) / samples - 1;
+		curve[i] = Math.tanh(x * (1 + amount * 25));
+	}
+	return curve;
+}
 
-  const stepDur = stepDurationSeconds(state.bpm);
-  const bars = 1; // 16 steps * 1/16 = 1 bar
-  const patternDuration = bars * (60 / state.bpm) * 4;
-  const tEnd = t0 + patternDuration + state.tailSeconds;
+// ---------------------------------------------------------------------------
+// Main scheduler
+// ---------------------------------------------------------------------------
 
-  // Master gain
-  const master = ctx.createGain();
-  master.gain.setValueAtTime(Math.max(0, Math.min(1, state.masterVolume)), t0);
-  (master as any).connect((ctx as any).destination ?? (ctx as OfflineAudioContext).destination);
+export function scheduleStepSequencer(
+	ctx: BaseAudioContext,
+	state: StepSequencerState,
+	offsetSeconds = 0
+): void {
+	const sr = Math.max(3000, Math.min(192000, state.sampleRate || ctx.sampleRate || 48000));
 
-  // Drive & Delay chain
-  // Drive
-  const driveShaper = ctx.createWaveShaper();
-  driveShaper.curve = generateDriveCurve(state.fx.drive.type, state.fx.drive.amount);
-  (driveShaper as any).oversample = "2x";
+	// Master
+	const masterGain = ctx.createGain();
+	masterGain.gain.setValueAtTime(clamp01(state.masterVolume), ctx.currentTime + offsetSeconds);
+	masterGain.connect(ctx.destination);
 
-  const driveTone = ctx.createBiquadFilter(); driveTone.type = "lowpass";
-  driveTone.frequency.setValueAtTime(state.fx.drive.tone, t0);
+	// Noise buffers (shared by all notes)
+	const noiseBuffers = generateNoiseBuffers(ctx);
 
-  const driveMakeup = ctx.createGain();
-  driveMakeup.gain.setValueAtTime(1 + state.fx.drive.amount * 0.1, t0);
+	// -------------------------------------------------------------------------
+	// FX: Drive
+	// -------------------------------------------------------------------------
+	const drive = state.fx.drive;
+	const driveEnabled = !!drive.enabled;
+	const driveShaper = ctx.createWaveShaper();
+	const driveToneFilter = ctx.createBiquadFilter();
+	driveToneFilter.type = "lowpass";
 
-  const driveDry = ctx.createGain(); driveDry.gain.setValueAtTime(state.fx.drive.enabled ? (1 - state.fx.drive.mix) : 1, t0);
-  const driveWet = ctx.createGain(); driveWet.gain.setValueAtTime(state.fx.drive.enabled ? state.fx.drive.mix : 0, t0);
-  const driveSum = ctx.createGain();
+	const driveDry = ctx.createGain();
+	const driveWet = ctx.createGain();
+	const driveMakeup = ctx.createGain();
+	const driveSum = ctx.createGain();
 
-  // Wire drive internals
-  driveShaper.connect(driveTone).connect(driveMakeup).connect(driveWet);
-  driveDry.connect(driveSum);
-  driveWet.connect(driveSum);
+	driveShaper.connect(driveToneFilter);
+	driveToneFilter.connect(driveMakeup);
+	driveMakeup.connect(driveWet);
 
-  // Delay
-  const delayNode = ctx.createDelay(5.0);
-  delayNode.delayTime.setValueAtTime(state.fx.delay.time, t0);
+	driveDry.connect(driveSum);
+	driveWet.connect(driveSum);
 
-  const feedbackGain = ctx.createGain();
-  feedbackGain.gain.setValueAtTime(state.fx.delay.feedback, t0);
+	if (driveEnabled) {
+		driveShaper.curve = generateDriveCurve(drive.type, clamp01(drive.amount));
+		driveMakeup.gain.value = 1 + clamp01(drive.amount) * 0.1;
+	} else {
+		// passthrough curve
+		const n = 1024;
+		const c = new Float32Array(n);
+		for (let i = 0; i < n; i++) c[i] = (i * 2) / n - 1;
+		driveShaper.curve = c;
+		driveMakeup.gain.value = 1;
+	}
 
-  const fbTone = ctx.createBiquadFilter();
-  fbTone.type = state.fx.delay.toneEnabled ? state.fx.delay.toneType : "allpass";
-  fbTone.frequency.setValueAtTime(state.fx.delay.toneEnabled ? state.fx.delay.toneHz : 20000, t0);
+	driveToneFilter.frequency.value = drive.tone || 5000;
 
-  const wetTone = ctx.createBiquadFilter();
-  wetTone.type = state.fx.delay.toneEnabled ? state.fx.delay.toneType : "allpass";
-  wetTone.frequency.setValueAtTime(state.fx.delay.toneEnabled ? state.fx.delay.toneHz : 20000, t0);
+	const driveMix = clamp01(drive.mix);
+	driveWet.gain.value = driveEnabled ? driveMix : 0;
+	driveDry.gain.value = driveEnabled ? 1 - driveMix : 1;
 
-  const delayWet = ctx.createGain();
-  const delayDry = ctx.createGain();
-  if (state.fx.delay.enabled) {
-    delayWet.gain.setValueAtTime(state.fx.delay.mix, t0);
-    delayDry.gain.setValueAtTime(1 - state.fx.delay.mix, t0);
-  } else {
-    delayWet.gain.setValueAtTime(0, t0);
-    delayDry.gain.setValueAtTime(1, t0);
-  }
+	// -------------------------------------------------------------------------
+	// FX: Delay
+	// -------------------------------------------------------------------------
+	const delay = state.fx.delay;
+	const delayEnabled = !!delay.enabled && delay.mix > 0;
 
-  // Feedback loop
-  delayNode.connect(fbTone).connect(feedbackGain).connect(delayNode);
+	const delayDry = ctx.createGain();
+	const delayWet = ctx.createGain();
+	const delayNode = ctx.createDelay(5.0);
+	const feedbackGain = ctx.createGain();
+	const fbTone = ctx.createBiquadFilter();
+	const wetTone = ctx.createBiquadFilter();
 
-  // Wet path
-  delayNode.connect(wetTone).connect(delayWet);
+	delayNode.connect(fbTone);
+	fbTone.connect(feedbackGain);
+	feedbackGain.connect(delayNode);
 
-  // Drive bus → Delay split
-  driveSum.connect(delayDry);
-  driveSum.connect(delayNode);
+	delayNode.connect(wetTone);
+	wetTone.connect(delayWet);
 
-  // To master
-  delayDry.connect(master);
-  delayWet.connect(master);
+	const delayTime = Math.max(0.001, Math.min(5, delay.time || 0));
+	delayNode.delayTime.value = delayTime;
 
-  // Shared bus that notes feed into (pre-drive)
-  const busIn = ctx.createGain();
-  // If drive disabled, go straight to driveSum (which will pass mostly dry)
-  busIn.connect(driveDry);
-  busIn.connect(driveShaper);
+	feedbackGain.gain.value = Math.max(0, Math.min(0.95, delay.feedback));
 
-  // LFO (shared)
-  const lfo = {
-    enabled: state.synth.lfo.enabled,
-    osc: null as OscillatorNode | null,
-    gain: null as GainNode | null,
-    uni: null as GainNode | null
-  };
+	const delayMixClamped = clamp01(delay.mix);
+	delayWet.gain.value = delayEnabled ? delayMixClamped : 0;
+	delayDry.gain.value = delayEnabled ? 1 - delayMixClamped : 1;
 
-  if (state.synth.lfo.enabled) {
-    const wf = state.synth.lfo.waveform === "random" ? "triangle" : state.synth.lfo.waveform;
-    const osc = ctx.createOscillator();
-    osc.type = wf as OscillatorType;
-    osc.frequency.setValueAtTime(Math.max(0.01, state.synth.lfo.rateHz || 1), t0);
+	const delayToneType = delay.toneEnabled
+		? (delay.toneType === "highpass" ? "highpass" : "lowpass")
+		: "allpass";
 
-    const g = ctx.createGain(); // raw bipolar scaler
-    g.gain.setValueAtTime(1, t0);
+	fbTone.type = delayToneType;
+	wetTone.type = delayToneType;
 
-    osc.connect(g);
-    (osc as any).start?.(t0);
-    (osc as any).stop?.(tEnd + 0.05);
+	const toneHz = delay.toneEnabled ? delay.toneHz : 20000;
+	fbTone.frequency.value = toneHz;
+	wetTone.frequency.value = toneHz;
 
-    lfo.osc = osc;
-    lfo.gain = g;
+	// drive → delay
+	driveSum.connect(delayDry);
+	driveSum.connect(delayNode);
 
-    // Unipolar (0..1) branch for tremolo
-    const half = ctx.createGain(); half.gain.setValueAtTime(0.5, t0);
-    const uni = ctx.createGain();
-    const offset = (ctx as any).createConstantSource ? (ctx as any).createConstantSource() : null;
-    if (offset) {
-      offset.offset.setValueAtTime(0.5, t0);
-      g.connect(half).connect(uni);
-      offset.connect(uni);
-      (offset as any).start?.(t0);
-      (offset as any).stop?.(tEnd + 0.05);
-      lfo.uni = uni;
-    }
-  }
+	// -------------------------------------------------------------------------
+	// FX: Reverb
+	// -------------------------------------------------------------------------
+	const rev = state.fx.reverb;
+	const reverbEnabled = !!rev.enabled && rev.mix > 0 && rev.decay > 0.05;
 
-  // Noise buffers
-  const noiseBufs = createAllNoiseBuffers(ctx);
-  const BURST_MAX_MS = 250; // keep in sync with UI
+	const reverbToneFilter = ctx.createBiquadFilter();
+	reverbToneFilter.type = "lowpass";
+	const reverbConvolver = ctx.createConvolver();
+	const reverbWet = ctx.createGain();
 
-  // Precompute mask with sane default (already coerced; keep fallback for safety)
-  const mask =
-    Array.isArray(state.synth.noise.mask) && state.synth.noise.mask.length
-      ? state.synth.noise.mask
-      : Array(STEPS).fill(true);
+	driveSum.connect(reverbToneFilter);
+	reverbToneFilter.connect(reverbConvolver);
+	reverbConvolver.connect(reverbWet);
 
-  // Schedule all steps
-  const voices = Math.max(1, Math.min(6, state.synth.unison.enabled ? state.synth.unison.voices : 1));
-  const detuneStep = state.synth.unison.enabled ? state.synth.unison.detuneCents : 0;
-  const spreadPct = state.synth.unison.enabled ? state.synth.unison.stereoSpread : 0;
+	if (reverbEnabled) {
+		const ir = generateReverbIR(ctx as any, {
+			decaySeconds: Math.max(0.1, rev.decay),
+			sampleRate: sr,
+			stereo: true,
+			seed: 1337,
+		});
+		reverbConvolver.buffer = ir;
 
-  for (let step = 0; step < STEPS; step++) {
-    const isOn = !!(state.pattern.active[step]);
-    if (!isOn) continue;
+		const t = clamp01(rev.tone);
+		const minHz = 800;
+		const maxHz = 12000;
+		const freq = minHz * Math.pow(maxHz / minHz, t);
+		reverbToneFilter.frequency.value = freq;
 
-    const isEven = (step % 2) === 1;
-    const swingOffset = isEven ? stepDur * state.swing : 0;
-    const tOn = t0 + step * stepDur + swingOffset;
+		reverbWet.gain.value = clamp01(rev.mix);
+	} else {
+		reverbWet.gain.value = 0;
+		reverbToneFilter.frequency.value = 20000;
+	}
 
-    const vel = state.pattern.velocities[step] ?? 1;
-    const pitchHz = state.pattern.pitches[step] ?? 220;
-    const wave = state.pattern.waveforms[step] ?? "sine";
+	// -------------------------------------------------------------------------
+	// Connect FX to master
+	// -------------------------------------------------------------------------
+	delayDry.connect(masterGain);
+	delayWet.connect(masterGain);
+	reverbWet.connect(masterGain);
 
-    const attack = Math.max(0.001, state.synth.envelope.attackMs / 1000);
-    const decay = Math.max(0.01, state.synth.envelope.decayMs / 1000);
-    const attackEnd = tOn + attack;
-    const naturalEnd = attackEnd + decay;
+	// -------------------------------------------------------------------------
+	// Global LFO (audio-rate) – optional, minimal parity
+	// -------------------------------------------------------------------------
+	const lfoState = state.synth.lfo;
+	let lfoGainNode: GainNode | null = null;
 
-    const wfComp = waveformGain(wave);
-    const safeOscGain = Math.max(0.0001, Math.min(1, vel * state.channelVolume * wfComp));
+	if (lfoState.enabled && lfoState.depth !== 0 && lfoState.rateHz > 0) {
+		const lfoOsc = ctx.createOscillator();
+		const lfoGain = ctx.createGain();
+		lfoOsc.type = lfoState.waveform;
+		lfoOsc.frequency.value = Math.max(0.01, lfoState.rateHz);
+		lfoGain.gain.value = lfoState.depth;
 
-    const noteEnd = state.synth.envelope.enabled ? naturalEnd : (tOn + Math.max(0.02, state.synth.envelope.decayMs / 1000));
+		lfoOsc.connect(lfoGain);
 
-    // Sum of unison voices before AM LFO
-    const oscEnvGain = ctx.createGain();
-    // Single amplitude envelope
-    if (state.synth.envelope.enabled) {
-      oscEnvGain.gain.setValueAtTime(0.0001, tOn);
-      oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
-      oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
-    } else {
-      oscEnvGain.gain.setValueAtTime(safeOscGain, tOn);
-      oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005);
-    }
+		const now = ctx.currentTime + offsetSeconds;
+		const beatsPerStep = 0.25; // 16th notes
+		const secondsPerBeat = 60 / state.bpm;
+		const stepDur = secondsPerBeat * beatsPerStep;
+		const patternDuration = state.stepsCount * stepDur + state.tailSeconds;
 
-    // Build voices
-    for (let i = 0; i < voices; i++) {
-      const osc = ctx.createOscillator();
-      osc.type = wave;
+		lfoOsc.start(now);
+		lfoOsc.stop(now + patternDuration);
 
-      // Pitch env
-      applyPitchEnv(osc, pitchHz, tOn, {
-        enabled: state.synth.pitchEnv.enabled,
-        semitones: state.synth.pitchEnv.semitones,
-        mode: state.synth.pitchEnv.mode,
-        decay: state.synth.pitchEnv.decayMs / 1000
-      });
+		lfoGainNode = lfoGain;
+	}
 
-      // FM
-      const fmHandle = startFM(ctx as any, osc as any, pitchHz, tOn, {
-        enabled: state.synth.fm.enabled,
-        modFreqHz: state.synth.fm.modFreq,
-        index: state.synth.fm.index,
-        ratio: state.synth.fm.ratio
-      });
+	// -------------------------------------------------------------------------
+	// Note scheduling (synth voice only)
+	// -------------------------------------------------------------------------
 
-      // Per-voice detune & pan
-      const dNorm = normIndex(i, voices);
-      const detuneC = dNorm * detuneStep;
-      osc.detune.setValueAtTime(detuneC, tOn);
+	const envState = state.synth.envelope;
+	const filterState = state.synth.filter;
+	const noiseState = state.synth.noise;
+	const uni = state.synth.unison;
+	const fmState = state.synth.fm;
+	const pitchEnv = state.synth.pitchEnv;
 
-      // Filter
-      const vFilter = ctx.createBiquadFilter();
-      vFilter.type = "lowpass";
-      if (state.synth.filter.enabled) {
-        vFilter.frequency.setValueAtTime(state.synth.filter.cutoff, tOn);
-        vFilter.Q.setValueAtTime(state.synth.filter.resonance, tOn);
-      } else {
-        vFilter.frequency.setValueAtTime(20000, tOn);
-        vFilter.Q.setValueAtTime(0.0001, tOn);
-      }
+	const secondsPerBeat = 60 / state.bpm;
+	const stepDuration = secondsPerBeat / 4; // 16th notes
+	const chanVol = clamp01(state.channelVolume);
 
-      const vGain = ctx.createGain(); vGain.gain.setValueAtTime(1 / voices, tOn);
-      const panner = (ctx as any).createStereoPanner ? (ctx as any).createStereoPanner() : null;
-      if (panner) (panner as StereoPannerNode).pan.setValueAtTime((dNorm * spreadPct) / 100, tOn);
+	const steps = state.pattern.active;
+	const velArr = state.pattern.velocities;
+	const pitchArr = state.pattern.pitches;
+	const waveArr = state.pattern.waveforms;
 
-      // LFO routing (shared osc/gain, per-voice taps)
-      if (lfo.enabled && lfo.osc && lfo.gain) {
-        if (state.synth.lfo.target === "pitch") {
-          const tap = ctx.createGain(); tap.gain.setValueAtTime(state.synth.lfo.depth, tOn); // cents
-          lfo.gain.connect(tap).connect(osc.detune);
+	for (let stepIndex = 0; stepIndex < state.stepsCount; stepIndex++) {
+		if (!steps[stepIndex]) continue;
 
-        } else if (state.synth.lfo.target === "filter") {
-          const f0 = state.synth.filter.enabled ? state.synth.filter.cutoff : 20000;
-          const minHz = 30, maxHz = ctx.sampleRate * 0.45;
-          const maxDepth = Math.max(0, Math.min(f0 - minHz, maxHz - f0));
-          const scale = state.synth.lfo.depth > 0 ? Math.min(1, maxDepth / state.synth.lfo.depth) : 0;
+		const baseVel = clamp01(velArr[stepIndex] ?? 1);
+		if (baseVel <= 0) continue;
 
-          const tap = ctx.createGain(); tap.gain.setValueAtTime(scale, tOn);
-          const ctrlLP = ctx.createBiquadFilter(); ctrlLP.type = "lowpass"; ctrlLP.frequency.setValueAtTime(120, tOn);
-          lfo.gain.connect(tap).connect(ctrlLP).connect(vFilter.frequency);
+		const freq = pitchArr[stepIndex] || 220;
+		const wave = (waveArr[stepIndex] ?? "sine") as OscillatorType;
 
-        } else if (state.synth.lfo.target === "resonance") {
-          const qBase = state.synth.filter.enabled ? state.synth.filter.resonance : 0.0001;
-          const qMin = 0.0001, qMax = 20;
-          const maxUp = qMax - qBase, maxDown = qBase - qMin;
-          const maxSym = Math.max(0, Math.min(maxUp, maxDown));
-          const qScale = state.synth.lfo.depth > 0 ? Math.min(1, maxSym / state.synth.lfo.depth) : 0;
+		// Swing: same as live schedule()
+		const isEvenStep = stepIndex % 2 === 1;
+		const swingOffset = isEvenStep ? stepDuration * clamp01(state.swing) : 0;
+		const t = ctx.currentTime + offsetSeconds + stepIndex * stepDuration + swingOffset;
 
-          const tap = ctx.createGain(); tap.gain.setValueAtTime(qScale, tOn);
-          const ctrlLP = ctx.createBiquadFilter(); ctrlLP.type = "lowpass"; ctrlLP.frequency.setValueAtTime(120, tOn);
-          lfo.gain.connect(tap).connect(ctrlLP).connect(vFilter.Q);
+		const padNoiseOn = noiseState.mask?.[stepIndex] ?? true;
 
-        } else if (state.synth.lfo.target === "pan" && panner) {
-          const tap = ctx.createGain(); tap.gain.setValueAtTime(state.synth.lfo.depth / 100, tOn); // percent→0..1
-          lfo.gain.connect(tap).connect((panner as StereoPannerNode).pan);
-        }
-      }
+		scheduleSynthNote({
+			ctx,
+			time: t,
+			freq,
+			baseVelocity: baseVel,
+			channelVolume: chanVol,
+			wave,
+			envState,
+			filterState,
+			noiseState,
+			padNoiseOn,
+			unisonState: uni,
+			fmState,
+			pitchEnv,
+			driveEnabled,
+			driveDry,
+			driveShaper,
+			driveSum,
+			lfoState,
+			lfoGainNode,
+			masterGain,
+			noiseBuffers,
+		});
+	}
+}
 
-      if (panner) {
-        (osc as any).connect(vFilter).connect(vGain).connect(panner).connect(oscEnvGain);
-      } else {
-        (osc as any).connect(vFilter).connect(vGain).connect(oscEnvGain);
-      }
+// ---------------------------------------------------------------------------
+// Single-note scheduling (parity with live playSynthNote noise behavior)
+// ---------------------------------------------------------------------------
 
-      (osc as any).start?.(tOn);
-      (osc as any).stop?.(noteEnd);
-      if (fmHandle?.stop) fmHandle.stop(noteEnd);
-    }
+type EnvState = StepSequencerState["synth"]["envelope"];
+type FilterState = StepSequencerState["synth"]["filter"];
+type NoiseState = StepSequencerState["synth"]["noise"];
+type UnisonState = StepSequencerState["synth"]["unison"];
+type FMState = StepSequencerState["synth"]["fm"];
+type PitchEnvState = StepSequencerState["synth"]["pitchEnv"];
+type LfoState = StepSequencerState["synth"]["lfo"];
 
-    // Amplitude LFO (tremolo) after env
-    let postNode: AudioNode = oscEnvGain;
-    if (lfo.enabled && lfo.uni && state.synth.lfo.target === "gain") {
-      const trem = ctx.createGain(); trem.gain.setValueAtTime(1, tOn);
-      const depth = Math.min(1, Math.max(0, state.synth.lfo.depth / 100)); // 0..1
+function scheduleSynthNote(opts: {
+	ctx: BaseAudioContext;
+	time: number;
+	freq: number;
+	baseVelocity: number;
+	channelVolume: number;
+	wave: OscillatorType;
+	envState: EnvState;
+	filterState: FilterState;
+	noiseState: NoiseState;
+	padNoiseOn: boolean;
+	unisonState: UnisonState;
+	fmState: FMState;
+	pitchEnv: PitchEnvState;
+	driveEnabled: boolean;
+	driveDry: GainNode;
+	driveShaper: WaveShaperNode;
+	driveSum: GainNode;
+	lfoState: LfoState;
+	lfoGainNode: GainNode | null;
+	masterGain: GainNode;
+	noiseBuffers: Record<NoiseKey, AudioBuffer>;
+}) {
+	const {
+		ctx, time, freq, baseVelocity, channelVolume, wave,
+		envState, filterState, noiseState, padNoiseOn,
+		unisonState, fmState, pitchEnv, driveEnabled,
+		driveDry, driveShaper, driveSum,
+		lfoState, lfoGainNode,
+		masterGain, noiseBuffers,
+	} = opts;
 
-      const scale = ctx.createGain(); scale.gain.setValueAtTime(depth, tOn);  // d * lfoUni
-      lfo.uni.connect(scale);
+	const attackSec = envState.enabled
+		? Math.max(0.001, envState.attackMs / 1000)
+		: 0.01;
 
-      const base = (ctx as any).createConstantSource ? (ctx as any).createConstantSource() : null; // (1 - d)
-      if (base) {
-        base.offset.setValueAtTime(1 - depth, tOn);
-        base.connect((trem as GainNode).gain);
-        (scale as any).connect((trem as GainNode).gain);
-        (base as any).start?.(tOn);
-        (base as any).stop?.(noteEnd + 0.05);
-      }
+	const decaySec = envState.enabled
+		? Math.max(0.05, envState.decayMs / 1000)
+		: 0.1;
 
-      (oscEnvGain as any).connect(trem);
-      postNode = trem;
-    }
+	const attackEnd = time + attackSec;
+	const naturalEnd = attackEnd + decaySec;
+	const gateEnd = time + Math.max(0.02, envState.decayMs / 1000);
+	const noteEnd = envState.enabled ? naturalEnd : gateEnd;
 
-    // Route to FX bus
-    (postNode as any).connect(busIn);
+	const baseAmp = baseVelocity * channelVolume;
 
-    // Noise
-    const noiseEnabled = !!state.synth.noise.enabled && state.synth.noise.amount > 0;
-    const maskOn = !!mask[step];
-    if (noiseEnabled && maskOn && vel > 0) {
-      // Determine color crossfade from continuous color (preferred), else legacy type
-      let wA = 1, wB = 0;
-      let keyA: NoiseKey = "white", keyB: NoiseKey = "white";
+	// --- Tone vs Noise blend: 100% parity with live code ---------------------
+	const addNoiseForThisPad = padNoiseOn !== false;
+	const blend = (addNoiseForThisPad && noiseState.enabled)
+		? clamp01(noiseState.amount)
+		: 0;
 
-      if (typeof state.synth.noise.color === "number") {
-        const t = Math.max(0, Math.min(1, state.synth.noise.color));
-        // find adjacent stops
-        let lower = NOISE_STOPS[0], upper = NOISE_STOPS[NOISE_STOPS.length - 1];
-        for (let i = 0; i < NOISE_STOPS.length - 1; i++) {
-          const a = NOISE_STOPS[i], b = NOISE_STOPS[i + 1];
-          if (t >= a.pos && t <= b.pos) { lower = a; upper = b; break; }
-        }
-        const span = Math.max(1e-6, upper.pos - lower.pos);
-        const w = (t - lower.pos) / span;
-        wA = 1 - w; wB = w;
-        keyA = lower.key; keyB = upper.key;
-      } else {
-        // discrete/legacy
-        const k = (state.synth.noise.type || "white") as NoiseKey;
-        keyA = keyB = (["brown", "pink", "white", "blue", "violet"].includes(k) ? k : "white") as NoiseKey;
-        wA = 1; wB = 0;
-      }
+	const oscBlend = 1 - blend;
+	const noiseBlend = blend;
 
-      // Single mixed bus for the two sources
-      const mix = ctx.createGain(); mix.gain.setValueAtTime(1, tOn);
+	// Tone envelope gain
+	const oscEnvGain = ctx.createGain();
 
-      if (wA > 0.0001) {
-        const sA = ctx.createBufferSource();
-        sA.buffer = noiseBufs[keyA];
-        const gA = ctx.createGain(); gA.gain.setValueAtTime(wA, tOn);
-        sA.connect(gA).connect(mix);
-        (sA as any).start?.(tOn);
-        (sA as any).stop?.(noteEnd);
-      }
-      if (wB > 0.0001) {
-        const sB = ctx.createBufferSource();
-        sB.buffer = noiseBufs[keyB];
-        const gB = ctx.createGain(); gB.gain.setValueAtTime(wB, tOn);
-        sB.connect(gB).connect(mix);
-        (sB as any).start?.(tOn);
-        (sB as any).stop?.(noteEnd);
-      }
+	const wfComp = waveformGain(wave);
+	const oscPeak = Math.max(0.0001, baseAmp * oscBlend * wfComp);
 
-      // Envelope (velocity-weighted amount; same as live)
-      const nEnv = ctx.createGain();
-      const noiseFilter = ctx.createBiquadFilter();
-      noiseFilter.type = "bandpass";
-      noiseFilter.frequency.setValueAtTime(8000, tOn);
-      noiseFilter.Q.setValueAtTime(1, tOn);
+	if (envState.enabled) {
+		oscEnvGain.gain.setValueAtTime(0.0001, time);
+		oscEnvGain.gain.exponentialRampToValueAtTime(oscPeak, attackEnd);
+		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
+	} else {
+		oscEnvGain.gain.setValueAtTime(Math.max(0.0001, baseAmp), time);
+		oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005);
+	}
 
-      // Blend = amount (0..1)
-      const blend = Math.max(0, Math.min(1, state.synth.noise.amount));
-      const safeNoiseGain = Math.max(0.0001, vel * blend);
+	// --- Unison / filter / LFO hookup (simplified parity) -------------------
+	const voices = unisonState.enabled
+		? Math.max(1, Math.min(6, unisonState.voices))
+		: 1;
 
-      nEnv.gain.setValueAtTime(0.0001, tOn);
-      nEnv.gain.exponentialRampToValueAtTime(safeNoiseGain, attackEnd);
+	const detuneStep = voices > 1 ? unisonState.detuneCents : 0;
+	const spreadPct = voices > 1 ? unisonState.stereoSpread : 0;
 
-      // Attack Burst
-      const burstActive = !!state.synth.noise.attackBurst &&
-        typeof state.synth.noise.burstMs === "number" &&
-        state.synth.noise.burstMs < BURST_MAX_MS;
+	const normIndex = (i: number, n: number) =>
+		n === 1 ? 0 : (i / (n - 1)) * 2 - 1;
 
-      const burstEnd = burstActive
-        ? Math.min(noteEnd, attackEnd + Math.max(0.005, (state.synth.noise.burstMs || 80) / 1000))
-        : noteEnd;
+	for (let i = 0; i < voices; i++) {
+		const osc = ctx.createOscillator();
+		osc.type = wave;
 
-      nEnv.gain.exponentialRampToValueAtTime(0.001, burstEnd);
-      nEnv.gain.setTargetAtTime(0.0001, burstEnd, 0.01);
+		const voiceFilter = ctx.createBiquadFilter();
+		voiceFilter.type = "lowpass";
 
-      mix.connect(noiseFilter).connect(nEnv).connect(master);
-    }
-  }
+		const voiceGain = ctx.createGain();
+		const panner = ctx.createStereoPanner();
+
+		applyPitchEnv(osc, freq, time, {
+			enabled: pitchEnv.enabled,
+			semitones: pitchEnv.semitones,
+			mode: pitchEnv.mode,
+			decay: Math.max(0.01, pitchEnv.decayMs / 1000),
+		});
+
+		const fmHandle = startFM(ctx, osc, freq, time, {
+			enabled: fmState.enabled,
+			modFreqHz: fmState.modFreq,
+			index: fmState.index,
+			ratio: fmState.ratio,
+		});
+
+		const dNorm = normIndex(i, voices);
+		const detuneC = dNorm * detuneStep;
+		osc.detune.setValueAtTime(detuneC, time);
+
+		if (filterState.enabled) {
+			voiceFilter.frequency.setValueAtTime(filterState.cutoff, time);
+			voiceFilter.Q.setValueAtTime(filterState.resonance, time);
+		} else {
+			voiceFilter.frequency.setValueAtTime(20000, time);
+			voiceFilter.Q.setValueAtTime(0.0001, time);
+		}
+
+		voiceGain.gain.setValueAtTime(1 / voices, time);
+		panner.pan.setValueAtTime((dNorm * spreadPct) / 100, time);
+
+		// LFO modulation (basic parity)
+		if (lfoState.enabled && lfoGainNode) {
+			if (lfoState.target === "pitch") {
+				const tap = ctx.createGain();
+				tap.gain.value = 1;
+				lfoGainNode.connect(tap).connect(osc.detune);
+			} else if (lfoState.target === "filter") {
+				const f0 = filterState.enabled ? filterState.cutoff : 20000;
+				const minHz = 30;
+				const maxHz = ctx.sampleRate * 0.45;
+				const maxDepth = Math.max(0, Math.min(f0 - minHz, maxHz - f0));
+				const scale = lfoState.depth > 0 ? Math.min(1, maxDepth / lfoState.depth) : 0;
+
+				const tap = ctx.createGain();
+				tap.gain.value = scale;
+
+				const ctrlLP = ctx.createBiquadFilter();
+				ctrlLP.type = "lowpass";
+				ctrlLP.frequency.value = 120;
+
+				lfoGainNode.connect(tap).connect(ctrlLP).connect(voiceFilter.frequency);
+			}
+		}
+
+		osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
+
+		osc.start(time);
+		osc.stop(noteEnd);
+		if (fmHandle) fmHandle.stop(noteEnd);
+	}
+
+	// Tone path → drive / FX chain
+	if (driveEnabled) {
+		oscEnvGain.connect(driveDry);
+		oscEnvGain.connect(driveShaper);
+	} else {
+		oscEnvGain.connect(driveSum);
+	}
+
+	// --- Noise path (matches live DrumSequencer playSynthNote) --------------
+
+	if (noiseBlend > 0 && noiseState.enabled) {
+		const { lower, upper, wA, wB } = pickNoiseStops(noiseState.color);
+
+		const bufA = noiseBuffers[lower.key];
+		const bufB = noiseBuffers[upper.key];
+
+		if (bufA || bufB) {
+			const mix = ctx.createGain();
+			mix.gain.setValueAtTime(1, time);
+
+			if (bufA) {
+				const sA = ctx.createBufferSource();
+				sA.buffer = bufA;
+				sA.loop = false;
+				const gA = ctx.createGain();
+				gA.gain.setValueAtTime(wA, time);
+				sA.connect(gA).connect(mix);
+				sA.start(time);
+				sA.stop(noteEnd);
+			}
+			if (bufB) {
+				const sB = ctx.createBufferSource();
+				sB.buffer = bufB;
+				sB.loop = false;
+				const gB = ctx.createGain();
+				gB.gain.setValueAtTime(wB, time);
+				sB.connect(gB).connect(mix);
+				sB.start(time);
+				sB.stop(noteEnd);
+			}
+
+			const noiseEnvGain = ctx.createGain();
+			const attackEnd = time + attackSec;
+
+			const gainLower = NOISE_LOUDNESS[lower.key];
+			const gainUpper = NOISE_LOUDNESS[upper.key];
+			const colorGain = gainLower * wA + gainUpper * wB;
+
+			const safePeak = Math.max(0.0001, baseAmp * noiseBlend * colorGain);
+
+			noiseEnvGain.gain.setValueAtTime(0.0001, time);
+			noiseEnvGain.gain.exponentialRampToValueAtTime(safePeak, attackEnd);
+
+			const BURST_MAX_MS = 250;
+			const burstActive =
+				noiseState.attackBurst && noiseState.burstMs < BURST_MAX_MS;
+
+			const burstEnd = burstActive
+				? Math.min(
+					noteEnd,
+					attackEnd + Math.max(0.005, noiseState.burstMs / 1000)
+				)
+				: noteEnd;
+
+			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, burstEnd);
+			noiseEnvGain.gain.setTargetAtTime(0.0001, burstEnd, 0.01);
+
+			const noiseTarget = driveSum; // common pre-FX bus for tone + noise
+
+			mix.connect(noiseEnvGain).connect(noiseTarget);
+
+		}
+	}
 }

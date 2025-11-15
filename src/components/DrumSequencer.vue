@@ -204,7 +204,7 @@
 					</SectionWrap>
 				</div>
 
-				<div class="module noise">
+				<!-- <div class="module noise">
 					<div class="noise-tv-bg" :class="{ 'on': noiseEnabled }" :style="noiseModuleStyle">
 						<div v-if="noiseEnabled" class="noise-overlay mode-static" aria-hidden="true">
 							<div class="grain"></div>
@@ -221,7 +221,34 @@
 							</div>
 						</SectionWrap>
 					</div>
+				</div> -->
+
+				<div class="module noise">
+					<div class="noise-tv-bg" :class="{ on: noiseEnabled }" :style="noiseModuleStyle">
+						<!-- NEW vertical ribbon toggle -->
+						<button type="button" class="noise-ribbon" :class="{ 'is-on': noiseEnabled }"
+							:aria-pressed="noiseEnabled" aria-label="Toggle noise"
+							:style="{ '--noise-ribbon-accent': '#9C27B0' }" @click="noiseEnabled = !noiseEnabled">
+							<span class="noise-ribbon-label">NOISE</span>
+						</button>
+
+						<div v-if="noiseEnabled" class="noise-overlay mode-static" aria-hidden="true">
+							<div class="grain"></div>
+						</div>
+
+						<SectionWrap id="noise" title="" v-model="collapsibleState['noise']">
+							<div class="gen-panel noise-panel">
+								<div class="noise-inline">
+									<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
+										v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
+										v-model:mask="noiseMask" v-model:attackBurst="noiseAttackBurst"
+										v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
+								</div>
+							</div>
+						</SectionWrap>
+					</div>
 				</div>
+
 
 				<!-- Envelope + Filter -->
 				<div class="module sound">
@@ -1593,14 +1620,23 @@ const pitchEnvDecay = computed(() => pitchEnvDecayMs.value / 1000);
 // Noise START
 
 
-type NoiseKey = 'brown' | 'pink' | 'white' | 'blue' | 'violet'
+type NoiseKey = 'brown' | 'pink' | 'white' | 'blue' | 'violet';
 const NOISE_STOPS: { key: NoiseKey; pos: number }[] = [
 	{ key: 'brown', pos: 0.00 },
 	{ key: 'pink', pos: 0.25 },
 	{ key: 'white', pos: 0.50 },
 	{ key: 'blue', pos: 0.75 },
 	{ key: 'violet', pos: 1.00 },
-]
+];
+
+
+const NOISE_LOUDNESS: Record<NoiseKey, number> = {
+	brown: 2.5,   // a bit of lift in mids
+	pink: 2,
+	white: 1.0,   // reference
+	blue: 1.5,
+	violet: 2,
+};
 
 // Visual swatch colors for each noise key (match NoiseModule’s swatch look)
 const NOISE_HEX: Record<NoiseKey, string> = {
@@ -1619,7 +1655,7 @@ function __mixHex(a: string, b: string, w: number) {
 	const [br, bg, bb] = toRgb(b.replace('#', ''));
 	const r = ar + (br - ar) * w, g = ag + (bg - ag) * w, b2 = ab + (bb - ab) * w;
 	return `#${pad(r)}${pad(g)}${pad(b2)}`;
-}
+};
 
 // Given morph t (0..1), pick adjacent NOISE_STOPS and blend their hexes.
 // Uses existing NOISE_STOPS and noise keys.
@@ -1633,10 +1669,9 @@ function noiseHexFromMorph(t: number) {
 	const span = Math.max(1e-6, b.pos - a.pos);
 	const w = (t - a.pos) / span;
 	return __mixHex(NOISE_HEX[a.key], NOISE_HEX[b.key], w);
-}
+};
 
 const noiseModuleStyle = computed(() => {
-	// Use the same defaults/tunings as SynthStepGrid instance
 	const tint = noiseHexFromMorph(noiseColor.value);
 	const alpha = 0.32;
 	const fps = 14;
@@ -1656,7 +1691,7 @@ const noiseModuleStyle = computed(() => {
 
 const noiseBuffers: Record<NoiseKey, AudioBuffer | null> = {
 	brown: null, pink: null, white: null, blue: null, violet: null
-}
+};
 // continuous color morph 0..1  (0=brown → 1=violet)
 const noiseColor = ref(0.5);
 
@@ -2605,13 +2640,20 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 				sB.stop(noteEnd);
 			}
 
-			// Envelope & burst
+
 			const noiseEnvGain = audioCtx.createGain();
 			const attackEnd = startTime + attackTime;
 
-			const safePeak = Math.max(0.0001, velocity * noiseBlend);
+			// Interpolate loudness between the two neighboring colors
+			const gainLower = NOISE_LOUDNESS[lower.key];
+			const gainUpper = NOISE_LOUDNESS[upper.key];
+			const colorGain = gainLower * wA + gainUpper * wB;
+
+			const safePeak = Math.max(0.0001, velocity * noiseBlend * colorGain);
 			noiseEnvGain.gain.setValueAtTime(0.0001, startTime);
 			noiseEnvGain.gain.exponentialRampToValueAtTime(safePeak, attackEnd);
+
+
 
 			const BURST_MAX_MS = 250;
 			const burstActive = noiseAttackBurst.value && (noiseBurstMs.value < BURST_MAX_MS);
@@ -2622,14 +2664,19 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, burstEnd);
 			noiseEnvGain.gain.setTargetAtTime(0.0001, burstEnd, 0.01);
 
-			// Gentle bandpass to keep the noise bright but contained
-			const noiseFilter = audioCtx.createBiquadFilter();
-			noiseFilter.type = 'bandpass';
-			noiseFilter.frequency.setValueAtTime(8000, startTime);
-			noiseFilter.Q.setValueAtTime(1, startTime);
+			// Optional: broad band-limiting instead of a tight band-pass
+			const noiseHP = audioCtx.createBiquadFilter();
+			noiseHP.type = 'highpass';
+			noiseHP.frequency.setValueAtTime(40, startTime);    // remove sub-rumble
+
+			const noiseLP = audioCtx.createBiquadFilter();
+			noiseLP.type = 'lowpass';
+			noiseLP.frequency.setValueAtTime(16000, startTime); // tame ultra-high fizz
 
 			// Mono path to master
-			mix.connect(noiseFilter).connect(noiseEnvGain).connect(masterGain);
+			mix.connect(noiseHP).connect(noiseLP).connect(noiseEnvGain).connect(masterGain);
+
+
 		}
 	}
 }
@@ -3879,6 +3926,108 @@ function resetUiToFactoryDefaults() {
 	display: none !important;
 }
 
+
+/* Make sure the tv shell can host the absolute ribbon */
+.module.noise .noise-tv-bg {
+	position: relative;
+}
+
+/* Vertical ribbon hugging the left edge */
+.noise-ribbon {
+	--noise-ribbon-accent: #9C27B0;
+
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	width: 40px;
+
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
+	padding: 8px 0;
+	border: 0;
+	cursor: pointer;
+
+	/* border-radius: 0 12px 12px 0; */
+	background: linear-gradient(180deg,
+			color-mix(in oklab, var(--pt-surface-3, #26263a), transparent 0%),
+			color-mix(in oklab, var(--pt-surface-1, #151522), transparent 0%));
+	color: color-mix(in oklab, var(--pt-text, #e5e9ff), transparent 20%);
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+		0 0 0 1px rgba(0, 0, 0, 0.7);
+
+	z-index: 2;
+	isolation: isolate;
+
+	/* no movement on hover; only subtle visual changes */
+	transition:
+		background-color 140ms ease,
+		box-shadow 140ms ease,
+		color 140ms ease,
+		filter 120ms ease;
+}
+
+/* “Wrapped” top & bottom tabs */
+/* .noise-ribbon::before,
+.noise-ribbon::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: inherit;
+  z-index: -1;
+}
+
+.noise-ribbon::before {
+  top: -6px;
+  border-radius: 0 0 10px 0;
+  box-shadow: 0 -3px 6px rgba(0, 0, 0, 0.45);
+}
+
+.noise-ribbon::after {
+  bottom: -6px;
+  border-radius: 0 10px 0 0;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.45);
+} */
+
+/* Active state: brighter accent, glowing like it’s wrapped tight */
+.noise-ribbon.is-on {
+	background: linear-gradient(180deg,
+			color-mix(in oklab, var(--noise-ribbon-accent), black 6%),
+			color-mix(in oklab, var(--noise-ribbon-accent), black 20%));
+	color: #fff;
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.85),
+		0 0 16px var(--pt-btn-glow, rgba(156, 39, 176, 0.65));
+}
+
+.noise-ribbon:hover {
+	filter: brightness(1.05) contrast(1.02);
+}
+
+/* Label: vertical, but flipped so N is at the bottom */
+.noise-ribbon-label {
+	writing-mode: vertical-rl;
+	text-orientation: mixed;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	font-size: 11px;
+	font-weight: 600;
+
+	/* flip reading order: bottom-to-top */
+	transform: rotate(180deg);
+}
+
+/* Push the actual controls over so they don't sit under the ribbon */
+.module.noise .noise-panel {
+	padding-left: 35px;
+}
+
+
 .pt-dot {
 	width: 14px;
 	height: 14px;
@@ -4201,7 +4350,6 @@ function resetUiToFactoryDefaults() {
 	min-width: 42px;
 }
 
-/* FM + Unison side-by-side within the Pitch section */
 .module.pitch :deep(.knob-group.pitch-col) {
 	margin-top: 0;
 	width: 50%;
@@ -4209,7 +4357,6 @@ function resetUiToFactoryDefaults() {
 	vertical-align: top;
 }
 
-/* responsive fall-back */
 @media (max-width: 900px) {
 	.module.pitch :deep(.knob-group.pitch-col) {
 		width: 100%;
@@ -4218,16 +4365,12 @@ function resetUiToFactoryDefaults() {
 }
 
 
-/*  Noise Module TV static background  */
 .module.noise .noise-tv-bg {
-	position: relative;
 	border-radius: var(--pt-card-radius, 12px);
 	overflow: hidden;
 }
 
-/* Keep all foreground content above the overlay */
 .module.noise .noise-tv-bg>*:not(.noise-overlay) {
-	position: relative;
 	z-index: 1;
 }
 
@@ -4345,9 +4488,9 @@ function resetUiToFactoryDefaults() {
 	}
 }
 
-.noise-tv-bg .pt-card {
+/* .noise-tv-bg .pt-card {
 	background: none;
-}
+} */
 
 .module.sound .split-two {
 	display: grid;

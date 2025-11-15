@@ -1,23 +1,10 @@
 <!-- components/LFOGroup.vue -->
 <template>
-    <KnobGroup
-        v-model="localEnabled"
-        :color="color"
-        :showToggle="showToggle"
-        :showHeader="false"
-    >
+    <KnobGroup v-model="localEnabled" :color="color" :showToggle="showToggle" :showHeader="false">
         <div class="lfo-root lfo-container">
-            <!-- TOP: Power + Config -->
             <div class="lfo-layout">
-                <!-- LEFT: Power tile -->
-                <button
-                    class="lfo-power-tile"
-                    :class="{ on: localEnabled }"
-                    :aria-pressed="localEnabled"
-                    title="Toggle LFO"
-                    @click="localEnabled = !localEnabled"
-                    @contextmenu.prevent="openAdvanced"
-                >
+                <button class="lfo-power-tile" :class="{ on: localEnabled }" :aria-pressed="localEnabled"
+                    title="Toggle LFO" @click="localEnabled = !localEnabled" @contextmenu.prevent="openAdvanced">
                     <div class="lfo-power-header">
                         <span class="lfo-power-label">LFO</span>
                         <span class="lfo-status-pill" :class="{ on: localEnabled }">
@@ -32,30 +19,15 @@
                     </span>
                 </button>
 
-                <!-- RIGHT: Wave + Target blocks -->
                 <div class="lfo-right">
-                    <!-- Waveform block -->
                     <section class="lfo-block" aria-label="LFO Waveform" role="group">
                         <div class="lfo-block-label">Wave</div>
-                        <div
-                            class="lfo-waves"
-                            role="radiogroup"
-                            aria-label="LFO Waveform"
-                        >
-                            <button
-                                v-for="w in waves"
-                                :key="w"
-                                class="lfo-wave-btn"
-                                :class="{
-                                    active: localWaveform === w,
-                                    disabled: !localEnabled
-                                }"
-                                role="radio"
-                                :aria-checked="localWaveform === w ? 'true' : 'false'"
-                                :disabled="!localEnabled"
-                                @click="setWave(w)"
-                                :title="waveLong(w)"
-                            >
+                        <div class="lfo-waves" role="radiogroup" aria-label="LFO Waveform">
+                            <button v-for="w in waves" :key="w" class="lfo-wave-btn" :class="{
+                                active: localWaveform === w,
+                                disabled: !localEnabled
+                            }" role="radio" :aria-checked="localWaveform === w ? 'true' : 'false'"
+                                :disabled="!localEnabled" @click="setWave(w)" :title="waveLong(w)">
                                 <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
                                     <path :d="wavePath(w)" class="wv" />
                                 </svg>
@@ -64,42 +36,22 @@
                         </div>
                     </section>
 
-                    <!-- Target block -->
                     <section class="lfo-block" aria-label="LFO Target" role="group">
                         <div class="lfo-block-label">Target</div>
-                        <div
-                            class="lfo-target-quick"
-                            role="radiogroup"
-                            aria-label="LFO Target"
-                        >
-                            <button
-                                class="mm-pill"
-                                :class="{
-                                    active: currentTarget === 'pitch',
-                                    disabled: !localEnabled
-                                }"
-                                :disabled="!localEnabled"
-                                role="radio"
+                        <div class="lfo-target-quick" role="radiogroup" aria-label="LFO Target">
+                            <button class="mm-pill" :class="{
+                                active: currentTarget === 'pitch',
+                                disabled: !localEnabled
+                            }" :disabled="!localEnabled" role="radio"
                                 :aria-checked="currentTarget === 'pitch' ? 'true' : 'false'"
-                                @click="updateTarget('pitch')"
-                                title="Modulate Pitch"
-                            >
+                                @click="updateTarget('pitch')" title="Modulate Pitch">
                                 Pitch
                             </button>
-                            <button
-                                class="mm-pill"
-                                :class="{
-                                    active: currentTarget === 'filter',
-                                    disabled: !localEnabled
-                                }"
-                                :disabled="!localEnabled"
-                                role="radio"
-                                :aria-checked="
-                                    currentTarget === 'filter' ? 'true' : 'false'
-                                "
-                                @click="updateTarget('filter')"
-                                title="Modulate Filter"
-                            >
+                            <button class="mm-pill" :class="{
+                                active: currentTarget === 'filter',
+                                disabled: !localEnabled
+                            }" :disabled="!localEnabled" role="radio" :aria-checked="currentTarget === 'filter' ? 'true' : 'false'
+                                " @click="updateTarget('filter')" title="Modulate Filter">
                                 Filter
                             </button>
                         </div>
@@ -107,26 +59,13 @@
                 </div>
             </div>
 
-            <!-- BOTTOM: Knobs (unchanged components) -->
             <div class="lfo-knobs">
                 <div class="pt-knob-row">
                     <div class="position-relative text-center">
-                        <Knob
-                            v-model="rateKnobModel"
-                            size="small"
-                            :min="rateMin"
-                            :max="rateMax"
-                            :step="rateStep"
-                            label="Rate"
-                            :color="color"
-                            :disabled="!localEnabled"
-                            :showMarkers="localSync"
-                            :markers="rateMarkers"
-                            :markersOnly="localSync"
-                            :markersOffsetDeg="-90"
-                            @knobStart="activeKnob = 'rate'"
-                            @knobEnd="activeKnob = null"
-                        />
+                        <Knob v-model="rateKnobModel" size="small" :min="rateMin" :max="rateMax" :step="rateStep"
+                            label="Rate" :color="color" :disabled="!localEnabled" :showMarkers="localSync"
+                            :markers="rateMarkers" :markersOnly="localSync" :markersOffsetDeg="-90"
+                            @knobStart="activeKnob = 'rate'" @knobEnd="activeKnob = null" />
                         <span v-if="activeKnob === 'rate'" class="custom-tooltip">
                             <template v-if="localSync">{{ localDivision }}</template>
                             <template v-else>{{ Number(localRate).toFixed(1) }} Hz</template>
@@ -134,18 +73,9 @@
                     </div>
 
                     <div class="position-relative text-center">
-                        <Knob
-                            v-model="localDepth"
-                            size="small"
-                            :min="0"
-                            :max="depthMax"
-                            :step="depthStep"
-                            label="Depth"
-                            :color="color"
-                            :disabled="!localEnabled"
-                            @knobStart="activeKnob = 'depth'"
-                            @knobEnd="activeKnob = null"
-                        />
+                        <Knob v-model="localDepth" size="small" :min="0" :max="depthMax" :step="depthStep" label="Depth"
+                            :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'depth'"
+                            @knobEnd="activeKnob = null" />
                         <span v-if="activeKnob === 'depth'" class="custom-tooltip">
                             {{ depthReadout }}
                         </span>
@@ -153,17 +83,10 @@
                 </div>
             </div>
 
-            <!-- Advanced menu (unchanged) -->
-            <div
-                v-if="advancedOpen"
-                class="mm-menu"
-                role="menu"
-                @click.stop
-                :style="{
-                    left: (advPos?.x ?? 0) + 'px',
-                    top: (advPos?.y ?? 0) + 'px'
-                }"
-            >
+            <div v-if="advancedOpen" class="mm-menu" role="menu" @click.stop :style="{
+                left: (advPos?.x ?? 0) + 'px',
+                top: (advPos?.y ?? 0) + 'px'
+            }">
                 <div class="mm-menu-title">Advanced Options</div>
 
                 <div class="mm-opt" role="menuitem" @click="setSync(!localSync)">
@@ -183,7 +106,6 @@
 </template>
 
 <script setup lang="ts">
-/* script section is IDENTICAL to your current file */
 import { ref, watch, computed, onUnmounted } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
@@ -245,7 +167,6 @@ function waveLong(w: Wave | string): string {
     return waveLabel(w);
 }
 
-/* Advanced menu state */
 const advancedOpen = ref(false);
 const advPos = ref<{ x: number; y: number } | null>(null);
 
@@ -358,7 +279,6 @@ const depthReadout = computed<string>(() => {
     }
 });
 
-/* Rate controls */
 const rateMin = computed<number>(() => (localSync.value ? 0 : 0.1));
 const rateMax = computed<number>(() => (localSync.value ? props.divisions.length - 1 : 20));
 const rateStep = computed<number>(() => (localSync.value ? 1 : 0.1));
@@ -411,7 +331,6 @@ function wavePath(w: Wave | string): string {
     margin-inline: auto;
 }
 
-/* Top layout: power on left, blocks on right */
 .lfo-layout {
     display: grid;
     grid-template-columns: 140px minmax(0, 1fr);
@@ -426,7 +345,6 @@ function wavePath(w: Wave | string): string {
     gap: 10px;
 }
 
-/* Power tile */
 .lfo-power-tile {
     border-radius: 18px;
     border: 1px solid var(--pt-hairline);
@@ -496,7 +414,6 @@ function wavePath(w: Wave | string): string {
     padding-inline: 4px;
 }
 
-/* Generic wave path */
 svg {
     display: block;
     width: 100%;
@@ -511,7 +428,6 @@ svg {
     stroke-linejoin: round;
 }
 
-/* Right-hand blocks */
 .lfo-block {
     border-radius: 14px;
     border: 1px solid var(--pt-hairline);
@@ -529,7 +445,6 @@ svg {
     color: rgba(199, 206, 224, 0.75);
 }
 
-/* Wave radio buttons */
 .lfo-waves {
     display: flex;
     gap: 8px;
@@ -564,11 +479,9 @@ svg {
 
 .lfo-wave-btn.active {
     border-color: hsl(var(--pt-accent) 75% 62%);
-    background: linear-gradient(
-        135deg,
-        hsl(var(--pt-accent) 70% 26% / 0.45),
-        hsl(var(--pt-accent) 70% 10% / 0.1)
-    );
+    background: linear-gradient(135deg,
+            hsl(var(--pt-accent) 70% 26% / 0.45),
+            hsl(var(--pt-accent) 70% 10% / 0.1));
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
 }
 
@@ -581,7 +494,6 @@ svg {
     transform: translateY(1px);
 }
 
-/* Target pills re-used but tightened */
 .lfo-target-quick {
     display: flex;
     align-items: center;
@@ -601,11 +513,9 @@ svg {
 
 .mm-pill.active {
     border-color: hsl(var(--pt-accent) 70% 55% / 0.8);
-    background: linear-gradient(
-        135deg,
-        hsl(var(--pt-accent) 70% 26% / 0.45),
-        hsl(var(--pt-accent) 70% 10% / 0.08)
-    );
+    background: linear-gradient(135deg,
+            hsl(var(--pt-accent) 70% 26% / 0.45),
+            hsl(var(--pt-accent) 70% 10% / 0.08));
 }
 
 .mm-pill.disabled {
@@ -617,7 +527,6 @@ svg {
     transform: translateY(1px);
 }
 
-/* Knob row positioning (knob styling itself is unchanged) */
 .lfo-knobs {
     margin-top: 2px;
 }
@@ -629,7 +538,6 @@ svg {
     align-items: flex-end;
 }
 
-/* Advanced menu styles remain as you had them */
 .mm-menu {
     position: absolute;
     min-width: 280px;
@@ -695,11 +603,9 @@ svg {
 }
 
 .mm-switch.on {
-    background: linear-gradient(
-        180deg,
-        hsl(var(--pt-accent) 80% 60%),
-        hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%)
-    );
+    background: linear-gradient(180deg,
+            hsl(var(--pt-accent) 80% 60%),
+            hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
 }
 
 .mm-switch.on .kn {
@@ -712,7 +618,6 @@ svg {
     z-index: 999;
 }
 
-/* Stack layout on very narrow widths (just in case) */
 @media (max-width: 440px) {
     .lfo-layout {
         grid-template-columns: 1fr;

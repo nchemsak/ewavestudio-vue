@@ -1,10 +1,8 @@
 <template>
     <KnobGroup v-model="enabledLocal" title="Noise" :color="accent" :showToggle="showToggle">
-        <div class="noise-layout">
+        <!-- just the knobs + mask -->
+        <div class="noise-main">
             <div class="controls-row">
-                <button class="pt-dot" :class="{ 'is-on': enabledLocal }" :aria-pressed="enabledLocal"
-                    title="Toggle noise" @click="enabledLocal = !enabledLocal" />
-
                 <!-- Burst -->
                 <div class="control-block knob-wrap">
                     <Knob v-model="burstMsLocal" label="Burst" :min="5" :max="250" :step="1" size="small"
@@ -28,13 +26,14 @@
                 <!-- Color morph -->
                 <div class="control-block color-block knob-wrap">
                     <div class="swatch-wrap" :aria-label="`Noise color swatch: ${colorLabel}`" :title="colorLabel">
-                        <div class="swatch" :style="{ backgroundColor: swatchHex }">Color</div>
+                        <div class="swatch" :style="{ backgroundColor: swatchHex }">
+                            Color
+                        </div>
                     </div>
 
                     <Knob v-model="colorLocal" aria-label="Noise color morph" :min="0" :max="1" :step="0.01"
                         size="small" :color="accent" :disabled="!enabledLocal" />
                 </div>
-
             </div>
 
             <div v-if="hasMask" class="mask-col">
@@ -57,6 +56,7 @@
     </KnobGroup>
 </template>
 
+
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
@@ -71,7 +71,7 @@ const props = withDefaults(defineProps<{
     burstMs?: number;
     color?: string;
     showToggle?: boolean;
-}>(), { 
+}>(), {
     enabled: false,
     amount: 0.25,
     colorMorph: 0.5,
@@ -187,7 +187,8 @@ function maskBackbeat(): void {
 </script>
 
 <style scoped>
-.noise-layout {
+/* Right side: knobs + mask */
+.noise-main {
     display: grid;
     grid-template-columns: minmax(0, 3fr) minmax(204px, 204px);
     gap: 12px;
@@ -273,32 +274,12 @@ function maskBackbeat(): void {
     font-size: 0.65rem;
     width: 56px;
     padding: 4px;
+    z-index: 2;
 }
 
-.pt-dot {
-    width: 14px;
-    height: 14px;
-    border-radius: 999px;
-    border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 45%);
-    background: var(--pt-surface-2);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
-    cursor: pointer;
-    transition: transform .12s ease, filter .2s ease, box-shadow .25s ease;
-}
-
-.pt-dot:hover {
-    transform: scale(1.06);
-}
-
-.pt-dot.is-on {
-    background: hsl(var(--pt-accent) 80% 60%);
-    box-shadow:
-        0 0 0 3px hsl(var(--pt-accent) 90% 60% / .18),
-        0 0 12px var(--pt-btn-glow);
-}
-
+/* Responsive: stack controls + mask, keep vertical ribbon on left */
 @media (max-width: 640px) {
-    .noise-layout {
+    .noise-main {
         grid-template-columns: 1fr;
     }
 }

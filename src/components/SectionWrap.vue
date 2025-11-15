@@ -60,4 +60,8 @@ onMounted(() => emit('update:modelValue', true))
     block-size: 1.1rem;
     opacity: .95;
 }
+
+.noise .pt-collapse-body {
+    margin-top: 5px;
+}
 </style>
