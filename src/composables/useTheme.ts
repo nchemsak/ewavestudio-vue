@@ -1,43 +1,58 @@
+// useTheme.ts
 import { ref, computed, watchEffect, onMounted } from 'vue';
 
 export type ThemeName = 'dark' | 'light' | 'synthwave';
 
 const THEME_KEY = 'ui-theme';
 
-export function useTheme() {
-  // Read stored theme; migrate old "system" to "dark"
-  const raw = localStorage.getItem(THEME_KEY) as (ThemeName | 'system' | null);
-  const initial: ThemeName = (raw === 'light' || raw === 'synthwave') ? raw : 'dark';
+// Singleton state
+const theme = ref<ThemeName>('dark');
+const resolved = computed(() => theme.value);
+const themeClass = computed(() => `theme-${resolved.value}`);
 
-  const theme = ref<ThemeName>(initial);
+let initialized = false;
 
-  // For compatibility with existing uses of `resolved`, keep the computed,
-  // but it now simply reflects the current theme (no system logic).
-  const resolved = computed<'dark' | 'light' | 'synthwave'>(() => theme.value);
+function apply() {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.classList.remove('theme-dark', 'theme-light', 'theme-synthwave');
+  root.classList.add(themeClass.value);
+}
 
-  // CSS applied to <html>
-  const themeClass = computed(() => `theme-${resolved.value}`);
+function init() {
+  if (initialized) return;
+  initialized = true;
 
-  function apply() {
-    const root = document.documentElement;
-    root.classList.remove('theme-dark', 'theme-light', 'theme-synthwave');
-    root.classList.add(themeClass.value);
+  let raw: ThemeName | 'system' | null = null;
+  try {
+    raw = localStorage.getItem(THEME_KEY) as any;
+  } catch {
+    raw = null;
   }
+
+  const initial: ThemeName =
+    raw === 'light' || raw === 'synthwave' ? raw : 'dark';
+  theme.value = initial;
+
+  if (raw === 'system') {
+    try {
+      localStorage.setItem(THEME_KEY, 'dark');
+    } catch { }
+  }
+
+  onMounted(apply);
+  watchEffect(apply);
+}
+
+export function useTheme() {
+  init();
 
   function setTheme(next: ThemeName) {
     theme.value = next;
-    localStorage.setItem(THEME_KEY, next);
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch { }
   }
-
-  onMounted(() => {
-    // One-time migration if a legacy "system" was stored
-    if (raw === 'system') {
-      localStorage.setItem(THEME_KEY, 'dark');
-    }
-    apply();
-  });
-
-  watchEffect(apply);
 
   return { theme, resolved, themeClass, setTheme };
 }

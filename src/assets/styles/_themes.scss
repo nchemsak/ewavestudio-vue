@@ -816,6 +816,8 @@ $dark: map.get($themes, dark);
     min-inline-size: 0;
 }
 
+
+
 .knob-group,
 .mode-row,
 .tone-row,
@@ -837,6 +839,10 @@ $dark: map.get($themes, dark);
 .pt-card .pt-title {
     font-size: 1.1rem;
     margin-bottom: 0px;
+}
+
+.fx .pt-card {
+	padding-bottom: 51px;
 }
 
 .theme-light .toggle-header .group-title,

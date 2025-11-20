@@ -135,7 +135,6 @@ function formatDate(ms?: number) {
     try { return new Date(ms).toLocaleString(); } catch { return ''; }
 }
 
-/** Filter helper: keep only projects with a non-empty, non-"Untitled" name */
 function isNamedProject(p: any) {
     const n = (p?.meta?.name ?? '').trim();
     return n.length > 0 && n.toLowerCase() !== 'untitled';

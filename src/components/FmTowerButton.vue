@@ -5,7 +5,6 @@
         @click="!disabled && $emit('update:modelValue', !modelValue)"
         @keydown.space.prevent="!disabled && $emit('update:modelValue', !modelValue)"
         @keydown.enter.prevent="!disabled && $emit('update:modelValue', !modelValue)">
-        <!-- Radio tower icon, sized exactly like your wave shapes -->
         <svg class="wave-svg" viewBox="0 0 100 100" aria-hidden="true">
             <defs>
                 <linearGradient :id="gid" x1="0" y1="0" x2="1" y2="1">
@@ -20,12 +19,6 @@
                 <!-- emitter -->
                 <circle cx="50" cy="26" r="4" />
                 <!-- broadcast waves -->
-                <!-- <path class="wave w1r" d="M50 26 a14 14 0 0 1 14 14" />
-                <path class="wave w1l" d="M50 26 a14 14 0 0 0 -14 14" />
-                <path class="wave w2r" d="M50 26 a26 26 0 0 1 26 26" />
-                <path class="wave w2l" d="M50 26 a26 26 0 0 0 -26 26" />
-                <path class="wave w3r" d="M50 26 a38 38 0 0 1 38 38" />
-                <path class="wave w3l" d="M50 26 a38 38 0 0 0 -38 38" /> -->
                 <g class="waves" :key="animNonce" :class="{ on: modelValue }">
                     <path class="wave w1r" d="M50 26 a14 14 0 0 1 14 14" />
                     <path class="wave w1l" d="M50 26 a14 14 0 0 0 -14 14" />
@@ -41,7 +34,6 @@
                 <path d="M42 72h16" />
             </g>
 
-            <!-- Subtle glossy overlay (like your shape outline) -->
             <g fill="none" stroke="white" stroke-opacity="0.15" stroke-width="2" stroke-linecap="round"
                 stroke-linejoin="round">
                 <path d="M30 84h40" />
@@ -54,7 +46,6 @@
 </template>
 
 <script setup>
-// import { computed } from 'vue'
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -78,7 +69,7 @@ const gid = `grad-${uid}`
 
 const animNonce = ref(0)
 watch(() => props.modelValue, (v) => {
-    if (v) animNonce.value++   // remounts the <g> so animation starts at 0%
+    if (v) animNonce.value++
 })
 </script>
 
@@ -173,28 +164,36 @@ watch(() => props.modelValue, (v) => {
 }
 
 
-/* default: no rays visible */
 .waves .wave {
-  opacity: 0;
+    opacity: 0;
 }
 
-/* animate only when enabled, and start at 0% of the cycle */
 .waves.on .wave {
-  animation: radiate 1.6s cubic-bezier(.2,.6,.3,1) infinite both;
-  opacity: .35; /* will be overridden by keyframes, kept for mid-cycle look */
+    animation: radiate 1.6s cubic-bezier(.2, .6, .3, 1) infinite both;
+    opacity: .35;
 }
 
-/* keep your staggering */
 .waves.on .w2r,
-.waves.on .w2l { animation-delay: .15s; }
+.waves.on .w2l {
+    animation-delay: .15s;
+}
 
 .waves.on .w3r,
-.waves.on .w3l { animation-delay: .30s; }
+.waves.on .w3l {
+    animation-delay: .30s;
+}
 
-/* keyframes ensure the first frames have zero opacity */
 @keyframes radiate {
-  0%   { opacity: 0; }
-  15%  { opacity: .55; }
-  100% { opacity: 0; }
+    0% {
+        opacity: 0;
+    }
+
+    15% {
+        opacity: .55;
+    }
+
+    100% {
+        opacity: 0;
+    }
 }
 </style>

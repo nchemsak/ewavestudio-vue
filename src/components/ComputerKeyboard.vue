@@ -298,15 +298,6 @@
 			</li>
 		</ul>
 	</div>
-
-
-	<!-- <FloatingWindow v-if="showPresets" @close="showPresets = false">
-			<template #title>Presets</template>
-			<PresetBankPanel :banks="banks" :activeBankIndex="activeBankIndex" :isTyping="isTyping" @save="saveToBank"
-				@load="loadFromBank" @clear="clearBank" @edit="startEditingBank" :bankHasData="bankHasData"
-				@update:isTyping="val => isTyping = val" />
-		</FloatingWindow> -->
-
 </template>
 
 <script setup>
@@ -314,8 +305,8 @@ const isDisabled = (wave) => selectedWave2.value === wave;
 
 import { ref, watch, onMounted, onBeforeUnmount, watchEffect } from 'vue';
 import { nextTick } from 'vue';
-import FloatingWindow from './FloatingWindow.vue';
-import PresetBankPanel from './PresetBankPanel.vue';
+// import FloatingWindow from './FloatingWindow.vue';
+// import PresetBankPanel from './PresetBankPanel.vue';
 import { computed } from 'vue';
 import Knob from './Knob.vue';
 import KnobGroup from './KnobGroup.vue';

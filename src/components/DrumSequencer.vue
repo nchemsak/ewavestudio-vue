@@ -17,7 +17,6 @@
 			<!-- Transport -->
 			<section class="pt-card transport-card ds-transport">
 				<div class="transport-left">
-					<h2 class="pt-title mb-2">Ephemeral Wave</h2>
 					<div class="pt-knob-row transport-row">
 						<!-- Volume -->
 						<div class="position-relative text-center knob-wrap">
@@ -62,19 +61,53 @@
 							:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
 							:aria-pressed="isPlaying">
 							<span class="btn-face">
-								<!-- Play -->
 								<svg v-if="!isPlaying" viewBox="0 0 24 24" aria-hidden="true">
 									<path d="M8 6v12l10-6-10-6z" />
 								</svg>
-								<!-- Stop -->
 								<svg v-else viewBox="0 0 24 24" aria-hidden="true">
 									<rect x="7" y="7" width="10" height="10" rx="1.5" />
 								</svg>
 							</span>
 							<span class="visually-hidden">{{ isPlaying ? 'Stop' : 'Play' }}</span>
 						</button>
-						<div class="transport-actions" style="display:flex; gap:8px;">
-						</div>
+
+						<img src="../assets/eWaveLogo1.png" style="max-width:130px;height:auto;">
+
+
+						<!-- MIDI Input selector (Web MIDI) -->
+						<template v-if="midiSupported && midiInputs.length">
+							<!-- Prefer Teleport into top toolbar if target exists -->
+							<Teleport v-if="hasMidiTarget" to="#midi-toolbar-slot">
+								<div class="midi-toolbar">
+									<label class="midi-label" for="midi-input-select">MIDI</label>
+									<select id="midi-input-select" class="pt-select pt-select-sm"
+										v-model="selectedMidiId" @change="attachSelectedMidi">
+										<option value="">None</option>
+										<option v-for="m in midiInputs" :key="m.id" :value="m.id">
+											{{ m.name }}
+										</option>
+									</select>
+
+									<!-- <span class="midi-led" :class="{ on: midiEnabled }" title="MIDI input status" /> -->
+								</div>
+							</Teleport>
+
+							<!-- Fallback: render in transport card if slot doesn't exist -->
+							<div v-else class="midi-toolbar">
+								<label class="midi-label" for="midi-input-select">MIDI</label>
+								<select id="midi-input-select" class="pt-select pt-select-sm" v-model="selectedMidiId"
+									@change="attachSelectedMidi">
+									<option value="">None</option>
+									<option v-for="m in midiInputs" :key="m.id" :value="m.id">
+										{{ m.name }}
+									</option>
+								</select>
+
+								<span class="midi-led" :class="{ on: midiEnabled }" title="MIDI input status" />
+							</div>
+						</template>
+
+
 					</div>
 				</div>
 			</section>
@@ -141,6 +174,7 @@
 							@octave-shift="onPatternOctaveShift" />
 					</SectionWrap>
 				</div>
+
 				<!-- Melody Maker -->
 				<div class="module melody">
 					<SectionWrap id="melody" title="Melody Maker" v-model="collapsibleState['melody']">
@@ -196,25 +230,6 @@
 					</SectionWrap>
 				</div>
 
-				<!-- <div class="module noise">
-					<div class="noise-tv-bg" :class="{ 'on': noiseEnabled }" :style="noiseModuleStyle">
-						<div v-if="noiseEnabled" class="noise-overlay mode-static" aria-hidden="true">
-							<div class="grain"></div>
-
-						</div>
-						<SectionWrap id="noise" title="" v-model="collapsibleState['noise']">
-							<div class="gen-panel noise-panel">
-								<div class="noise-inline">
-									<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
-										v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
-										v-model:mask="noiseMask" v-model:attackBurst="noiseAttackBurst"
-										v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
-								</div>
-							</div>
-						</SectionWrap>
-					</div>
-				</div> -->
-
 				<div class="module noise">
 					<div class="noise-tv-bg" :class="{ on: noiseEnabled }" :style="noiseModuleStyle">
 						<!-- NEW vertical ribbon toggle -->
@@ -240,7 +255,6 @@
 						</SectionWrap>
 					</div>
 				</div>
-
 
 				<!-- Envelope + Filter -->
 				<div class="module sound">
@@ -285,10 +299,6 @@
 
 				<div class="module fx fx-adv-anchor" ref="fxAnchor">
 					<SectionWrap id="fx" title="Effects" v-model="collapsibleState['fx']">
-						<!-- <template #tools>
-							<button class="pt-info-icon" aria-label="Advanced options"
-								@click="openFxAdvanced($event)">⋯</button>
-						</template> -->
 
 						<section class="pt-section">
 							<div class="fx-pair">
@@ -307,7 +317,7 @@
 							</div>
 						</section>
 						<!-- Effects — Advanced -->
-						<Teleport to="body">
+						<!-- <Teleport to="body">
 							<div v-if="fxAdvanced.open">
 								<div class="mm-overlay" @click="fxAdvanced.open = false"></div>
 
@@ -326,16 +336,16 @@
 									</div>
 								</div>
 							</div>
-						</Teleport>
+						</Teleport> -->
 						<!-- overlay to close -->
-						<div v-if="fxAdvanced.open" class="mm-overlay" @click="fxAdvanced.open = false"></div>
+						<!-- <div v-if="fxAdvanced.open" class="mm-overlay" @click="fxAdvanced.open = false"></div> -->
 					</SectionWrap>
 				</div>
 
 			</section>
 
 			<!-- Bottom Sequencer -->
-			<section class="pt-panel ds-sequencer">
+			<!-- <section class="pt-panel ds-sequencer">
 				<h2 class="pt-title">Sequencer</h2>
 				<div class="accordion" id="seqAccordion">
 					<div class="accordion-item">
@@ -347,7 +357,6 @@
 
 						<div id="seqPanel" class="accordion-collapse collapse" :class="{ show: seqOpen }">
 							<div class="accordion-body p-3">
-								<!-- Channels  -->
 								<section class="channels-section">
 									<div v-for="inst in orderedChannels" :key="inst.key || inst.name"
 										class="mb-3 channel-wrap">
@@ -439,7 +448,7 @@
 						</div>
 					</div>
 				</div>
-			</section>
+			</section> -->
 		</div>
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
@@ -447,7 +456,6 @@
 			:anchorRect="padPopover.anchorRect" :title="padPopover.title" />
 	</div>
 </template>
-
 
 <script setup lang="ts">
 // IMPORTS START
@@ -488,10 +496,13 @@ import ReverbEffect from './modules/ReverbEffect.vue';
 import { generateReverbIR } from '../audio/reverb/generateIr';
 
 // IMPORTS END
+
 const resetNonce = ref(0);
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 //SEQUENCER TOOLS START
+
 const STEP_COUNT = 16 as const;
 const stepLength = ref<typeof STEP_COUNT>(STEP_COUNT);
 
@@ -523,7 +534,7 @@ const melodyUi = reactive<MelodyUi>({
 	arpTones: 'chord',
 });
 
-function setStepLength(len: 16 | 32) {
+function setStepLength() {
 	const target = STEP_COUNT;
 
 	const resize = <T,>(arr: T[], fill: T) =>
@@ -549,6 +560,142 @@ function setStepLength(len: 16 | 32) {
 
 const padSizeStyle = computed(() => ({ '--padTEST-size': '41px' }));
 
+// -------------------------------------------------------------------------
+// Web MIDI (live keyboard input) START
+// -------------------------------------------------------------------------
+
+type MidiInputInfo = {
+	id: string;
+	name: string;
+	input: WebMidi.MIDIInput;
+};
+
+const midiSupported = typeof navigator !== "undefined" && !!(navigator as any).requestMIDIAccess;
+
+const midiInputs = ref<MidiInputInfo[]>([]);
+const selectedMidiId = ref<string>("");
+const midiEnabled = ref(false);
+
+function handleMidiMessage(e: WebMidi.MIDIMessageEvent) {
+	if (!midiEnabled.value) return;
+
+	const [status, data1, data2] = e.data;
+	const cmd = status & 0xf0;
+	const NOTE_ON = 0x90;
+	const NOTE_OFF = 0x80;
+
+	// Only care about note-on / note-off for now
+	if (cmd !== NOTE_ON && cmd !== NOTE_OFF) return;
+
+	const midiNote = data1;
+	const velocity7bit = data2;
+
+	// Treat NOTE_ON with velocity 0 as NOTE_OFF (MIDI convention)
+	const isNoteOn = cmd === NOTE_ON && velocity7bit > 0;
+
+	// Percussion synth is one-shot, so we ignore note-off
+	if (!isNoteOn) return;
+
+	// Map MIDI → frequency + velocity
+	const freq = midiToFreq(midiNote);
+	const vel = Math.max(0.0, Math.min(1.0, velocity7bit / 127));
+
+	// Use same decay you already use for sequencer notes
+	const decayTime = synthDecay.value; // seconds
+
+	// Use the currently selected global waveform
+	const wf = selectedWaveform.value as OscillatorType;
+
+	// Schedule "now" (slightly ahead to avoid tiny click)
+	const t = audioCtx.currentTime + 0.003;
+
+	// Optionally: only respond if the synth instrument exists and isn’t muted
+	const inst = synthInstrument.value;
+	if (!inst || inst.muted) return;
+
+	// Scale by channel volume
+	const chanVol = inst.channelVolume ?? 1;
+	const amp = Math.min(1, vel * chanVol);
+
+	playSynthNote(freq, amp, decayTime, t, wf, {
+		addNoise: true, // or use noiseMask / some other logic if you want
+	});
+}
+
+async function initMidiAccess() {
+	if (!midiSupported) return;
+
+	try {
+		const access = await (navigator as any).requestMIDIAccess();
+
+		const updateInputs = () => {
+			const list: MidiInputInfo[] = [];
+			access.inputs.forEach((input: WebMidi.MIDIInput) => {
+				list.push({
+					id: input.id,
+					name: input.name || `Input ${input.id}`,
+					input,
+				});
+			});
+			midiInputs.value = list;
+
+			// If the currently selected id disappeared, disable
+			if (!list.some(i => i.id === selectedMidiId.value)) {
+				selectedMidiId.value = "";
+				midiEnabled.value = false;
+			}
+		};
+
+		updateInputs();
+		access.onstatechange = () => {
+			updateInputs();
+		};
+	} catch (err) {
+		console.warn("MIDI access failed:", err);
+	}
+}
+
+function attachSelectedMidi() {
+	// Clear all previous listeners first
+	midiInputs.value.forEach(({ input }) => {
+		input.onmidimessage = null;
+	});
+
+	const info = midiInputs.value.find(i => i.id === selectedMidiId.value);
+	if (!info) {
+		midiEnabled.value = false;
+		return;
+	}
+
+	info.input.onmidimessage = handleMidiMessage;
+	midiEnabled.value = true;
+}
+
+// Initialize MIDI once on mount
+onMounted(() => {
+	initMidiAccess();
+});
+
+// Clean up on unmount
+onBeforeUnmount(() => {
+	midiInputs.value.forEach(({ input }) => {
+		input.onmidimessage = null;
+	});
+});
+
+
+const hasMidiTarget = ref(false);
+
+onMounted(() => {
+	if (typeof window !== 'undefined') {
+		hasMidiTarget.value = !!document.querySelector('#midi-toolbar-slot');
+	}
+});
+
+// Web MIDI (live keyboard input) END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 
 //SEQUENCER TOOLS END
 
@@ -561,6 +708,7 @@ const lfoBipolar = ref(false)
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 //Effects Panel Advanced Menu BEGIN
+
 const fxAdvanced = reactive({ open: false, x: 0, y: 0 });
 const fxAnchor = ref<HTMLElement | null>(null);
 
@@ -585,11 +733,13 @@ function resetDelayDrive() {
 	driveMix.value = 0.5;
 	driveTone.value = 5000;
 }
+
 //Effects Panel Advanced Menu END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Step Sequencer — Advanced BEGIN
+
 const stepsAdvanced = reactive({ open: false, x: 0, y: 0 });
 
 function openStepsAdvanced(e: MouseEvent) {
@@ -603,7 +753,6 @@ function resetSynthPadsToDefaults() {
 	const inst = synthInstrument.value as any;
 	if (!inst) return;
 
-	// Force the baseline back to A3 as requested
 	selectedKeyRoot.value = 'A';
 	globalOctaveOffset.value = 0;
 
@@ -641,10 +790,6 @@ const ui = reactive({
 });
 
 // Generators tab
-const genTab = ref<'osc' | 'noise'>('osc');
-const genInfoOpen = ref(false);
-
-// tabs + menus + help popovers
 ui.generatorsTab ??= 'osc';
 
 ui.menus.gen = ui.menus.gen ?? { open: false, x: 0, y: 0 };
@@ -652,31 +797,16 @@ const info = reactive({
 	gen: { open: false, x: 0, y: 0 }
 });
 
-function openMenu(name: keyof typeof ui.menus, e: MouseEvent) {
-	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-	const m = ui.menus[name];
-	m.open = true; m.x = Math.round(r.right + 8); m.y = Math.round(r.top);
-}
-function openInfo(name: keyof typeof info, e: MouseEvent) {
-	const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-	const p = info[name];
-	p.open = true; p.x = Math.round(r.right + 8); p.y = Math.round(r.top);
-}
 function closeOverlays() {
 	for (const k in ui.menus) (ui.menus as any)[k].open = false;
 	for (const k in info) (info as any)[k].open = false;
 }
 
-// single checkbox that controls both sliders
 const padSlidersOn = computed({
 	get: () => showVelocity.value && showPitch.value,
 	set: (v: boolean) => { showVelocity.value = v; showPitch.value = v; }
 });
 function togglePadSliders() { padSlidersOn.value = !padSlidersOn.value; }
-
-function closeMenus() {
-	for (const k in ui.menus) (ui.menus as any)[k].open = false;
-}
 
 // PANEL MENU END
 
@@ -698,8 +828,8 @@ const collapseIds = [
 	'pattern-tools',
 	'melody',
 	'generators',
-	'envelope',   // was 'sound'
-	'filter',     // new
+	'envelope',
+	'filter',
 	'pitch',
 	'mod',
 	'fx',
@@ -717,11 +847,6 @@ const collapsibleState = reactive<Record<CollapseId, boolean | undefined>>({
 	'mod': undefined,
 	'fx': undefined,
 });
-
-// Expand/collapse all at once (also persists because each card writes to localStorage)
-function setAllCollapsibles(open: boolean) {
-	collapseIds.forEach(id => { collapsibleState[id] = open; });
-}
 
 const allOpen = computed(() => collapseIds.every(id => collapsibleState[id] === true));
 const allClosed = computed(() => collapseIds.every(id => collapsibleState[id] === false));
@@ -753,7 +878,6 @@ const A4 = 440;
 const MIN_PAD_HZ = 100;
 const MAX_PAD_HZ = 2000;
 
-// Map Melody Maker roots (includes flats) → semitone index
 const ROOT_TO_SEMITONE: Record<string, number> = {
 	'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6,
 	'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
@@ -786,7 +910,7 @@ const accidentalMode = computed<AccidentalMode>(() => {
 	const r = selectedKeyRoot.value;
 	if (r.includes('b') || FLAT_KEYS.has(r)) return 'flat';
 	if (r.includes('#') || SHARP_KEYS.has(r)) return 'sharp';
-	return 'sharp'; // default for C/A etc.
+	return 'sharp';
 });
 
 function midiToNamePref(m: number, mode: AccidentalMode = accidentalMode.value) {
@@ -800,6 +924,7 @@ function midiToNamePref(m: number, mode: AccidentalMode = accidentalMode.value) 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // nac Screen BEGIN
+
 const lcdText = ref('HARP  2');
 const activeFKey = ref<number>(1);
 const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner' | 'env'>('scope');
@@ -807,15 +932,11 @@ const screen = ref<InstanceType<typeof nacScreen> | null>(null);
 
 // Remember previous screen so can be restored after the knob is released
 const prevScreen = ref<{ view: typeof lcdView.value; fkey: number } | null>(null);
-// Support overlapping holds (attack & decay) without flicker
 let envHoldCount = 0;
-// If the user manually changes the screen while holding, don't auto-restore
 let userOverrodeWhileHeld = false;
 
 function jumpToEnv() {
-	// Save once (first hold)
 	if (!prevScreen.value) prevScreen.value = { view: lcdView.value, fkey: activeFKey.value };
-	// Go to F4 (ENV)
 	activeFKey.value = 4;
 	lcdView.value = 'env';
 }
@@ -969,7 +1090,7 @@ function startSpectrogram() {
 		const W = canvas.clientWidth;
 		const H = canvas.clientHeight;
 
-		// Refresh theme if it changed (e.g., switched .theme-* class)
+		// Refresh theme if it changed
 		const maybeNew = readTheme();
 		const sig = signatureOf(maybeNew);
 		const themeChanged = sig !== lastSig;
@@ -977,7 +1098,7 @@ function startSpectrogram() {
 			theme = maybeNew;
 			lastSig = sig;
 			ctx.save();
-			ctx.setTransform(1, 0, 0, 1, 0, 0); // ensure fillRect uses CSS px after fitCanvasToBox
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.fillStyle = theme.bg;
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
 			ctx.restore();
@@ -1001,7 +1122,7 @@ function startSpectrogram() {
 		// Fetch spectrum
 		analyser.getByteFrequencyData(freqBins);
 
-		// Noise floor suppression (removes the “always-on” bottom line)
+		// Noise floor suppression
 		const MIN_BIN = 3;
 		const FLOOR_TAP = 8;
 		let floor = 0;
@@ -1207,7 +1328,6 @@ onMounted(() => {
 
 });
 onBeforeUnmount(() => {
-	// cancelAnimationFrame(loopId);
 	hardStopSequencer();
 	window.removeEventListener('mouseup', handleMouseUp);
 	window.removeEventListener('keydown', onGlobalKeydown, { capture: true } as any);
@@ -1220,11 +1340,13 @@ onBeforeUnmount(() => {
 	clearTempoRepeat();
 
 });
+
 // nac Screen END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Pad settings popover BEGIN
+
 const padPopover = ref({
 	open: false,
 	title: '',
@@ -1250,7 +1372,8 @@ function closePadSettings() {
 const padSettings = reactive({
 	name: null as null | string,
 	index: -1
-})
+});
+
 // Pad settings popover END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -1307,24 +1430,23 @@ const randomTooltip = computed(() =>
 
 const waveLabel = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
 
+// const perPadWavesActive = computed(() => {
+// 	const inst = synthInstrument.value as any;
+// 	return !!(inst && inst.waveforms && Array.isArray(inst.waveforms));
+// });
 
-const perPadWavesActive = computed(() => {
-	const inst = synthInstrument.value as any;
-	return !!(inst && inst.waveforms && Array.isArray(inst.waveforms));
-});
+// function randomizeSynthPadWaves() {
+// 	const inst = synthInstrument.value as any;
+// 	if (!inst) return;
+// 	const len = stepLength.value;
+// 	inst.waveforms = Array.from({ length: len }, () => waves[Math.floor(Math.random() * waves.length)]) as any;
+// }
 
-function randomizeSynthPadWaves() {
-	const inst = synthInstrument.value as any;
-	if (!inst) return;
-	const len = stepLength.value;
-	inst.waveforms = Array.from({ length: len }, () => waves[Math.floor(Math.random() * waves.length)]) as any;
-}
-
-function clearSynthPadWaves() {
-	const inst = synthInstrument.value as any;
-	if (!inst) return;
-	inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as any);
-}
+// function clearSynthPadWaves() {
+// 	const inst = synthInstrument.value as any;
+// 	if (!inst) return;
+// 	inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as any);
+// }
 
 function applyWaveToAll(w: OscillatorType) {
 	selectedWaveform.value = w;
@@ -1468,14 +1590,12 @@ const padNoiseEnabled = computed<boolean>({
 	set(v: boolean) {
 		const i = padSettings.index;
 		if (i < 0) return;
-		// ensure mask exists & sized (should already be handled by your setStepLength, but keep it safe)
 		if (!Array.isArray(noiseMask.value) || noiseMask.value.length !== stepLength.value) {
 			noiseMask.value = Array(stepLength.value).fill(true);
 		}
 		noiseMask.value[i] = !!v;
 	}
 });
-
 
 const currentPadHz = computed({
 	get() {
@@ -1568,6 +1688,7 @@ function onPatternOctaveShift(payload: number | { delta: number; onlyActive?: bo
 	const onlyActive = typeof payload === 'object' && !!payload.onlyActive;
 	octaveShiftAllSkip(delta, { onlyActive });
 }
+
 // Called when PatternTools reports a new key root
 function onKeyRootChange(root: typeof selectedKeyRoot.value) {
 	const inst = synthInstrument.value;
@@ -1611,7 +1732,6 @@ const pitchEnvDecay = computed(() => pitchEnvDecayMs.value / 1000);
 
 // Noise START
 
-
 type NoiseKey = 'brown' | 'pink' | 'white' | 'blue' | 'violet';
 const NOISE_STOPS: { key: NoiseKey; pos: number }[] = [
 	{ key: 'brown', pos: 0.00 },
@@ -1621,11 +1741,10 @@ const NOISE_STOPS: { key: NoiseKey; pos: number }[] = [
 	{ key: 'violet', pos: 1.00 },
 ];
 
-
 const NOISE_LOUDNESS: Record<NoiseKey, number> = {
-	brown: 2.5,   // a bit of lift in mids
+	brown: 2.5,
 	pink: 2,
-	white: 1.0,   // reference
+	white: 1.0,
 	blue: 1.5,
 	violet: 2,
 };
@@ -1700,16 +1819,17 @@ const noiseBurstMs = ref(80);
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Delay Start
+
 const delayEnabled = ref(false);
 const delaySync = ref(true);
-const delayTime = ref(0.2);          // seconds (0.01 to 1.0)
-const delayFeedback = ref(0.3);      // 0–0.95
-const delayMix = ref(0.3);           // 0–1
+const delayTime = ref(0.2);
+const delayFeedback = ref(0.3);
+const delayMix = ref(0.3);
 const delayToneHz = ref(5000);
 const delayToneEnabled = ref(true);
 const delayToneType = ref<'lowpass' | 'highpass'>('lowpass');
 
-const delayNode = audioCtx.createDelay(5.0); // max delay time = 5s
+const delayNode = audioCtx.createDelay(5.0);
 delayNode.delayTime.setValueAtTime(delayTime.value, audioCtx.currentTime);
 
 const feedbackGain = audioCtx.createGain();
@@ -1794,11 +1914,12 @@ function applyDelayEnabled(on) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Drive START
+
 const driveEnabled = ref(false);
 const driveType = ref('overdrive');
-const driveAmount = ref(0.4);  // 0 to 1
-const driveTone = ref(5000);   // Hz
-const driveMix = ref(0.5);     // 0 to 1
+const driveAmount = ref(0.4);
+const driveTone = ref(5000);
+const driveMix = ref(0.5);
 
 // Drive node chain
 const driveShaper = audioCtx.createWaveShaper();
@@ -1850,17 +1971,17 @@ watch(driveMix, val => {
 
 // Reverb START
 const reverbEnabled = ref(false);
-const reverbMix = ref(0.18);      // 0..1
-const reverbDecay = ref(1.4);     // seconds
+const reverbMix = ref(0.18);
+const reverbDecay = ref(1.4);
 
 // 0 = dark, 1 = bright
 const reverbTone = ref(0.6);      // normalized tone control
 
-let reverbConvolver = audioCtx.createConvolver();   // was const
+let reverbConvolver = audioCtx.createConvolver();
 const reverbToneFilter = audioCtx.createBiquadFilter();
 reverbToneFilter.type = 'lowpass';
 
-let reverbWet = audioCtx.createGain();              // was const
+let reverbWet = audioCtx.createGain();
 
 // Track whether we've initialized the IR at least once
 let reverbIrReady = false;
@@ -1899,9 +2020,9 @@ function swapReverbIRSmooth(newBuffer: AudioBuffer) {
 
 	// After fade, disconnect old chain and update references
 	setTimeout(() => {
-		try { reverbToneFilter.disconnect(oldConvolver); } catch { /* no-op */ }
-		try { oldConvolver.disconnect(); } catch { /* no-op */ }
-		try { oldWet.disconnect(); } catch { /* no-op */ }
+		try { reverbToneFilter.disconnect(oldConvolver); } catch { }
+		try { oldConvolver.disconnect(); } catch { }
+		try { oldWet.disconnect(); } catch { }
 
 		reverbConvolver = newConvolver;
 		reverbWet = newWet;
@@ -1945,7 +2066,6 @@ watch(reverbDecay, () => {
 	}, 120); // ~1–2 frames of pause before rebuilding
 });
 
-
 // Map 0..1 tone → lowpass frequency (dark → bright)
 function applyReverbTone() {
 	const t = Math.max(0, Math.min(1, reverbTone.value));
@@ -1977,9 +2097,8 @@ watch(reverbMix, (v) => {
 	const t = audioCtx.currentTime;
 	reverbWet.gain.setTargetAtTime(reverbEnabled.value ? v : 0, t, 0.03);
 });
+
 // Reverb END
-
-
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2120,11 +2239,13 @@ const exportState = computed<StepSequencerState>(() => {
 		tailSeconds: 5.0,
 	};
 });
+
 // Export to wav file END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // LFO START
+
 const lfoEnabled = ref(true);
 const lfoRate = ref(5);
 const lfoDepth = ref(0);
@@ -2221,7 +2342,6 @@ watch(lfoRate, (r) => {
 		if (lfoOsc) lfoOsc.frequency.setValueAtTime(r, audioCtx.currentTime);
 	}
 });
-
 
 function applyDepthScale() {
 	const t = audioCtx.currentTime;
@@ -2419,7 +2539,6 @@ function hardStopSequencer() {
 	startTime = audioCtx.currentTime;
 }
 
-
 function togglePad(instrumentName, index) {
 	const instrument = instruments.value.find(i => i.name === instrumentName);
 	if (instrument) instrument.steps[index] = !instrument.steps[index];
@@ -2577,7 +2696,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 				ctrlLP.frequency.value = 120;
 
 				lfoGain.connect(lfoTap).connect(ctrlLP).connect(voiceFilter.frequency);
-
 			}
 		}
 
@@ -2632,7 +2750,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 				sB.stop(noteEnd);
 			}
 
-
 			const noiseEnvGain = audioCtx.createGain();
 			const attackEnd = startTime + attackTime;
 
@@ -2645,8 +2762,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 			noiseEnvGain.gain.setValueAtTime(0.0001, startTime);
 			noiseEnvGain.gain.exponentialRampToValueAtTime(safePeak, attackEnd);
 
-
-
 			const BURST_MAX_MS = 250;
 			const burstActive = noiseAttackBurst.value && (noiseBurstMs.value < BURST_MAX_MS);
 			const burstEnd = burstActive
@@ -2656,7 +2771,6 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, burstEnd);
 			noiseEnvGain.gain.setTargetAtTime(0.0001, burstEnd, 0.01);
 
-			// Optional: broad band-limiting instead of a tight band-pass
 			const noiseHP = audioCtx.createBiquadFilter();
 			noiseHP.type = 'highpass';
 			noiseHP.frequency.setValueAtTime(40, startTime);    // remove sub-rumble
@@ -2693,7 +2807,6 @@ async function togglePlay() {
 		schedule();
 	}
 }
-
 
 async function exportCurrentPattern() {
 	if (!synthInstrument.value) return;
@@ -2777,6 +2890,7 @@ function toggleMute(instrumentName) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // click and drag START
+
 const isMouseDown = ref(false);
 const dragMode = ref(null); // 'on' or 'off'
 
@@ -2803,8 +2917,8 @@ function handleMouseUp() {
 	isMouseDown.value = false;
 	dragMode.value = null;
 }
-// click and drag END
 
+// click and drag END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2835,7 +2949,6 @@ function getPadStyle(instrument: any, index: number) {
 	const pct = Math.round(instrument.velocities[index] * 100);
 	const hue = instrument.pitches ? hueFor(instrument.pitches[index] || MIN_PAD_HZ)
 		: 210;
-
 	return { '--vol': pct, '--heat-h': hue, '--pad-on': 1 };
 }
 
@@ -2944,7 +3057,6 @@ function generateDriveCurve(type: string, amount = 0.5) {
 	}
 	return curve;
 }
-
 
 function initDriveNow() {
 	const t = audioCtx.currentTime;
@@ -3095,7 +3207,6 @@ function buildSnapshot() {
 				tone: reverbTone.value,
 			},
 
-
 		},
 		instruments: instruments.value.map(i => ({
 			name: i.name,
@@ -3119,7 +3230,6 @@ function buildSnapshot() {
 			arpOctaves: mm?.arpOctaves ?? melodyUi.arpOctaves,
 			arpTones: mm?.arpTones ?? melodyUi.arpTones,
 		},
-
 
 		selectedWaveform: selectedWaveform.value,
 	};
@@ -3186,7 +3296,6 @@ function applySnapshot(s: any) {
 		}
 		if (typeof syn.noise.attackBurst === 'boolean') noiseAttackBurst.value = syn.noise.attackBurst;
 		if (typeof syn.noise.burstMs === 'number') noiseBurstMs.value = syn.noise.burstMs;
-
 	}
 
 	if (syn.unison) {
@@ -3253,7 +3362,6 @@ function applySnapshot(s: any) {
 		if (typeof s.fx.reverb.decay === 'number') reverbDecay.value = s.fx.reverb.decay;
 		if (typeof s.fx.reverb.tone === 'number') reverbTone.value = s.fx.reverb.tone;
 	}
-
 
 	if (s.melody) {
 		if (s.melody.keyRoot) melodyUi.keyRoot = s.melody.keyRoot;
@@ -3622,13 +3730,6 @@ function resetUiToFactoryDefaults() {
 	margin: 0 0 .35rem;
 }
 
-.transport-row .transport-actions {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	min-width: 96px;
-}
-
 .nac-wrap {
 	margin-top: 0;
 }
@@ -3657,7 +3758,6 @@ function resetUiToFactoryDefaults() {
 }
 
 /* OVERRIDES */
-
 @media (min-width: 992px) {
 	.ds-visualizer {
 		display: flex;
@@ -3813,7 +3913,6 @@ function resetUiToFactoryDefaults() {
 		width: 100%;
 		height: 100% !important;
 		display: block;
-
 	}
 
 	.ds-visualizer :deep(.nac-screen__fkeys) {
@@ -3879,7 +3978,6 @@ function resetUiToFactoryDefaults() {
 	padding: 0;
 }
 
-
 .gen-divider {
 	margin: 10px 0 12px;
 }
@@ -3918,90 +4016,41 @@ function resetUiToFactoryDefaults() {
 	display: none !important;
 }
 
-
-/* Make sure the tv shell can host the absolute ribbon */
 .module.noise .noise-tv-bg {
 	position: relative;
 }
 
-/* Vertical ribbon hugging the left edge */
 .noise-ribbon {
 	--noise-ribbon-accent: #9C27B0;
-
 	position: absolute;
 	top: 0;
 	bottom: 0;
 	left: 0;
 	width: 40px;
-
 	display: flex;
 	align-items: center;
 	justify-content: center;
-
 	padding: 8px 0;
 	border: 0;
 	cursor: pointer;
-
-	/* border-radius: 0 12px 12px 0; */
-	background: linear-gradient(180deg,
-			color-mix(in oklab, var(--pt-surface-3, #26263a), transparent 0%),
-			color-mix(in oklab, var(--pt-surface-1, #151522), transparent 0%));
+	background: linear-gradient(180deg, color-mix(in oklab, var(--pt-surface-3, #26263a), transparent 0%), color-mix(in oklab, var(--pt-surface-1, #151522), transparent 0%));
 	color: color-mix(in oklab, var(--pt-text, #e5e9ff), transparent 20%);
-	box-shadow:
-		inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-		0 0 0 1px rgba(0, 0, 0, 0.7);
-
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.7);
 	z-index: 2;
 	isolation: isolate;
-
-	/* no movement on hover; only subtle visual changes */
-	transition:
-		background-color 140ms ease,
-		box-shadow 140ms ease,
-		color 140ms ease,
-		filter 120ms ease;
+	transition: background-color 140ms ease, box-shadow 140ms ease, color 140ms ease, filter 120ms ease;
 }
 
-/* “Wrapped” top & bottom tabs */
-/* .noise-ribbon::before,
-.noise-ribbon::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 10px;
-  background: inherit;
-  z-index: -1;
-}
-
-.noise-ribbon::before {
-  top: -6px;
-  border-radius: 0 0 10px 0;
-  box-shadow: 0 -3px 6px rgba(0, 0, 0, 0.45);
-}
-
-.noise-ribbon::after {
-  bottom: -6px;
-  border-radius: 0 10px 0 0;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.45);
-} */
-
-/* Active state: brighter accent, glowing like it’s wrapped tight */
 .noise-ribbon.is-on {
-	background: linear-gradient(180deg,
-			color-mix(in oklab, var(--noise-ribbon-accent), black 6%),
-			color-mix(in oklab, var(--noise-ribbon-accent), black 20%));
+	background: linear-gradient(180deg, color-mix(in oklab, var(--noise-ribbon-accent), black 6%), color-mix(in oklab, var(--noise-ribbon-accent), black 20%));
 	color: #fff;
-	box-shadow:
-		0 0 0 1px rgba(0, 0, 0, 0.85),
-		0 0 16px var(--pt-btn-glow, rgba(156, 39, 176, 0.65));
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.85), 0 0 16px var(--pt-btn-glow, rgba(156, 39, 176, 0.65));
 }
 
 .noise-ribbon:hover {
 	filter: brightness(1.05) contrast(1.02);
 }
 
-/* Label: vertical, but flipped so N is at the bottom */
 .noise-ribbon-label {
 	writing-mode: vertical-rl;
 	text-orientation: mixed;
@@ -4009,16 +4058,12 @@ function resetUiToFactoryDefaults() {
 	letter-spacing: 0.14em;
 	font-size: 11px;
 	font-weight: 600;
-
-	/* flip reading order: bottom-to-top */
 	transform: rotate(180deg);
 }
 
-/* Push the actual controls over so they don't sit under the ribbon */
 .module.noise .noise-panel {
 	padding-left: 35px;
 }
-
 
 .pt-dot {
 	width: 14px;
@@ -4181,9 +4226,7 @@ function resetUiToFactoryDefaults() {
 }
 
 .mm-switch.on {
-	background: linear-gradient(180deg,
-			hsl(var(--pt-accent) 80% 60%),
-			hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
+	background: linear-gradient(180deg, hsl(var(--pt-accent) 80% 60%), hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
 }
 
 .mm-switch.on .kn {
@@ -4216,7 +4259,6 @@ function resetUiToFactoryDefaults() {
 	--r: 14px;
 	--bg-top: #5f8df1;
 	--bg-bot: #3f6ddc;
-
 	position: relative;
 	display: inline-flex;
 	align-items: center;
@@ -4238,28 +4280,20 @@ function resetUiToFactoryDefaults() {
 	position: absolute;
 	inset: 2px;
 	border-radius: calc(var(--r) - 2px);
-	box-shadow:
-		inset 0 0 0 2px rgba(255, 255, 255, .16),
-		inset 0 8px 16px rgba(255, 255, 255, .10),
-		inset 0 -10px 22px rgba(0, 0, 0, .28);
+	box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .16), inset 0 8px 16px rgba(255, 255, 255, .10), inset 0 -10px 22px rgba(0, 0, 0, .28);
 	pointer-events: none;
 	transition: box-shadow 90ms ease, opacity 90ms ease;
 }
 
 .pt-btn.btn3d:active,
 .pt-btn.btn3d.active {
-	background: linear-gradient(180deg,
-			color-mix(in srgb, var(--bg-top) 92%, black 8%),
-			color-mix(in srgb, var(--bg-bot) 92%, black 8%));
+	background: linear-gradient(180deg, color-mix(in srgb, var(--bg-top) 92%, black 8%), color-mix(in srgb, var(--bg-bot) 92%, black 8%));
 	box-shadow: 0 9px 18px rgba(0, 0, 0, .32);
 }
 
 .pt-btn.btn3d:active::before,
 .pt-btn.btn3d.active::before {
-	box-shadow:
-		inset 0 0 0 2px rgba(255, 255, 255, .14),
-		inset 0 6px 12px rgba(255, 255, 255, .09),
-		inset 0 -12px 22px rgba(0, 0, 0, .38);
+	box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .14), inset 0 6px 12px rgba(255, 255, 255, .09), inset 0 -12px 22px rgba(0, 0, 0, .38);
 }
 
 .pt-btn.btn3d,
@@ -4356,7 +4390,6 @@ function resetUiToFactoryDefaults() {
 	}
 }
 
-
 .module.noise .noise-tv-bg {
 	border-radius: var(--pt-card-radius, 12px);
 	overflow: hidden;
@@ -4366,34 +4399,18 @@ function resetUiToFactoryDefaults() {
 	z-index: 1;
 }
 
-
 .module.noise .noise-overlay {
 	position: absolute;
 	inset: 0;
 	border-radius: inherit;
 	z-index: 0;
 	pointer-events: none;
-
 	--grain-unit: 8px;
 	--grain-alpha: var(--noise-alpha, 0.24);
-
-	background:
-		linear-gradient(135deg,
-			color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent calc(100% - (var(--grain-alpha) * 100%))) 0%,
-			transparent 60%),
-		repeating-linear-gradient(0deg,
-			color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent 92%) 0px,
-			color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent 92%) 3px,
-			transparent 6px,
-			transparent 9px);
-
-	background-size:
-		auto,
-		var(--grain-unit) var(--grain-unit);
-
+	background: linear-gradient(135deg, color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent calc(100% - (var(--grain-alpha) * 100%))) 0%, transparent 60%), repeating-linear-gradient(0deg, color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent 92%) 0px, color-mix(in oklab, var(--noise-tint, #3ec2cc), transparent 92%) 3px, transparent 6px, transparent 9px);
+	background-size: auto, var(--grain-unit) var(--grain-unit);
 	mix-blend-mode: screen;
 	opacity: 1;
-
 	background-position: 0 0, 0 0;
 }
 
@@ -4405,16 +4422,9 @@ function resetUiToFactoryDefaults() {
 	position: absolute;
 	inset: 0;
 	border-radius: inherit;
-	background:
-		radial-gradient(1px 1px at 20% 30%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 40%, transparent 41%),
-		radial-gradient(1px 1px at 60% 80%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 45%, transparent 46%),
-		radial-gradient(1px 1px at 80% 10%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 35%, transparent 36%),
-		repeating-conic-gradient(from 0deg,
-			color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 0% 1%,
-			transparent 1% 2%);
+	background: radial-gradient(1px 1px at 20% 30%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 40%, transparent 41%), radial-gradient(1px 1px at 60% 80%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 45%, transparent 46%), radial-gradient(1px 1px at 80% 10%, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 35%, transparent 36%), repeating-conic-gradient(from 0deg, color-mix(in oklab, var(--noise-tint, #9bf3ff), transparent calc(100% - (var(--noise-alpha, .28) * 100%))) 0% 1%, transparent 1% 2%);
 	background-size: 60px 60px, 90px 90px, 120px 120px, 6px 6px;
-	animation:
-		noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
+	animation: noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
 	filter: contrast(110%) brightness(105%);
 	opacity: 1;
 }
@@ -4427,27 +4437,13 @@ function resetUiToFactoryDefaults() {
 	pointer-events: none;
 	mix-blend-mode: multiply;
 	opacity: var(--pepper-alpha, 0.16);
-	background:
-		radial-gradient(1px 1px at 18% 22%, rgba(0, 0, 0, 0.85) 40%, transparent 41%),
-		radial-gradient(1px 1px at 36% 76%, rgba(0, 0, 0, 0.85) 42%, transparent 43%),
-		radial-gradient(1px 1px at 66% 48%, rgba(0, 0, 0, 0.85) 38%, transparent 39%),
-		radial-gradient(1px 1px at 84% 16%, rgba(0, 0, 0, 0.85) 40%, transparent 41%),
-		repeating-conic-gradient(from 0deg,
-			rgba(0, 0, 0, 0.7) 0% 0.5%,
-			transparent 0.5% 1.6%);
-	background-size:
-		80px 80px,
-		110px 110px,
-		140px 140px,
-		170px 170px,
-		var(--pepper-scale, 6px) var(--pepper-scale, 6px);
-	animation:
-		noise-shift var(--noise-anim-dur, 1s) steps(var(--noise-fps, 12)) infinite,
-		noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
+	background: radial-gradient(1px 1px at 18% 22%, rgba(0, 0, 0, 0.85) 40%, transparent 41%), radial-gradient(1px 1px at 36% 76%, rgba(0, 0, 0, 0.85) 42%, transparent 43%), radial-gradient(1px 1px at 66% 48%, rgba(0, 0, 0, 0.85) 38%, transparent 39%), radial-gradient(1px 1px at 84% 16%, rgba(0, 0, 0, 0.85) 40%, transparent 41%), repeating-conic-gradient(from 0deg, rgba(0, 0, 0, 0.7) 0% 0.5%, transparent 0.5% 1.6%);
+	background-size: 80px 80px, 110px 110px, 140px 140px, 170px 170px, var(--pepper-scale, 6px) var(--pepper-scale, 6px);
+	animation: noise-shift var(--noise-anim-dur, 1s) steps(var(--noise-fps, 12)) infinite, noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
 	filter: contrast(115%);
 }
 
-/* Animations  */
+/* Animations */
 @keyframes noise-shift {
 	0% {
 		transform: translate3d(0, 0, 0) scale(1.0);
@@ -4480,10 +4476,6 @@ function resetUiToFactoryDefaults() {
 	}
 }
 
-/* .noise-tv-bg .pt-card {
-	background: none;
-} */
-
 .module.sound .split-two {
 	display: grid;
 	grid-template-columns: 1fr;
@@ -4502,7 +4494,6 @@ function resetUiToFactoryDefaults() {
 	}
 }
 
-
 .fx-pair {
 	display: grid;
 	grid-template-columns: 1fr 1fr 1fr;
@@ -4514,5 +4505,36 @@ function resetUiToFactoryDefaults() {
 	.fx-pair {
 		grid-template-columns: 1fr;
 	}
+}
+
+.midi-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.midi-label {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	font-weight: 600;
+	opacity: 0.8;
+}
+
+.midi-led {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: #3a3a4d;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
+}
+
+.midi-led.on {
+	background: #4caf50;
+	box-shadow: 0 0 8px rgba(76, 175, 80, 0.9);
+}
+
+.generators .pt-btn {
+	width: 100%;
 }
 </style>

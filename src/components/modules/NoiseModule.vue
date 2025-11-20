@@ -1,6 +1,5 @@
 <template>
     <KnobGroup v-model="enabledLocal" title="Noise" :color="accent" :showToggle="showToggle">
-        <!-- just the knobs + mask -->
         <div class="noise-main">
             <div class="controls-row">
                 <!-- Burst -->
@@ -56,30 +55,32 @@
     </KnobGroup>
 </template>
 
-
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 
-const props = withDefaults(defineProps<{
-    enabled: boolean;
-    amount: number;
-    colorMorph: number;
-    mask?: boolean[];
-    attackBurst?: boolean;
-    burstMs?: number;
-    color?: string;
-    showToggle?: boolean;
-}>(), {
-    enabled: false,
-    amount: 0.25,
-    colorMorph: 0.5,
-    attackBurst: false,
-    burstMs: 80,
-    color: '#9C27B0',
-    showToggle: true,
-});
+const props = withDefaults(
+    defineProps<{
+        enabled: boolean;
+        amount: number;
+        colorMorph: number;
+        mask?: boolean[];
+        attackBurst?: boolean;
+        burstMs?: number;
+        color?: string;
+        showToggle?: boolean;
+    }>(),
+    {
+        enabled: false,
+        amount: 0.25,
+        colorMorph: 0.5,
+        attackBurst: false,
+        burstMs: 80,
+        color: '#9C27B0',
+        showToggle: true
+    }
+);
 
 const emit = defineEmits<{
     (e: 'update:enabled', v: boolean): void;
@@ -90,41 +91,80 @@ const emit = defineEmits<{
     (e: 'update:burstMs', v: number): void;
 }>();
 
-const enabledLocal = ref(props.enabled);
-const amountLocal = ref(props.amount);
-const colorLocal = ref(props.colorMorph);
-const burstMsLocal = ref(props.burstMs ?? 80);
+const enabledLocal = ref<boolean>(props.enabled);
+const amountLocal = ref<number>(props.amount);
+const colorLocal = ref<number>(props.colorMorph);
+const burstMsLocal = ref<number>(props.burstMs ?? 80);
 
 const activeKnob = ref<null | 'noiseAmount' | 'burstMs'>(null);
 
-watch(() => props.enabled, v => { enabledLocal.value = v; });
-watch(() => props.amount, v => { amountLocal.value = v; });
-watch(() => props.colorMorph, v => { colorLocal.value = v; });
-watch(() => props.burstMs, v => { if (typeof v === 'number') burstMsLocal.value = v; });
+// Sync props -> local
+watch(
+    () => props.enabled,
+    (v) => {
+        enabledLocal.value = v;
+    }
+);
+watch(
+    () => props.amount,
+    (v) => {
+        amountLocal.value = v;
+    }
+);
+watch(
+    () => props.colorMorph,
+    (v) => {
+        colorLocal.value = v;
+    }
+);
+watch(
+    () => props.burstMs,
+    (v) => {
+        if (typeof v === 'number') burstMsLocal.value = v;
+    }
+);
 
-watch(enabledLocal, v => { emit('update:enabled', v); emit('update:attackBurst', v); });
-watch(amountLocal, v => { emit('update:amount', Math.max(0, Math.min(1, v))); });
-watch(colorLocal, v => { emit('update:colorMorph', Math.max(0, Math.min(1, v))); });
-watch(burstMsLocal, v => { emit('update:burstMs', Math.max(5, Math.min(250, Math.round(v)))); });
+// Sync local -> parent
+watch(enabledLocal, (v) => {
+    emit('update:enabled', v);
+    emit('update:attackBurst', v);
+});
+watch(amountLocal, (v) => {
+    emit('update:amount', Math.max(0, Math.min(1, v)));
+});
+watch(colorLocal, (v) => {
+    emit('update:colorMorph', Math.max(0, Math.min(1, v)));
+});
+watch(burstMsLocal, (v) => {
+    emit('update:burstMs', Math.max(5, Math.min(250, Math.round(v))));
+});
 
-if (props.attackBurst !== props.enabled) { emit('update:attackBurst', props.enabled); }
+// Ensure attackBurst is initially aligned with enabled
+if (props.attackBurst !== props.enabled) {
+    emit('update:attackBurst', props.enabled);
+}
 
 const accent = computed(() => props.color);
 
+// Color stops for swatch
 const stops = [
-    { pos: 0.00, name: 'Brown', hex: '#6a4b2f' },
+    { pos: 0.0, name: 'Brown', hex: '#6a4b2f' },
     { pos: 0.25, name: 'Pink', hex: '#f5a3bd' },
-    { pos: 0.50, name: 'White', hex: '#ffffff' },
+    { pos: 0.5, name: 'White', hex: '#ffffff' },
     { pos: 0.75, name: 'Blue', hex: '#7bbcff' },
-    { pos: 1.00, name: 'Violet', hex: '#c7a4ff' },
+    { pos: 1.0, name: 'Violet', hex: '#c7a4ff' }
 ] as const;
 
 const colorLabel = computed(() => {
     const t = colorLocal.value;
-    let nearest = stops[0], best = Infinity;
+    let nearest = stops[0];
+    let best = Infinity;
     for (const s of stops) {
         const d = Math.abs(s.pos - t);
-        if (d < best) { best = d; nearest = s; }
+        if (d < best) {
+            best = d;
+            nearest = s;
+        }
     }
     return nearest.name;
 });
@@ -136,10 +176,12 @@ function hexToRgb(hex: string): [number, number, number] {
     const b = parseInt(h.slice(4, 6), 16);
     return [r, g, b];
 }
+
 function rgbToHex(r: number, g: number, b: number): string {
     const to2 = (n: number) => n.toString(16).padStart(2, '0');
     return `#${to2(Math.round(r))}${to2(Math.round(g))}${to2(Math.round(b))}`;
 }
+
 function mixHex(a: string, b: string, w: number): string {
     const [ar, ag, ab] = hexToRgb(a);
     const [br, bg, bb] = hexToRgb(b);
@@ -151,35 +193,56 @@ function mixHex(a: string, b: string, w: number): string {
 
 const swatchHex = computed(() => {
     const t = Math.min(1, Math.max(0, colorLocal.value));
-    let a = stops[0], b = stops[stops.length - 1];
+    let a = stops[0];
+    let b = stops[stops.length - 1];
     for (let i = 0; i < stops.length - 1; i++) {
-        const s0 = stops[i], s1 = stops[i + 1];
-        if (t >= s0.pos && t <= s1.pos) { a = s0; b = s1; break; }
+        const s0 = stops[i];
+        const s1 = stops[i + 1];
+        if (t >= s0.pos && t <= s1.pos) {
+            a = s0;
+            b = s1;
+            break;
+        }
     }
     const span = Math.max(1e-6, b.pos - a.pos);
     const w = (t - a.pos) / span;
     return mixHex(a.hex, b.hex, w);
 });
 
-// Per-Pad Noise mask  
+// Per-Pad Noise mask
 const hasMask = computed(() => Array.isArray(props.mask) && props.mask.length > 0);
 
-const emitMask = (out: boolean[]) => { emit('update:mask', out); };
+const emitMask = (out: boolean[]) => {
+    emit('update:mask', out);
+};
+
 function updateMask(make: (i: number, len: number) => boolean): void {
     const len = props.mask?.length ?? 0;
-    if (len <= 0) { return; }
+    if (len <= 0) return;
     const out = Array.from({ length: len }, (_, i) => !!make(i, len));
     emitMask(out);
 }
-function maskAll(): void { updateMask(() => true); }
-function maskEvery2(): void { updateMask((i) => i % 2 === 0); }
-function maskEvery4(): void { updateMask((i) => i % 4 === 0); }
-function maskInvert(): void { if (!props.mask) { return; } emitMask(props.mask.map(v => !v)); }
-function maskRandom(): void { updateMask(() => Math.random() < 0.5); }
+
+function maskAll(): void {
+    updateMask(() => true);
+}
+function maskEvery2(): void {
+    updateMask((i) => i % 2 === 0);
+}
+function maskEvery4(): void {
+    updateMask((i) => i % 4 === 0);
+}
+function maskInvert(): void {
+    if (!props.mask) return;
+    emitMask(props.mask.map((v) => !v));
+}
+function maskRandom(): void {
+    updateMask(() => Math.random() < 0.5);
+}
 function maskBackbeat(): void {
     updateMask((i, len) => {
         const perBeat = Math.max(1, Math.round(len / 4));
-        const isDownbeatStep = (i % perBeat) === 0;
+        const isDownbeatStep = i % perBeat === 0;
         const beatIdx = Math.floor(i / perBeat) + 1; // 1..4
         return isDownbeatStep && (beatIdx === 2 || beatIdx === 4);
     });
@@ -187,7 +250,6 @@ function maskBackbeat(): void {
 </script>
 
 <style scoped>
-/* Right side: knobs + mask */
 .noise-main {
     display: grid;
     grid-template-columns: minmax(0, 3fr) minmax(204px, 204px);
@@ -225,7 +287,7 @@ function maskBackbeat(): void {
     height: 9px;
     border-radius: 1px;
     border: none;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
     transition: background-color 120ms linear;
     font-size: 10px;
     color: black;
@@ -277,7 +339,6 @@ function maskBackbeat(): void {
     z-index: 2;
 }
 
-/* Responsive: stack controls + mask, keep vertical ribbon on left */
 @media (max-width: 640px) {
     .noise-main {
         grid-template-columns: 1fr;

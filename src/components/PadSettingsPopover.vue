@@ -134,7 +134,6 @@ onBeforeUnmount(() => {
 });
 
 // positioning
-// positioning
 const POP_W = 380;
 const EST_H = 300;
 const OFFSET_X = 40;
@@ -143,7 +142,7 @@ const pos = computed(() => {
     const r = props.anchorRect;
     const m = 8;
 
-    // Fallback: center in viewport, nudged slightly to the right
+    // Fallback: center in viewport, slightly to the right
     if (!r) {
         let x = (window.innerWidth - POP_W) / 2 + OFFSET_X;
         x = Math.min(window.innerWidth - POP_W - m, Math.max(m, x));
@@ -152,7 +151,6 @@ const pos = computed(() => {
         return { x, y };
     }
 
-    // Anchor case: place popover relative to pad, shifted right
     let x = r.left + OFFSET_X;
     x = Math.min(window.innerWidth - POP_W - m, Math.max(m, x));
 

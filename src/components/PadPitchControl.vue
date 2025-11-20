@@ -10,11 +10,15 @@
         <div v-if="open" class="note-popover card p-2">
             <div class="note-row d-flex flex-wrap gap-1 mb-2">
                 <button v-for="(n, i) in NOTE_NAMES" :key="n" class="note-dot"
-                    :class="{ active: (baseMidi % 12) === i }" @click="setSemitone(i)">{{ n }}</button>
+                    :class="{ active: (baseMidi % 12) === i }" @click="setSemitone(i)">
+                    {{ n }}
+                </button>
             </div>
             <div class="octave-row d-flex gap-1">
                 <button v-for="o in OCTAVES" :key="o" class="oct-btn" :class="{ active: octave === o }"
-                    @click="setOctave(o)">{{ o }}</button>
+                    @click="setOctave(o)">
+                    {{ o }}
+                </button>
             </div>
         </div>
 
@@ -30,7 +34,7 @@
         </div>
         <div class="flex-grow-1 ms-3" v-else>
             <input type="range" min="100" max="1000" step="1" :value="modelValue"
-                @input="onFreeHz($event.target.valueAsNumber)" />
+                @input="onFreeHz(($event.target as HTMLInputElement).valueAsNumber)" />
         </div>
 
         <!-- Live readout -->
@@ -41,98 +45,97 @@
 </template>
 
 <script setup>
-import { computed, reactive, watch, toRefs } from 'vue';
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
     modelValue: { type: Number, required: true }, // Hz
-});
-const emit = defineEmits(['update:frequency', 'update:modelValue']);
+})
+const emit = defineEmits(['update:frequency', 'update:modelValue'])
 
-// --- Music helpers
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const A4 = 440;
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+const OCTAVES = [1, 2, 3, 4, 5, 6]
+const A4 = 440
 
 function midiToFreq(m) {
-    return A4 * Math.pow(2, (m - 69) / 12);
+    return A4 * Math.pow(2, (m - 69) / 12)
 }
 function freqToMidi(f) {
-    return Math.round(69 + 12 * Math.log2(f / A4));
+    return Math.round(69 + 12 * Math.log2(f / A4))
 }
 function midiToName(m) {
-    const n = m % 12;
-    const o = Math.floor(m / 12) - 1;
-    return `${NOTE_NAMES[n]}${o}`;
+    const n = m % 12
+    const o = Math.floor(m / 12) - 1
+    return `${NOTE_NAMES[n]}${o}`
 }
 
-// --- Local state
-const state = reactive({
-    open: false,
-    noteLocked: true,          // default: use musical mode
-    baseMidi: freqToMidi(props.modelValue),
-    detuneCents: 0,            // -100..+100 around base note
-    NOTE_NAMES,
-    OCTAVES: [1, 2, 3, 4, 5, 6],    // adjust as desired
-});
-
-const { open, noteLocked, baseMidi, detuneCents, OCTAVES } = toRefs(state);
+// Local state
+const open = ref(false)
+const noteLocked = ref(true)
+const baseMidi = ref(freqToMidi(props.modelValue))
+const detuneCents = ref(0)
 
 // Derived octave
 const octave = computed({
     get: () => Math.floor(baseMidi.value / 12) - 1,
     set: (o) => {
-        const semitone = baseMidi.value % 12;
-        baseMidi.value = (o + 1) * 12 + semitone;
+        const semitone = baseMidi.value % 12
+        baseMidi.value = (o + 1) * 12 + semitone
     },
-});
+})
 
 const noteLabel = computed(() => {
     if (!noteLocked.value) {
         // Show nearest note for free Hz mode
-        return `${midiToName(freqToMidi(props.modelValue))}`;
+        return midiToName(freqToMidi(props.modelValue))
     }
-    const label = midiToName(baseMidi.value);
-    const cents = detuneCents.value;
-    const sign = cents === 0 ? '' : (cents > 0 ? ` (+${cents}¢)` : ` (${cents}¢)`);
-    return `${label}${sign}`;
-});
+    const label = midiToName(baseMidi.value)
+    const cents = detuneCents.value
+    const sign =
+        cents === 0 ? '' : cents > 0 ? ` (+${cents}¢)` : ` (${cents}¢)`
+    return `${label}${sign}`
+})
 
 // When locked: frequency follows baseMidi + detune
 const lockedFreq = computed(() => {
-    const base = midiToFreq(baseMidi.value);
-    return base * Math.pow(2, detuneCents.value / 1200);
-});
+    const base = midiToFreq(baseMidi.value)
+    return base * Math.pow(2, detuneCents.value / 1200)
+})
 
-// Keep parent in sync
+// Keep parent in sync when in locked mode
 watch([noteLocked, baseMidi, detuneCents], () => {
     if (noteLocked.value) {
-        emit('update:modelValue', lockedFreq.value);
-        emit('update:frequency', lockedFreq.value);
+        emit('update:modelValue', lockedFreq.value)
+        emit('update:frequency', lockedFreq.value)
     }
-});
+})
 
 // Also react if parent changes Hz (e.g., programmatic load or free mode)
-watch(() => props.modelValue, (hz) => {
-    if (!noteLocked.value) return; // ignore in free mode
-    // Re-anchor base note to nearest MIDI and set cents offset
-    const m = freqToMidi(hz);
-    const base = midiToFreq(m);
-    const cents = Math.round(1200 * Math.log2(hz / base));
-    baseMidi.value = m;
-    detuneCents.value = Math.max(-100, Math.min(100, cents));
-});
+watch(
+    () => props.modelValue,
+    (hz) => {
+        if (!noteLocked.value) return // ignore in free mode
+
+        const m = freqToMidi(hz)
+        const base = midiToFreq(m)
+        const cents = Math.round(1200 * Math.log2(hz / base))
+
+        baseMidi.value = m
+        detuneCents.value = Math.max(-100, Math.min(100, cents))
+    }
+)
 
 // UI handlers
 function setSemitone(semi) {
-    const o = Math.floor(baseMidi.value / 12) - 1;
-    baseMidi.value = (o + 1) * 12 + semi;
+    const o = Math.floor(baseMidi.value / 12) - 1
+    baseMidi.value = (o + 1) * 12 + semi
 }
 function setOctave(o) {
-    const semi = baseMidi.value % 12;
-    baseMidi.value = (o + 1) * 12 + semi;
+    const semi = baseMidi.value % 12
+    baseMidi.value = (o + 1) * 12 + semi
 }
 function onFreeHz(hz) {
-    emit('update:modelValue', hz);
-    emit('update:frequency', hz);
+    emit('update:modelValue', hz)
+    emit('update:frequency', hz)
 }
 </script>
 
@@ -160,7 +163,7 @@ function onFreeHz(hz) {
     background: #1a1a1a;
     border: 1px solid #333;
     border-radius: 12px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, .35);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
 }
 
 .note-dot {
@@ -173,8 +176,8 @@ function onFreeHz(hz) {
 }
 
 .note-dot.active {
-    border-color: #23CDE8;
-    color: #23CDE8;
+    border-color: #23cde8;
+    color: #23cde8;
 }
 
 .oct-btn {
@@ -187,14 +190,14 @@ function onFreeHz(hz) {
 }
 
 .oct-btn.active {
-    border-color: #23CDE8;
-    color: #23CDE8;
+    border-color: #23cde8;
+    color: #23cde8;
 }
 
 .readout {
     min-width: 160px;
     text-align: right;
     font-variant-numeric: tabular-nums;
-    opacity: .9;
+    opacity: 0.9;
 }
 </style>

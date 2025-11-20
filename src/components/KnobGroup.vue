@@ -1,5 +1,4 @@
 <!-- components/KnobGroup.vue -->
-
 <template>
     <div class="knob-group">
         <!-- HEADER -->
@@ -9,7 +8,9 @@
                 @click="enabled = !enabled"></div>
 
             <!-- Title (clickable toggle) -->
-            <span class="group-title" @click="enabled = !enabled">{{ title }}</span>
+            <span class="group-title" @click="enabled = !enabled">
+                {{ title }}
+            </span>
 
             <!--  Injected content via named slot -->
             <slot name="header-content" />
@@ -21,7 +22,6 @@
         </div>
     </div>
 </template>
- 
 
 <script setup>
 import { ref, watch } from 'vue';
@@ -29,16 +29,27 @@ import { ref, watch } from 'vue';
 const props = defineProps({
     title: String,
     color: { type: String, default: '#23CDE8' },
-    modelValue: Boolean, // v-model binding for enabled state
+    modelValue: { type: Boolean, default: false }, // v-model binding for enabled state
     showToggle: { type: Boolean, default: true },
     showHeader: { type: Boolean, default: true }
 });
+
 const emit = defineEmits(['update:modelValue']);
 
 const enabled = ref(props.modelValue);
 
-watch(() => props.modelValue, val => (enabled.value = val));
-watch(enabled, val => emit('update:modelValue', val));
+watch(
+    () => props.modelValue,
+    (val) => {
+        enabled.value = val;
+    }
+);
+
+watch(enabled, (val) => emit('update:modelValue', val));
 </script>
 
-<style scoped></style>
+<style scoped>
+.mod .knob-group {
+    padding-bottom: 3px;
+}
+</style>

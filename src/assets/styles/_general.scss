@@ -14,7 +14,6 @@ body {
 *:before,
 *:after {
     box-sizing: border-box;
-    // prevents text from being selected
     user-select: none;
 }
 
@@ -58,9 +57,7 @@ input[type="range"] {
 .preset-banks {
     position: fixed;
     top: 100px;
-    /* Distance from top of viewport */
     left: 0px;
-    /* Distance from left of viewport */
     padding: 20px;
     display: block;
     background-color: white;

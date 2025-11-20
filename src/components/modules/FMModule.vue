@@ -35,13 +35,17 @@
                     <Knob v-model="localModFreqCtrl" label="Mod Freq" size="small" :min="0" :max="CTRL_MAX" :step="1"
                         :disabled="modFreqDisabled" :color="color" @knobStart="activeKnob = 'mf'"
                         @knobEnd="activeKnob = null" />
-                    <span v-if="activeKnob === 'mf'" class="custom-tooltip">{{ displayHz }} Hz</span>
+                    <span v-if="activeKnob === 'mf'" class="custom-tooltip">
+                        {{ displayHz }} Hz
+                    </span>
                 </div>
 
                 <div class="position-relative text-center" :class="{ 'is-fm-off': !localEnabled }">
                     <Knob v-model="localIndex" label="Amount" size="small" :min="0" :max="50" :step="0.1" :color="color"
                         @knobStart="activeKnob = 'ix'" @knobEnd="activeKnob = null" />
-                    <span v-if="activeKnob === 'ix'" class="custom-tooltip">{{ localIndex.toFixed(1) }}</span>
+                    <span v-if="activeKnob === 'ix'" class="custom-tooltip">
+                        {{ localIndex.toFixed(1) }}
+                    </span>
                 </div>
             </div>
         </div>
@@ -49,33 +53,36 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
-import Knob from '../Knob.vue'
-import KnobGroup from '../KnobGroup.vue'
-import FmTowerButton from '../FmTowerButton.vue'
+import { ref, watch, computed } from 'vue';
+import Knob from '../Knob.vue';
+import KnobGroup from '../KnobGroup.vue';
+import FmTowerButton from '../FmTowerButton.vue';
 
-type Ratio = number | null
+type Ratio = number | null;
 
-const props = withDefaults(defineProps<{
-    enabled: boolean
-    modFreq: number
-    index: number
-    ratio: Ratio
-    title?: string
-    color?: string
-    showToggle?: boolean
-}>(), {
-    title: 'FM',
-    color: '#3F51B5',
-    showToggle: false
-})
+const props = withDefaults(
+    defineProps<{
+        enabled: boolean;
+        modFreq: number;
+        index: number;
+        ratio: Ratio;
+        title?: string;
+        color?: string;
+        showToggle?: boolean;
+    }>(),
+    {
+        title: 'FM',
+        color: '#3F51B5',
+        showToggle: false
+    }
+);
 
 const emit = defineEmits<{
-    (e: 'update:enabled', v: boolean): void
-    (e: 'update:modFreq', v: number): void
-    (e: 'update:index', v: number): void
-    (e: 'update:ratio', v: Ratio): void
-}>()
+    (e: 'update:enabled', v: boolean): void;
+    (e: 'update:modFreq', v: number): void;
+    (e: 'update:index', v: number): void;
+    (e: 'update:ratio', v: Ratio): void;
+}>();
 
 const MF_MIN = 1;
 const MF_MAX = 5000;
@@ -88,6 +95,7 @@ function ctrlToHz(ctrl: number): number {
     const hz = MF_MIN * Math.pow(MF_MAX / MF_MIN, n);
     return Math.max(MF_MIN, Math.min(MF_MAX, hz));
 }
+
 function hzToCtrl(hz: number): number {
     const clamped = Math.max(MF_MIN, Math.min(MF_MAX, hz));
     const n = Math.log(clamped / MF_MIN) / Math.log(MF_MAX / MF_MIN);
@@ -95,14 +103,16 @@ function hzToCtrl(hz: number): number {
     return Math.round(t * CTRL_MAX);
 }
 
-const localEnabled = ref(props.enabled);
-const localIndex = ref(props.index ?? 4.0);
+const localEnabled = ref<boolean>(props.enabled);
+const localIndex = ref<number>(props.index ?? 4.0);
 const localRatio = ref<Ratio>(props.ratio ?? null);
 
-const initialHz = (props.ratio === null && (props.modFreq === undefined || props.modFreq === null))
-    ? MF_MIN
-    : (props.modFreq ?? 200);
-const localModFreqCtrl = ref(hzToCtrl(initialHz));
+const initialHz =
+    props.ratio === null && (props.modFreq === undefined || props.modFreq === null)
+        ? MF_MIN
+        : props.modFreq ?? 200;
+
+const localModFreqCtrl = ref<number>(hzToCtrl(initialHz));
 
 const displayHz = computed(() => {
     const hz = ctrlToHz(localModFreqCtrl.value);
@@ -110,23 +120,48 @@ const displayHz = computed(() => {
 });
 
 // sync down (props → local)
-watch(() => props.enabled, v => (localEnabled.value = v));
-watch(() => props.index, v => (localIndex.value = v ?? 4.0));
-watch(() => props.ratio, v => (localRatio.value = v ?? null));
-watch(() => props.modFreq, v => {
-    const hz = v ?? 200;
-    localModFreqCtrl.value = hzToCtrl(hz);
-});
+watch(
+    () => props.enabled,
+    (v) => {
+        localEnabled.value = v;
+    }
+);
+
+watch(
+    () => props.index,
+    (v) => {
+        localIndex.value = v ?? 4.0;
+    }
+);
+
+watch(
+    () => props.ratio,
+    (v) => {
+        localRatio.value = v ?? null;
+    }
+);
+
+watch(
+    () => props.modFreq,
+    (v) => {
+        const hz = v ?? 200;
+        localModFreqCtrl.value = hzToCtrl(hz);
+    }
+);
 
 // emit up (local → parent)
-watch(localEnabled, v => emit('update:enabled', v));
-watch(localIndex, v => emit('update:index', Math.max(0, Math.min(50, +v))));
-watch(localModFreqCtrl, v => {
+watch(localEnabled, (v) => emit('update:enabled', v));
+
+watch(localIndex, (v) =>
+    emit('update:index', Math.max(0, Math.min(50, +v)))
+);
+
+watch(localModFreqCtrl, (v) => {
     const hz = Math.round(ctrlToHz(v));
     emit('update:modFreq', hz);
 });
 
-function setRatio(r: Ratio) {
+function setRatio(r: Ratio): void {
     const prev = localRatio.value;
     localRatio.value = r;
     emit('update:ratio', r);
@@ -137,18 +172,14 @@ function setRatio(r: Ratio) {
     }
 }
 
-
 const modFreqDisabled = computed(() => localRatio.value !== null);
-
 const activeKnob = ref<null | 'mf' | 'ix'>(null);
-
-
 </script>
 
 <style scoped>
 .pt-seg-row {
-    margin-top: .25rem;
-    margin-bottom: .5rem;
+    margin-top: 0.25rem;
+    margin-bottom: 0.5rem;
     display: flex;
     gap: 8px;
     justify-content: center;
@@ -177,13 +208,13 @@ const activeKnob = ref<null | 'mf' | 'ix'>(null);
 
 .is-disabled :deep(.knob-label) {
     color: #9aa0a6;
-    opacity: .7;
+    opacity: 0.7;
 }
 
 .is-disabled :deep(.knob-readout),
 .is-disabled :deep(.knob-value) {
     color: #9aa0a6;
-    opacity: .6;
+    opacity: 0.6;
 }
 
 .pt-seg-btn.is-fm-off {

@@ -22,9 +22,10 @@
 				<g v-if="showMarkers && markers.length" class="dial-markers">
 					<circle v-for="(m, i) in markers" :key="i" :cx="polarXY(m).x" :cy="polarXY(m).y" :r="markerR" :fill="props.disabled
 						? 'var(--knob-arc-disabled, #555)'
-						: (i === activeMarkerIndex
+						: i === activeMarkerIndex
 							? 'var(--knob-marker-active, #e6c6ff)'
-							: 'var(--knob-marker, rgba(192,120,255,.55))')" />
+							: 'var(--knob-marker, rgba(192,120,255,.55))'
+						" />
 				</g>
 
 				<!-- Hide the solid arc when markersOnly is true -->
@@ -34,12 +35,11 @@
 					stroke-width="6" :style="{ strokeDashoffset: 184 - 184 * ((rotation + 132) / 264) }" />
 			</svg>
 		</div>
-
 	</div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed } from 'vue';
 
 const props = defineProps({
 	modelValue: Number,
@@ -49,119 +49,130 @@ const props = defineProps({
 	label: String,
 
 	color: { type: String, default: '#23CDE8' },
-
-	/** Use theme gradient for the arc by default */
 	useThemeArc: { type: Boolean, default: true },
 
-	/** Optional per-knob override gradient (keeps other knobs customizable) */
-	arcStart: { type: String, default: null },   // e.g. "#74d0ff"
-	arcEnd: { type: String, default: null },   // e.g. "#c471ff"
+	arcStart: { type: String, default: null },
+	arcEnd: { type: String, default: null },
 
 	size: { type: String, default: 'large' },
 	disabled: { type: Boolean, default: false },
 
-	/* Stepped marker mode */
 	showMarkers: { type: Boolean, default: false },
-	markers: { type: Array, default: () => [] },  // array of 0..1 positions
-	markersOnly: { type: Boolean, default: false },     // if true: hide solid arc entirely
-	markersOffsetDeg: { type: Number, default: -6 },        // small rotation to line up with tick
-})
+	markers: { type: Array, default: () => [] },
+	markersOnly: { type: Boolean, default: false },
+	// small rotation to line up with tick
+	markersOffsetDeg: { type: Number, default: -6 }
+});
 
+const emit = defineEmits(['update:modelValue', 'knobStart', 'knobEnd']);
 
-const emit = defineEmits(['update:modelValue', 'knobStart', 'knobEnd'])
-
-/* rotation math (−132°..+132° sweep) */
+// rotation math (−132°..+132° sweep)
 const rotation = computed(() => {
-	const percent = (props.modelValue - props.min) / (props.max - props.min)
-	return percent * 264 - 132
-})
+	const percent = (props.modelValue - props.min) / (props.max - props.min);
+	return percent * 264 - 132;
+});
 
-/* Markers */
+// Markers
 const norm = computed(() => {
-	const pct = (props.modelValue - props.min) / (props.max - props.min)
-	return Math.min(1, Math.max(0, pct || 0))
-})
+	const pct = (props.modelValue - props.min) / (props.max - props.min);
+	return Math.min(1, Math.max(0, pct || 0));
+});
+
 const activeMarkerIndex = computed(() => {
-	if (!props.markers?.length) return -1
-	let best = -1, dmin = Infinity
+	if (!props.markers?.length) return -1;
+	let best = -1;
+	let dmin = Infinity;
 	props.markers.forEach((m, i) => {
-		const d = Math.abs(m - norm.value)
-		if (d < dmin) { dmin = d; best = i }
-	})
-	return best
-})
+		const d = Math.abs(m - norm.value);
+		if (d < dmin) {
+			dmin = d;
+			best = i;
+		}
+	});
+	return best;
+});
 
 const markerR = computed(() =>
 	props.size === 'small' ? 2 : props.size === 'medium' ? 2.6 : 3
-)
-const SWEEP = 264
-const START = -132
-function polarXY(t /*0..1*/) {
-	const a = (START + props.markersOffsetDeg + t * SWEEP) * Math.PI / 180
-	const R = 44, CX = 50, CY = 50
-	return { x: CX + R * Math.cos(a), y: CY + R * Math.sin(a) }
+);
+
+const SWEEP = 264;
+const START = -132;
+function polarXY(t /* 0..1 */) {
+	const a = ((START + props.markersOffsetDeg + t * SWEEP) * Math.PI) / 180;
+	const R = 44;
+	const CX = 50;
+	const CY = 50;
+	return { x: CX + R * Math.cos(a), y: CY + R * Math.sin(a) };
 }
 
-/* ids for gradient (avoid collisions) */
-const gradId = `kgrad-${Math.random().toString(36).slice(2)}`
-const showArcPaths = computed(() => !props.markersOnly)
+// ids for gradient (avoid collisions)
+const gradId = `kgrad-${Math.random().toString(36).slice(2)}`;
+const showArcPaths = computed(() => !props.markersOnly);
 
-/* colors */
 const trackColor = computed(() =>
 	props.disabled ? 'var(--knob-track-disabled, #555)' : 'var(--knob-track, #333)'
-)
+);
 
-const arcStartColor = computed(() =>
-	props.arcStart || 'var(--knob-arc-start, #74d0ff)'
-)
-const arcEndColor = computed(() =>
-	props.arcEnd || 'var(--knob-arc-end,   #c471ff)'
-)
+const arcStartColor = computed(
+	() => props.arcStart || 'var(--knob-arc-start, #74d0ff)'
+);
+const arcEndColor = computed(
+	() => props.arcEnd || 'var(--knob-arc-end,   #c471ff)'
+);
 
-/* active arc stroke: theme gradient or single color */
+// active arc stroke: theme gradient or single color
 const activeStroke = computed(() => {
-	if (props.disabled) return 'var(--knob-arc-disabled, #555)'
-	if (props.useThemeArc || (props.arcStart && props.arcEnd)) return `url(#${gradId})`
-	return props.color
-})
+	if (props.disabled) return 'var(--knob-arc-disabled, #555)';
+	if (props.useThemeArc || (props.arcStart && props.arcEnd)) return `url(#${gradId})`;
+	return props.color;
+});
 
+// drag behavior
+let startY = 0;
+let startVal = 0;
 
-/* drag behavior */
-let startY = 0
-let startVal = 0
 function startDrag(e, isTouch = false) {
-	if (props.disabled) return
-	const move = isTouch ? 'touchmove' : 'mousemove'
-	const end = isTouch ? 'touchend' : 'mouseup'
+	if (props.disabled) return;
+	const move = isTouch ? 'touchmove' : 'mousemove';
+	const end = isTouch ? 'touchend' : 'mouseup';
 
-	startY = isTouch ? e.touches[0].pageY : e.pageY
-	startVal = props.modelValue
-	emit('knobStart')
+	startY = isTouch ? e.touches[0].pageY : e.pageY;
+	startVal = props.modelValue;
+	emit('knobStart');
 
 	function onMove(ev) {
-		const currentY = isTouch ? ev.touches[0].pageY : ev.pageY
-		const deltaY = startY - currentY
-		const sensitivity = 0.005 * (props.max - props.min)
-		let newVal = startVal + deltaY * sensitivity
-		newVal = Math.min(props.max, Math.max(props.min, Math.round(newVal / props.step) * props.step))
-		emit('update:modelValue', newVal)
+		const currentY = isTouch ? ev.touches[0].pageY : ev.pageY;
+		const deltaY = startY - currentY;
+		const sensitivity = 0.005 * (props.max - props.min);
+		let newVal = startVal + deltaY * sensitivity;
+		newVal = Math.min(
+			props.max,
+			Math.max(
+				props.min,
+				Math.round(newVal / props.step) * props.step
+			)
+		);
+		emit('update:modelValue', newVal);
 	}
+
 	function onUp() {
-		window.removeEventListener(move, onMove)
-		window.removeEventListener(end, onUp)
-		emit('knobEnd')
+		window.removeEventListener(move, onMove);
+		window.removeEventListener(end, onUp);
+		emit('knobEnd');
 	}
-	window.addEventListener(move, onMove)
-	window.addEventListener(end, onUp)
+
+	window.addEventListener(move, onMove);
+	window.addEventListener(end, onUp);
 }
 </script>
+
 <style scoped>
 .drive-pedal .level .knob-label,
 .drive-pedal .drive .knob-label {
 	position: absolute;
 	bottom: -10px;
 	width: 40px;
-
 }
 
 .drive-pedal .knob-label,
@@ -170,7 +181,6 @@ function startDrag(e, isTouch = false) {
 	color: black;
 	font-weight: bold;
 }
-
 
 .drive-pedal .tone .knob-label,
 .reverb-pedal .tone .knob-label,
@@ -188,12 +198,9 @@ function startDrag(e, isTouch = false) {
 }
 
 .delay-pedal .time .knob-label,
-.delay-pedal .feedback .knob-label,
-.delay-pedal .mix .knob-label,
-.delay-pedal .cutoff .knob-label {
+.delay-pedal .mix .knob-label {
 	position: absolute;
 	bottom: -10px;
 	width: 40px;
 }
-
 </style>

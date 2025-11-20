@@ -132,7 +132,7 @@ function selectIndex(i: number) {
     close();
 }
 
-/* Keyboard: button */
+//Keyboard: button
 function onKeyDownRoot(e: KeyboardEvent) {
     if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -140,7 +140,7 @@ function onKeyDownRoot(e: KeyboardEvent) {
     }
 }
 
-/* Keyboard: listbox */
+// Keyboard: listbox
 let typeBuffer = '';
 let typeTimer: number | null = null;
 

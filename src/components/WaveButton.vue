@@ -38,7 +38,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed } from 'vue';
 
 const props = defineProps({
     modelValue: String,
@@ -47,61 +47,71 @@ const props = defineProps({
     disabled: Boolean,
     palette: {
         type: Array,
-        default: () => ['#ff7eb3', '#ffd06b', '#7bd0ff']
+        default: () => ['#ff7eb3', '#ffd06b', '#7bd0ff'],
     },
-    // Dice badge controls
     showDice: { type: Boolean, default: true },
-    randomIncluded: { type: Boolean, default: true }
-})
+    randomIncluded: { type: Boolean, default: true },
+});
 
-const emit = defineEmits(['update:modelValue', 'toggle-random'])
+const emit = defineEmits(['update:modelValue', 'toggle-random']);
 
-const checked = computed(() => props.modelValue === props.value)
-const colors = computed(() => props.palette.length >= 3 ? props.palette : ['#aef', '#fda', '#fea'])
+const checked = computed(() => props.modelValue === props.value);
+const colors = computed(() =>
+    props.palette.length >= 3 ? props.palette : ['#aef', '#fda', '#fea'],
+);
 
-const uid = Math.random().toString(36).slice(2)
-const gid = `grad-${uid}`
+const uid = Math.random().toString(36).slice(2);
+const gid = `grad-${uid}`;
 
 const shapeTag = computed(() => {
     switch (props.value) {
-        case 'square': return 'rect'
-        case 'triangle': return 'polygon'
-        case 'sawtooth': return 'polygon'
-        case 'sine': return 'circle'
-        default: return 'rect'
+        case 'square':
+            return 'rect';
+        case 'triangle':
+            return 'polygon';
+        case 'sawtooth':
+            return 'polygon';
+        case 'sine':
+            return 'circle';
+        default:
+            return 'rect';
     }
-})
+});
 
 const shapeAttrs = computed(() => {
     switch (props.value) {
-        case 'square': return { x: 18, y: 18, width: 64, height: 64, rx: 0 }
-        case 'triangle': return { points: '50,14 88,86 12,86' }
-        case 'sawtooth': return { points: '16,84 84,84 16,16' }
-        case 'sine': return { cx: 50, cy: 50, r: 32 }
-        default: return { x: 20, y: 20, width: 60, height: 60, rx: 12 }
+        case 'square':
+            return { x: 18, y: 18, width: 64, height: 64, rx: 0 };
+        case 'triangle':
+            return { points: '50,14 88,86 12,86' };
+        case 'sawtooth':
+            return { points: '16,84 84,84 16,16' };
+        case 'sine':
+            return { cx: 50, cy: 50, r: 32 };
+        default:
+            return { x: 20, y: 20, width: 60, height: 60, rx: 12 };
     }
-})
+});
 
 const diceAria = computed(() =>
     props.randomIncluded
         ? `Exclude ${props.label || props.value} from Random`
-        : `Include ${props.label || props.value} in Random`
-)
+        : `Include ${props.label || props.value} in Random`,
+);
 
 function toggleDice() {
-    // No “shift-only” behavior anymore
-    emit('toggle-random', props.value, !props.randomIncluded)
+    emit('toggle-random', props.value, !props.randomIncluded);
 }
 
 function onDiceKey(e) {
-    if (e.key === ' ' || e.key === 'Enter') toggleDice()
+    if (e.key === ' ' || e.key === 'Enter') {
+        toggleDice();
+    }
 }
 </script>
+
 <style scoped>
 .wave-btn {
-    /* Theme-driven tile surface (replaces the hard-coded --panel) */
-    /* --tile-1: var(--pt-surface-1);
-  --tile-2: var(--pt-surface-2); */
     --tile-1: var(--pt-tile-1, var(--pt-surface-1));
     --tile-2: var(--pt-tile-2, var(--pt-surface-2));
     position: relative;
@@ -112,11 +122,9 @@ function onDiceKey(e) {
     padding: 6px 6px 6px;
     border-radius: 14px;
 
-    /* themed background + border */
     background: linear-gradient(145deg, var(--tile-1), var(--tile-2));
     border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 70%);
 
-    /* themed text + shadow */
     color: var(--pt-text);
     box-shadow:
         inset 0 1px 0 rgb(255 255 255 / 0.05),
@@ -127,7 +135,6 @@ function onDiceKey(e) {
 }
 
 .wave-btn:hover {
-    /* gentle lift toward accent glow + a touch lighter */
     box-shadow:
         inset 0 1px 0 rgb(255 255 255 / 0.06),
         0 10px 24px var(--pt-btn-glow);
@@ -141,7 +148,6 @@ function onDiceKey(e) {
 }
 
 .wave-btn.is-active {
-    /* accent ring + brighter surface */
     box-shadow:
         0 0 0 2px hsl(var(--pt-accent) 80% 60% / .25),
         inset 0 1px 0 rgb(255 255 255 / 0.06),
@@ -156,7 +162,6 @@ function onDiceKey(e) {
     pointer-events: none;
 }
 
-/* Icon size unchanged */
 .wave-svg {
     display: block;
     width: 72px;
@@ -170,7 +175,6 @@ function onDiceKey(e) {
     user-select: none;
 }
 
-/* --- dice badge, themed --- */
 .dice-badge {
     position: absolute;
     top: 6px;

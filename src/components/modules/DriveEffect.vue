@@ -1,7 +1,6 @@
 <template>
     <KnobGroup v-model="localEnabled" title="Drive" :color="color" :showToggle="showToggle" :showHeader="false">
         <div class="drive-pedal">
-
             <div class="panel-top">
                 <span class="check-led" :class="{ on: localEnabled }" aria-hidden="true"></span>
 
@@ -37,12 +36,11 @@
                 <div class="effect-label">overdrive</div>
                 <button class="footswitch" type="button" :aria-pressed="localEnabled"
                     @click="localEnabled = !localEnabled" @keydown.space.prevent="localEnabled = !localEnabled"
-                    @keydown.enter.prevent="localEnabled = !localEnabled" />
+                    @keydown.enter.prevent="localEnabled = !localEnabled"></button>
             </div>
         </div>
     </KnobGroup>
 </template>
-
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue';
@@ -51,22 +49,25 @@ import KnobGroup from '../KnobGroup.vue';
 
 type DriveType = 'overdrive' | string;
 
-const props = withDefaults(defineProps<{
-    enabled: boolean;
-    driveType?: DriveType;
-    driveAmount?: number;
-    driveTone?: number;
-    driveMix?: number;
-    color?: string;
-    showToggle?: boolean;
-}>(), {
-    driveType: 'overdrive',
-    driveAmount: 0.4,
-    driveTone: 5000,
-    driveMix: 0.5,
-    color: '#FF4081',
-    showToggle: true
-});
+const props = withDefaults(
+    defineProps<{
+        enabled: boolean;
+        driveType?: DriveType;
+        driveAmount?: number;
+        driveTone?: number;
+        driveMix?: number;
+        color?: string;
+        showToggle?: boolean;
+    }>(),
+    {
+        driveType: 'overdrive',
+        driveAmount: 0.4,
+        driveTone: 5000,
+        driveMix: 0.5,
+        color: '#FF4081',
+        showToggle: true
+    }
+);
 
 const emit = defineEmits<{
     (e: 'update:enabled', v: boolean): void;
@@ -77,7 +78,6 @@ const emit = defineEmits<{
 }>();
 
 const localEnabled = ref<boolean>(props.enabled);
-const localDriveType = ref<DriveType>('overdrive');
 
 const localAmount = ref<number>(props.driveAmount ?? 0.4);
 const localTone = ref<number>(props.driveTone ?? 5000);
@@ -85,39 +85,60 @@ const localMix = ref<number>(props.driveMix ?? 0.5);
 
 const activeKnob = ref<null | 'amount' | 'tone' | 'mix'>(null);
 
+// Ensure driveType is always 'overdrive'
 onMounted(() => {
     if (props.driveType !== 'overdrive') {
-        localDriveType.value = 'overdrive';
         emit('update:driveType', 'overdrive');
     }
 });
 
-watch(() => props.driveType, (v) => {
-    if (v !== 'overdrive') {
-        localDriveType.value = 'overdrive';
-        emit('update:driveType', 'overdrive');
+watch(
+    () => props.driveType,
+    (v) => {
+        if (v !== 'overdrive') {
+            emit('update:driveType', 'overdrive');
+        }
     }
-});
+);
 
 /* Emits */
-watch(localEnabled, v => emit('update:enabled', v));
-watch(localDriveType, v => {
-    if (v !== 'overdrive') {
-        localDriveType.value = 'overdrive';
-        emit('update:driveType', 'overdrive');
-    } else {
-        emit('update:driveType', v);
-    }
-});
-watch(localAmount, v => emit('update:driveAmount', Math.max(0, Math.min(1, v))));
-watch(localTone, v => emit('update:driveTone', Math.max(100, Math.min(10000, v))));
-watch(localMix, v => emit('update:driveMix', Math.max(0, Math.min(1, v))));
+watch(localEnabled, (v) => emit('update:enabled', v));
+watch(localAmount, (v) =>
+    emit('update:driveAmount', Math.max(0, Math.min(1, v)))
+);
+watch(localTone, (v) =>
+    emit('update:driveTone', Math.max(100, Math.min(10000, v)))
+);
+watch(localMix, (v) =>
+    emit('update:driveMix', Math.max(0, Math.min(1, v)))
+);
 
-watch(() => props.enabled, v => (localEnabled.value = v));
-watch(() => props.driveAmount, v => (localAmount.value = typeof v === 'number' ? v : localAmount.value));
-watch(() => props.driveTone, v => (localTone.value = typeof v === 'number' ? v : localTone.value));
-watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : localMix.value));
+watch(
+    () => props.enabled,
+    (v) => {
+        localEnabled.value = v;
+    }
+);
+watch(
+    () => props.driveAmount,
+    (v) => {
+        localAmount.value = typeof v === 'number' ? v : localAmount.value;
+    }
+);
+watch(
+    () => props.driveTone,
+    (v) => {
+        localTone.value = typeof v === 'number' ? v : localTone.value;
+    }
+);
+watch(
+    () => props.driveMix,
+    (v) => {
+        localMix.value = typeof v === 'number' ? v : localMix.value;
+    }
+);
 </script>
+
 <style scoped>
 .drive-pedal {
     display: grid;
@@ -129,18 +150,17 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
     position: relative;
     border-radius: 8px 8px 0px 0px;
     padding: 12px 0px 10px;
-
     background: linear-gradient(#f1df8f, #ebbd54);
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, .35),
-        0 1px 0 rgba(0, 0, 0, .35);
+        inset 0 1px 0 rgba(255, 255, 255, 0.35),
+        0 1px 0 rgba(0, 0, 0, 0.35);
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto auto auto;
     grid-template-areas:
-        "led  led"
-        "drive level"
-        "tone  tone";
+        'led  led'
+        'drive level'
+        'tone  tone';
     align-items: center;
     justify-items: center;
 }
@@ -151,16 +171,16 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
     height: 12px;
     border-radius: 50%;
     background: #7a1f19;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, .55) inset;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55) inset;
     margin-top: 2px;
 }
 
 .check-led.on {
     background: #e53935;
     box-shadow:
-        0 0 0 1px rgba(0, 0, 0, .55) inset,
-        0 0 8px 3px rgba(229, 57, 53, .6),
-        0 0 18px 6px rgba(229, 57, 53, .35);
+        0 0 0 1px rgba(0, 0, 0, 0.55) inset,
+        0 0 8px 3px rgba(229, 57, 53, 0.6),
+        0 0 18px 6px rgba(229, 57, 53, 0.35);
 }
 
 .level {
@@ -190,7 +210,7 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
     padding: 2px 6px;
     font-size: 12px;
     line-height: 1.2;
-    background: rgba(0, 0, 0, .85);
+    background: rgba(0, 0, 0, 0.85);
     color: #fff;
     border-radius: 4px;
     white-space: nowrap;
@@ -199,15 +219,15 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
 }
 
 .tone .custom-tooltip {
-    top:initial;
-    bottom:-18px;
+    top: initial;
+    bottom: -18px;
 }
 
 .panel-seam {
     height: 25px;
     border-radius: 2px;
     background: linear-gradient(#f1df8f, #ebbd54);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .panel-bottom {
@@ -215,8 +235,8 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
     padding: 8px;
     background: linear-gradient(#f1df8f, #ebbd54);
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, .3),
-        0 1px 0 rgba(0, 0, 0, .35);
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        0 1px 0 rgba(0, 0, 0, 0.35);
 }
 
 .footswitch {
@@ -227,25 +247,25 @@ watch(() => props.driveMix, v => (localMix.value = typeof v === 'number' ? v : l
     border-radius: 8px;
     background: linear-gradient(#3f3c3f, #2d2b2f);
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, .06),
-        inset 0 -10px 16px rgba(0, 0, 0, .35);
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        inset 0 -10px 16px rgba(0, 0, 0, 0.35);
     cursor: pointer;
     position: relative;
 }
 
 .footswitch::before {
-    content: "";
+    content: '';
     position: absolute;
     inset: 8px;
     border-radius: 8px;
     box-shadow: 0 0 0 2px #2d2b2f inset;
-    opacity: .8;
+    opacity: 0.8;
     pointer-events: none;
 }
 
 .footswitch:active {
     transform: translateY(1px);
-    filter: brightness(.96);
+    filter: brightness(0.96);
 }
 
 .effect-label {

@@ -382,9 +382,6 @@
 				hsla(var(--heat-h, 210), 85%, 60%, var(--heat-a)) calc(var(--vol, 0) * 1%),
 				transparent calc(var(--vol, 0) * 1%));
 		opacity: var(--pad-on, 0);
-		// transition:
-		// 	opacity 0.15s,
-		// 	background 0.15s;
 	}
 
 	.padTEST::after {

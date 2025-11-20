@@ -35,51 +35,81 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import Knob from '../Knob.vue'
-import KnobGroup from '../KnobGroup.vue'
-import UnisonButton from '../UnisonButton.vue'
+import { ref, watch } from 'vue';
+import Knob from '../Knob.vue';
+import KnobGroup from '../KnobGroup.vue';
+import UnisonButton from '../UnisonButton.vue';
 
-const props = withDefaults(defineProps<{
-	enabled: boolean
-	voices: number
-	detune: number
-	spread: number
-	color?: string
-	showToggle?: boolean
-}>(), {
-	enabled: false,
-	voices: 3,
-	detune: 10,
-	spread: 50,
-	color: '#27fcff',
-	showToggle: true,
-})
+const props = withDefaults(
+	defineProps<{
+		enabled: boolean;
+		voices: number;
+		detune: number;
+		spread: number;
+		color?: string;
+		showToggle?: boolean;
+	}>(),
+	{
+		enabled: false,
+		voices: 3,
+		detune: 10,
+		spread: 50,
+		color: '#27fcff',
+		showToggle: true
+	}
+);
 
 const emit = defineEmits<{
-	(e: 'update:enabled', v: boolean): void
-	(e: 'update:voices', v: number): void
-	(e: 'update:detune', v: number): void
-	(e: 'update:spread', v: number): void
-}>()
+	(e: 'update:enabled', v: boolean): void;
+	(e: 'update:voices', v: number): void;
+	(e: 'update:detune', v: number): void;
+	(e: 'update:spread', v: number): void;
+}>();
 
-const activeKnob = ref<null | 'voices' | 'detune' | 'spread'>(null)
-const localEnabled = ref(props.enabled)
-const localVoices = ref(props.voices)
-const localDetune = ref(props.detune)
-const localSpread = ref(props.spread)
+const activeKnob = ref<null | 'voices' | 'detune' | 'spread'>(null);
+
+const localEnabled = ref<boolean>(props.enabled);
+const localVoices = ref<number>(props.voices);
+const localDetune = ref<number>(props.detune);
+const localSpread = ref<number>(props.spread);
 
 /* emit updates (clamped just in case) */
-watch(localEnabled, v => emit('update:enabled', v))
-watch(localVoices, v => emit('update:voices', Math.max(1, Math.min(6, Math.round(v)))))
-watch(localDetune, v => emit('update:detune', Math.max(0, Math.min(100, Math.round(v)))))
-watch(localSpread, v => emit('update:spread', Math.max(0, Math.min(100, Math.round(v)))))
+watch(localEnabled, (v) => emit('update:enabled', v));
+watch(localVoices, (v) =>
+	emit('update:voices', Math.max(1, Math.min(6, Math.round(v))))
+);
+watch(localDetune, (v) =>
+	emit('update:detune', Math.max(0, Math.min(100, Math.round(v))))
+);
+watch(localSpread, (v) =>
+	emit('update:spread', Math.max(0, Math.min(100, Math.round(v))))
+);
 
 // sync down from parent
-watch(() => props.enabled, v => (localEnabled.value = v))
-watch(() => props.voices, v => (localVoices.value = v))
-watch(() => props.detune, v => (localDetune.value = v))
-watch(() => props.spread, v => (localSpread.value = v))
+watch(
+	() => props.enabled,
+	(v) => {
+		localEnabled.value = v;
+	}
+);
+watch(
+	() => props.voices,
+	(v) => {
+		localVoices.value = v;
+	}
+);
+watch(
+	() => props.detune,
+	(v) => {
+		localDetune.value = v;
+	}
+);
+watch(
+	() => props.spread,
+	(v) => {
+		localSpread.value = v;
+	}
+);
 </script>
 
 <style scoped>

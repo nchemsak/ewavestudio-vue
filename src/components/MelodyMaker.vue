@@ -79,16 +79,15 @@
             <!-- Advanced menu -->
             <div v-if="advancedOpen" class="mm-menu" @click.stop
                 :style="{ left: (advPos?.x ?? 0) + 'px', top: (advPos?.y ?? 0) + 'px' }" role="menu">
-
                 <div class="mm-menu-title">Advanced Options</div>
                 <div class="mm-subtitle">Melody</div>
 
                 <div class="mm-opt" role="menuitem" @click="applyScope = (applyScope === 'active' ? 'all' : 'active')">
                     <span>Active Pads Only</span>
-                    <button class="mm-switch" :class="{ on: applyScope === 'active' }"><span class="kn"></span></button>
+                    <button class="mm-switch" :class="{ on: applyScope === 'active' }">
+                        <span class="kn"></span>
+                    </button>
                 </div>
-
-                <!-- Removed: Start on tonic toggle -->
 
                 <div class="mm-sep"></div>
 
@@ -97,17 +96,23 @@
 
                 <div class="mm-opt" role="menuitem" @click="arpSeventhOnDownbeat = !arpSeventhOnDownbeat">
                     <span>7th on downbeats</span>
-                    <button class="mm-switch" :class="{ on: arpSeventhOnDownbeat }"><span class="kn"></span></button>
+                    <button class="mm-switch" :class="{ on: arpSeventhOnDownbeat }">
+                        <span class="kn"></span>
+                    </button>
                 </div>
 
                 <div class="mm-opt" role="menuitem" @click.stop="arpStride = (arpStride === 1 ? 2 : 1)">
                     <span>Skip every other tone</span>
-                    <button class="mm-switch" :class="{ on: arpStride === 2 }"><span class="kn"></span></button>
+                    <button class="mm-switch" :class="{ on: arpStride === 2 }">
+                        <span class="kn"></span>
+                    </button>
                 </div>
 
                 <div class="mm-opt" role="menuitem" @click.stop="arpHop = !arpHop">
                     <span>Occasional octave hops</span>
-                    <button class="mm-switch" :class="{ on: arpHop }"><span class="kn"></span></button>
+                    <button class="mm-switch" :class="{ on: arpHop }">
+                        <span class="kn"></span>
+                    </button>
                 </div>
 
                 <div class="mm-sep"></div>
@@ -125,13 +130,12 @@
             </div>
 
             <div v-if="advancedOpen" class="mm-overlay" @click="advancedOpen = false"></div>
-
         </section>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted, defineExpose } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, defineExpose } from 'vue';
 import PtSelect from './PtSelect.vue';
 
 const props = defineProps<{
@@ -142,8 +146,15 @@ const props = defineProps<{
     currentTheme?: string;
 
     initialKeyRoot?: 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B';
-    // initialKeyScale?: 'none' | 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'wholeTone' | 'dorian' | 'lydian' | 'egyptian';
-    initialKeyScale?: 'none' | 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'dorian' | 'lydian' | 'mixolydian';
+    initialKeyScale?:
+    | 'none'
+    | 'major'
+    | 'naturalMinor'
+    | 'pentMajor'
+    | 'pentMinor'
+    | 'dorian'
+    | 'lydian'
+    | 'mixolydian';
 
     initialRangePreset?: 'low' | 'mid' | 'high' | 'wide';
 
@@ -155,8 +166,7 @@ const props = defineProps<{
 
 /*  Defaults  */
 const DEFAULTS_MELODY = {
-    applyScope: 'active' as 'active' | 'all',
-    // removed: startOnTonic from defaults (always on now)
+    applyScope: 'active' as 'active' | 'all'
 };
 
 const DEFAULTS_ARP = {
@@ -166,11 +176,8 @@ const DEFAULTS_ARP = {
     tones: 'chord' as 'chord' | 'scale',
     seventhOnDownbeat: false,
     stride: 1 as 1 | 2,
-    hop: false,
+    hop: false
 };
-
-type Style = 'random' | 'natural' | 'up' | 'down' | 'arch' | 'zigzag';
-const style = ref<Style>('random');
 
 const emit = defineEmits<{
     (e: 'update:frequencies', v: number[]): void;
@@ -191,7 +198,7 @@ const SCALES: Record<string, number[]> = {
     pentMinor: [0, 3, 5, 7, 10],
     dorian: [0, 2, 3, 5, 7, 9, 10],
     lydian: [0, 2, 4, 6, 7, 9, 11],
-    mixolydian: [0, 2, 4, 5, 7, 9, 10],
+    mixolydian: [0, 2, 4, 5, 7, 9, 10]
 };
 
 const SCALE_LABELS: Record<string, string> = {
@@ -201,51 +208,93 @@ const SCALE_LABELS: Record<string, string> = {
     pentMinor: 'Pentatonic Minor',
     lydian: 'Major / Lydian',
     dorian: 'Minor / Dorian',
-    mixolydian: 'Major / Mixolydian',
+    mixolydian: 'Major / Mixolydian'
 };
-
 
 const keyRoot = ref<RootNote>(props.initialKeyRoot ?? 'A');
 type KeyScale = 'none' | keyof typeof SCALES;
 const keyScale = ref<KeyScale>(props.initialKeyScale ?? 'none');
 
-const NATURALS: Array<{ n: Extract<RootNote, 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B'>; hasSharp: boolean; sharp?: RootNote }> = [
-    { n: 'C', hasSharp: true, sharp: 'C#' },
-    { n: 'D', hasSharp: true, sharp: 'Eb' },
-    { n: 'E', hasSharp: false },
-    { n: 'F', hasSharp: true, sharp: 'F#' },
-    { n: 'G', hasSharp: true, sharp: 'Ab' },
-    { n: 'A', hasSharp: true, sharp: 'Bb' },
-    { n: 'B', hasSharp: false },
-];
+const NATURALS: Array<{
+    n: Extract<RootNote, 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B'>;
+    hasSharp: boolean;
+    sharp?: RootNote;
+}> = [
+        { n: 'C', hasSharp: true, sharp: 'C#' },
+        { n: 'D', hasSharp: true, sharp: 'Eb' },
+        { n: 'E', hasSharp: false },
+        { n: 'F', hasSharp: true, sharp: 'F#' },
+        { n: 'G', hasSharp: true, sharp: 'Ab' },
+        { n: 'A', hasSharp: true, sharp: 'Bb' },
+        { n: 'B', hasSharp: false }
+    ];
 
 const SHARP_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 const FLAT_NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
 const FLAT_KEYS = new Set(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb']);
-const preferFlat = computed(() => keyRoot.value.includes('b') || FLAT_KEYS.has(keyRoot.value));
-const NAMES = computed(() => preferFlat.value ? FLAT_NOTE_NAMES : SHARP_NOTE_NAMES);
-const midiToName = (m: number) => `${NAMES.value[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
+const preferFlat = computed(
+    () => keyRoot.value.includes('b') || FLAT_KEYS.has(keyRoot.value)
+);
+const NAMES = computed(() =>
+    preferFlat.value ? FLAT_NOTE_NAMES : SHARP_NOTE_NAMES
+);
+const midiToName = (m: number) =>
+    `${NAMES.value[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
 
 type PresetKey = 'low' | 'mid' | 'high' | 'wide';
 const PRESETS: Record<PresetKey, { minOct: number; maxOct: number; label: string }> = {
     low: { minOct: 2, maxOct: 3, label: 'Low' },
     mid: { minOct: 3, maxOct: 4, label: 'Mid' },
     high: { minOct: 4, maxOct: 5, label: 'High' },
-    wide: { minOct: 2, maxOct: 6, label: 'Wide' },
+    wide: { minOct: 2, maxOct: 6, label: 'Wide' }
 };
 
 const rangePreset = ref<PresetKey>(props.initialRangePreset ?? 'wide');
 const minOctave = ref(3);
 const maxOctave = ref(6);
-watch(rangePreset, (k) => { const p = PRESETS[k]; minOctave.value = p.minOct; maxOctave.value = p.maxOct; }, { immediate: true });
+
+watch(
+    rangePreset,
+    (k) => {
+        const p = PRESETS[k];
+        minOctave.value = p.minOct;
+        maxOctave.value = p.maxOct;
+    },
+    { immediate: true }
+);
 
 const NOTE_TO_SEMITONE: Record<string, number> = {
-    'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
+    C: 0,
+    'C#': 1,
+    Db: 1,
+    D: 2,
+    'D#': 3,
+    Eb: 3,
+    E: 4,
+    F: 5,
+    'F#': 6,
+    Gb: 6,
+    G: 7,
+    'G#': 8,
+    Ab: 8,
+    A: 9,
+    'A#': 10,
+    Bb: 10,
+    B: 11
 };
-const midiToFreq = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
-const freqToMidi = (f: number) => Math.round(69 + 12 * Math.log2(f / 440));
 
-function buildCandidateMidiPool(root: string, scaleName: string, minOct: number, maxOct: number, fMin: number, fMax: number) {
+const midiToFreq = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
+const freqToMidi = (f: number) =>
+    Math.round(69 + 12 * Math.log2(f / 440));
+
+function buildCandidateMidiPool(
+    root: string,
+    scaleName: string,
+    minOct: number,
+    maxOct: number,
+    fMin: number,
+    fMax: number
+) {
     const steps = SCALES[scaleName] ?? SCALES.major;
     const rootSemi = NOTE_TO_SEMITONE[root] ?? 0;
     const pool: number[] = [];
@@ -286,19 +335,28 @@ const poolSummary = computed(() => {
         };
         if (!inRange(oct)) {
             for (const tryOct of [oct - 1, oct + 1, oct - 2, oct + 2]) {
-                if (tryOct >= 0 && inRange(tryOct)) { oct = tryOct; break; }
+                if (tryOct >= 0 && inRange(tryOct)) {
+                    oct = tryOct;
+                    break;
+                }
             }
         }
         const m = 12 * (oct + 1) + semi;
         return `${midiToName(m)} only`;
     }
 
-    const pool = buildCandidateMidiPool(keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, fMin, fMax);
+    const pool = buildCandidateMidiPool(
+        keyRoot.value,
+        keyScale.value,
+        minOctave.value,
+        maxOctave.value,
+        fMin,
+        fMax
+    );
     if (!pool.length) return '';
-    return `${midiToName(pool[0])}–${midiToName(pool[pool.length - 1])} • ${pool.length} notes`;
+    return `${midiToName(pool[0])}–${midiToName(pool[pool.length - 1])} • ${pool.length
+        } notes`;
 });
-
-const keyOptions = ROOTS.map(r => ({ label: r, value: r }));
 
 const scaleOptions = [
     { label: 'None', value: 'none' },
@@ -308,51 +366,57 @@ const scaleOptions = [
     { label: SCALE_LABELS.pentMinor, value: 'pentMinor' },
     { label: SCALE_LABELS.lydian, value: 'lydian' },
     { label: SCALE_LABELS.dorian, value: 'dorian' },
-    { label: SCALE_LABELS.mixolydian, value: 'mixolydian' },
+    { label: SCALE_LABELS.mixolydian, value: 'mixolydian' }
 ];
 
+const rangeOptions = (
+    Object.entries(PRESETS) as [PresetKey, (typeof PRESETS)[PresetKey]][]
+).map(([value, def]) => ({ label: def.label, value }));
 
-const rangeOptions = (Object.entries(PRESETS) as [PresetKey, typeof PRESETS[PresetKey]][])
-    .map(([value, def]) => ({ label: def.label, value }));
+watch(
+    keyRoot,
+    (v) => emit('key-root-change', v),
+    { immediate: true }
+);
+watch(
+    keyScale,
+    (v) => emit('key-scale-change', v),
+    { immediate: true }
+);
+watch(
+    rangePreset,
+    (v) => emit('range-preset-change', v),
+    { immediate: true }
+);
 
-watch(keyRoot, (v) => emit('key-root-change', v), { immediate: true });
-watch(keyScale, (v) => emit('key-scale-change', v), { immediate: true });
-watch(rangePreset, (v) => emit('range-preset-change', v), { immediate: true });
-
-watch(() => props.initialKeyRoot, (v) => { if (v && v !== keyRoot.value) keyRoot.value = v as RootNote; });
-watch(() => props.initialKeyScale, (v) => { if (v && v !== keyScale.value) keyScale.value = v as KeyScale; });
-watch(() => props.initialRangePreset, (v) => { if (v && v !== rangePreset.value) rangePreset.value = v as PresetKey; });
-
-// Smart generator  
-function contourAt(i: number, n: number, kind: Style) {
-    const t = n > 1 ? i / (n - 1) : 0;
-    switch (kind) {
-        case 'up': return t;
-        case 'down': return 1 - t;
-        case 'arch': return 1 - Math.abs(2 * t - 1);
-        case 'zigzag': return (i % 2 ? 0.8 : 0.2);
-        case 'natural':
-        default: {
-            const drift = 0.5 + 0.28 * Math.sin(2 * Math.PI * t) + 0.12 * Math.sin(4 * Math.PI * t + 1.1);
-            return Math.min(1, Math.max(0, drift));
-        }
+watch(
+    () => props.initialKeyRoot,
+    (v) => {
+        if (v && v !== keyRoot.value) keyRoot.value = v as RootNote;
     }
-}
+);
+watch(
+    () => props.initialKeyScale,
+    (v) => {
+        if (v && v !== keyScale.value) keyScale.value = v as KeyScale;
+    }
+);
+watch(
+    () => props.initialRangePreset,
+    (v) => {
+        if (v && v !== rangePreset.value) rangePreset.value = v as PresetKey;
+    }
+);
 
-function defaultWeightsFor(scaleLen: number) {
-    if (scaleLen >= 7) return [80, 35, 60, 35, 70, 45, 30];
-    if (scaleLen === 5) return [80, 60, 70, 60, 65];
-    return Array.from({ length: scaleLen }, (_, i) => (i === 0 ? 80 : i % 4 === 0 ? 70 : 45));
-}
-
-function degreeIndexFor(semiAbs: number, rootSemi: number, steps: number[]) {
-    const rel = (semiAbs - rootSemi + 120) % 12;
-    const di = steps.indexOf(rel);
-    return di >= 0 ? di : 0;
-}
-
+// RNG helpers
 function makeRng(s: number) {
-    return () => { s |= 0; s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t ^= t + Math.imul(t ^ (t >>> 7), 61 | s); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    return () => {
+        s |= 0;
+        s = (s + 0x6d2b79f5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t ^= t + Math.imul(t ^ (t >>> 7), 61 | s);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
 }
 
 let clickNonce = 0;
@@ -361,7 +425,7 @@ const seed = ref(1);
 function freshRng() {
     const mixed =
         (seed.value | 0) ^
-        (++clickNonce * 0x9e3779b9) ^
+        ++clickNonce * 0x9e3779b9 ^
         (Date.now() & 0xffffffff);
     return makeRng(mixed);
 }
@@ -369,16 +433,20 @@ function freshRng() {
 // Always-on: start on tonic
 const startOnTonic = ref(true);
 
+// Smart generator
 function smartGenerate(): void {
     if (!props.frequencies || !props.frequencies.length) return;
 
     const out = props.frequencies.slice();
 
     const stepsMask =
-        (applyScope.value === 'active' && props.steps && props.steps.length === out.length)
+        applyScope.value === 'active' &&
+            props.steps &&
+            props.steps.length === out.length
             ? props.steps
             : out.map(() => true);
 
+    // No scale: lock everything to the key root in some octave(s)
     if (keyScale.value === 'none') {
         const fMin = props.minFreq ?? 100;
         const fMax = props.maxFreq ?? 2000;
@@ -404,7 +472,14 @@ function smartGenerate(): void {
                 const midi = 12 * (o + 1) + semi;
                 const f = midiToFreq(midi);
                 if (f >= fMin && f <= fMax) return o;
-                for (const tryOct of [o - 1, o + 1, o - 2, o + 2, o - 3, o + 3]) {
+                for (const tryOct of [
+                    o - 1,
+                    o + 1,
+                    o - 2,
+                    o + 2,
+                    o - 3,
+                    o + 3
+                ]) {
                     if (tryOct < 0) continue;
                     const m = 12 * (tryOct + 1) + semi;
                     const ff = midiToFreq(m);
@@ -424,11 +499,16 @@ function smartGenerate(): void {
         return;
     }
 
-    // Scale modes 
+    // Scale modes (random style only)
     const freqMin = props.minFreq ?? 100;
     const freqMax = props.maxFreq ?? 2000;
     const pool = buildCandidateMidiPool(
-        keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, freqMin, freqMax
+        keyRoot.value,
+        keyScale.value,
+        minOctave.value,
+        maxOctave.value,
+        freqMin,
+        freqMax
     ).sort((a, b) => a - b);
     if (!pool.length) return;
 
@@ -436,89 +516,35 @@ function smartGenerate(): void {
     const rootSemi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
 
     const tonicSemi = (rootSemi + stepsArr[0]) % 12;
-    const tonicCandidates = pool.filter(m => (((m % 12) + 12) % 12) === tonicSemi);
+    const tonicCandidates = pool.filter(
+        (m) => (((m % 12) + 12) % 12) === tonicSemi
+    );
 
     const center = pool[Math.floor(pool.length / 2)];
     const firstActive = stepsMask.findIndex(Boolean);
 
-    if (style.value === 'random') {
-        const rand = freshRng();
+    const rand = freshRng();
 
-        if (startOnTonic.value && firstActive >= 0 && tonicCandidates.length) {
-            const m = tonicCandidates.reduce(
-                (best, cur) => Math.abs(cur - center) < Math.abs(best - center) ? cur : best,
-                tonicCandidates[0]
-            );
-            out[firstActive] = midiToFreq(m);
-        }
-
-        for (let i = 0; i < out.length; i++) {
-            if (!stepsMask[i]) continue;
-            if (startOnTonic.value && i === firstActive && tonicCandidates.length) continue;
-            const midi = pool[Math.floor(rand() * pool.length)];
-            out[i] = midiToFreq(midi);
-        }
-        rememberBeforeWrite();
-        emit('update:frequencies', out);
-        return;
+    if (startOnTonic.value && firstActive >= 0 && tonicCandidates.length) {
+        const m = tonicCandidates.reduce(
+            (best, cur) =>
+                Math.abs(cur - center) < Math.abs(best - center) ? cur : best,
+            tonicCandidates[0]
+        );
+        out[firstActive] = midiToFreq(m);
     }
 
-    const baseWeights = defaultWeightsFor(stepsArr.length);
-    let prevMidi = center;
-    let prevIdx = Math.floor(pool.length / 2);
-    const L = out.length;
-
-    for (let i = 0; i < L; i++) {
+    for (let i = 0; i < out.length; i++) {
         if (!stepsMask[i]) continue;
-
-        if (startOnTonic.value && i === firstActive && tonicCandidates.length) {
-            const m = tonicCandidates.reduce(
-                (best, cur) => Math.abs(cur - center) < Math.abs(best - center) ? cur : best,
-                tonicCandidates[0]
-            );
-            out[i] = midiToFreq(m);
-            prevMidi = m; prevIdx = pool.indexOf(m);
+        if (
+            startOnTonic.value &&
+            i === firstActive &&
+            tonicCandidates.length
+        ) {
             continue;
         }
-
-        const target = contourAt(i, L, 'natural');
-        const targetIdx = Math.round(target * (pool.length - 1));
-
-        const spread = Math.max(2, Math.floor(pool.length * 0.12));
-        const lo = Math.max(0, targetIdx - spread);
-        const hi = Math.min(pool.length - 1, targetIdx + spread);
-
-        let bestMidi = pool[targetIdx];
-        let bestScore = -Infinity;
-        let bestIdx = targetIdx;
-        const desiredDir = Math.sign(targetIdx - prevIdx);
-
-        for (let j = lo; j <= hi; j++) {
-            const midi = pool[j];
-            const semiAbs = ((midi % 12) + 12) % 12;
-            const di = degreeIndexFor(semiAbs, rootSemi, stepsArr);
-
-            let w = baseWeights[di];
-            if (i % 4 === 0) {
-                const isTonic = di === 0;
-                const isFifth = stepsArr[di] === 7;
-                if (isTonic || isFifth) w *= 1.3;
-            }
-
-            const dMidi = Math.abs(midi - prevMidi);
-            let lead = 1 / (1 + dMidi);
-            if (dMidi === 0) lead *= 0.6;
-
-            const align = 1 / (1 + Math.abs(j - targetIdx));
-            const dir = Math.sign(j - prevIdx);
-            const dirAlign = desiredDir === 0 ? 1 : (dir === desiredDir ? 1.12 : 0.94);
-
-            const score = w * (0.60 + 0.25 * lead + 0.15 * align) * dirAlign
-                - (j === prevIdx ? w * 0.08 : 0);
-
-            if (score > bestScore) { bestScore = score; bestMidi = midi; bestIdx = j; }
-        }
-        prevMidi = bestMidi; prevIdx = bestIdx; out[i] = midiToFreq(bestMidi);
+        const midi = pool[Math.floor(rand() * pool.length)];
+        out[i] = midiToFreq(midi);
     }
 
     rememberBeforeWrite();
@@ -539,11 +565,19 @@ function clampArpOctaves(v: number | undefined): 1 | 2 | 3 {
     return 2;
 }
 
-// Arpeggiator 
-const arpPattern = ref<'up' | 'down' | 'updown' | 'random'>(props.initialArpPattern ?? 'up');
-const arpRate = ref<'1/4' | '1/8' | '1/16'>(props.initialArpRate ?? '1/16');
-const arpOctaves = ref<1 | 2 | 3>(clampArpOctaves(props.initialArpOctaves));
-const arpTones = ref<'chord' | 'scale'>(props.initialArpTones ?? 'chord');
+// Arpeggiator
+const arpPattern = ref<'up' | 'down' | 'updown' | 'random'>(
+    props.initialArpPattern ?? 'up'
+);
+const arpRate = ref<'1/4' | '1/8' | '1/16'>(
+    props.initialArpRate ?? '1/16'
+);
+const arpOctaves = ref<1 | 2 | 3>(
+    clampArpOctaves(props.initialArpOctaves)
+);
+const arpTones = ref<'chord' | 'scale'>(
+    props.initialArpTones ?? 'chord'
+);
 
 const arpSeventhOnDownbeat = ref(false);
 const arpStride = ref<1 | 2>(1);
@@ -553,21 +587,21 @@ const arpPatternOptions = [
     { label: 'Up', value: 'up' },
     { label: 'Down', value: 'down' },
     { label: 'Up/Down', value: 'updown' },
-    { label: 'Random', value: 'random' },
+    { label: 'Random', value: 'random' }
 ] as const;
 const arpRateOptions = [
     { label: '1/4', value: '1/4' },
     { label: '1/8', value: '1/8' },
-    { label: '1/16', value: '1/16' },
+    { label: '1/16', value: '1/16' }
 ] as const;
 const arpOctaveOptions = [
     { label: '1', value: 1 },
     { label: '2', value: 2 },
-    { label: '3', value: 3 },
+    { label: '3', value: 3 }
 ] as const;
 const arpToneOptions = [
     { label: 'Chord', value: 'chord' },
-    { label: 'Scale', value: 'scale' },
+    { label: 'Scale', value: 'scale' }
 ] as const;
 
 function rotate<T>(arr: T[], n: number) {
@@ -587,10 +621,14 @@ function indicesWithStride(L: number, stride: number) {
 
 function nearestIndexIn(arr: number[], base: number): number | null {
     if (!arr.length) return null;
-    let best = 0, d = Math.abs(arr[0] - base);
+    let best = 0;
+    let d = Math.abs(arr[0] - base);
     for (let i = 1; i < arr.length; i++) {
         const dd = Math.abs(arr[i] - base);
-        if (dd < d) { d = dd; best = i; }
+        if (dd < d) {
+            d = dd;
+            best = i;
+        }
     }
     return best;
 }
@@ -598,10 +636,15 @@ function nearestIndexIn(arr: number[], base: number): number | null {
 function pickBaseTonicByRange(tonicGroup: number[], centerMidi: number): number {
     if (!tonicGroup.length) return centerMidi;
     switch (rangePreset.value) {
-        case 'low': return tonicGroup[0];
-        case 'high': return tonicGroup[tonicGroup.length - 1];
+        case 'low':
+            return tonicGroup[0];
+        case 'high':
+            return tonicGroup[tonicGroup.length - 1];
         case 'mid': {
-            const idx = Math.min(tonicGroup.length - 1, Math.ceil((tonicGroup.length - 1) / 2));
+            const idx = Math.min(
+                tonicGroup.length - 1,
+                Math.ceil((tonicGroup.length - 1) / 2)
+            );
             return tonicGroup[idx];
         }
         case 'wide':
@@ -618,18 +661,28 @@ function bakeArp(): void {
     const out = props.frequencies.slice();
 
     const scopeMask =
-        (applyScope.value === 'active' && props.steps && props.steps.length === out.length)
+        applyScope.value === 'active' &&
+            props.steps &&
+            props.steps.length === out.length
             ? props.steps
             : out.map(() => true);
 
-    const activeIdx = out.map((_, i) => i).filter(i => scopeMask[i]);
-    if (!activeIdx.length) { emit('update:frequencies', out); return; }
+    const activeIdx = out.map((_, i) => i).filter((i) => scopeMask[i]);
+    if (!activeIdx.length) {
+        emit('update:frequencies', out);
+        return;
+    }
 
     const fMin = props.minFreq ?? 100;
     const fMax = props.maxFreq ?? 2000;
 
     const pool = buildCandidateMidiPool(
-        keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, fMin, fMax
+        keyRoot.value,
+        keyScale.value,
+        minOctave.value,
+        maxOctave.value,
+        fMin,
+        fMax
     ).sort((a, b) => a - b);
     if (!pool.length) return;
 
@@ -638,9 +691,14 @@ function bakeArp(): void {
     const center = pool[Math.floor(pool.length / 2)];
 
     const toneSemitones = (mode: 'chord' | 'scale'): number[] => {
-        if (mode === 'scale') return Array.from(new Set(stepsArr.map(s => (rootSemi + s) % 12)));
+        if (mode === 'scale')
+            return Array.from(
+                new Set(stepsArr.map((s) => (rootSemi + s) % 12))
+            );
         const chordIdx = [0, 2, 4]; // 1,3,5
-        const semis = chordIdx.filter(i => i < stepsArr.length).map(i => (rootSemi + stepsArr[i]) % 12);
+        const semis = chordIdx
+            .filter((i) => i < stepsArr.length)
+            .map((i) => (rootSemi + stepsArr[i]) % 12);
         return Array.from(new Set(semis));
     };
     const degreeSemis = toneSemitones(arpTones.value);
@@ -648,7 +706,7 @@ function bakeArp(): void {
     const groupsBySemi: Record<number, number[]> = {};
     for (const s of degreeSemis) groupsBySemi[s] = [];
     for (const m of pool) {
-        const s = ((m % 12) + 12) % 12;
+        const s = (((m % 12) + 12) % 12);
         if (groupsBySemi[s]) groupsBySemi[s].push(m);
     }
     for (const s of degreeSemis) groupsBySemi[s].sort((a, b) => a - b);
@@ -659,7 +717,7 @@ function bakeArp(): void {
     // ceiling pick helper
     const pickAtOrAbove = (g: number[], targetBase: number): number | null => {
         if (!g.length) return null;
-        const idx = g.findIndex(m => m >= targetBase);
+        const idx = g.findIndex((m) => m >= targetBase);
         if (idx !== -1) return g[idx];
         return g[g.length - 1];
     };
@@ -714,9 +772,10 @@ function bakeArp(): void {
     })();
 
     const posInStrided = baseIdxRaw.indexOf(tonicIdxInLadder);
-    const rotateBy = (posInStrided !== -1)
-        ? posInStrided
-        : (nearestIndexIn(baseIdxRaw, tonicIdxInLadder) ?? 0);
+    const rotateBy =
+        posInStrided !== -1
+            ? posInStrided
+            : nearestIndexIn(baseIdxRaw, tonicIdxInLadder) ?? 0;
 
     const baseIdx = rotate(baseIdxRaw, rotateBy);
 
@@ -747,11 +806,15 @@ function bakeArp(): void {
             }
         }
     }
-    const order = orderIdx.map(i => ladder[i]);
+    const order = orderIdx.map((i) => ladder[i]);
     if (!order.length) return;
 
     // Grouping by rate
-    const RATE_TO_GROUP: Record<string, number> = { '1/4': 4, '1/8': 2, '1/16': 1 };
+    const RATE_TO_GROUP: Record<string, number> = {
+        '1/4': 4,
+        '1/8': 2,
+        '1/16': 1
+    };
     const groupSize = RATE_TO_GROUP[arpRate.value] ?? 1;
 
     const groupsOfIdx: number[][] = [];
@@ -759,25 +822,29 @@ function bakeArp(): void {
         groupsOfIdx.push(activeIdx.slice(k, k + groupSize));
     }
 
-    const seventhSemi = stepsArr.length >= 7 ? (rootSemi + stepsArr[6]) % 12 : null;
-    const seventhCandidates = (seventhSemi != null)
-        ? pool.filter(m => (((m % 12) + 12) % 12) === seventhSemi)
-        : [];
+    const seventhSemi =
+        stepsArr.length >= 7 ? (rootSemi + stepsArr[6]) % 12 : null;
+    const seventhCandidates =
+        seventhSemi != null
+            ? pool.filter(
+                (m) => (((m % 12) + 12) % 12) === seventhSemi
+            )
+            : [];
 
     const rgen = freshRng();
 
     function maybeHop(midi: number): number {
         if (!arpHop.value) return midi;
         if (rgen() < 0.2) {
-            const s = ((midi % 12) + 12) % 12;
+            const s = (((midi % 12) + 12) % 12);
             const g = groupsBySemi[s] || [];
             if (!g.length) return midi;
             const dirUp = rgen() < 0.5;
             if (dirUp) {
-                const higher = g.find(x => x > midi);
+                const higher = g.find((x) => x > midi);
                 if (higher != null) return higher;
             } else {
-                const lower = [...g].reverse().find(x => x < midi);
+                const lower = [...g].reverse().find((x) => x < midi);
                 if (lower != null) return lower;
             }
         }
@@ -792,13 +859,17 @@ function bakeArp(): void {
         const firstStep = g[0];
         let midi: number | undefined;
 
-        if (arpSeventhOnDownbeat.value && seventhCandidates.length && (firstStep % 4 === 0)) {
+        if (
+            arpSeventhOnDownbeat.value &&
+            seventhCandidates.length &&
+            firstStep % 4 === 0
+        ) {
             const i = nearestIndexIn(seventhCandidates, center);
             if (i != null) midi = seventhCandidates[i];
         }
 
         if (midi === undefined) {
-            midi = order[(p++) % order.length];
+            midi = order[p++ % order.length];
             midi = maybeHop(midi);
         }
 
@@ -813,6 +884,7 @@ function bakeArp(): void {
 //  UI state
 const advancedOpen = ref(false);
 const advPos = ref<{ x: number; y: number } | null>(null);
+
 function openAdvanced(e?: MouseEvent) {
     const target = e?.currentTarget as HTMLElement | null;
     const parent = document.querySelector('.melody-maker') as HTMLElement | null;
@@ -821,7 +893,7 @@ function openAdvanced(e?: MouseEvent) {
         const p = parent.getBoundingClientRect();
         advPos.value = {
             x: Math.round(r.right - p.left + 8),
-            y: Math.round(r.top - p.top),
+            y: Math.round(r.top - p.top)
         };
     } else {
         advPos.value = { x: 24, y: 24 };
@@ -833,13 +905,26 @@ const applyScope = ref<'all' | 'active'>('active');
 
 // Undo buffer
 const lastFrequencies = ref<number[] | null>(null);
-function rememberBeforeWrite() { if (props.frequencies) lastFrequencies.value = props.frequencies.slice(); }
-function undo() { if (lastFrequencies.value) emit('update:frequencies', lastFrequencies.value.slice()); }
+function rememberBeforeWrite() {
+    if (props.frequencies) lastFrequencies.value = props.frequencies.slice();
+}
+function undo() {
+    if (lastFrequencies.value)
+        emit('update:frequencies', lastFrequencies.value.slice());
+}
 
 // Close menu on ESC
-function onKey(e: KeyboardEvent) { if (e.key === 'Escape') advancedOpen.value = false; }
-window.addEventListener('keydown', onKey, { capture: true });
-onUnmounted(() => window.removeEventListener('keydown', onKey));
+function onKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') advancedOpen.value = false;
+}
+
+onMounted(() => {
+    window.addEventListener('keydown', onKey, { capture: true });
+});
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', onKey);
+});
 
 function resetAdvanced() {
     applyScope.value = DEFAULTS_MELODY.applyScope;
@@ -872,7 +957,7 @@ function getUi(): UiSnapshot {
         arpPattern: arpPattern.value,
         arpRate: arpRate.value,
         arpOctaves: arpOctaves.value,
-        arpTones: arpTones.value,
+        arpTones: arpTones.value
     };
 }
 
@@ -891,7 +976,6 @@ defineExpose({ openAdvanced, getUi, setUi });
 </script>
 
 <style scoped>
-/* (styles unchanged) */
 .melody-maker {
     position: relative;
     width: 100%;
@@ -909,7 +993,7 @@ defineExpose({ openAdvanced, getUi, setUi });
 .mm-label {
     color: var(--pt-muted);
     font-weight: 600;
-    font-size: .9rem;
+    font-size: 0.9rem;
 }
 
 .mm-hint {
@@ -936,17 +1020,19 @@ defineExpose({ openAdvanced, getUi, setUi });
     border: 0;
     cursor: pointer;
     font-weight: 700;
-    transition: filter .2s ease, box-shadow .2s ease, transform .08s ease;
+    transition: filter 0.2s ease, box-shadow 0.2s ease, transform 0.08s ease;
 }
 
 .mm-btn:active {
-    transform: translateY(1px) scale(.98);
+    transform: translateY(1px) scale(0.98);
 }
 
 .mm-primary-btn {
     color: var(--pt-text);
-    background: linear-gradient(180deg, hsl(var(--pt-accent) 80% 60%), hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
-    box-shadow: 0 6px 22px hsl(var(--pt-accent) 90% 60% / .25);
+    background: linear-gradient(180deg,
+            hsl(var(--pt-accent) 80% 60%),
+            hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
+    box-shadow: 0 6px 22px hsl(var(--pt-accent) 90% 60% / 0.25);
     width: 100%;
     margin: 5px 0px;
 }
@@ -973,7 +1059,7 @@ defineExpose({ openAdvanced, getUi, setUi });
     position: absolute;
     min-width: 280px;
     border-radius: 12px;
-    box-shadow: 0 12px 40px rgb(0 0 0 / .45);
+    box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
     padding: 10px;
     z-index: 1000;
     background: var(--pt-panel);
@@ -984,7 +1070,7 @@ defineExpose({ openAdvanced, getUi, setUi });
 .mm-menu-title {
     font-weight: 700;
     color: #c7cee0;
-    opacity: .9;
+    opacity: 0.9;
     padding: 8px 8px 6px;
 }
 
@@ -997,19 +1083,19 @@ defineExpose({ openAdvanced, getUi, setUi });
 }
 
 .mm-opt:hover {
-    background: rgba(255, 255, 255, .04);
+    background: rgba(255, 255, 255, 0.04);
     cursor: pointer;
 }
 
 .mm-opt.is-disabled {
-    opacity: .5;
+    opacity: 0.5;
     pointer-events: none;
 }
 
 .mm-reset {
     text-align: center;
     color: #c7cee0;
-    opacity: .9;
+    opacity: 0.9;
     padding: 10px 8px 4px;
     cursor: pointer;
 }
@@ -1035,11 +1121,13 @@ defineExpose({ openAdvanced, getUi, setUi });
     height: var(--kn);
     border-radius: 999px;
     background: #fff;
-    box-shadow: 0 2px 8px rgb(0 0 0 / .35);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
 }
 
 .mm-switch.on {
-    background: linear-gradient(180deg, hsl(var(--pt-accent) 80% 60%), hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
+    background: linear-gradient(180deg,
+            hsl(var(--pt-accent) 80% 60%),
+            hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
 }
 
 .mm-switch.on .kn {
@@ -1057,8 +1145,10 @@ defineExpose({ openAdvanced, getUi, setUi });
     height: 36px;
     border-radius: 12px;
     padding: 8px 36px 8px 12px !important;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .03), 0 2px 10px rgb(0 0 0 / .25) !important;
-    font-size: .8rem;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+        0 2px 10px rgb(0 0 0 / 0.25) !important;
+    font-size: 0.8rem;
     background: var(--pt-surface-1) !important;
     color: var(--pt-text) !important;
     border: 1px solid var(--pt-hairline) !important;
@@ -1067,7 +1157,7 @@ defineExpose({ openAdvanced, getUi, setUi });
 :deep(.pt-caret) {
     filter: none;
     color: #aab0c0;
-    opacity: .95;
+    opacity: 0.95;
 }
 
 @media (max-width: 720px) {
@@ -1091,17 +1181,17 @@ defineExpose({ openAdvanced, getUi, setUi });
 
 .mm-subtitle {
     font-weight: 700;
-    font-size: .85rem;
-    letter-spacing: .02em;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
     color: #c7cee0;
-    opacity: .9;
+    opacity: 0.9;
     padding: 8px 8px 4px;
 }
 
 .mm-sep {
     height: 1px;
     background: var(--pt-hairline);
-    opacity: .6;
+    opacity: 0.6;
     margin: 8px 6px;
     border-radius: 1px;
 }
@@ -1125,7 +1215,7 @@ defineExpose({ openAdvanced, getUi, setUi });
     margin: 6px 0 2px;
     padding: 6px 6px 8px;
     border-radius: var(--pt-radius-md);
-    background: linear-gradient(180deg, transparent, rgb(0 0 0 / .05));
+    background: linear-gradient(180deg, transparent, rgb(0 0 0 / 0.05));
     --white1: color-mix(in oklab, white 94%, var(--pt-panel) 6%);
     --white2: color-mix(in oklab, white 83%, var(--pt-panel) 17%);
     --black1: color-mix(in oklab, #0b0f1a 90%, var(--pt-panel) 10%);
@@ -1157,15 +1247,30 @@ defineExpose({ openAdvanced, getUi, setUi });
     font-weight: 700;
     color: #111;
     cursor: pointer;
-    transition: transform .03s ease, box-shadow .12s ease, filter .12s ease;
-    background: linear-gradient(180deg, var(--white1), var(--white2)) padding-box, linear-gradient(145deg, rgb(0 0 0 / .18), rgb(255 255 255 / .06)) border-box;
-    border: 1px solid rgb(0 0 0 / .48);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / .06), 0 2px 0 rgb(0 0 0 / .5), 0 6px 14px rgb(0 0 0 / .22);
+    transition:
+        transform 0.03s ease,
+        box-shadow 0.12s ease,
+        filter 0.12s ease;
+    background:
+        linear-gradient(180deg, var(--white1), var(--white2)) padding-box,
+        linear-gradient(145deg, rgb(0 0 0 / 0.18), rgb(255 255 255 / 0.06)) border-box;
+    border: 1px solid rgb(0 0 0 / 0.48);
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.06),
+        0 2px 0 rgb(0 0 0 / 0.5),
+        0 6px 14px rgb(0 0 0 / 0.22);
 }
 
 .kb-white.is-active {
-    box-shadow: inset 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .85), inset 0 1px 0 rgb(255 255 255 / .05), 0 2px 0 rgb(0 0 0 / .5), 0 8px 18px rgb(0 0 0 / .28);
-    background: radial-gradient(circle at center, #d9a0c3 0%, #9b8cb4 75%, #736c92 100%);
+    box-shadow:
+        inset 0 0 0 2px hsl(var(--pt-accent) 90% 60% / 0.85),
+        inset 0 1px 0 rgb(255 255 255 / 0.05),
+        0 2px 0 rgb(0 0 0 / 0.5),
+        0 8px 18px rgb(0 0 0 / 0.28);
+    background: radial-gradient(circle at center,
+            #d9a0c3 0%,
+            #9b8cb4 75%,
+            #736c92 100%);
 }
 
 .kb-white.is-active .wlabel {
@@ -1177,8 +1282,8 @@ defineExpose({ openAdvanced, getUi, setUi });
     position: absolute;
     bottom: 4px;
     left: 6px;
-    font-size: .72rem;
-    opacity: .9;
+    font-size: 0.72rem;
+    opacity: 0.9;
 }
 
 .kb-black {
@@ -1193,20 +1298,35 @@ defineExpose({ openAdvanced, getUi, setUi });
     align-items: flex-end;
     justify-content: center;
     padding-bottom: 2px;
-    font-size: .7rem;
+    font-size: 0.7rem;
     font-weight: 700;
     color: #e7ecff;
     cursor: pointer;
-    transition: transform .03s ease, box-shadow .12s ease, filter .12s ease;
-    background: linear-gradient(180deg, var(--black1), var(--black2)) padding-box, linear-gradient(145deg, #1a2334, #0b0f1a) border-box;
-    border: 1px solid rgb(0 0 0 / .7);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / .05), 0 2px 0 rgb(0 0 0 / .78), 0 6px 12px rgb(0 0 0 / .32);
+    transition:
+        transform 0.03s ease,
+        box-shadow 0.12s ease,
+        filter 0.12s ease;
+    background:
+        linear-gradient(180deg, var(--black1), var(--black2)) padding-box,
+        linear-gradient(145deg, #1a2334, #0b0f1a) border-box;
+    border: 1px solid rgb(0 0 0 / 0.7);
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.05),
+        0 2px 0 rgb(0 0 0 / 0.78),
+        0 6px 12px rgb(0 0 0 / 0.32);
     z-index: 2;
 }
 
 .kb-black.is-active {
-    box-shadow: 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .9), inset 0 1px 0 rgb(255 255 255 / .05), 0 2px 0 rgb(0 0 0 / .8), 0 8px 16px rgb(0 0 0 / .4);
-    background: radial-gradient(circle at center, #d9a0c3 0%, #9b8cb4 75%, #736c92 100%);
+    box-shadow:
+        0 0 0 2px hsl(var(--pt-accent) 90% 60% / 0.9),
+        inset 0 1px 0 rgb(255 255 255 / 0.05),
+        0 2px 0 rgb(0 0 0 / 0.8),
+        0 8px 16px rgb(0 0 0 / 0.4);
+    background: radial-gradient(circle at center,
+            #d9a0c3 0%,
+            #9b8cb4 75%,
+            #736c92 100%);
 }
 
 .kb-black.is-active .blabel {

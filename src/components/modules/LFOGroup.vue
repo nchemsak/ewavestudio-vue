@@ -4,7 +4,7 @@
         <div class="lfo-root lfo-container">
             <div class="lfo-layout">
                 <button class="lfo-power-tile" :class="{ on: localEnabled }" :aria-pressed="localEnabled"
-                    title="Toggle LFO" @click="localEnabled = !localEnabled" @contextmenu.prevent="openAdvanced">
+                    title="Toggle LFO" @click="localEnabled = !localEnabled">
                     <div class="lfo-power-header">
                         <span class="lfo-power-label">LFO</span>
                         <span class="lfo-status-pill" :class="{ on: localEnabled }">
@@ -50,8 +50,9 @@
                             <button class="mm-pill" :class="{
                                 active: currentTarget === 'filter',
                                 disabled: !localEnabled
-                            }" :disabled="!localEnabled" role="radio" :aria-checked="currentTarget === 'filter' ? 'true' : 'false'
-                                " @click="updateTarget('filter')" title="Modulate Filter">
+                            }" :disabled="!localEnabled" role="radio"
+                                :aria-checked="currentTarget === 'filter' ? 'true' : 'false'"
+                                @click="updateTarget('filter')" title="Modulate Filter">
                                 Filter
                             </button>
                         </div>
@@ -106,7 +107,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onUnmounted } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 
@@ -186,41 +187,52 @@ function openAdvanced(e?: MouseEvent): void {
 function onKey(e: KeyboardEvent): void {
     if (e.key === 'Escape') advancedOpen.value = false;
 }
-window.addEventListener('keydown', onKey, { capture: true });
-onUnmounted(() => window.removeEventListener('keydown', onKey));
+
+onMounted(() => {
+    if (typeof window !== 'undefined') {
+        window.addEventListener('keydown', onKey, { capture: true });
+    }
+});
+
+onUnmounted(() => {
+    if (typeof window !== 'undefined') {
+        window.removeEventListener('keydown', onKey, { capture: true });
+    }
+});
 
 defineExpose({ openAdvanced });
 
 const localEnabled = ref<boolean>(props.modelValue);
 watch(
     () => props.modelValue,
-    v => {
+    (v) => {
         localEnabled.value = v;
     }
 );
-watch(localEnabled, v => emit('update:modelValue', v));
+watch(localEnabled, (v) => emit('update:modelValue', v));
 
 const localRate = ref<number>(props.rate);
 watch(
     () => props.rate,
-    v => {
+    (v) => {
         localRate.value = v;
     }
 );
-watch(localRate, v => emit('update:rate', v));
+watch(localRate, (v) => emit('update:rate', v));
 
 const localDepth = ref<number>(props.depth);
 watch(
     () => props.depth,
-    v => {
+    (v) => {
         localDepth.value = v;
     }
 );
-watch(localDepth, v => emit('update:depth', v));
+watch(localDepth, (v) => emit('update:depth', v));
 
 const currentTarget = computed<Target>(() => props.target);
 const updateTarget = (t: Target): void => {
     emit('update:target', t);
+    // Reset depth when changing target
     localDepth.value = 0;
     emit('update:depth', 0);
 };
@@ -228,7 +240,7 @@ const updateTarget = (t: Target): void => {
 const localWaveform = ref<Wave | undefined>(props.waveform);
 watch(
     () => props.waveform,
-    v => {
+    (v) => {
         localWaveform.value = v;
     }
 );
@@ -239,22 +251,24 @@ function setWave(w: Wave): void {
 const localSync = ref<boolean>(props.syncEnabled);
 watch(
     () => props.syncEnabled,
-    v => {
+    (v) => {
         localSync.value = v;
     }
 );
 function setSync(v: boolean): void {
+    localSync.value = v;
     emit('update:syncEnabled', v);
 }
 
 const localDivision = ref<string | undefined>(props.division);
 watch(
     () => props.division,
-    v => {
+    (v) => {
         localDivision.value = v;
     }
 );
 function setDivision(d: string): void {
+    localDivision.value = d;
     emit('update:division', d);
 }
 
@@ -269,6 +283,7 @@ const depthStep = computed<number>(() => {
             return 1;
     }
 });
+
 const depthReadout = computed<string>(() => {
     const v = localDepth.value;
     switch (currentTarget.value) {
@@ -282,11 +297,13 @@ const depthReadout = computed<string>(() => {
 const rateMin = computed<number>(() => (localSync.value ? 0 : 0.1));
 const rateMax = computed<number>(() => (localSync.value ? props.divisions.length - 1 : 20));
 const rateStep = computed<number>(() => (localSync.value ? 1 : 0.1));
+
 const rateMarkers = computed<number[]>(() => {
     if (!localSync.value) return [];
     const n = props.divisions.length;
     return n <= 1 ? [0.5] : props.divisions.map((_, i) => i / (n - 1));
 });
+
 const divisionIndex = computed<number>({
     get() {
         const idx = props.divisions.indexOf(localDivision.value || '');
@@ -299,15 +316,34 @@ const divisionIndex = computed<number>({
         setDivision(d);
     }
 });
+
 const rateKnobModel = computed<number>({
     get() {
         return localSync.value ? divisionIndex.value : localRate.value;
     },
     set(v: number) {
-        if (localSync.value) divisionIndex.value = v;
-        else localRate.value = v;
+        if (localSync.value) {
+            divisionIndex.value = v;
+        } else {
+            localRate.value = v;
+        }
     }
 });
+
+function resetAdvanced(): void {
+    // Reset core motion parameters
+    localRate.value = 2;
+    localDepth.value = 0;
+    localSync.value = true;
+    localDivision.value = '1/8';
+
+    emit('update:rate', 2);
+    emit('update:depth', 0);
+    emit('update:syncEnabled', true);
+    emit('update:division', '1/8');
+
+    advancedOpen.value = false;
+}
 
 function wavePath(w: Wave | string): string {
     switch (w) {
@@ -357,8 +393,6 @@ function wavePath(w: Wave | string): string {
     justify-content: space-between;
     min-height: 132px;
     text-align: left;
-    transition: box-shadow 0.18s ease, transform 0.06s ease,
-        border-color 0.18s ease, background 0.18s ease;
 }
 
 .lfo-power-tile.on {
@@ -463,8 +497,7 @@ svg {
     gap: 6px;
     padding: 4px 8px;
     font-size: 12px;
-    transition: border-color 0.16s ease, background 0.16s ease, transform 0.06s ease,
-        box-shadow 0.16s ease;
+
 }
 
 .lfo-wave-btn svg {
@@ -508,7 +541,6 @@ svg {
     background: var(--pt-surface-2);
     color: #c7cee0;
     font-size: 12px;
-    transition: border-color 0.16s ease, background 0.16s ease, transform 0.06s ease;
 }
 
 .mm-pill.active {

@@ -2,9 +2,6 @@
     <div class="nac-screen">
         <div class="nac-screen__bezel">
             <div class="nac-screen__lcd">
-                <!-- LCD text (hidden when any canvas is shown) -->
-                <!-- <span v-show="view === 'text'">{{ text }}</span> -->
-
                 <!-- Oscilloscope canvas -->
                 <canvas v-show="view === 'scope'" ref="lcdScope" aria-hidden="true"></canvas>
 
@@ -37,7 +34,6 @@
 import { ref, defineExpose, defineEmits, defineProps, computed } from 'vue';
 
 const props = defineProps({
-    // text: { type: String, default: 'HARP  2' },
     view: { type: String, default: 'scope' },
     activeKey: { type: Number, default: 1 },
     fkeys: { type: Array, default: null }
@@ -82,16 +78,6 @@ const ICONS = {
           <path d="M3 18V6h6l4 6h8v6H3z"
                 fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
         </svg>`,
-
-    // text: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-    //        <path d="M4 6h16M4 12h10M4 18h14"
-    //              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-    //      </svg>`,
-
-    // info: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-    //        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/>
-    //        <path d="M12 10v6m0-9h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-    //      </svg>`
 };
 
 const defaultDefs = [
@@ -99,8 +85,6 @@ const defaultDefs = [
     { id: 2, title: 'Spectrogram', svg: ICONS.spec },
     { id: 3, title: 'Tuner', svg: ICONS.tuner },
     { id: 4, title: 'Envelope', svg: ICONS.env },
-    // { id: 5, title: 'Text', svg: ICONS.text },
-    // { id: 6, title: 'Info', svg: ICONS.info }
 ];
 
 const fkeyDefs = computed(() => {

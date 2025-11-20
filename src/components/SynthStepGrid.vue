@@ -5,14 +5,16 @@
             <div v-for="(active, index) in steps" :key="index" class="pad-col" @mouseleave="hovered = null">
                 <div class="pad-head">
                     <button class="pad-settings-dot" @mousedown.stop @click.stop="emitOpenSettings(index, $event)"
-                        aria-label="Pad settings">⋮</button>
-
+                        aria-label="Pad settings">
+                        ⋮
+                    </button>
                     <div v-if="showIndices" class="pad-step-num">{{ index + 1 }}</div>
                 </div>
 
                 <div class="padTESTwrap" @mouseenter="hovered = index" @mouseleave="hovered = null">
                     <div :class="[
-                        'padTEST', 'liquid',
+                        'padTEST',
+                        'liquid',
                         { selected: active },
                         { playing: index === currentStep },
                         { 'has-noise': noiseOn(index) }
@@ -21,8 +23,6 @@
                         <div v-if="noiseOn(index)" class="noise-overlay" :class="[`mode-${noiseMode}`]"
                             :style="noiseStyle(index)" aria-hidden="true">
                             <div v-if="noiseMode === 'static'" class="grain" />
-
-                            <!-- SVG turbulence TV static -->
                             <div v-else-if="noiseMode === 'svg'" class="svg-noise">
                                 <svg class="svg-filter" width="0" height="0" aria-hidden="true" focusable="false">
                                     <filter :id="`tvNoise-${uid}-${index}`">
@@ -42,7 +42,6 @@
                                 <div class="svg-noise-fill" :style="{ filter: `url(#tvNoise-${uid}-${index})` }" />
                             </div>
 
-                            <!-- GIF / video -->
                             <img v-else-if="noiseMode === 'gif' && noiseGifUrl" class="noise-gif" :src="noiseGifUrl"
                                 alt="" aria-hidden="true" decoding="async" loading="lazy" />
 
@@ -50,7 +49,6 @@
                         </div>
                     </div>
 
-                    <!-- waveform badge -->
                     <div class="wave-badge" :class="{ 'is-off': !active }" :data-wave="waveFor(index)"
                         :title="waveFor(index)">
                         <svg class="wave-ico" viewBox="0 0 12 12" width="12" height="12" fill="none"
@@ -65,12 +63,10 @@
                         </svg>
                     </div>
 
-                    <!-- per-step note chip -->
                     <div v-if="active" class="note-chip">
                         {{ nearestNote(pitches[index]) }}
                     </div>
 
-                    <!-- hover sliders -->
                     <div v-if="active && hovered === index && props.showVelocity" class="hover-slider volume-slider">
                         <input type="range" min="0" max="1" step="0.01" :value="velocities[index]"
                             @input="updateVelocity(index, $event)" @mousedown="activeVol = index"
@@ -98,53 +94,53 @@ import { ref } from 'vue';
 type NoteNameFn = (hz: number) => string;
 type Wave = 'sine' | 'triangle' | 'sawtooth' | 'square';
 
-const props = withDefaults(defineProps<{
-    name: string;
-    currentStep: number;
-    minHz: number;
-    maxHz: number;
+const props = withDefaults(
+    defineProps<{
+        name: string;
+        currentStep: number;
+        minHz: number;
+        maxHz: number;
 
-    steps: boolean[];
-    velocities: number[];
-    pitches: number[];
+        steps: boolean[];
+        velocities: number[];
+        pitches: number[];
 
-    nearestNote: NoteNameFn;
+        nearestNote: NoteNameFn;
 
-    showIndices?: boolean;
-    showVelocity?: boolean;
-    showPitch?: boolean;
+        showIndices?: boolean;
+        showVelocity?: boolean;
+        showPitch?: boolean;
 
-    waveforms?: Wave[];
-    defaultWave?: Wave;
+        waveforms?: Wave[];
+        defaultWave?: Wave;
 
-    noiseMask?: boolean[];
-    noiseTint?: string;
-    noiseAlpha?: number;
+        noiseMask?: boolean[];
+        noiseTint?: string;
+        noiseAlpha?: number;
 
-    noiseEnabled?: boolean;
-    noiseMode?: 'wash' | 'static' | 'svg' | 'gif';
+        noiseEnabled?: boolean;
+        noiseMode?: 'wash' | 'static' | 'svg' | 'gif';
 
-    noiseGifUrl?: string;
+        noiseGifUrl?: string;
 
-    noiseFps?: number;
-    noiseSpeed?: number;
+        noiseFps?: number;
+        noiseSpeed?: number;
 
-
-    pepperAlpha?: number;
-    pepperScale?: number;
-
-}>(), {
-    showIndices: true,
-    showVelocity: true,
-    showPitch: true,
-    noiseMode: 'wash',
-    noiseFps: 12,
-    noiseSpeed: 60,
-    noiseEnabled: true,
-    pepperAlpha: 0.16,
-    pepperScale: 6,
-
-});
+        pepperAlpha?: number;
+        pepperScale?: number;
+    }>(),
+    {
+        showIndices: true,
+        showVelocity: true,
+        showPitch: true,
+        noiseMode: 'wash',
+        noiseFps: 12,
+        noiseSpeed: 60,
+        noiseEnabled: true,
+        pepperAlpha: 0.16,
+        pepperScale: 6,
+    },
+);
 
 const emit = defineEmits<{
     (e: 'update:steps', v: boolean[]): void;
@@ -161,7 +157,9 @@ const activePitch = ref<number | null>(null);
 
 const uid = Math.random().toString(36).slice(2);
 
-function clone<T>(arr: T[]): T[] { return arr.slice(); }
+function clone<T>(arr: T[]): T[] {
+    return arr.slice();
+}
 
 function onMouseDown(evt: MouseEvent, index: number) {
     if ((evt.target as HTMLElement).closest('.hover-slider input')) return;
@@ -177,12 +175,14 @@ function onMouseDown(evt: MouseEvent, index: number) {
 
     window.addEventListener('mouseup', onMouseUp, { once: true });
 }
+
 function onMouseEnter(index: number) {
     if (!isMouseDown.value || !dragMode.value) return;
     const out = clone(props.steps);
     out[index] = dragMode.value === 'on';
     emit('update:steps', out);
 }
+
 function onMouseUp() {
     isMouseDown.value = false;
     dragMode.value = null;
@@ -194,8 +194,12 @@ function updateVelocity(i: number, e: Event) {
     out[i] = v;
     emit('update:velocities', out);
 }
+
 function updatePitch(i: number, e: Event) {
-    const v = Math.min(props.maxHz, Math.max(props.minHz, Number((e.target as HTMLInputElement).value)));
+    const v = Math.min(
+        props.maxHz,
+        Math.max(props.minHz, Number((e.target as HTMLInputElement).value)),
+    );
     const out = clone(props.pitches);
     out[i] = v;
     emit('update:pitches', out);
@@ -206,7 +210,7 @@ function emitOpenSettings(index: number, evt: MouseEvent) {
     emit('open-pad-settings', { name: props.name, index, anchorRect: r });
 }
 
-/* --- visuals --- */
+// visuals
 function hueFor(hz: number, lo = props.minHz, hi = props.maxHz) {
     const t = Math.min(1, Math.max(0, (hz - lo) / (hi - lo)));
     return Math.round(220 * (1 - t));
@@ -221,11 +225,13 @@ function padStyle(index: number) {
         '--vol': pct,
         '--heat-h': hue,
         '--pad-on': 1,
-        '--noise-alpha': String(typeof props.noiseAlpha === 'number' ? props.noiseAlpha : 0.28) // boosted default
+        '--noise-alpha': String(
+            typeof props.noiseAlpha === 'number' ? props.noiseAlpha : 0.28,
+        ), // boosted default
     } as any;
 }
 
-/** per-step noise overlay styling */
+// per-step noise overlay styling
 function noiseStyle(index: number) {
     const tint = props.noiseTint || '#9bf3ff';
     const a = typeof props.noiseAlpha === 'number' ? props.noiseAlpha : 0.28;
@@ -238,12 +244,11 @@ function noiseStyle(index: number) {
         '--noise-fps': String(fps),
         '--noise-speed': String(speed),
         '--pepper-alpha': String(
-            typeof (props as any).pepperAlpha === 'number' ? (props as any).pepperAlpha : 0.16
+            typeof (props as any).pepperAlpha === 'number'
+                ? (props as any).pepperAlpha
+                : 0.16,
         ),
-        '--pepper-scale': String(
-            Math.max(2, (props as any).pepperScale ?? 6)
-        ),
-
+        '--pepper-scale': String(Math.max(2, (props as any).pepperScale ?? 6)),
     } as any;
 }
 
@@ -251,13 +256,14 @@ function noiseOn(i: number) {
     return !!props.noiseEnabled && !!props.steps?.[i] && !!props.noiseMask?.[i];
 }
 
-/* SVG noise timing */
+// SVG noise timing
 const svgDur = '0.6s';
 const svgBase = 0.8;
 
 function waveFor(i: number): Wave {
     return (props.waveforms?.[i] ?? props.defaultWave ?? 'sine') as Wave;
 }
+
 const nearestNote = props.nearestNote;
 </script>
 
@@ -376,7 +382,7 @@ const nearestNote = props.nearestNote;
     position: relative;
 }
 
-/*  NOISE OVERLAY Layer order: padTEST::before (volume hue wash, z=1) -> .noise-overlay (z=1, drawn after) -> padTEST::after (bevel z=2) */
+/* NOISE OVERLAY Layer order: padTEST::before (volume hue wash, z=1) -> .noise-overlay (z=1, drawn after) -> padTEST::after (bevel z=2) */
 
 .padTEST .noise-overlay {
     position: absolute;
@@ -545,8 +551,6 @@ const nearestNote = props.nearestNote;
         noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
     filter: contrast(115%);
 }
-
-
 
 /* all other visuals in SCSS (_drumSequencer.scss) */
 </style>

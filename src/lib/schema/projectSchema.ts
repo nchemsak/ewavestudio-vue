@@ -21,7 +21,7 @@ const ProjectDataV2 = z.object({
     instruments: z.array(z.object({
         name: z.string(),
         label: z.string(),
-        type: z.string(), // 'sample' | 'synth' (keep loose if you want)
+        type: z.string(), 
         isCustom: z.boolean(),
         muted: z.boolean(),
         channelVolume: z.number(),

@@ -27,8 +27,6 @@
 
 	.keyboard-key {
 		position: relative;
-		// width: 40px;
-		// this 100% will change the width of the key based on the width of .keyboard-container. If .keyboard-container is changed in width, this will auto update, but the black keys WILL NOT. You'll have to manually change those.
 		width: 100%;
 		height: 174px;
 		display: flex;
