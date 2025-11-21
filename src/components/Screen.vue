@@ -235,7 +235,7 @@ const fkeyDefs = computed(() => {
 
 .nac-screen__fkeys {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: .4rem;
     padding: 0 .75rem;
 }

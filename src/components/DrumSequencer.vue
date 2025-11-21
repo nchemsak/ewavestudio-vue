@@ -22,7 +22,6 @@
 						<div class="position-relative text-center knob-wrap">
 							<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
-
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(volume * 100)}%`">
 								{{ Math.round(volume * 100) }}%
 							</div>
@@ -49,52 +48,67 @@
 						<div class="position-relative text-center knob-wrap">
 							<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
-
-
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(swing * 100)}% swing`">
 								{{ Math.round(swing * 100) }}%
 							</div>
 						</div>
 
-						<!-- Play/Stop -->
-						<button type="button" class="pt-btn btn-lg btn3d" @click="togglePlay"
-							:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
-							:aria-pressed="isPlaying">
-							<span class="btn-face">
-								<svg v-if="!isPlaying" viewBox="0 0 24 24" aria-hidden="true">
-									<path d="M8 6v12l10-6-10-6z" />
-								</svg>
-								<svg v-else viewBox="0 0 24 24" aria-hidden="true">
-									<rect x="7" y="7" width="10" height="10" rx="1.5" />
-								</svg>
-							</span>
-							<span class="visually-hidden">{{ isPlaying ? 'Stop' : 'Play' }}</span>
-						</button>
+						<!-- Right cluster: play + logo (+ MIDI fallback) -->
+						<div class="transport-right">
+							<img class="transport-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral logo">
+							<!-- Play/Stop -->
+							<button type="button" class="pt-btn btn-lg btn3d" @click="togglePlay"
+								:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
+								:aria-pressed="isPlaying">
+								<span class="btn-face">
+									<svg v-if="!isPlaying" viewBox="0 0 24 24" aria-hidden="true">
+										<path d="M8 6v12l10-6-10-6z" />
+									</svg>
+									<svg v-else viewBox="0 0 24 24" aria-hidden="true">
+										<rect x="7" y="7" width="10" height="10" rx="1.5" />
+									</svg>
+								</span>
+								<span class="visually-hidden">{{ isPlaying ? 'Stop' : 'Play' }}</span>
+							</button>
 
-						<img src="../assets/eWaveLogo1.png" style="max-width:130px;height:auto;">
 
 
-						<!-- MIDI Input selector (Web MIDI) -->
-						<template v-if="midiSupported && midiInputs.length">
-							<!-- Prefer Teleport into top toolbar if target exists -->
-							<Teleport v-if="hasMidiTarget" to="#midi-toolbar-slot">
+							<!-- MIDI fallback lives in the right cluster -->
+							<template v-if="midiSupported && !hasMidiTarget">
 								<div class="midi-toolbar">
-									<label class="midi-label" for="midi-input-select">MIDI</label>
-									<select id="midi-input-select" class="pt-select pt-select-sm"
-										v-model="selectedMidiId" @change="attachSelectedMidi">
-										<option value="">None</option>
-										<option v-for="m in midiInputs" :key="m.id" :value="m.id">
-											{{ m.name }}
-										</option>
-									</select>
+									<label class="midi-label" for="midi-input-select">MIDI Controller</label>
 
-									<!-- <span class="midi-led" :class="{ on: midiEnabled }" title="MIDI input status" /> -->
+									<button v-if="!midiInitialized" type="button" class="pt-btn pt-btn-sm"
+										@click="enableMidi">
+										{{ midiInitInProgress ? 'Enabling…' : 'Enable MIDI' }}
+									</button>
+
+									<template v-else>
+										<select id="midi-input-select" class="pt-select pt-select-sm"
+											v-model="selectedMidiId" @change="attachSelectedMidi">
+											<option value="">None</option>
+											<option v-for="m in midiInputs" :key="m.id" :value="m.id">
+												{{ m.name }}
+											</option>
+										</select>
+									</template>
 								</div>
-							</Teleport>
+							</template>
+						</div>
+					</div>
+				</div>
 
-							<!-- Fallback: render in transport card if slot doesn't exist -->
-							<div v-else class="midi-toolbar">
-								<label class="midi-label" for="midi-input-select">MIDI</label>
+				<!-- MIDI toolbar Teleport stays outside; only used when a slot exists -->
+				<template v-if="midiSupported && hasMidiTarget">
+					<Teleport to="#midi-toolbar-slot">
+						<div class="midi-toolbar">
+							<label class="midi-label" for="midi-input-select" style="text-align:right;">
+								MIDI Controller
+							</label>
+							<button v-if="!midiInitialized" type="button" class="pt-btn pt-btn-sm" @click="enableMidi">
+								{{ midiInitInProgress ? 'Enabling…' : 'Enable MIDI' }}
+							</button>
+							<template v-else>
 								<select id="midi-input-select" class="pt-select pt-select-sm" v-model="selectedMidiId"
 									@change="attachSelectedMidi">
 									<option value="">None</option>
@@ -102,15 +116,12 @@
 										{{ m.name }}
 									</option>
 								</select>
-
-								<span class="midi-led" :class="{ on: midiEnabled }" title="MIDI input status" />
-							</div>
-						</template>
-
-
-					</div>
-				</div>
+							</template>
+						</div>
+					</Teleport>
+				</template>
 			</section>
+
 
 			<!-- Step Sequencer -->
 			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
@@ -576,6 +587,9 @@ const midiInputs = ref<MidiInputInfo[]>([]);
 const selectedMidiId = ref<string>("");
 const midiEnabled = ref(false);
 
+const midiInitialized = ref(false);
+const midiInitInProgress = ref(false);
+
 function handleMidiMessage(e: WebMidi.MIDIMessageEvent) {
 	if (!midiEnabled.value) return;
 
@@ -623,7 +637,7 @@ function handleMidiMessage(e: WebMidi.MIDIMessageEvent) {
 }
 
 async function initMidiAccess() {
-	if (!midiSupported) return;
+	if (!midiSupported || midiInitialized.value) return;
 
 	try {
 		const access = await (navigator as any).requestMIDIAccess();
@@ -650,10 +664,24 @@ async function initMidiAccess() {
 		access.onstatechange = () => {
 			updateInputs();
 		};
+
+		// success
+		midiInitialized.value = true;
 	} catch (err) {
 		console.warn("MIDI access failed:", err);
 	}
 }
+
+async function enableMidi() {
+	if (!midiSupported || midiInitialized.value || midiInitInProgress.value) return;
+	midiInitInProgress.value = true;
+	try {
+		await initMidiAccess();
+	} finally {
+		midiInitInProgress.value = false;
+	}
+}
+
 
 function attachSelectedMidi() {
 	// Clear all previous listeners first
@@ -670,11 +698,6 @@ function attachSelectedMidi() {
 	info.input.onmidimessage = handleMidiMessage;
 	midiEnabled.value = true;
 }
-
-// Initialize MIDI once on mount
-onMounted(() => {
-	initMidiAccess();
-});
 
 // Clean up on unmount
 onBeforeUnmount(() => {
@@ -4254,51 +4277,58 @@ function resetUiToFactoryDefaults() {
 	image-rendering: pixelated;
 }
 
-/* Top-down 3D: inner bevel only */
+/* PLAY BUTTON BEGIN */
+
 .pt-btn.btn3d {
-	--r: 14px;
-	--bg-top: #5f8df1;
-	--bg-bot: #3f6ddc;
 	position: relative;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	min-width: 72px;
-	min-height: 56px;
+	min-width: 78px;
+	min-height: 58px;
 	padding: 0;
 	border: 0;
-	border-radius: var(--r);
+	border-radius: 12px;
+
+	--btn3d-h: var(--pt-accent, 210);
+	--btn3d-h2: var(--pt-accent-2, var(--btn3d-h));
+	--btn3d-top: hsl(var(--btn3d-h) 78% 66%);
+	--btn3d-mid: hsl(var(--btn3d-h2) 82% 58%);
+	--btn3d-bot: hsl(var(--btn3d-h2) 90% 46%);
+
+	background: radial-gradient(circle at 30% 20%,
+			color-mix(in oklab, var(--btn3d-top), white 16%) 0,
+			var(--btn3d-top) 38%,
+			var(--btn3d-mid) 80%,
+			var(--btn3d-bot) 100%);
 	color: #fff;
-	background: linear-gradient(180deg, var(--bg-top), var(--bg-bot));
-	box-shadow: 0 10px 20px rgba(0, 0, 0, .35);
-	transition: background 90ms ease, box-shadow 90ms ease;
+	box-shadow:
+		0 10px 24px rgba(0, 0, 0, 0.55),
+		0 0 0 1px rgba(0, 0, 0, 0.75),
+		inset 0 1px 0 rgba(255, 255, 255, 0.28);
+
+	cursor: pointer;
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.85), inset 0 2px 6px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+	transition:
+		transform 120ms ease,
+		filter 140ms ease,
+		background 160ms ease;
 }
 
-/* inner ring + bevel */
 .pt-btn.btn3d::before {
 	content: "";
 	position: absolute;
-	inset: 2px;
-	border-radius: calc(var(--r) - 2px);
-	box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .16), inset 0 8px 16px rgba(255, 255, 255, .10), inset 0 -10px 22px rgba(0, 0, 0, .28);
+	inset: 3px;
+	border-radius: inherit;
+	background:
+		radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.55), transparent 55%),
+		linear-gradient(180deg,
+			color-mix(in oklab, #ffffff, rgba(0, 0, 0, 0.35) 38%),
+			color-mix(in oklab, #b9c0d5, rgba(0, 0, 0, 0.6) 80%));
+	mix-blend-mode: screen;
+	opacity: 0.26;
 	pointer-events: none;
-	transition: box-shadow 90ms ease, opacity 90ms ease;
-}
-
-.pt-btn.btn3d:active,
-.pt-btn.btn3d.active {
-	background: linear-gradient(180deg, color-mix(in srgb, var(--bg-top) 92%, black 8%), color-mix(in srgb, var(--bg-bot) 92%, black 8%));
-	box-shadow: 0 9px 18px rgba(0, 0, 0, .32);
-}
-
-.pt-btn.btn3d:active::before,
-.pt-btn.btn3d.active::before {
-	box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .14), inset 0 6px 12px rgba(255, 255, 255, .09), inset 0 -12px 22px rgba(0, 0, 0, .38);
-}
-
-.pt-btn.btn3d,
-.pt-btn.btn3d::before {
-	transition: background 140ms ease, box-shadow 140ms ease;
+	transition: opacity 160ms ease;
 }
 
 .pt-btn.btn3d .btn-face {
@@ -4307,8 +4337,8 @@ function resetUiToFactoryDefaults() {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	padding: 14px 20px;
 	line-height: 1;
-	padding: 14px 18px;
 }
 
 .pt-btn.btn3d svg {
@@ -4317,14 +4347,39 @@ function resetUiToFactoryDefaults() {
 	fill: currentColor;
 }
 
+.pt-btn.btn3d:active {
+	transform: translateY(1px);
+	box-shadow:
+		0 8px 18px rgba(0, 0, 0, 0.6),
+		0 0 0 1px rgba(0, 0, 0, 0.85),
+		inset 0 2px 4px rgba(0, 0, 0, 0.45);
+	filter: brightness(0.98);
+}
+
 .pt-btn.btn3d:focus {
 	outline: none;
 }
 
 .pt-btn.btn3d:focus-visible {
-	outline: 3px solid #fff;
-	outline-offset: 2px;
+	outline: 2px solid #fff;
+	outline-offset: 3px;
 }
+
+.pt-btn.btn3d[aria-pressed="true"] {
+	box-shadow:
+		0 10px 24px rgba(0, 0, 0, 0.6),
+		0 0 0 1px rgba(0, 0, 0, 0.85),
+		inset 0 2px 6px rgba(0, 0, 0, 0.6),
+		inset 0 1px 0 rgba(255, 255, 255, 0.35);
+	filter: saturate(1.1) brightness(1.02);
+}
+
+.pt-btn.btn3d[aria-pressed="true"] .btn-face {
+	background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.18), transparent 60%);
+	border-radius: inherit;
+}
+
+/* PLAY BUTTON END */
 
 .tempo-wrap {
 	display: inline-flex;
@@ -4513,12 +4568,28 @@ function resetUiToFactoryDefaults() {
 	gap: 8px;
 }
 
+.midi-toolbar>.pt-btn-sm,
+.midi-toolbar>.pt-select-sm {
+	flex: 0 0 160px;
+	max-width: 160px;
+}
+
+.midi-toolbar>.pt-select-sm {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .midi-label {
 	font-size: 11px;
 	text-transform: uppercase;
 	letter-spacing: 0.1em;
 	font-weight: 600;
 	opacity: 0.8;
+
+	white-space: nowrap;
+	flex-shrink: 0;
+	text-align: right;
 }
 
 .midi-led {
@@ -4536,5 +4607,42 @@ function resetUiToFactoryDefaults() {
 
 .generators .pt-btn {
 	width: 100%;
+}
+
+.transport-row {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+
+.transport-right {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 18px;
+}
+
+.transport-logo {
+	max-width: 130px;
+	height: auto;
+	display: block;
+}
+
+@media (max-width: 720px) {
+	.transport-row {
+		flex-wrap: wrap;
+		row-gap: 10px;
+		justify-content: space-evenly;
+	}
+
+	.transport-right {
+		margin-left: 0;
+		width: 100%;
+		justify-content: space-evenly;
+	}
+
+	.midi-label {
+		display: none;
+	}
 }
 </style>

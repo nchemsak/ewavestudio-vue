@@ -48,6 +48,7 @@
 
             <!-- ARPEGGIATOR GRID  -->
             <div class="mm-group">
+                <h2 class="pt-title" style="padding-bottom: 15px;">Arpeggio</h2>
                 <div class="mm-grid">
                     <label class="mm-field">
                         <span class="mm-label">Pattern</span>
@@ -324,7 +325,7 @@ const poolSummary = computed(() => {
     if (keyScale.value === 'none') {
         const pref = preferredOctaveForPreset(rangePreset.value);
         if (pref === 'random') {
-            return `${keyRoot.value} random octaves (${PRESETS.wide.minOct}–${PRESETS.wide.maxOct})`;
+            return `${keyRoot.value} • random octaves`;
         }
         const semi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
         let oct = pref;
@@ -986,7 +987,7 @@ defineExpose({ openAdvanced, getUi, setUi });
 .mm-field {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    /* gap: 6px; */
     min-width: 0;
 }
 
@@ -999,6 +1000,9 @@ defineExpose({ openAdvanced, getUi, setUi });
 .mm-hint {
     margin-top: 6px;
     color: var(--pt-muted);
+    font-style: italic;
+    font-size: 13px;
+    text-align: center;
 }
 
 .mm-head-row2 {
@@ -1212,8 +1216,9 @@ defineExpose({ openAdvanced, getUi, setUi });
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: var(--gap);
-    margin: 6px 0 2px;
+    /* margin: 6px 0 2px; */
     padding: 6px 6px 8px;
+    padding-top: 0px;
     border-radius: var(--pt-radius-md);
     background: linear-gradient(180deg, transparent, rgb(0 0 0 / 0.05));
     --white1: color-mix(in oklab, white 94%, var(--pt-panel) 6%);

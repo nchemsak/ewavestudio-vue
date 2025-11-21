@@ -165,6 +165,10 @@ function shapeReset(): void {
 	.pt-tools-grid {
 		grid-template-columns: 1fr;
 	}
+
+	.pattern-tools .pt-btn-group {
+		justify-content: space-evenly;
+	}
 }
 
 .pt-btn-group {
@@ -172,7 +176,7 @@ function shapeReset(): void {
 	flex-wrap: wrap;
 	gap: 10px;
 	justify-content: space-between;
-	background-color: rgba(15, 18, 26, .50);
+	
 }
 
 .pt-btn {
@@ -199,5 +203,15 @@ function shapeReset(): void {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
+}
+
+.pt-section-title {
+	text-align: center;
+}
+
+.pt-section {
+	background-color: rgba(15, 18, 26, .70);
+	border-radius: var(--pt-radius);
+	
 }
 </style>

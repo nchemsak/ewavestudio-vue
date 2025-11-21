@@ -244,6 +244,7 @@ watch(
     display: grid;
     grid-template-rows: auto 8px auto;
     width: 100%;
+    opacity: .9;
 }
 
 .panel-top {
