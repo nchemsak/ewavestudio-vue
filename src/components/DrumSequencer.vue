@@ -242,7 +242,7 @@
 
 				<div class="module noise">
 					<div class="noise-tv-bg" :class="{ on: noiseEnabled }" :style="noiseModuleStyle">
-						<!-- NEW vertical ribbon toggle -->
+						<!-- vertical ribbon toggle -->
 						<button type="button" class="noise-ribbon" :class="{ 'is-on': noiseEnabled }"
 							:aria-pressed="noiseEnabled" aria-label="Toggle noise"
 							:style="{ '--noise-ribbon-accent': '#9C27B0' }" @click="noiseEnabled = !noiseEnabled">
@@ -1849,7 +1849,7 @@ const noiseBuffers: Record<NoiseKey, AudioBuffer | null> = {
 // continuous color morph 0..1  (0=brown → 1=violet)
 const noiseColor = ref(0.5);
 
-const noiseAmount = ref(0); // 0 = no noise, 1 = full noise
+const noiseAmount = ref(0.25); // 0 = no noise, 1 = full noise
 const noiseEnabled = ref(false);
 
 const noiseMask = ref<boolean[]>(Array(stepLength.value).fill(true));

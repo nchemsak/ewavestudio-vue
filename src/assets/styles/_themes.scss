@@ -77,8 +77,8 @@ $themes: (
     }
 }
 
-/* Base (root) — tokens + DEFAULT THEME = dark */
-$dark: map.get($themes, dark);
+/* Base (root) — tokens + DEFAULT THEME = synthwave */
+$base: map.get($themes, synthwave);
 
 :root {
     /* static tokens */
@@ -88,16 +88,16 @@ $dark: map.get($themes, dark);
     --pt-title-size: 1.4rem;
     --pt-label-size: 0.85rem;
 
-    /* default (dark) variables */
-    --pt-bg: #{map.get($dark, bg)};
-    --pt-panel: #{map.get($dark, panel)};
-    --pt-text: #{map.get($dark, text)};
-    --pt-muted: #{map.get($dark, muted)};
-    --pt-surface-1: #{map.get($dark, surface1)};
-    --pt-surface-2: #{map.get($dark, surface2)};
-    --pt-accent: #{map.get($dark, accent)};
-    --pt-accent-2: #{map.get($dark, accent2)};
-    --pt-accent-3: #{map.get($dark, accent3)};
+    /* default (synthwave) variables */
+    --pt-bg: #{map.get($base, bg)};
+    --pt-panel: #{map.get($base, panel)};
+    --pt-text: #{map.get($base, text)};
+    --pt-muted: #{map.get($base, muted)};
+    --pt-surface-1: #{map.get($base, surface1)};
+    --pt-surface-2: #{map.get($base, surface2)};
+    --pt-accent: #{map.get($base, accent)};
+    --pt-accent-2: #{map.get($base, accent2)};
+    --pt-accent-3: #{map.get($base, accent3)};
     --pt-btn-border: hsl(var(--pt-accent) 80% 60%);
     --pt-btn-glow: hsl(var(--pt-accent) 90% 60% / 0.4);
     --pt-header-fg: #fff;
@@ -106,11 +106,12 @@ $dark: map.get($themes, dark);
     --pt-hairline: rgba(255, 255, 255, 0.06);
     --pt-focus-ring: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / 0.35);
 
-    --cc-chevron: #{map.get($dark, chevron)};
+    --cc-chevron: #{map.get($base, chevron)};
 
-    --pt-tile-1: #{mix(#000, map.get($dark, surface1), 12%)};
-    --pt-tile-2: #{mix(#000, map.get($dark, surface2), 16%)};
+    --pt-tile-1: #{mix(#000, map.get($base, surface1), 12%)};
+    --pt-tile-2: #{mix(#000, map.get($base, surface2), 16%)};
 }
+
 
 @each $name, $t in $themes {
     @include emit-theme($name, $t);
@@ -352,7 +353,6 @@ $dark: map.get($themes, dark);
     color: var(--pt-text);
     border: 1px solid transparent;
     border-radius: var(--pt-radius-sm);
-    // padding: 8px 36px 8px 12px;
     line-height: 1.2;
     transition:
         box-shadow 0.25s ease,
@@ -536,9 +536,9 @@ $dark: map.get($themes, dark);
 }
 
 @media (max-width: 720px) {
-.pt-knob-row {
-    justify-content: space-evenly;
-}
+    .pt-knob-row {
+        justify-content: space-evenly;
+    }
 
 }
 
