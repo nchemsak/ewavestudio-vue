@@ -7,7 +7,7 @@
 					<div class="app-toolbar-left">
 						<ThemeToggle />
 					</div>
- 
+
 					<!-- MIDI selector will be teleported into here -->
 					<div id="midi-toolbar-slot" class="app-toolbar-right"></div>
 				</header>
@@ -45,5 +45,12 @@ useTheme();
 	align-items: center;
 	justify-content: flex-end;
 	gap: 8px;
+}
+
+@media (max-width: 768px) {
+	.app-toolbar {
+		display: none;
+	}
+
 }
 </style>

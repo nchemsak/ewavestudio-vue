@@ -276,4 +276,10 @@ watch(
     text-shadow: 0px 0px 8px black;
     color: white;
 }
+
+@media (max-width: 720px) {
+    .drive-pedal {
+        width: 50%;
+    }
+}
 </style>

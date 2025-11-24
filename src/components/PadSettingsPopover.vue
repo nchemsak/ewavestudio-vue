@@ -493,4 +493,23 @@ watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
 .kb-cell.has-sharp {
     padding-top: 0;
 }
+
+.pad-popover {
+    position: fixed;
+    width: clamp(320px, 48vw, 420px);
+    padding: 12px 14px;
+    max-height: none;
+    overflow: visible;
+}
+
+/* Mobile: center + prevent overflow */
+@media (max-width: 720px) {
+    .pad-popover {
+        left: 50% !important;
+        transform: translateX(-50%);
+        width: min(100vw - 24px, 420px);
+        max-height: calc(100vh - 32px);
+        overflow-y: auto;
+    }
+}
 </style>

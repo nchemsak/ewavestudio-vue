@@ -443,6 +443,12 @@
 	}
 }
 
+@media (max-width: 720px) {
+	.padTEST-grid {
+		row-gap: 35px;
+	}
+}
+
 // Numbers for SynthStepGrid dots
 .step-index {
 	position: absolute;
@@ -485,6 +491,14 @@
 	}
 }
 
+@media (max-width: 720px) {
+	.generators {
+		.pt-card {
+			background: linear-gradient(145deg, var(--pt-surface-1) #2a0f52, var(--pt-surface-2));
+
+		}
+	}
+}
 
 .gen-toolbar {
 	display: flex;

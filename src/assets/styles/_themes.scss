@@ -535,6 +535,13 @@ $dark: map.get($themes, dark);
     min-width: 0;
 }
 
+@media (max-width: 720px) {
+.pt-knob-row {
+    justify-content: space-evenly;
+}
+
+}
+
 .pt-switch {
     position: relative;
     display: inline-block;

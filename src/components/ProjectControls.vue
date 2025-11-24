@@ -16,8 +16,8 @@
                     </button>
 
                     <div class="pc-menu-row pc-has-sub" role="menuitem" aria-haspopup="menu"
-                        :aria-expanded="showOpen ? 'true' : 'false'" @mouseenter="openSub(true)"
-                        @mouseleave="openSub(false)">
+                        :aria-expanded="showOpen ? 'true' : 'false'" @pointerenter="onSubPointerEnter"
+                        @pointerleave="onSubPointerLeave">
                         <button class="pc-sub-btn" @click.stop="toggleOpenMenu">
                             Open ▸
                         </button>
@@ -35,7 +35,9 @@
                                         <span class="pc-title">
                                             {{ truncateTitle(p.meta?.name || 'Untitled') }}
                                         </span>
-                                        <span class="pc-meta">{{ formatDate(p.meta?.updatedAt) }}</span>
+                                        <span class="pc-meta">
+                                            {{ formatDate(p.meta?.updatedAt) }}
+                                        </span>
                                     </button>
 
                                     <button class="pc-del" title="Delete"
@@ -60,6 +62,7 @@
                     <button class="pc-menu-row" role="menuitem" @click="triggerImport">
                         Import file
                     </button>
+
                     <button class="pc-menu-row" role="menuitem" @click="exportWavFromMenu"
                         :disabled="!store.loaded || props.exporting" :aria-busy="props.exporting ? 'true' : 'false'">
                         <span v-if="props.exporting">Exporting…</span>
@@ -92,6 +95,9 @@
         </div>
     </div>
 </template>
+
+
+
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue';
@@ -158,6 +164,18 @@ function toggleOpenMenu() {
 function openSub(visible: boolean) {
     showOpen.value = visible;
     if (visible) refreshList();
+}
+
+function onSubPointerEnter(e: PointerEvent) {
+    // Only auto-open on mouse hover, not touch/pen.
+    if (e.pointerType === 'touch' || e.pointerType === 'pen') return;
+    openSub(true);
+}
+
+function onSubPointerLeave(e: PointerEvent) {
+    // Only auto-close on mouse hover, not touch/pen.
+    if (e.pointerType === 'touch' || e.pointerType === 'pen') return;
+    openSub(false);
 }
 
 async function openProject(id: string) {
@@ -624,5 +642,48 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 .pc-hidden {
     display: none;
+}
+
+@media (max-width: 768px) {
+    .pc-btn {
+        min-width: auto;
+        font-size: 11px;
+    }
+
+    .pc-status {
+        display: none;
+    }
+
+    .pc-actions {
+        padding-right: 0px;
+    }
+
+    .pc-name {
+        font-size: 11px;
+    }
+
+    .pc-open-submenu {
+        position: fixed;
+        top: 12vh;
+        left: 50%;
+        transform: translateX(-50%);
+        inline-size: min(92vw, 360px);
+        max-height: 70vh;
+        overflow-y: auto;
+        z-index: 1100;
+    }
+
+    .pc-row {
+        grid-template-columns: 1fr auto;
+    }
+
+    .pc-menu-item {
+        grid-template-columns: minmax(0, 1fr);
+        font-size: 12px;
+    }
+
+    .pc-meta {
+        display: none;
+    }
 }
 </style>

@@ -2,9 +2,10 @@
 <template>
 	<div class="pattern-tools" :class="props.currentTheme">
 		<div class="pt-tools-grid">
+			<!-- Step Fills -->
 			<section class="pt-section">
 				<div class="pt-section-title">Step Fills</div>
-				<div class="pt-btn-group" role="group" aria-label="Step fills">
+				<div class="pt-btn-group pt-btn-grid-6" role="group" aria-label="Step fills">
 					<button class="pt-btn" @click="fillAll">All</button>
 					<button class="pt-btn" @click="fillEvery2">Every 2</button>
 					<button class="pt-btn" @click="fillEvery4">Every 4</button>
@@ -14,9 +15,10 @@
 				</div>
 			</section>
 
+			<!-- Humanize -->
 			<section class="pt-section" v-if="props.velocities">
 				<div class="pt-section-title">Humanize</div>
-				<div class="pt-btn-group" role="group" aria-label="Velocity shapes">
+				<div class="pt-btn-group pt-btn-grid-6" role="group" aria-label="Velocity shapes">
 					<button class="pt-btn" @click="shapePeaks">Peaks</button>
 					<button class="pt-btn" @click="shapeStairs4">Stairs</button>
 					<button class="pt-btn" @click="shapeRamp">Ramp</button>
@@ -26,9 +28,10 @@
 				</div>
 			</section>
 
+			<!-- Octave -->
 			<section class="pt-section">
 				<div class="pt-section-title">Octave</div>
-				<div class="pt-btn-group" role="group" aria-label="Octave">
+				<div class="pt-btn-group pt-btn-octave" role="group" aria-label="Octave">
 					<button class="pt-btn octave-btn" @click="shiftOctave(-1)">↓</button>
 					<button class="pt-btn octave-btn" @click="shiftOctave(+1)">↑</button>
 				</div>
@@ -176,7 +179,7 @@ function shapeReset(): void {
 	flex-wrap: wrap;
 	gap: 10px;
 	justify-content: space-between;
-	
+
 }
 
 .pt-btn {
@@ -193,6 +196,7 @@ function shapeReset(): void {
 }
 
 .pt-inline {
+	display: block;
 	margin-top: 12px;
 	color: var(--pt-muted);
 	font-size: 0.7rem;
@@ -212,6 +216,37 @@ function shapeReset(): void {
 .pt-section {
 	background-color: rgba(15, 18, 26, .70);
 	border-radius: var(--pt-radius);
-	
+
 }
+
+@media (max-width: 720px) {
+	.pt-inline {
+		display: none;
+	}
+
+	.pt-tools-grid {
+		grid-template-columns: 1fr;
+	}
+
+	/* Step Fills / Humanize: 2 rows of 3 */
+	.pattern-tools .pt-btn-grid-6 {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 8px 10px;
+		justify-content: stretch;
+	}
+
+	.pattern-tools .pt-btn-grid-6 .pt-btn {
+		width: 100%;
+	}
+
+	/* Octave: keep just 2 buttons, centered, not stretched */
+	.pattern-tools .pt-btn-octave {
+		display: flex;
+		justify-content: center;
+		gap: 12px;
+	}
+
+}
+
 </style>

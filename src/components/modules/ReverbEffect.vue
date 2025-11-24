@@ -236,4 +236,10 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	text-shadow: 0px 0px 8px black;
 	color: white;
 }
+
+@media (max-width: 720px) {
+    .reverb-pedal {
+        width: 50%;
+    }
+}
 </style>

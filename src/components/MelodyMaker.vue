@@ -882,25 +882,46 @@ function bakeArp(): void {
     emit('update:frequencies', out);
 }
 
-//  UI state
 const advancedOpen = ref(false);
 const advPos = ref<{ x: number; y: number } | null>(null);
 
 function openAdvanced(e?: MouseEvent) {
     const target = e?.currentTarget as HTMLElement | null;
-    const parent = document.querySelector('.melody-maker') as HTMLElement | null;
+    const parent =
+        (target?.closest('.melody-maker') as HTMLElement | null) ||
+        (document.querySelector('.melody-maker') as HTMLElement | null);
+
+    let x = 24;
+    let y = 24;
+
     if (target && parent) {
-        const r = target.getBoundingClientRect();
-        const p = parent.getBoundingClientRect();
-        advPos.value = {
-            x: Math.round(r.right - p.left + 8),
-            y: Math.round(r.top - p.top)
-        };
-    } else {
-        advPos.value = { x: 24, y: 24 };
+        const triggerRect = target.getBoundingClientRect();
+        const parentRect = parent.getBoundingClientRect();
+
+        // Desktop behavior: open to the right of the trigger
+        x = Math.round(triggerRect.right - parentRect.left + 8);
+        y = Math.round(triggerRect.top - parentRect.top);
+
+        // Mobile-only clamp so the menu stays inside the Melody Maker container
+        if (typeof window !== 'undefined' && window.innerWidth <= 720) {
+            const MENU_WIDTH = 280;
+            const PADDING = 8;
+
+            const maxX = Math.max(
+                PADDING,
+                parentRect.width - MENU_WIDTH - PADDING
+            );
+
+            if (x > maxX) x = maxX;
+            if (x < PADDING) x = PADDING;
+        }
     }
+
+    advPos.value = { x, y };
     advancedOpen.value = true;
 }
+
+
 
 const applyScope = ref<'all' | 'active'>('active');
 
@@ -1347,10 +1368,10 @@ defineExpose({ openAdvanced, getUi, setUi });
     outline: none;
 }
 
-@media (max-width: 560px) {
+/* @media (max-width: 560px) {
     .mm-kb {
         --whiteH: 50px;
         --blackH: 30px;
     }
-}
+} */
 </style>

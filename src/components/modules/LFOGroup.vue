@@ -173,14 +173,35 @@ const advPos = ref<{ x: number; y: number } | null>(null);
 
 function openAdvanced(e?: MouseEvent): void {
     const target = e?.currentTarget as HTMLElement | null;
-    const parent = document.querySelector('.lfo-container') as HTMLElement | null;
+    // Prefer the LFO container that actually owns the trigger
+    const parent =
+        (target?.closest('.lfo-container') as HTMLElement | null) ||
+        (document.querySelector('.lfo-container') as HTMLElement | null);
+
+    // Fallback defaults
+    let x = 24;
+    let y = 24;
+
     if (target && parent) {
-        const r = target.getBoundingClientRect();
-        const p = parent.getBoundingClientRect();
-        advPos.value = { x: Math.round(r.right - p.left + 8), y: Math.round(r.top - p.top) };
-    } else {
-        advPos.value = { x: 24, y: 24 };
+        const triggerRect = target.getBoundingClientRect();
+        const parentRect = parent.getBoundingClientRect();
+
+        // Initial "open to the right of trigger" position (desktop behavior)
+        x = Math.round(triggerRect.right - parentRect.left + 8);
+        y = Math.round(triggerRect.top - parentRect.top);
+
+        // On small screens only, clamp inside the LFO container
+        if (typeof window !== 'undefined' && window.innerWidth <= 720) {
+            const MENU_WIDTH = 280;
+            const PADDING = 8;
+
+            const maxX = Math.max(PADDING, parentRect.width - MENU_WIDTH - PADDING);
+            if (x > maxX) x = maxX;
+            if (x < PADDING) x = PADDING;
+        }
     }
+
+    advPos.value = { x, y };
     advancedOpen.value = true;
 }
 
@@ -497,7 +518,6 @@ svg {
     gap: 6px;
     padding: 4px 8px;
     font-size: 12px;
-
 }
 
 .lfo-wave-btn svg {
@@ -648,6 +668,16 @@ svg {
     position: fixed;
     inset: 0;
     z-index: 999;
+}
+
+@media (max-width: 720px) {
+    .lfo-power-tile {
+        min-height: auto;
+    }
+
+    .pt-knob-row {
+        justify-content: space-evenly;
+    }
 }
 
 @media (max-width: 440px) {

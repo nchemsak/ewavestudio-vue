@@ -8,8 +8,8 @@
 
 		<div class="pt-knob-row" :class="{ 'is-unison-off': !localEnabled }">
 			<div class="position-relative text-center">
-				<Knob v-model="localVoices" size="small" :min="1" :max="6" :step="1" label="Voices" :color="color"
-					@knobStart="activeKnob = 'voices'" @knobEnd="activeKnob = null" />
+				<Knob v-model="localVoices" size="small" :min="1" :max="maxVoices" :step="1" label="Voices"
+					:color="color" @knobStart="activeKnob = 'voices'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'voices'" class="custom-tooltip">
 					{{ localVoices }}
 				</span>
@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 import UnisonButton from '../UnisonButton.vue';
@@ -75,9 +75,14 @@ const localSpread = ref<number>(props.spread);
 
 /* emit updates (clamped just in case) */
 watch(localEnabled, (v) => emit('update:enabled', v));
-watch(localVoices, (v) =>
-	emit('update:voices', Math.max(1, Math.min(6, Math.round(v))))
-);
+
+watch(localVoices, (v) => {
+	const cap = maxVoices.value;
+	const clamped = Math.max(1, Math.min(cap, Math.round(v)));
+	if (clamped !== v) localVoices.value = clamped;
+	emit('update:voices', clamped);
+});
+
 watch(localDetune, (v) =>
 	emit('update:detune', Math.max(0, Math.min(100, Math.round(v))))
 );
@@ -92,12 +97,15 @@ watch(
 		localEnabled.value = v;
 	}
 );
+
 watch(
 	() => props.voices,
 	(v) => {
-		localVoices.value = v;
+		const cap = maxVoices.value;
+		localVoices.value = Math.max(1, Math.min(cap, v));
 	}
 );
+
 watch(
 	() => props.detune,
 	(v) => {
@@ -110,6 +118,38 @@ watch(
 		localSpread.value = v;
 	}
 );
+
+
+const isMobile = ref(false);
+
+watch(isMobile, () => {
+	const cap = maxVoices.value;
+	if (localVoices.value > cap) {
+		localVoices.value = cap;
+		emit('update:voices', cap);
+	}
+});
+
+function updateIsMobile() {
+	if (typeof window === 'undefined') return;
+	isMobile.value = window.matchMedia('(max-width: 768px)').matches;
+}
+
+onMounted(() => {
+	updateIsMobile();
+	if (typeof window !== 'undefined') {
+		window.addEventListener('resize', updateIsMobile);
+	}
+});
+
+onBeforeUnmount(() => {
+	if (typeof window !== 'undefined') {
+		window.removeEventListener('resize', updateIsMobile);
+	}
+});
+
+const maxVoices = computed(() => (isMobile.value ? 3 : 6));
+
 </script>
 
 <style scoped>

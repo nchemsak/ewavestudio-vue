@@ -122,7 +122,6 @@
 				</template>
 			</section>
 
-
 			<!-- Step Sequencer -->
 			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
 				<div class="pt-subheader step-sequencer-subheader">
@@ -509,6 +508,27 @@ import { generateReverbIR } from '../audio/reverb/generateIr';
 // IMPORTS END
 
 const resetNonce = ref(0);
+const isMobile = ref(false);
+
+function updateIsMobile() {
+	if (typeof window === 'undefined') return;
+	isMobile.value = window.matchMedia('(max-width: 768px)').matches;
+}
+
+onMounted(() => {
+	updateIsMobile();
+	if (typeof window !== 'undefined') {
+		window.addEventListener('resize', updateIsMobile);
+	}
+});
+
+onBeforeUnmount(() => {
+	if (typeof window !== 'undefined') {
+		window.removeEventListener('resize', updateIsMobile);
+	}
+});
+
+const unisonMaxVoices = computed(() => (isMobile.value ? 3 : 6));
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2132,6 +2152,20 @@ const unisonVoices = ref(3);   // 1–6
 const detuneCents = ref(12);  // 0–100 cents per step
 const stereoSpread = ref(50);  // 0–100 %
 
+watch(unisonVoices, (v) => {
+	const cap = unisonMaxVoices.value;
+	let clamped = v;
+	if (v < 1) clamped = 1;
+	if (v > cap) clamped = cap;
+	if (clamped !== v) unisonVoices.value = clamped;
+});
+
+watch(unisonMaxVoices, (cap) => {
+	if (unisonVoices.value > cap) {
+		unisonVoices.value = cap;
+	}
+});
+
 // Unison / Detune END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -2193,10 +2227,20 @@ const isExporting = ref(false);
 const exportState = computed<StepSequencerState>(() => {
 	const inst = synthInstrument.value!;
 	const stepsCount = stepLength.value;
-	const wf = (idx: number) => (inst as any).waveforms?.[idx] ?? (selectedWaveform.value as OscillatorType);
+
+	const wf = (idx: number) =>
+		(inst as any).waveforms?.[idx] ?? (selectedWaveform.value as OscillatorType);
 
 	// Derive LFO rate in Hz if synced
-	const rateHz = lfoSync.value ? divisionToHz(lfoDivision.value, tempo.value) : lfoRate.value;
+	const rateHz = lfoSync.value
+		? divisionToHz(lfoDivision.value, tempo.value)
+		: lfoRate.value;
+
+	// Clamp unison voices here (can't use const inside an object literal)
+	const cappedVoices = Math.max(
+		1,
+		Math.min(unisonMaxVoices.value, unisonVoices.value)
+	);
 
 	return {
 		bpm: tempo.value,
@@ -2208,23 +2252,33 @@ const exportState = computed<StepSequencerState>(() => {
 		pattern: {
 			active: [...inst.steps],
 			velocities: [...inst.velocities],
-			pitches: [...(inst.pitches ?? Array(stepsCount).fill(currentDefaultHz.value))],
+			pitches: [
+				...(inst.pitches ?? Array(stepsCount).fill(currentDefaultHz.value)),
+			],
 			waveforms: Array.from({ length: stepsCount }, (_, i) => wf(i)),
 		},
 
 		synth: {
-			envelope: { enabled: envelopeEnabled.value, attackMs: ampEnvAttackMs.value, decayMs: ampEnvDecayMs.value },
-			filter: { enabled: filterEnabled.value, cutoff: filterCutoff.value, resonance: filterResonance.value },
+			envelope: {
+				enabled: envelopeEnabled.value,
+				attackMs: ampEnvAttackMs.value,
+				decayMs: ampEnvDecayMs.value,
+			},
+			filter: {
+				enabled: filterEnabled.value,
+				cutoff: filterCutoff.value,
+				resonance: filterResonance.value,
+			},
 			noise: {
 				enabled: noiseEnabled.value,
 				color: noiseColor.value,
 				type: (() => {
 					const t = noiseColor.value;
-					if (t < 0.125) return 'brown';
-					if (t < 0.375) return 'pink';
-					if (t < 0.625) return 'white';
-					if (t < 0.875) return 'blue';
-					return 'violet';
+					if (t < 0.125) return "brown";
+					if (t < 0.375) return "pink";
+					if (t < 0.625) return "white";
+					if (t < 0.875) return "blue";
+					return "violet";
 				})(),
 				amount: noiseAmount.value,
 				mask: [...noiseMask.value],
@@ -2232,7 +2286,13 @@ const exportState = computed<StepSequencerState>(() => {
 				burstMs: noiseBurstMs.value,
 			} as any,
 
-			unison: { enabled: unisonEnabled.value, voices: unisonVoices.value, detuneCents: detuneCents.value, stereoSpread: stereoSpread.value },
+			unison: {
+				enabled: unisonEnabled.value,
+				voices: cappedVoices,
+				detuneCents: detuneCents.value,
+				stereoSpread: stereoSpread.value,
+			},
+
 			lfo: {
 				enabled: lfoEnabled.value,
 				target: lfoTarget.value as any,
@@ -2243,25 +2303,53 @@ const exportState = computed<StepSequencerState>(() => {
 				retrigger: lfoRetrigger.value,
 				bipolar: lfoBipolar.value,
 			},
-			fm: { enabled: fmEnabled.value, modFreq: fmModFreq.value, index: fmIndex.value, ratio: fmRatio.value },
-			pitchEnv: { enabled: pitchEnvEnabled.value, semitones: pitchEnvSemitones.value, decayMs: pitchEnvDecayMs.value, mode: pitchMode.value },
+
+			fm: {
+				enabled: fmEnabled.value,
+				modFreq: fmModFreq.value,
+				index: fmIndex.value,
+				ratio: fmRatio.value,
+			},
+
+			pitchEnv: {
+				enabled: pitchEnvEnabled.value,
+				semitones: pitchEnvSemitones.value,
+				decayMs: pitchEnvDecayMs.value,
+				mode: pitchMode.value,
+			},
 		},
 
 		fx: {
-			delay: { enabled: delayEnabled.value, sync: delaySync.value, time: delayTime.value, feedback: delayFeedback.value, mix: delayMix.value, toneEnabled: delayToneEnabled.value, toneHz: delayToneHz.value, toneType: delayToneType.value },
-			drive: { enabled: driveEnabled.value, type: 'overdrive', amount: driveAmount.value, tone: driveTone.value, mix: driveMix.value },
+			delay: {
+				enabled: delayEnabled.value,
+				sync: delaySync.value,
+				time: delayTime.value,
+				feedback: delayFeedback.value,
+				mix: delayMix.value,
+				toneEnabled: delayToneEnabled.value,
+				toneHz: delayToneHz.value,
+				toneType: delayToneType.value,
+			},
+			drive: {
+				enabled: driveEnabled.value,
+				type: "overdrive",
+				amount: driveAmount.value,
+				tone: driveTone.value,
+				mix: driveMix.value,
+			},
 			reverb: {
 				enabled: reverbEnabled.value,
 				mix: reverbMix.value,
 				decay: reverbDecay.value,
 				tone: reverbTone.value,
 			},
-
 		},
+
 		sampleRate: audioCtx?.sampleRate || 48000,
 		tailSeconds: 5.0,
 	};
 });
+
 
 // Export to wav file END
 
@@ -2653,7 +2741,11 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 	}
 
 	//  UNISON 
-	const voices = unisonEnabled.value ? Math.max(1, Math.min(6, unisonVoices.value)) : 1;
+	// const voices = unisonEnabled.value ? Math.max(1, Math.min(6, unisonVoices.value)) : 1;
+	const voices = unisonEnabled.value
+		? Math.max(1, Math.min(unisonMaxVoices.value, unisonVoices.value))
+		: 1;
+
 	const detuneStep = (voices > 1) ? detuneCents.value : 0;
 	const spreadPct = (voices > 1) ? stereoSpread.value : 0;
 	const normIndex = (i, n) => (n === 1) ? 0 : ((i / (n - 1)) * 2 - 1);
@@ -3323,7 +3415,12 @@ function applySnapshot(s: any) {
 
 	if (syn.unison) {
 		unisonEnabled.value = !!syn.unison.enabled;
-		if (typeof syn.unison.voices === 'number') unisonVoices.value = syn.unison.voices;
+		// if (typeof syn.unison.voices === 'number') unisonVoices.value = syn.unison.voices;
+		if (typeof syn.unison.voices === 'number') {
+			const cap = unisonMaxVoices.value;
+			const raw = syn.unison.voices;
+			unisonVoices.value = Math.max(1, Math.min(cap, raw));
+		}
 		if (typeof syn.unison.detuneCents === 'number') detuneCents.value = syn.unison.detuneCents;
 		if (typeof syn.unison.stereoSpread === 'number') stereoSpread.value = syn.unison.stereoSpread;
 	}
@@ -4154,9 +4251,9 @@ function resetUiToFactoryDefaults() {
 	--w: 80px;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 720px) {
 	.wave-row :deep(.wave-btn) {
-		--w: 84px;
+		--w: 65px;
 	}
 }
 
@@ -4202,6 +4299,8 @@ function resetUiToFactoryDefaults() {
 	opacity: .9;
 	padding: 8px 8px 6px;
 }
+
+
 
 .mm-opt {
 	display: flex;
@@ -4268,6 +4367,31 @@ function resetUiToFactoryDefaults() {
 	inset: 0;
 	z-index: 2000;
 }
+
+@media (max-width: 768px) {
+	.mm-menu {
+		position: fixed;
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		width: calc(100vw - 32px);
+		/* 16px padding on each side */
+		max-width: 360px;
+		max-height: 80vh;
+		overflow-y: auto;
+		right: auto;
+		bottom: auto;
+	}
+
+	/* Override the "anchor to right" behavior just for mobile */
+	.mm-menu.is-local {
+		left: 50%;
+		top: 50%;
+		right: auto;
+		bottom: auto;
+	}
+}
+
 
 .fx-adv-anchor {
 	position: relative;
@@ -4643,6 +4767,21 @@ function resetUiToFactoryDefaults() {
 
 	.midi-label {
 		display: none;
+	}
+
+	.drum-sequencer {
+		background: none;
+		box-shadow: none;
+	}
+
+	.module.sound .split-two {
+		display: flex;
+		gap: 10px;
+	}
+
+	.module.sound .split-two>* {
+		flex: 1 1 0;
+		min-width: 0;
 	}
 }
 </style>
