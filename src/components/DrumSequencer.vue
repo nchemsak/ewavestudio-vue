@@ -57,7 +57,10 @@
 						<div class="transport-right">
 							<img class="transport-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral logo">
 							<!-- Play/Stop -->
-							<button type="button" class="pt-btn btn-lg btn3d" @click="togglePlay"
+							<!-- <button type="button" class="pt-btn btn-lg btn3d" @click="togglePlay"
+								:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
+								:aria-pressed="isPlaying"> -->
+							<button type="button" class="pt-btn btn-lg btn3d" @click="onPlayClick"
 								:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
 								:aria-pressed="isPlaying">
 								<span class="btn-face">
@@ -70,8 +73,6 @@
 								</span>
 								<span class="visually-hidden">{{ isPlaying ? 'Stop' : 'Play' }}</span>
 							</button>
-
-
 
 							<!-- MIDI fallback lives in the right cluster -->
 							<template v-if="midiSupported && !hasMidiTarget">
@@ -509,6 +510,16 @@ import { generateReverbIR } from '../audio/reverb/generateIr';
 
 const resetNonce = ref(0);
 const isMobile = ref(false);
+
+// GOOGLE ANALYTICS BEGIN
+function trackEvent(event: string, params: Record<string, any> = {}) {
+	if (typeof window === 'undefined') return;
+	const w = window as any;
+	if (typeof w.gtag === 'function') {
+		w.gtag('event', event, params);
+	}
+}
+// GOOGLE ANALYTICS END
 
 function updateIsMobile() {
 	if (typeof window === 'undefined') return;
@@ -2904,6 +2915,22 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 
 delayDry.connect(masterGain);
 delayWet.connect(masterGain);
+
+// GOOGLE ANALYTICS BEGIN
+function onPlayClick() {
+	// We want to log what the user *is about to do* based on current state.
+	const nextAction = isPlaying.value ? 'stop' : 'play';
+
+	trackEvent('play_toggle_click', {
+		action: nextAction,          // 'play' or 'stop'
+		bpm: tempo.value,
+		swing: swing.value,
+		steps: stepLength.value,
+	});
+
+	togglePlay();
+}
+// GOOGLE ANALYTICS END
 
 async function togglePlay() {
 	if (isPlaying.value) {

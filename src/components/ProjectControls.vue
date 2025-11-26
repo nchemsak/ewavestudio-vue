@@ -131,7 +131,22 @@ const lastSavedName = ref<string>('');
 const props = defineProps<{ exporting?: boolean }>();
 const emit = defineEmits<{ (e: 'export-wav'): void }>();
 
+// GOOGLE ANALYTICS
+function trackEvent(event: string, params: Record<string, any> = {}) {
+    if (typeof window === 'undefined') return;
+    const w = window as any;
+    if (typeof w.gtag === 'function') {
+        w.gtag('event', event, params);
+    }
+}
+
 function exportWavFromMenu() {
+    // Analytics: user clicked "Export WAV"
+    trackEvent('export_wav_click', {
+        project_id: store.projectId,
+        project_name: store.name || '(unnamed)',
+    });
+
     closeAllMenus();
     emit('export-wav');
 }

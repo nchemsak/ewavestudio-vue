@@ -18,6 +18,7 @@
 			</div>
 		</div>
 	</div>
+	<a href="/" class="return">Return to Ephemeral Wave</a>
 </template>
 
 <script setup>
@@ -45,6 +46,25 @@ useTheme();
 	align-items: center;
 	justify-content: flex-end;
 	gap: 8px;
+}
+
+.return {
+	position: absolute;
+	top: 50%;
+	left: 10px;
+}
+
+@media (max-width: 1800px) {
+	.return {
+        position: relative;
+        text-align: center;
+        display: block;
+        left: 0px;
+        margin-top: 10px;
+        top: auto;
+        margin-bottom: 25px;
+        padding: 5px;
+	}
 }
 
 @media (max-width: 768px) {
