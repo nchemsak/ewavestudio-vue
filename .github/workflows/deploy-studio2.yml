@@ -1,0 +1,74 @@
+# Builds the app and uploads it to ephemeralwave.com/studio2/ whenever main changes
+# (for example when a pull request is merged). It can also be started by hand from the
+# Actions tab ("Run workflow"). It never touches /studio/, which holds the original app.
+#
+# Needs three repository secrets (Settings → Secrets and variables → Actions):
+#   FTP_HOST      the FTP server, as in FileZilla's Site Manager
+#   FTP_USER      the FTP username
+#   FTP_PASSWORD  the FTP password
+# The upload requires FTP over TLS, so the password is never sent unencrypted.
+
+name: Deploy to /studio2/
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time; a newer one waits for the running one to finish
+concurrency:
+  group: deploy-studio2
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Check the build is for /studio2/
+        run: |
+          if ! grep -q '/studio2/assets/' dist/index.html; then
+            echo "dist/index.html doesn't load its files from /studio2/. Check 'base' in vite.config.js."
+            exit 1
+          fi
+
+      - name: Install lftp
+        run: sudo apt-get update -q && sudo apt-get install -y -q lftp
+
+      # New files go up first and stale ones are deleted last, so visitors never get an
+      # index.html that points at files that aren't there yet. Deleting is limited to
+      # studio2/assets/, which only ever holds build output.
+      - name: Upload to /public_html/studio2/
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          lftp --env-password -u "$FTP_USER" "ftp://$FTP_HOST" <<'EOF'
+          set cmd:fail-exit true
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set ssl:verify-certificate true
+          set net:max-retries 3
+          set net:timeout 30
+          mirror --reverse --parallel=4 dist/assets /public_html/studio2/assets
+          mirror --reverse --parallel=4 --exclude-glob assets/ dist /public_html/studio2
+          mirror --reverse --delete dist/assets /public_html/studio2/assets
+          bye
+          EOF

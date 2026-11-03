@@ -1,5 +1,6 @@
 // src/lib/storage/db.ts
 import { openDB, DBSchema } from 'idb';
+import { STORAGE_NS } from './namespace';
 
 export interface ProjectSnapshot {
     version: number;
@@ -16,7 +17,8 @@ interface EWaveDb extends DBSchema {
     };
 }
 
-const DB_NAME = 'ewave-db';
+// Its own database per folder; see namespace.ts
+const DB_NAME = `${STORAGE_NS}-db`;
 const DB_VER = 1;
 
 export async function getDb() {

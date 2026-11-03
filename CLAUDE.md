@@ -1,8 +1,10 @@
 # Ephemeral Wave Studio
 
-Browser-based 16-step percussion synthesizer and step sequencer, live at
-https://www.ephemeralwave.com/studio/. Everything runs client-side with the Web Audio API;
-there is no backend. Features: one 16-step synth lane with per-step pitch, velocity and
+Browser-based 16-step percussion synthesizer and step sequencer. This repo is **version 2**,
+served from https://www.ephemeralwave.com/studio2/. The original version stays at
+https://www.ephemeralwave.com/studio/ and is never updated or overwritten, so the two can
+be compared; never deploy this code to `/studio/`. Everything runs client-side with the Web
+Audio API; there is no backend. Features: one 16-step synth lane with per-step pitch, velocity and
 waveform; amp envelope, pitch envelope, filter, noise, FM, unison and LFO; delay, overdrive
 and reverb; Web MIDI note input; a random melody and arpeggio maker; an oscilloscope,
 spectrogram, tuner and envelope display; WAV export; and projects saved in IndexedDB with JSON
@@ -19,9 +21,9 @@ Tested with Node 22.19 on Windows (Git Bash). Vite 7 needs Node 20.19+ or 22.12+
 
 ```bash
 npm install        # or `npm ci` for an exact install from package-lock.json
-npm run dev        # dev server → open http://localhost:5173/studio/
+npm run dev        # dev server → open http://localhost:5173/studio2/
 npm run build      # production build into dist/
-npm run preview    # serve dist/ locally → http://localhost:4173/studio/
+npm run preview    # serve dist/ locally → http://localhost:4173/studio2/
 ```
 
 There are no tests, linter or type-checker yet. `npm run build` does **not** type-check:
@@ -29,29 +31,28 @@ Vite strips the TypeScript types without checking them, and there is no `tsconfi
 The build prints hundreds of Sass deprecation warnings that come from Bootstrap's SCSS.
 They are expected, and the build still succeeds.
 
-## Deploy (manual, FTP)
+## Deploy (automatic, to /studio2/)
 
-`vite.config.js` sets `base: '/studio/'`, so the built `index.html` loads its files from
-`/studio/assets/...`, `/studio/audio/...` and so on. The site must therefore be served from
-the `/studio/` folder of the web root. Deploy steps:
+`vite.config.js` sets `base: '/studio2/'`, so the built `index.html` loads its files from
+`/studio2/assets/...`, `/studio2/audio/...` and so on. On the server that folder is
+`/public_html/studio2/` (the WordPress site lives in `/public_html/`; version 1 in
+`/public_html/studio/`).
 
-1. `git pull` and make sure the working tree is the version you want to ship.
-2. `npm ci` (only needed when `package-lock.json` changed).
-3. `npm run build`
-4. Optional: `npm run preview`, open http://localhost:4173/studio/, and check that sound plays.
-5. In FileZilla, open the remote `/studio/` folder (the one served as
-   `https://www.ephemeralwave.com/studio/`).
-6. Upload the **contents** of local `dist/` (not the `dist` folder itself) into remote
-   `/studio/`, overwriting existing files. After uploading, the remote folder holds
-   `index.html`, `assets/`, `audio/`, `images/` and `ephemeral-wave-128.png`.
-7. Optional cleanup: remove old `assets/index-*.js`, `assets/index-*.css` and `assets/*.png` files
-   on the server that the new `index.html` no longer references. File names are content-hashed,
-   so old files do no harm but pile up.
-8. Hard-refresh https://www.ephemeralwave.com/studio/ (Ctrl+F5) and press Play.
+Every push to `main` (for example merging a PR) runs `.github/workflows/deploy-studio2.yml`:
+it runs `npm ci` and `npm run build`, checks the build is for `/studio2/`, then uploads `dist/`
+to `/public_html/studio2/` with `lftp`. It uploads new assets before `index.html`, and deletes
+stale files only inside `studio2/assets/`. It needs the repository secrets `FTP_HOST`,
+`FTP_USER` and `FTP_PASSWORD`, and refuses to connect without TLS (FTP over TLS) or with a
+certificate that doesn't match `FTP_HOST`. The Actions tab shows each run, and its
+"Run workflow" button re-deploys `main` by hand. After a deploy, hard-refresh
+https://www.ephemeralwave.com/studio2/ (Ctrl+F5).
+
+Manual fallback with FileZilla: `npm run build`, then upload the **contents** of `dist/` (not
+the folder itself) into `/public_html/studio2/`. Never upload to `/public_html/studio/`.
 
 Notes:
-- If the base path ever changes (for example to serve from the domain root), change `base` in
-  `vite.config.js` and the hard-coded `/studio/` mentions here.
+- `base` also decides where saved projects are stored (see "Saving / projects"), so changing
+  it gives the app a fresh, empty set of saved projects.
 - `index.html` includes the Google Analytics (gtag) snippet, so `npm run dev` also sends
   analytics events.
 - The "Return to Ephemeral Wave" link points to `/`, the main site, which is not part of this repo.
@@ -79,13 +80,15 @@ src/audio/
   export/scheduleStepSequencer.ts  Separate offline engine used for WAV export
   export/encodeWav.ts    AudioBuffer → 32-bit float WAV
 src/stores/projectStore.ts  Pinia store: current projectId, name, data snapshot
-src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/export
+src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/export,
+                         namespace.ts (storage names, one set per site folder)
 src/lib/schema/projectSchema.ts  zod schema + v1→v2 migration (CURRENT_VERSION = 2)
 src/composables/useTheme.ts      synthwave | dark | light theme, stored in localStorage
 src/assets/styles/       Bootstrap overrides + all global SCSS (themes are in _themes.scss)
 public/audio/            kick.mp3, snare.mp3, hihat.mp3: still fetched at startup, but only
                          used by the hidden drum lanes
 public/images/           Background textures/GIFs referenced from SCSS via ../images/
+.github/workflows/deploy-studio2.yml  Builds `main` and uploads it to /studio2/ (see Deploy)
 ```
 
 ### Audio engine (live), in `DrumSequencer.vue`
@@ -129,11 +132,16 @@ public/images/           Background textures/GIFs referenced from SCSS via ../im
 ### Saving / projects
 - `buildSnapshot()` turns all UI and synth state into a plain object; `applySnapshot()` restores
   it. Shape: `{ meta, ui, transport, synth, fx, instruments[], melody, selectedWaveform }`.
+- Storage names come from `src/lib/storage/namespace.ts` and include the site folder, because
+  browsers share storage across a whole website: `/studio2/` uses the IndexedDB database
+  `ewave-studio2-db` and `localStorage` keys `ewave-studio2:*`. Version 1 on `/studio/` uses
+  `ewave-db`, `ewave:*`, `seqOpen` and `ui-theme`, so the two never see each other's projects
+  or settings. Always go through `STORAGE_NS` / `storageKey()`; never hard-code a name.
 - A deep watcher copies the snapshot into `projectStore.data`. Edits are written to IndexedDB
-  (`ewave-db` database, `projects` store) only on an explicit Save in `ProjectControls` (the
-  Save menu item or Ctrl/Cmd+S); creating a project also writes an initial record. A status
-  dot shows unsaved changes.
-- `localStorage` keys: `ewave:lastProjectId` (reopened on load), `ewave:reset-ui-next`
+  (`projects` store) only on an explicit Save in `ProjectControls` (the Save menu item or
+  Ctrl/Cmd+S); creating a project also writes an initial record. A status dot shows unsaved
+  changes.
+- `localStorage` keys (all prefixed): `lastProjectId` (reopened on load), `reset-ui-next`
   (one-shot flag that ProjectControls sets to reset the UI on New Project), `seqOpen`, `ui-theme`.
 - `instruments[]` still contains the hidden kick, snare and hihat lanes (normally with no
   steps on). Keep them so saved projects stay compatible.
@@ -158,7 +166,7 @@ public/images/           Background textures/GIFs referenced from SCSS via ../im
   unless a change is requested.
 - Reference runtime assets in `public/` relative to the page (for example `audio/kick.mp3`)
   or through `import.meta.env.BASE_URL`. Never start the path with `/`, or it breaks under
-  the `/studio/` base.
+  the `/studio2/` base.
 - Analytics: `trackEvent(name, params)` calls `window.gtag`. Copies of this helper exist in
   DrumSequencer and ProjectControls; `src/lib/analytics.ts` is unused.
 
@@ -184,20 +192,26 @@ Confirm with the maintainer before deleting any of this.
 - Don't break existing saved projects: snapshot changes must stay backward compatible.
 - Before pushing, run `npm run build` and confirm it succeeds.
 
-## Testing a PR locally
-Pushing a branch or opening a PR changes nothing on the live site, and `main` only changes
-when the PR is merged. To try a PR before merging (Git Bash, in the project folder):
+## Testing a PR
+Pushing a branch or opening a PR changes nothing on the website. **Merging a PR into `main`
+deploys it to `/studio2/` within a few minutes** (`/studio/` is never touched), so the usual
+way to test is: merge, wait for the Actions run to finish, then try it on
+https://www.ephemeralwave.com/studio2/ (on any device). If something is wrong, fix it in a
+new PR.
+
+To try a PR on your own computer before merging (Git Bash, in the project folder):
 
 ```bash
 git fetch origin
 git checkout <branch-name>   # the branch named on the PR page
 git pull                     # make sure you have its latest commits
 npm install                  # in case dependencies changed
-npm run dev                  # then open http://localhost:5173/studio/
+npm run dev                  # then open http://localhost:5173/studio2/
 ```
 
 To test the exact build that would be uploaded: `npm run build`, then `npm run preview`, and open
-http://localhost:4173/studio/. Afterwards, `git checkout main`. (Use `git checkout`, not
-`git switch`: the maintainer's Git predates `switch`.) Saved projects are stored per
-address, so the live site, `localhost:5173` and `localhost:4173` each have their own; to test
-with a real project, use File → Export file on the live site and File → Import file locally.
+http://localhost:4173/studio2/. Afterwards, `git checkout main`. (Use `git checkout`, not
+`git switch`: the maintainer's Git predates `switch`.) Saved projects are stored per website
+and folder, so the live `/studio/`, the live `/studio2/`, `localhost:5173` and
+`localhost:4173` each have their own. To test with a real project, use File → Export file
+where it lives and File → Import file where you're testing.
