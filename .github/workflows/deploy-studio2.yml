@@ -3,9 +3,11 @@
 # Actions tab ("Run workflow"). It never touches /studio/, which holds the original app.
 #
 # Needs three repository secrets (Settings → Secrets and variables → Actions):
-#   FTP_HOST      the FTP server, as in FileZilla's Site Manager
-#   FTP_USER      the FTP username
-#   FTP_PASSWORD  the FTP password
+#   FTP_HOST      the FTP server, for example ftp.ephemeralwave.com
+#   FTP_USER      an FTP account whose directory is public_html/studio2, created just for
+#                 this in cPanel → FTP Accounts (for example deploy@ephemeralwave.com).
+#                 The job refuses a login that can see more than that folder.
+#   FTP_PASSWORD  that account's password
 # The upload requires FTP over TLS, so the password is never sent unencrypted.
 
 name: Deploy to /studio2/
@@ -44,31 +46,44 @@ jobs:
       - name: Check the build is for /studio2/
         run: |
           if ! grep -q '/studio2/assets/' dist/index.html; then
-            echo "dist/index.html doesn't load its files from /studio2/. Check 'base' in vite.config.js."
+            echo "::error::dist/index.html doesn't load its files from /studio2/. Check 'base' in vite.config.js."
             exit 1
           fi
 
       - name: Install lftp
         run: sudo apt-get update -q && sudo apt-get install -y -q lftp
 
+      # Paths are relative to the FTP account's own folder (public_html/studio2).
       # New files go up first and stale ones are deleted last, so visitors never get an
       # index.html that points at files that aren't there yet. Deleting is limited to
-      # studio2/assets/, which only ever holds build output.
-      - name: Upload to /public_html/studio2/
+      # assets/, which only ever holds build output.
+      - name: Upload to /studio2/
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USER: ${{ secrets.FTP_USER }}
           LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          lftp --env-password -u "$FTP_USER" "ftp://$FTP_HOST" <<'EOF'
+          ftp() {
+            lftp --env-password -u "$FTP_USER" "ftp://$FTP_HOST" <<EOF
           set cmd:fail-exit true
           set ftp:ssl-force true
           set ftp:ssl-protect-data true
           set ssl:verify-certificate true
           set net:max-retries 3
           set net:timeout 30
-          mirror --reverse --parallel=4 dist/assets /public_html/studio2/assets
-          mirror --reverse --parallel=4 --exclude-glob assets/ dist /public_html/studio2
-          mirror --reverse --delete dist/assets /public_html/studio2/assets
+          $1
           bye
           EOF
+          }
+
+          # A login that sees public_html or WordPress files at its top level (such as the
+          # main hosting login) could change the whole website, so don't use it.
+          top=$(ftp "cls -1a /")
+          if printf '%s\n' "$top" | grep -qE '(^|/)(public_html|wp-admin|wp-content|wp-config\.php|studio)/?$'; then
+            echo "::error::The FTP_USER login can see more than the studio2 folder. Use an FTP account whose directory is public_html/studio2 (cPanel → FTP Accounts)."
+            exit 1
+          fi
+
+          ftp "mirror --reverse --parallel=4 dist/assets /assets
+          mirror --reverse --parallel=4 --exclude-glob assets/ dist /
+          mirror --reverse --delete dist/assets /assets"

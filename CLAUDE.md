@@ -42,8 +42,11 @@ Every push to `main` (for example merging a PR) runs `.github/workflows/deploy-s
 it runs `npm ci` and `npm run build`, checks the build is for `/studio2/`, then uploads `dist/`
 to `/public_html/studio2/` with `lftp`. It uploads new assets before `index.html`, and deletes
 stale files only inside `studio2/assets/`. It needs the repository secrets `FTP_HOST`,
-`FTP_USER` and `FTP_PASSWORD`, and refuses to connect without TLS (FTP over TLS) or with a
-certificate that doesn't match `FTP_HOST`. The Actions tab shows each run, and its
+`FTP_USER` and `FTP_PASSWORD`. `FTP_USER` is a dedicated FTP account whose directory is
+`public_html/studio2` (cPanel → FTP Accounts), so the paths in the workflow are relative to
+that folder and the job can't reach anything else. It refuses a login that can see
+`public_html` or WordPress files (such as the main hosting login), a server without TLS
+(FTP over TLS), and a certificate that doesn't match `FTP_HOST`. The Actions tab shows each run, and its
 "Run workflow" button re-deploys `main` by hand. After a deploy, hard-refresh
 https://www.ephemeralwave.com/studio2/ (Ctrl+F5).
 
