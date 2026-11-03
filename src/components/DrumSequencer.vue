@@ -202,7 +202,11 @@
 							@octave-shift="octaveShiftAllSkip($event)"
 							@key-root-change="(r) => { onKeyRootChange(r); melodyUi.keyRoot = r as any; }"
 							@key-scale-change="(s) => { melodyUi.keyScale = s as any }"
-							@range-preset-change="(p) => { melodyUi.rangePreset = p as any }" />
+							@range-preset-change="(p) => { melodyUi.rangePreset = p as any }"
+							@arp-pattern-change="(v) => { melodyUi.arpPattern = v as any }"
+							@arp-rate-change="(v) => { melodyUi.arpRate = v as any }"
+							@arp-octaves-change="(v) => { melodyUi.arpOctaves = v as any }"
+							@arp-tones-change="(v) => { melodyUi.arpTones = v as any }" />
 					</SectionWrap>
 				</div>
 
@@ -481,6 +485,7 @@ import PitchEnvModule from './modules/PitchEnvModule.vue';
 import { applyPitchEnv } from '../audio/pitchEnv';
 import FMModule from './modules/FMModule.vue';
 import { startFM } from '../audio/fm';
+import { createTicker } from '../audio/ticker';
 import FilterModule from './modules/FilterModule.vue';
 import EnvelopeModule from './modules/EnvelopeModule.vue';
 import NoiseModule from './modules/NoiseModule.vue';
@@ -2506,6 +2511,15 @@ function isTypingTarget(el: EventTarget | null): boolean {
 }
 
 function onGlobalKeydown(e: KeyboardEvent) {
+	// Number keys 1–4 switch the screen view, like the four buttons under the screen
+	if (/^[1-4]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+		// Leave digits alone while typing, or while a dropdown list is open
+		if (isTypingTarget(e.target) || document.querySelector('[role="listbox"]')) return;
+		e.preventDefault();
+		if (!e.repeat) handleFKey(Number(e.key));
+		return;
+	}
+
 	const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
 	if (!isSpace) return;
 
@@ -2523,15 +2537,6 @@ function onGlobalKeydown(e: KeyboardEvent) {
 		e.preventDefault();
 		e.stopPropagation();
 		togglePlay();
-		return;
-	}
-
-	if (!isTypingTarget(el) && /^[1-6]$/.test(e.key)) {
-		const n = Number(e.key);
-		activeFKey.value = n;
-		handleFKey(n);
-		e.preventDefault();
-		e.stopPropagation();
 		return;
 	}
 
@@ -2646,15 +2651,18 @@ function loadUserSample(event: Event, instrument: any) {
 	reader.readAsArrayBuffer(file);
 }
 
-let loopId: number | null = null;
+// Sequencer clock: every tick schedules the steps that start within the next
+// SCHEDULE_AHEAD_S seconds. The ticker runs in a Web Worker (see src/audio/ticker.ts)
+// so playback keeps going when the tab is in the background.
+const SCHEDULE_AHEAD_S = 0.1;
+const sequencerTicker = createTicker(schedule, 25);
+onBeforeUnmount(() => sequencerTicker.dispose());
+
 let startTime = 0;
 let stepIndex = 0;
 
 function hardStopSequencer() {
-	if (loopId != null) {
-		cancelAnimationFrame(loopId);
-		loopId = null;
-	}
+	sequencerTicker.stop();
 	isPlaying.value = false;
 	currentStep.value = -1;
 	stepIndex = 0;
@@ -2678,7 +2686,17 @@ function playBuffer(buffer: AudioBuffer, time: number, amp = 1) {
 function schedule() {
 	const now = audioCtx.currentTime;
 	const stepDuration = 60 / tempo.value / 4;
-	while (startTime < now + 0.1) {
+
+	// If the clock fell more than a step behind (computer asleep, page busy), don't play
+	// every missed step at once: skip to the next step that is still ahead, keeping the
+	// pattern position where it would have been.
+	if (startTime < now - stepDuration) {
+		const missed = Math.ceil((now - startTime) / stepDuration);
+		startTime += missed * stepDuration;
+		stepIndex = (stepIndex + missed) % stepLength.value;
+	}
+
+	while (startTime < now + SCHEDULE_AHEAD_S) {
 		instruments.value.forEach(inst => {
 			if (!inst.muted && inst.steps[stepIndex]) {
 				const vel = inst.velocities[stepIndex] ?? 1;
@@ -2710,7 +2728,14 @@ function schedule() {
 		stepIndex = (stepIndex + 1) % stepLength.value;
 		startTime += stepDuration;
 	}
-	loopId = requestAnimationFrame(schedule);
+}
+
+// Detach a note's LFO tap from the shared LFO once the note has finished. Without this,
+// every note ever played stays connected to the LFO and the nodes pile up.
+function releaseLfoTap(tap: AudioNode, ...rest: AudioNode[]) {
+	try { lfoGain.disconnect(tap); } catch { /* already disconnected */ }
+	tap.disconnect();
+	rest.forEach(n => n.disconnect());
 }
 
 function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: OscillatorType, opts: { addNoise?: boolean } = {}) {
@@ -2803,6 +2828,7 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 			if (lfoTarget.value === 'pitch') {
 				const lfoTap = audioCtx.createGain(); lfoTap.gain.value = 1;
 				lfoGain.connect(lfoTap).connect(osc.detune);
+				osc.addEventListener('ended', () => releaseLfoTap(lfoTap));
 
 			} else if (lfoTarget.value === 'filter') {
 				//  keep cutoff in a safe band and smooth the control 
@@ -2822,6 +2848,7 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 				ctrlLP.frequency.value = 120;
 
 				lfoGain.connect(lfoTap).connect(ctrlLP).connect(voiceFilter.frequency);
+				osc.addEventListener('ended', () => releaseLfoTap(lfoTap, ctrlLP));
 			}
 		}
 
@@ -2947,6 +2974,7 @@ async function togglePlay() {
 		stepIndex = 0;
 		isPlaying.value = true;
 		schedule();
+		sequencerTicker.start();
 	}
 }
 
@@ -3253,8 +3281,6 @@ watch(() => project.projectId, async () => {
 
 // Build a serializable snapshot
 function buildSnapshot() {
-	const mm = melodyRef?.getUi?.() ?? null;
-
 	return {
 		meta: {
 
@@ -3363,14 +3389,15 @@ function buildSnapshot() {
 			waveforms: (i as any).waveforms ? [...(i as any).waveforms] : null,
 		})),
 
+		// melodyUi mirrors the Melody Maker panel, which reports every change through events
 		melody: {
-			keyRoot: mm?.keyRoot ?? melodyUi.keyRoot,
-			keyScale: mm?.keyScale ?? melodyUi.keyScale,
-			rangePreset: mm?.rangePreset ?? melodyUi.rangePreset,
-			arpPattern: mm?.arpPattern ?? melodyUi.arpPattern,
-			arpRate: mm?.arpRate ?? melodyUi.arpRate,
-			arpOctaves: mm?.arpOctaves ?? melodyUi.arpOctaves,
-			arpTones: mm?.arpTones ?? melodyUi.arpTones,
+			keyRoot: melodyUi.keyRoot,
+			keyScale: melodyUi.keyScale,
+			rangePreset: melodyUi.rangePreset,
+			arpPattern: melodyUi.arpPattern,
+			arpRate: melodyUi.arpRate,
+			arpOctaves: melodyUi.arpOctaves,
+			arpTones: melodyUi.arpTones,
 		},
 
 		selectedWaveform: selectedWaveform.value,
@@ -3520,17 +3547,7 @@ function applySnapshot(s: any) {
 		if (s.melody.arpRate) melodyUi.arpRate = s.melody.arpRate;
 		if (s.melody.arpOctaves) melodyUi.arpOctaves = s.melody.arpOctaves;
 		if (s.melody.arpTones) melodyUi.arpTones = s.melody.arpTones;
-
-		// Push into the child so its UI updates without remount
-		melodyRef?.setUi?.({
-			keyRoot: melodyUi.keyRoot,
-			keyScale: melodyUi.keyScale,
-			rangePreset: melodyUi.rangePreset,
-			arpPattern: melodyUi.arpPattern,
-			arpRate: melodyUi.arpRate,
-			arpOctaves: melodyUi.arpOctaves,
-			arpTones: melodyUi.arpTones,
-		});
+		// The Melody Maker panel follows these through its initial-* props
 	}
 
 	// Instruments

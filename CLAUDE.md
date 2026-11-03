@@ -2,11 +2,13 @@
 
 Browser-based 16-step percussion synthesizer and step sequencer, live at
 https://www.ephemeralwave.com/studio/. Everything runs client-side with the Web Audio API;
-there is no backend. Features: a synth voice with per-step pitch, velocity and waveform;
-sample drum lanes (kick, snare, hihat, plus user-loaded custom samples); amp envelope, pitch
-envelope, filter, noise, FM, unison and LFO; delay, overdrive and reverb; Web MIDI note input;
-a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope display;
-WAV export; and projects saved in IndexedDB with JSON import and export.
+there is no backend. Features: one 16-step synth lane with per-step pitch, velocity and
+waveform; amp envelope, pitch envelope, filter, noise, FM, unison and LFO; delay, overdrive
+and reverb; Web MIDI note input; a random melody and arpeggio maker; an oscilloscope,
+spectrogram, tuner and envelope display; WAV export; and projects saved in IndexedDB with JSON
+import and export. Earlier versions also had sample drum lanes (kick, snare, hihat and
+user-loaded samples). Their UI is commented out and they are no longer part of the app, but
+some of their code remains (see "Dead code").
 
 History: the app began as an Angular app (about 2015) and was rewritten in Vue 3 + Vite in 2025.
 Some files and assets left over from earlier versions are unused (see "Dead code" below).
@@ -81,7 +83,8 @@ src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/e
 src/lib/schema/projectSchema.ts  zod schema + v1→v2 migration (CURRENT_VERSION = 2)
 src/composables/useTheme.ts      synthwave | dark | light theme, stored in localStorage
 src/assets/styles/       Bootstrap overrides + all global SCSS (themes are in _themes.scss)
-public/audio/            kick.mp3, snare.mp3, hihat.mp3 (loaded at runtime)
+public/audio/            kick.mp3, snare.mp3, hihat.mp3: still fetched at startup, but only
+                         used by the hidden drum lanes
 public/images/           Background textures/GIFs referenced from SCSS via ../images/
 ```
 
@@ -91,16 +94,21 @@ public/images/           Background textures/GIFs referenced from SCSS via ../im
 - Graph: per-note synth voices → drive (dry + shaper → `driveSum`). From `driveSum` two paths
   run in parallel: delay (dry + wet, with a feedback loop and tone filters) and a reverb send
   (tone filter → convolver → wet gain). Both go to `masterGain` → destination. An
-  `AnalyserNode` is tapped from `masterGain` for the scope, spectrogram and tuner. The noise layer and sample lanes go
-  straight to `masterGain`, so they bypass drive, delay and reverb.
-- Scheduler: `schedule()` is a lookahead loop driven by `requestAnimationFrame`. It schedules
-  steps up to 100 ms ahead using `audioCtx.currentTime`. Swing delays every second step
-  (steps 2, 4, 6, ... counting from 1).
+  `AnalyserNode` is tapped from `masterGain` for the scope, spectrogram and tuner. The noise
+  layer (and the hidden sample lanes) go straight to `masterGain`, so they bypass drive, delay
+  and reverb.
+- Scheduler: `schedule()` runs every 25 ms, driven by a ticker in a small Web Worker
+  (`src/audio/ticker.ts`), so playback keeps going in background tabs; it falls back to
+  `setInterval` if a worker can't be created. Each run schedules the steps that start within
+  the next 100 ms (`SCHEDULE_AHEAD_S`), using `audioCtx.currentTime`. If the clock falls more
+  than a step behind (computer asleep, page busy), it skips ahead instead of playing every
+  missed step at once. Swing delays every second step (steps 2, 4, 6, ... counting from 1).
 - `playSynthNote()` builds a new set of nodes for every note (oscillator per unison voice,
   biquad filter, panner, FM modulator, noise buffer sources, envelope gain). Pitch envelope and
   FM come from `src/audio/pitchEnv.ts` and `src/audio/fm.ts`.
 - The LFO is one shared oscillator → `lfoGain`. Each note connects a tap from it to the voice's
-  `detune` or filter frequency.
+  `detune` or filter frequency, and `releaseLfoTap()` disconnects it when the note ends.
+  Anything else per-note that connects to a long-lived node needs the same cleanup.
 - WAV export uses a **separate** offline engine (`scheduleStepSequencer.ts`), fed by the
   `exportState` computed. It renders only the synth lane. Changes to the live sound (new
   parameters, changed gain staging) must be mirrored there, or exports will sound different.
@@ -112,6 +120,12 @@ public/images/           Background textures/GIFs referenced from SCSS via ../im
   and current synth settings, scaled by velocity and the synth channel volume. Note-off, CC,
   pitch bend and MIDI clock are ignored.
 
+### Keyboard shortcuts
+- Space: play/stop (`onGlobalKeydown` in `DrumSequencer.vue`, ignored while typing).
+- 1–4: screen view (Oscilloscope, Spectrogram, Tuner, Envelope), same handler; ignored while
+  typing or while a dropdown list is open.
+- Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers.
+
 ### Saving / projects
 - `buildSnapshot()` turns all UI and synth state into a plain object; `applySnapshot()` restores
   it. Shape: `{ meta, ui, transport, synth, fx, instruments[], melody, selectedWaveform }`.
@@ -121,7 +135,11 @@ public/images/           Background textures/GIFs referenced from SCSS via ../im
   dot shows unsaved changes.
 - `localStorage` keys: `ewave:lastProjectId` (reopened on load), `ewave:reset-ui-next`
   (one-shot flag that ProjectControls sets to reset the UI on New Project), `seqOpen`, `ui-theme`.
-- Custom sample audio is **not** saved: only the lane's metadata and steps are stored.
+- `instruments[]` still contains the hidden kick, snare and hihat lanes (normally with no
+  steps on). Keep them so saved projects stay compatible.
+- Melody Maker settings (key, scale, range, and arp pattern, rate, octaves and tones) live in
+  `melodyUi`. `MelodyMaker.vue` reports each change with an event, and follows `melodyUi`
+  through its `initial-*` props when a project loads. Its Advanced-menu toggles are not saved.
 - The JSON import/export format is `{ version, projectId, meta, data }`, validated by
   `validateAndMigrate()`.
 - If you add a parameter: add it to `buildSnapshot`, `applySnapshot`,
@@ -149,12 +167,37 @@ public/images/           Background textures/GIFs referenced from SCSS via ../im
 `src/lib/generators/seed.ts` (imports `seedrandom`, which is not a dependency),
 `src/lib/analytics.ts`, `src/style.css`, `src/assets/vue.svg`, `src/assets/eWaveLogo.svg`,
 `public/vite.svg`, and most of `public/images/` (only `black-thread.png`, `circleWave.gif`
-and `retroSpeaker.gif` are referenced). Confirm before deleting.
+and `retroSpeaker.gif` are referenced).
+
+The old drum and custom-sample lanes: the commented-out "Bottom Sequencer" block in
+`DrumSequencer.vue`'s template, and script code that only served it, such as
+`orderedChannels`, `addCustomChannel`, `deleteChannel`, `loadUserSample`, and
+`loadAllSamples` (which still downloads `public/audio/*.mp3` on every visit).
+
+Confirm with the maintainer before deleting any of this.
 
 ## Working on this repo
 - Sound can't be verified automatically (Claude can't hear audio), so every PR description must
   include a short **manual test checklist** of what to listen for and what to click
-  (for example: "press Play: kick, snare and hihat on steps 1/5/9/13; turn Reverb mix up:
+  (for example: "turn on synth pads 1, 5, 9 and 13 and press Play; turn Reverb mix up:
   the tail gets longer, with no clicks").
 - Don't break existing saved projects: snapshot changes must stay backward compatible.
 - Before pushing, run `npm run build` and confirm it succeeds.
+
+## Testing a PR locally
+Pushing a branch or opening a PR changes nothing on the live site, and `main` only changes
+when the PR is merged. To try a PR before merging (Git Bash, in the project folder):
+
+```bash
+git fetch origin
+git checkout <branch-name>   # the branch named on the PR page
+git pull                     # make sure you have its latest commits
+npm install                  # in case dependencies changed
+npm run dev                  # then open http://localhost:5173/studio/
+```
+
+To test the exact build that would be uploaded: `npm run build`, then `npm run preview`, and open
+http://localhost:4173/studio/. Afterwards, `git checkout main`. (Use `git checkout`, not
+`git switch`: the maintainer's Git predates `switch`.) Saved projects are stored per
+address, so the live site, `localhost:5173` and `localhost:4173` each have their own; to test
+with a real project, use File → Export file on the live site and File → Import file locally.
