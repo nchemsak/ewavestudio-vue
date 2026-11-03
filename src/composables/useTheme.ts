@@ -1,9 +1,10 @@
 // useTheme.ts
 import { ref, computed, watchEffect, onMounted } from 'vue';
+import { storageKey } from '../lib/storage/namespace';
 
 export type ThemeName = 'dark' | 'light' | 'synthwave';
 
-const THEME_KEY = 'ui-theme';
+const THEME_KEY = storageKey('ui-theme');
 
 // Singleton state
 const theme = ref<ThemeName>('synthwave');

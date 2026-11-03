@@ -500,6 +500,7 @@ import MelodyMaker from './MelodyMaker.vue';
 // Saving Imports
 import { useProjectStore } from "../stores/projectStore";
 import { listProjects as repoList } from "../lib/storage/projects";
+import { storageKey } from "../lib/storage/namespace";
 import { downloadJson, importJson } from "../lib/storage/exportImport";
 import ProjectControls from './ProjectControls.vue';
 
@@ -873,8 +874,8 @@ function togglePadSliders() { padSlidersOn.value = !padSlidersOn.value; }
 
 //Sequencer Accordian BEGIN
 
-const seqOpen = ref(localStorage.getItem('seqOpen') === 'true');
-watch(seqOpen, v => localStorage.setItem('seqOpen', String(v)));
+const seqOpen = ref(localStorage.getItem(storageKey('seqOpen')) === 'true');
+watch(seqOpen, v => localStorage.setItem(storageKey('seqOpen'), String(v)));
 
 //Sequencer Accordian END
 
@@ -3264,14 +3265,14 @@ const project = useProjectStore();
 
 // Remember last opened project id
 watch(() => project.projectId, (id) => {
-	if (id) localStorage.setItem('ewave:lastProjectId', id);
+	if (id) localStorage.setItem(storageKey('lastProjectId'), id);
 });
 
 watch(() => project.projectId, async () => {
 	// one-shot UI reset if requested by ProjectControls
-	const flag = localStorage.getItem('ewave:reset-ui-next');
+	const flag = localStorage.getItem(storageKey('reset-ui-next'));
 	if (flag === '1') {
-		localStorage.removeItem('ewave:reset-ui-next');
+		localStorage.removeItem(storageKey('reset-ui-next'));
 		resetUiToFactoryDefaults();
 		// replace the blank store snapshot with the fresh UI defaults so autosave is coherent
 		project.data = buildSnapshot();
@@ -3627,7 +3628,7 @@ watch(
 
 // On first mount, open last project or create a new one from current defaults
 onMounted(async () => {
-	const lastId = localStorage.getItem('ewave:lastProjectId');
+	const lastId = localStorage.getItem(storageKey('lastProjectId'));
 	if (lastId) {
 		const ok = await project.load(lastId);
 		if (!ok) {

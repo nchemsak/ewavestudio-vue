@@ -108,6 +108,7 @@ import {
     clearAllProjects as repoClearAll
 } from '../lib/storage/projects';
 import { buildExportFile, downloadJson, importJson } from '../lib/storage/exportImport';
+import { storageKey } from '../lib/storage/namespace';
 
 const TITLE_MAX_CHARS = 28;
 const store = useProjectStore();
@@ -228,7 +229,7 @@ async function deleteOne(id: string, name?: string) {
 
     if (deletingCurrent) {
         await store.newProject('', {});
-        localStorage.setItem('ewave:reset-ui-next', '1');
+        localStorage.setItem(storageKey('reset-ui-next'), '1');
         isNewUnsaved.value = true;
         nextTick(() => {
             lastSavedHash.value = '__new__';
@@ -243,7 +244,7 @@ async function clearAll() {
     if (!confirm('Delete ALL saved projects? This cannot be undone.')) return;
     await repoClearAll();
     await store.newProject('', {});
-    localStorage.setItem('ewave:reset-ui-next', '1');
+    localStorage.setItem(storageKey('reset-ui-next'), '1');
     isNewUnsaved.value = true;
     nextTick(() => {
         lastSavedHash.value = '__new__';
@@ -256,7 +257,7 @@ async function clearAll() {
 
 async function newProject(evt?: MouseEvent) {
     const duplicate = !!evt?.shiftKey;
-    localStorage.setItem('ewave:reset-ui-next', duplicate ? '0' : '1');
+    localStorage.setItem(storageKey('reset-ui-next'), duplicate ? '0' : '1');
 
     let initialData: any = {};
     if (duplicate) {
