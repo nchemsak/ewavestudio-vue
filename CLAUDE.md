@@ -179,6 +179,7 @@ when the PR is merged. To try a PR before merging (Git Bash, in the project fold
 ```bash
 git fetch origin
 git switch <branch-name>     # the branch named on the PR page
+git pull                     # make sure you have its latest commits
 npm install                  # in case dependencies changed
 npm run dev                  # then open http://localhost:5173/studio/
 ```
