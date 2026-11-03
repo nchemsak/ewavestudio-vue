@@ -186,6 +186,10 @@ const emit = defineEmits<{
     (e: 'key-root-change', root: typeof ROOTS[number]): void;
     (e: 'key-scale-change', scale: KeyScale): void;
     (e: 'range-preset-change', preset: PresetKey): void;
+    (e: 'arp-pattern-change', v: 'up' | 'down' | 'updown' | 'random'): void;
+    (e: 'arp-rate-change', v: '1/4' | '1/8' | '1/16'): void;
+    (e: 'arp-octaves-change', v: 1 | 2 | 3): void;
+    (e: 'arp-tones-change', v: 'chord' | 'scale'): void;
 }>();
 
 /*  Theory  */
@@ -579,6 +583,18 @@ const arpOctaves = ref<1 | 2 | 3>(
 const arpTones = ref<'chord' | 'scale'>(
     props.initialArpTones ?? 'chord'
 );
+
+// Report arp settings to the parent so they're saved with the project, and follow the
+// parent's values when a project is loaded (the same pattern as key, scale and range).
+watch(arpPattern, (v) => emit('arp-pattern-change', v));
+watch(arpRate, (v) => emit('arp-rate-change', v));
+watch(arpOctaves, (v) => emit('arp-octaves-change', v));
+watch(arpTones, (v) => emit('arp-tones-change', v));
+
+watch(() => props.initialArpPattern, (v) => { if (v) arpPattern.value = v; });
+watch(() => props.initialArpRate, (v) => { if (v) arpRate.value = v; });
+watch(() => props.initialArpOctaves, (v) => { if (v) arpOctaves.value = clampArpOctaves(v); });
+watch(() => props.initialArpTones, (v) => { if (v) arpTones.value = v; });
 
 const arpSeventhOnDownbeat = ref(false);
 const arpStride = ref<1 | 2>(1);

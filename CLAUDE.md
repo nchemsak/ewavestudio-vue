@@ -93,14 +93,18 @@ public/images/           Background textures/GIFs referenced from SCSS via ../im
   (tone filter → convolver → wet gain). Both go to `masterGain` → destination. An
   `AnalyserNode` is tapped from `masterGain` for the scope, spectrogram and tuner. The noise layer and sample lanes go
   straight to `masterGain`, so they bypass drive, delay and reverb.
-- Scheduler: `schedule()` is a lookahead loop driven by `requestAnimationFrame`. It schedules
-  steps up to 100 ms ahead using `audioCtx.currentTime`. Swing delays every second step
-  (steps 2, 4, 6, ... counting from 1).
+- Scheduler: `schedule()` runs every 25 ms, driven by a ticker in a small Web Worker
+  (`src/audio/ticker.ts`), so playback keeps going in background tabs; it falls back to
+  `setInterval` if a worker can't be created. Each run schedules the steps that start within
+  the next 100 ms (`SCHEDULE_AHEAD_S`), using `audioCtx.currentTime`. If the clock falls more
+  than a step behind (computer asleep, page busy), it skips ahead instead of playing every
+  missed step at once. Swing delays every second step (steps 2, 4, 6, ... counting from 1).
 - `playSynthNote()` builds a new set of nodes for every note (oscillator per unison voice,
   biquad filter, panner, FM modulator, noise buffer sources, envelope gain). Pitch envelope and
   FM come from `src/audio/pitchEnv.ts` and `src/audio/fm.ts`.
 - The LFO is one shared oscillator → `lfoGain`. Each note connects a tap from it to the voice's
-  `detune` or filter frequency.
+  `detune` or filter frequency, and `releaseLfoTap()` disconnects it when the note ends.
+  Anything else per-note that connects to a long-lived node needs the same cleanup.
 - WAV export uses a **separate** offline engine (`scheduleStepSequencer.ts`), fed by the
   `exportState` computed. It renders only the synth lane. Changes to the live sound (new
   parameters, changed gain staging) must be mirrored there, or exports will sound different.
@@ -112,6 +116,12 @@ public/images/           Background textures/GIFs referenced from SCSS via ../im
   and current synth settings, scaled by velocity and the synth channel volume. Note-off, CC,
   pitch bend and MIDI clock are ignored.
 
+### Keyboard shortcuts
+- Space: play/stop (`onGlobalKeydown` in `DrumSequencer.vue`, ignored while typing).
+- 1–4: screen view (Oscilloscope, Spectrogram, Tuner, Envelope), same handler; ignored while
+  typing or while a dropdown list is open.
+- Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers.
+
 ### Saving / projects
 - `buildSnapshot()` turns all UI and synth state into a plain object; `applySnapshot()` restores
   it. Shape: `{ meta, ui, transport, synth, fx, instruments[], melody, selectedWaveform }`.
@@ -122,6 +132,9 @@ public/images/           Background textures/GIFs referenced from SCSS via ../im
 - `localStorage` keys: `ewave:lastProjectId` (reopened on load), `ewave:reset-ui-next`
   (one-shot flag that ProjectControls sets to reset the UI on New Project), `seqOpen`, `ui-theme`.
 - Custom sample audio is **not** saved: only the lane's metadata and steps are stored.
+- Melody Maker settings (key, scale, range, and arp pattern, rate, octaves and tones) live in
+  `melodyUi`. `MelodyMaker.vue` reports each change with an event, and follows `melodyUi`
+  through its `initial-*` props when a project loads. Its Advanced-menu toggles are not saved.
 - The JSON import/export format is `{ version, projectId, meta, data }`, validated by
   `validateAndMigrate()`.
 - If you add a parameter: add it to `buildSnapshot`, `applySnapshot`,
@@ -158,3 +171,19 @@ and `retroSpeaker.gif` are referenced). Confirm before deleting.
   the tail gets longer, with no clicks").
 - Don't break existing saved projects: snapshot changes must stay backward compatible.
 - Before pushing, run `npm run build` and confirm it succeeds.
+
+## Testing a PR locally
+Pushing a branch or opening a PR changes nothing on the live site, and `main` only changes
+when the PR is merged. To try a PR before merging (Git Bash, in the project folder):
+
+```bash
+git fetch origin
+git switch <branch-name>     # the branch named on the PR page
+npm install                  # in case dependencies changed
+npm run dev                  # then open http://localhost:5173/studio/
+```
+
+To test the exact build that would be uploaded: `npm run build`, then `npm run preview`, and open
+http://localhost:4173/studio/. Afterwards, `git switch main`. Saved projects are stored per
+address, so the live site, `localhost:5173` and `localhost:4173` each have their own; to test
+with a real project, use File → Export file on the live site and File → Import file locally.
