@@ -178,13 +178,14 @@ when the PR is merged. To try a PR before merging (Git Bash, in the project fold
 
 ```bash
 git fetch origin
-git switch <branch-name>     # the branch named on the PR page
+git checkout <branch-name>   # the branch named on the PR page
 git pull                     # make sure you have its latest commits
 npm install                  # in case dependencies changed
 npm run dev                  # then open http://localhost:5173/studio/
 ```
 
 To test the exact build that would be uploaded: `npm run build`, then `npm run preview`, and open
-http://localhost:4173/studio/. Afterwards, `git switch main`. Saved projects are stored per
+http://localhost:4173/studio/. Afterwards, `git checkout main`. (Use `git checkout`, not
+`git switch`: the maintainer's Git predates `switch`.) Saved projects are stored per
 address, so the live site, `localhost:5173` and `localhost:4173` each have their own; to test
 with a real project, use File → Export file on the live site and File → Import file locally.
