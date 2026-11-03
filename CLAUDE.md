@@ -39,16 +39,30 @@ They are expected, and the build still succeeds.
 `/public_html/studio/`).
 
 Every push to `main` (for example merging a PR) runs `.github/workflows/deploy-studio2.yml`:
-it runs `npm ci` and `npm run build`, checks the build is for `/studio2/`, then uploads `dist/`
-to `/public_html/studio2/` with `lftp`. It uploads new assets before `index.html`, and deletes
-stale files only inside `studio2/assets/`. It needs the repository secrets `FTP_HOST`,
-`FTP_USER` and `FTP_PASSWORD`. `FTP_USER` is a dedicated FTP account whose directory is
-`public_html/studio2` (cPanel → FTP Accounts), so the paths in the workflow are relative to
-that folder and the job can't reach anything else. It refuses a login that can see
-`public_html` or WordPress files (such as the main hosting login), a server without TLS
-(FTP over TLS), and a certificate that doesn't match `FTP_HOST`. The Actions tab shows each run, and its
-"Run workflow" button re-deploys `main` by hand. After a deploy, hard-refresh
-https://www.ephemeralwave.com/studio2/ (Ctrl+F5).
+it runs `npm ci` and `npm run build`, checks the build is for `/studio2/`, then makes
+`/public_html/studio2/` an exact copy of `dist/` with `lftp`:
+- It uploads every file on every deploy (`--transfer-all`), overwriting in place
+  (`mirror:overwrite`). It never trusts sizes or timestamps, because `index.html` changes
+  without changing size.
+- It uploads new assets before `index.html`, then deletes anything that's no longer part of
+  the build, except names starting with a dot (`.ftpquota`, `.htaccess`, `.well-known/`).
+
+Secrets:
+- `FTP_HOST` is the name on the server's TLS certificate: currently `dfw-s05.nixihost.com`,
+  not `ftp.ephemeralwave.com`. If the host moves the account to another server, the deploy
+  stops with "certificate common name doesn't match". Get the new name with
+  `openssl s_client -starttls ftp -connect ftp.ephemeralwave.com:21 </dev/null 2>/dev/null | openssl x509 -noout -subject`
+  and update the secret.
+- `FTP_USER` (`deploy@ephemeralwave.com`) is a dedicated FTP account whose directory is
+  `public_html/studio2` (cPanel → FTP Accounts), so the paths in the workflow are relative to
+  that folder and the job can't reach anything else.
+- `FTP_PASSWORD` is that account's password.
+
+The job refuses a login that can see `public_html` or WordPress files (such as the main
+hosting login), a server without TLS (FTP over TLS), and a certificate that doesn't match
+`FTP_HOST`. The Actions tab shows each run; its "Re-run jobs" and "Run workflow" buttons
+re-deploy by hand. After a deploy, hard-refresh https://www.ephemeralwave.com/studio2/
+(Ctrl+F5).
 
 Manual fallback with FileZilla: `npm run build`, then upload the **contents** of `dist/` (not
 the folder itself) into `/public_html/studio2/`. Never upload to `/public_html/studio/`.
@@ -170,24 +184,24 @@ public/images/           Background textures/GIFs referenced from SCSS via ../im
 - Reference runtime assets in `public/` relative to the page (for example `audio/kick.mp3`)
   or through `import.meta.env.BASE_URL`. Never start the path with `/`, or it breaks under
   the `/studio2/` base.
-- Analytics: `trackEvent(name, params)` calls `window.gtag`. Copies of this helper exist in
-  DrumSequencer and ProjectControls; `src/lib/analytics.ts` is unused.
+- Analytics: `trackEvent(name, params)` calls `window.gtag`. Separate copies of this helper
+  live in DrumSequencer and ProjectControls.
 
-## Dead code (not imported anywhere)
-`ComputerKeyboard.vue`, `SequencerKeyboard.vue`, `PadPitchControl.vue`, `PresetBankPanel.vue`,
-`src/lib/generators/seed.ts` (imports `seedrandom`, which is not a dependency),
-`src/lib/analytics.ts`, `src/style.css`, `src/assets/vue.svg`, `src/assets/eWaveLogo.svg`,
-`public/vite.svg`, and most of `public/images/` (only `black-thread.png`, `circleWave.gif`
-and `retroSpeaker.gif` are referenced).
+## Dead code
+The old drum and custom-sample lanes are hidden but their code remains: the commented-out
+"Bottom Sequencer" block in `DrumSequencer.vue`'s template, and script code that only served
+it, such as `orderedChannels`, `addCustomChannel`, `deleteChannel`, `loadUserSample`, and
+`loadAllSamples` (which still downloads `public/audio/*.mp3` on every visit). The maintainer
+may bring the drums back, so keep this code unless asked to remove it.
 
-The old drum and custom-sample lanes: the commented-out "Bottom Sequencer" block in
-`DrumSequencer.vue`'s template, and script code that only served it, such as
-`orderedChannels`, `addCustomChannel`, `deleteChannel`, `loadUserSample`, and
-`loadAllSamples` (which still downloads `public/audio/*.mp3` on every visit).
-
-Confirm with the maintainer before deleting any of this.
+Old components, scripts and images that nothing used were deleted in the cleanup batch; if one
+is ever needed again (for example `ComputerKeyboard.vue`'s computer-keyboard note map), get it
+back from git history.
 
 ## Working on this repo
+- **Every change goes live only at `/studio2/`, through the deploy workflow.** `/studio/` is the
+  frozen original: never upload to it, never point `base`, the workflow or any FTP account at
+  it, and never suggest overwriting it.
 - Sound can't be verified automatically (Claude can't hear audio), so every PR description must
   include a short **manual test checklist** of what to listen for and what to click
   (for example: "turn on synth pads 1, 5, 9 and 13 and press Play; turn Reverb mix up:

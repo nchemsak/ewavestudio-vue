@@ -3,7 +3,8 @@
 # Actions tab ("Run workflow"). It never touches /studio/, which holds the original app.
 #
 # Needs three repository secrets (Settings → Secrets and variables → Actions):
-#   FTP_HOST      the FTP server, for example ftp.ephemeralwave.com
+#   FTP_HOST      the FTP server's name as it appears on its TLS certificate (the hosting
+#                 server, for example dfw-s05.nixihost.com), not ftp.ephemeralwave.com
 #   FTP_USER      an FTP account whose directory is public_html/studio2, created just for
 #                 this in cPanel → FTP Accounts (for example deploy@ephemeralwave.com).
 #                 The job refuses a login that can see more than that folder.
@@ -53,10 +54,11 @@ jobs:
       - name: Install lftp
         run: sudo apt-get update -q && sudo apt-get install -y -q lftp
 
-      # Paths are relative to the FTP account's own folder (public_html/studio2).
-      # New files go up first and stale ones are deleted last, so visitors never get an
-      # index.html that points at files that aren't there yet. Deleting is limited to
-      # assets/, which only ever holds build output.
+      # Paths are relative to the FTP account's own folder (public_html/studio2), so the
+      # folder ends up an exact copy of the build. New assets go up first and index.html
+      # after them, so visitors never get a page that points at files that aren't there
+      # yet. Last, anything that's no longer part of the build is deleted, except dotfiles
+      # such as .ftpquota or .htaccess.
       - name: Upload to /studio2/
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
@@ -71,6 +73,7 @@ jobs:
           set ssl:verify-certificate true
           set net:max-retries 3
           set net:timeout 30
+          set mirror:overwrite true
           $1
           bye
           EOF
@@ -84,6 +87,9 @@ jobs:
             exit 1
           fi
 
-          ftp "mirror --reverse --parallel=4 dist/assets /assets
-          mirror --reverse --parallel=4 --exclude-glob assets/ dist /
-          mirror --reverse --delete dist/assets /assets"
+          # --transfer-all: upload every file, rather than trusting size and timestamps
+          # (index.html changes without changing size). The regex skips anything whose
+          # name starts with a dot, so those are never deleted.
+          ftp "mirror --reverse --parallel=4 --transfer-all dist/assets /assets
+          mirror --reverse --parallel=4 --transfer-all --exclude-glob assets/ dist /
+          mirror --reverse --delete --exclude '(^|/)\.' dist /"

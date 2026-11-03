@@ -495,7 +495,6 @@ import SynthStepGrid from './SynthStepGrid.vue'
 import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
 import MelodyMaker from './MelodyMaker.vue';
-// import SequencerKeyboard from './SequencerKeyboard.vue';
 
 // Saving Imports
 import { useProjectStore } from "../stores/projectStore";
