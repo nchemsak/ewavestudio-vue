@@ -4,13 +4,19 @@ Browser-based 16-step percussion synthesizer and step sequencer. This repo is **
 served from https://www.ephemeralwave.com/studio2/. The original version stays at
 https://www.ephemeralwave.com/studio/ and is never updated or overwritten, so the two can
 be compared; never deploy this code to `/studio/`. Everything runs client-side with the Web
-Audio API; there is no backend. Features: one 16-step synth lane with per-step pitch, velocity and
-waveform; amp envelope, pitch envelope, filter, noise, FM, unison and LFO; delay, overdrive
-and reverb; Web MIDI note input; a random melody and arpeggio maker; an oscilloscope,
-spectrogram, tuner and envelope display; WAV export; and projects saved in IndexedDB with JSON
-import and export; and undo/redo. Earlier versions also had sample drum lanes (kick, snare, hihat and
-user-loaded samples). Their UI is commented out and they are no longer part of the app, but
-some of their code remains (see "Dead code").
+Audio API; there is no backend. Features: one 16-step synth lane with per-step pitch,
+velocity and waveform; amp envelope, filter, noise, FM, unison and LFO (and a pitch envelope
+whose panel is hidden for now, see "Planned work"); delay, overdrive and reverb; Web MIDI note
+input; a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope
+display; WAV export; projects saved in IndexedDB with JSON import and export; and undo/redo.
+Earlier versions also had sample drum lanes (kick, snare, hihat and user-loaded samples).
+Their UI is commented out and they are no longer part of the app, but some of their code
+remains (see "Dead code").
+
+Design intent: a percussion synthesizer in the spirit of the Moog DFAM and Behringer Edge
+(sounds shaped by short envelopes on pitch, filter and level, played by a step sequencer), but
+not a copy of either. The maintainer wants it to stand on its own without drifting far from
+that idea; weigh new features against it.
 
 History: the app began as an Angular app (about 2015) and was rewritten in Vue 3 + Vite in 2025.
 Some files and assets left over from earlier versions are unused (see "Dead code" below).
@@ -36,7 +42,8 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
 - **Unit tests** (Vitest, in Node): pure logic such as loading and upgrading saved projects,
   WAV encoding, storage names, the playback clock, synth helpers, MIDI input (with a fake
   MIDI system), the undo history and project snapshots (save → load round trip, older
-  projects, factory defaults). `vitest.config.js` reuses `vite.config.js` and sets `BASE_URL` to the real base, so code sees `/studio2/` as in the app.
+  projects, factory defaults). `vitest.config.js` reuses `vite.config.js` and sets `BASE_URL`
+  to the real base, so code sees `/studio2/` as in the app.
 - **Browser tests** (Playwright, Chromium), `e2e/app.spec.ts`: build, serve with
   `vite preview`, then drive the app. An init script keeps a handle on the app's AudioContext
   (`__ctx`), records every scheduled note and the per-note LFO taps, measures the output
@@ -344,8 +351,10 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
   each item, and "do the next item" means the first one under "Next, in this order".
 - The PR that finishes an item also updates this list: move the item to "Done".
 
-Next, in this order (agreed after PR 15: fixes that later features depend on come first;
-everything drum-related waits until the maintainer brings the drum lanes back):
+Next, in this order (agreed after PR 15; the maintainer changes it as ideas come up): fixes
+that later features depend on, then sound features in the spirit of the design intent (top of
+this file), then presets that can use them. Everything drum-related waits until the maintainer
+brings the drum lanes back.
 1. **Delay time isn't always the synced time.** With tempo sync on, the Delay panel
    (`DelayEffect.vue`) works out the delay time from the tempo and its division knob (default
    dotted 1/8), and sends it only when it first appears or when the tempo or division changes.
@@ -370,32 +379,96 @@ everything drum-related waits until the maintainer brings the drum lanes back):
 4. **Housekeeping**, one small PR: replace the Vite template in `README.md` with a real
    description, and stop `npm run dev` from sending analytics events (the gtag snippet in
    `index.html` always runs).
-5. **Built-in preset library of synth patches.** Planned shape, discussed with the maintainer
-   (confirm the open questions before starting): a preset sets only the sound (synth, fx and
-   waveform groups of the snapshot), not the pattern, tempo, swing or volume; presets live in
-   `src/lib/presets/` as partial snapshots applied with `applySnapshot()`; 8 to 12 of them,
-   picked from a "Preset" dropdown; one undo step each. Open questions: sound only, or also
-   starter patterns? User-saved presets now or later? Which sounds? Dropdown above the synth
-   panels or in the toolbar?
-6. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
-   key-to-note map.
-7. **Master limiter/compressor** (louder output without clipping), together with the **DC
-   offset** fix: the drive shaper's curve has an even number of points (1024), so silence maps
-   to about −0.011 instead of 0. Even with Drive off, that reaches the speakers through the
-   drive wet gain, at about 0.004 with the default settings. It can't be heard, but it shows up
-   in measurements (the browser tests use `__swingOver` to ignore it) and wastes a little
-   headroom. Both change the sound slightly, so they are listen-tested together. The export
-   engine has the same curve and needs the same changes.
-8. **Share a project as a link** (the project encoded in the URL).
-9. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
-10. **Several patterns (A/B/C/D) chained into a song.**
-11. **32 steps, or per-lane lengths** (the export code's types already allow 32).
-12. **Per-step parameter locks** (for example a different filter cutoff on each step).
-13. **Export options:** N bars or loops, stems, MIDI file.
-14. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
-15. **Install as an app (PWA)** that works offline.
-16. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-17. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
+5. **Bring back the pitch envelope, with a drum-style sweep.** Its panel (`PitchEnvModule.vue`:
+   Amount 0–48 semitones, Decay 5–2000 ms, modes up/down/random) is imported in
+   `DrumSequencer.vue` but no longer shown under "Pitch & Harmonics"; the maintainer removed it
+   because it didn't seem useful. The engine still applies it to every note (`applyPitchEnv()`
+   in `src/audio/pitchEnv.ts`, shared with the export engine), but the default amount is 0, so
+   it does nothing. Why it sounded weak: `exponentialRampToValueAtTime` on the frequency glides
+   by the same number of semitones every millisecond, like a laser or siren slide. A drum's
+   pitch drops fast and then settles, as an analog decay envelope into an exponential VCO does
+   (DFAM's VCO decay): use that curve, for example an exponentially decaying offset in cents on
+   `detune` (which already carries the unison detune and the LFO pitch tap). Also make short
+   decays (10–100 ms, where kicks live) easy to reach: `Knob.vue` is linear, so they are under
+   5% of the turn; a non-linear knob option would help the Cutoff knob too. Optionally, let
+   velocity scale the amount. Old projects keep loading (`synth.pitchEnv` is already saved),
+   but any with a non-zero amount will sound different with the new curve.
+6. **Filter envelope, and a filter view on the screen.** Each note's lowpass cutoff is fixed
+   for the whole note; only the LFO moves it. Add a DFAM-style filter envelope (Decay and
+   Amount: the cutoff starts higher by the amount and decays back), in the live and export
+   engines. Add a screen view that draws the filter's real response curve
+   (`BiquadFilterNode.getFrequencyResponse()`) on a log-frequency axis, with the live spectrum
+   faintly behind it, and shows the envelope's sweep. Like the envelope view, it appears while
+   Cutoff, Resonance or the new knobs are turned (`knobStart`/`knobEnd`). Ask the maintainer
+   whether it also gets its own F-key (the screen has four, keys 1–4).
+7. **Pulse wave with pulse-width modulation, and a few custom waveforms.** Pulse width is how
+   much of each cycle the wave spends up versus down; 50% is the current square. Web Audio has
+   no pulse oscillator with an adjustable width: feed a sawtooth into a comparator
+   (`WaveShaperNode`, with `oversample` to reduce aliasing) whose threshold is moved by a
+   `ConstantSourceNode`, or use an AudioWorklet if that sounds too harsh. Add a Width knob, and
+   "Pulse width" as a third LFO target next to Pitch and Filter. Add 2–3 custom harmonic shapes
+   (`createPeriodicWave`: for example organ-like, hollow, bell-like). The engines set
+   `osc.type` from the wave name (type `Wave` in `snapshot.ts`), and `synthHelpers.ts`
+   balances each wave's loudness, so both need the new waves. The project check accepts any
+   wave name (it only checks that it's a string), so saved projects need no migration. The
+   global and per-pad wave buttons need room for the new choices, especially on phones.
+8. **Velocity routing.** Each pad's velocity slider only sets its loudness. Let it also drive
+   other settings, as DFAM does by patching its velocity sequence: for example velocity to
+   filter cutoff or filter envelope amount, to decay, to pitch envelope amount and to FM index,
+   each with an amount knob. That gives per-step variety from a slider that's already there,
+   and is a first step toward parameter locks (item 17).
+9. **Built-in preset library of synth patches.** Planned shape (confirm the open questions
+   before starting): a preset sets only the sound (the synth and fx groups of the snapshot, and
+   the waveform), not the pattern, tempo, swing or volume; presets live in `src/lib/presets/`
+   as partial snapshots applied with `applySnapshot()`; 8 to 12 of them, picked from a
+   "Preset" dropdown; one undo step each. It comes after items 5–8 so presets can use them
+   (kicks and toms need the pitch envelope, plucks the filter envelope). Open questions: sound
+   only, or also starter patterns? What happens to per-pad waveforms? User-saved presets now or
+   later? Which sounds? Dropdown above the synth panels or in the toolbar?
+10. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
+    key-to-note map. Space, 1–4 and the Ctrl/Cmd shortcuts must keep working (see "Keyboard
+    shortcuts").
+11. **Master limiter/compressor** (louder output without clipping), together with the **DC
+    offset** fix: the drive shaper's curve has an even number of points (1024), so silence
+    maps to about −0.011 instead of 0. Even with Drive off, that reaches the speakers through
+    the drive wet gain, at about 0.004 with the default settings. It can't be heard, but it
+    shows up in measurements (the browser tests use `__swingOver` to ignore it) and wastes a
+    little headroom. Both change the sound slightly, so they are listen-tested together. The
+    export engine has the same curve and needs the same changes.
+12. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
+    outside, so it needs item 1.
+13. **Stage view for TVs, and an audio output picker.** Casting already works without code
+    (Chrome or Edge "Cast tab", AirPlay screen mirroring, Windows Cast, HDMI), picture and
+    sound together, but with a noticeable lag when turning knobs. A Cast button of our own
+    isn't practical: the web's casting APIs are made for media files, not sound made live in
+    the page, and a Google Cast receiver app would really be the shared session (see "On
+    hold"). Instead: a full-screen version of the screen (scope or spectrogram, with the steps
+    lighting up) designed for a TV, to cast with the browser; and optionally an "Audio output"
+    picker (`AudioContext.setSinkId()`, which not every browser supports; check before
+    building).
+14. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
+15. **Several patterns (A/B/C/D) chained into a song.**
+16. **32 steps, or per-lane lengths** (the export code's types already allow 32).
+17. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
+    note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
+    vary per step. Delay and reverb are shared by every note, so per step they become send
+    amounts (how much of the step goes into them), not per-step effect settings, which would
+    cut off the previous note's tail; per-step drive would mean moving drive into each note.
+    UI idea: select a step with its settings dot, then the knobs you turn change that step
+    only; locked steps are marked, with a way to clear them. Build on item 8 (velocity
+    routing).
+18. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
+    in a short delay loop that loses brightness each time round; the original paper also has a
+    drum variant), metallic (several square waves at odd ratios, as the 808 makes cymbals and
+    cowbell) and struck (a click ringing tuned resonant filters: wood block, marimba, toms,
+    bells). Karplus–Strong needs an AudioWorklet: a `DelayNode` in a feedback loop can't be
+    shorter than one render quantum (128 samples, about 3 ms), which caps the pitch around the
+    F above middle C. AudioWorklets also run in the `OfflineAudioContext` used for WAV export.
+19. **Export options:** N bars or loops, stems, MIDI file.
+20. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
+21. **Install as an app (PWA)** that works offline.
+22. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+23. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
     purpose so far.
 
 On hold until the drum lanes come back (ask the maintainer before starting any of them):
@@ -406,6 +479,14 @@ On hold until the drum lanes come back (ask the maintainer before starting any o
 - **Drum sample paths depend on the trailing slash.** They are relative to the page
   (`audio/kick.mp3`), so they break if `/studio2` is opened without its trailing slash and the
   server doesn't redirect.
+- **Shared session ("jam"):** several people on one URL, for example one phone playing the
+  drum lanes and another the synth. It needs a realtime relay between devices; the site is
+  static files on shared hosting, so that means a third-party service (not decided yet).
+  Design: one device (a laptop, or a TV with the Stage view) makes all the sound, and the
+  phones are remote controls that each show their own part, so network lag only delays when a
+  change takes effect, never the beat. Phones that each made the sound would drift apart and
+  flam. Also to decide: who can join (a room code), and what undo means with several people.
+  Share links (item 12) build part of it (the project packed into a compact message).
 
 Done:
 
