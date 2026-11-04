@@ -34,7 +34,8 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
 - **Type check:** `tsconfig.json` is deliberately lenient (`strict` and `noImplicitAny` off),
   because the code was written without a type checker. It must stay at zero errors.
 - **Unit tests** (Vitest, in Node): pure logic such as loading and upgrading saved projects,
-  WAV encoding, storage names and the playback clock. `vitest.config.js` reuses
+  WAV encoding, storage names, the playback clock, synth helpers and MIDI input (with a fake
+  MIDI system). `vitest.config.js` reuses
   `vite.config.js` and sets `BASE_URL` to the real base, so code sees `/studio2/` as in the app.
 - **Browser tests** (Playwright, Chromium), `e2e/app.spec.ts`: build, serve with
   `vite preview`, then drive the app. An init script keeps a handle on the app's AudioContext
@@ -108,8 +109,9 @@ index.html               Entry HTML + Google Analytics tag
 src/main.ts              createApp + Pinia, imports the global SCSS (Bootstrap + theme)
 src/App.vue              Toolbar (ThemeToggle, #midi-toolbar-slot) + <DrumSequencer/>
 src/components/
-  DrumSequencer.vue      ~4100 lines; holds nearly all app state (as refs), MIDI, screen views
-                         and saving; passes the sound settings to the live engine
+  DrumSequencer.vue      ~3900 lines; holds nearly all app state (as refs), screen views and
+                         saving; passes the sound settings to the live engine and decides
+                         what a MIDI note plays
   modules/*.vue          Synth and effect panels: Envelope, Filter, PitchEnv, Noise, FM,
                          Unison, LFOGroup, Delay, Drive, Reverb (UI only; mostly v-model)
   SynthStepGrid.vue      16 synth step pads with velocity and pitch sliders
@@ -117,6 +119,7 @@ src/components/
   PatternTools.vue       Synth-lane tools: step fills (all, every 2/4, invert, random, clear),
                          velocity shapes ("Humanize") and octave shift
   ProjectControls.vue    File menu: new, open, save, rename, delete, import/export JSON, WAV
+  MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
 src/audio/
@@ -134,6 +137,7 @@ src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/e
 src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) + v1→v2
                          migration (CURRENT_VERSION = 2)
 src/composables/useTheme.ts      synthwave | dark | light theme, stored in localStorage
+src/composables/useMidiInput.ts  Web MIDI note input (see "MIDI")
 src/assets/styles/       Bootstrap overrides + all global SCSS (themes are in _themes.scss)
 public/audio/            kick.mp3, snare.mp3, hihat.mp3: still fetched at startup, but only
                          used by the hidden drum lanes
@@ -180,8 +184,14 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   parameters, changed gain staging) must be mirrored there, or exports will sound different.
 
 ### MIDI
-- Web MIDI (`navigator.requestMIDIAccess`), opt-in through an "Enable MIDI" button. The device
-  selector is teleported into `#midi-toolbar-slot` in `App.vue`.
+- `src/composables/useMidiInput.ts` handles Web MIDI (`navigator.requestMIDIAccess`): access,
+  the input list, the chosen input, note-on parsing (`parseNoteOn`) and waking the audio
+  engine. It doesn't know about the synth: `DrumSequencer.vue` calls
+  `useMidiInput({ audioCtx, noteToPlay })`, and `noteToPlay(note, velocity)` returns what to
+  play, or `null` to ignore the note (a muted synth lane), before audio is woken.
+- Opt-in through an "Enable MIDI" button. `MidiToolbar.vue` (button, then the input list) is
+  teleported into `#midi-toolbar-slot` in `App.vue`, or shown in the transport row if there
+  is no slot. At 768 px wide or less, `App.vue` hides its toolbar, MIDI controls included.
 - Only note-on messages are handled. Each one plays `playSynthNote()` with the global waveform
   and current synth settings, scaled by velocity and the synth channel volume. Note-off, CC,
   pitch bend and MIDI clock are ignored.
@@ -278,7 +288,7 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 Next, in this order:
 1. **Split `DrumSequencer.vue`** (about 4,800 lines) into modules, one PR each:
    - ~~the live sound engine~~ (done in PR 9: `src/audio/liveEngine.ts`);
-   - MIDI;
+   - ~~MIDI~~ (done in PR 11: `src/composables/useMidiInput.ts`, `MidiToolbar.vue`);
    - saving and loading projects.
 
    Behavior and sound must not change. This prepares live playback and WAV export to share
@@ -346,6 +356,7 @@ Done:
 | 7 | Replaced zod with a hand-written project check. |
 | 9 | Split `DrumSequencer.vue`, part 1 of 3: the live sound engine moved to `src/audio/liveEngine.ts` (helpers in `synthHelpers.ts`). |
 | 10 | Fixed a race between File → New and an import right after it, which emptied the name box and made a deploy's checks fail now and then. |
+| 11 | Split `DrumSequencer.vue`, part 2 of 3: MIDI moved to `src/composables/useMidiInput.ts` (with unit tests) and `MidiToolbar.vue`. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

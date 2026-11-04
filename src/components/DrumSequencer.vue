@@ -75,50 +75,15 @@
 							</button>
 
 							<!-- MIDI fallback lives in the right cluster -->
-							<template v-if="midiSupported && !hasMidiTarget">
-								<div class="midi-toolbar">
-									<label class="midi-label" for="midi-input-select">MIDI Controller</label>
-
-									<button v-if="!midiInitialized" type="button" class="pt-btn pt-btn-sm"
-										@click="enableMidi">
-										{{ midiInitInProgress ? 'Enabling…' : 'Enable MIDI' }}
-									</button>
-
-									<template v-else>
-										<select id="midi-input-select" class="pt-select pt-select-sm"
-											v-model="selectedMidiId" @change="attachSelectedMidi">
-											<option value="">None</option>
-											<option v-for="m in midiInputs" :key="m.id" :value="m.id">
-												{{ m.name }}
-											</option>
-										</select>
-									</template>
-								</div>
-							</template>
+							<MidiToolbar v-if="midi.supported && !hasMidiTarget" :midi="midi" />
 						</div>
 					</div>
 				</div>
 
 				<!-- MIDI toolbar Teleport stays outside; only used when a slot exists -->
-				<template v-if="midiSupported && hasMidiTarget">
+				<template v-if="midi.supported && hasMidiTarget">
 					<Teleport to="#midi-toolbar-slot">
-						<div class="midi-toolbar">
-							<label class="midi-label" for="midi-input-select" style="text-align:right;">
-								MIDI Controller
-							</label>
-							<button v-if="!midiInitialized" type="button" class="pt-btn pt-btn-sm" @click="enableMidi">
-								{{ midiInitInProgress ? 'Enabling…' : 'Enable MIDI' }}
-							</button>
-							<template v-else>
-								<select id="midi-input-select" class="pt-select pt-select-sm" v-model="selectedMidiId"
-									@change="attachSelectedMidi">
-									<option value="">None</option>
-									<option v-for="m in midiInputs" :key="m.id" :value="m.id">
-										{{ m.name }}
-									</option>
-								</select>
-							</template>
-						</div>
+						<MidiToolbar :midi="midi" />
 					</Teleport>
 				</template>
 			</section>
@@ -492,6 +457,8 @@ import SynthStepGrid from './SynthStepGrid.vue'
 import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
 import MelodyMaker from './MelodyMaker.vue';
+import MidiToolbar from './MidiToolbar.vue';
+import { useMidiInput } from '../composables/useMidiInput';
 
 // Saving Imports
 import { useProjectStore } from "../stores/projectStore";
@@ -606,167 +573,6 @@ function setStepLength() {
 
 
 const padSizeStyle = computed(() => ({ '--padTEST-size': '41px' }));
-
-// -------------------------------------------------------------------------
-// Web MIDI (live keyboard input) START
-// -------------------------------------------------------------------------
-
-type MidiInputInfo = {
-	id: string;
-	name: string;
-	input: MIDIInput;
-};
-
-const midiSupported = typeof navigator !== "undefined" && !!(navigator as any).requestMIDIAccess;
-
-const midiInputs = ref<MidiInputInfo[]>([]);
-const selectedMidiId = ref<string>("");
-const midiEnabled = ref(false);
-
-const midiInitialized = ref(false);
-const midiInitInProgress = ref(false);
-
-function handleMidiMessage(e: MIDIMessageEvent) {
-	if (!midiEnabled.value) return;
-
-	const [status, data1, data2] = e.data;
-	const cmd = status & 0xf0;
-	const NOTE_ON = 0x90;
-	const NOTE_OFF = 0x80;
-
-	// Only care about note-on / note-off for now
-	if (cmd !== NOTE_ON && cmd !== NOTE_OFF) return;
-
-	const midiNote = data1;
-	const velocity7bit = data2;
-
-	// Treat NOTE_ON with velocity 0 as NOTE_OFF (MIDI convention)
-	const isNoteOn = cmd === NOTE_ON && velocity7bit > 0;
-
-	// Percussion synth is one-shot, so we ignore note-off
-	if (!isNoteOn) return;
-
-	// Map MIDI → frequency + velocity
-	const freq = midiToFreq(midiNote);
-	const vel = Math.max(0.0, Math.min(1.0, velocity7bit / 127));
-
-	// Use same decay you already use for sequencer notes
-	const decayTime = synthDecay.value; // seconds
-
-	// Use the currently selected global waveform
-	const wf = selectedWaveform.value as OscillatorType;
-
-	// Optionally: only respond if the synth instrument exists and isn’t muted
-	const inst = synthInstrument.value;
-	if (!inst || inst.muted) return;
-
-	// Scale by channel volume
-	const chanVol = inst.channelVolume ?? 1;
-	const amp = Math.min(1, vel * chanVol);
-
-	// Schedule "now" (slightly ahead to avoid tiny click)
-	const play = () => {
-		startLfoIfNeeded();
-		playSynthNote(freq, amp, decayTime, audioCtx.currentTime + 0.003, wf, {
-			addNoise: true, // or use noiseMask / some other logic if you want
-		});
-	};
-
-	// The audio engine starts suspended and used to wake only on the first Play, so MIDI
-	// notes were silent until then. Wake it here. If that takes more than a moment (the page
-	// hasn't been clicked yet), drop the note rather than play it late.
-	if (audioCtx.state === 'running') {
-		play();
-	} else {
-		const requested = performance.now();
-		audioCtx.resume().then(() => { if (performance.now() - requested < 250) play(); }, () => { });
-	}
-}
-
-async function initMidiAccess() {
-	if (!midiSupported || midiInitialized.value) return;
-
-	try {
-		const access = await (navigator as any).requestMIDIAccess();
-
-		const updateInputs = () => {
-			const list: MidiInputInfo[] = [];
-			access.inputs.forEach((input: MIDIInput) => {
-				list.push({
-					id: input.id,
-					name: input.name || `Input ${input.id}`,
-					input,
-				});
-			});
-			midiInputs.value = list;
-
-			// If the currently selected id disappeared, disable
-			if (!list.some(i => i.id === selectedMidiId.value)) {
-				selectedMidiId.value = "";
-				midiEnabled.value = false;
-			}
-		};
-
-		updateInputs();
-		access.onstatechange = () => {
-			updateInputs();
-		};
-
-		// success
-		midiInitialized.value = true;
-	} catch (err) {
-		console.warn("MIDI access failed:", err);
-	}
-}
-
-async function enableMidi() {
-	if (!midiSupported || midiInitialized.value || midiInitInProgress.value) return;
-	// This click lets the audio engine start, so MIDI notes play before Play is ever pressed
-	audioCtx.resume().catch(() => { });
-	midiInitInProgress.value = true;
-	try {
-		await initMidiAccess();
-	} finally {
-		midiInitInProgress.value = false;
-	}
-}
-
-
-function attachSelectedMidi() {
-	// Clear all previous listeners first
-	midiInputs.value.forEach(({ input }) => {
-		input.onmidimessage = null;
-	});
-
-	const info = midiInputs.value.find(i => i.id === selectedMidiId.value);
-	if (!info) {
-		midiEnabled.value = false;
-		return;
-	}
-
-	info.input.onmidimessage = handleMidiMessage;
-	midiEnabled.value = true;
-}
-
-// Clean up on unmount
-onBeforeUnmount(() => {
-	midiInputs.value.forEach(({ input }) => {
-		input.onmidimessage = null;
-	});
-});
-
-
-const hasMidiTarget = ref(false);
-
-onMounted(() => {
-	if (typeof window !== 'undefined') {
-		hasMidiTarget.value = !!document.querySelector('#midi-toolbar-slot');
-	}
-});
-
-// Web MIDI (live keyboard input) END
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
 
 
 //SEQUENCER TOOLS END
@@ -2198,6 +2004,49 @@ const {
 const dataArray = new Uint8Array(analyser.fftSize);
 
 // Live sound engine END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// Web MIDI (live keyboard input) START
+
+// Device access and note input live in src/composables/useMidiInput.ts, the toolbar in
+// MidiToolbar.vue. This decides what a MIDI note plays: the synth lane's sound at the note's
+// pitch, with the global waveform, scaled by velocity and the synth channel volume.
+const midi = useMidiInput({
+	audioCtx,
+	noteToPlay(note, velocity) {
+		const freq = midiToFreq(note);
+		const decayTime = synthDecay.value; // seconds, as for sequencer notes
+		const wf = selectedWaveform.value as OscillatorType;
+
+		// Only if the synth lane exists and isn't muted
+		const inst = synthInstrument.value;
+		if (!inst || inst.muted) return null;
+
+		const chanVol = inst.channelVolume ?? 1;
+		const amp = Math.min(1, velocity * chanVol);
+
+		// Play "now" (slightly ahead to avoid a tiny click)
+		return () => {
+			startLfoIfNeeded();
+			playSynthNote(freq, amp, decayTime, audioCtx.currentTime + 0.003, wf, {
+				addNoise: true,
+			});
+		};
+	},
+});
+
+// The toolbar goes into App.vue's #midi-toolbar-slot when there is one, else into the
+// transport row
+const hasMidiTarget = ref(false);
+
+onMounted(() => {
+	if (typeof window !== 'undefined') {
+		hasMidiTarget.value = !!document.querySelector('#midi-toolbar-slot');
+	}
+});
+
+// Web MIDI (live keyboard input) END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3971,49 +3820,6 @@ function resetUiToFactoryDefaults() {
 	}
 }
 
-.midi-toolbar {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.midi-toolbar>.pt-btn-sm,
-.midi-toolbar>.pt-select-sm {
-	flex: 0 0 160px;
-	max-width: 160px;
-}
-
-.midi-toolbar>.pt-select-sm {
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.midi-label {
-	font-size: 11px;
-	text-transform: uppercase;
-	letter-spacing: 0.1em;
-	font-weight: 600;
-	opacity: 0.8;
-
-	white-space: nowrap;
-	flex-shrink: 0;
-	text-align: right;
-}
-
-.midi-led {
-	width: 10px;
-	height: 10px;
-	border-radius: 50%;
-	background: #3a3a4d;
-	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
-}
-
-.midi-led.on {
-	background: #4caf50;
-	box-shadow: 0 0 8px rgba(76, 175, 80, 0.9);
-}
-
 .generators .pt-btn {
 	width: 100%;
 }
@@ -4048,10 +3854,6 @@ function resetUiToFactoryDefaults() {
 		margin-left: 0;
 		width: 100%;
 		justify-content: space-evenly;
-	}
-
-	.midi-label {
-		display: none;
 	}
 
 	.drum-sequencer {
