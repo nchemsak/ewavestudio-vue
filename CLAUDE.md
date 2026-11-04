@@ -37,9 +37,11 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   WAV encoding, storage names and the playback clock. `vitest.config.js` reuses
   `vite.config.js` and sets `BASE_URL` to the real base, so code sees `/studio2/` as in the app.
 - **Browser tests** (Playwright, Chromium), `e2e/app.spec.ts`: build, serve with
-  `vite preview`, then drive the app. An init script records every scheduled note and the
-  per-note LFO taps, and can pause `requestAnimationFrame` the way hidden tabs do. Google
-  Analytics is stubbed out. Before the first local run: `npx playwright install chromium`.
+  `vite preview`, then drive the app. An init script keeps a handle on the app's AudioContext
+  (`__ctx`), records every scheduled note and the per-note LFO taps, measures the output
+  level (`__peakOver(ms)`), tracks keydown listeners on `window` (`__keydown`), and can pause
+  `requestAnimationFrame` the way hidden tabs do. The MIDI test installs a fake MIDI keyboard.
+  Google Analytics is stubbed out. Before the first local run: `npx playwright install chromium`.
 - **No linter yet.** Current ESLint and typescript-eslint releases depend on `minimatch` 10,
   which has a moderate advisory (GHSA-g3hv-75wg-m249) that only `minimatch` 11 fixes. Adding
   them now would make `npm install` report 14 vulnerabilities. Add ESLint once they move to
@@ -153,6 +155,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - `playSynthNote()` builds a new set of nodes for every note (oscillator per unison voice,
   biquad filter, panner, FM modulator, noise buffer sources, envelope gain). Pitch envelope and
   FM come from `src/audio/pitchEnv.ts` and `src/audio/fm.ts`.
+- Envelope: the on/off switch is hidden in the interface (`EnvelopeModule` with
+  `:showToggle="false"`), but saved or imported projects can have the envelope off. A note
+  then holds the level the envelope would peak at (waveform balance and noise mix included),
+  in both the live and the export engine.
 - The LFO is one shared oscillator → `lfoGain`. Each note connects a tap from it to the voice's
   `detune` or filter frequency, and `releaseLfoTap()` disconnects it when the note ends.
   Anything else per-note that connects to a long-lived node needs the same cleanup.
@@ -166,6 +172,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Only note-on messages are handled. Each one plays `playSynthNote()` with the global waveform
   and current synth settings, scaled by velocity and the synth channel volume. Note-off, CC,
   pitch bend and MIDI clock are ignored.
+- The AudioContext starts suspended. Clicking "Enable MIDI" resumes it, and a note that arrives
+  while it's suspended resumes it and then plays (or is dropped if resuming takes more than
+  250 ms, so it's never played late). MIDI notes also start the LFO, as Play does.
 
 ### Keyboard shortcuts
 - Space: play/stop (`onGlobalKeydown` in `DrumSequencer.vue`, ignored while typing).
@@ -185,6 +194,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (`projects` store) only on an explicit Save in `ProjectControls` (the Save menu item or
   Ctrl/Cmd+S); creating a project also writes an initial record. A status dot shows unsaved
   changes.
+- While the dot shows unsaved changes, `ProjectControls` asks before the page is closed or
+  reloaded (`beforeunload`). A project made with File → New counts as unsaved until it's saved.
 - `localStorage` keys (all prefixed): `lastProjectId` (reopened on load), `reset-ui-next`
   (one-shot flag that ProjectControls sets to reset the UI on New Project), `seqOpen`, `ui-theme`.
 - `instruments[]` still contains the hidden kick, snare and hihat lanes (normally with no

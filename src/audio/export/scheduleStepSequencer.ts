@@ -541,7 +541,8 @@ function scheduleSynthNote(opts: {
 		oscEnvGain.gain.exponentialRampToValueAtTime(oscPeak, attackEnd);
 		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
 	} else {
-		oscEnvGain.gain.setValueAtTime(Math.max(0.0001, baseAmp), time);
+		// Same level as the envelope's peak: waveform balance and noise mix included
+		oscEnvGain.gain.setValueAtTime(oscPeak, time);
 		oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005);
 	}
 

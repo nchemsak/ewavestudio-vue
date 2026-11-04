@@ -1,11 +1,19 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
-// Injected before the app loads. Records every note the app schedules, tracks nodes that
-// feed an audio parameter (the per-note LFO taps), and lets a test pause
-// requestAnimationFrame the way browsers do in a hidden tab.
+// Injected before the app loads. Keeps a handle on the app's AudioContext (__ctx), records
+// every note it schedules, tracks nodes that feed an audio parameter (the per-note LFO taps),
+// taps the output for level measurements (__peakOver), tracks keydown listeners on window,
+// and lets a test pause requestAnimationFrame the way browsers do in a hidden tab.
 function instrument() {
 	const w = window as any;
+	const OrigAudioContext = window.AudioContext;
+	window.AudioContext = class extends OrigAudioContext {
+		constructor(...args: any[]) {
+			super(...args);
+			w.__ctx = this;
+		}
+	} as typeof AudioContext;
 	w.__starts = [];
 	const origStart = AudioScheduledSourceNode.prototype.start;
 	AudioScheduledSourceNode.prototype.start = function (this: AudioScheduledSourceNode, when = 0, ...rest: any[]) {
@@ -18,7 +26,45 @@ function instrument() {
 	const origConnect = AudioNode.prototype.connect;
 	(AudioNode.prototype as any).connect = function (dest: any, ...rest: any[]) {
 		if (dest instanceof AudioParam && this.context instanceof AudioContext) w.__paramSources.add(this);
+		if (dest instanceof AudioDestinationNode && this.context instanceof AudioContext) {
+			// Whatever goes to the speakers also goes to a probe the tests can measure
+			if (!w.__probe) {
+				w.__probe = this.context.createAnalyser();
+				w.__probe.fftSize = 4096;
+			}
+			(origConnect as any).call(this, w.__probe);
+		}
 		return (origConnect as any).call(this, dest, ...rest);
+	};
+	// Loudest sample reaching the speakers during the next `ms` milliseconds
+	w.__peakOver = (ms: number) => new Promise<number>((resolve) => {
+		const probe: AnalyserNode = w.__probe;
+		const buf = new Float32Array(probe.fftSize);
+		let peak = 0;
+		const id = setInterval(() => {
+			probe.getFloatTimeDomainData(buf);
+			for (const x of buf) peak = Math.max(peak, Math.abs(x));
+		}, 15);
+		setTimeout(() => { clearInterval(id); resolve(peak); }, ms);
+	});
+	// Keydown listeners on window, as (listener, capture) pairs, which is what identifies one
+	w.__keydown = [];
+	const captureOf = (opts: any) => (typeof opts === 'boolean' ? opts : !!opts?.capture);
+	const origAdd = EventTarget.prototype.addEventListener;
+	EventTarget.prototype.addEventListener = function (this: EventTarget, type: string, fn: any, opts?: any) {
+		if (this === window && type === 'keydown' && fn
+			&& !w.__keydown.some((l: any) => l.fn === fn && l.capture === captureOf(opts))) {
+			w.__keydown.push({ fn, capture: captureOf(opts) });
+		}
+		return (origAdd as any).call(this, type, fn, opts);
+	};
+	const origRemove = EventTarget.prototype.removeEventListener;
+	EventTarget.prototype.removeEventListener = function (this: EventTarget, type: string, fn: any, opts?: any) {
+		if (this === window && type === 'keydown') {
+			const i = w.__keydown.findIndex((l: any) => l.fn === fn && l.capture === captureOf(opts));
+			if (i >= 0) w.__keydown.splice(i, 1);
+		}
+		return (origRemove as any).call(this, type, fn, opts);
 	};
 	const origDisconnect = AudioNode.prototype.disconnect;
 	(AudioNode.prototype as any).disconnect = function (...args: any[]) {
@@ -212,4 +258,125 @@ test('exports a WAV file with sound in it, and a project file that imports again
 	});
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(4);
 	await expect(name).toHaveValue('Export Test');
+});
+
+// --- Second batch of fixes -----------------------------------------------------------------
+
+async function chooseFromFileMenu(page: Page, item: string) {
+	if (!(await page.getByRole('menuitem', { name: item }).isVisible())) {
+		await page.getByRole('button', { name: 'File ▾' }).click();
+	}
+	await page.getByRole('menuitem', { name: item }).click();
+}
+
+async function downloadFromFileMenu(page: Page, item: string) {
+	const [download] = await Promise.all([page.waitForEvent('download'), chooseFromFileMenu(page, item)]);
+	return readFileSync((await download.path())!);
+}
+
+// Loudest sample in a 32-bit float WAV file
+function wavPeak(bytes: Buffer) {
+	let peak = 0;
+	for (let i = 44; i + 4 <= bytes.length; i += 4) peak = Math.max(peak, Math.abs(bytes.readFloatLE(i)));
+	return peak;
+}
+
+test('asks before leaving with unsaved changes, and not once they are saved', async ({ page }) => {
+	await turnOnPads(page, [0]);
+	await expect(page.locator('.pc-dot')).toHaveClass(/\bunsaved\b/);
+
+	const dialogs: string[] = [];
+	page.on('dialog', async (dialog) => {
+		dialogs.push(dialog.type());
+		await dialog.dismiss(); // "Stay on page"
+	});
+	await page.close({ runBeforeUnload: true });
+	await expect.poll(() => dialogs).toEqual(['beforeunload']);
+	expect(page.isClosed()).toBe(false);
+
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('Control+s');
+	await expect(page.locator('.pc-dot')).toHaveClass(/\bsaved\b/);
+	await page.close({ runBeforeUnload: true });
+	await expect.poll(() => page.isClosed()).toBe(true);
+	expect(dialogs).toEqual(['beforeunload']); // no second prompt
+});
+
+test('MIDI notes wake the audio engine, even before Play has been pressed', async ({ page }) => {
+	// A fake MIDI keyboard, installed before the app loads
+	await page.addInitScript(() => {
+		const w = window as any;
+		w.__midiInput = { id: 'test-keyboard', name: 'Test Keyboard', onmidimessage: null };
+		const access = { inputs: new Map([['test-keyboard', w.__midiInput]]), outputs: new Map(), onstatechange: null };
+		(navigator as any).requestMIDIAccess = async () => access;
+	});
+	await page.reload();
+	await expect(pads(page)).toHaveCount(16);
+	const audioState = () => page.evaluate(() => (window as any).__ctx.state as string);
+
+	// Visitors' browsers keep audio suspended until the page is clicked. The test browser
+	// allows audio up front, so suspend it to start from what visitors get.
+	await page.evaluate(() => (window as any).__ctx.suspend());
+	await page.getByRole('button', { name: 'Enable MIDI' }).click();
+	await expect.poll(audioState).toBe('running');
+	await page.locator('#midi-input-select').selectOption('test-keyboard');
+
+	// A key pressed while audio is suspended wakes it and plays
+	await page.evaluate(() => (window as any).__ctx.suspend());
+	const before = await notesPlayed(page);
+	await page.evaluate(() => (window as any).__midiInput.onmidimessage({ data: new Uint8Array([0x90, 60, 100]) }));
+	await expect.poll(audioState).toBe('running');
+	await expect.poll(() => notesPlayed(page)).toBeGreaterThan(before);
+});
+
+test('with the envelope off, notes are as loud as with it on, live and in WAV exports', async ({ page }) => {
+	await turnOnPads(page, [0, 4, 8, 12]);
+	// Square has the biggest loudness correction of the four waves
+	await page.getByRole('radio', { name: 'SQUARE', exact: true }).click();
+
+	const livePeak = async () => {
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		const peak = await page.evaluate(() => (window as any).__peakOver(1500) as Promise<number>);
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+		await page.waitForTimeout(600); // let the last note die away
+		return peak;
+	};
+	const liveOn = await livePeak();
+	const wavOn = wavPeak(await downloadFromFileMenu(page, 'Export WAV'));
+
+	// The Envelope switch is hidden in the interface, but saved projects can have the envelope
+	// off; import one that does
+	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	expect(project.data.synth.envelope.enabled).toBe(true);
+	project.data.synth.envelope.enabled = false;
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'envelope-off.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify(project)),
+	});
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(4);
+
+	const liveOff = await livePeak();
+	const wavOff = wavPeak(await downloadFromFileMenu(page, 'Export WAV'));
+
+	// Before the fix, square notes with the envelope off came out about twice as loud
+	expect(liveOn).toBeGreaterThan(0.01);
+	expect(wavOn).toBeGreaterThan(0.01);
+	expect(liveOff / liveOn).toBeGreaterThan(0.8);
+	expect(liveOff / liveOn).toBeLessThan(1.25);
+	expect(wavOff / wavOn).toBeGreaterThan(0.8);
+	expect(wavOff / wavOn).toBeLessThan(1.25);
+});
+
+test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {
+	const listeners = () => page.evaluate(() => (window as any).__keydown.length as number);
+	const start = await listeners();
+	for (let i = 0; i < 3; i++) {
+		await chooseFromFileMenu(page, 'New');
+		// The menu closes once the new project has been created
+		await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
+		await expect(page.getByRole('button', { name: 'Arp pattern' })).toBeVisible();
+	}
+	await page.waitForTimeout(500);
+	expect(await listeners()).toBe(start);
 });

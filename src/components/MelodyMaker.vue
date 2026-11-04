@@ -961,7 +961,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-    window.removeEventListener('keydown', onKey);
+    window.removeEventListener('keydown', onKey, { capture: true });
 });
 
 function resetAdvanced() {

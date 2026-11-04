@@ -299,6 +299,15 @@ const dirty = computed(() =>
 );
 const dotClass = computed(() => (dirty.value ? 'unsaved' : 'saved'));
 
+// While the dot shows unsaved changes, ask before the page is closed or reloaded
+function onBeforeUnload(e: BeforeUnloadEvent) {
+    if (!dirty.value) return;
+    e.preventDefault();
+    e.returnValue = ''; // older browsers only show the prompt when this is set
+}
+onMounted(() => window.addEventListener('beforeunload', onBeforeUnload));
+onUnmounted(() => window.removeEventListener('beforeunload', onBeforeUnload));
+
 
 async function saveNow() {
     if (!store.loaded) return;

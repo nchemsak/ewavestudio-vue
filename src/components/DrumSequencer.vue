@@ -656,9 +656,6 @@ function handleMidiMessage(e: MIDIMessageEvent) {
 	// Use the currently selected global waveform
 	const wf = selectedWaveform.value as OscillatorType;
 
-	// Schedule "now" (slightly ahead to avoid tiny click)
-	const t = audioCtx.currentTime + 0.003;
-
 	// Optionally: only respond if the synth instrument exists and isn’t muted
 	const inst = synthInstrument.value;
 	if (!inst || inst.muted) return;
@@ -667,9 +664,23 @@ function handleMidiMessage(e: MIDIMessageEvent) {
 	const chanVol = inst.channelVolume ?? 1;
 	const amp = Math.min(1, vel * chanVol);
 
-	playSynthNote(freq, amp, decayTime, t, wf, {
-		addNoise: true, // or use noiseMask / some other logic if you want
-	});
+	// Schedule "now" (slightly ahead to avoid tiny click)
+	const play = () => {
+		startLfoIfNeeded();
+		playSynthNote(freq, amp, decayTime, audioCtx.currentTime + 0.003, wf, {
+			addNoise: true, // or use noiseMask / some other logic if you want
+		});
+	};
+
+	// The audio engine starts suspended and used to wake only on the first Play, so MIDI
+	// notes were silent until then. Wake it here. If that takes more than a moment (the page
+	// hasn't been clicked yet), drop the note rather than play it late.
+	if (audioCtx.state === 'running') {
+		play();
+	} else {
+		const requested = performance.now();
+		audioCtx.resume().then(() => { if (performance.now() - requested < 250) play(); }, () => { });
+	}
 }
 
 async function initMidiAccess() {
@@ -710,6 +721,8 @@ async function initMidiAccess() {
 
 async function enableMidi() {
 	if (!midiSupported || midiInitialized.value || midiInitInProgress.value) return;
+	// This click lets the audio engine start, so MIDI notes play before Play is ever pressed
+	audioCtx.resume().catch(() => { });
 	midiInitInProgress.value = true;
 	try {
 		await initMidiAccess();
@@ -2792,7 +2805,8 @@ function playSynthNote(freq: number, velocity: number, decayTime: number, startT
 		oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
 		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
 	} else {
-		oscEnvGain.gain.setValueAtTime(Math.max(0.0001, velocity), startTime);
+		// Same level as the envelope's peak: waveform balance and noise mix included
+		oscEnvGain.gain.setValueAtTime(safeOscGain, startTime);
 		oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005);
 	}
 
