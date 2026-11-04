@@ -71,6 +71,23 @@
                 </div>
             </div>
 
+            <div class="pc-history">
+                <button class="pc-btn pc-icon-btn" :disabled="!props.canUndo" @click="emit('undo')"
+                    aria-label="Undo" :title="undoTitle">
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                        <path d="M9 14 4 9l5-5" />
+                        <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+                    </svg>
+                </button>
+                <button class="pc-btn pc-icon-btn" :disabled="!props.canRedo" @click="emit('redo')"
+                    aria-label="Redo" :title="redoTitle">
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                        <path d="m15 14 5-5-5-5" />
+                        <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+                    </svg>
+                </button>
+            </div>
+
             <input ref="fileInput" type="file" accept="application/json" class="pc-hidden" @change="onImport" />
         </div>
 
@@ -129,8 +146,8 @@ const isNewUnsaved = ref<boolean>(false);
 const lastSavedHash = ref<string>('');
 const lastSavedName = ref<string>('');
 
-const props = defineProps<{ exporting?: boolean }>();
-const emit = defineEmits<{ (e: 'export-wav'): void }>();
+const props = defineProps<{ exporting?: boolean; canUndo?: boolean; canRedo?: boolean }>();
+const emit = defineEmits<{ (e: 'export-wav'): void; (e: 'undo'): void; (e: 'redo'): void }>();
 
 // GOOGLE ANALYTICS
 function trackEvent(event: string, params: Record<string, any> = {}) {
@@ -298,6 +315,8 @@ const hotkeyTitle = computed(() => {
     const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
     return isMac ? 'Save (⌘S)' : 'Save (Ctrl+S)';
 });
+const undoTitle = computed(() => (/Mac|iPod|iPhone|iPad/.test(navigator.platform) ? 'Undo (⌘Z)' : 'Undo (Ctrl+Z)'));
+const redoTitle = computed(() => (/Mac|iPod|iPhone|iPad/.test(navigator.platform) ? 'Redo (⇧⌘Z)' : 'Redo (Ctrl+Y)'));
 function hashOf(obj: unknown): string { try { return JSON.stringify(obj); } catch { return ''; } }
 const currentHash = computed(() => hashOf(store.data));
 const nameDirty = computed(() => (store.name || '') !== (lastSavedName.value || ''));
@@ -487,6 +506,27 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
 .pc-file {
     position: relative;
+}
+
+.pc-history {
+    display: inline-flex;
+    gap: .25rem;
+}
+
+.pc-btn.pc-icon-btn {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: .35rem .45rem;
+}
+
+.pc-icon-btn svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .pc-menu {
@@ -697,6 +737,20 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
     .pc-name {
         font-size: 11px;
+        /* fit between the Undo/Redo buttons and Save */
+        width: 100%;
+        max-width: 22ch;
+        min-width: 0;
+    }
+
+    .pc-center {
+        justify-self: stretch;
+        display: flex;
+        justify-content: center;
+    }
+
+    .pc-btn.pc-icon-btn {
+        padding: .3rem .35rem;
     }
 
     .pc-open-submenu {

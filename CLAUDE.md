@@ -8,7 +8,7 @@ Audio API; there is no backend. Features: one 16-step synth lane with per-step p
 waveform; amp envelope, pitch envelope, filter, noise, FM, unison and LFO; delay, overdrive
 and reverb; Web MIDI note input; a random melody and arpeggio maker; an oscilloscope,
 spectrogram, tuner and envelope display; WAV export; and projects saved in IndexedDB with JSON
-import and export. Earlier versions also had sample drum lanes (kick, snare, hihat and
+import and export; and undo/redo. Earlier versions also had sample drum lanes (kick, snare, hihat and
 user-loaded samples). Their UI is commented out and they are no longer part of the app, but
 some of their code remains (see "Dead code").
 
@@ -35,9 +35,8 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   because the code was written without a type checker. It must stay at zero errors.
 - **Unit tests** (Vitest, in Node): pure logic such as loading and upgrading saved projects,
   WAV encoding, storage names, the playback clock, synth helpers, MIDI input (with a fake
-  MIDI system) and project snapshots (save → load round trip, older projects, factory
-  defaults). `vitest.config.js` reuses
-  `vite.config.js` and sets `BASE_URL` to the real base, so code sees `/studio2/` as in the app.
+  MIDI system), the undo history and project snapshots (save → load round trip, older
+  projects, factory defaults). `vitest.config.js` reuses `vite.config.js` and sets `BASE_URL` to the real base, so code sees `/studio2/` as in the app.
 - **Browser tests** (Playwright, Chromium), `e2e/app.spec.ts`: build, serve with
   `vite preview`, then drive the app. An init script keeps a handle on the app's AudioContext
   (`__ctx`), records every scheduled note and the per-note LFO taps, measures the output
@@ -122,7 +121,8 @@ src/components/
   MelodyMaker.vue        Scale, key and range; random melody and arpeggio generator
   PatternTools.vue       Synth-lane tools: step fills (all, every 2/4, invert, random, clear),
                          velocity shapes ("Humanize") and octave shift
-  ProjectControls.vue    File menu: new, open, save, rename, delete, import/export JSON, WAV
+  ProjectControls.vue    File menu: new, open, save, rename, delete, import/export JSON, WAV;
+                         Undo/Redo buttons
   MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
@@ -137,6 +137,7 @@ src/audio/
   export/encodeWav.ts    AudioBuffer → 32-bit float WAV
 src/stores/projectStore.ts  Pinia store: current projectId, name, data snapshot
 src/lib/project/snapshot.ts  Settings ↔ project snapshot, and factory defaults (see "Saving")
+src/lib/project/history.ts   Undo/redo history of snapshots (pure; see "Undo / redo")
 src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/export,
                          namespace.ts (storage names, one set per site folder)
 src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) + v1→v2
@@ -144,6 +145,7 @@ src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) +
 src/composables/useTheme.ts      synthwave | dark | light theme, stored in localStorage
 src/composables/useMidiInput.ts  Web MIDI note input (see "MIDI")
 src/composables/useProjectSync.ts  Keeps the settings and the project store in step (see "Saving")
+src/composables/useUndoHistory.ts  When to record an undo step, and applying undo/redo
 src/assets/styles/       _bootstrap-custom.scss (the Bootstrap parts in use, then main.scss),
                          and all global SCSS (themes are in _themes.scss). _sequencer.scss and
                          _keyboard.scss are not built (main.scss doesn't load them)
@@ -214,6 +216,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - 1–4: screen view (Oscilloscope, Spectrogram, Tuner, Envelope), same handler; ignored while
   typing or while a dropdown list is open.
 - Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers.
+- Ctrl/Cmd+Z: undo; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: redo (same handler as Space). Ignored in
+  a text box, which keeps its own undo (the project name).
 - Knobs (`Knob.vue`, `role="slider"`): Tab to one, then arrows (Up/Right turn it up) move one
   step, or about 1% of the range on a knob with more than 300 steps; Shift+arrow and Page
   Up/Down about 10%; Home/End minimum/maximum. The first key emits `knobStart`, as a drag
@@ -222,6 +226,23 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `tabindex="0"`). Left/Right move between pads, Home/End to the first/last, Enter turns
   the focused pad on or off. Each pad is a toggle button named "Step 3", plus its note when on.
 - Focus rings show for keyboard focus only (`:focus-visible`), in the theme's accent color.
+
+### Undo / redo
+- `src/composables/useUndoHistory.ts` (called once from `DrumSequencer.vue`) keeps a history of
+  snapshots (`src/lib/project/history.ts`, up to 100 steps, in memory only, not saved). Each
+  entry is the whole snapshot except `ui`, so the theme and which panels are open are never
+  undone. A new saved parameter is covered automatically.
+- It watches `projectStore.data` (replaced on every change by `useProjectSync.ts`) and records
+  a step once the settings have stayed the same for 400 ms (`SETTLE_MS`) and no pointer is held
+  down, so a knob drag or a burst of arrow keys is one step. Undo first records anything still
+  pending, so it always goes back past the latest change. The page's (or a newly opened
+  project's) first 400 ms are its starting point.
+- Opening, importing or creating a project (a new `projectId`) starts a fresh history; File →
+  New and Open can't be undone.
+- While an undo/redo is applied (two ticks), changes the panels make by themselves (the Delay
+  panel resets the delay time from the tempo) are folded into that entry, so they don't count
+  as a new change that throws away the redo side. A browser test covers this.
+- Undo changes the project like any edit, so the unsaved dot shows; it doesn't stop playback.
 
 ### Saving / projects
 - The settings stay refs in `DrumSequencer.vue`. It groups every saved one into `projectState`
@@ -325,23 +346,22 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 
 Next, in this order:
 1. **Features**, one PR each, ranked by value for effort (the maintainer may reorder):
-   1. Undo/redo (the app already builds full snapshots).
-   2. Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan
+   1. Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan
       (only if the drum lanes come back).
-   3. Store custom samples in the browser, and load them by drag-and-drop (drum lanes).
-   4. Built-in preset library of synth patches (and drum kits, if those come back).
-   5. Share a project as a link (the project encoded in the URL).
-   6. Master limiter/compressor (louder output without clipping).
-   7. Step probability, ratchets (quick repeats within a step) and timing humanize.
-   8. Several patterns (A/B/C/D) chained into a song.
-   9. More MIDI: MIDI learn for knobs, MIDI clock sync, MIDI out, and drum lanes played by
+   2. Store custom samples in the browser, and load them by drag-and-drop (drum lanes).
+   3. Built-in preset library of synth patches (and drum kits, if those come back).
+   4. Share a project as a link (the project encoded in the URL).
+   5. Master limiter/compressor (louder output without clipping).
+   6. Step probability, ratchets (quick repeats within a step) and timing humanize.
+   7. Several patterns (A/B/C/D) chained into a song.
+   8. More MIDI: MIDI learn for knobs, MIDI clock sync, MIDI out, and drum lanes played by
       MIDI notes.
-   10. Play the synth from the computer keyboard. `ComputerKeyboard.vue` in git history has a
-       key-to-note map.
-   11. Export options: N bars or loops, stems, MIDI file.
-   12. 32 steps, or per-lane lengths (the export code's types already allow 32).
-   13. Per-step parameter locks (for example a different filter cutoff on each step).
-   14. Install as an app (PWA) that works offline.
+   9. Play the synth from the computer keyboard. `ComputerKeyboard.vue` in git history has a
+      key-to-note map.
+   10. Export options: N bars or loops, stems, MIDI file.
+   11. 32 steps, or per-lane lengths (the export code's types already allow 32).
+   12. Per-step parameter locks (for example a different filter cutoff on each step).
+   13. Install as an app (PWA) that works offline.
 2. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
 
 Not scheduled yet: smaller items from reviews. Ask the maintainer before starting any of them.
@@ -393,6 +413,7 @@ Done:
 | 12 | Split `DrumSequencer.vue`, part 3 of 3: saving and loading moved to `src/lib/project/snapshot.ts` (with unit tests) and `src/composables/useProjectSync.ts`. Finishes the split. |
 | 13 | Accessibility: knobs are sliders that work from the keyboard (arrows, Shift, Home/End) and tell screen readers their value; the step pads are one Tab stop (arrows move, Enter switches a pad). Space stays Play everywhere, on purpose (the planned "Space presses the focused button" was dropped). |
 | 14 | Trimmed the CSS from 334 kB to 119 kB (gzip 51 kB → 23 kB) by building only the Bootstrap parts in use, and silenced Bootstrap's Sass deprecation warnings (our own `mix()` calls moved to `color.mix()`). The look is unchanged: every element's computed style and every screenshot matched the old build in all three themes at five widths (before/after screenshots linked from the PR). |
+| 15 | Undo/redo: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl+Y, and Undo/Redo buttons next to File. A knob drag is one step; theme and panel layout aren't undone; opening a project starts a fresh history. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

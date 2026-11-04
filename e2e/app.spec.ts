@@ -618,3 +618,127 @@ test('refuses a broken project file with a message, and keeps the current patter
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(2);
 	await expect(name).toHaveValue(nameBefore);
 });
+
+// A change counts as one undo step once the settings have stayed the same this long
+// (SETTLE_MS in src/composables/useUndoHistory.ts), plus a margin
+const SETTLED = 700;
+
+test('undo and redo step through changes; a knob drag is one step', async ({ page }) => {
+	const undoBtn = page.getByRole('button', { name: 'Undo', exact: true });
+	const redoBtn = page.getByRole('button', { name: 'Redo', exact: true });
+	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
+	const selected = page.locator('.pad-row .padTEST.selected');
+	await page.waitForTimeout(SETTLED); // the opened project becomes the starting point
+	await expect(undoBtn).toBeDisabled();
+	await expect(redoBtn).toBeDisabled();
+
+	await turnOnPads(page, [0]);
+	await page.waitForTimeout(SETTLED);
+	await turnOnPads(page, [4]);
+	await page.waitForTimeout(SETTLED);
+
+	// Dragging a knob changes the tempo many times, but it's one step
+	const box = (await tempo.boundingBox())!;
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	for (let i = 1; i <= 8; i++) {
+		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - i * 8);
+		await page.waitForTimeout(100); // longer than the whole drag would be without the pointer rule
+	}
+	await page.waitForTimeout(SETTLED); // still held: nothing is recorded yet
+	await page.mouse.up();
+	const dragged = Number(await tempo.getAttribute('aria-valuenow'));
+	expect(dragged).toBeGreaterThan(80);
+	await expect(undoBtn).toBeEnabled();
+
+	// Undo right away, before the drag has settled: it still goes back past the whole drag
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('Control+z');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await expect(selected).toHaveCount(2);
+	await undoBtn.click();
+	await expect(selected).toHaveCount(1);
+	await page.keyboard.press('Control+z');
+	await expect(selected).toHaveCount(0);
+	await expect(undoBtn).toBeDisabled();
+
+	// Redo with the button, Ctrl+Shift+Z and Ctrl+Y
+	await redoBtn.click();
+	await expect(selected).toHaveCount(1);
+	await page.keyboard.press('Control+Shift+z');
+	await expect(selected).toHaveCount(2);
+	await page.keyboard.press('Control+y');
+	await expect(tempo).toHaveAttribute('aria-valuenow', String(dragged));
+	await expect(redoBtn).toBeDisabled();
+
+	await page.keyboard.press('Control+z');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await page.waitForTimeout(SETTLED);
+	await expect(redoBtn).toBeEnabled();
+
+	// A new change after undo drops what could be redone
+	await turnOnPads(page, [8]);
+	await page.waitForTimeout(SETTLED);
+	await expect(redoBtn).toBeDisabled();
+	await page.keyboard.press('Control+z');
+	await expect(selected).toHaveCount(2);
+	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+
+	// Undo changes the project, so the unsaved dot shows
+	await expect(page.locator('.pc-dot')).toHaveClass(/\bunsaved\b/);
+});
+
+test("after an undo, a panel's own follow-up change keeps redo available", async ({ page }) => {
+	// After File → New the delay time is the default 0.2 s, not the synced time; any tempo
+	// change makes the Delay panel set the synced time (see "Delay time" in CLAUDE.md). So
+	// undoing a tempo change restores 0.2 s, then the panel sets the synced time again.
+	await chooseFromFileMenu(page, 'New');
+	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
+	await page.waitForTimeout(SETTLED);
+	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
+	await tempo.focus();
+	await page.keyboard.press('ArrowUp');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '81');
+	await page.waitForTimeout(SETTLED);
+
+	await page.keyboard.press('Control+z');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await page.waitForTimeout(SETTLED);
+	const redoBtn = page.getByRole('button', { name: 'Redo', exact: true });
+	await expect(redoBtn).toBeEnabled();
+	await redoBtn.click();
+	await expect(tempo).toHaveAttribute('aria-valuenow', '81');
+});
+
+test('Ctrl+Z in the project name box undoes typing, not the pattern', async ({ page }) => {
+	await page.waitForTimeout(SETTLED);
+	await turnOnPads(page, [0]);
+	await page.waitForTimeout(SETTLED);
+	const name = page.getByRole('textbox', { name: 'Project name' });
+	await name.click();
+	await page.keyboard.type('abc');
+	await page.keyboard.press('Control+z');
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(1);
+});
+
+test('opening another project starts a fresh undo history', async ({ page }) => {
+	const undoBtn = page.getByRole('button', { name: 'Undo', exact: true });
+	await page.waitForTimeout(SETTLED);
+	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	await turnOnPads(page, [0, 1]);
+	await page.waitForTimeout(SETTLED);
+	await expect(undoBtn).toBeEnabled();
+
+	project.data.instruments.find((i: any) => i.name === 'synth-voice').steps[5] = true;
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'Other.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify({ ...project, meta: { name: 'Other' } })),
+	});
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(1);
+	await page.waitForTimeout(SETTLED);
+	await expect(undoBtn).toBeDisabled();
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('Control+z');
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(1);
+});
