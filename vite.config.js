@@ -8,4 +8,17 @@ export default defineConfig({
   // Changing `base` also changes where saved projects are stored (src/lib/storage/namespace.ts).
   base: '/studio2/',
   plugins: [vue()],
+  css: {
+    preprocessorOptions: {
+      scss: {
+        // Bootstrap 5.3's Sass uses features Dart Sass now flags as deprecated (@import, global
+        // functions such as red()), which printed hundreds of warnings on every build. They are
+        // Bootstrap's to fix (Bootstrap 6). quietDeps hides warnings from files in node_modules;
+        // 'import' covers our own @import of Bootstrap in _bootstrap-custom.scss, which Bootstrap
+        // 5.3 needs. Our other SCSS uses @use, so new problems in it still show.
+        quietDeps: true,
+        silenceDeprecations: ['import'],
+      },
+    },
+  },
 })

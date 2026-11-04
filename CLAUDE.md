@@ -56,8 +56,11 @@ Installing from the lockfile (`npm ci`, or `npm install` with nothing new) works
 upgrade Vitest, run that one install with npm 11 (`npx npm@11 install -D vitest@...`), then
 confirm `npm ci` still works with npm 10.
 
-The build prints hundreds of Sass deprecation warnings that come from Bootstrap's SCSS.
-They are expected, and the build still succeeds.
+Sass deprecation warnings from Bootstrap's own SCSS are silenced in `vite.config.js`
+(`quietDeps`, plus `import` for our `@import` of Bootstrap, which Bootstrap 5.3 needs). Warnings
+from our other SCSS still show, so a clean build prints none. In our SCSS, use the `sass:`
+modules (`@use "sass:color"` and `color.mix()`, `map.get()`), not the global functions
+(`mix()`, `map-get()`), which Dart Sass deprecates.
 
 ## Deploy (automatic, to /studio2/)
 
@@ -141,7 +144,9 @@ src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) +
 src/composables/useTheme.ts      synthwave | dark | light theme, stored in localStorage
 src/composables/useMidiInput.ts  Web MIDI note input (see "MIDI")
 src/composables/useProjectSync.ts  Keeps the settings and the project store in step (see "Saving")
-src/assets/styles/       Bootstrap overrides + all global SCSS (themes are in _themes.scss)
+src/assets/styles/       _bootstrap-custom.scss (the Bootstrap parts in use, then main.scss),
+                         and all global SCSS (themes are in _themes.scss). _sequencer.scss and
+                         _keyboard.scss are not built (main.scss doesn't load them)
 public/audio/            kick.mp3, snare.mp3, hihat.mp3: still fetched at startup, but only
                          used by the hidden drum lanes
 public/images/           Background textures/GIFs referenced from SCSS via ../images/
@@ -267,9 +272,15 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Indentation is mostly tabs in `DrumSequencer.vue` and 4 spaces elsewhere. Match the
   surrounding file.
 - Large files are split into sections with `// X START` / `// X END` banner comments. Keep them.
-- Styling: Bootstrap 5 (full SCSS import) + custom SCSS in `src/assets/styles/`. There are
-  three themes, selected by a `theme-*` class on `<html>`. Keep the current look and feel
-  unless a change is requested.
+- Styling: Bootstrap 5 + custom SCSS in `src/assets/styles/`. There are three themes, selected
+  by a `theme-*` class on `<html>`. Keep the current look and feel unless a change is
+  requested.
+- Only the Bootstrap parts the app uses are built (`_bootstrap-custom.scss`): root variables and
+  reboot, the grid's `.container`, `.row` and `.col-12`, `.visually-hidden`, and the utilities
+  `.d-flex`, `.position-relative`, `.align-items-center`, `.gap-2` and `.text-center`. Any other
+  Bootstrap class (`mb-3`, `btn`, `form-control`, ...) does nothing until you add its part
+  there: a utility to the `$utilities` map, anything else as an `@import` of its file, in
+  Bootstrap's order (see `node_modules/bootstrap/scss/bootstrap.scss`).
 - Reference runtime assets in `public/` relative to the page (for example `audio/kick.mp3`)
   or through `import.meta.env.BASE_URL`. Never start the path with `/`, or it breaks under
   the `/studio2/` base.
@@ -313,11 +324,7 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 - The PR that finishes an item also updates this list: move the item to "Done".
 
 Next, in this order:
-1. **Trim the CSS** (333 kB):
-   - Import only the Bootstrap parts in use.
-   - Silence the Sass deprecation warnings.
-   - The look must not change: include before/after screenshots of all three themes.
-2. **Features**, one PR each, ranked by value for effort (the maintainer may reorder):
+1. **Features**, one PR each, ranked by value for effort (the maintainer may reorder):
    1. Undo/redo (the app already builds full snapshots).
    2. Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan
       (only if the drum lanes come back).
@@ -335,7 +342,7 @@ Next, in this order:
    12. 32 steps, or per-lane lengths (the export code's types already allow 32).
    13. Per-step parameter locks (for example a different filter cutoff on each step).
    14. Install as an app (PWA) that works offline.
-3. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+2. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
 
 Not scheduled yet: smaller items from reviews. Ask the maintainer before starting any of them.
 - **Change tracking is heavy.** Every change rebuilds the whole snapshot and turns it into
@@ -385,6 +392,7 @@ Done:
 | 11 | Split `DrumSequencer.vue`, part 2 of 3: MIDI moved to `src/composables/useMidiInput.ts` (with unit tests) and `MidiToolbar.vue`. |
 | 12 | Split `DrumSequencer.vue`, part 3 of 3: saving and loading moved to `src/lib/project/snapshot.ts` (with unit tests) and `src/composables/useProjectSync.ts`. Finishes the split. |
 | 13 | Accessibility: knobs are sliders that work from the keyboard (arrows, Shift, Home/End) and tell screen readers their value; the step pads are one Tab stop (arrows move, Enter switches a pad). Space stays Play everywhere, on purpose (the planned "Space presses the focused button" was dropped). |
+| 14 | Trimmed the CSS from 334 kB to 119 kB (gzip 51 kB → 23 kB) by building only the Bootstrap parts in use, and silenced Bootstrap's Sass deprecation warnings (our own `mix()` calls moved to `color.mix()`). The look is unchanged: every element's computed style and every screenshot matched the old build in all three themes at five widths (before/after screenshots linked from the PR). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
