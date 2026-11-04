@@ -433,6 +433,47 @@ test('delay, drive and reverb are in the signal path', async ({ page }) => {
 	expect(driven).toBeGreaterThan(0.01);
 });
 
+test('File → New gives the same settings as a freshly opened page', async ({ page }) => {
+	const projectData = async () =>
+		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	// The page's starting settings are the refs' initial values in DrumSequencer.vue; File → New
+	// sets them from resetToFactoryDefaults() in src/lib/project/snapshot.ts. They must agree.
+	const fresh = await projectData();
+
+	// Load a project with other settings, then start a new one
+	const changed = JSON.parse(JSON.stringify(fresh));
+	changed.transport.tempo = 140;
+	changed.synth.envelope.decayMs = 900;
+	changed.fx.reverb.enabled = true;
+	changed.melody.keyScale = 'dorian';
+	changed.selectedWaveform = 'square';
+	changed.instruments.find((i: any) => i.name === 'synth-voice').steps[0] = true;
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'Changed.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify({ version: 2, projectId: 'changed', meta: { name: 'Changed' }, data: changed })),
+	});
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(1);
+	expect((await projectData()).transport.tempo).toBe(140);
+
+	await chooseFromFileMenu(page, 'New');
+	// The menu closes once the new project has been created; until then, the File menu can
+	// close under the next click
+	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(0);
+	const afterNew = await projectData();
+
+	// Only the screen layout (which panels are open) may differ. The delay time and tone are set
+	// by the Delay panel itself when it appears (from the tempo, its division knob and its tone
+	// knob), not from the defaults; after File → New the project keeps the defaults' 0.2 s and
+	// 5000 Hz (see "Delay time" under "Not scheduled yet" in CLAUDE.md).
+	const settings = ({ ui, ...rest }: any) => {
+		const { time, toneHz, ...delay } = rest.fx.delay;
+		return { ...rest, fx: { ...rest.fx, delay } };
+	};
+	expect(settings(afterNew)).toEqual(settings(fresh));
+});
+
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {
 	const listeners = () => page.evaluate(() => (window as any).__keydown.length as number);
 	const start = await listeners();

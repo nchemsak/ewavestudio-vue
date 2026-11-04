@@ -34,8 +34,9 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
 - **Type check:** `tsconfig.json` is deliberately lenient (`strict` and `noImplicitAny` off),
   because the code was written without a type checker. It must stay at zero errors.
 - **Unit tests** (Vitest, in Node): pure logic such as loading and upgrading saved projects,
-  WAV encoding, storage names, the playback clock, synth helpers and MIDI input (with a fake
-  MIDI system). `vitest.config.js` reuses
+  WAV encoding, storage names, the playback clock, synth helpers, MIDI input (with a fake
+  MIDI system) and project snapshots (save → load round trip, older projects, factory
+  defaults). `vitest.config.js` reuses
   `vite.config.js` and sets `BASE_URL` to the real base, so code sees `/studio2/` as in the app.
 - **Browser tests** (Playwright, Chromium), `e2e/app.spec.ts`: build, serve with
   `vite preview`, then drive the app. An init script keeps a handle on the app's AudioContext
@@ -109,9 +110,9 @@ index.html               Entry HTML + Google Analytics tag
 src/main.ts              createApp + Pinia, imports the global SCSS (Bootstrap + theme)
 src/App.vue              Toolbar (ThemeToggle, #midi-toolbar-slot) + <DrumSequencer/>
 src/components/
-  DrumSequencer.vue      ~3900 lines; holds nearly all app state (as refs), screen views and
-                         saving; passes the sound settings to the live engine and decides
-                         what a MIDI note plays
+  DrumSequencer.vue      ~3400 lines; holds nearly all app state (as refs) and the screen
+                         views; groups the saved settings as `projectState` for saving and
+                         the live engine, and decides what a MIDI note plays
   modules/*.vue          Synth and effect panels: Envelope, Filter, PitchEnv, Noise, FM,
                          Unison, LFOGroup, Delay, Drive, Reverb (UI only; mostly v-model)
   SynthStepGrid.vue      16 synth step pads with velocity and pitch sliders
@@ -132,12 +133,14 @@ src/audio/
   export/scheduleStepSequencer.ts  Separate offline engine used for WAV export
   export/encodeWav.ts    AudioBuffer → 32-bit float WAV
 src/stores/projectStore.ts  Pinia store: current projectId, name, data snapshot
+src/lib/project/snapshot.ts  Settings ↔ project snapshot, and factory defaults (see "Saving")
 src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/export,
                          namespace.ts (storage names, one set per site folder)
 src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) + v1→v2
                          migration (CURRENT_VERSION = 2)
 src/composables/useTheme.ts      synthwave | dark | light theme, stored in localStorage
 src/composables/useMidiInput.ts  Web MIDI note input (see "MIDI")
+src/composables/useProjectSync.ts  Keeps the settings and the project store in step (see "Saving")
 src/assets/styles/       Bootstrap overrides + all global SCSS (themes are in _themes.scss)
 public/audio/            kick.mp3, snare.mp3, hihat.mp3: still fetched at startup, but only
                          used by the hidden drum lanes
@@ -150,9 +153,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### Audio engine (live), in `src/audio/liveEngine.ts`
 - `DrumSequencer.vue` calls `useLiveEngine(settings)` once during setup. `settings` holds the
-  component's own refs (transport, pattern lanes, envelope, filter, noise, unison, LFO, FM,
-  pitch envelope, delay, drive, reverb), grouped like `exportState`. The engine only reads
-  them, and follows changes with watchers. It returns `audioCtx`, `analyser`, `isPlaying`,
+  component's own refs: the transport, synth and effect groups of `projectState` (see
+  "Saving / projects"), plus the pattern lanes. The engine only reads them, and follows
+  changes with watchers. It returns `audioCtx`, `analyser`, `isPlaying`,
   `currentStep`, `playSynthNote`, `startLfoIfNeeded`, `togglePlay`, `hardStopSequencer` and
   `loadSample`. A new sound setting is passed in here (see "If you add a parameter").
 - One `AudioContext` is created when `useLiveEngine` runs. It is resumed on the first Play
@@ -206,14 +209,22 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers.
 
 ### Saving / projects
-- `buildSnapshot()` turns all UI and synth state into a plain object; `applySnapshot()` restores
-  it. Shape: `{ meta, ui, transport, synth, fx, instruments[], melody, selectedWaveform }`.
+- The settings stay refs in `DrumSequencer.vue`. It groups every saved one into `projectState`
+  (type `ProjectState`), shaped like a snapshot:
+  `{ meta, ui, transport, synth, fx, instruments[], melody, selectedWaveform }`.
+- `src/lib/project/snapshot.ts`: `buildSnapshot(state)` turns the settings into a plain object,
+  `applySnapshot(state, s)` restores them (a missing or wrongly typed field keeps its current
+  value), and `resetToFactoryDefaults(state)` is File → New. They only touch refs, so
+  `snapshot.test.ts` tests them in Node. `resetUiToFactoryDefaults()` in `DrumSequencer.vue`
+  wraps the last one with what isn't saved (stop playback, pad sliders, menus, Melody Maker).
+- `src/composables/useProjectSync.ts` connects them to the project store (below).
 - Storage names come from `src/lib/storage/namespace.ts` and include the site folder, because
   browsers share storage across a whole website: `/studio2/` uses the IndexedDB database
   `ewave-studio2-db` and `localStorage` keys `ewave-studio2:*`. Version 1 on `/studio/` uses
   `ewave-db`, `ewave:*`, `seqOpen` and `ui-theme`, so the two never see each other's projects
   or settings. Always go through `STORAGE_NS` / `storageKey()`; never hard-code a name.
-- A deep watcher copies the snapshot into `projectStore.data`. Edits are written to IndexedDB
+- A deep watcher in `useProjectSync.ts` copies the snapshot into `projectStore.data`, and a
+  project put into the store (opened, imported, new) is applied back to the settings. Edits are written to IndexedDB
   (`projects` store) only on an explicit Save in `ProjectControls` (the Save menu item or
   Ctrl/Cmd+S); creating a project also writes an initial record. A status dot shows unsaved
   changes.
@@ -232,10 +243,13 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (`LANE_FIELDS`); other sections are free-form, and unknown fields are kept, so a new
   parameter needs no change there. A file that fails the check is refused as a whole
   ("Import failed"), and the console says which field was wrong.
-- If you add a parameter: add it to `buildSnapshot`, `applySnapshot`,
-  `resetUiToFactoryDefaults`, and (if it affects sound) the `useLiveEngine` settings and
-  `liveEngine.ts`, `exportState` and `scheduleStepSequencer.ts`. Treat a missing field in an older snapshot as "use the default",
-  so existing saved projects still load.
+- If you add a parameter: add its ref to `projectState` in `DrumSequencer.vue` (and the
+  `ProjectState` type), to `buildSnapshot`, `applySnapshot` and `resetToFactoryDefaults` in
+  `snapshot.ts` (the default must match the ref's starting value; a browser test compares
+  File → New with a fresh page), and to `changeEverything()` in `snapshot.test.ts` (the
+  round-trip test names any setting it doesn't cover). If it affects sound, also to
+  `liveEngine.ts`, `exportState` and `scheduleStepSequencer.ts`. Treat a missing field in an
+  older snapshot as "use the default", so existing saved projects still load.
 
 ## Conventions
 - Vue 3 `<script setup>` SFCs, a mix of `lang="ts"` and plain JS. Composition API with
@@ -280,28 +294,21 @@ back from git history.
 ## Planned work
 
 The maintainer's to-do list, agreed in earlier sessions. Rules:
-- Do one item at a time, as one PR (the `DrumSequencer.vue` split is three PRs).
+- Do one item at a time, as one PR.
 - Start the next item only when the maintainer says so. They usually start a new chat for
   each item, and "do the next item" means the first one under "Next, in this order".
 - The PR that finishes an item also updates this list: move the item to "Done".
 
 Next, in this order:
-1. **Split `DrumSequencer.vue`** (about 4,800 lines) into modules, one PR each:
-   - ~~the live sound engine~~ (done in PR 9: `src/audio/liveEngine.ts`);
-   - ~~MIDI~~ (done in PR 11: `src/composables/useMidiInput.ts`, `MidiToolbar.vue`);
-   - saving and loading projects.
-
-   Behavior and sound must not change. This prepares live playback and WAV export to share
-   one engine later, and unblocks most of the features below.
-2. **Accessibility:**
+1. **Accessibility:**
    - Knobs get a slider role and work from the keyboard.
    - Step pads can be reached with Tab.
    - Space on a focused button presses that button instead of toggling Play.
-3. **Trim the CSS** (333 kB):
+2. **Trim the CSS** (333 kB):
    - Import only the Bootstrap parts in use.
    - Silence the Sass deprecation warnings.
    - The look must not change: include before/after screenshots of all three themes.
-4. **Features**, one PR each, ranked by value for effort (the maintainer may reorder):
+3. **Features**, one PR each, ranked by value for effort (the maintainer may reorder):
    1. Undo/redo (the app already builds full snapshots).
    2. Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan
       (only if the drum lanes come back).
@@ -319,12 +326,12 @@ Next, in this order:
    12. 32 steps, or per-lane lengths (the export code's types already allow 32).
    13. Per-step parameter locks (for example a different filter cutoff on each step).
    14. Install as an app (PWA) that works offline.
-5. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+4. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
 
 Not scheduled yet: smaller items from reviews. Ask the maintainer before starting any of them.
 - **Change tracking is heavy.** Every change rebuilds the whole snapshot and turns it into
   JSON several times, even each frame of a knob drag. This happens in the UI → store watcher
-  in `DrumSequencer.vue` and in `hashOf` in `ProjectControls.vue`. Debounce it.
+  in `useProjectSync.ts` and in `hashOf` in `ProjectControls.vue`. Debounce it.
 - **A broken last-opened project fails silently.** If it fails the project check at startup,
   it isn't opened and no message appears. Save then does nothing (`store.loaded` stays false)
   until File → New. Show a message and start a fresh project instead.
@@ -340,6 +347,16 @@ Not scheduled yet: smaller items from reviews. Ask the maintainer before startin
   It can't be heard, but it shows up in measurements (the browser tests use `__swingOver` to
   ignore it) and wastes a little headroom. Fixing it changes the sound slightly, so it was
   left out of the engine split. The export engine has the same curve.
+- **Delay time isn't always the synced time.** With tempo sync on, the Delay panel
+  (`DelayEffect.vue`) works out the delay time from the tempo and its division knob (default
+  dotted 1/8), and sends it only when it first appears or when the tempo or division changes.
+  Its division knob isn't saved, and it ignores a delay time set from outside. So after
+  File → New the delay time can stay at the default 0.2 s (in the project, and in the sound if
+  the tempo didn't change) instead of the synced time (0.5625 s at 80 BPM), until the tempo
+  or division changes; and a reopened project plays its saved time while the knob shows
+  dotted 1/8. Fix: save the division, and have the panel follow a time set from outside
+  (or compute the synced time from tempo and division in one place). The browser test "File →
+  New gives the same settings as a freshly opened page" skips the delay time and tone for now.
 - **Major-version upgrades were left out on purpose** (Vite 8, Pinia 4). If wanted, do each as
   its own PR.
 
@@ -357,6 +374,7 @@ Done:
 | 9 | Split `DrumSequencer.vue`, part 1 of 3: the live sound engine moved to `src/audio/liveEngine.ts` (helpers in `synthHelpers.ts`). |
 | 10 | Fixed a race between File → New and an import right after it, which emptied the name box and made a deploy's checks fail now and then. |
 | 11 | Split `DrumSequencer.vue`, part 2 of 3: MIDI moved to `src/composables/useMidiInput.ts` (with unit tests) and `MidiToolbar.vue`. |
+| 12 | Split `DrumSequencer.vue`, part 3 of 3: saving and loading moved to `src/lib/project/snapshot.ts` (with unit tests) and `src/composables/useProjectSync.ts`. Finishes the split. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
