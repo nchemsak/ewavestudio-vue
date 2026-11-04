@@ -2,7 +2,8 @@
 	<div class="drum-sequencer" :class="currentTheme" :style="padSizeStyle">
 		<!-- Save/Open/Import/Export toolbar -->
 		<section class="pt-card" style="margin-bottom:12px">
-			<ProjectControls :exporting="isExporting" @export-wav="exportCurrentPattern" />
+			<ProjectControls :exporting="isExporting" :can-undo="canUndo" :can-redo="canRedo"
+				@export-wav="exportCurrentPattern" @undo="undo" @redo="redo" />
 		</section>
 		<div class="ds-grid">
 
@@ -475,6 +476,7 @@ import {
 	type KeyRoot,
 } from '../lib/project/snapshot';
 import { useProjectSync } from '../composables/useProjectSync';
+import { useUndoHistory } from '../composables/useUndoHistory';
 
 // WAV Export
 import { scheduleStepSequencer, type StepSequencerState } from '../audio/export/scheduleStepSequencer';
@@ -2087,6 +2089,15 @@ function isTypingTarget(el: EventTarget | null): boolean {
 }
 
 function onGlobalKeydown(e: KeyboardEvent) {
+	// Ctrl/Cmd+Z undo; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redo. A text box keeps its own undo.
+	const key = e.key.toLowerCase();
+	if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === 'z' || key === 'y')) {
+		if (isTypingTarget(e.target)) return;
+		e.preventDefault();
+		if (key === 'y' || e.shiftKey) redo(); else undo();
+		return;
+	}
+
 	// Number keys 1–4 switch the screen view, like the four buttons under the screen
 	if (/^[1-4]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
 		// Leave digits alone while typing, or while a dropdown list is open
@@ -2393,6 +2404,13 @@ const { project } = useProjectSync({
 	buildSnapshot: () => buildSnapshot(projectState),
 	applySnapshot: (s) => applySnapshot(projectState, s),
 	resetUiToFactoryDefaults,
+});
+
+// Undo/redo of settings changes (Ctrl/Cmd+Z and the buttons in ProjectControls); see
+// src/composables/useUndoHistory.ts
+const { canUndo, canRedo, undo, redo } = useUndoHistory({
+	buildSnapshot: () => buildSnapshot(projectState),
+	applySnapshot: (s) => applySnapshot(projectState, s),
 });
 
 // SAVING END
