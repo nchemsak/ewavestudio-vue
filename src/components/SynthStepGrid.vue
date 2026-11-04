@@ -1,7 +1,8 @@
 <!-- src/components/SynthStepGrid.vue -->
 <template>
     <div class="d-flex pad-row">
-        <div class="padTEST-grid" data-equal-cols>
+        <!-- One Tab stop for all pads: the arrow keys move between them, Enter turns one on or off -->
+        <div class="padTEST-grid" data-equal-cols role="group" aria-label="Steps">
             <div v-for="(active, index) in steps" :key="index" class="pad-col" @mouseleave="hovered = null">
                 <div class="pad-head">
                     <button class="pad-settings-dot" @mousedown.stop @click.stop="emitOpenSettings(index, $event)"
@@ -19,7 +20,10 @@
                         { playing: index === currentStep },
                         { 'has-noise': noiseOn(index) }
                     ]" @mousedown="onMouseDown($event, index)" @mouseenter="onMouseEnter(index)" @dragstart.prevent
-                        :style="padStyle(index)">
+                        :style="padStyle(index)" role="button" :aria-pressed="active ? 'true' : 'false'"
+                        :aria-label="padLabel(index, active)" :tabindex="index === focusIndex ? 0 : -1"
+                        :ref="(el) => { padEls[index] = el as HTMLElement }" @keydown="onPadKeydown($event, index)"
+                        @focus="focusIndex = index">
                         <div v-if="noiseOn(index)" class="noise-overlay" :class="[`mode-${noiseMode}`]"
                             :style="noiseStyle(index)" aria-hidden="true">
                             <div v-if="noiseMode === 'static'" class="grain" />
@@ -165,6 +169,7 @@ function onMouseDown(evt: MouseEvent, index: number) {
     if ((evt.target as HTMLElement).closest('.hover-slider input')) return;
     evt.preventDefault();
     isMouseDown.value = true;
+    focusIndex.value = index; // Tab comes back to the last pad used
 
     const next = !props.steps[index];
     dragMode.value = next ? 'on' : 'off';
@@ -186,6 +191,41 @@ function onMouseEnter(index: number) {
 function onMouseUp() {
     isMouseDown.value = false;
     dragMode.value = null;
+}
+
+// keyboard
+// The pads are one Tab stop (only the pad at focusIndex has tabindex 0). Left/Right move between
+// pads, Home/End go to the first/last, Enter turns the focused pad on or off. Space is left
+// alone: it plays and stops the sequencer everywhere (onGlobalKeydown in DrumSequencer.vue).
+const focusIndex = ref(0);
+const padEls: HTMLElement[] = [];
+
+function padLabel(i: number, active: boolean) {
+    return active ? `Step ${i + 1}, ${props.nearestNote(props.pitches[i])}` : `Step ${i + 1}`;
+}
+
+function onPadKeydown(e: KeyboardEvent, index: number) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const last = props.steps.length - 1;
+    let to: number;
+    switch (e.key) {
+        case 'Enter':
+            e.preventDefault();
+            if (!e.repeat) {
+                const out = clone(props.steps);
+                out[index] = !out[index];
+                emit('update:steps', out);
+            }
+            return;
+        case 'ArrowRight': to = Math.min(last, index + 1); break;
+        case 'ArrowLeft': to = Math.max(0, index - 1); break;
+        case 'Home': to = 0; break;
+        case 'End': to = last; break;
+        default: return;
+    }
+    e.preventDefault();
+    focusIndex.value = to;
+    padEls[to]?.focus();
 }
 
 function updateVelocity(i: number, e: Event) {
@@ -268,6 +308,16 @@ const nearestNote = props.nearestNote;
 </script>
 
 <style scoped>
+/* Keyboard focus only (a mouse click doesn't show it), like the app's buttons */
+.padTEST:focus {
+    outline: none;
+}
+
+.padTEST:focus-visible {
+    outline: 2px solid hsl(var(--pt-accent) 80% 60%);
+    outline-offset: 2px;
+}
+
 .wave-badge {
     --wb-pad-x: 3px;
     --wb-pad-y: 2px;

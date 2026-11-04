@@ -31,14 +31,14 @@
             <!-- knobs row -->
             <div class="pt-knob-row">
                 <div class="position-relative text-center">
-                    <Knob v-model="localSemitones" label="Amount" size="small" :min="0" :max="48" :step="1"
+                    <Knob :value-text="`${localSemitones} semitones`" v-model="localSemitones" label="Amount" size="small" :min="0" :max="48" :step="1"
                         :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'amt'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'amt'" class="custom-tooltip">{{ localSemitones }} semitones</span>
                 </div>
 
                 <div class="position-relative text-center">
-                    <Knob v-model="localDecayMs" label="Decay" size="small" :min="5" :max="2000" :step="1"
+                    <Knob :value-text="`${Math.round(localDecayMs)} ms`" v-model="localDecayMs" label="Decay" size="small" :min="5" :max="2000" :step="1"
                         :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'decay'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'decay'" class="custom-tooltip">{{ Math.round(localDecayMs) }} ms</span>

@@ -6,7 +6,7 @@
 
                 <!-- MIX -->
                 <div class="knob-cell mix">
-                    <Knob v-model="localMix" label="MIX" :min="0" :max="1" :step="0.01" size="small" :color="color"
+                    <Knob :value-text="`${Math.round(localMix * 100)}%`" v-model="localMix" label="MIX" :min="0" :max="1" :step="0.01" size="small" :color="color"
                         :disabled="!localEnabled" @knobStart="activeKnob = 'mix'" @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'mix'" class="custom-tooltip">
                         {{ Math.round(localMix * 100) }}%
@@ -15,7 +15,7 @@
 
                 <!-- TIME (SYNCED ONLY) -->
                 <div class="knob-cell time">
-                    <Knob v-model="divIndexKnob" label="TIME" :min="0" :max="1" :step="knobStep" size="small"
+                    <Knob :value-text="`${currentDivLabel}, ${syncedMs.toFixed(0)} ms`" v-model="divIndexKnob" label="TIME" :min="0" :max="1" :step="knobStep" size="small"
                         :color="color" :disabled="!localEnabled" :showMarkers="true" :markers="knobMarkers"
                         :markersOnly="true" :markersOffsetDeg="-90" @knobStart="activeKnob = 'time'"
                         @knobEnd="activeKnob = null" />
@@ -26,7 +26,7 @@
 
                 <!-- TONE -->
                 <div class="knob-cell tone">
-                    <Knob v-model="localToneNorm" label="TONE" :min="0" :max="1" :step="0.001" size="small"
+                    <Knob :value-text="`${Math.round(mappedToneHz)} Hz`" v-model="localToneNorm" label="TONE" :min="0" :max="1" :step="0.001" size="small"
                         :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'toneHz'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'toneHz'" class="custom-tooltip">

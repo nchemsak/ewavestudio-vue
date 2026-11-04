@@ -5,7 +5,7 @@
                 <span class="check-led" :class="{ on: localEnabled }" aria-hidden="true"></span>
 
                 <div class="knob-cell level">
-                    <Knob v-model="localMix" label="MIX" :min="0" :max="1" :step="0.01" size="small" :color="color"
+                    <Knob :value-text="`${Math.round(localMix * 100)}%`" v-model="localMix" label="MIX" :min="0" :max="1" :step="0.01" size="small" :color="color"
                         :disabled="!localEnabled" @knobStart="activeKnob = 'mix'" @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'mix'" class="custom-tooltip">
                         {{ Math.round(localMix * 100) }}%
@@ -13,7 +13,7 @@
                 </div>
 
                 <div class="knob-cell drive">
-                    <Knob v-model="localAmount" label="DRIVE" :min="0" :max="1" :step="0.01" size="small" :color="color"
+                    <Knob :value-text="`${Math.round(localAmount * 100)}%`" v-model="localAmount" label="DRIVE" :min="0" :max="1" :step="0.01" size="small" :color="color"
                         :disabled="!localEnabled" @knobStart="activeKnob = 'amount'" @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'amount'" class="custom-tooltip">
                         {{ Math.round(localAmount * 100) }}%
@@ -21,7 +21,7 @@
                 </div>
 
                 <div class="knob-cell tone">
-                    <Knob v-model="localTone" label="TONE" :min="100" :max="10000" :step="10" size="small"
+                    <Knob :value-text="`${Math.round(localTone)} Hz`" v-model="localTone" label="TONE" :min="100" :max="10000" :step="10" size="small"
                         :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'tone'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'tone'" class="custom-tooltip">

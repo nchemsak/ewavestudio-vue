@@ -20,7 +20,7 @@
 					<div class="pt-knob-row transport-row">
 						<!-- Volume -->
 						<div class="position-relative text-center knob-wrap">
-							<Knob v-model="volume" label="Volume" :min="0" :max="1" :step="0.01" size="medium"
+							<Knob v-model="volume" label="Volume" :value-text="`${Math.round(volume * 100)}%`" :min="0" :max="1" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(volume * 100)}%`">
 								{{ Math.round(volume * 100) }}%
@@ -46,7 +46,7 @@
 
 						<!-- Swing -->
 						<div class="position-relative text-center knob-wrap">
-							<Knob v-model="swing" label="Swing" :min="0" :max="0.5" :step="0.01" size="medium"
+							<Knob v-model="swing" label="Swing" :value-text="`${Math.round(swing * 100)}%`" :min="0" :max="0.5" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(swing * 100)}% swing`">
 								{{ Math.round(swing * 100) }}%
@@ -98,7 +98,8 @@
 						<h2 class="pt-title">Step Sequencer</h2>
 
 						<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
-							label="Vol" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
+							label="Vol" aria-label="Synth volume"
+							:value-text="`${Math.round(synthInstrument.channelVolume * 100)}%`" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
 							@knobEnd="activeKnob = null" />
 						<span v-if="activeKnob === `vol-${synthInstrument.name}`" class="custom-tooltip">
 							{{ Math.round(synthInstrument.channelVolume * 100) }}%
