@@ -1,5 +1,6 @@
 /* _themes.scss */
 @use "sass:map";
+@use "sass:color";
 
 /* Theme tokens as a Sass map */
 $themes: (
@@ -57,19 +58,19 @@ $themes: (
 
         /* darker tiles in dark & synthwave so they pop from panels */
         @if $name ==dark {
-            --pt-tile-1: #{mix(#000, map.get($t, surface1), 12%)};
-            --pt-tile-2: #{mix(#000, map.get($t, surface2), 16%)};
+            --pt-tile-1: #{color.mix(#000, map.get($t, surface1), 12%)};
+            --pt-tile-2: #{color.mix(#000, map.get($t, surface2), 16%)};
         }
 
         @if $name ==synthwave {
             /* synthwave a hair stronger */
-            --pt-tile-1: #{mix(#000, map.get($t, surface1), 14%)};
-            --pt-tile-2: #{mix(#000, map.get($t, surface2), 18%)};
+            --pt-tile-1: #{color.mix(#000, map.get($t, surface1), 14%)};
+            --pt-tile-2: #{color.mix(#000, map.get($t, surface2), 18%)};
         }
 
         @if $name ==light {
-            --pt-tile-1: #{mix(#000, map.get($t, surface1), 6%)};
-            --pt-tile-2: #{mix(#000, map.get($t, surface2), 10%)};
+            --pt-tile-1: #{color.mix(#000, map.get($t, surface1), 6%)};
+            --pt-tile-2: #{color.mix(#000, map.get($t, surface2), 10%)};
             /* slightly cooler, stronger accent ring on light */
             --pt-btn-border: hsl(var(--pt-accent) 72% 46%);
             --pt-btn-glow: hsl(var(--pt-accent) 90% 55% / 0.32);
@@ -108,8 +109,8 @@ $base: map.get($themes, synthwave);
 
     --cc-chevron: #{map.get($base, chevron)};
 
-    --pt-tile-1: #{mix(#000, map.get($base, surface1), 12%)};
-    --pt-tile-2: #{mix(#000, map.get($base, surface2), 16%)};
+    --pt-tile-1: #{color.mix(#000, map.get($base, surface1), 12%)};
+    --pt-tile-2: #{color.mix(#000, map.get($base, surface2), 16%)};
 }
 
 

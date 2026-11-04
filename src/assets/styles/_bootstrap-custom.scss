@@ -1,6 +1,62 @@
+// Bootstrap, reduced to the parts the app uses, then the app's own styles (main.scss).
+//
+// Bootstrap is used for its base styles (root variables and "reboot"), the page grid
+// (.container, .row, .col-12 in App.vue), .visually-hidden, and five utility classes. To use
+// another Bootstrap class, add the file that defines it (the full list is in
+// node_modules/bootstrap/scss/bootstrap.scss) or its utility below, keeping Bootstrap's order.
+//
+// Bootstrap 5.3 needs @import (it doesn't support Sass modules yet). The deprecation warnings
+// that causes are silenced in vite.config.js.
+
+@use "sass:map";
+
 // Override Bootstrap variables
 $primary: #9C27B0;
 $secondary: #03A9F4;
 
-@import "bootstrap/scss/bootstrap";
+// Configuration (outputs no CSS)
+@import "bootstrap/scss/functions";
+@import "bootstrap/scss/variables";
+@import "bootstrap/scss/variables-dark";
+@import "bootstrap/scss/maps";
+@import "bootstrap/scss/mixins";
+@import "bootstrap/scss/utilities";
+
+// Only the utility classes in use (.d-flex, .position-relative, .align-items-center, .gap-2,
+// .text-center), in Bootstrap's order and written exactly as Bootstrap writes them, without
+// their breakpoint and print variants. utilities/api turns this map into CSS at the end.
+$utilities: (
+	"display": map.merge(map.get($utilities, "display"), (responsive: false, print: false, values: flex)),
+	"position": map.merge(map.get($utilities, "position"), (values: relative)),
+	"align-items": map.merge(map.get($utilities, "align-items"), (responsive: false, values: (center: center))),
+	"gap": map.merge(map.get($utilities, "gap"), (responsive: false, values: (2: map.get($spacers, 2)))),
+	"text-align": map.merge(map.get($utilities, "text-align"), (responsive: false, values: (center: center))),
+);
+
+// Base styles
+@import "bootstrap/scss/root";
+@import "bootstrap/scss/reboot";
+
+// Page grid: .container (all its breakpoints), and only .row and .col-12, made with the same
+// mixins as bootstrap/scss/grid (which would also make every other column class)
+@import "bootstrap/scss/containers";
+
+.row {
+	@include make-row();
+
+	> * {
+		@include make-col-ready();
+	}
+}
+
+.col-12 {
+	@include make-col(12, $grid-columns);
+}
+
+// Helpers
+@import "bootstrap/scss/helpers/visually-hidden";
+
+// Utilities
+@import "bootstrap/scss/utilities/api";
+
 @import "./main";
