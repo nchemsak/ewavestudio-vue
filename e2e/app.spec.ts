@@ -448,6 +448,34 @@ test('starting new projects does not leave old keyboard listeners behind', async
 
 // --- Project file check (replaced zod) -----------------------------------------------------
 
+test('a project imported right after File → New keeps its name and counts as saved', async ({ page }) => {
+	// Make New's save to IndexedDB finish late, after the import's: the order that made the
+	// export test fail now and then on GitHub
+	await page.evaluate(() => {
+		const w = window as any;
+		w.__delayNextWrite = true;
+		const orig = IDBTransaction.prototype.addEventListener;
+		(IDBTransaction.prototype as any).addEventListener = function (type: string, fn: any, ...rest: any[]) {
+			if (type === 'complete' && this.mode === 'readwrite' && (w.__delayNextWrite || this.__delayed)) {
+				w.__delayNextWrite = false;
+				this.__delayed = true;
+				return orig.call(this, type, (e: Event) => setTimeout(() => fn(e), 500), ...rest);
+			}
+			return orig.call(this, type, fn, ...rest);
+		};
+	});
+	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	await chooseFromFileMenu(page, 'New');
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'Imported Name.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify({ ...project, meta: { ...project.meta, name: 'Imported Name' } })),
+	});
+	await page.waitForTimeout(1000); // until New's delayed save has finished
+	await expect(page.getByRole('textbox', { name: 'Project name' })).toHaveValue('Imported Name');
+	await expect(page.locator('.pc-dot')).not.toHaveClass(/\bunsaved\b/);
+});
+
 test('refuses a broken project file with a message, and keeps the current pattern', async ({ page }) => {
 	await turnOnPads(page, [0, 4]);
 	const name = page.getByRole('textbox', { name: 'Project name' });
