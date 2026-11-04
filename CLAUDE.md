@@ -255,6 +255,78 @@ back from git history.
 - When fixing a bug, add a test that fails without the fix where practical. The browser tests
   can count scheduled notes and audio connections; see the helpers in `e2e/app.spec.ts`.
 
+## Planned work
+
+The maintainer's to-do list, agreed in earlier sessions. Rules:
+- Do one item at a time, as one PR (the `DrumSequencer.vue` split is three PRs).
+- Start the next item only when the maintainer says so. They usually start a new chat for
+  each item, and "do the next item" means the first one under "Next, in this order".
+- The PR that finishes an item also updates this list: move the item to "Done".
+
+Next, in this order:
+1. **Split `DrumSequencer.vue`** (about 4,800 lines) into modules, one PR each:
+   - the live sound engine;
+   - MIDI;
+   - saving and loading projects.
+
+   Behavior and sound must not change. This prepares live playback and WAV export to share
+   one engine later, and unblocks most of the features below.
+2. **Accessibility:**
+   - Knobs get a slider role and work from the keyboard.
+   - Step pads can be reached with Tab.
+   - Space on a focused button presses that button instead of toggling Play.
+3. **Trim the CSS** (333 kB):
+   - Import only the Bootstrap parts in use.
+   - Silence the Sass deprecation warnings.
+   - The look must not change: include before/after screenshots of all three themes.
+4. **Features**, one PR each, ranked by value for effort (the maintainer may reorder):
+   1. Undo/redo (the app already builds full snapshots).
+   2. Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan
+      (only if the drum lanes come back).
+   3. Store custom samples in the browser, and load them by drag-and-drop (drum lanes).
+   4. Built-in preset library of synth patches (and drum kits, if those come back).
+   5. Share a project as a link (the project encoded in the URL).
+   6. Master limiter/compressor (louder output without clipping).
+   7. Step probability, ratchets (quick repeats within a step) and timing humanize.
+   8. Several patterns (A/B/C/D) chained into a song.
+   9. More MIDI: MIDI learn for knobs, MIDI clock sync, MIDI out, and drum lanes played by
+      MIDI notes.
+   10. Play the synth from the computer keyboard. `ComputerKeyboard.vue` in git history has a
+       key-to-note map.
+   11. Export options: N bars or loops, stems, MIDI file.
+   12. 32 steps, or per-lane lengths (the export code's types already allow 32).
+   13. Per-step parameter locks (for example a different filter cutoff on each step).
+   14. Install as an app (PWA) that works offline.
+5. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+
+Not scheduled yet: smaller items from reviews. Ask the maintainer before starting any of them.
+- **Change tracking is heavy.** Every change rebuilds the whole snapshot and turns it into
+  JSON several times, even each frame of a knob drag. This happens in the UI → store watcher
+  in `DrumSequencer.vue` and in `hashOf` in `ProjectControls.vue`. Debounce it.
+- **A broken last-opened project fails silently.** If it fails the project check at startup,
+  it isn't opened and no message appears. Save then does nothing (`store.loaded` stays false)
+  until File → New. Show a message and start a fresh project instead.
+- **WAV export renders only the synth lane.** This matters only if the drum lanes come back.
+- **`README.md` is still the Vite template.**
+- **`npm run dev` sends analytics events.** The gtag snippet in `index.html` always runs.
+- **Drum sample paths depend on the trailing slash.** They are relative to the page
+  (`audio/kick.mp3`), so they break if `/studio2` is opened without its trailing slash and the
+  server doesn't redirect. Only the hidden drum lanes use them.
+- **Major-version upgrades were left out on purpose** (Vite 8, Pinia 4). If wanted, do each as
+  its own PR.
+
+Done:
+
+| PR | What it did |
+|---|---|
+| 1 | This guide. |
+| 2 | First fixes: npm audit fixes and minor updates, playback in background tabs, LFO tap cleanup, Melody Maker arp settings saved, 1–4 view keys. |
+| 3 | Moved to `/studio2/` with automatic deploys. |
+| 4 | Removed unused files, and made each deploy an exact copy of the build. |
+| 5 | Checks on every PR and deploy: type check, unit tests, browser tests. |
+| 6 | Unsaved-changes warning, MIDI before Play, envelope-off loudness, Melody Maker listener leak. |
+| 7 | Replaced zod with a hand-written project check. |
+
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
 every PR, and the result (a green check or a red ✗) shows on the PR page; merge only when it's
