@@ -39,7 +39,8 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
 - **Browser tests** (Playwright, Chromium), `e2e/app.spec.ts`: build, serve with
   `vite preview`, then drive the app. An init script keeps a handle on the app's AudioContext
   (`__ctx`), records every scheduled note and the per-note LFO taps, measures the output
-  level (`__peakOver(ms)`), tracks keydown listeners on `window` (`__keydown`), and can pause
+  level (`__peakOver(ms)`, and `__swingOver(ms)`, which ignores a steady offset), tracks keydown
+  listeners on `window` (`__keydown`), and can pause
   `requestAnimationFrame` the way hidden tabs do. The MIDI test installs a fake MIDI keyboard.
   Google Analytics is stubbed out. Before the first local run: `npx playwright install chromium`.
 - **No linter yet.** Current ESLint and typescript-eslint releases depend on `minimatch` 10,
@@ -107,7 +108,8 @@ index.html               Entry HTML + Google Analytics tag
 src/main.ts              createApp + Pinia, imports the global SCSS (Bootstrap + theme)
 src/App.vue              Toolbar (ThemeToggle, #midi-toolbar-slot) + <DrumSequencer/>
 src/components/
-  DrumSequencer.vue      ~4800 lines; holds nearly all app state and the live audio engine
+  DrumSequencer.vue      ~4100 lines; holds nearly all app state (as refs), MIDI, screen views
+                         and saving; passes the sound settings to the live engine
   modules/*.vue          Synth and effect panels: Envelope, Filter, PitchEnv, Noise, FM,
                          Unison, LFOGroup, Delay, Drive, Reverb (UI only; mostly v-model)
   SynthStepGrid.vue      16 synth step pads with velocity and pitch sliders
@@ -118,6 +120,10 @@ src/components/
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
 src/audio/
+  liveEngine.ts          The live sound engine (`useLiveEngine`), see "Audio engine (live)"
+  synthHelpers.ts        Pure helpers: noise colors and buffers, drive curves, waveform
+                         loudness, LFO division → Hz
+  ticker.ts              Worker-driven timer for the sequencer clock
   pitchEnv.ts, fm.ts     Per-note helpers shared by the live and offline engines
   reverb/generateIr.ts   Algorithmic impulse response for the ConvolverNode
   export/scheduleStepSequencer.ts  Separate offline engine used for WAV export
@@ -138,9 +144,15 @@ src/**/*.test.ts         Unit tests (Vitest; vitest.config.js)
 e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 ```
 
-### Audio engine (live), in `DrumSequencer.vue`
-- One `AudioContext` is created when the component's script first runs. It is resumed on the
-  first Play click.
+### Audio engine (live), in `src/audio/liveEngine.ts`
+- `DrumSequencer.vue` calls `useLiveEngine(settings)` once during setup. `settings` holds the
+  component's own refs (transport, pattern lanes, envelope, filter, noise, unison, LFO, FM,
+  pitch envelope, delay, drive, reverb), grouped like `exportState`. The engine only reads
+  them, and follows changes with watchers. It returns `audioCtx`, `analyser`, `isPlaying`,
+  `currentStep`, `playSynthNote`, `startLfoIfNeeded`, `togglePlay`, `hardStopSequencer` and
+  `loadSample`. A new sound setting is passed in here (see "If you add a parameter").
+- One `AudioContext` is created when `useLiveEngine` runs. It is resumed on the first Play
+  click.
 - Graph: per-note synth voices → drive (dry + shaper → `driveSum`). From `driveSum` two paths
   run in parallel: delay (dry + wet, with a feedback loop and tone filters) and a reverb send
   (tone filter → convolver → wet gain). Both go to `masterGain` → destination. An
@@ -211,8 +223,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   parameter needs no change there. A file that fails the check is refused as a whole
   ("Import failed"), and the console says which field was wrong.
 - If you add a parameter: add it to `buildSnapshot`, `applySnapshot`,
-  `resetUiToFactoryDefaults`, and (if it affects sound) `exportState` and
-  `scheduleStepSequencer.ts`. Treat a missing field in an older snapshot as "use the default",
+  `resetUiToFactoryDefaults`, and (if it affects sound) the `useLiveEngine` settings and
+  `liveEngine.ts`, `exportState` and `scheduleStepSequencer.ts`. Treat a missing field in an older snapshot as "use the default",
   so existing saved projects still load.
 
 ## Conventions
@@ -265,7 +277,7 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 
 Next, in this order:
 1. **Split `DrumSequencer.vue`** (about 4,800 lines) into modules, one PR each:
-   - the live sound engine;
+   - ~~the live sound engine~~ (done in PR 9: `src/audio/liveEngine.ts`);
    - MIDI;
    - saving and loading projects.
 
@@ -312,6 +324,12 @@ Not scheduled yet: smaller items from reviews. Ask the maintainer before startin
 - **Drum sample paths depend on the trailing slash.** They are relative to the page
   (`audio/kick.mp3`), so they break if `/studio2` is opened without its trailing slash and the
   server doesn't redirect. Only the hidden drum lanes use them.
+- **A small constant offset (DC) on the output.** The drive shaper's curve has an even number
+  of points (1024), so silence maps to about −0.011 instead of 0. Even with Drive off, that
+  reaches the speakers through the drive wet gain, at about 0.004 with the default settings.
+  It can't be heard, but it shows up in measurements (the browser tests use `__swingOver` to
+  ignore it) and wastes a little headroom. Fixing it changes the sound slightly, so it was
+  left out of the engine split. The export engine has the same curve.
 - **Major-version upgrades were left out on purpose** (Vite 8, Pinia 4). If wanted, do each as
   its own PR.
 
@@ -326,6 +344,7 @@ Done:
 | 5 | Checks on every PR and deploy: type check, unit tests, browser tests. |
 | 6 | Unsaved-changes warning, MIDI before Play, envelope-off loudness, Melody Maker listener leak. |
 | 7 | Replaced zod with a hand-written project check. |
+| 9 | Split `DrumSequencer.vue`, part 1 of 3: the live sound engine moved to `src/audio/liveEngine.ts` (helpers in `synthHelpers.ts`). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

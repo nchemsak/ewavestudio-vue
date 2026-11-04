@@ -482,10 +482,7 @@ import UnisonEffect from './modules/UnisonEffect.vue';
 import LFOGroup from './modules/LFOGroup.vue';
 import nacScreen from './Screen.vue';
 import PitchEnvModule from './modules/PitchEnvModule.vue';
-import { applyPitchEnv } from '../audio/pitchEnv';
 import FMModule from './modules/FMModule.vue';
-import { startFM } from '../audio/fm';
-import { createTicker } from '../audio/ticker';
 import FilterModule from './modules/FilterModule.vue';
 import EnvelopeModule from './modules/EnvelopeModule.vue';
 import NoiseModule from './modules/NoiseModule.vue';
@@ -509,7 +506,10 @@ import { audioBufferToWavFloat32 } from '../audio/export/encodeWav';
 
 // Reverb
 import ReverbEffect from './modules/ReverbEffect.vue';
-import { generateReverbIR } from '../audio/reverb/generateIr';
+
+// Live sound engine
+import { useLiveEngine } from '../audio/liveEngine';
+import { divisionToHz, NOISE_STOPS, type NoiseKey } from '../audio/synthHelpers';
 
 // IMPORTS END
 
@@ -1379,12 +1379,6 @@ function startEnvViz() {
 
 onMounted(() => {
 	loadAllSamples();
-	generateNoiseBuffers();
-	initDriveNow();
-
-	analyser.smoothingTimeConstant = 0.8;
-	analyser.minDecibels = -90;
-	analyser.maxDecibels = -10;
 
 	window.addEventListener('mouseup', handleMouseUp);
 
@@ -1400,12 +1394,9 @@ onMounted(() => {
 
 });
 onBeforeUnmount(() => {
-	hardStopSequencer();
 	window.removeEventListener('mouseup', handleMouseUp);
 	window.removeEventListener('keydown', onGlobalKeydown, { capture: true } as any);
 	window.removeEventListener('keyup', onGlobalKeyup, { capture: true } as any);
-
-	if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
 
 	window.removeEventListener('mouseup', stopTempoRepeat as any);
 	window.removeEventListener('touchend', stopTempoRepeat as any);
@@ -1453,22 +1444,6 @@ const padSettings = reactive({
 const volume = ref(0.75);
 const tempo = ref(80);
 const swing = ref(0);
-const isPlaying = ref(false);
-const currentStep = ref(-1);
-
-const AC = window.AudioContext || (window as any).webkitAudioContext;
-const audioCtx = new AC();
-
-const masterGain = audioCtx.createGain();
-masterGain.gain.value = volume.value;
-masterGain.connect(audioCtx.destination);
-
-// Oscilloscope / analyser
-const analyser = audioCtx.createAnalyser();
-analyser.fftSize = 2048;
-const dataArray = new Uint8Array(analyser.fftSize);
-masterGain.connect(analyser);
-
 const activeKnob = ref(null);
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
@@ -1811,35 +1786,16 @@ const filterResonance = ref(0.5);
 const ampEnvAttackMs = ref(20);
 const ampEnvDecayMs = ref(400);
 
-const synthAttack = computed(() => ampEnvAttackMs.value / 1000);
 const synthDecay = computed(() => ampEnvDecayMs.value / 1000);
 
 const pitchEnvSemitones = ref(0);
 const pitchEnvDecayMs = ref(300);
 
 const pitchMode = ref<'up' | 'down' | 'random'>('up');
-const pitchEnvDecay = computed(() => pitchEnvDecayMs.value / 1000);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Noise START
-
-type NoiseKey = 'brown' | 'pink' | 'white' | 'blue' | 'violet';
-const NOISE_STOPS: { key: NoiseKey; pos: number }[] = [
-	{ key: 'brown', pos: 0.00 },
-	{ key: 'pink', pos: 0.25 },
-	{ key: 'white', pos: 0.50 },
-	{ key: 'blue', pos: 0.75 },
-	{ key: 'violet', pos: 1.00 },
-];
-
-const NOISE_LOUDNESS: Record<NoiseKey, number> = {
-	brown: 2.5,
-	pink: 2,
-	white: 1.0,
-	blue: 1.5,
-	violet: 2,
-};
 
 // Visual swatch colors for each noise key (match NoiseModule’s swatch look)
 const NOISE_HEX: Record<NoiseKey, string> = {
@@ -1892,9 +1848,6 @@ const noiseModuleStyle = computed(() => {
 });
 
 
-const noiseBuffers: Record<NoiseKey, AudioBuffer | null> = {
-	brown: null, pink: null, white: null, blue: null, violet: null
-};
 // continuous color morph 0..1  (0=brown → 1=violet)
 const noiseColor = ref(0.5);
 
@@ -1921,86 +1874,6 @@ const delayToneHz = ref(5000);
 const delayToneEnabled = ref(true);
 const delayToneType = ref<'lowpass' | 'highpass'>('lowpass');
 
-const delayNode = audioCtx.createDelay(5.0);
-delayNode.delayTime.setValueAtTime(delayTime.value, audioCtx.currentTime);
-
-const feedbackGain = audioCtx.createGain();
-feedbackGain.gain.value = delayFeedback.value;
-
-const delayWet = audioCtx.createGain();
-const delayDry = audioCtx.createGain();
-applyDelayEnabled(delayEnabled.value);
-
-const fbTone = audioCtx.createBiquadFilter();
-fbTone.type = 'lowpass';
-fbTone.frequency.value = 5000;
-
-// wet path tone (colors first echo)
-const wetTone = audioCtx.createBiquadFilter();
-wetTone.type = 'lowpass';
-wetTone.frequency.value = 5000;
-
-delayNode.connect(fbTone);
-fbTone.connect(feedbackGain);
-feedbackGain.connect(delayNode);
-
-delayNode.connect(wetTone);
-wetTone.connect(delayWet);
-
-watch(delayTime, val => {
-	const t = audioCtx.currentTime;
-	const current = delayNode.delayTime.value;
-	delayNode.delayTime.cancelScheduledValues(t);
-	delayNode.delayTime.setValueAtTime(current, t);
-	delayNode.delayTime.linearRampToValueAtTime(val, t + 0.03);
-});
-watch(delayFeedback, val => {
-	feedbackGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
-});
-watch(delayMix, val => {
-	const t = audioCtx.currentTime;
-	if (delayEnabled.value) {
-		delayWet.gain.setTargetAtTime(val, t, 0.02);
-		delayDry.gain.setTargetAtTime(1 - val, t, 0.02);
-	} else {
-		// keep dry when disabled
-		delayWet.gain.setValueAtTime(0, t);
-		delayDry.gain.setValueAtTime(1, t);
-	}
-});
-
-function applyDelayToneState() {
-	const type = delayToneEnabled.value
-		? (delayToneType.value === 'highpass' ? 'highpass' : 'lowpass')
-		: 'allpass'; // click-free bypass
-
-	fbTone.type = type;
-	wetTone.type = type;
-
-	const targetHz = delayToneEnabled.value ? delayToneHz.value : 20000;
-	const t = audioCtx.currentTime;
-	fbTone.frequency.setTargetAtTime(targetHz, t, 0.02);
-	wetTone.frequency.setTargetAtTime(targetHz, t, 0.02);
-}
-
-watch([delayToneEnabled, delayToneType, delayToneHz], applyDelayToneState);
-onMounted(applyDelayToneState);
-
-watch(delayEnabled, on => {
-	applyDelayEnabled(on);
-});
-
-function applyDelayEnabled(on) {
-	const t = audioCtx.currentTime;
-	if (on) {
-		delayWet.gain.setValueAtTime(delayMix.value, t);
-		delayDry.gain.setValueAtTime(1 - delayMix.value, t);
-	} else {
-		delayWet.gain.setValueAtTime(0, t);
-		delayDry.gain.setValueAtTime(1, t);
-	}
-}
-
 //Delay END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -2013,50 +1886,6 @@ const driveAmount = ref(0.4);
 const driveTone = ref(5000);
 const driveMix = ref(0.5);
 
-// Drive node chain
-const driveShaper = audioCtx.createWaveShaper();
-const driveToneFilter = audioCtx.createBiquadFilter();
-driveToneFilter.type = 'lowpass';
-
-const driveDry = audioCtx.createGain();
-const driveWet = audioCtx.createGain();
-
-//  sum both drive paths before delay
-const driveSum = audioCtx.createGain();
-const driveMakeup = audioCtx.createGain();
-driveMakeup.gain.value = 1.0;
-
-// connections inside Drive
-driveShaper.connect(driveToneFilter);
-driveToneFilter.connect(driveMakeup);
-driveMakeup.connect(driveWet);
-
-// gains set by mix
-driveWet.gain.value = driveMix.value;
-driveDry.gain.value = 1 - driveMix.value;
-
-//  IMPORTANT: feed the sum, not the delay directly
-driveDry.connect(driveSum);
-driveWet.connect(driveSum);
-
-// Now feed delay chain **from the sum** (same for all cases)
-driveSum.connect(delayDry);
-driveSum.connect(delayNode);
-
-watch([driveType, driveAmount], ([type, amount]) => {
-	driveShaper.curve = generateDriveCurve(type, amount);
-	driveMakeup.gain.setTargetAtTime(1 + amount * 0.1, audioCtx.currentTime, 0.01);
-});
-
-watch(driveTone, hz => {
-	driveToneFilter.frequency.setValueAtTime(hz, audioCtx.currentTime);
-});
-
-watch(driveMix, val => {
-	driveWet.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
-	driveDry.gain.setTargetAtTime(1 - val, audioCtx.currentTime, 0.01);
-});
-
 //Drive END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -2068,127 +1897,6 @@ const reverbDecay = ref(1.4);
 
 // 0 = dark, 1 = bright
 const reverbTone = ref(0.6);      // normalized tone control
-
-let reverbConvolver = audioCtx.createConvolver();
-const reverbToneFilter = audioCtx.createBiquadFilter();
-reverbToneFilter.type = 'lowpass';
-
-let reverbWet = audioCtx.createGain();
-
-// Track whether we've initialized the IR at least once
-let reverbIrReady = false;
-
-// Debounce handle so we don't regenerate on every tiny knob tick
-let reverbIrUpdateTimer: number | null = null;
-
-// Cross-fade between old and new IR to avoid chopping tails
-function swapReverbIRSmooth(newBuffer: AudioBuffer) {
-	const oldConvolver = reverbConvolver;
-	const oldWet = reverbWet;
-
-	// New convolver + wet gain
-	const newConvolver = audioCtx.createConvolver();
-	newConvolver.buffer = newBuffer;
-
-	const newWet = audioCtx.createGain();
-	newWet.gain.value = 0;
-
-	// Wire in parallel
-	reverbToneFilter.connect(newConvolver);
-	newConvolver.connect(newWet);
-	newWet.connect(masterGain);
-
-	const fadeTime = 0.25; // seconds
-	const now = audioCtx.currentTime;
-	const targetWet = reverbEnabled.value ? reverbMix.value : 0;
-
-	// Fade new IR up
-	newWet.gain.setValueAtTime(0, now);
-	newWet.gain.linearRampToValueAtTime(targetWet, now + fadeTime);
-
-	// Fade old IR down
-	oldWet.gain.setValueAtTime(oldWet.gain.value, now);
-	oldWet.gain.linearRampToValueAtTime(0, now + fadeTime);
-
-	// After fade, disconnect old chain and update references
-	setTimeout(() => {
-		try { reverbToneFilter.disconnect(oldConvolver); } catch { }
-		try { oldConvolver.disconnect(); } catch { }
-		try { oldWet.disconnect(); } catch { }
-
-		reverbConvolver = newConvolver;
-		reverbWet = newWet;
-	}, fadeTime * 1000 + 50);
-}
-
-// Drive sum → tone filter → convolver → wet gain → master
-driveSum.connect(reverbToneFilter);
-reverbToneFilter.connect(reverbConvolver);
-reverbConvolver.connect(reverbWet);
-reverbWet.connect(masterGain);
-reverbWet.gain.value = 0;
-
-function ensureReverbIR() {
-	const buf = generateReverbIR(audioCtx as any, {
-		decaySeconds: reverbDecay.value,
-		sampleRate: audioCtx.sampleRate,
-		stereo: true,
-		seed: 1337,
-	});
-
-	// First-time init: no need to cross-fade, just assign
-	if (!reverbIrReady || !reverbConvolver.buffer) {
-		reverbConvolver.buffer = buf;
-		reverbIrReady = true;
-		return;
-	}
-
-	// Subsequent changes: smooth swap so the current tail isn't chopped
-	swapReverbIRSmooth(buf);
-}
-
-// Debounce decay changes so we only rebuild IR once the knob slows down
-watch(reverbDecay, () => {
-	if (reverbIrUpdateTimer != null) {
-		clearTimeout(reverbIrUpdateTimer);
-	}
-	reverbIrUpdateTimer = window.setTimeout(() => {
-		reverbIrUpdateTimer = null;
-		ensureReverbIR();
-	}, 120); // ~1–2 frames of pause before rebuilding
-});
-
-// Map 0..1 tone → lowpass frequency (dark → bright)
-function applyReverbTone() {
-	const t = Math.max(0, Math.min(1, reverbTone.value));
-	const minHz = 800;
-	const maxHz = 12000;
-	const freq = minHz * Math.pow(maxHz / minHz, t); // exponential-ish
-	const now = audioCtx.currentTime;
-	reverbToneFilter.frequency.setTargetAtTime(freq, now, 0.05);
-}
-
-watch(reverbTone, applyReverbTone);
-onMounted(() => {
-	applyReverbTone();
-});
-
-// Enable/disable reverb
-watch(reverbEnabled, (on) => {
-	const t = audioCtx.currentTime;
-	if (on) {
-		if (!reverbConvolver.buffer) ensureReverbIR();
-		reverbWet.gain.setTargetAtTime(reverbMix.value, t, 0.03);
-	} else {
-		reverbWet.gain.setTargetAtTime(0, t, 0.03);
-	}
-});
-
-// Mix changes
-watch(reverbMix, (v) => {
-	const t = audioCtx.currentTime;
-	reverbWet.gain.setTargetAtTime(reverbEnabled.value ? v : 0, t, 0.03);
-});
 
 // Reverb END
 
@@ -2425,100 +2133,71 @@ const lfoDepthMax = computed(() => {
 	}
 });
 
-//  LFO source + core gain 
-let lfoOsc: OscillatorNode | null = null;
-const lfoGain = audioCtx.createGain();
-lfoGain.gain.value = 0;
-
-// helper: compute Hz when synced
-function divisionToHz(div: string, bpm: number): number {
-	const parts = div.replace(/\s+/g, '');
-	const dotted = parts.endsWith('.');
-	const trip = parts.endsWith('T');
-	const base = parts.replace(/[\.T]$/, ''); // e.g., "1/8"
-
-	const denom = parseInt(base.split('/')[1] || '4', 10);
-	let beats = 4 / denom; // whole note = 4 beats
-	if (dotted) beats *= 1.5;
-	if (trip) beats *= 2 / 3;
-
-	const seconds = (60 / bpm) * beats;
-	return Math.max(0.01, 1 / seconds);
-}
-
-function currentLfoHz() {
-	return lfoSync.value ? divisionToHz(lfoDivision.value, tempo.value) : lfoRate.value;
-}
-
-function ensureLfoSource() {
-	if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
-
-	const hz = currentLfoHz();
-	lfoOsc = audioCtx.createOscillator();
-	lfoOsc.type = lfoWaveform.value;
-	lfoOsc.frequency.setValueAtTime(hz, audioCtx.currentTime);
-	lfoOsc.connect(lfoGain);
-	lfoOsc.start();
-}
-
-function startLfoIfNeeded(): void {
-	if (!lfoEnabled.value) return;
-	if (lfoOsc) return;
-
-	if (audioCtx.state === 'running') {
-		ensureLfoSource();
-		return;
-	}
-	const onStateChange = () => {
-		if (audioCtx.state === 'running') {
-			ensureLfoSource();
-			audioCtx.removeEventListener?.('statechange', onStateChange);
-		}
-	};
-	audioCtx.addEventListener?.('statechange', onStateChange);
-}
-
-watch(lfoEnabled, (on) => {
-	if (on) startLfoIfNeeded();
-	else if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
-});
-
-watch([lfoWaveform, lfoSync, lfoDivision, tempo], () => {
-	if (!lfoEnabled.value) return;
-
-	if (!lfoOsc) {
-		startLfoIfNeeded();
-		return;
-	}
-
-	lfoOsc.type = lfoWaveform.value;
-	lfoOsc.frequency.setValueAtTime(currentLfoHz(), audioCtx.currentTime);
-});
-
-watch(lfoRate, (r) => {
-	if (!lfoEnabled.value) return;
-	if (!lfoSync.value) {
-		if (!lfoOsc) startLfoIfNeeded();
-		if (lfoOsc) lfoOsc.frequency.setValueAtTime(r, audioCtx.currentTime);
-	}
-});
-
-function applyDepthScale() {
-	const t = audioCtx.currentTime;
-	switch (lfoTarget.value) {
-		case 'pitch':
-			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
-			break;
-		case 'filter':
-			lfoGain.gain.setValueAtTime(lfoDepth.value, t);
-			break;
-
-	}
-}
-watch([lfoDepth, lfoTarget], applyDepthScale);
-applyDepthScale();
-
 // LFO END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// Live sound engine START
+
+// The AudioContext, effects graph, LFO, synth voices and sequencer clock live in
+// src/audio/liveEngine.ts. It reads the settings above and follows their changes.
+const {
+	audioCtx,
+	analyser,
+	isPlaying,
+	currentStep,
+	playSynthNote,
+	startLfoIfNeeded,
+	togglePlay,
+	hardStopSequencer,
+	loadSample,
+} = useLiveEngine({
+	transport: { volume, tempo, swing },
+	pattern: { lanes: instruments, stepLength, selectedWaveform, noiseMask },
+	envelope: { enabled: envelopeEnabled, attackMs: ampEnvAttackMs, decayMs: ampEnvDecayMs },
+	filter: { enabled: filterEnabled, cutoff: filterCutoff, resonance: filterResonance },
+	noise: {
+		enabled: noiseEnabled,
+		color: noiseColor,
+		amount: noiseAmount,
+		attackBurst: noiseAttackBurst,
+		burstMs: noiseBurstMs,
+	},
+	unison: {
+		enabled: unisonEnabled,
+		voices: unisonVoices,
+		maxVoices: unisonMaxVoices,
+		detuneCents,
+		stereoSpread,
+	},
+	lfo: {
+		enabled: lfoEnabled,
+		rate: lfoRate,
+		depth: lfoDepth,
+		target: lfoTarget,
+		waveform: lfoWaveform,
+		sync: lfoSync,
+		division: lfoDivision,
+	},
+	fm: { enabled: fmEnabled, modFreq: fmModFreq, index: fmIndex, ratio: fmRatio },
+	pitchEnv: { enabled: pitchEnvEnabled, semitones: pitchEnvSemitones, decayMs: pitchEnvDecayMs, mode: pitchMode },
+	delay: {
+		enabled: delayEnabled,
+		time: delayTime,
+		feedback: delayFeedback,
+		mix: delayMix,
+		toneEnabled: delayToneEnabled,
+		toneHz: delayToneHz,
+		toneType: delayToneType,
+	},
+	drive: { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix },
+	reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone },
+});
+
+// Oscilloscope samples (the scope view reads the analyser into this every frame)
+const dataArray = new Uint8Array(analyser.fftSize);
+
+// Live sound engine END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2615,20 +2294,6 @@ function stopEditingLabel(instrument) {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// Equalize waveform volume
-
-function waveformGain(type: OscillatorType): number {
-	switch (type) {
-		case 'square': return 0.5011872336;
-		case 'sawtooth': return 0.7079457844;
-		case 'triangle':
-		case 'sine':
-		default: return 1.0;
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
 function addCustomChannel() {
 	const id = Date.now();
 	const customIndex = instruments.value.filter(i => i.isCustom).length + 1;
@@ -2684,298 +2349,11 @@ function loadUserSample(event: Event, instrument: any) {
 	reader.readAsArrayBuffer(file);
 }
 
-// Sequencer clock: every tick schedules the steps that start within the next
-// SCHEDULE_AHEAD_S seconds. The ticker runs in a Web Worker (see src/audio/ticker.ts)
-// so playback keeps going when the tab is in the background.
-const SCHEDULE_AHEAD_S = 0.1;
-const sequencerTicker = createTicker(schedule, 25);
-onBeforeUnmount(() => sequencerTicker.dispose());
-
-let startTime = 0;
-let stepIndex = 0;
-
-function hardStopSequencer() {
-	sequencerTicker.stop();
-	isPlaying.value = false;
-	currentStep.value = -1;
-	stepIndex = 0;
-	startTime = audioCtx.currentTime;
-}
 
 function togglePad(instrumentName, index) {
 	const instrument = instruments.value.find(i => i.name === instrumentName);
 	if (instrument) instrument.steps[index] = !instrument.steps[index];
 }
-
-function playBuffer(buffer: AudioBuffer, time: number, amp = 1) {
-	const source = audioCtx.createBufferSource();
-	source.buffer = buffer;
-	const gain = audioCtx.createGain();
-	gain.gain.setValueAtTime(Math.max(0.0001, amp), time); // no master volume here
-	source.connect(gain).connect(masterGain);
-	source.start(time);
-}
-
-function schedule() {
-	const now = audioCtx.currentTime;
-	const stepDuration = 60 / tempo.value / 4;
-
-	// If the clock fell more than a step behind (computer asleep, page busy), don't play
-	// every missed step at once: skip to the next step that is still ahead, keeping the
-	// pattern position where it would have been.
-	if (startTime < now - stepDuration) {
-		const missed = Math.ceil((now - startTime) / stepDuration);
-		startTime += missed * stepDuration;
-		stepIndex = (stepIndex + missed) % stepLength.value;
-	}
-
-	while (startTime < now + SCHEDULE_AHEAD_S) {
-		instruments.value.forEach(inst => {
-			if (!inst.muted && inst.steps[stepIndex]) {
-				const vel = inst.velocities[stepIndex] ?? 1;
-				const chanVol = inst.channelVolume ?? 1;
-				const amp = Math.min(1, chanVol * vel);
-
-				const pitch = inst.pitches?.[stepIndex] || 220;
-				const safeDecay = (isFinite(synthDecay.value) && synthDecay.value > 0) ? synthDecay.value : 0.1;
-
-				const isEvenStep = stepIndex % 2 === 1;
-				const stepDuration = 60 / tempo.value / 4;
-				const swingOffset = isEvenStep ? stepDuration * swing.value : 0;
-				const t = startTime + swingOffset;
-
-				if (inst.type === 'synth') {
-					const wf = ((inst as any).waveforms?.[stepIndex] ?? selectedWaveform.value) as OscillatorType;
-					const padNoiseOn = noiseMask.value?.[stepIndex] ?? true;
-
-					// pass the mask to playSynthNote so noise can be per-step enabled/disabled
-					playSynthNote(pitch, amp, safeDecay, t, wf, { addNoise: padNoiseOn });
-
-				} else if (inst.buffer) {
-					playBuffer(inst.buffer, t, amp);
-				}
-			}
-		});
-
-		currentStep.value = stepIndex;
-		stepIndex = (stepIndex + 1) % stepLength.value;
-		startTime += stepDuration;
-	}
-}
-
-// Detach a note's LFO tap from the shared LFO once the note has finished. Without this,
-// every note ever played stays connected to the LFO and the nodes pile up.
-function releaseLfoTap(tap: AudioNode, ...rest: AudioNode[]) {
-	try { lfoGain.disconnect(tap); } catch { /* already disconnected */ }
-	tap.disconnect();
-	rest.forEach(n => n.disconnect());
-}
-
-function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: OscillatorType, opts: { addNoise?: boolean } = {}) {
-
-	const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
-	const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
-
-	// ENV sums all unison voices
-	const oscEnvGain = audioCtx.createGain();
-
-	// Shared envelope timings
-	const attackEnd = startTime + attackTime;
-	const naturalEnd = attackEnd + decay;
-	const gateEnd = startTime + Math.max(0.02, ampEnvDecayMs.value / 1000);
-	const noteEnd = envelopeEnabled.value ? naturalEnd : gateEnd;
-
-	//  Per-step blend (masked) 
-	const addNoiseForThisPad = opts.addNoise !== false;
-	const blend = (addNoiseForThisPad && noiseEnabled.value)
-		? Math.min(Math.max(noiseAmount.value, 0), 1)
-		: 0;
-	const oscBlend = 1 - blend;
-	const noiseBlend = blend;
-
-	// Apply waveform loudness compensation to the TONAL path only
-	const wfComp = waveformGain(waveType);
-	const safeOscGain = Math.max(0.0001, velocity * oscBlend * wfComp);
-
-	const safeNoiseGain = Math.max(0.0001, velocity * noiseBlend);
-
-	// Single amplitude envelope for the OSC path
-	if (envelopeEnabled.value) {
-		oscEnvGain.gain.setValueAtTime(0.0001, startTime);
-		oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
-		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
-	} else {
-		// Same level as the envelope's peak: waveform balance and noise mix included
-		oscEnvGain.gain.setValueAtTime(safeOscGain, startTime);
-		oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005);
-	}
-
-	//  UNISON 
-	// const voices = unisonEnabled.value ? Math.max(1, Math.min(6, unisonVoices.value)) : 1;
-	const voices = unisonEnabled.value
-		? Math.max(1, Math.min(unisonMaxVoices.value, unisonVoices.value))
-		: 1;
-
-	const detuneStep = (voices > 1) ? detuneCents.value : 0;
-	const spreadPct = (voices > 1) ? stereoSpread.value : 0;
-	const normIndex = (i, n) => (n === 1) ? 0 : ((i / (n - 1)) * 2 - 1);
-
-	for (let i = 0; i < voices; i++) {
-		const osc = audioCtx.createOscillator();
-		const voiceFilter = audioCtx.createBiquadFilter();
-		const voiceGain = audioCtx.createGain();
-		const panner = audioCtx.createStereoPanner();
-		osc.type = waveType;
-
-		applyPitchEnv(osc, freq, startTime, {
-			enabled: pitchEnvEnabled.value,
-			semitones: pitchEnvSemitones.value,
-			mode: pitchMode.value,
-			decay: pitchEnvDecay.value
-		});
-
-		const fmHandle = startFM(audioCtx, osc, freq, startTime, {
-			enabled: fmEnabled.value,
-			modFreqHz: fmModFreq.value,
-			index: fmIndex.value,
-			ratio: fmRatio.value
-		});
-
-		const dNorm = normIndex(i, voices);
-		const detuneC = dNorm * detuneStep;
-		osc.detune.setValueAtTime(detuneC, startTime);
-
-		voiceFilter.type = 'lowpass';
-		if (filterEnabled.value) {
-			voiceFilter.frequency.setValueAtTime(filterCutoff.value, startTime);
-			voiceFilter.Q.setValueAtTime(filterResonance.value, startTime);
-		} else {
-			voiceFilter.frequency.setValueAtTime(20000, startTime);
-			voiceFilter.Q.setValueAtTime(0.0001, startTime);
-		}
-
-		voiceGain.gain.setValueAtTime(1 / voices, startTime);
-		panner.pan.setValueAtTime((dNorm * spreadPct) / 100, startTime);
-
-		//  LFO routing per target (except 'gain' — handled post-envelope below) 
-		if (lfoEnabled.value) {
-			if (lfoTarget.value === 'pitch') {
-				const lfoTap = audioCtx.createGain(); lfoTap.gain.value = 1;
-				lfoGain.connect(lfoTap).connect(osc.detune);
-				osc.addEventListener('ended', () => releaseLfoTap(lfoTap));
-
-			} else if (lfoTarget.value === 'filter') {
-				//  keep cutoff in a safe band and smooth the control 
-				const f0 = filterEnabled.value ? filterCutoff.value : 20000;
-				const minHz = 30;
-				const maxHz = audioCtx.sampleRate * 0.45; // ~0.45*Nyquist for headroom
-
-				const maxDepth = Math.max(0, Math.min(f0 - minHz, maxHz - f0));
-				// Scale down requested depth if it would exceed the safe band:
-				const scale = (lfoDepth.value > 0) ? Math.min(1, maxDepth / lfoDepth.value) : 0;
-
-				const lfoTap = audioCtx.createGain();
-				lfoTap.gain.value = scale;      // shrink to stay within [minHz, maxHz]
-
-				const ctrlLP = audioCtx.createBiquadFilter();
-				ctrlLP.type = 'lowpass';
-				ctrlLP.frequency.value = 120;
-
-				lfoGain.connect(lfoTap).connect(ctrlLP).connect(voiceFilter.frequency);
-				osc.addEventListener('ended', () => releaseLfoTap(lfoTap, ctrlLP));
-			}
-		}
-
-		// voice chain into the shared envelope
-		osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
-
-		osc.start(startTime);
-		osc.stop(noteEnd);
-		if (fmHandle) fmHandle.stop(noteEnd);
-	}
-
-	if (driveEnabled.value) {
-		oscEnvGain.connect(driveDry);
-		oscEnvGain.connect(driveShaper);
-	} else {
-		oscEnvGain.connect(driveSum);
-	}
-
-	//  Noise 
-	if (noiseBlend > 0) {
-		const t = Math.min(1, Math.max(0, noiseColor.value));
-		let lower = NOISE_STOPS[0], upper = NOISE_STOPS[NOISE_STOPS.length - 1];
-		for (let i = 0; i < NOISE_STOPS.length - 1; i++) {
-			const a = NOISE_STOPS[i], b = NOISE_STOPS[i + 1];
-			if (t >= a.pos && t <= b.pos) { lower = a; upper = b; break; }
-		}
-		const span = Math.max(1e-6, upper.pos - lower.pos);
-		const wMorph = (t - lower.pos) / span;
-		const wA = 1 - wMorph, wB = wMorph;
-
-		const bufA = noiseBuffers[lower.key];
-		const bufB = noiseBuffers[upper.key];
-
-		if (bufA || bufB) {
-			const mix = audioCtx.createGain();
-			mix.gain.setValueAtTime(1, startTime);
-
-			if (bufA) {
-				const sA = audioCtx.createBufferSource();
-				sA.buffer = bufA; sA.loop = false;
-				const gA = audioCtx.createGain(); gA.gain.setValueAtTime(wA, startTime);
-				sA.connect(gA).connect(mix);
-				sA.start(startTime);
-				sA.stop(noteEnd);
-			}
-			if (bufB) {
-				const sB = audioCtx.createBufferSource();
-				sB.buffer = bufB; sB.loop = false;
-				const gB = audioCtx.createGain(); gB.gain.setValueAtTime(wB, startTime);
-				sB.connect(gB).connect(mix);
-				sB.start(startTime);
-				sB.stop(noteEnd);
-			}
-
-			const noiseEnvGain = audioCtx.createGain();
-			const attackEnd = startTime + attackTime;
-
-			// Interpolate loudness between the two neighboring colors
-			const gainLower = NOISE_LOUDNESS[lower.key];
-			const gainUpper = NOISE_LOUDNESS[upper.key];
-			const colorGain = gainLower * wA + gainUpper * wB;
-
-			const safePeak = Math.max(0.0001, velocity * noiseBlend * colorGain);
-			noiseEnvGain.gain.setValueAtTime(0.0001, startTime);
-			noiseEnvGain.gain.exponentialRampToValueAtTime(safePeak, attackEnd);
-
-			const BURST_MAX_MS = 250;
-			const burstActive = noiseAttackBurst.value && (noiseBurstMs.value < BURST_MAX_MS);
-			const burstEnd = burstActive
-				? Math.min(noteEnd, attackEnd + Math.max(0.005, noiseBurstMs.value / 1000))
-				: noteEnd;
-
-			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, burstEnd);
-			noiseEnvGain.gain.setTargetAtTime(0.0001, burstEnd, 0.01);
-
-			const noiseHP = audioCtx.createBiquadFilter();
-			noiseHP.type = 'highpass';
-			noiseHP.frequency.setValueAtTime(40, startTime);    // remove sub-rumble
-
-			const noiseLP = audioCtx.createBiquadFilter();
-			noiseLP.type = 'lowpass';
-			noiseLP.frequency.setValueAtTime(16000, startTime); // tame ultra-high fizz
-
-			// Mono path to master
-			mix.connect(noiseHP).connect(noiseLP).connect(noiseEnvGain).connect(masterGain);
-
-
-		}
-	}
-}
-
-delayDry.connect(masterGain);
-delayWet.connect(masterGain);
 
 // GOOGLE ANALYTICS BEGIN
 function onPlayClick() {
@@ -2992,26 +2370,6 @@ function onPlayClick() {
 	togglePlay();
 }
 // GOOGLE ANALYTICS END
-
-async function togglePlay() {
-	if (isPlaying.value) {
-		// STOP
-		hardStopSequencer();
-		return;
-	} else {
-		// START
-		if (audioCtx.state === 'suspended') {
-			await audioCtx.resume();
-		}
-		startLfoIfNeeded();
-		startTime = audioCtx.currentTime;
-		stepIndex = 0;
-		isPlaying.value = true;
-		schedule();
-		sequencerTicker.start();
-	}
-}
-
 async function exportCurrentPattern() {
 	if (!synthInstrument.value) return;
 
@@ -3074,18 +2432,6 @@ async function exportCurrentPattern() {
 	}
 }
 
-async function loadSample(url) {
-	try {
-		const res = await fetch(url);
-		if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		const data = await res.arrayBuffer();
-		return await audioCtx.decodeAudioData(data);
-	} catch (err) {
-		console.error(`Failed to load or decode sample: ${url}`, err);
-		return null;
-	}
-}
-
 function toggleMute(instrumentName) {
 	const inst = instruments.value.find(i => i.name === instrumentName);
 	if (inst) inst.muted = !inst.muted;
@@ -3138,10 +2484,6 @@ async function loadAllSamples() {
 	}
 }
 
-watch(volume, val => {
-	masterGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
-});
-
 function hueFor(hz: number, lo = MIN_PAD_HZ, hi = MAX_PAD_HZ) {
 	const t = Math.min(1, Math.max(0, (hz - lo) / (hi - lo)));
 	return Math.round(220 * (1 - t)); // blue→red
@@ -3155,141 +2497,6 @@ function getPadStyle(instrument: any, index: number) {
 		: 210;
 	return { '--vol': pct, '--heat-h': hue, '--pad-on': 1 };
 }
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-// Noise Generator START
-
-function generateNoiseBuffers() {
-	const length = audioCtx.sampleRate * 2; // 2 seconds
-	const createBuffer = () => audioCtx.createBuffer(1, length, audioCtx.sampleRate);
-
-	// white 
-	const white = createBuffer();
-	const wd = white.getChannelData(0);
-	for (let i = 0; i < length; i++) wd[i] = Math.random() * 2 - 1;
-
-	//Pink
-	const pink = createBuffer();
-	const pd = pink.getChannelData(0);
-	let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-	for (let i = 0; i < length; i++) {
-		const w = wd[i];
-		b0 = 0.99886 * b0 + w * 0.0555179;
-		b1 = 0.99332 * b1 + w * 0.0750759;
-		b2 = 0.96900 * b2 + w * 0.1538520;
-		b3 = 0.86650 * b3 + w * 0.3104856;
-		b4 = 0.55000 * b4 + w * 0.5329522;
-		b5 = -0.7616 * b5 - w * 0.0168980;
-		pd[i] = b0 + b1 + b2 + b3 + b4 + b5 + (w * 0.5362);
-		b6 = w * 0.115926;
-	}
-
-	// normalize pink
-	(function norm(buf: Float32Array) {
-		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
-		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
-	})(pd);
-
-	//  Brown
-	const brown = createBuffer();
-	const bd = brown.getChannelData(0);
-	let lastOut = 0;
-	for (let i = 0; i < length; i++) {
-		const w = wd[i];
-		lastOut = (lastOut + (0.02 * w)) / 1.02;
-		bd[i] = lastOut * 3.5;
-	}
-
-	// normalize brown
-	(function norm(buf: Float32Array) {
-		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
-		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
-	})(bd);
-
-	//  Blue (+3 dB/oct)
-	const blue = createBuffer();
-	const bud = blue.getChannelData(0);
-	let prev = 0;
-	for (let i = 0; i < length; i++) {
-		const x = wd[i] - prev;
-		prev = wd[i];
-		bud[i] = x;
-	}
-
-	// normalize blue
-	(function norm(buf: Float32Array) {
-		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
-		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
-	})(bud);
-
-	//  Violet (~ +6 dB/oct)
-	const violet = createBuffer();
-	const vd = violet.getChannelData(0);
-	let prev1 = 0, prev2 = 0;
-	for (let i = 0; i < length; i++) {
-		const d1 = wd[i] - prev1; prev1 = wd[i];
-		const d2 = d1 - prev2; prev2 = d1;
-		vd[i] = d2;
-	}
-	// normalize violet
-	(function norm(buf: Float32Array) {
-		let m = 0; for (let i = 0; i < buf.length; i++) m = Math.max(m, Math.abs(buf[i]));
-		if (m > 0) for (let i = 0; i < buf.length; i++) buf[i] /= m;
-	})(vd);
-
-	// store
-	noiseBuffers.white = white;
-	noiseBuffers.pink = pink;
-	noiseBuffers.brown = brown;
-	noiseBuffers.blue = blue;
-	noiseBuffers.violet = violet;
-}
-
-// Noise Generator END
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-// Drive effect START
-function generateDriveCurve(type: string, amount = 0.5) {
-	const samples = 1024;
-	const curve = new Float32Array(samples);
-	for (let i = 0; i < samples; ++i) {
-		const x = (i * 2) / samples - 1;
-		// force overdrive behavior
-		curve[i] = Math.tanh(x * (1 + amount * 25));
-	}
-	return curve;
-}
-
-function initDriveNow() {
-	const t = audioCtx.currentTime;
-
-	// Ensure the shaper actually has a curve before any audio hits it
-	driveShaper.curve = generateDriveCurve(driveType.value, driveAmount.value);
-	driveShaper.oversample = '2x';
-
-	// Anchor params so setTargetAtTime works consistently in all browsers
-	driveToneFilter.frequency.setValueAtTime(driveTone.value, t);
-
-	// Make sure wet/dry reflect current mix
-	driveWet.gain.setValueAtTime(driveMix.value, t);
-	driveDry.gain.setValueAtTime(1 - driveMix.value, t);
-}
-
-watch(driveEnabled, on => {
-	if (on) initDriveNow();
-});
-driveShaper.curve = (() => {
-	const n = 2 ** 10;
-	const c = new Float32Array(n);
-	for (let i = 0; i < n; i++) {
-		const x = (i * 2) / n - 1;
-		c[i] = x; // linear passthrough
-	}
-	return c;
-})();
-// Drive effect END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
