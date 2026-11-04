@@ -65,4 +65,48 @@ describe('validateAndMigrate', () => {
 		expect(() => validateAndMigrate({ version: 2, data: { instruments: [{ name: 1 }] } })).toThrow();
 		expect(() => validateAndMigrate({ version: 2, data: { instruments: [lane({ steps: 'on' })] } })).toThrow();
 	});
+
+	// The cases below pin details of the zod schema this check replaced, so they stay the same.
+
+	it('rejects numbers that are not finite (NaN, Infinity)', () => {
+		for (const bad of [NaN, Infinity, -Infinity]) {
+			expect(() => validateAndMigrate({ data: { instruments: [lane({ channelVolume: bad })] } })).toThrow();
+			expect(() => validateAndMigrate({ data: { instruments: [lane({ velocities: [1, bad] })] } })).toThrow();
+			expect(() => validateAndMigrate({ data: { instruments: [lane({ pitches: [220, bad] })] } })).toThrow();
+		}
+	});
+
+	it('accepts a missing optional field but not null, except for pitches and waveforms', () => {
+		expect(() => validateAndMigrate({ data: { meta: {} } })).not.toThrow();
+		expect(() => validateAndMigrate({ data: { meta: { name: null } } })).toThrow();
+		expect(() => validateAndMigrate({ data: { meta: null } })).toThrow();
+		expect(() => validateAndMigrate({ data: { instruments: null } })).toThrow();
+		expect(() => validateAndMigrate({ data: { selectedWaveform: null } })).toThrow();
+		expect(() => validateAndMigrate({ data: { instruments: [lane({ pitches: null, waveforms: null })] } })).not.toThrow();
+		expect(() => validateAndMigrate({ data: { instruments: [lane({ pitches: undefined, waveforms: undefined })] } })).not.toThrow();
+	});
+
+	it('rejects lists with holes or wrong items, and lanes that are not objects', () => {
+		const withHole = [true, , false]; // nothing between the two commas
+		expect(() => validateAndMigrate({ data: { instruments: [lane({ steps: withHole })] } })).toThrow();
+		expect(() => validateAndMigrate({ data: { instruments: [lane({ pitches: [220, '440'] })] } })).toThrow();
+		expect(() => validateAndMigrate({ data: { instruments: [null] } })).toThrow();
+		expect(() => validateAndMigrate({ data: { instruments: [[]] } })).toThrow();
+		expect(() => validateAndMigrate({ data: 'not a project' })).toThrow();
+	});
+
+	it('does not check the free-form sections (ui, transport, synth, fx)', () => {
+		expect(() => validateAndMigrate({ data: { ui: 'x', transport: null, synth: [1], fx: 5 } })).not.toThrow();
+	});
+
+	it('rejects a version-1 file whose pads or patterns are not lists', () => {
+		expect(() => validateAndMigrate({ version: 1, data: { pads: 'kick' } })).toThrow();
+		expect(() => validateAndMigrate({ version: 1, data: { patterns: {} } })).toThrow();
+		expect(() => validateAndMigrate({ version: 1, data: 'old' })).toThrow();
+	});
+
+	it('says where it found the problem', () => {
+		expect(() => validateAndMigrate({ data: { instruments: [lane(), lane({ muted: 'no' })] } }))
+			.toThrow('instruments[1].muted');
+	});
 });

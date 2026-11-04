@@ -125,7 +125,8 @@ src/audio/
 src/stores/projectStore.ts  Pinia store: current projectId, name, data snapshot
 src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/export,
                          namespace.ts (storage names, one set per site folder)
-src/lib/schema/projectSchema.ts  zod schema + v1→v2 migration (CURRENT_VERSION = 2)
+src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) + v1→v2
+                         migration (CURRENT_VERSION = 2)
 src/composables/useTheme.ts      synthwave | dark | light theme, stored in localStorage
 src/assets/styles/       Bootstrap overrides + all global SCSS (themes are in _themes.scss)
 public/audio/            kick.mp3, snare.mp3, hihat.mp3: still fetched at startup, but only
@@ -204,7 +205,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `melodyUi`. `MelodyMaker.vue` reports each change with an event, and follows `melodyUi`
   through its `initial-*` props when a project loads. Its Advanced-menu toggles are not saved.
 - The JSON import/export format is `{ version, projectId, meta, data }`, validated by
-  `validateAndMigrate()`.
+  `validateAndMigrate()`, which also checks every project loaded from IndexedDB. It only
+  checks the types of `data.meta.name`, `data.selectedWaveform` and each lane's fields
+  (`LANE_FIELDS`); other sections are free-form, and unknown fields are kept, so a new
+  parameter needs no change there. A file that fails the check is refused as a whole
+  ("Import failed"), and the console says which field was wrong.
 - If you add a parameter: add it to `buildSnapshot`, `applySnapshot`,
   `resetUiToFactoryDefaults`, and (if it affects sound) `exportState` and
   `scheduleStepSequencer.ts`. Treat a missing field in an older snapshot as "use the default",

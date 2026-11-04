@@ -380,3 +380,30 @@ test('starting new projects does not leave old keyboard listeners behind', async
 	await page.waitForTimeout(500);
 	expect(await listeners()).toBe(start);
 });
+
+// --- Project file check (replaced zod) -----------------------------------------------------
+
+test('refuses a broken project file with a message, and keeps the current pattern', async ({ page }) => {
+	await turnOnPads(page, [0, 4]);
+	const name = page.getByRole('textbox', { name: 'Project name' });
+	const nameBefore = await name.inputValue();
+	const alerts: string[] = [];
+	page.on('dialog', (d) => { alerts.push(d.message()); void d.dismiss(); });
+	const consoleErrors: string[] = [];
+	page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+
+	// Every pad on, but one field has the wrong type, so none of it may be loaded
+	const lane = {
+		name: 'synth-voice', label: 'Synth', type: 'synth', isCustom: false, muted: 'no',
+		channelVolume: 0.5, steps: Array(16).fill(true), velocities: Array(16).fill(1),
+	};
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'Broken.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify({ version: 2, data: { instruments: [lane] } })),
+	});
+	await expect.poll(() => alerts).toEqual(['Import failed: invalid or unsupported file.']);
+	expect(consoleErrors.join('\n')).toContain('instruments[0].muted');
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(2);
+	await expect(name).toHaveValue(nameBefore);
+});

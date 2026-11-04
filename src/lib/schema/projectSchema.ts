@@ -1,40 +1,101 @@
 // src/lib/schema/projectSchema.ts
-import { z } from "zod";
+// Checks the shape of a saved or imported project before the app uses it, and upgrades
+// version-1 projects. Only the lanes ("instruments") are checked field by field; the other
+// sections are free-form, and unknown fields are kept. This replaced a zod schema and accepts
+// and rejects exactly the same input (see projectSchema.test.ts).
 
 export const CURRENT_VERSION = 2;
 
-// Legacy
-const LegacyProjectV1 = z.object({
-    synth: z.any().optional(),
-    pads: z.array(z.any()).optional(),
-    patterns: z.array(z.any()).optional(),
-    mix: z.any().optional(),
-});
+export type ProjectLane = {
+    name: string;
+    label: string;
+    type: string;
+    isCustom: boolean;
+    muted: boolean;
+    channelVolume: number;
+    steps: boolean[];
+    velocities: number[];
+    pitches?: number[] | null;
+    waveforms?: unknown[] | null;
+};
 
-// Current
-const ProjectDataV2 = z.object({
-    meta: z.object({ name: z.string().optional() }).optional(),
-    ui: z.any().optional(),
-    transport: z.any().optional(),
-    synth: z.any().optional(),
-    fx: z.any().optional(),
-    instruments: z.array(z.object({
-        name: z.string(),
-        label: z.string(),
-        type: z.string(), 
-        isCustom: z.boolean(),
-        muted: z.boolean(),
-        channelVolume: z.number(),
-        steps: z.array(z.boolean()),
-        velocities: z.array(z.number()),
-        pitches: z.array(z.number()).nullable().optional(),
-        waveforms: z.array(z.any()).nullable().optional(),
-    })).default([]),
-    selectedWaveform: z.string().optional(),
-}).passthrough();
+export type ProjectData = {
+    meta?: { name?: string };
+    ui?: unknown;
+    transport?: unknown;
+    synth?: unknown;
+    fx?: unknown;
+    instruments?: ProjectLane[];
+    selectedWaveform?: string;
+    [field: string]: unknown;
+};
+
+type LegacyProjectV1 = { synth?: unknown; pads?: unknown[]; patterns?: unknown[]; mix?: unknown };
+
+type Check = (value: unknown) => boolean;
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+    typeof v === 'object' && v !== null && !Array.isArray(v);
+const isString: Check = (v) => typeof v === 'string';
+const isBoolean: Check = (v) => typeof v === 'boolean';
+const isNumber: Check = (v) => typeof v === 'number' && Number.isFinite(v); // no NaN or Infinity
+const anything: Check = () => true;
+const optional = (check: Check): Check => (v) => v === undefined || check(v);
+const optionalOrNull = (check: Check): Check => (v) => v === undefined || v === null || check(v);
+// Checks every index, so a hole in a sparse array counts as undefined
+const arrayOf = (check: Check): Check => (v) => {
+    if (!Array.isArray(v)) return false;
+    for (let i = 0; i < v.length; i++) if (!check(v[i])) return false;
+    return true;
+};
+
+const LANE_FIELDS: Record<string, Check> = {
+    name: isString,
+    label: isString,
+    type: isString,
+    isCustom: isBoolean,
+    muted: isBoolean,
+    channelVolume: isNumber,
+    steps: arrayOf(isBoolean),
+    velocities: arrayOf(isNumber),
+    pitches: optionalOrNull(arrayOf(isNumber)),
+    waveforms: optionalOrNull(arrayOf(anything)),
+};
+
+function invalid(where: string): never {
+    throw new Error(`Not a valid project: unexpected value at ${where}`);
+}
+
+function checkFields(obj: Record<string, unknown>, fields: Record<string, Check>, path: string) {
+    for (const key of Object.keys(fields)) {
+        if (!fields[key](obj[key])) invalid(path + key);
+    }
+}
+
+function checkProjectData(data: unknown) {
+    if (!isObject(data)) invalid('data');
+    if (data.meta !== undefined) {
+        if (!isObject(data.meta)) invalid('meta');
+        checkFields(data.meta, { name: optional(isString) }, 'meta.');
+    }
+    if (data.instruments !== undefined) {
+        if (!Array.isArray(data.instruments)) invalid('instruments');
+        for (let i = 0; i < data.instruments.length; i++) {
+            const lane: unknown = data.instruments[i];
+            if (!isObject(lane)) invalid(`instruments[${i}]`);
+            checkFields(lane, LANE_FIELDS, `instruments[${i}].`);
+        }
+    }
+    checkFields(data, { selectedWaveform: optional(isString) }, '');
+}
+
+function checkLegacyData(data: unknown): asserts data is LegacyProjectV1 {
+    if (!isObject(data)) invalid('data');
+    checkFields(data, { pads: optional(arrayOf(anything)), patterns: optional(arrayOf(anything)) }, '');
+}
 
 // Minimal migration if you ever load truly old projects
-function migrateV1toV2(v1: z.infer<typeof LegacyProjectV1>) {
+function migrateV1toV2(v1: LegacyProjectV1) {
     const pads = Array.isArray(v1.pads) ? v1.pads : [];
     return {
         version: 2,
@@ -61,8 +122,6 @@ function migrateV1toV2(v1: z.infer<typeof LegacyProjectV1>) {
     };
 }
 
-export type ProjectData = z.infer<typeof ProjectDataV2>;
-
 export function validateAndMigrate(raw: any) {
     // Try to infer version if missing
     const rawVersion =
@@ -70,14 +129,15 @@ export function validateAndMigrate(raw: any) {
             (raw?.data?.pads || raw?.data?.patterns) ? 1 : 2;
 
     if (rawVersion === 1) {
-        const legacy = LegacyProjectV1.parse(raw.data ?? {});
+        const legacy = raw.data ?? {};
+        checkLegacyData(legacy);
         const migrated = migrateV1toV2(legacy);
         // validate final shape
-        ProjectDataV2.parse(migrated.data);
+        checkProjectData(migrated.data);
         return { ...raw, ...migrated };
     }
 
     // v2+
-    ProjectDataV2.parse(raw?.data ?? {});
+    checkProjectData(raw?.data ?? {});
     return { ...raw, version: 2 };
 }
