@@ -461,11 +461,19 @@ import MidiToolbar from './MidiToolbar.vue';
 import { useMidiInput } from '../composables/useMidiInput';
 
 // Saving Imports
-import { useProjectStore } from "../stores/projectStore";
-import { listProjects as repoList } from "../lib/storage/projects";
 import { storageKey } from "../lib/storage/namespace";
-import { downloadJson, importJson } from "../lib/storage/exportImport";
 import ProjectControls from './ProjectControls.vue';
+import {
+	buildSnapshot,
+	applySnapshot,
+	resetToFactoryDefaults,
+	type ProjectState,
+	type Instrument,
+	type MelodyUi,
+	type Wave,
+	type KeyRoot,
+} from '../lib/project/snapshot';
+import { useProjectSync } from '../composables/useProjectSync';
 
 // WAV Export
 import { scheduleStepSequencer, type StepSequencerState } from '../audio/export/scheduleStepSequencer';
@@ -527,16 +535,6 @@ const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 	getUi?: () => any;
 	setUi?: (u: any) => void;
 }) | null>(null);
-
-type MelodyUi = {
-	keyRoot: 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B';
-	keyScale: 'none' | 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'dorian' | 'lydian' | 'mixolydian';
-	rangePreset: 'low' | 'mid' | 'high' | 'wide';
-	arpPattern: 'up' | 'down' | 'updown' | 'random';
-	arpRate: '1/4' | '1/8' | '1/16';
-	arpOctaves: 1 | 2 | 3;
-	arpTones: 'chord' | 'scale';
-};
 
 const melodyUi = reactive<MelodyUi>({
 	keyRoot: 'A',
@@ -762,7 +760,7 @@ const ROOT_TO_SEMITONE: Record<string, number> = {
 };
 
 const defaultOctaveForPads = 3;
-const selectedKeyRoot = ref<'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B'>('A');
+const selectedKeyRoot = ref<KeyRoot>('A');
 
 function midiToFreq(m: number) { return A4 * Math.pow(2, (m - 69) / 12); }
 function freqForRootAtOct(root: string, oct: number) {
@@ -1254,9 +1252,6 @@ const activeKnob = ref(null);
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
 
-// The four oscillator shapes the synth uses (no custom periodic waves)
-type Wave = Exclude<OscillatorType, 'custom'>;
-
 const selectedWaveform = ref<Wave>("sine");
 const waves = ['sine', 'triangle', 'sawtooth', 'square'] as const;
 
@@ -1340,23 +1335,6 @@ function isFreqInRange(f) {
 function isNoteInRange(octave, semitone) {
 	return isFreqInRange(freqOf(octave, semitone));
 }
-
-// One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
-type Instrument = {
-	name: string;
-	label: string;
-	type: 'synth' | 'sample';
-	isCustom: boolean;
-	isEditingName?: boolean;
-	buffer?: AudioBuffer | null;
-	muted: boolean;
-	channelVolume: number;
-	steps: boolean[];
-	velocities: number[];
-	pitches?: number[];
-	waveforms?: OscillatorType[];
-	inputRef?: HTMLInputElement | null;
-};
 
 const instruments = ref<Instrument[]>([
 	{
@@ -1943,6 +1921,70 @@ const lfoDepthMax = computed(() => {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+// Project settings START
+
+// Every setting a project saves, grouped like a saved project (see ProjectState in
+// src/lib/project/snapshot.ts). Saving and loading use it, and the live engine gets its groups.
+const projectState: ProjectState = {
+	ui: { currentTheme, stepLength, collapsibleState, seqOpen },
+	transport: { volume, tempo, swing },
+	synth: {
+		envelope: { enabled: envelopeEnabled, attackMs: ampEnvAttackMs, decayMs: ampEnvDecayMs },
+		filter: { enabled: filterEnabled, cutoff: filterCutoff, resonance: filterResonance },
+		noise: {
+			enabled: noiseEnabled,
+			color: noiseColor,
+			amount: noiseAmount,
+			mask: noiseMask,
+			attackBurst: noiseAttackBurst,
+			burstMs: noiseBurstMs,
+		},
+		unison: {
+			enabled: unisonEnabled,
+			voices: unisonVoices,
+			detuneCents,
+			stereoSpread,
+			maxVoices: unisonMaxVoices,
+		},
+		lfo: {
+			enabled: lfoEnabled,
+			rate: lfoRate,
+			depth: lfoDepth,
+			target: lfoTarget,
+			waveform: lfoWaveform,
+			sync: lfoSync,
+			division: lfoDivision,
+			retrigger: lfoRetrigger,
+			bipolar: lfoBipolar,
+		},
+		fm: { enabled: fmEnabled, modFreq: fmModFreq, index: fmIndex, ratio: fmRatio },
+		pitchEnv: { enabled: pitchEnvEnabled, semitones: pitchEnvSemitones, decayMs: pitchEnvDecayMs, mode: pitchMode },
+		tuning: { selectedKeyRoot, globalOctaveOffset, currentDefaultHz },
+	},
+	fx: {
+		delay: {
+			enabled: delayEnabled,
+			sync: delaySync,
+			time: delayTime,
+			feedback: delayFeedback,
+			mix: delayMix,
+			toneEnabled: delayToneEnabled,
+			toneHz: delayToneHz,
+			toneType: delayToneType,
+		},
+		drive: { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix },
+		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone },
+	},
+	instruments,
+	melody: melodyUi,
+	selectedWaveform,
+	setStepLength,
+};
+
+// Project settings END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 // Live sound engine START
 
 // The AudioContext, effects graph, LFO, synth voices and sequencer clock live in
@@ -1958,46 +2000,18 @@ const {
 	hardStopSequencer,
 	loadSample,
 } = useLiveEngine({
-	transport: { volume, tempo, swing },
+	transport: projectState.transport,
 	pattern: { lanes: instruments, stepLength, selectedWaveform, noiseMask },
-	envelope: { enabled: envelopeEnabled, attackMs: ampEnvAttackMs, decayMs: ampEnvDecayMs },
-	filter: { enabled: filterEnabled, cutoff: filterCutoff, resonance: filterResonance },
-	noise: {
-		enabled: noiseEnabled,
-		color: noiseColor,
-		amount: noiseAmount,
-		attackBurst: noiseAttackBurst,
-		burstMs: noiseBurstMs,
-	},
-	unison: {
-		enabled: unisonEnabled,
-		voices: unisonVoices,
-		maxVoices: unisonMaxVoices,
-		detuneCents,
-		stereoSpread,
-	},
-	lfo: {
-		enabled: lfoEnabled,
-		rate: lfoRate,
-		depth: lfoDepth,
-		target: lfoTarget,
-		waveform: lfoWaveform,
-		sync: lfoSync,
-		division: lfoDivision,
-	},
-	fm: { enabled: fmEnabled, modFreq: fmModFreq, index: fmIndex, ratio: fmRatio },
-	pitchEnv: { enabled: pitchEnvEnabled, semitones: pitchEnvSemitones, decayMs: pitchEnvDecayMs, mode: pitchMode },
-	delay: {
-		enabled: delayEnabled,
-		time: delayTime,
-		feedback: delayFeedback,
-		mix: delayMix,
-		toneEnabled: delayToneEnabled,
-		toneHz: delayToneHz,
-		toneType: delayToneType,
-	},
-	drive: { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix },
-	reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone },
+	envelope: projectState.synth.envelope,
+	filter: projectState.synth.filter,
+	noise: projectState.synth.noise,
+	unison: projectState.synth.unison,
+	lfo: projectState.synth.lfo,
+	fm: projectState.synth.fm,
+	pitchEnv: projectState.synth.pitchEnv,
+	delay: projectState.fx.delay,
+	drive: projectState.fx.drive,
+	reverb: projectState.fx.reverb,
 });
 
 // Oscilloscope samples (the scope view reads the analyser into this every frame)
@@ -2350,502 +2364,20 @@ function getPadStyle(instrument: any, index: number) {
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // SAVING BEGIN
-const project = useProjectStore();
 
-// Remember last opened project id
-watch(() => project.projectId, (id) => {
-	if (id) localStorage.setItem(storageKey('lastProjectId'), id);
-});
+// Turning settings into a project snapshot and back, and factory defaults, are in
+// src/lib/project/snapshot.ts; keeping them in step with the project store (and File → New)
+// is in src/composables/useProjectSync.ts.
 
-watch(() => project.projectId, async () => {
-	// one-shot UI reset if requested by ProjectControls
-	const flag = localStorage.getItem(storageKey('reset-ui-next'));
-	if (flag === '1') {
-		localStorage.removeItem(storageKey('reset-ui-next'));
-		resetUiToFactoryDefaults();
-		// replace the blank store snapshot with the fresh UI defaults so autosave is coherent
-		project.data = buildSnapshot();
-		await project.save?.();
-	}
-});
-
-// Build a serializable snapshot
-function buildSnapshot() {
-	return {
-		meta: {
-
-		},
-		ui: {
-			currentTheme: currentTheme.value,
-			stepLength: stepLength.value,
-			collapsibleState: JSON.parse(JSON.stringify(collapsibleState)),
-			seqOpen: seqOpen.value,
-		},
-		transport: {
-			volume: volume.value,
-			tempo: tempo.value,
-			swing: swing.value,
-		},
-		synth: {
-			envelope: {
-				enabled: envelopeEnabled.value,
-				attackMs: ampEnvAttackMs.value,
-				decayMs: ampEnvDecayMs.value,
-			},
-			filter: {
-				enabled: filterEnabled.value,
-				cutoff: filterCutoff.value,
-				resonance: filterResonance.value,
-			},
-			noise: {
-				enabled: noiseEnabled.value,
-				type: 'legacy',
-				color: noiseColor.value,
-				amount: noiseAmount.value,
-				mask: [...noiseMask.value],
-				attackBurst: noiseAttackBurst.value,
-				burstMs: noiseBurstMs.value,
-			},
-			unison: {
-				enabled: unisonEnabled.value,
-				voices: unisonVoices.value,
-				detuneCents: detuneCents.value,
-				stereoSpread: stereoSpread.value,
-			},
-			lfo: {
-				enabled: lfoEnabled.value,
-				rate: lfoRate.value,
-				depth: lfoDepth.value,
-				target: lfoTarget.value,
-				waveform: lfoWaveform.value,
-				sync: lfoSync.value,
-				division: lfoDivision.value,
-				retrigger: lfoRetrigger.value,
-				bipolar: lfoBipolar.value,
-			},
-			fm: {
-				enabled: fmEnabled.value,
-				modFreq: fmModFreq.value,
-				index: fmIndex.value,
-				ratio: fmRatio.value,
-			},
-			pitchEnv: {
-				enabled: pitchEnvEnabled.value,
-				semitones: pitchEnvSemitones.value,
-				decayMs: pitchEnvDecayMs.value,
-				mode: pitchMode.value
-			},
-			tuning: {
-				selectedKeyRoot: selectedKeyRoot.value,
-				globalOctaveOffset: globalOctaveOffset.value,
-			}
-		},
-		fx: {
-			delay: {
-				enabled: delayEnabled.value,
-				sync: delaySync.value,
-				time: delayTime.value,
-				feedback: delayFeedback.value,
-				mix: delayMix.value,
-				toneEnabled: delayToneEnabled.value,
-				toneHz: delayToneHz.value,
-				toneType: delayToneType.value,
-			},
-			drive: {
-				enabled: driveEnabled.value,
-				type: driveType.value,
-				amount: driveAmount.value,
-				tone: driveTone.value,
-				mix: driveMix.value,
-			},
-			reverb: {
-				enabled: reverbEnabled.value,
-				mix: reverbMix.value,
-				decay: reverbDecay.value,
-				tone: reverbTone.value,
-			},
-
-		},
-		instruments: instruments.value.map(i => ({
-			name: i.name,
-			label: i.label,
-			type: i.type,
-			isCustom: i.isCustom,
-			muted: i.muted,
-			channelVolume: i.channelVolume,
-			steps: [...i.steps],
-			velocities: [...i.velocities],
-			pitches: i.pitches ? [...i.pitches] : null,
-			waveforms: (i as any).waveforms ? [...(i as any).waveforms] : null,
-		})),
-
-		// melodyUi mirrors the Melody Maker panel, which reports every change through events
-		melody: {
-			keyRoot: melodyUi.keyRoot,
-			keyScale: melodyUi.keyScale,
-			rangePreset: melodyUi.rangePreset,
-			arpPattern: melodyUi.arpPattern,
-			arpRate: melodyUi.arpRate,
-			arpOctaves: melodyUi.arpOctaves,
-			arpTones: melodyUi.arpTones,
-		},
-
-		selectedWaveform: selectedWaveform.value,
-	};
-}
-
-function applySnapshot(s: any) {
-	if (!s || typeof s !== 'object') return;
-
-	// UI
-	if (s.ui) {
-		if (typeof s.ui.currentTheme === 'string') currentTheme.value = s.ui.currentTheme;
-		setStepLength();
-		if (s.ui.seqOpen != null) seqOpen.value = !!s.ui.seqOpen;
-		if (s.ui.collapsibleState) {
-			Object.keys(collapsibleState).forEach((k) => {
-				if (k in s.ui.collapsibleState) (collapsibleState as any)[k] = !!s.ui.collapsibleState[k];
-			});
-		}
-	}
-
-	// Transport
-	if (s.transport) {
-		if (typeof s.transport.volume === 'number') volume.value = s.transport.volume;
-		if (typeof s.transport.tempo === 'number') tempo.value = s.transport.tempo;
-		if (typeof s.transport.swing === 'number') swing.value = s.transport.swing;
-	}
-
-	// Synth core
-	const syn = s.synth || {};
-	if (syn.envelope) {
-		envelopeEnabled.value = !!syn.envelope.enabled;
-		if (typeof syn.envelope.attackMs === 'number') ampEnvAttackMs.value = syn.envelope.attackMs;
-		if (typeof syn.envelope.decayMs === 'number') ampEnvDecayMs.value = syn.envelope.decayMs;
-	}
-	if (syn.filter) {
-		filterEnabled.value = !!syn.filter.enabled;
-		if (typeof syn.filter.cutoff === 'number') filterCutoff.value = syn.filter.cutoff;
-		if (typeof syn.filter.resonance === 'number') filterResonance.value = syn.filter.resonance;
-	}
-
-	if (syn.noise) {
-		noiseEnabled.value = !!syn.noise.enabled;
-
-		if (typeof syn.noise.color === 'number') {
-			noiseColor.value = Math.max(0, Math.min(1, syn.noise.color));
-		} else {
-			const legacy = (syn.noise.type || '').toLowerCase();
-			const map: Record<string, number> = { brown: 0.0, pink: 0.25, white: 0.5, blue: 0.75, violet: 1.0 };
-			noiseColor.value = map[legacy] ?? 0.5;
-		}
-
-		if (typeof syn.noise.amount === 'number') {
-			noiseAmount.value = syn.noise.amount;
-		}
-
-		if (Array.isArray(syn.noise.mask)) {
-			const len = stepLength.value;
-			const src = syn.noise.mask as boolean[];
-			noiseMask.value = (src.length === len)
-				? [...src]
-				: [...src.slice(0, len), ...Array(Math.max(0, len - src.length)).fill(true)];
-		} else if (!noiseMask.value?.length) {
-			noiseMask.value = Array(stepLength.value).fill(true);
-		}
-		if (typeof syn.noise.attackBurst === 'boolean') noiseAttackBurst.value = syn.noise.attackBurst;
-		if (typeof syn.noise.burstMs === 'number') noiseBurstMs.value = syn.noise.burstMs;
-	}
-
-	if (syn.unison) {
-		unisonEnabled.value = !!syn.unison.enabled;
-		// if (typeof syn.unison.voices === 'number') unisonVoices.value = syn.unison.voices;
-		if (typeof syn.unison.voices === 'number') {
-			const cap = unisonMaxVoices.value;
-			const raw = syn.unison.voices;
-			unisonVoices.value = Math.max(1, Math.min(cap, raw));
-		}
-		if (typeof syn.unison.detuneCents === 'number') detuneCents.value = syn.unison.detuneCents;
-		if (typeof syn.unison.stereoSpread === 'number') stereoSpread.value = syn.unison.stereoSpread;
-	}
-	if (syn.lfo) {
-		lfoEnabled.value = !!syn.lfo.enabled;
-		if (typeof syn.lfo.rate === 'number') lfoRate.value = syn.lfo.rate;
-		if (typeof syn.lfo.depth === 'number') lfoDepth.value = syn.lfo.depth;
-
-		if (syn.lfo.target) {
-			lfoTarget.value = (syn.lfo.target === 'filter' || syn.lfo.target === 'pitch')
-				? syn.lfo.target
-				: 'pitch';
-		}
-
-		if (syn.lfo.waveform) lfoWaveform.value = syn.lfo.waveform;
-		if (typeof syn.lfo.sync === 'boolean') lfoSync.value = syn.lfo.sync;
-		if (syn.lfo.division) lfoDivision.value = syn.lfo.division;
-		if (typeof syn.lfo.retrigger === 'boolean') lfoRetrigger.value = syn.lfo.retrigger;
-		if (typeof syn.lfo.bipolar === 'boolean') lfoBipolar.value = syn.lfo.bipolar;
-	}
-	if (syn.fm) {
-		fmEnabled.value = !!syn.fm.enabled;
-		if (typeof syn.fm.modFreq === 'number') fmModFreq.value = syn.fm.modFreq;
-		if (typeof syn.fm.index === 'number') fmIndex.value = syn.fm.index;
-		fmRatio.value = syn.fm.ratio ?? fmRatio.value;
-	}
-	if (syn.pitchEnv) {
-		pitchEnvEnabled.value = !!syn.pitchEnv.enabled;
-		if (typeof syn.pitchEnv.semitones === 'number') pitchEnvSemitones.value = syn.pitchEnv.semitones;
-		if (typeof syn.pitchEnv.decayMs === 'number') pitchEnvDecayMs.value = syn.pitchEnv.decayMs;
-		if (syn.pitchEnv.mode) pitchMode.value = syn.pitchEnv.mode;
-	}
-	if (syn.tuning) {
-		if (typeof syn.tuning.selectedKeyRoot === 'string') (selectedKeyRoot as any).value = syn.tuning.selectedKeyRoot;
-		if (typeof syn.tuning.globalOctaveOffset === 'number') globalOctaveOffset.value = syn.tuning.globalOctaveOffset;
-	}
-
-	// FX
-	if (s.fx?.delay) {
-		delayEnabled.value = !!s.fx.delay.enabled;
-		delaySync.value = !!s.fx.delay.sync;
-		if (typeof s.fx.delay.time === 'number') delayTime.value = s.fx.delay.time;
-		if (typeof s.fx.delay.feedback === 'number') delayFeedback.value = s.fx.delay.feedback;
-		if (typeof s.fx.delay.mix === 'number') delayMix.value = s.fx.delay.mix;
-		delayToneEnabled.value = !!s.fx.delay.toneEnabled;
-		if (typeof s.fx.delay.toneHz === 'number') delayToneHz.value = s.fx.delay.toneHz;
-		if (typeof s.fx.delay.toneType === 'string') delayToneType.value = s.fx.delay.toneType;
-	}
-	if (s.fx?.drive) {
-		driveEnabled.value = !!s.fx.drive.enabled;
-		if (s.fx.drive.type) driveType.value = s.fx.drive.type;
-		if (typeof s.fx.drive.amount === 'number') driveAmount.value = s.fx.drive.amount;
-		if (typeof s.fx.drive.tone === 'number') driveTone.value = s.fx.drive.tone;
-		if (typeof s.fx.drive.mix === 'number') driveMix.value = s.fx.drive.mix;
-	}
-	if (s.fx?.reverb) {
-		reverbEnabled.value = !!s.fx.reverb.enabled;
-		if (typeof s.fx.reverb.mix === 'number') reverbMix.value = s.fx.reverb.mix;
-		if (typeof s.fx.reverb.decay === 'number') reverbDecay.value = s.fx.reverb.decay;
-		if (typeof s.fx.reverb.tone === 'number') reverbTone.value = s.fx.reverb.tone;
-	}
-
-	if (s.melody) {
-		if (s.melody.keyRoot) melodyUi.keyRoot = s.melody.keyRoot;
-		if (s.melody.keyScale) melodyUi.keyScale = s.melody.keyScale;
-		if (s.melody.rangePreset) melodyUi.rangePreset = s.melody.rangePreset;
-
-		// Also keep arp aligned if present
-		if (s.melody.arpPattern) melodyUi.arpPattern = s.melody.arpPattern;
-		if (s.melody.arpRate) melodyUi.arpRate = s.melody.arpRate;
-		if (s.melody.arpOctaves) melodyUi.arpOctaves = s.melody.arpOctaves;
-		if (s.melody.arpTones) melodyUi.arpTones = s.melody.arpTones;
-		// The Melody Maker panel follows these through its initial-* props
-	}
-
-	// Instruments
-	if (Array.isArray(s.instruments) && s.instruments.length) {
-		// keep buffers on existing sample instruments; only copy serializable fields
-		const mapByName = new Map<string, any>(s.instruments.map((i: any) => [i.name, i]));
-		instruments.value.forEach((inst) => {
-			const from = mapByName.get(inst.name);
-			if (!from) return;
-			inst.label = from.label ?? inst.label;
-			inst.isCustom = !!from.isCustom;
-			inst.muted = !!from.muted;
-			inst.channelVolume = typeof from.channelVolume === 'number' ? from.channelVolume : inst.channelVolume;
-
-			if (Array.isArray(from.steps)) inst.steps = [...from.steps];
-			if (Array.isArray(from.velocities)) inst.velocities = [...from.velocities];
-			if (Array.isArray(from.pitches)) (inst as any).pitches = [...from.pitches];
-			if (Array.isArray(from.waveforms)) (inst as any).waveforms = [...from.waveforms];
-		});
-
-		// If there are saved *custom* instruments that don't exist yet, append them
-		s.instruments.forEach((from: any) => {
-			const exists = instruments.value.find(i => i.name === from.name);
-			if (!exists && from.isCustom) {
-				instruments.value.push({
-					name: from.name,
-					label: from.label ?? from.name,
-					type: 'sample',
-					isCustom: true,
-					isEditingName: false,
-					buffer: null,
-					muted: !!from.muted,
-					channelVolume: typeof from.channelVolume === 'number' ? from.channelVolume : 0.5,
-					steps: Array.isArray(from.steps) ? [...from.steps] : Array(stepLength.value).fill(false),
-					velocities: Array.isArray(from.velocities) ? [...from.velocities] : Array(stepLength.value).fill(1),
-				} as any);
-			}
-		});
-	}
-
-
-	if (typeof s.selectedWaveform === 'string') selectedWaveform.value = s.selectedWaveform as any;
-}
-
-let applyingFromStore = false;
-
-// UI -> Store
-watch(
-	() => buildSnapshot(),
-	(snap) => {
-		if (applyingFromStore) return;
-		try {
-			const a = JSON.stringify(project.data);
-			const b = JSON.stringify(snap);
-			if (a === b) return;
-		} catch { }
-
-		project.data = snap;
-	},
-	{ deep: true }
-);
-
-// Store -> UI
-watch(
-	() => project.data,
-	(data) => {
-		if (!data) return;
-		applyingFromStore = true;
-		try {
-			applySnapshot(data);
-		} finally {
-			nextTick(() => { applyingFromStore = false; });
-		}
-	},
-	{ deep: false, flush: 'sync' }
-);
-
-// On first mount, open last project or create a new one from current defaults
-onMounted(async () => {
-	const lastId = localStorage.getItem(storageKey('lastProjectId'));
-	if (lastId) {
-		const ok = await project.load(lastId);
-		if (!ok) {
-			await project.newProject('Untitled', buildSnapshot());
-		}
-	} else {
-		await project.newProject('Untitled', buildSnapshot());
-	}
-
-	if (project.data) {
-		applyingFromStore = true;
-		try { applySnapshot(project.data); } finally { applyingFromStore = false; }
-	}
-});
-
-// SAVING END
-
-//RESET TO FACTORY DEFAULTS ON NEW PROJECT BEGIN 
+// File → New: every saved setting back to its factory default, plus the parts of the screen
+// that aren't saved
 function resetUiToFactoryDefaults() {
-
 	hardStopSequencer();
 
-	currentTheme.value = '';
-	seqOpen.value = false;
-	(Object.keys(collapsibleState) as Array<keyof typeof collapsibleState>)
-		.forEach((k) => { collapsibleState[k] = undefined; });
-
-	// grid length
-	setStepLength();
-
-	// transport
-	volume.value = 0.75;
-	tempo.value = 80;
-	swing.value = 0;
-
-	// synth
-	envelopeEnabled.value = true;
-	ampEnvAttackMs.value = 20;
-	ampEnvDecayMs.value = 400;
-
-	filterEnabled.value = true;
-	filterCutoff.value = 5000;
-	filterResonance.value = 0.5;
-
-	noiseEnabled.value = false;
-	noiseMask.value = Array(stepLength.value).fill(true);
-	noiseColor.value = 0.5;
-	noiseAmount.value = 0.25;
-	noiseAttackBurst.value = false;
-	noiseBurstMs.value = 80;
-
-	unisonEnabled.value = false;
-	unisonVoices.value = 3;
-	detuneCents.value = 12;
-	stereoSpread.value = 50;
-
-	lfoEnabled.value = true;
-	lfoRate.value = 5;
-	lfoDepth.value = 0;
-	lfoTarget.value = 'pitch';
-	lfoWaveform.value = 'sine';
-	lfoSync.value = true;
-	lfoDivision.value = '1/8';
-	lfoRetrigger.value = false;
-	lfoBipolar.value = false;
-
-	fmEnabled.value = false;
-	fmModFreq.value = 200;
-	fmIndex.value = 4.0;
-	fmRatio.value = 1;
-
-	pitchEnvEnabled.value = true;
-	pitchEnvSemitones.value = 0;
-	pitchEnvDecayMs.value = 300;
-	pitchMode.value = 'up';
-
-	selectedKeyRoot.value = 'A';
-	globalOctaveOffset.value = 0;
-
-	melodyUi.keyRoot = 'A';
-	melodyUi.keyScale = 'none';
-	melodyUi.rangePreset = 'wide';
-	melodyUi.arpPattern = 'up';
-	melodyUi.arpRate = '1/16';
-	melodyUi.arpOctaves = 1;
-	melodyUi.arpTones = 'chord';
+	resetToFactoryDefaults(projectState);
 
 	showVelocity.value = false;
 	showPitch.value = false;
-
-	// instruments
-	instruments.value.forEach((i: any) => {
-		i.muted = false;
-		i.channelVolume = 0.5;
-		i.steps = Array(stepLength.value).fill(false);
-		i.velocities = Array(stepLength.value).fill(1);
-		if (i.pitches) i.pitches = Array(stepLength.value).fill(currentDefaultHz.value);
-		if (i.waveforms) i.waveforms = Array(stepLength.value).fill('sine');
-	});
-	// remove custom channels
-	for (let idx = instruments.value.length - 1; idx >= 0; idx--) {
-		if ((instruments.value[idx] as any).isCustom) instruments.value.splice(idx, 1);
-	}
-
-	selectedWaveform.value = 'sine';
-
-	// FX: Delay 
-	delayEnabled.value = false;
-	delaySync.value = true;
-	delayTime.value = 0.2;
-	delayFeedback.value = 0.3;
-	delayMix.value = 0.3;
-	delayToneEnabled.value = true;
-	delayToneHz.value = 5000;
-	delayToneType.value = 'lowpass';
-
-	// FX: Drive 
-	driveEnabled.value = false;
-	driveType.value = 'overdrive';
-	driveAmount.value = 0.4;
-	driveTone.value = 5000;
-	driveMix.value = 0.5;
-
-	// FX: Reverb 
-	reverbEnabled.value = false;
-	reverbMix.value = 0.18;
-	reverbDecay.value = 1.4;
-	reverbTone.value = 0.6;
 
 	// Close any open menus/popovers
 	fxAdvanced.open = false;
@@ -2855,7 +2387,14 @@ function resetUiToFactoryDefaults() {
 	// Force-reset components that hold local state (e.g., Melody Maker)
 	resetNonce.value++;
 }
-//RESET TO FACTORY DEFAULTS ON NEW PROJECT END 
+
+const { project } = useProjectSync({
+	buildSnapshot: () => buildSnapshot(projectState),
+	applySnapshot: (s) => applySnapshot(projectState, s),
+	resetUiToFactoryDefaults,
+});
+
+// SAVING END
 </script>
 
 <style scoped>
