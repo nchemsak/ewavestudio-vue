@@ -344,57 +344,68 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
   each item, and "do the next item" means the first one under "Next, in this order".
 - The PR that finishes an item also updates this list: move the item to "Done".
 
-Next, in this order:
-1. **Features**, one PR each, ranked by value for effort (the maintainer may reorder):
-   1. Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan
-      (only if the drum lanes come back).
-   2. Store custom samples in the browser, and load them by drag-and-drop (drum lanes).
-   3. Built-in preset library of synth patches (and drum kits, if those come back).
-   4. Share a project as a link (the project encoded in the URL).
-   5. Master limiter/compressor (louder output without clipping).
-   6. Step probability, ratchets (quick repeats within a step) and timing humanize.
-   7. Several patterns (A/B/C/D) chained into a song.
-   8. More MIDI: MIDI learn for knobs, MIDI clock sync, MIDI out, and drum lanes played by
-      MIDI notes.
-   9. Play the synth from the computer keyboard. `ComputerKeyboard.vue` in git history has a
-      key-to-note map.
-   10. Export options: N bars or loops, stems, MIDI file.
-   11. 32 steps, or per-lane lengths (the export code's types already allow 32).
-   12. Per-step parameter locks (for example a different filter cutoff on each step).
-   13. Install as an app (PWA) that works offline.
-2. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+Next, in this order (agreed after PR 15: fixes that later features depend on come first;
+everything drum-related waits until the maintainer brings the drum lanes back):
+1. **Delay time isn't always the synced time.** With tempo sync on, the Delay panel
+   (`DelayEffect.vue`) works out the delay time from the tempo and its division knob (default
+   dotted 1/8), and sends it only when it first appears or when the tempo or division changes.
+   Its division knob isn't saved, and it ignores a delay time set from outside. So after
+   File → New the delay time can stay at the default 0.2 s (in the project, and in the sound if
+   the tempo didn't change) instead of the synced time (0.5625 s at 80 BPM), until the tempo
+   or division changes; and a reopened project plays its saved time while the knob shows
+   dotted 1/8. Presets and share links set the delay from outside, so they need this first.
+   Fix: save the division, and have the panel follow a time set from outside (or compute the
+   synced time from tempo and division in one place). The browser test "File → New gives the
+   same settings as a freshly opened page" skips the delay time and tone for now; include them
+   again.
+2. **A broken last-opened project fails silently.** If it fails the project check at startup,
+   it isn't opened and no message appears. Save then does nothing (`store.loaded` stays false)
+   until File → New, so work can be lost. Show a message and start a fresh project instead.
+3. **Change tracking is heavy.** Every change rebuilds the whole snapshot and turns it into
+   JSON several times, even each frame of a knob drag. This happens in the UI → store watcher
+   in `useProjectSync.ts` and in `hashOf` in `ProjectControls.vue`. Debounce it, before
+   patterns, parameter locks and 32 steps make the snapshot several times bigger. The undo
+   history (`useUndoHistory.ts`) relies on `projectStore.data` being replaced on each change;
+   keep that working (its browser tests cover it).
+4. **Housekeeping**, one small PR: replace the Vite template in `README.md` with a real
+   description, and stop `npm run dev` from sending analytics events (the gtag snippet in
+   `index.html` always runs).
+5. **Built-in preset library of synth patches.** Planned shape, discussed with the maintainer
+   (confirm the open questions before starting): a preset sets only the sound (synth, fx and
+   waveform groups of the snapshot), not the pattern, tempo, swing or volume; presets live in
+   `src/lib/presets/` as partial snapshots applied with `applySnapshot()`; 8 to 12 of them,
+   picked from a "Preset" dropdown; one undo step each. Open questions: sound only, or also
+   starter patterns? User-saved presets now or later? Which sounds? Dropdown above the synth
+   panels or in the toolbar?
+6. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
+   key-to-note map.
+7. **Master limiter/compressor** (louder output without clipping), together with the **DC
+   offset** fix: the drive shaper's curve has an even number of points (1024), so silence maps
+   to about −0.011 instead of 0. Even with Drive off, that reaches the speakers through the
+   drive wet gain, at about 0.004 with the default settings. It can't be heard, but it shows up
+   in measurements (the browser tests use `__swingOver` to ignore it) and wastes a little
+   headroom. Both change the sound slightly, so they are listen-tested together. The export
+   engine has the same curve and needs the same changes.
+8. **Share a project as a link** (the project encoded in the URL).
+9. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
+10. **Several patterns (A/B/C/D) chained into a song.**
+11. **32 steps, or per-lane lengths** (the export code's types already allow 32).
+12. **Per-step parameter locks** (for example a different filter cutoff on each step).
+13. **Export options:** N bars or loops, stems, MIDI file.
+14. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
+15. **Install as an app (PWA)** that works offline.
+16. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+17. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
+    purpose so far.
 
-Not scheduled yet: smaller items from reviews. Ask the maintainer before starting any of them.
-- **Change tracking is heavy.** Every change rebuilds the whole snapshot and turns it into
-  JSON several times, even each frame of a knob drag. This happens in the UI → store watcher
-  in `useProjectSync.ts` and in `hashOf` in `ProjectControls.vue`. Debounce it.
-- **A broken last-opened project fails silently.** If it fails the project check at startup,
-  it isn't opened and no message appears. Save then does nothing (`store.loaded` stays false)
-  until File → New. Show a message and start a fresh project instead.
-- **WAV export renders only the synth lane.** This matters only if the drum lanes come back.
-- **`README.md` is still the Vite template.**
-- **`npm run dev` sends analytics events.** The gtag snippet in `index.html` always runs.
+On hold until the drum lanes come back (ask the maintainer before starting any of them):
+- Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan.
+- Store custom samples in the browser, and load them by drag-and-drop.
+- Drum kits in the preset library, and drum lanes played by MIDI notes.
+- **WAV export renders only the synth lane.**
 - **Drum sample paths depend on the trailing slash.** They are relative to the page
   (`audio/kick.mp3`), so they break if `/studio2` is opened without its trailing slash and the
-  server doesn't redirect. Only the hidden drum lanes use them.
-- **A small constant offset (DC) on the output.** The drive shaper's curve has an even number
-  of points (1024), so silence maps to about −0.011 instead of 0. Even with Drive off, that
-  reaches the speakers through the drive wet gain, at about 0.004 with the default settings.
-  It can't be heard, but it shows up in measurements (the browser tests use `__swingOver` to
-  ignore it) and wastes a little headroom. Fixing it changes the sound slightly, so it was
-  left out of the engine split. The export engine has the same curve.
-- **Delay time isn't always the synced time.** With tempo sync on, the Delay panel
-  (`DelayEffect.vue`) works out the delay time from the tempo and its division knob (default
-  dotted 1/8), and sends it only when it first appears or when the tempo or division changes.
-  Its division knob isn't saved, and it ignores a delay time set from outside. So after
-  File → New the delay time can stay at the default 0.2 s (in the project, and in the sound if
-  the tempo didn't change) instead of the synced time (0.5625 s at 80 BPM), until the tempo
-  or division changes; and a reopened project plays its saved time while the knob shows
-  dotted 1/8. Fix: save the division, and have the panel follow a time set from outside
-  (or compute the synced time from tempo and division in one place). The browser test "File →
-  New gives the same settings as a freshly opened page" skips the delay time and tone for now.
-- **Major-version upgrades were left out on purpose** (Vite 8, Pinia 4). If wanted, do each as
-  its own PR.
+  server doesn't redirect.
 
 Done:
 

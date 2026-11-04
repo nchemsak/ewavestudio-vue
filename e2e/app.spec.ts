@@ -543,7 +543,7 @@ test('File → New gives the same settings as a freshly opened page', async ({ p
 	// Only the screen layout (which panels are open) may differ. The delay time and tone are set
 	// by the Delay panel itself when it appears (from the tempo, its division knob and its tone
 	// knob), not from the defaults; after File → New the project keeps the defaults' 0.2 s and
-	// 5000 Hz (see "Delay time" under "Not scheduled yet" in CLAUDE.md).
+	// 5000 Hz (see "Delay time" under "Planned work" in CLAUDE.md).
 	const settings = ({ ui, ...rest }: any) => {
 		const { time, toneHz, ...delay } = rest.fx.delay;
 		return { ...rest, fx: { ...rest.fx, delay } };
