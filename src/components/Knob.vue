@@ -1,7 +1,11 @@
 <!-- components/Knob.vue -->
 <template>
-	<div class="knob-wrapper" :class="[`knob-${props.size}`, { disabled: props.disabled }]"
-		:aria-disabled="props.disabled" @mousedown="startDrag" @touchstart.prevent="startDrag($event, true)">
+	<!-- A slider for keyboards and screen readers: Tab to it, then the arrow keys (see onKeydown) -->
+	<div class="knob-wrapper" :class="[`knob-${props.size}`, { disabled: props.disabled }]" role="slider"
+		:tabindex="props.disabled ? -1 : 0" :aria-label="label" :aria-valuemin="props.min"
+		:aria-valuemax="props.max" :aria-valuenow="props.modelValue" :aria-valuetext="props.valueText"
+		:aria-disabled="props.disabled" @mousedown="startDrag" @touchstart.prevent="startDrag($event, true)"
+		@keydown="onKeydown" @blur="endKeyboardTurn">
 		<div class="knob-label">{{ label }}</div>
 
 		<div class="knob-dial">
@@ -47,6 +51,9 @@ const props = defineProps({
 	max: { type: Number, default: 1 },
 	step: { type: Number, default: 0.01 },
 	label: String,
+	// What a screen reader says for the value, such as "120 ms", when the knob's own number
+	// isn't the real value (a 0..1 position, an index); otherwise it reads the number
+	valueText: { type: String, default: undefined },
 
 	color: { type: String, default: '#23CDE8' },
 	useThemeArc: { type: Boolean, default: true },
@@ -165,9 +172,69 @@ function startDrag(e, isTouch = false) {
 	window.addEventListener(move, onMove);
 	window.addEventListener(end, onUp);
 }
+
+// keyboard
+// Arrow keys: one step, or about 1% of the range on a knob with more than 300 steps.
+// Shift+arrow, Page Up/Down: about 10%. Home/End: minimum/maximum. Up and Right turn it up.
+// Space is left alone: it plays and stops the sequencer everywhere.
+const FINE_STEPS_MAX = 300;
+let keyboardTurning = false;
+
+function snap(v) {
+	return Math.min(props.max, Math.max(props.min, Math.round(v / props.step) * props.step));
+}
+
+function onKeydown(e) {
+	if (props.disabled || e.altKey || e.ctrlKey || e.metaKey) return;
+	const range = props.max - props.min;
+	const step = props.step > 0 ? props.step : range / 100;
+	const small = range / step <= FINE_STEPS_MAX ? step : Math.max(step, range / 100);
+	const big = Math.max(small, range / 10);
+	const value = props.modelValue;
+
+	let next;
+	switch (e.key) {
+		case 'ArrowUp':
+		case 'ArrowRight': next = value + (e.shiftKey ? big : small); break;
+		case 'ArrowDown':
+		case 'ArrowLeft': next = value - (e.shiftKey ? big : small); break;
+		case 'PageUp': next = value + big; break;
+		case 'PageDown': next = value - big; break;
+		case 'Home': next = props.min; break;
+		case 'End': next = props.max; break;
+		default: return;
+	}
+	e.preventDefault(); // don't scroll the page
+
+	// Like a drag: knobStart before the first change (parents show the value, or the envelope
+	// view), knobEnd when the knob loses focus
+	if (!keyboardTurning) {
+		keyboardTurning = true;
+		emit('knobStart');
+	}
+	next = snap(next);
+	if (next !== value) emit('update:modelValue', next);
+}
+
+function endKeyboardTurn() {
+	if (!keyboardTurning) return;
+	keyboardTurning = false;
+	emit('knobEnd');
+}
 </script>
 
 <style scoped>
+/* Keyboard focus only (a mouse click doesn't show it), like the app's buttons */
+.knob-wrapper:focus {
+	outline: none;
+}
+
+.knob-wrapper:focus-visible {
+	outline: 2px solid hsl(var(--pt-accent) 80% 60%);
+	outline-offset: 2px;
+	border-radius: 8px;
+}
+
 .drive-pedal .level .knob-label,
 .drive-pedal .drive .knob-label {
 	position: absolute;

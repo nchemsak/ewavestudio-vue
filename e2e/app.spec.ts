@@ -196,6 +196,83 @@ test('number keys 1–4 switch the screen view, except while typing', async ({ p
 	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
 });
 
+test('knobs work from the keyboard, and turning Attack shows the envelope until focus moves on', async ({ page }) => {
+	// One step per arrow on a knob with few steps (tempo: 1 BPM)
+	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
+	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await tempo.focus();
+	await page.keyboard.press('ArrowUp');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '81');
+	await page.keyboard.press('ArrowLeft');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await page.keyboard.press('Shift+ArrowUp'); // about 10% of 20..300
+	await expect(tempo).toHaveAttribute('aria-valuenow', '108');
+	await page.keyboard.press('End');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '300');
+	await page.keyboard.press('Home');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '20');
+	expect((JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'))).data.transport.tempo).toBe(20);
+
+	// About 1% of the range on a knob with many steps (cutoff: 100..10000 Hz in 1 Hz steps),
+	// and a value a screen reader can say
+	const cutoff = page.getByRole('slider', { name: 'Cutoff' });
+	await expect(cutoff).toHaveAttribute('aria-valuetext', '5000 Hz');
+	await cutoff.focus();
+	await page.keyboard.press('ArrowDown');
+	await expect(cutoff).toHaveAttribute('aria-valuetext', '4901 Hz');
+
+	// Turning an envelope knob shows the envelope view, as dragging it does, until the knob
+	// loses focus
+	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
+	const attack = page.getByRole('slider', { name: 'Attack' });
+	await attack.focus();
+	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope'); // focus alone changes nothing
+	await page.keyboard.press('ArrowUp');
+	await expect(screenView(page)).toHaveAttribute('title', 'Envelope');
+	await expect(attack).toHaveAttribute('aria-valuetext', /^\d+ ms$/);
+	await page.keyboard.press('Tab');
+	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
+});
+
+test('the step pads are one Tab stop: arrows move, Enter switches a pad, Space still plays', async ({ page }) => {
+	const pad = (i: number) => pads(page).nth(i);
+	const inTabOrder = page.locator('.pad-row .padTEST[tabindex="0"]');
+	await expect(inTabOrder).toHaveCount(1);
+
+	// Tab from the first pad's settings button reaches the pads
+	await page.locator('.pad-row .pad-settings-dot').first().focus();
+	await page.keyboard.press('Tab');
+	await expect(pad(0)).toBeFocused();
+	await expect(pad(0)).toHaveAttribute('aria-label', 'Step 1');
+
+	await page.keyboard.press('Enter');
+	await expect(pad(0)).toHaveAttribute('aria-pressed', 'true');
+	await expect(pad(0)).toHaveAttribute('aria-label', /^Step 1, [A-G]/); // with its note
+
+	await page.keyboard.press('ArrowRight');
+	await page.keyboard.press('ArrowRight');
+	await expect(pad(2)).toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(2);
+	await expect(inTabOrder).toHaveCount(1);
+	await expect(pad(2)).toHaveAttribute('tabindex', '0'); // Tab comes back here
+
+	await page.keyboard.press('End');
+	await expect(pad(15)).toBeFocused();
+	await page.keyboard.press('ArrowRight'); // already at the end
+	await expect(pad(15)).toBeFocused();
+	await page.keyboard.press('Home');
+	await expect(pad(0)).toBeFocused();
+
+	// Space plays and stops, as everywhere, and leaves the pad alone
+	await page.keyboard.press('Space');
+	await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+	await page.keyboard.press('Space');
+	await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+	await expect(pad(0)).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(2);
+});
+
 test("saves a project, restores it after a reload, and keeps it in /studio2/'s own storage", async ({ page }) => {
 	await turnOnPads(page, [0, 5, 10]);
 	await page.getByRole('button', { name: 'Arp pattern' }).click();

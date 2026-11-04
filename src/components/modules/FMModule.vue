@@ -32,7 +32,7 @@
                 <div class="position-relative text-center"
                     :class="{ 'is-disabled': modFreqDisabled, 'is-fm-off': !localEnabled }"
                     :aria-disabled="modFreqDisabled">
-                    <Knob v-model="localModFreqCtrl" label="Mod Freq" size="small" :min="0" :max="CTRL_MAX" :step="1"
+                    <Knob :value-text="`${displayHz} Hz`" v-model="localModFreqCtrl" label="Mod Freq" size="small" :min="0" :max="CTRL_MAX" :step="1"
                         :disabled="modFreqDisabled" :color="color" @knobStart="activeKnob = 'mf'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'mf'" class="custom-tooltip">
@@ -41,7 +41,7 @@
                 </div>
 
                 <div class="position-relative text-center" :class="{ 'is-fm-off': !localEnabled }">
-                    <Knob v-model="localIndex" label="Amount" size="small" :min="0" :max="50" :step="0.1" :color="color"
+                    <Knob :value-text="localIndex.toFixed(1)" v-model="localIndex" label="Amount" size="small" :min="0" :max="50" :step="0.1" :color="color"
                         @knobStart="activeKnob = 'ix'" @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'ix'" class="custom-tooltip">
                         {{ localIndex.toFixed(1) }}

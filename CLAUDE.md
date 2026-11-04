@@ -203,10 +203,20 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   250 ms, so it's never played late). MIDI notes also start the LFO, as Play does.
 
 ### Keyboard shortcuts
-- Space: play/stop (`onGlobalKeydown` in `DrumSequencer.vue`, ignored while typing).
+- Space: play/stop (`onGlobalKeydown` in `DrumSequencer.vue`, ignored while typing). It does
+  this everywhere, even on a focused button, knob or pad, on purpose: that's how music apps
+  work. Enter presses a focused button.
 - 1–4: screen view (Oscilloscope, Spectrogram, Tuner, Envelope), same handler; ignored while
   typing or while a dropdown list is open.
 - Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers.
+- Knobs (`Knob.vue`, `role="slider"`): Tab to one, then arrows (Up/Right turn it up) move one
+  step, or about 1% of the range on a knob with more than 300 steps; Shift+arrow and Page
+  Up/Down about 10%; Home/End minimum/maximum. The first key emits `knobStart`, as a drag
+  does (value tooltip, envelope view), and leaving the knob emits `knobEnd`.
+- Step pads (`SynthStepGrid.vue`): one Tab stop for the grid (only the last used pad has
+  `tabindex="0"`). Left/Right move between pads, Home/End to the first/last, Enter turns
+  the focused pad on or off. Each pad is a toggle button named "Step 3", plus its note when on.
+- Focus rings show for keyboard focus only (`:focus-visible`), in the theme's accent color.
 
 ### Saving / projects
 - The settings stay refs in `DrumSequencer.vue`. It groups every saved one into `projectState`
@@ -263,6 +273,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Reference runtime assets in `public/` relative to the page (for example `audio/kick.mp3`)
   or through `import.meta.env.BASE_URL`. Never start the path with `/`, or it breaks under
   the `/studio2/` base.
+- Knobs: give every `<Knob>` a `label` (or an `aria-label`), and a `value-text` (what a
+  screen reader says, such as "120 ms") when its number isn't the real value, for example a
+  0..1 position. The text is usually the knob's tooltip.
 - Analytics: `trackEvent(name, params)` calls `window.gtag`. Separate copies of this helper
   live in DrumSequencer and ProjectControls.
 
@@ -300,15 +313,11 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 - The PR that finishes an item also updates this list: move the item to "Done".
 
 Next, in this order:
-1. **Accessibility:**
-   - Knobs get a slider role and work from the keyboard.
-   - Step pads can be reached with Tab.
-   - Space on a focused button presses that button instead of toggling Play.
-2. **Trim the CSS** (333 kB):
+1. **Trim the CSS** (333 kB):
    - Import only the Bootstrap parts in use.
    - Silence the Sass deprecation warnings.
    - The look must not change: include before/after screenshots of all three themes.
-3. **Features**, one PR each, ranked by value for effort (the maintainer may reorder):
+2. **Features**, one PR each, ranked by value for effort (the maintainer may reorder):
    1. Undo/redo (the app already builds full snapshots).
    2. Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan
       (only if the drum lanes come back).
@@ -326,7 +335,7 @@ Next, in this order:
    12. 32 steps, or per-lane lengths (the export code's types already allow 32).
    13. Per-step parameter locks (for example a different filter cutoff on each step).
    14. Install as an app (PWA) that works offline.
-4. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+3. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
 
 Not scheduled yet: smaller items from reviews. Ask the maintainer before starting any of them.
 - **Change tracking is heavy.** Every change rebuilds the whole snapshot and turns it into
@@ -375,6 +384,7 @@ Done:
 | 10 | Fixed a race between File → New and an import right after it, which emptied the name box and made a deploy's checks fail now and then. |
 | 11 | Split `DrumSequencer.vue`, part 2 of 3: MIDI moved to `src/composables/useMidiInput.ts` (with unit tests) and `MidiToolbar.vue`. |
 | 12 | Split `DrumSequencer.vue`, part 3 of 3: saving and loading moved to `src/lib/project/snapshot.ts` (with unit tests) and `src/composables/useProjectSync.ts`. Finishes the split. |
+| 13 | Accessibility: knobs are sliders that work from the keyboard (arrows, Shift, Home/End) and tell screen readers their value; the step pads are one Tab stop (arrows move, Enter switches a pad). Space stays Play everywhere, on purpose (the planned "Space presses the focused button" was dropped). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

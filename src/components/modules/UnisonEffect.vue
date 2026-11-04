@@ -16,7 +16,7 @@
 			</div>
 
 			<div class="position-relative text-center">
-				<Knob v-model="localDetune" size="small" :min="0" :max="100" :step="1" label="Detune" :color="color"
+				<Knob :value-text="`${localDetune} cents`" v-model="localDetune" size="small" :min="0" :max="100" :step="1" label="Detune" :color="color"
 					@knobStart="activeKnob = 'detune'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'detune'" class="custom-tooltip">
 					{{ localDetune }}¢
@@ -24,7 +24,7 @@
 			</div>
 
 			<div class="position-relative text-center">
-				<Knob v-model="localSpread" size="small" :min="0" :max="100" :step="1" label="Spread" :color="color"
+				<Knob :value-text="`${localSpread}%`" v-model="localSpread" size="small" :min="0" :max="100" :step="1" label="Spread" :color="color"
 					@knobStart="activeKnob = 'spread'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'spread'" class="custom-tooltip">
 					{{ localSpread }}%
