@@ -457,6 +457,9 @@ test('File → New gives the same settings as a freshly opened page', async ({ p
 	expect((await projectData()).transport.tempo).toBe(140);
 
 	await chooseFromFileMenu(page, 'New');
+	// The menu closes once the new project has been created; until then, the File menu can
+	// close under the next click
+	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(0);
 	const afterNew = await projectData();
 
