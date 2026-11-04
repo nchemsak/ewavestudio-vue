@@ -10,7 +10,7 @@ export interface FMOptions {
  * Returns a stop() handle so you can end it with the voice.
  */
 export function startFM(
-    ctx: AudioContext,
+    ctx: BaseAudioContext,
     carrier: OscillatorNode,
     baseFreq: number,
     startTime: number,

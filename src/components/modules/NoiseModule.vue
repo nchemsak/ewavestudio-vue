@@ -157,7 +157,7 @@ const stops = [
 
 const colorLabel = computed(() => {
     const t = colorLocal.value;
-    let nearest = stops[0];
+    let nearest: (typeof stops)[number] = stops[0];
     let best = Infinity;
     for (const s of stops) {
         const d = Math.abs(s.pos - t);
@@ -193,8 +193,8 @@ function mixHex(a: string, b: string, w: number): string {
 
 const swatchHex = computed(() => {
     const t = Math.min(1, Math.max(0, colorLocal.value));
-    let a = stops[0];
-    let b = stops[stops.length - 1];
+    let a: (typeof stops)[number] = stops[0];
+    let b: (typeof stops)[number] = stops[stops.length - 1];
     for (let i = 0; i < stops.length - 1; i++) {
         const s0 = stops[i];
         const s1 = stops[i + 1];

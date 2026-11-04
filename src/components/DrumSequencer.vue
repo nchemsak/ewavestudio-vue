@@ -165,7 +165,7 @@
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
 						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
 						:waveforms="(synthInstrument as any).waveforms"
-						:defaultWave="selectedWaveform as OscillatorType" :noiseMask="noiseMask"
+						:defaultWave="selectedWaveform" :noiseMask="noiseMask"
 						:noiseTint="noiseHexFromMorph(noiseColor)" noise-mode="static" :noise-alpha="0.32"
 						:noise-fps="14" :noise-speed="40" :noise-enabled="noiseEnabled" :pepper-alpha="0.2"
 						:pepper-scale="6" @open-pad-settings="({ name, index, anchorRect }) =>
@@ -563,11 +563,11 @@ const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 
 type MelodyUi = {
 	keyRoot: 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B';
-	keyScale: 'none' | 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'wholeTone' | 'dorian' | 'lydian' | 'egyptian';
+	keyScale: 'none' | 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'dorian' | 'lydian' | 'mixolydian';
 	rangePreset: 'low' | 'mid' | 'high' | 'wide';
 	arpPattern: 'up' | 'down' | 'updown' | 'random';
 	arpRate: '1/4' | '1/8' | '1/16';
-	arpOctaves: 1 | 2 | 3 | 4;
+	arpOctaves: 1 | 2 | 3;
 	arpTones: 'chord' | 'scale';
 };
 
@@ -614,7 +614,7 @@ const padSizeStyle = computed(() => ({ '--padTEST-size': '41px' }));
 type MidiInputInfo = {
 	id: string;
 	name: string;
-	input: WebMidi.MIDIInput;
+	input: MIDIInput;
 };
 
 const midiSupported = typeof navigator !== "undefined" && !!(navigator as any).requestMIDIAccess;
@@ -626,7 +626,7 @@ const midiEnabled = ref(false);
 const midiInitialized = ref(false);
 const midiInitInProgress = ref(false);
 
-function handleMidiMessage(e: WebMidi.MIDIMessageEvent) {
+function handleMidiMessage(e: MIDIMessageEvent) {
 	if (!midiEnabled.value) return;
 
 	const [status, data1, data2] = e.data;
@@ -680,7 +680,7 @@ async function initMidiAccess() {
 
 		const updateInputs = () => {
 			const list: MidiInputInfo[] = [];
-			access.inputs.forEach((input: WebMidi.MIDIInput) => {
+			access.inputs.forEach((input: MIDIInput) => {
 				list.push({
 					id: input.id,
 					name: input.name || `Input ${input.id}`,
@@ -845,7 +845,7 @@ const ui = reactive({
 	fxTab: 'delay' as 'delay' | 'drive',
 	menus: {
 		fx: { open: false, x: 0, y: 0 },
-	}
+	} as Record<string, { open: boolean; x: number; y: number }>
 });
 
 // Generators tab
@@ -1460,10 +1460,13 @@ const activeKnob = ref(null);
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
 
-const selectedWaveform = ref("sine");
+// The four oscillator shapes the synth uses (no custom periodic waves)
+type Wave = Exclude<OscillatorType, 'custom'>;
+
+const selectedWaveform = ref<Wave>("sine");
 const waves = ['sine', 'triangle', 'sawtooth', 'square'] as const;
 
-const randomPool = reactive<Record<OscillatorType, boolean>>({
+const randomPool = reactive<Record<Wave, boolean>>({
 	sine: true, triangle: true, sawtooth: true, square: true
 });
 
@@ -1507,7 +1510,7 @@ const waveLabel = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
 // 	inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as any);
 // }
 
-function applyWaveToAll(w: OscillatorType) {
+function applyWaveToAll(w: Wave) {
 	selectedWaveform.value = w;
 	const inst = synthInstrument.value as any;
 	if (!inst) return;
@@ -1544,7 +1547,24 @@ function isNoteInRange(octave, semitone) {
 	return isFreqInRange(freqOf(octave, semitone));
 }
 
-const instruments = ref([
+// One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
+type Instrument = {
+	name: string;
+	label: string;
+	type: 'synth' | 'sample';
+	isCustom: boolean;
+	isEditingName?: boolean;
+	buffer?: AudioBuffer | null;
+	muted: boolean;
+	channelVolume: number;
+	steps: boolean[];
+	velocities: number[];
+	pitches?: number[];
+	waveforms?: OscillatorType[];
+	inputRef?: HTMLInputElement | null;
+};
+
+const instruments = ref<Instrument[]>([
 	{
 		name: 'kick',
 		label: 'Kick',
@@ -1620,18 +1640,18 @@ const padFrequencies = computed<number[]>({
 	set: v => { if (synthInstrument.value) synthInstrument.value.pitches = v; }
 });
 
-const currentPadWave = computed<OscillatorType>({
+const currentPadWave = computed<Wave>({
 	get() {
 		const inst = instruments.value.find(i => i.name === padSettings.name) as any;
-		if (!inst) return selectedWaveform.value as OscillatorType;
+		if (!inst) return selectedWaveform.value as Wave;
 		const i = padSettings.index;
-		return (inst.waveforms?.[i] ?? selectedWaveform.value) as OscillatorType;
+		return (inst.waveforms?.[i] ?? selectedWaveform.value) as Wave;
 	},
 	set(w) {
 		const inst = instruments.value.find(i => i.name === padSettings.name) as any;
 		if (!inst) return;
 		if (!Array.isArray(inst.waveforms) || inst.waveforms.length !== stepLength.value) {
-			inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as OscillatorType);
+			inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as Wave);
 		}
 		inst.waveforms[padSettings.index] = w;
 	}
@@ -3410,7 +3430,7 @@ function applySnapshot(s: any) {
 	// UI
 	if (s.ui) {
 		if (typeof s.ui.currentTheme === 'string') currentTheme.value = s.ui.currentTheme;
-		setStepLength(16);
+		setStepLength();
 		if (s.ui.seqOpen != null) seqOpen.value = !!s.ui.seqOpen;
 		if (s.ui.collapsibleState) {
 			Object.keys(collapsibleState).forEach((k) => {
@@ -3553,7 +3573,7 @@ function applySnapshot(s: any) {
 	// Instruments
 	if (Array.isArray(s.instruments) && s.instruments.length) {
 		// keep buffers on existing sample instruments; only copy serializable fields
-		const mapByName = new Map(s.instruments.map((i: any) => [i.name, i]));
+		const mapByName = new Map<string, any>(s.instruments.map((i: any) => [i.name, i]));
 		instruments.value.forEach((inst) => {
 			const from = mapByName.get(inst.name);
 			if (!from) return;
@@ -3656,7 +3676,7 @@ function resetUiToFactoryDefaults() {
 		.forEach((k) => { collapsibleState[k] = undefined; });
 
 	// grid length
-	setStepLength(16);
+	setStepLength();
 
 	// transport
 	volume.value = 0.75;

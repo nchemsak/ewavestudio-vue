@@ -1,0 +1,22 @@
+{
+  // Used by `npm run typecheck` (vue-tsc). The build itself doesn't type-check.
+  // Deliberately lenient: the code base was written without a type checker, so strict mode
+  // and implicit-any checks are off. Tighten these over time, one file at a time.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "jsx": "preserve",
+    "strict": false,
+    "noImplicitAny": false,
+    "allowJs": true,
+    "checkJs": false,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue"]
+}
