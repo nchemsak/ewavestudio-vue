@@ -31,6 +31,12 @@ function instrument() {
 			if (!w.__probe) {
 				w.__probe = this.context.createAnalyser();
 				w.__probe.fftSize = 4096;
+				// Chromium stops updating an analyser whose input has gone silent, so it would
+				// keep showing the last sound. A silent source keeps it reading the real level.
+				const keepAlive = this.context.createConstantSource();
+				keepAlive.offset.value = 1e-6; // zero would count as silent too
+				(origConnect as any).call(keepAlive, w.__probe);
+				(origStart as any).call(keepAlive);
 			}
 			(origConnect as any).call(this, w.__probe);
 		}
@@ -46,6 +52,19 @@ function instrument() {
 			for (const x of buf) peak = Math.max(peak, Math.abs(x));
 		}, 15);
 		setTimeout(() => { clearInterval(id); resolve(peak); }, ms);
+	});
+	// Peak-to-peak swing at the speakers during the next `ms` milliseconds. Unlike __peakOver it
+	// ignores a steady offset: the output carries a small constant one (about 0.004) from the
+	// drive stage, even when nothing is playing.
+	w.__swingOver = (ms: number) => new Promise<number>((resolve) => {
+		const probe: AnalyserNode = w.__probe;
+		const buf = new Float32Array(probe.fftSize);
+		let lo = Infinity, hi = -Infinity;
+		const id = setInterval(() => {
+			probe.getFloatTimeDomainData(buf);
+			for (const x of buf) { lo = Math.min(lo, x); hi = Math.max(hi, x); }
+		}, 15);
+		setTimeout(() => { clearInterval(id); resolve(hi - lo); }, ms);
 	});
 	// Keydown listeners on window, as (listener, capture) pairs, which is what identifies one
 	w.__keydown = [];
@@ -366,6 +385,52 @@ test('with the envelope off, notes are as loud as with it on, live and in WAV ex
 	expect(liveOff / liveOn).toBeLessThan(1.25);
 	expect(wavOff / wavOn).toBeGreaterThan(0.8);
 	expect(wavOff / wavOn).toBeLessThan(1.25);
+});
+
+test('delay, drive and reverb are in the signal path', async ({ page }) => {
+	await turnOnPads(page, [0]);
+
+	// Play pad 1 once, then measure what reaches the speakers after the note itself has
+	// ended (attack 20 ms + decay 400 ms): only an effect can still be sounding then
+	const tailSwing = async () => {
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		await page.waitForTimeout(150);
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+		await page.waitForTimeout(750);
+		const swing = await page.evaluate(() => (window as any).__swingOver(500) as Promise<number>);
+		await page.waitForTimeout(3000); // let any tail die away before the next round
+		return swing;
+	};
+	// Delay and Drive have no on/off switch in the interface; import a project that turns them on
+	const importWith = async (name: string, fx: Record<string, any>) => {
+		const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+		for (const [key, on] of Object.entries(fx)) project.data.fx[key].enabled = on;
+		await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+			name: `${name}.json`,
+			mimeType: 'application/json',
+			buffer: Buffer.from(JSON.stringify(project)),
+		});
+		await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(1);
+	};
+
+	expect(await tailSwing()).toBeLessThan(0.0001); // dry: silent once the note has ended
+
+	const reverbSwitch = page.locator('.fx .footswitch').last();
+	await reverbSwitch.click();
+	await expect(reverbSwitch).toHaveAttribute('aria-pressed', 'true');
+	expect(await tailSwing()).toBeGreaterThan(0.0003); // the reverb tail is quiet at the default mix
+	await reverbSwitch.click();
+	await expect(reverbSwitch).toHaveAttribute('aria-pressed', 'false');
+
+	await importWith('delay-on', { delay: true });
+	expect(await tailSwing()).toBeGreaterThan(0.005);
+
+	// Drive reroutes every note through the shaper; the notes must still be heard
+	await importWith('drive-on', { delay: false, drive: true });
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	const driven = await page.evaluate(() => (window as any).__swingOver(600) as Promise<number>);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	expect(driven).toBeGreaterThan(0.01);
 });
 
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {
