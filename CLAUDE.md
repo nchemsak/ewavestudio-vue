@@ -24,10 +24,33 @@ npm install        # or `npm ci` for an exact install from package-lock.json
 npm run dev        # dev server → open http://localhost:5173/studio2/
 npm run build      # production build into dist/
 npm run preview    # serve dist/ locally → http://localhost:4173/studio2/
+npm run typecheck  # vue-tsc type check (the build itself doesn't type-check)
+npm test           # unit tests (Vitest): src/**/*.test.ts
+npm run test:e2e   # build, then browser tests (Playwright): e2e/
 ```
 
-There are no tests, linter or type-checker yet. `npm run build` does **not** type-check:
-Vite strips the TypeScript types without checking them, and there is no `tsconfig.json`.
+Checks (GitHub runs the same ones on every PR and before every deploy, see
+`.github/workflows/checks.yml`):
+- **Type check:** `tsconfig.json` is deliberately lenient (`strict` and `noImplicitAny` off),
+  because the code was written without a type checker. It must stay at zero errors.
+- **Unit tests** (Vitest, in Node): pure logic such as loading and upgrading saved projects,
+  WAV encoding, storage names and the playback clock. `vitest.config.js` reuses
+  `vite.config.js` and sets `BASE_URL` to the real base, so code sees `/studio2/` as in the app.
+- **Browser tests** (Playwright, Chromium), `e2e/app.spec.ts`: build, serve with
+  `vite preview`, then drive the app. An init script records every scheduled note and the
+  per-note LFO taps, and can pause `requestAnimationFrame` the way hidden tabs do. Google
+  Analytics is stubbed out. Before the first local run: `npx playwright install chromium`.
+- **No linter yet.** Current ESLint and typescript-eslint releases depend on `minimatch` 10,
+  which has a moderate advisory (GHSA-g3hv-75wg-m249) that only `minimatch` 11 fixes. Adding
+  them now would make `npm install` report 14 vulnerabilities. Add ESLint once they move to
+  `minimatch` 11.
+
+npm 10 (bundled with Node 22) crashes with "Cannot read properties of null (reading
+'edgesOut')" when *adding* Vitest 4.1, because of Vitest's optional peer dependencies.
+Installing from the lockfile (`npm ci`, or `npm install` with nothing new) works. To add or
+upgrade Vitest, run that one install with npm 11 (`npx npm@11 install -D vitest@...`), then
+confirm `npm ci` still works with npm 10.
+
 The build prints hundreds of Sass deprecation warnings that come from Bootstrap's SCSS.
 They are expected, and the build still succeeds.
 
@@ -38,8 +61,9 @@ They are expected, and the build still succeeds.
 `/public_html/studio2/` (the WordPress site lives in `/public_html/`; version 1 in
 `/public_html/studio/`).
 
-Every push to `main` (for example merging a PR) runs `.github/workflows/deploy-studio2.yml`:
-it runs `npm ci` and `npm run build`, checks the build is for `/studio2/`, then makes
+Every push to `main` (for example merging a PR) runs `.github/workflows/deploy-studio2.yml`.
+It first runs the Checks workflow (type check, unit and browser tests) and stops if any fail.
+Then it runs `npm ci` and `npm run build`, checks the build is for `/studio2/`, and makes
 `/public_html/studio2/` an exact copy of `dist/` with `lftp`:
 - It uploads every file on every deploy (`--transfer-all`), overwriting in place
   (`mirror:overwrite`). It never trusts sizes or timestamps, because `index.html` changes
@@ -106,6 +130,9 @@ public/audio/            kick.mp3, snare.mp3, hihat.mp3: still fetched at startu
                          used by the hidden drum lanes
 public/images/           Background textures/GIFs referenced from SCSS via ../images/
 .github/workflows/deploy-studio2.yml  Builds `main` and uploads it to /studio2/ (see Deploy)
+.github/workflows/checks.yml  Type check, unit tests and browser tests (every PR, every deploy)
+src/**/*.test.ts         Unit tests (Vitest; vitest.config.js)
+e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 ```
 
 ### Audio engine (live), in `DrumSequencer.vue`
@@ -207,10 +234,15 @@ back from git history.
   (for example: "turn on synth pads 1, 5, 9 and 13 and press Play; turn Reverb mix up:
   the tail gets longer, with no clicks").
 - Don't break existing saved projects: snapshot changes must stay backward compatible.
-- Before pushing, run `npm run build` and confirm it succeeds.
+- Before pushing, run `npm run typecheck`, `npm test` and `npm run test:e2e`, and confirm
+  they pass.
+- When fixing a bug, add a test that fails without the fix where practical. The browser tests
+  can count scheduled notes and audio connections; see the helpers in `e2e/app.spec.ts`.
 
 ## Testing a PR
-Pushing a branch or opening a PR changes nothing on the website. **Merging a PR into `main`
+Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
+every PR, and the result (a green check or a red ✗) shows on the PR page; merge only when it's
+green. **Merging a PR into `main`
 deploys it to `/studio2/` within a few minutes** (`/studio/` is never touched), so the usual
 way to test is: merge, wait for the Actions run to finish, then try it on
 https://www.ephemeralwave.com/studio2/ (on any device). If something is wrong, fix it in a

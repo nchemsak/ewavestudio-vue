@@ -6,7 +6,7 @@ export async function saveProject(snapshot: {
     projectId: string;
     // allow either shape:
     name?: string;
-    meta?: { name?: string; createdAt?: number; updatedAt?: number; appVersion?: string };
+    meta?: { name?: string; createdAt?: number | string; updatedAt?: number | string; appVersion?: string };
     data: unknown;
     appVersion?: string;
 }) {

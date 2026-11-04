@@ -1,6 +1,8 @@
 # Builds the app and uploads it to ephemeralwave.com/studio2/ whenever main changes
 # (for example when a pull request is merged). It can also be started by hand from the
 # Actions tab ("Run workflow"). It never touches /studio/, which holds the original app.
+# It runs the Checks workflow (type check, unit and browser tests) first, and only
+# uploads if they pass.
 #
 # Needs three repository secrets (Settings → Secrets and variables → Actions):
 #   FTP_HOST      the FTP server's name as it appears on its TLS certificate (the hosting
@@ -27,7 +29,11 @@ permissions:
   contents: read
 
 jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
   deploy:
+    needs: checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

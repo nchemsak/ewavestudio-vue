@@ -37,7 +37,7 @@ type Opt = { label: string; value: string | number; disabled?: boolean };
 
 const props = defineProps<{
     modelValue: string | number;
-    options: Opt[];
+    options: readonly Opt[];
     ariaLabel?: string;
 }>();
 const emit = defineEmits<{ (e: 'update:modelValue', v: string | number): void }>();

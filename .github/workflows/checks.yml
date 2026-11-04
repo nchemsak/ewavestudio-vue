@@ -1,0 +1,40 @@
+# Type check, unit tests and browser tests. GitHub runs this on every pull request (the
+# result shows as a check on the PR page), and the deploy workflow runs it before uploading,
+# so a build that fails these never reaches /studio2/.
+
+name: Checks
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Install Chromium for the browser tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: npm run test:e2e
