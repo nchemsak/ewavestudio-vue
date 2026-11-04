@@ -269,13 +269,20 @@ async function newProject(evt?: MouseEvent) {
         initialData = cloned;
     }
 
-    await store.newProject('', initialData);
-    isNewUnsaved.value = true;
-    nextTick(() => {
-        lastSavedHash.value = '__new__';
-        lastSavedName.value = '';
-        nameDraft.value = '';
-    });
+    // store.newProject sets the new id at once, then saves. If another project replaces this
+    // one before that save finishes (an import right after New), leave the newer one's name
+    // and saved state alone.
+    const creating = store.newProject('', initialData);
+    const id = store.projectId;
+    await creating;
+    if (store.projectId === id) {
+        isNewUnsaved.value = true;
+        nextTick(() => {
+            lastSavedHash.value = '__new__';
+            lastSavedName.value = '';
+            nameDraft.value = '';
+        });
+    }
 
     closeAllMenus();
 }
@@ -373,12 +380,17 @@ async function onImport(e: Event) {
         const insideData = typeof normalized?.data?.meta?.name === 'string' ? normalized.data.meta.name.trim() : '';
         const importedName = topLevel || fromFilename || insideData || 'Imported';
 
-        await store.newProject(importedName, normalized.data);
-        isNewUnsaved.value = false;
-        nextTick(() => {
-            lastSavedHash.value = hashOf(store.data);
-            lastSavedName.value = store.name || '';
-        });
+        // Same guard as in newProject(): skip if another project replaced this one meanwhile
+        const importing = store.newProject(importedName, normalized.data);
+        const id = store.projectId;
+        await importing;
+        if (store.projectId === id) {
+            isNewUnsaved.value = false;
+            nextTick(() => {
+                lastSavedHash.value = hashOf(store.data);
+                lastSavedName.value = store.name || '';
+            });
+        }
     } catch (err) {
         console.error('Import failed:', err);
         alert('Import failed: invalid or unsupported file.');
