@@ -18,6 +18,20 @@ export function waveformGain(type: OscillatorType): number {
 
 // Waveform loudness END
 
+// LFO filter depth START
+
+// The LFO swings each note's cutoff by ±Depth Hz around the cutoff, scaled down so it stays
+// between 30 Hz and 0.45 × the sample rate. Returns that scale (the tap's gain, 0..1). Used
+// by the live and export engines, and by the screen's filter view to draw the swing.
+export const LFO_FILTER_MIN_HZ = 30;
+export function lfoFilterTapGain(cutoffHz: number, depthHz: number, sampleRate: number): number {
+	const maxHz = sampleRate * 0.45;
+	const maxDepth = Math.max(0, Math.min(cutoffHz - LFO_FILTER_MIN_HZ, maxHz - cutoffHz));
+	return depthHz > 0 ? Math.min(1, maxDepth / depthHz) : 0;
+}
+
+// LFO filter depth END
+
 // LFO timing START
 
 // Tempo-synced LFO rate: a note division such as "1/8", "1/8." (dotted) or "1/8T" (triplet)

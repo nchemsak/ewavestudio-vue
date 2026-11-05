@@ -13,6 +13,9 @@
 
                 <!-- Envelope canvas -->
                 <canvas v-show="view === 'env'" ref="lcdEnv" aria-hidden="true"></canvas>
+
+                <!-- Filter response canvas (no F-key: shown while a filter knob is turned) -->
+                <canvas v-show="view === 'filter'" ref="lcdFilter" aria-hidden="true"></canvas>
             </div>
         </div>
 
@@ -45,12 +48,14 @@ const lcdScope = ref(null);
 const lcdSpec = ref(null);
 const lcdTuner = ref(null);
 const lcdEnv = ref(null);
+const lcdFilter = ref(null);
 
 defineExpose({
     scopeCanvas: lcdScope,
     specCanvas: lcdSpec,
     tunerCanvas: lcdTuner,
-    envCanvas: lcdEnv
+    envCanvas: lcdEnv,
+    filterCanvas: lcdFilter
 });
 
 const ICONS = {

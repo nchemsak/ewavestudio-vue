@@ -29,6 +29,7 @@ import {
 	NOISE_STOPS,
 	NOISE_LOUDNESS,
 	type NoiseKey,
+	lfoFilterTapGain,
 } from './synthHelpers';
 
 type R<T> = Readonly<Ref<T>>;
@@ -604,15 +605,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 				} else if (lfoTarget.value === 'filter') {
 					//  keep cutoff in a safe band and smooth the control
 					const f0 = filterEnabled ? filterCutoff : 20000;
-					const minHz = 30;
-					const maxHz = audioCtx.sampleRate * 0.45; // ~0.45*Nyquist for headroom
-
-					const maxDepth = Math.max(0, Math.min(f0 - minHz, maxHz - f0));
-					// Scale down requested depth if it would exceed the safe band:
-					const scale = (lfoDepth.value > 0) ? Math.min(1, maxDepth / lfoDepth.value) : 0;
-
 					const lfoTap = audioCtx.createGain();
-					lfoTap.gain.value = scale;      // shrink to stay within [minHz, maxHz]
+					// shrink the depth so the cutoff stays within the safe band
+					lfoTap.gain.value = lfoFilterTapGain(f0, lfoDepth.value, audioCtx.sampleRate);
 
 					const ctrlLP = audioCtx.createBiquadFilter();
 					ctrlLP.type = 'lowpass';
