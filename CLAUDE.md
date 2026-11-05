@@ -10,7 +10,8 @@ harmonic shapes); amp envelope, pitch envelope (a drum-style sweep), filter with
 envelope, noise, FM,
 unison and LFO; delay, overdrive and reverb; Web MIDI note
 input; a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope
-display; WAV export; projects saved in IndexedDB with JSON import and export; and undo/redo.
+display; six built-in presets that set the sound (not the pattern); WAV export; projects
+saved in IndexedDB with JSON import and export; and undo/redo.
 Earlier versions also had sample drum lanes (kick, snare, hihat and user-loaded samples).
 Their UI is commented out and they are no longer part of the app, but some of their code
 remains (see "Dead code").
@@ -43,8 +44,10 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   because the code was written without a type checker. It must stay at zero errors.
 - **Unit tests** (Vitest, in Node): pure logic such as loading and upgrading saved projects,
   WAV encoding, storage names, the playback clock, synth helpers, the LFO visualizer's
-  arithmetic, MIDI input (with a fake MIDI system), the undo history and project snapshots (save → load round trip, older
-  projects, factory defaults). `vitest.config.js` reuses `vite.config.js` and sets `BASE_URL`
+  arithmetic, MIDI input (with a fake MIDI system), the undo history, project snapshots (save → load round trip, older
+  projects, factory defaults) and presets (exact values, knob ranges, pattern untouched).
+  `src/lib/project/testState.ts` builds the settings those tests use (`makeState`,
+  `changeEverything`). `vitest.config.js` reuses `vite.config.js` and sets `BASE_URL`
   to the real base, so code sees `/studio2/` as in the app.
 - **Browser tests** (Playwright, Chromium), `e2e/app.spec.ts`: build, serve with
   `vite preview`, then drive the app. An init script keeps a handle on the app's AudioContext
@@ -136,6 +139,7 @@ src/components/
                          velocity shapes ("Humanize") and octave shift
   ProjectControls.vue    File menu: new, open, save, rename, delete, import/export JSON, WAV;
                          Undo/Redo buttons
+  PresetButtons.vue      The Presets buttons in the transport card (see "Presets")
   MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
   WaveButton.vue, WaveIcon.vue  A wave's big tile (Waveforms panel) and small line icon (pads)
@@ -157,6 +161,9 @@ src/audio/
 src/stores/projectStore.ts  Pinia store: current projectId, name, data snapshot
 src/lib/project/snapshot.ts  Settings ↔ project snapshot, and factory defaults (see "Saving")
 src/lib/project/history.ts   Undo/redo history of snapshots (pure; see "Undo / redo")
+src/lib/project/testState.ts  Settings for unit tests (not used by the app)
+src/lib/presets/         Built-in presets: library.ts (the sounds), presets.ts (applying one,
+                         and matching the sound to one; see "Presets")
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
@@ -349,13 +356,44 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - `DelayEffect.vue` only shows the division and time; turning its knob emits both. It never
   sets the time or tone by itself, so loading a project doesn't change them.
 
+### Presets
+- Six buttons in the transport card (`PresetButtons.vue`): Kick, Snare, Metal / Pluck, Acid,
+  Bell. From 1280 px they sit between Swing and the logo, three across, without making the
+  card taller; narrower, they get a row of their own under the knobs (six across; three across
+  under Play on phones), and the screen beside grows with the card.
+- A preset sets the sound only: the synth and effect settings, the main wave and every pad's
+  wave (as clicking a wave tile does). Never the pattern (steps, velocities, pitches, the noise
+  mask), the key and octave, tempo, swing, volume or Melody Maker.
+- `src/lib/presets/library.ts` lists each preset as only what it changes from the factory
+  sound. `applyPreset()` (`presets.ts`) first puts the whole sound back to factory
+  (`resetSoundToFactoryDefaults()` in `snapshot.ts`, which File → New uses too), then applies
+  the preset's settings with `applySnapshot()`. So a preset that doesn't mention the delay has
+  it off, and a preset sounds the same whatever was set before it (a unit test checks this
+  from a state with every setting changed). A new sound setting must go into
+  `resetSoundToFactoryDefaults()`, or presets would keep whatever it was.
+- Its values must stay within the knobs' ranges (a unit test checks) and survive the panels
+  unrounded (a browser test checks each preset lands exactly and stays lit). The delay's
+  feedback has no knob, so presets leave it at 0.3. The drive saturates to near full scale,
+  so its mix sets the level: keep it low (Kick 0.3, Acid 0.35), or that preset is much louder
+  than the others. WAV exports of pads 1, 5, 9, 13 peak between about 0.2 (Pluck) and 0.5
+  (Acid).
+- A click is one undo step (the undo history records it like any change). The button of the
+  preset the sound matches is lit (`aria-pressed`): `DrumSequencer.vue` notes each preset's
+  sound once it has been applied and the panels have followed (`soundKey()`: the sound part of
+  a snapshot, without the synced delay time), and compares it with the project store's copy.
+  Turning a sound knob unlights it; undo back to it lights it again; a tempo change doesn't
+  unlight it. A preset not clicked on this page has no sound noted, so a project that happens
+  to match it lights nothing.
+- Analytics: `preset_select` with the preset's id.
+
 ### Saving / projects
 - The settings stay refs in `DrumSequencer.vue`. It groups every saved one into `projectState`
   (type `ProjectState`), shaped like a snapshot:
   `{ meta, ui, transport, synth, fx, instruments[], melody, selectedWaveform }`.
 - `src/lib/project/snapshot.ts`: `buildSnapshot(state)` turns the settings into a plain object,
   `applySnapshot(state, s)` restores them (a missing or wrongly typed field keeps its current
-  value), and `resetToFactoryDefaults(state)` is File → New. They only touch refs, so
+  value), and `resetToFactoryDefaults(state)` is File → New (its synth and effects part is
+  `resetSoundToFactoryDefaults(state)`, which presets use too). They only touch refs, so
   `snapshot.test.ts` tests them in Node. `resetUiToFactoryDefaults()` in `DrumSequencer.vue`
   wraps the last one with what isn't saved (stop playback, pad sliders, menus, Melody Maker).
 - `src/composables/useProjectSync.ts` connects them to the project store (below).
@@ -402,10 +440,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   parameter needs no change there. A file that fails the check is refused as a whole
   ("Import failed"), and the console says which field was wrong.
 - If you add a parameter: add its ref to `projectState` in `DrumSequencer.vue` (and the
-  `ProjectState` type), to `buildSnapshot`, `applySnapshot` and `resetToFactoryDefaults` in
-  `snapshot.ts` (the default must match the ref's starting value; a browser test compares
-  File → New with a fresh page), and to `changeEverything()` in `snapshot.test.ts` (the
-  round-trip test names any setting it doesn't cover). If it affects sound, also to
+  `ProjectState` type), to `buildSnapshot`, `applySnapshot` and the factory defaults in
+  `snapshot.ts` (a sound setting in `resetSoundToFactoryDefaults`, see "Presets"; the default
+  must match the ref's starting value; a browser test compares File → New with a fresh page),
+  and to `changeEverything()` in `testState.ts` (the round-trip test names any setting it
+  doesn't cover). If it affects sound, also to
   `liveEngine.ts`, `exportState` and `scheduleStepSequencer.ts`. Treat a missing field in an
   older snapshot as "use the default", so existing saved projects still load.
 
@@ -496,29 +535,22 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 
 Next, in this order (agreed after PR 15; the maintainer changes it as ideas come up): fixes
 that later features depend on, then sound features in the spirit of the design intent (top of
-this file), then presets that can use them. Everything drum-related waits until the maintainer
-brings the drum lanes back.
-1. **Built-in preset library of synth patches.** Planned shape (confirm the open questions
-   before starting): a preset sets only the sound (the synth and fx groups of the snapshot, and
-   the waveform), not the pattern, tempo, swing or volume; presets live in `src/lib/presets/`
-   as partial snapshots applied with `applySnapshot()`; 8 to 12 of them, picked from a
-   "Preset" dropdown; one undo step each. Velocity routing (PR 28) can be part of a preset too
-   (kicks and toms use the pitch envelope, PR 21; plucks the filter envelope, PR 24). Open questions: sound
-   only, or also starter patterns? What happens to per-pad waveforms? User-saved presets now or
-   later? Which sounds? Dropdown above the synth panels or in the toolbar?
-2. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
+this file), then presets that can use them (the first six presets came in PR 30; more can come
+with new sound features). Everything drum-related waits until the maintainer brings the drum
+lanes back.
+1. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
    key-to-note map. Space, 1–4 and the Ctrl/Cmd shortcuts must keep working (see "Keyboard
    shortcuts").
-3. **Master limiter/compressor** (louder output without clipping), together with the **DC
+2. **Master limiter/compressor** (louder output without clipping), together with the **DC
    offset** fix: the drive shaper's curve has an even number of points (1024), so silence
    maps to about −0.011 instead of 0. Even with Drive off, that reaches the speakers through
    the drive wet gain, at about 0.004 with the default settings. It can't be heard, but it
    shows up in measurements (the browser tests use `__swingOver` to ignore it) and wastes a
    little headroom. Both change the sound slightly, so they are listen-tested together. The
    export engine has the same curve and needs the same changes.
-4. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
+3. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
    outside, which works since PR 17.
-5. **Stage view for TVs, and an audio output picker.** Casting already works without code
+4. **Stage view for TVs, and an audio output picker.** Casting already works without code
    (Chrome or Edge "Cast tab", AirPlay screen mirroring, Windows Cast, HDMI), picture and
    sound together, but with a noticeable lag when turning knobs. A Cast button of our own
    isn't practical: the web's casting APIs are made for media files, not sound made live in
@@ -527,10 +559,10 @@ brings the drum lanes back.
    lighting up) designed for a TV, to cast with the browser; and optionally an "Audio output"
    picker (`AudioContext.setSinkId()`, which not every browser supports; check before
    building).
-6. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
-7. **Several patterns (A/B/C/D) chained into a song.**
-8. **32 steps, or per-lane lengths** (the export code's types already allow 32).
-9. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
+5. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
+6. **Several patterns (A/B/C/D) chained into a song.**
+7. **32 steps, or per-lane lengths** (the export code's types already allow 32).
+8. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
    note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
    vary per step. Delay and reverb are shared by every note, so per step they become send
    amounts (how much of the step goes into them), not per-step effect settings, which would
@@ -538,19 +570,23 @@ brings the drum lanes back.
    UI idea: select a step with its settings dot, then the knobs you turn change that step
    only; locked steps are marked, with a way to clear them. Build on velocity routing
    (PR 28).
-10. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
+9. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
     in a short delay loop that loses brightness each time round; the original paper also has a
     drum variant), metallic (several square waves at odd ratios, as the 808 makes cymbals and
     cowbell) and struck (a click ringing tuned resonant filters: wood block, marimba, toms,
     bells). Karplus–Strong needs an AudioWorklet: a `DelayNode` in a feedback loop can't be
     shorter than one render quantum (128 samples, about 3 ms), which caps the pitch around the
     F above middle C. AudioWorklets also run in the `OfflineAudioContext` used for WAV export.
-11. **Export options:** N bars or loops, stems, MIDI file.
-12. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
-13. **Install as an app (PWA)** that works offline.
-14. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-15. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
+10. **Export options:** N bars or loops, stems, MIDI file.
+11. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
+12. **Install as an app (PWA)** that works offline.
+13. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+14. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
     purpose so far.
+15. **User-saved presets, and more built-in ones.** Left out of PR 30 on purpose. A user
+    preset could be the sound part of a snapshot (`soundKey()`'s parts) kept in IndexedDB
+    next to the projects; more built-in ones as new sound features arrive (toms, hats, organ
+    and hollow sounds).
 
 On hold until the drum lanes come back (ask the maintainer before starting any of them):
 - Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan.
@@ -567,7 +603,7 @@ On hold until the drum lanes come back (ask the maintainer before starting any o
   phones are remote controls that each show their own part, so network lag only delays when a
   change takes effect, never the beat. Phones that each made the sound would drift apart and
   flam. Also to decide: who can join (a room code), and what undo means with several people.
-  Share links (item 4) build part of it (the project packed into a compact message).
+  Share links (item 3) build part of it (the project packed into a compact message).
 
 Done:
 
@@ -600,6 +636,7 @@ Done:
 | 27 | Pulse Width covers one side only, 5 % (thinnest) to 50 % (the square, fullest): a width and its mirror (25 % and 75 %) sound the same, so half the knob repeated the other. Older projects' widths above 50 % become their mirror, which sounds the same. The LFO's third target is labelled "Pulse" instead of "PW", and the LFO visualizer idea added to the plan.
 | 28 | Velocity routing: a step's velocity (or a MIDI note's) also shapes Decay, Cutoff, the pitch envelope and the noise mix, each by a bipolar amount in the Step Sequencer's "Vel →" panel; full-velocity steps play as set; in the live and export engines (`velocity.ts`). |
 | 29 | LFO visualizer: while the LFO plays, an amber dot on the Cutoff knob (over an arc for the swing), the Pulse tile's bar widening and narrowing (over a ghost of the widest), or a bar sliding on each lit pad (pitch) shows what it's doing, without turning any knob; ranges only with reduced motion. |
+| 30 | Built-in presets: six buttons (Kick, Snare, Metal, Pluck, Acid, Bell) in the transport card, between Swing and the logo (a row of their own on narrower screens). A preset sets the sound from the factory sound up (synth, effects, the main wave and every pad's), never the pattern, tempo or key; one undo step; its button is lit while the sound matches. `src/lib/presets/`. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

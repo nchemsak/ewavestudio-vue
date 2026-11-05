@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { PRESETS } from '../src/lib/presets/library';
 
 // Injected before the app loads. Keeps a handle on the app's AudioContext (__ctx), records
 // every note it schedules, tracks nodes that feed an audio parameter (the per-note LFO taps),
@@ -1377,4 +1378,121 @@ test('opening another project starts a fresh undo history', async ({ page }) => 
 	await page.locator('body').click({ position: { x: 5, y: 5 } });
 	await page.keyboard.press('Control+z');
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(1);
+});
+
+// --- Presets ---------------------------------------------------------------------------------
+
+// Leaf values of an object by path ("synth.filter.cutoff"), and reading one back
+const flatten = (o: any, path = ''): Record<string, unknown> =>
+	o !== null && typeof o === 'object' && !Array.isArray(o)
+		? Object.assign({}, ...Object.keys(o).map((k) => flatten(o[k], path ? `${path}.${k}` : k)))
+		: { [path]: o };
+const valueAt = (o: any, path: string) => path.split('.').reduce((v, k) => v?.[k], o);
+
+test('presets set the sound but not the pattern, light up, and are one undo step each', async ({ page }) => {
+	const projectData = async () =>
+		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	const presetButton = (label: string) => page.locator('.preset-grid').getByRole('button', { name: label, exact: true });
+	const lit = page.locator('.preset-grid .pt-btn[aria-pressed="true"]');
+	await expect(page.locator('.preset-grid .pt-btn')).toHaveText(PRESETS.map((p) => p.label));
+
+	// A pattern, and a tempo of its own
+	await page.waitForTimeout(SETTLED);
+	await turnOnPads(page, [0, 4, 9]);
+	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
+	await tempo.focus();
+	await page.keyboard.press('ArrowUp');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '81');
+	await page.waitForTimeout(SETTLED);
+	await expect(lit).toHaveCount(0);
+	const before = await projectData();
+	const pattern = (d: any) => ({
+		transport: d.transport, melody: d.melody, tuning: d.synth.tuning, noiseMask: d.synth.noise.mask,
+		lanes: d.instruments.map(({ waveforms, ...lane }: any) => lane),
+	});
+
+	for (const p of PRESETS) {
+		await presetButton(p.label).click();
+		await expect(lit).toHaveText([p.label]);
+		await page.waitForTimeout(SETTLED);
+		// Still lit once the panels have followed the new settings: none rounded one away
+		await expect(lit).toHaveText([p.label]);
+		const data = await projectData();
+		for (const [path, value] of Object.entries(flatten({ synth: p.synth ?? {}, fx: p.fx ?? {} }))) {
+			expect(valueAt(data, path), `${p.id}: ${path}`).toEqual(value);
+		}
+		expect(data.selectedWaveform).toBe(p.wave);
+		expect(new Set(data.instruments.find((i: any) => i.name === 'synth-voice').waveforms)).toEqual(new Set([p.wave]));
+		expect(pattern(data), `${p.id} keeps the pattern`).toEqual(pattern(before));
+		// The delay time stays the division at this tempo
+		expect(data.fx.delay.time).toBeCloseTo((60 / 81) * 0.75, 6);
+	}
+	// What the last preset (Bell) doesn't set is back at its default, though Acid set it
+	const bell = await projectData();
+	expect(bell.fx.drive.enabled).toBe(false);
+	expect(bell.synth.lfo).toMatchObject({ target: 'pitch', depth: 0 });
+	expect(bell.synth.filter).toMatchObject({ resonance: 0.5, envAmount: 0 });
+
+	// The sound plays
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	const swing = await page.evaluate(() => (window as any).__swingOver(800) as Promise<number>);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	expect(swing).toBeGreaterThan(0.01);
+
+	// Turning a sound knob unlights it; undo lights it again, and each preset is one step
+	const cutoff = page.getByRole('slider', { name: 'Cutoff', exact: true });
+	await cutoff.focus();
+	await page.keyboard.press('ArrowUp');
+	await expect(lit).toHaveCount(0);
+	await page.waitForTimeout(SETTLED);
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('Control+z');
+	await expect(lit).toHaveText(['Bell']);
+	await page.keyboard.press('Control+z');
+	await expect(lit).toHaveText(['Acid']);
+	await page.keyboard.press('Control+y');
+	await expect(lit).toHaveText(['Bell']);
+});
+
+test('the preset buttons sit between Swing and the logo, or on a row of their own', async ({ page }) => {
+	for (const width of [1600, 1280, 1100, 900, 390]) {
+		await page.setViewportSize({ width, height: 900 });
+		const m = await page.evaluate(() => {
+			const rect = (el: Element) => {
+				const b = el.getBoundingClientRect();
+				return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, height: b.height };
+			};
+			const row = document.querySelector('.transport-row')!;
+			const buttons = [...document.querySelectorAll('.preset-grid .pt-btn')] as HTMLElement[];
+			return {
+				card: rect(document.querySelector('.ds-transport')!),
+				swing: rect(row.children[2]),
+				logo: rect(document.querySelector('.transport-logo')!),
+				box: rect(document.querySelector('.preset-box')!),
+				buttons: buttons.map(rect),
+				clipped: buttons.filter((b) => b.scrollWidth > b.clientWidth).map((b) => b.textContent),
+				pageScrolls: document.documentElement.scrollWidth > window.innerWidth,
+			};
+		});
+		const at = `${width} px`;
+		expect(m.buttons, at).toHaveLength(6);
+		expect(m.clipped, `${at}: names fit`).toEqual([]);
+		expect(m.pageScrolls, `${at}: no sideways scroll`).toBe(false);
+		for (const b of m.buttons) {
+			expect(b.left, at).toBeGreaterThanOrEqual(m.card.left);
+			expect(b.right, at).toBeLessThanOrEqual(m.card.right);
+			expect(b.bottom, at).toBeLessThanOrEqual(m.card.bottom);
+		}
+		if (width >= 1280) {
+			// In the space between Swing and the logo, three across, and the card is no taller
+			expect(m.box.left, at).toBeGreaterThan(m.swing.right);
+			expect(m.box.right, at).toBeLessThan(m.logo.left);
+			expect(new Set(m.buttons.map((b) => Math.round(b.top))).size, at).toBe(2);
+			expect(m.card.height, at).toBeLessThan(130);
+		} else {
+			// A row of their own below the knobs: six across, or three across on a phone
+			expect(m.box.top, at).toBeGreaterThan(m.swing.bottom);
+			expect(new Set(m.buttons.map((b) => Math.round(b.top))).size, at).toBe(width <= 720 ? 2 : 1);
+		}
+	}
 });
