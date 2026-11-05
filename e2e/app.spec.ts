@@ -693,8 +693,10 @@ test('a burst of changes is copied into the project once, and Save or Export rig
 });
 
 test('the pitch envelope sweeps each note down from Amount, and short decays are easy to reach', async ({ page }) => {
-	const amount = page.locator('.module.pitch').getByRole('slider', { name: 'Amount', exact: true }).last();
-	const decay = page.locator('.module.pitch').getByRole('slider', { name: 'Decay', exact: true });
+	// The "Pitch" card in the Envelope / Filter row
+	const card = page.locator('.module.sound .pt-card').filter({ has: page.locator('#pitch-env-panel') });
+	const amount = card.getByRole('slider', { name: 'Amount', exact: true });
+	const decay = card.getByRole('slider', { name: 'Decay', exact: true });
 	await expect(amount).toHaveAttribute('aria-valuenow', '0'); // off by default
 	const detuneCalls = () => page.evaluate(() => (window as any).__detuneCalls as any[]);
 
@@ -705,10 +707,10 @@ test('the pitch envelope sweeps each note down from Amount, and short decays are
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
 	expect((await detuneCalls()).every((c) => c[0] === 'set' && c[1] === 0)).toBe(true);
 
-	// Amount 24 semitones up
+	// Amount is bipolar (zero in the middle): right of centre starts above and drops
 	await amount.focus();
 	for (let i = 0; i < 24; i++) await page.keyboard.press('ArrowUp');
-	await expect(amount).toHaveAttribute('aria-valuetext', '24 semitones');
+	await expect(amount).toHaveAttribute('aria-valuetext', 'starts 24 semitones above, drops into the note');
 
 	// Decay's knob is logarithmic (5–2000 ms): half a turn is about 100 ms. Arrow keys move
 	// it 1% of the turn (or at least 1 ms), so from the top, 50 presses down are half a turn.
@@ -740,6 +742,43 @@ test('the pitch envelope sweeps each note down from Amount, and short decays are
 	expect(late).toBeGreaterThan(0.4); // 220 Hz: 0.44 crossings per ms
 	expect(late).toBeLessThan(0.5);
 	expect(early).toBeGreaterThan(late * 3);
+
+	// Left of centre starts below and rises (saved as mode 'down'); RND is mode 'random', and
+	// turning it off goes back to the knob's side
+	const pitchEnv = async () =>
+		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.pitchEnv;
+	expect(await pitchEnv()).toMatchObject({ semitones: 24, mode: 'up' });
+	await amount.focus();
+	for (let i = 0; i < 36; i++) await page.keyboard.press('ArrowDown');
+	await expect(amount).toHaveAttribute('aria-valuenow', '-12');
+	expect(await pitchEnv()).toMatchObject({ semitones: 12, mode: 'down' });
+	const rnd = card.getByRole('button', { name: 'Random sweep' });
+	await rnd.click();
+	await expect(rnd).toHaveAttribute('aria-pressed', 'true');
+	expect(await pitchEnv()).toMatchObject({ semitones: 12, mode: 'random' });
+	await rnd.click();
+	expect(await pitchEnv()).toMatchObject({ semitones: 12, mode: 'down' });
+	await expect(amount).toHaveAttribute('aria-valuenow', '-12');
+});
+
+test('Envelope, Filter and Pitch fit on one row, even where the cards are narrowest', async ({ page }) => {
+	// 1280 px wide and a phone leave each card about 90 px inside: two knobs and a short title
+	for (const width of [1280, 390]) {
+		await page.setViewportSize({ width, height: 900 });
+		const cards = await page.locator('.module.sound .pt-card').evaluateAll((els) => els.map((el) => {
+			const box = el.getBoundingClientRect();
+			const title = el.querySelector('.pt-title') as HTMLElement;
+			const lineHeight = parseFloat(getComputedStyle(title).lineHeight) || parseFloat(getComputedStyle(title).fontSize) * 1.3;
+			const inside = [...el.querySelectorAll('.knob-wrapper, .pt-title, button')].every((c) => {
+				const b = c.getBoundingClientRect();
+				return b.left >= box.left - 0.5 && b.right <= box.right + 0.5;
+			});
+			return { top: Math.round(box.top), oneLine: title.getBoundingClientRect().height < lineHeight * 1.5, inside };
+		}));
+		expect(cards.length, `${width} px`).toBe(3);
+		expect(new Set(cards.map((c) => c.top)).size, `${width} px: one row`).toBe(1);
+		for (const c of cards) expect(c, `${width} px`).toMatchObject({ oneLine: true, inside: true });
+	}
 });
 
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {

@@ -35,8 +35,13 @@
 				<!-- Hide the solid arc when markersOnly is true -->
 				<path v-if="showArcPaths" d="M20,76 A 40 40 0 1 1 80 76" fill="none" :stroke="trackColor"
 					stroke-width="6" />
-				<path v-if="showArcPaths" d="M20,76 A 40 40 0 1 1 80 76" fill="none" :stroke="activeStroke"
+				<path v-if="showArcPaths && !props.bipolar" d="M20,76 A 40 40 0 1 1 80 76" fill="none" :stroke="activeStroke"
 					stroke-width="6" :style="{ strokeDashoffset: 184 - 184 * ((rotation + 132) / 264) }" />
+				<!-- Bipolar: the arc grows from the top (zero) towards either side, and a tick marks zero -->
+				<template v-if="showArcPaths && props.bipolar">
+					<path v-if="bipolarArc" :d="bipolarArc" fill="none" :stroke="activeStroke" stroke-width="6" />
+					<line x1="50" y1="3" x2="50" y2="8" class="dial-zero" />
+				</template>
 			</svg>
 		</div>
 	</div>
@@ -72,7 +77,9 @@ const props = defineProps({
 	// How the turn maps to the value. 'linear': evenly. 'log': each part of the turn multiplies
 	// the value by the same amount (min must be above 0), so short times or low frequencies get
 	// as much of the turn as long or high ones; for example 5–2000 ms has 100 ms at half a turn.
-	taper: { type: String, default: 'linear' }
+	taper: { type: String, default: 'linear' },
+	// Zero is in the middle of the turn (min = −max): the arc is drawn from the top
+	bipolar: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['update:modelValue', 'knobStart', 'knobEnd']);
@@ -91,6 +98,16 @@ function fromPos(p) {
 
 // rotation math (−132°..+132° sweep)
 const rotation = computed(() => toPos(props.modelValue) * 264 - 132);
+
+// Bipolar arc: from the top of the dial (radius 40 around 50,50, as the track) to the pointer
+const bipolarArc = computed(() => {
+	const deg = rotation.value;
+	if (Math.abs(deg) < 0.5) return '';
+	const a = (deg * Math.PI) / 180;
+	const x = 50 + 40 * Math.sin(a);
+	const y = 50 - 40 * Math.cos(a);
+	return `M50,10 A 40 40 0 0 ${deg > 0 ? 1 : 0} ${x.toFixed(2)} ${y.toFixed(2)}`;
+});
 
 // Markers
 const norm = computed(() => Math.min(1, Math.max(0, toPos(props.modelValue) || 0)));
@@ -236,6 +253,13 @@ function endKeyboardTurn() {
 </script>
 
 <style scoped>
+/* Bipolar knobs: the tick at zero (top of the dial) */
+.dial-zero {
+	stroke: var(--knob-marker, rgba(192, 120, 255, .55));
+	stroke-width: 3;
+	stroke-linecap: round;
+}
+
 /* Keyboard focus only (a mouse click doesn't show it), like the app's buttons */
 .knob-wrapper:focus {
 	outline: none;

@@ -238,9 +238,9 @@
 					</div>
 				</div>
 
-				<!-- Envelope + Filter -->
+				<!-- Envelope + Filter + Pitch Env: the note's three envelopes, side by side -->
 				<div class="module sound">
-					<div class="split-two">
+					<div class="split-three">
 						<SectionWrap id="envelope" title="Envelope" v-model="collapsibleState['envelope']">
 							<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 								v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
@@ -252,6 +252,9 @@
 							<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 								v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
 						</SectionWrap>
+
+						<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
+							v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
 					</div>
 				</div>
 
@@ -276,9 +279,6 @@
 							v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
 						<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
 							v-model:detune="detuneCents" v-model:spread="stereoSpread" />
-						<PitchEnvModule :showToggle="false" v-model:enabled="pitchEnvEnabled"
-							v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
-							v-model:mode="pitchMode" />
 					</SectionWrap>
 				</div>
 
@@ -3357,22 +3357,20 @@ const { canUndo, canRedo, undo, redo } = useUndoHistory({
 	}
 }
 
-.module.sound .split-two {
+.module.sound .split-three {
 	display: grid;
-	grid-template-columns: 1fr;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 12px;
 }
 
-@media (min-width: 720px) {
-	.module.sound .split-two {
-		grid-template-columns: 1fr 1fr;
-	}
+/* Narrow cards: the knobs take the card's whole width (pt-subblock is half width from 992px) */
+.module.sound :deep(.pt-subblock) {
+	width: 100%;
 }
 
-@media (min-width: 1280px) {
-	.module.sound .split-two {
-		gap: 14px;
-	}
+.module.sound :deep(.pt-card) {
+	padding-left: 10px;
+	padding-right: 10px;
 }
 
 .fx-pair {
@@ -3429,14 +3427,8 @@ const { canUndo, canRedo, undo, redo } = useUndoHistory({
 		box-shadow: none;
 	}
 
-	.module.sound .split-two {
-		display: flex;
-		gap: 10px;
-	}
-
-	.module.sound .split-two>* {
-		flex: 1 1 0;
-		min-width: 0;
+	.module.sound .split-three {
+		gap: 8px;
 	}
 }
 </style>
