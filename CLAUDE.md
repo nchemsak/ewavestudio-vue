@@ -194,13 +194,16 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - `playSynthNote()` builds a new set of nodes for every note (oscillator per unison voice,
   biquad filter, panner, FM modulator, noise buffer sources, envelope gain). Pitch envelope and
   FM come from `src/audio/pitchEnv.ts` and `src/audio/fm.ts`.
-- Pitch envelope (`pitchEnv.ts`, panel `PitchEnvModule.vue` under "Pitch & Harmonics"): each
-  note starts Amount semitones up, down or at a random offset, as an offset in cents on the
+- Pitch envelope (`pitchEnv.ts`; panel `PitchEnvModule.vue`, the "Pitch" card next to Envelope
+  and Filter): each note starts Amount semitones up, down or at a random offset, as an offset in cents on the
   oscillator's `detune` that decays exponentially (`setTargetAtTime`, time constant Decay / 4,
   so after Decay it's about 2% of where it started) to the voice's unison detune. That's the
   curve of an analog decay envelope into an exponential oscillator: fast, then settling. The
   frequency itself stays at the note's pitch. The offset is picked once per note
   (`pitchEnvStartCents`), so unison voices sweep together. Amount 0 (the default) is off.
+  In the panel, Amount is one bipolar knob (−48…+48): right of centre is mode `up` (starts
+  above, drops), left is `down`; the RND pill is `random`. Saved as before: `semitones` (0–48)
+  and `mode`.
 - Envelope: the on/off switch is hidden in the interface (`EnvelopeModule` with
   `:showToggle="false"`), but saved or imported projects can have the envelope off. A note
   then holds the level the envelope would peak at (waveform balance and noise mix included),
@@ -361,6 +364,15 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Knobs: `taper="log"` makes a knob logarithmic (each part of the turn multiplies the value
   by the same amount; min must be above 0), for times and frequencies with a wide range. The
   pitch envelope's Decay uses it (5–2000 ms, 100 ms at half a turn); Cutoff could too.
+  `bipolar` (min = −max) draws the arc from a zero tick at the top, for amounts that go both
+  ways (the pitch envelope's Amount).
+- Layout: the module cards flow in CSS columns from 992 px (`.ds-modules`), so a module that
+  grows taller reshuffles the columns and can leave a gap. Envelope, Filter and Pitch share one
+  row of three narrow cards (`.split-three`): at 1280 px and on phones each has about 90 px
+  inside, room for two small knobs (40 px) and a five-letter title. A browser test checks that
+  they stay on one row with one-line titles. The look is meant to be one piece of hardware
+  that fills its frame: check a layout change at several widths (1600, 1280, 1100, 900, 390)
+  against the build before it.
 - Knobs: give every `<Knob>` a `label` (or an `aria-label`), and a `value-text` (what a
   screen reader says, such as "120 ms") when its number isn't the real value, for example a
   0..1 position. The text is usually the knob's tooltip.
@@ -412,7 +424,9 @@ brings the drum lanes back.
    (`BiquadFilterNode.getFrequencyResponse()`) on a log-frequency axis, with the live spectrum
    faintly behind it, and shows the envelope's sweep. Like the envelope view, it appears while
    Cutoff, Resonance or the new knobs are turned (`knobStart`/`knobEnd`). Ask the maintainer
-   whether it also gets its own F-key (the screen has four, keys 1–4).
+   whether it also gets its own F-key (the screen has four, keys 1–4). Layout: the Filter card
+   sits in a row of three narrow cards (see "Layout" under Conventions) with room for two
+   knobs, so two more need a layout the maintainer agrees to (propose with screenshots).
 2. **Pulse wave with pulse-width modulation, and a few custom waveforms.** Pulse width is how
    much of each cycle the wave spends up versus down; 50% is the current square. Web Audio has
    no pulse oscillator with an adjustable width: feed a sawtooth into a comparator
@@ -522,7 +536,8 @@ Done:
 | 18 | A saved project that fails the project check is no longer opened silently: at startup a new project is started with a message (so Save works); from File → Open a message says so and the current project stays. |
 | 19 | Lighter change tracking: the project snapshot is built and compared once the settings have been still for 100 ms, not on every change (a burst of 30 knob steps: about 150 JSON conversions of the snapshot → 3). Save, Export file and the leave-page warning include a change made just before them. |
 | 20 | Housekeeping: a real `README.md` (what the app is, running it, checks, deploy), and the Google Analytics tag is added by the build only, so `npm run dev` sends no analytics events. |
-| 21 | Pitch envelope back under "Pitch & Harmonics", with a drum-style sweep: an exponentially decaying offset on `detune` (fast, then settling) instead of a glide of the frequency, in the live and export engines, the same for every unison voice of a note. Its Decay knob is logarithmic (new `taper="log"` knob option), so 10–100 ms is a third of the turn. |
+| 21 | Pitch envelope back on screen (under "Pitch & Harmonics" at first), with a drum-style sweep: an exponentially decaying offset on `detune` (fast, then settling) instead of a glide of the frequency, in the live and export engines, the same for every unison voice of a note. Its Decay knob is logarithmic (new `taper="log"` knob option), so 10–100 ms is a third of the turn. |
+| 22 | Pitch envelope panel redesigned to fit the synth's frame: a compact "Pitch" card in a row of three with Envelope and Filter (instead of under "Pitch & Harmonics", which grew 149 px and left a gap on the left), a bipolar Amount knob instead of the ↑/↓ buttons, and an RND pill. Every module is back at its earlier size and place at all widths. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

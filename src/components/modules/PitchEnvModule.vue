@@ -1,127 +1,149 @@
 <!-- components/modules/PitchEnvModule.vue -->
+<!-- Pitch envelope card ("Pitch"), in the Envelope / Filter row: three narrow cards, so the
+     title is short and the controls are two knobs and a small RND pill. Amount is one bipolar knob: right of
+     centre the note starts above its pitch and drops into it (mode 'up'), left of centre it
+     starts below and rises (mode 'down'). RND (mode 'random') gives each note its own offset
+     within ±Amount. The saved settings stay `semitones` (0–48) and `mode`. -->
 <template>
-    <KnobGroup v-model="localEnabled" :title="title" :color="color" :showToggle="showToggle">
-        <!-- Info button in header -->
-        <template #header-content>
-            <div class="pt-header-tools">
-                <InfoPopover title="Pitch Env Explained" aria-label="What is the Pitch Envelope?">
-                    Starts each note higher (↑), lower (↓) or at a random offset (⇵) by Amount, then
-                    drops fast and settles on the note's pitch within Decay, like an analog drum.
-                    Short decays (10–100 ms) give kicks and toms their punch; longer ones a zap.
-                </InfoPopover>
-            </div>
+    <SectionWrap id="pitch-env" title="Pitch" aria-label="Pitch envelope">
+        <template #tools>
+            <button type="button" class="pe-rnd" :class="{ on: isRandom }" :aria-pressed="isRandom"
+                :disabled="!enabled" aria-label="Random sweep"
+                title="Random: each note starts at its own offset within ±Amount"
+                @click="toggleRandom">RND</button>
         </template>
 
-        <div class="pt-stack">
-            <!-- buttons row -->
-            <div class="pt-seg pt-seg-row" role="group" aria-label="Pitch Env Mode">
-                <button class="pt-seg-btn" :class="{ 'is-active': localMode === 'up' }"
-                    :aria-pressed="localMode === 'up'" :disabled="!localEnabled" @click="selectMode('up')">
-                    ↑ <span class="selector-tooltip">Pitch up</span>
-                </button>
-                <button class="pt-seg-btn" :class="{ 'is-active': localMode === 'down' }"
-                    :aria-pressed="localMode === 'down'" :disabled="!localEnabled" @click="selectMode('down')">
-                    ↓ <span class="selector-tooltip">Pitch down</span>
-                </button>
-                <button class="pt-seg-btn" :class="{ 'is-active': localMode === 'random' }"
-                    :aria-pressed="localMode === 'random'" :disabled="!localEnabled" @click="selectMode('random')">
-                    ⇵ <span class="selector-tooltip">Random pitch</span>
-                </button>
-            </div>
-
-            <!-- knobs row -->
+        <div class="pt-subblock">
             <div class="pt-knob-row">
                 <div class="position-relative text-center">
-                    <Knob :value-text="`${localSemitones} semitones`" v-model="localSemitones" label="Amount" size="small" :min="0" :max="48" :step="1"
-                        :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'amt'"
-                        @knobEnd="activeKnob = null" />
-                    <span v-if="activeKnob === 'amt'" class="custom-tooltip">{{ localSemitones }} semitones</span>
+                    <Knob v-model="signedAmount" bipolar label="Amount" size="small" :min="-AMOUNT_MAX" :max="AMOUNT_MAX"
+                        :step="1" :value-text="amountText" :disabled="!enabled" :color="color"
+                        @knobStart="activeKnob = 'amt'" @knobEnd="activeKnob = null" />
+                    <span v-if="activeKnob === 'amt'" class="custom-tooltip">{{ amountTip }}</span>
                 </div>
 
                 <div class="position-relative text-center">
-                    <Knob :value-text="`${Math.round(localDecayMs)} ms`" v-model="localDecayMs" label="Decay" size="small" :min="5" :max="2000" :step="1" taper="log"
-                        :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'decay'"
-                        @knobEnd="activeKnob = null" />
-                    <span v-if="activeKnob === 'decay'" class="custom-tooltip">{{ Math.round(localDecayMs) }} ms</span>
+                    <Knob v-model="decay" label="Decay" size="small" :min="5" :max="2000" :step="1" taper="log"
+                        :value-text="`${Math.round(decay)} ms`" :disabled="!enabled" :color="color"
+                        @knobStart="activeKnob = 'decay'" @knobEnd="activeKnob = null" />
+                    <span v-if="activeKnob === 'decay'" class="custom-tooltip">{{ Math.round(decay) }} ms</span>
                 </div>
             </div>
         </div>
-    </KnobGroup>
+    </SectionWrap>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import Knob from '../Knob.vue'
-import KnobGroup from '../KnobGroup.vue'
-import InfoPopover from '../InfoPopover.vue'
+import SectionWrap from '../SectionWrap.vue'
 
 type Mode = 'up' | 'down' | 'random'
+
+const AMOUNT_MAX = 48
 
 const props = withDefaults(defineProps<{
     enabled: boolean
     semitones: number
     decayMs: number
     mode: Mode
-    title?: string
     color?: string
-    showToggle?: boolean
 }>(), {
-    title: 'Pitch Env',
     color: '#3F51B5',
-    showToggle: true
 })
 
 const emit = defineEmits<{
-    (e: 'update:enabled', v: boolean): void
     (e: 'update:semitones', v: number): void
     (e: 'update:decayMs', v: number): void
     (e: 'update:mode', v: Mode): void
 }>()
 
-const localEnabled = ref(props.enabled)
-const localSemitones = ref(props.semitones)
-const localDecayMs = ref(props.decayMs)
-const localMode = ref<Mode>(props.mode)
+const activeKnob = ref<null | 'amt' | 'decay'>(null)
+const isRandom = computed(() => props.mode === 'random')
 
-watch(() => props.enabled, v => (localEnabled.value = v))
-watch(() => props.semitones, v => (localSemitones.value = v))
-watch(() => props.decayMs, v => (localDecayMs.value = v))
-watch(() => props.mode, v => (localMode.value = v))
+// The knob's signed position. In random mode the sign has no meaning, so the knob keeps
+// whichever side it was on, and turning RND off goes back to that direction.
+const clampAmount = (v: number) => Math.max(0, Math.min(AMOUNT_MAX, Math.round(Math.abs(v))))
+const signed = ref(props.mode === 'down' ? -clampAmount(props.semitones) : clampAmount(props.semitones))
 
-watch(localEnabled, v => emit('update:enabled', v))
-watch(localSemitones, v => emit('update:semitones', Math.max(0, Math.min(48, Math.round(v)))))
-watch(localDecayMs, v => emit('update:decayMs', Math.max(5, Math.min(2000, Math.round(v)))))
+// Follow settings set from outside (a project, undo)
+watch(() => [props.semitones, props.mode] as const, ([s, m]) => {
+    const n = clampAmount(s)
+    if (m === 'down') signed.value = -n
+    else if (m === 'up') signed.value = n
+    else signed.value = signed.value < 0 ? -n : n
+})
 
-function selectMode(m: Mode) {
-    if (!localEnabled.value) localEnabled.value = true // smart-enable on click
-    localMode.value = m
-    emit('update:mode', m)
+const signedAmount = computed<number>({
+    get: () => signed.value,
+    set: (v: number) => {
+        const n = Math.max(-AMOUNT_MAX, Math.min(AMOUNT_MAX, Math.round(v)))
+        signed.value = n
+        if (!isRandom.value && n !== 0) {
+            const dir: Mode = n < 0 ? 'down' : 'up'
+            if (dir !== props.mode) emit('update:mode', dir)
+        }
+        if (Math.abs(n) !== props.semitones) emit('update:semitones', Math.abs(n))
+    },
+})
+
+function toggleRandom() {
+    emit('update:mode', isRandom.value ? (signed.value < 0 ? 'down' : 'up') : 'random')
 }
 
-const activeKnob = ref<null | 'amt' | 'decay'>(null)
+const decay = computed<number>({
+    get: () => props.decayMs,
+    set: (v: number) => emit('update:decayMs', Math.max(5, Math.min(2000, Math.round(v)))),
+})
+
+const amountTip = computed(() => {
+    const n = Math.abs(signed.value)
+    if (n === 0) return 'Off'
+    if (isRandom.value) return `±${n} st, random`
+    return signed.value > 0 ? `+${n} st, drops` : `−${n} st, rises`
+})
+const amountText = computed(() => {
+    const n = Math.abs(signed.value)
+    if (n === 0) return 'off'
+    if (isRandom.value) return `random, up to ${n} semitones`
+    return signed.value > 0 ? `starts ${n} semitones above, drops into the note` : `starts ${n} semitones below, rises into the note`
+})
 </script>
 
 <style scoped>
-.pt-seg-row {
-    margin-top: .25rem;
-    margin-bottom: .5rem;
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    flex-wrap: wrap;
+/* Room for the title and the pill on one line in a narrow card */
+.pt-card :deep(.pt-subheader) {
+    gap: 6px;
 }
 
-.pt-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: 100%;
+.pe-rnd {
+    flex: none;
+    padding: 1px 4px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 9px;
+    line-height: 1.4;
+    letter-spacing: 0.06em;
+    opacity: 0.65;
+    cursor: pointer;
 }
 
-.pt-knob-row {
-    display: flex;
-    gap: 16px;
-    justify-content: center;
-    flex-wrap: wrap;
+.pe-rnd.on {
+    border-color: hsl(var(--pt-accent) 80% 62% / 0.9);
+    background: hsl(var(--pt-accent) 80% 60% / 0.18);
+    opacity: 1;
+}
+
+.pe-rnd:disabled {
+    cursor: default;
+    opacity: 0.35;
+}
+
+.pe-rnd:focus-visible {
+    outline: 2px solid hsl(var(--pt-accent) 80% 62%);
+    outline-offset: 2px;
 }
 </style>
