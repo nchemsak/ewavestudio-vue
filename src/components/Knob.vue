@@ -42,6 +42,13 @@
 					<path v-if="bipolarArc" :d="bipolarArc" fill="none" :stroke="activeStroke" stroke-width="6" />
 					<line x1="50" y1="3" x2="50" y2="8" class="dial-zero" />
 				</template>
+
+				<!-- Something else moving this setting (the LFO): its range as a faint outer arc, and
+					 where it is now as a dot on the ring. The knob itself stays where it was set. -->
+				<path v-if="modArc" :d="modArc" fill="none" :stroke="props.modColor" stroke-width="2.5"
+					stroke-linecap="round" class="dial-mod-range" />
+				<circle v-if="modDot" :cx="modDot.x" :cy="modDot.y" r="5" :fill="props.modColor"
+					class="dial-mod-dot" />
 			</svg>
 		</div>
 	</div>
@@ -82,7 +89,14 @@ const props = defineProps({
 	bipolar: { type: Boolean, default: false },
 	// No visible label (the label is still the knob's accessible name), for a knob sitting on
 	// something that already says what it is, such as the mini knob on the Pulse tile
-	hideLabel: { type: Boolean, default: false }
+	hideLabel: { type: Boolean, default: false },
+	// The LFO visualizer: where something else (the LFO) moves this setting right now, drawn as
+	// a dot on the ring, and its whole range [low, high] as a faint outer arc. Values outside
+	// min..max are drawn at the end. null: nothing drawn.
+	modValue: { type: Number, default: null },
+	modRange: { type: Array, default: null },
+	// Amber: every theme's knob arcs are blue to purple or pink, so it stands apart from them
+	modColor: { type: String, default: 'var(--lfo-mod, #ffc53d)' }
 });
 
 const emit = defineEmits(['update:modelValue', 'knobStart', 'knobEnd']);
@@ -110,6 +124,23 @@ const bipolarArc = computed(() => {
 	const x = 50 + 40 * Math.sin(a);
 	const y = 50 - 40 * Math.cos(a);
 	return `M50,10 A 40 40 0 0 ${deg > 0 ? 1 : 0} ${x.toFixed(2)} ${y.toFixed(2)}`;
+});
+
+// LFO visualizer drawing: points on the dial's circle (the track: radius 40; the range arc
+// just outside it, radius 47)
+function dialPoint(v, r) {
+	const deg = Math.min(1, Math.max(0, toPos(v) || 0)) * 264 - 132;
+	const a = (deg * Math.PI) / 180;
+	return { x: 50 + r * Math.sin(a), y: 50 - r * Math.cos(a), deg };
+}
+const modDot = computed(() => (props.modValue == null || props.disabled ? null : dialPoint(props.modValue, 40)));
+const modArc = computed(() => {
+	const r = props.modRange;
+	if (!r || r.length !== 2 || props.disabled) return '';
+	const a = dialPoint(Math.min(r[0], r[1]), 47);
+	const b = dialPoint(Math.max(r[0], r[1]), 47);
+	if (b.deg - a.deg < 0.5) return '';
+	return `M${a.x.toFixed(2)},${a.y.toFixed(2)} A 47 47 0 ${b.deg - a.deg > 180 ? 1 : 0} 1 ${b.x.toFixed(2)},${b.y.toFixed(2)}`;
 });
 
 // Markers
@@ -256,6 +287,18 @@ function endKeyboardTurn() {
 </script>
 
 <style scoped>
+/* The LFO visualizer's range arc and dot */
+.dial-mod-range {
+	opacity: 0.65;
+	stroke-dasharray: none; /* the dial's paths are dashed for the value arc; not this one */
+}
+
+.dial-mod-dot {
+	stroke: rgb(0 0 0 / 0.55);
+	stroke-width: 1.5;
+	stroke-dasharray: none;
+}
+
 /* Bipolar knobs: the tick at zero (top of the dial) */
 .dial-zero {
 	stroke: var(--knob-marker, rgba(192, 120, 255, .55));

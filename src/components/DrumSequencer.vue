@@ -144,7 +144,7 @@
 						:defaultWave="selectedWaveform" :noiseMask="noiseMask"
 						:noiseTint="noiseHexFromMorph(noiseColor)" noise-mode="static" :noise-alpha="0.32"
 						:noise-fps="14" :noise-speed="40" :noise-enabled="noiseEnabled" :pepper-alpha="0.2"
-						:pepper-scale="6" @open-pad-settings="({ name, index, anchorRect }) =>
+						:pepper-scale="6" :lfoView="lfoView" @open-pad-settings="({ name, index, anchorRect }) =>
 							openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
 
 				</div>
@@ -195,6 +195,7 @@
 								<div v-for="t in WAVE_TILES" :key="t.value" class="wave-cell">
 									<WaveButton :modelValue="selectedWaveform" :value="t.value" :label="t.label"
 										:palette="t.palette" :pulseWidth="pulseWidth"
+										:lfoView="t.value === 'pulse' ? lfoView : null"
 										:randomIncluded="randomPool[t.value]" @toggle-random="onToggleRandom"
 										@update:modelValue="() => applyWaveToAll(t.value)" />
 									<!-- The pulse's width: a mini knob in the Pulse tile's corner (beside the tile's
@@ -260,7 +261,7 @@
 							<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 								v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
 								v-model:envAmount="filterEnvAmount" v-model:envDecayMs="filterEnvDecayMs"
-								@knob-start="onFilterKnobStart" @knob-end="onScreenKnobEnd" />
+								:lfoView="lfoView" @knob-start="onFilterKnobStart" @knob-end="onScreenKnobEnd" />
 						</SectionWrap>
 
 						<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
@@ -505,6 +506,10 @@ import ReverbEffect from './modules/ReverbEffect.vue';
 
 // Live sound engine
 import { useLiveEngine } from '../audio/liveEngine';
+import { useLfoVisual } from '../composables/useLfoVisual';
+import {
+	lfoCutoffAt, lfoCutoffSwing, lfoPulseWidthAt, lfoPulseWidthRange, lfoBendAt, lfoBendRange, type LfoView,
+} from '../lib/lfoVisual';
 import { divisionToHz, NOISE_STOPS, type NoiseKey } from '../audio/synthHelpers';
 
 // IMPORTS END
@@ -2104,6 +2109,8 @@ const {
 	togglePlay,
 	hardStopSequencer,
 	loadSample,
+	lfoNow,
+	soundingRecently,
 } = useLiveEngine({
 	transport: projectState.transport,
 	pattern: { lanes: instruments, stepLength, selectedWaveform, noiseMask },
@@ -2125,6 +2132,33 @@ const {
 const dataArray = new Uint8Array(analyser.fftSize);
 
 // Live sound engine END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// LFO visualizer START
+
+// Shows what the LFO is doing on the control it moves, without turning that control (so it can
+// still be turned while the LFO runs): a dot and range arc on the Cutoff knob, the Pulse tile's
+// bar, or a bar on the lit step pads. The arithmetic is in src/lib/lfoVisual.ts, the frame clock
+// in src/composables/useLfoVisual.ts. `lfoView` is passed down as one object, so only the
+// components that read it redraw every frame (not this one).
+const lfoMoving = computed(() => lfoEnabled.value && lfoDepth.value > 0);
+const { lfoPos } = useLfoVisual({ lfoNow, soundingRecently, active: lfoMoving });
+const lfoAt = (target: string) => lfoMoving.value && lfoTarget.value === target;
+const lfoView: LfoView = reactive({
+	cutoff: computed(() => (lfoAt('filter') && filterEnabled.value && lfoPos.value != null
+		? lfoCutoffAt(filterCutoff.value, lfoDepth.value, audioCtx.sampleRate, lfoPos.value) : null)),
+	cutoffRange: computed(() => (lfoAt('filter') && filterEnabled.value
+		? lfoCutoffSwing(filterCutoff.value, lfoDepth.value, audioCtx.sampleRate) : null)),
+	// The Pulse target only moves pulse notes, so the tile rests while nothing plays Pulse
+	pulseWidth: computed(() => (lfoAt('pwm') && pulseInUse.value && lfoPos.value != null
+		? lfoPulseWidthAt(pulseWidth.value, lfoDepth.value, lfoPos.value) : null)),
+	pulseRange: computed(() => (lfoAt('pwm') && pulseInUse.value ? lfoPulseWidthRange(pulseWidth.value, lfoDepth.value) : null)),
+	bend: computed(() => (lfoAt('pitch') && lfoPos.value != null ? lfoBendAt(lfoDepth.value, lfoPos.value) : null)),
+	bendRange: computed(() => (lfoAt('pitch') ? lfoBendRange(lfoDepth.value) : null)),
+});
+
+// LFO visualizer END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 

@@ -28,6 +28,9 @@
                 </linearGradient>
             </defs>
 
+            <!-- The LFO visualizer (Pulse tile, LFO target Pulse): the widest the LFO takes the bar,
+                 as a faint ghost; the bar itself then widens and narrows with the LFO -->
+            <path v-if="pulseGhost" :d="pulseGhost" class="lfo-ghost" />
             <component :is="shapeTag" v-bind="shapeAttrs" :fill="`url(#${gid})`" />
             <component :is="shapeTag" v-bind="shapeAttrs" fill="none" stroke="white" stroke-opacity="0.15"
                 stroke-width="1.2" />
@@ -53,6 +56,9 @@ const props = defineProps({
     randomIncluded: { type: Boolean, default: true },
     // Pulse tile: the width (%), drawn as the bar's width
     pulseWidth: { type: Number, default: 50 },
+    // Pulse tile: what the LFO is doing (src/lib/lfoVisual.ts, LfoView): `pulseWidth` is the
+    // width it has the pulse at now, `pulseRange` the narrowest and widest it plays
+    lfoView: { type: Object, default: null },
 });
 
 const emit = defineEmits(['update:modelValue', 'toggle-random']);
@@ -64,6 +70,18 @@ const colors = computed(() =>
 
 const uid = Math.random().toString(36).slice(2);
 const gid = `grad-${uid}`;
+
+// The Pulse tile's bar: its left and right edges for a width (%)
+function barEdges(widthPct) {
+    const bw = Math.max(6, Math.min(70, (76 * widthPct) / 100));
+    return { a: (50 - bw / 2).toFixed(1), b: (50 + bw / 2).toFixed(1) };
+}
+const pulseGhost = computed(() => {
+    const r = props.value === 'pulse' ? props.lfoView?.pulseRange : null;
+    if (!r) return '';
+    const { a, b } = barEdges(r[1]);
+    return `M${a} 74 V16 H${b} V74 Z`;
+});
 
 const shapeTag = computed(() => {
     switch (props.value) {
@@ -98,8 +116,7 @@ const shapeAttrs = computed(() => {
             return { cx: 50, cy: 50, r: 32 };
         // Pulse: a bar on a baseline, as wide as the pulse's width (share of the cycle spent high)
         case 'pulse': {
-            const bw = Math.max(6, Math.min(70, (76 * props.pulseWidth) / 100));
-            const a = (50 - bw / 2).toFixed(1), b = (50 + bw / 2).toFixed(1);
+            const { a, b } = barEdges(props.lfoView?.pulseWidth ?? props.pulseWidth);
             return { d: `M12 84 V74 H${a} V16 H${b} V74 H88 V84 Z` };
         }
         // Organ: three drawbars
@@ -134,6 +151,14 @@ function onDiceKey(e) {
 </script>
 
 <style scoped>
+/* The LFO's widest pulse, behind the bar (amber, like the LFO's dot on the Cutoff knob) */
+.lfo-ghost {
+    fill: rgb(255 197 61 / 0.18);
+    stroke: var(--lfo-mod, #ffc53d);
+    stroke-width: 1.2;
+    stroke-dasharray: 3 2;
+}
+
 .wave-btn {
     --tile-1: var(--pt-tile-1, var(--pt-surface-1));
     --tile-2: var(--pt-tile-2, var(--pt-surface-2));

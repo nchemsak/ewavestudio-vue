@@ -26,6 +26,8 @@
 	--knob-arc-start: #79d9ff;
 	--knob-arc-end: #c078ff;
 	--knob-pointer: #c078ff;
+	/* The LFO visualizer's marks (Cutoff knob, Pulse tile, step pads): apart from the knob arcs */
+	--lfo-mod: #ffc53d;
 	--knob-track: #444;
 	--knob-track-disabled: #333;
 	--knob-arc-disabled: #555;
@@ -268,6 +270,7 @@
 
 	--knob-marker: rgba(79, 163, 255, 0.55);
 	--knob-marker-active: #cfe2ff;
+	--lfo-mod: #e08a00; /* darker, to show on white */
 
 	--pad-bg: #eef1f6;
 	--pad-tint: #7c4dff;

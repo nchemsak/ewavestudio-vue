@@ -980,7 +980,7 @@ test('Pulse Width sits on the Pulse tile, and the LFO says when PW has no pulse 
 
 	// One side of the pulse only: from 5% (thinnest) to 50% (the square, fullest), and the
 	// tile's bar follows: thinnest at 5%, widest at 50%
-	const barWidth = () => pulse.locator('svg.wave-svg path').first().getAttribute('d')
+	const barWidth = () => pulse.locator('svg.wave-svg path:not(.lfo-ghost)').first().getAttribute('d')
 		.then((d) => { const [a, b] = [...d!.matchAll(/H(\d+(?:\.\d+)?)/g)].map((m) => Number(m[1])); return b - a; });
 	await width.focus();
 	await page.keyboard.press('Home');
@@ -1005,6 +1005,80 @@ test('Pulse Width sits on the Pulse tile, and the LFO says when PW has no pulse 
 	// Back to Sine: no pulse again
 	await sine.click();
 	await expect(status).toHaveText('No Pulse');
+});
+
+test('the LFO visualizer shows what the LFO moves, without turning the knob', async ({ page }) => {
+	const lfo = page.locator('.module.mod');
+	const depth = lfo.getByRole('slider', { name: 'Depth' });
+	const target = (name: string) => lfo.getByRole('radio', { name, exact: true });
+	const play = page.getByRole('button', { name: 'Play', exact: true });
+	const stop = page.getByRole('button', { name: 'Stop', exact: true });
+	// Most of the depth (picking a target sets it back to 0)
+	async function setDepth() {
+		await depth.focus();
+		await page.keyboard.press('End');
+		await page.keyboard.press('PageDown');
+		await page.locator('body').click({ position: { x: 3, y: 3 } });
+	}
+	// Reads `read` every 60 ms for `ms`: how many different values it gave
+	async function distinct(read: () => Promise<string | null>, ms = 1200) {
+		const seen = new Set<string | null>();
+		for (let t = 0; t < ms; t += 60) {
+			seen.add(await read());
+			await page.waitForTimeout(60);
+		}
+		return seen.size;
+	}
+	await turnOnPads(page, [0, 4, 8, 12]);
+
+	// Filter: a range arc on the Cutoff knob as soon as the LFO moves the cutoff, and a dot
+	// that moves with the LFO while it plays; the knob itself stays where it was set
+	const cutoff = page.getByRole('slider', { name: 'Cutoff', exact: true });
+	const dot = cutoff.locator('.dial-mod-dot');
+	await target('Filter').click();
+	await expect(cutoff.locator('.dial-mod-range')).toHaveCount(0); // depth 0: nothing moves
+	await setDepth();
+	await expect(cutoff.locator('.dial-mod-range')).toHaveCount(1);
+	await expect(dot).toHaveCount(0); // nothing plays yet
+	await play.click();
+	await expect(dot).toHaveCount(1);
+	expect(await distinct(() => dot.getAttribute('cx'))).toBeGreaterThan(3);
+	await expect(cutoff).toHaveAttribute('aria-valuenow', '5000');
+	await stop.click();
+	await expect(dot).toHaveCount(0, { timeout: 4000 });
+
+	// Pitch: a track on each lit pad, and a bar sliding along it while it plays
+	await target('Pitch').click();
+	await setDepth();
+	await expect(page.locator('.pad-row .lfo-bend-track')).toHaveCount(4);
+	await expect(page.locator('.pad-row .lfo-bend-bar')).toHaveCount(0);
+	await expect(cutoff.locator('.dial-mod-range')).toHaveCount(0);
+	await play.click();
+	const bar = page.locator('.pad-row .lfo-bend-bar');
+	await expect(bar).toHaveCount(4);
+	expect(await distinct(() => bar.first().evaluate((el) => String(Math.round(el.getBoundingClientRect().top))))).toBeGreaterThan(3);
+
+	// Pulse: the Pulse tile's bar widens and narrows (here: every pad plays Pulse), with the
+	// widest as a ghost behind it; the Pulse Width knob stays at 50 %
+	const pulse = page.locator('.wave-row').getByRole('radio', { name: 'PULSE', exact: true });
+	await pulse.click();
+	await target('Pulse width').click();
+	await setDepth();
+	await expect(bar).toHaveCount(0);
+	await expect(pulse.locator('.lfo-ghost')).toHaveCount(1);
+	expect(await distinct(() => pulse.locator('svg.wave-svg path:not(.lfo-ghost)').first().getAttribute('d'))).toBeGreaterThan(3);
+	await expect(page.getByRole('slider', { name: 'Pulse Width', exact: true })).toHaveAttribute('aria-valuenow', '50');
+	await stop.click();
+
+	// prefers-reduced-motion: only the ranges, nothing moves
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await target('Filter').click();
+	await setDepth();
+	await play.click();
+	await page.waitForTimeout(500);
+	await expect(cutoff.locator('.dial-mod-range')).toHaveCount(1);
+	await expect(dot).toHaveCount(0);
+	await stop.click();
 });
 
 test('velocity routing: a soft step rings shorter with Vel → Decay, and the setting is saved', async ({ page }) => {

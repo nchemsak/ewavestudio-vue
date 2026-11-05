@@ -58,6 +58,9 @@
                         <WaveIcon :wave="waveFor(index)" />
                     </div>
 
+                    <!-- The LFO bending this note's pitch (LFO target Pitch) -->
+                    <LfoBendMark v-if="active && lfoView" :view="lfoView" />
+
                     <div v-if="active" class="note-chip">
                         {{ nearestNote(pitches[index]) }}
                     </div>
@@ -88,7 +91,9 @@ import { ref } from 'vue';
 
 type NoteNameFn = (hz: number) => string;
 import WaveIcon from './WaveIcon.vue';
+import LfoBendMark from './LfoBendMark.vue';
 import type { Wave } from '../audio/waves';
+import type { LfoView } from '../lib/lfoVisual';
 
 const props = withDefaults(
     defineProps<{
@@ -124,6 +129,9 @@ const props = withDefaults(
 
         pepperAlpha?: number;
         pepperScale?: number;
+
+        // The LFO visualizer (LfoBendMark on each lit pad)
+        lfoView?: LfoView | null;
     }>(),
     {
         showIndices: true,
