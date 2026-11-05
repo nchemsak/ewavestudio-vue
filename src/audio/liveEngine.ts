@@ -19,6 +19,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, type Ref } from 'vue'
 import { applyPitchEnv, pitchEnvStartCents } from './pitchEnv';
 import { applyFilterEnv } from './filterEnv';
 import { createVoiceSource, lfoPwmTapGain, waveGain, type Wave } from './waves';
+import { routeVelocity, routedCutoff, routedSemitones, routedNoise } from './velocity';
 import { startFM } from './fm';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
@@ -71,6 +72,8 @@ export type LiveEngineSettings = {
 	fm: { enabled: R<boolean>; modFreq: R<number>; index: R<number>; ratio: R<number | null> };
 	pitchEnv: { enabled: R<boolean>; semitones: R<number>; decayMs: R<number>; mode: R<'up' | 'down' | 'random'> };
 	pulse: { width: R<number> }; // pulse wave's width, % (waves.ts)
+	// Velocity routing amounts, % −100..100 (velocity.ts)
+	velocity: { decay: R<number>; cutoff: R<number>; pitchEnv: R<number>; noise: R<number> };
 	delay: {
 		enabled: R<boolean>;
 		time: R<number>;
@@ -510,10 +513,20 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// Synth voice START
 
-	function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: Wave | string, opts: { addNoise?: boolean } = {}) {
+	// `velocity` is the note's loudness (its step's velocity × the lane's volume); `opts.vel` is
+	// the step's (or MIDI note's) own velocity 0..1, for velocity routing (velocity.ts)
+	function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: Wave | string, opts: { addNoise?: boolean; vel?: number } = {}) {
+
+		// Velocity routing: what this note's velocity does to decay, cutoff, pitch env and noise
+		const routed = routeVelocity({
+			decay: s.velocity.decay.value,
+			cutoff: s.velocity.cutoff.value,
+			pitchEnv: s.velocity.pitchEnv.value,
+			noise: s.velocity.noise.value,
+		}, opts.vel ?? 1);
 
 		const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
-		const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
+		const decay = (isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1) * routed.decayFactor;
 
 		// ENV sums all unison voices
 		const oscEnvGain = audioCtx.createGain();
@@ -521,13 +534,13 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		// Shared envelope timings
 		const attackEnd = startTime + attackTime;
 		const naturalEnd = attackEnd + decay;
-		const gateEnd = startTime + Math.max(0.02, s.envelope.decayMs.value / 1000);
+		const gateEnd = startTime + Math.max(0.02, (s.envelope.decayMs.value / 1000) * routed.decayFactor);
 		const noteEnd = s.envelope.enabled.value ? naturalEnd : gateEnd;
 
 		//  Per-step blend (masked)
 		const addNoiseForThisPad = opts.addNoise !== false;
 		const blend = (addNoiseForThisPad && s.noise.enabled.value)
-			? Math.min(Math.max(s.noise.amount.value, 0), 1)
+			? routedNoise(Math.min(Math.max(s.noise.amount.value, 0), 1), routed)
 			: 0;
 		const oscBlend = 1 - blend;
 		const noiseBlend = blend;
@@ -557,12 +570,12 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const normIndex = (i: number, n: number) => (n === 1) ? 0 : ((i / (n - 1)) * 2 - 1);
 
 		const filterEnabled = s.filter.enabled.value;
-		const filterCutoff = s.filter.cutoff.value;
+		const filterCutoff = routedCutoff(s.filter.cutoff.value, routed);
 
 		// Pitch envelope: one starting offset for the whole note, so the voices sweep together
 		const pitchStartCents = pitchEnvStartCents({
 			enabled: s.pitchEnv.enabled.value,
-			semitones: s.pitchEnv.semitones.value,
+			semitones: routedSemitones(s.pitchEnv.semitones.value, routed),
 			mode: s.pitchEnv.mode.value,
 			decay: pitchEnvDecay.value,
 		});
@@ -797,7 +810,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 						const padNoiseOn = noiseMask.value?.[stepIndex] ?? true;
 
 						// pass the mask to playSynthNote so noise can be per-step enabled/disabled
-						playSynthNote(pitch, amp, safeDecay, t, wf, { addNoise: padNoiseOn });
+						playSynthNote(pitch, amp, safeDecay, t, wf, { addNoise: padNoiseOn, vel });
 
 					} else if (inst.buffer) {
 						playBuffer(inst.buffer, t, amp);

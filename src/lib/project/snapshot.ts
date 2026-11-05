@@ -20,6 +20,7 @@ export type KeyRoot = 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 
 // harmonic shapes. Saved projects may hold any name; an unknown one plays as a sine.
 import type { Wave } from '../../audio/waves';
 import { PULSE_WIDTH_DEFAULT, foldPulseWidth } from '../../audio/waves';
+import { VELOCITY_DESTINATIONS } from '../../audio/velocity';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -99,6 +100,8 @@ export type ProjectState = {
 			mode: Ref<'up' | 'down' | 'random'>;
 		};
 		pulse: { width: Ref<number> }; // the pulse wave's width, % (5–50; 50 is the square)
+		// Velocity routing amounts, % −100..100 (src/audio/velocity.ts; 0 = off)
+		velocity: { decay: Ref<number>; cutoff: Ref<number>; pitchEnv: Ref<number>; noise: Ref<number> };
 		tuning: {
 			selectedKeyRoot: Ref<KeyRoot>;
 			globalOctaveOffset: Ref<number>;
@@ -177,6 +180,7 @@ function byName(st: ProjectState) {
 		pitchEnvDecayMs: sy.pitchEnv.decayMs,
 		pitchMode: sy.pitchEnv.mode,
 		pulseWidth: sy.pulse.width,
+		velocityRouting: sy.velocity,
 		selectedKeyRoot: sy.tuning.selectedKeyRoot,
 		globalOctaveOffset: sy.tuning.globalOctaveOffset,
 		currentDefaultHz: sy.tuning.currentDefaultHz,
@@ -217,7 +221,7 @@ export function buildSnapshot(st: ProjectState) {
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix,
@@ -292,6 +296,12 @@ export function buildSnapshot(st: ProjectState) {
 				mode: pitchMode.value
 			},
 			pulse: { width: pulseWidth.value },
+			velocity: {
+				decay: velocityRouting.decay.value,
+				cutoff: velocityRouting.cutoff.value,
+				pitchEnv: velocityRouting.pitchEnv.value,
+				noise: velocityRouting.noise.value,
+			},
 			tuning: {
 				selectedKeyRoot: selectedKeyRoot.value,
 				globalOctaveOffset: globalOctaveOffset.value,
@@ -370,7 +380,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix,
@@ -490,6 +500,15 @@ export function applySnapshot(st: ProjectState, s: any) {
 		// A whole project saved before the pulse wave: the default width (a square)
 		pulseWidth.value = PULSE_WIDTH_DEFAULT;
 	}
+	if (syn.velocity && typeof syn.velocity === 'object') {
+		for (const k of VELOCITY_DESTINATIONS) {
+			const v = syn.velocity[k];
+			if (typeof v === 'number') velocityRouting[k].value = Math.max(-100, Math.min(100, v));
+		}
+	} else if (syn.envelope) {
+		// A whole project saved before velocity routing: none
+		for (const k of VELOCITY_DESTINATIONS) velocityRouting[k].value = 0;
+	}
 	if (syn.tuning) {
 		if (typeof syn.tuning.selectedKeyRoot === 'string') (selectedKeyRoot as any).value = syn.tuning.selectedKeyRoot;
 		if (typeof syn.tuning.globalOctaveOffset === 'number') globalOctaveOffset.value = syn.tuning.globalOctaveOffset;
@@ -598,7 +617,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix,
@@ -662,6 +681,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	pitchEnvDecayMs.value = 300;
 	pitchMode.value = 'up';
 	pulseWidth.value = PULSE_WIDTH_DEFAULT;
+	for (const k of VELOCITY_DESTINATIONS) velocityRouting[k].value = 0;
 
 	selectedKeyRoot.value = 'A';
 	globalOctaveOffset.value = 0;

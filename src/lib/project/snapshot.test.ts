@@ -58,6 +58,7 @@ function makeState(maxVoices = 6): ProjectState {
 			fm: { enabled: ref(true), modFreq: ref(1), index: ref(1), ratio: ref(null) },
 			pitchEnv: { enabled: ref(false), semitones: ref(5), decayMs: ref(1), mode: ref('down') },
 			pulse: { width: ref(7) },
+			velocity: { decay: ref(1), cutoff: ref(2), pitchEnv: ref(3), noise: ref(4) },
 			tuning: {
 				selectedKeyRoot,
 				globalOctaveOffset,
@@ -116,6 +117,7 @@ function changeEverything(st: ProjectState) {
 	s.fm.enabled.value = true; s.fm.modFreq.value = 440; s.fm.index.value = 9; s.fm.ratio.value = 2;
 	s.pitchEnv.enabled.value = false; s.pitchEnv.semitones.value = 12; s.pitchEnv.decayMs.value = 50; s.pitchEnv.mode.value = 'random';
 	s.pulse.width.value = 25;
+	s.velocity.decay.value = 60; s.velocity.cutoff.value = -40; s.velocity.pitchEnv.value = 100; s.velocity.noise.value = 25;
 	s.tuning.selectedKeyRoot.value = 'Eb'; s.tuning.globalOctaveOffset.value = -1;
 	fx.delay.enabled.value = true; fx.delay.sync.value = false; fx.delay.division.value = '1/4'; fx.delay.time.value = 0.5; fx.delay.feedback.value = 0.6;
 	fx.delay.mix.value = 0.4; fx.delay.toneEnabled.value = false; fx.delay.toneHz.value = 2000; fx.delay.toneType.value = 'highpass';
@@ -158,6 +160,7 @@ describe('factory defaults (File → New)', () => {
 			fm: { enabled: false, modFreq: 200, index: 4, ratio: 1 },
 			pitchEnv: { enabled: true, semitones: 0, decayMs: 300, mode: 'up' },
 			pulse: { width: 50 },
+			velocity: { decay: 0, cutoff: 0, pitchEnv: 0, noise: 0 },
 			tuning: { selectedKeyRoot: 'A', globalOctaveOffset: 0 },
 		});
 		expect(snap.fx).toEqual({
@@ -245,6 +248,16 @@ describe('saving and loading a project', () => {
 		expect(delay(100, 0.401)[0]).toBe('1/4T'); // within 1% of 0.4 s
 		// No division matches (File → New used to leave 0.2 s): the default, as the knob showed
 		expect(delay(80, 0.2)).toEqual(['1/8.', 0.5625]);
+	});
+
+	it('gives projects saved before velocity routing none', () => {
+		const st = fresh();
+		changeEverything(st);
+		applySnapshot(st, { synth: { envelope: { enabled: true, attackMs: 20, decayMs: 400 } } });
+		expect([st.synth.velocity.decay.value, st.synth.velocity.cutoff.value, st.synth.velocity.pitchEnv.value, st.synth.velocity.noise.value]).toEqual([0, 0, 0, 0]);
+		applySnapshot(st, { synth: { velocity: { decay: 250, noise: -30 } } });
+		expect(st.synth.velocity.decay.value).toBe(100); // kept to ±100 %
+		expect(st.synth.velocity.noise.value).toBe(-30);
 	});
 
 	it('gives projects saved before the pulse wave the default width, and keeps the new waves', () => {

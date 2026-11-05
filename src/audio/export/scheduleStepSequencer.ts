@@ -6,6 +6,7 @@ import { applyPitchEnv, pitchEnvStartCents } from "../pitchEnv";
 import { lfoFilterTapGain } from "../synthHelpers";
 import { applyFilterEnv } from "../filterEnv";
 import { createVoiceSource, lfoPwmTapGain, waveGain, PULSE_WIDTH_DEFAULT } from "../waves";
+import { routeVelocity, routedCutoff, routedSemitones, routedNoise, type VelocityRouting } from "../velocity";
 import { startFM } from "../fm";
 import { generateReverbIR } from "../reverb/generateIr";
 
@@ -60,6 +61,8 @@ export type StepSequencerState = {
 		};
 
 		pulse?: { width: number }; // the pulse wave's width, % (missing: 50)
+
+		velocity?: VelocityRouting; // velocity routing amounts (missing: off)
 	};
 
 	fx: {
@@ -445,6 +448,7 @@ export function scheduleStepSequencer(
 			fmState,
 			pitchEnv,
 			pulseWidth: state.synth.pulse?.width ?? PULSE_WIDTH_DEFAULT,
+			velocityRouting: state.synth.velocity,
 			driveEnabled,
 			driveDry,
 			driveShaper,
@@ -484,6 +488,7 @@ function scheduleSynthNote(opts: {
 	fmState: FMState;
 	pitchEnv: PitchEnvState;
 	pulseWidth: number;
+	velocityRouting?: VelocityRouting;
 	driveEnabled: boolean;
 	driveDry: GainNode;
 	driveShaper: WaveShaperNode;
@@ -496,7 +501,7 @@ function scheduleSynthNote(opts: {
 	const {
 		ctx, time, freq, baseVelocity, channelVolume, wave,
 		envState, filterState, noiseState, padNoiseOn,
-		unisonState, fmState, pitchEnv, pulseWidth, driveEnabled,
+		unisonState, fmState, pitchEnv, pulseWidth, velocityRouting, driveEnabled,
 		driveDry, driveShaper, driveSum,
 		lfoState, lfoGainNode,
 		masterGain, noiseBuffers,
@@ -506,13 +511,18 @@ function scheduleSynthNote(opts: {
 		? Math.max(0.001, envState.attackMs / 1000)
 		: 0.01;
 
-	const decaySec = envState.enabled
+	// Velocity routing, as in the live engine: the step's velocity also shapes decay, cutoff,
+	// pitch envelope and noise
+	const routed = routeVelocity(velocityRouting, baseVelocity);
+	const noteCutoff = routedCutoff(filterState.cutoff, routed);
+
+	const decaySec = (envState.enabled
 		? Math.max(0.05, envState.decayMs / 1000)
-		: 0.1;
+		: 0.1) * routed.decayFactor;
 
 	const attackEnd = time + attackSec;
 	const naturalEnd = attackEnd + decaySec;
-	const gateEnd = time + Math.max(0.02, envState.decayMs / 1000);
+	const gateEnd = time + Math.max(0.02, (envState.decayMs / 1000) * routed.decayFactor);
 	const noteEnd = envState.enabled ? naturalEnd : gateEnd;
 
 	const baseAmp = baseVelocity * channelVolume;
@@ -520,7 +530,7 @@ function scheduleSynthNote(opts: {
 	// --- Tone vs Noise blend: 100% parity with live code ---------------------
 	const addNoiseForThisPad = padNoiseOn !== false;
 	const blend = (addNoiseForThisPad && noiseState.enabled)
-		? clamp01(noiseState.amount)
+		? routedNoise(clamp01(noiseState.amount), routed)
 		: 0;
 
 	const oscBlend = 1 - blend;
@@ -557,7 +567,7 @@ function scheduleSynthNote(opts: {
 	const pitchDecay = pitchEnv.decayMs / 1000;
 	const pitchStartCents = pitchEnvStartCents({
 		enabled: pitchEnv.enabled,
-		semitones: pitchEnv.semitones,
+		semitones: routedSemitones(pitchEnv.semitones, routed),
 		mode: pitchEnv.mode,
 		decay: pitchDecay,
 	});
@@ -587,7 +597,7 @@ function scheduleSynthNote(opts: {
 
 
 		if (filterState.enabled) {
-			voiceFilter.frequency.setValueAtTime(filterState.cutoff, time);
+			voiceFilter.frequency.setValueAtTime(noteCutoff, time);
 			voiceFilter.Q.setValueAtTime(filterState.resonance, time);
 			// Filter envelope, as in the live engine
 			applyFilterEnv(voiceFilter, time, filterState.envAmount ?? 0, (filterState.envDecayMs ?? 200) / 1000);
@@ -606,7 +616,7 @@ function scheduleSynthNote(opts: {
 				tap.gain.value = 1;
 				lfoGainNode.connect(tap).connect(osc.detune);
 			} else if (lfoState.target === "filter") {
-				const f0 = filterState.enabled ? filterState.cutoff : 20000;
+				const f0 = filterState.enabled ? noteCutoff : 20000;
 				const tap = ctx.createGain();
 				tap.gain.value = lfoFilterTapGain(f0, lfoState.depth, ctx.sampleRate);
 
