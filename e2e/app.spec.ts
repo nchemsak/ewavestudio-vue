@@ -193,6 +193,16 @@ test("disconnects each note's LFO tap when the note ends", async ({ page }) => {
 	expect(await page.evaluate(() => (window as any).__paramSources.size)).toBeLessThanOrEqual(2);
 });
 
+test('the built page has the Google Analytics tag (stubbed out here)', async ({ page }) => {
+	// The build adds it (build-plugins/googleAnalytics.js); `npm run dev` doesn't
+	const tag = await page.evaluate(() => ({
+		gtag: typeof (window as any).gtag,
+		config: ((window as any).dataLayer ?? []).some((a: any) => a[0] === 'config' && a[1] === 'G-ZZ1T0XVYLJ'),
+		script: !!document.querySelector('script[src^="https://www.googletagmanager.com/gtag/js"]'),
+	}));
+	expect(tag).toEqual({ gtag: 'function', config: true, script: true });
+});
+
 test('number keys 1–4 switch the screen view, except while typing', async ({ page }) => {
 	await page.locator('body').click({ position: { x: 5, y: 5 } });
 	for (const [key, title] of [['2', 'Spectrogram'], ['3', 'Tuner'], ['4', 'Envelope'], ['1', 'Oscilloscope']]) {
