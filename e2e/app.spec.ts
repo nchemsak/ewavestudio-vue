@@ -261,8 +261,7 @@ test('knobs work from the keyboard, and turning Attack shows the envelope until 
 	await expect(cutoff).toHaveAttribute('aria-valuetext', '4901 Hz');
 
 	// Turning an envelope knob shows the envelope view, as dragging it does, until the knob
-	// loses focus
-	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
+	// loses focus (moving on from Cutoff ends its filter view first)
 	const attack = page.getByRole('slider', { name: 'Attack' });
 	await attack.focus();
 	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope'); // focus alone changes nothing
@@ -271,6 +270,46 @@ test('knobs work from the keyboard, and turning Attack shows the envelope until 
 	await expect(attack).toHaveAttribute('aria-valuetext', /^\d+ ms$/);
 	await page.keyboard.press('Tab');
 	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
+});
+
+test('turning Cutoff or Resonance shows the filter curve until the knob is let go', async ({ page }) => {
+	const filterCanvas = page.locator('.nac-screen__lcd canvas').nth(4);
+	const cutoff = page.getByRole('slider', { name: 'Cutoff', exact: true });
+	const resonance = page.getByRole('slider', { name: 'Resonance', exact: true });
+	const picture = () => filterCanvas.evaluate((c: HTMLCanvasElement) => c.toDataURL());
+	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
+	await expect(filterCanvas).toBeHidden();
+
+	// No F-key of its own: none is lit while it shows
+	await cutoff.focus();
+	await page.keyboard.press('ArrowDown');
+	await expect(filterCanvas).toBeVisible();
+	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
+
+	// The curve follows the knobs
+	await page.waitForTimeout(100);
+	const before = await picture();
+	await page.keyboard.press('PageDown');
+	await expect.poll(picture).not.toBe(before);
+	const lower = await picture();
+	await resonance.focus(); // still the filter view
+	await page.keyboard.press('PageUp');
+	await expect(filterCanvas).toBeVisible();
+	await expect.poll(picture).not.toBe(lower);
+
+	// Let go: back to the view it was on
+	await page.keyboard.press('Tab');
+	await expect(filterCanvas).toBeHidden();
+	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
+
+	// Picking another view while turning keeps that view afterwards
+	await cutoff.focus();
+	await page.keyboard.press('ArrowUp');
+	await expect(filterCanvas).toBeVisible();
+	await page.keyboard.press('2');
+	await expect(screenView(page)).toHaveAttribute('title', 'Spectrogram');
+	await page.keyboard.press('Tab');
+	await expect(screenView(page)).toHaveAttribute('title', 'Spectrogram');
 });
 
 test('the step pads are one Tab stop: arrows move, Enter switches a pad, Space still plays', async ({ page }) => {

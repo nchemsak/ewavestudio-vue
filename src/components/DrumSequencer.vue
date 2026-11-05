@@ -244,13 +244,14 @@
 						<SectionWrap id="envelope" title="Envelope" v-model="collapsibleState['envelope']">
 							<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 								v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
-								@attack-knob-start="onEnvKnobStart" @attack-knob-end="onEnvKnobEnd"
-								@decay-knob-start="onEnvKnobStart" @decay-knob-end="onEnvKnobEnd" />
+								@attack-knob-start="onEnvKnobStart" @attack-knob-end="onScreenKnobEnd"
+								@decay-knob-start="onEnvKnobStart" @decay-knob-end="onScreenKnobEnd" />
 						</SectionWrap>
 
 						<SectionWrap id="filter" title="Filter" v-model="collapsibleState['filter']">
 							<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
-								v-model:cutoff="filterCutoff" v-model:resonance="filterResonance" />
+								v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
+								@knob-start="onFilterKnobStart" @knob-end="onScreenKnobEnd" />
 						</SectionWrap>
 
 						<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
@@ -452,6 +453,7 @@ import DriveEffect from './modules/DriveEffect.vue';
 import UnisonEffect from './modules/UnisonEffect.vue';
 import LFOGroup from './modules/LFOGroup.vue';
 import nacScreen from './Screen.vue';
+import { startFilterView } from './filterView';
 import PitchEnvModule from './modules/PitchEnvModule.vue';
 import FMModule from './modules/FMModule.vue';
 import FilterModule from './modules/FilterModule.vue';
@@ -810,35 +812,45 @@ function midiToNamePref(m: number, mode: AccidentalMode = accidentalMode.value) 
 
 const lcdText = ref('HARP  2');
 const activeFKey = ref<number>(1);
-const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner' | 'env'>('scope');
+const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner' | 'env' | 'filter'>('scope');
 const screen = ref<InstanceType<typeof nacScreen> | null>(null);
 
-// Remember previous screen so can be restored after the knob is released
+// While a knob is turned, the screen shows what it changes (Attack/Decay: the envelope view,
+// F4; Cutoff/Resonance: the filter view, no F-key), then goes back to the view it was on.
+// If the user picks another view while turning, that view stays.
 const prevScreen = ref<{ view: typeof lcdView.value; fkey: number } | null>(null);
-let envHoldCount = 0;
+let screenHoldCount = 0;
+let heldView: typeof lcdView.value | null = null;
 let userOverrodeWhileHeld = false;
 
-function jumpToEnv() {
+function holdScreen(view: typeof lcdView.value, fkey: number) {
+	if (screenHoldCount > 0 && lcdView.value !== heldView) userOverrodeWhileHeld = true;
+	screenHoldCount++;
 	if (!prevScreen.value) prevScreen.value = { view: lcdView.value, fkey: activeFKey.value };
-	activeFKey.value = 4;
-	lcdView.value = 'env';
+	heldView = view;
+	activeFKey.value = fkey;
+	lcdView.value = view;
 }
 
 function onEnvKnobStart() {
-	if (envHoldCount > 0 && lcdView.value !== 'env') userOverrodeWhileHeld = true;
-	envHoldCount++;
-	jumpToEnv();
+	holdScreen('env', 4);
 }
 
-function onEnvKnobEnd() {
-	envHoldCount = Math.max(0, envHoldCount - 1);
-	if (envHoldCount === 0) {
+function onFilterKnobStart() {
+	holdScreen('filter', 0); // 0: no F-key lit
+}
+
+function onScreenKnobEnd() {
+	screenHoldCount = Math.max(0, screenHoldCount - 1);
+	if (screenHoldCount === 0) {
 		const prev = prevScreen.value;
-		if (prev && !userOverrodeWhileHeld) {
+		// Restore, unless the user picked another view meanwhile (an F-key or 1–4)
+		if (prev && !userOverrodeWhileHeld && lcdView.value === heldView) {
 			lcdView.value = prev.view;
 			activeFKey.value = prev.fkey;
 		}
 		prevScreen.value = null;
+		heldView = null;
 		userOverrodeWhileHeld = false;
 	}
 }
@@ -1198,6 +1210,20 @@ onMounted(() => {
 	startSpectrogram();
 	startTuner();
 	startEnvViz();
+	const filterCanvas = screen.value?.filterCanvas as unknown as HTMLCanvasElement | null;
+	if (filterCanvas) startFilterView({
+		canvas: filterCanvas,
+		audioCtx,
+		analyser,
+		isActive: () => lcdView.value === 'filter',
+		fit: fitCanvasToBox,
+		settings: {
+			filterEnabled: () => filterEnabled.value,
+			cutoff: () => filterCutoff.value,
+			resonance: () => filterResonance.value,
+			lfo: () => ({ enabled: lfoEnabled.value, target: lfoTarget.value, depth: lfoDepth.value }),
+		},
+	});
 	window.addEventListener('keydown', onGlobalKeydown, { capture: true });
 	window.addEventListener('keyup', onGlobalKeyup, { capture: true });
 	window.addEventListener('mouseup', stopTempoRepeat);

@@ -3,6 +3,7 @@
 // Rebuilds a minimal version of your live graph inside any BaseAudioContext.
 
 import { applyPitchEnv, pitchEnvStartCents } from "../pitchEnv";
+import { lfoFilterTapGain } from "../synthHelpers";
 import { startFM } from "../fm";
 import { generateReverbIR } from "../reverb/generateIr";
 
@@ -608,13 +609,8 @@ function scheduleSynthNote(opts: {
 				lfoGainNode.connect(tap).connect(osc.detune);
 			} else if (lfoState.target === "filter") {
 				const f0 = filterState.enabled ? filterState.cutoff : 20000;
-				const minHz = 30;
-				const maxHz = ctx.sampleRate * 0.45;
-				const maxDepth = Math.max(0, Math.min(f0 - minHz, maxHz - f0));
-				const scale = lfoState.depth > 0 ? Math.min(1, maxDepth / lfoState.depth) : 0;
-
 				const tap = ctx.createGain();
-				tap.gain.value = scale;
+				tap.gain.value = lfoFilterTapGain(f0, lfoState.depth, ctx.sampleRate);
 
 				const ctrlLP = ctx.createBiquadFilter();
 				ctrlLP.type = "lowpass";

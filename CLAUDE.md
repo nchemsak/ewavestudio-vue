@@ -135,6 +135,7 @@ src/components/
                          Undo/Redo buttons
   MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
+  filterView.ts          The screen's filter view (drawing loop and its pure helpers)
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
 src/audio/
   liveEngine.ts          The live sound engine (`useLiveEngine`), see "Audio engine (live)"
@@ -236,14 +237,16 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   this everywhere, even on a focused button, knob or pad, on purpose: that's how music apps
   work. Enter presses a focused button.
 - 1–4: screen view (Oscilloscope, Spectrogram, Tuner, Envelope), same handler; ignored while
-  typing or while a dropdown list is open.
+  typing or while a dropdown list is open. While Attack/Decay or Cutoff/Resonance is turned,
+  the screen shows the envelope view (F4) or the filter view (no F-key), then goes back
+  (`holdScreen`/`onScreenKnobEnd` in `DrumSequencer.vue`); a view picked meanwhile stays.
 - Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers.
 - Ctrl/Cmd+Z: undo; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: redo (same handler as Space). Ignored in
   a text box, which keeps its own undo (the project name).
 - Knobs (`Knob.vue`, `role="slider"`): Tab to one, then arrows (Up/Right turn it up) move one
   step, or about 1% of the range on a knob with more than 300 steps; Shift+arrow and Page
   Up/Down about 10%; Home/End minimum/maximum. The first key emits `knobStart`, as a drag
-  does (value tooltip, envelope view), and leaving the knob emits `knobEnd`.
+  does (value tooltip, envelope or filter view), and leaving the knob emits `knobEnd`.
 - Step pads (`SynthStepGrid.vue`): one Tab stop for the grid (only the last used pad has
   `tabindex="0"`). Left/Right move between pads, Home/End to the first/last, Enter turns
   the focused pad on or off. Each pad is a toggle button named "Step 3", plus its note when on.
@@ -370,7 +373,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   grows taller reshuffles the columns and can leave a gap. Envelope, Filter and Pitch share one
   row of three narrow cards (`.split-three`): at 1280 px and on phones each has about 90 px
   inside, room for two small knobs (40 px) and a five-letter title. A browser test checks that
-  they stay on one row with one-line titles. The look is meant to be one piece of hardware
+  they stay on one row with one-line titles. The maintainer turned down layouts that add a
+  row of knobs there (see the filter envelope in "Planned work"). The look is meant to be one piece of hardware
   that fills its frame: check a layout change at several widths (1600, 1280, 1100, 900, 390)
   against the build before it.
 - Knobs: give every `<Knob>` a `label` (or an `aria-label`), and a `value-text` (what a
@@ -417,16 +421,17 @@ Next, in this order (agreed after PR 15; the maintainer changes it as ideas come
 that later features depend on, then sound features in the spirit of the design intent (top of
 this file), then presets that can use them. Everything drum-related waits until the maintainer
 brings the drum lanes back.
-1. **Filter envelope, and a filter view on the screen.** Each note's lowpass cutoff is fixed
-   for the whole note; only the LFO moves it. Add a DFAM-style filter envelope (Decay and
-   Amount: the cutoff starts higher by the amount and decays back), in the live and export
-   engines. Add a screen view that draws the filter's real response curve
-   (`BiquadFilterNode.getFrequencyResponse()`) on a log-frequency axis, with the live spectrum
-   faintly behind it, and shows the envelope's sweep. Like the envelope view, it appears while
-   Cutoff, Resonance or the new knobs are turned (`knobStart`/`knobEnd`). Ask the maintainer
-   whether it also gets its own F-key (the screen has four, keys 1–4). Layout: the Filter card
-   sits in a row of three narrow cards (see "Layout" under Conventions) with room for two
-   knobs, so two more need a layout the maintainer agrees to (propose with screenshots).
+1. **Filter envelope** (the screen's filter view is done, PR 23). Each note's lowpass cutoff
+   is fixed for the whole note; only the LFO moves it. Add a DFAM-style filter envelope (Decay
+   and Amount: the cutoff starts higher by the amount and decays back), in the live and export
+   engines, and draw its sweep in the filter view (`filterView.ts`, which already draws the
+   LFO's swing). Its two knobs should also switch the screen to the filter view. Layout first:
+   the Filter card sits in a row of three narrow cards (see "Layout" under Conventions) with
+   room for two knobs. Mockups tried after PR 22 and turned down by the maintainer: Envelope
+   and Pitch stacked beside a 2×2 Filter; Filter as its own full-width row of four knobs;
+   three across with a 2×2 Filter (all of them made the middle column ~120 px taller). The
+   maintainer's idea: make the LFO section shorter, to give the Envelope, Filter and Pitch row
+   more room. Propose with screenshots and agree before building.
 2. **Pulse wave with pulse-width modulation, and a few custom waveforms.** Pulse width is how
    much of each cycle the wave spends up versus down; 50% is the current square. Web Audio has
    no pulse oscillator with an adjustable width: feed a sawtooth into a comparator
@@ -538,6 +543,7 @@ Done:
 | 20 | Housekeeping: a real `README.md` (what the app is, running it, checks, deploy), and the Google Analytics tag is added by the build only, so `npm run dev` sends no analytics events. |
 | 21 | Pitch envelope back on screen (under "Pitch & Harmonics" at first), with a drum-style sweep: an exponentially decaying offset on `detune` (fast, then settling) instead of a glide of the frequency, in the live and export engines, the same for every unison voice of a note. Its Decay knob is logarithmic (new `taper="log"` knob option), so 10–100 ms is a third of the turn. |
 | 22 | Pitch envelope panel redesigned to fit the synth's frame: a compact "Pitch" card in a row of three with Envelope and Filter (instead of under "Pitch & Harmonics", which grew 149 px and left a gap on the left), a bipolar Amount knob instead of the ↑/↓ buttons, and an RND pill. Every module is back at its earlier size and place at all widths. |
+| 23 | Filter view on the screen: while Cutoff or Resonance is turned (no F-key), the screen draws the filter's real response curve (log frequency, dB) with the live spectrum faintly behind, and dashed curves for the LFO's swing when it targets the filter. Picking another view while a knob is held now keeps that view. The LFO's filter depth limit is one helper shared by both engines. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

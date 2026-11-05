@@ -4,8 +4,8 @@
             <!-- Cutoff -->
             <div class="position-relative text-center">
                 <Knob :value-text="`${Math.round(localCutoff)} Hz`" v-model="localCutoff" label="Cutoff" size="small" :min="minCutoff" :max="maxCutoff"
-                    :step="cutoffStep" :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'cutoff'"
-                    @knobEnd="activeKnob = null" />
+                    :step="cutoffStep" :disabled="!localEnabled" :color="color" @knobStart="onKnobStart('cutoff')"
+                    @knobEnd="onKnobEnd" />
                 <span v-if="activeKnob === 'cutoff'" class="custom-tooltip">
                     {{ Math.round(localCutoff) }} Hz
                 </span>
@@ -14,8 +14,8 @@
             <!-- Resonance -->
             <div class="position-relative text-center">
                 <Knob :value-text="`Q ${localResonance.toFixed(1)}`" v-model="localResonance" label="Resonance" size="small" :min="minResonance" :max="maxResonance"
-                    :step="resonanceStep" :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'res'"
-                    @knobEnd="activeKnob = null" />
+                    :step="resonanceStep" :disabled="!localEnabled" :color="color" @knobStart="onKnobStart('res')"
+                    @knobEnd="onKnobEnd" />
                 <span v-if="activeKnob === 'res'" class="custom-tooltip">
                     Q: {{ localResonance.toFixed(1) }}
                 </span>
@@ -60,6 +60,9 @@ const emit = defineEmits<{
     (e: 'update:enabled', v: boolean): void;
     (e: 'update:cutoff', v: number): void;
     (e: 'update:resonance', v: number): void;
+    // A knob is being turned (drag or keys) / let go: the screen shows the filter meanwhile
+    (e: 'knob-start'): void;
+    (e: 'knob-end'): void;
 }>();
 
 const localEnabled = ref<boolean>(props.enabled);
@@ -100,4 +103,13 @@ watch(localResonance, (v) => {
 });
 
 const activeKnob = ref<null | 'cutoff' | 'res'>(null);
+
+function onKnobStart(which: 'cutoff' | 'res') {
+    activeKnob.value = which;
+    emit('knob-start');
+}
+function onKnobEnd() {
+    activeKnob.value = null;
+    emit('knob-end');
+}
 </script>
