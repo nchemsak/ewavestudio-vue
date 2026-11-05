@@ -664,6 +664,73 @@ test('refuses a broken project file with a message, and keeps the current patter
 	await expect(name).toHaveValue(nameBefore);
 });
 
+test('a saved project that fails the check is not opened, with a message, and Save still works', async ({ page }) => {
+	const alerts: string[] = [];
+	page.on('dialog', (d) => { alerts.push(d.message()); void d.dismiss(); });
+	// The project with this id in IndexedDB (its name), or null
+	const savedName = (id: string) => page.evaluate((id) => new Promise((resolve) => {
+		const req = indexedDB.open('ewave-studio2-db');
+		req.onsuccess = () => {
+			const get = req.result.transaction('projects').objectStore('projects').get(id);
+			get.onsuccess = () => resolve(get.result?.meta?.name ?? null);
+			get.onerror = () => resolve(null);
+		};
+		req.onerror = () => resolve(null);
+	}), id);
+
+	// A saved project with a wrongly typed field, opened last
+	await page.evaluate(() => new Promise<void>((resolve, reject) => {
+		const lane = {
+			name: 'synth-voice', label: 'Synth', type: 'synth', isCustom: false, muted: 'no',
+			channelVolume: 0.5, steps: Array(16).fill(true), velocities: Array(16).fill(1),
+		};
+		const row = {
+			version: 2, projectId: 'broken-1',
+			meta: { name: 'Broken Song', createdAt: 1, updatedAt: Date.now() },
+			data: { instruments: [lane] },
+		};
+		const req = indexedDB.open('ewave-studio2-db');
+		req.onsuccess = () => {
+			const tx = req.result.transaction('projects', 'readwrite');
+			tx.objectStore('projects').put(row);
+			tx.oncomplete = () => resolve();
+			tx.onerror = () => reject(tx.error);
+		};
+		req.onerror = () => reject(req.error);
+	}));
+	await page.evaluate(() => localStorage.setItem('ewave-studio2:lastProjectId', 'broken-1'));
+
+	await page.reload();
+	await expect(pads(page)).toHaveCount(16);
+	await expect.poll(() => alerts).toEqual([
+		"\"Broken Song\" couldn't be opened: it is damaged, or this version of the app can't read it. A new project was started instead.",
+	]);
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(0); // none of it was loaded
+	const lastId = () => page.evaluate(() => localStorage.getItem('ewave-studio2:lastProjectId'));
+	expect(await lastId()).not.toBe('broken-1');
+
+	// Save works in the new project
+	const name = page.getByRole('textbox', { name: 'Project name' });
+	await name.fill('Rescued');
+	await name.press('Enter');
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('Control+s');
+	const newId = (await lastId())!;
+	await expect.poll(() => savedName(newId)).toBe('Rescued');
+	expect(await savedName('broken-1')).toBe('Broken Song'); // the broken record is left alone
+
+	// Choosing it from File → Open gives the same message and keeps the current project
+	await page.getByRole('button', { name: 'File ▾' }).click();
+	await page.getByRole('button', { name: 'Open ▸' }).hover(); // the submenu opens on hover
+	await page.getByRole('menuitem', { name: /Broken Song/ }).click();
+	await expect.poll(() => alerts.length).toBe(2);
+	expect(alerts[1]).toBe(
+		"\"Broken Song\" couldn't be opened: it is damaged, or this version of the app can't read it. Your current project is unchanged.",
+	);
+	await expect(name).toHaveValue('Rescued');
+	expect(await lastId()).toBe(newId);
+});
+
 // A change counts as one undo step once the settings have stayed the same this long
 // (SETTLE_MS in src/composables/useUndoHistory.ts), plus a margin
 const SETTLED = 700;

@@ -122,7 +122,9 @@ import { useProjectStore } from '../stores/projectStore';
 import {
     listProjects as repoList,
     deleteProject as repoRemove,
-    clearAllProjects as repoClearAll
+    clearAllProjects as repoClearAll,
+    BrokenProjectError,
+    brokenProjectMessage
 } from '../lib/storage/projects';
 import { buildExportFile, downloadJson, importJson } from '../lib/storage/exportImport';
 import { storageKey } from '../lib/storage/namespace';
@@ -212,7 +214,16 @@ function onSubPointerLeave(e: PointerEvent) {
 }
 
 async function openProject(id: string) {
-    await store.load(id);
+    try {
+        await store.load(id);
+    } catch (err) {
+        // A project that fails the project check isn't opened; the current one stays
+        if (!(err instanceof BrokenProjectError)) throw err;
+        console.error(err, (err as any).cause);
+        closeAllMenus();
+        alert(brokenProjectMessage(err, 'This project', 'Your current project is unchanged.'));
+        return;
+    }
     isNewUnsaved.value = false;
     closeAllMenus();
     nextTick(() => {
