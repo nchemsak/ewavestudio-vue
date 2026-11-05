@@ -10,14 +10,10 @@
             <div v-if="showWaveRow" class="pad-row">
                 <div class="pad-label">Wave</div>
                 <div class="pt-seg pt-seg-sm wave-seg" role="group" aria-label="Waveform">
-                    <button class="pt-seg-btn" :class="{ 'is-active': waveLocal === 'sine' }"
-                        @click="setWave('sine')">Sine</button>
-                    <button class="pt-seg-btn" :class="{ 'is-active': waveLocal === 'triangle' }"
-                        @click="setWave('triangle')">Triangle</button>
-                    <button class="pt-seg-btn" :class="{ 'is-active': waveLocal === 'sawtooth' }"
-                        @click="setWave('sawtooth')">Saw</button>
-                    <button class="pt-seg-btn" :class="{ 'is-active': waveLocal === 'square' }"
-                        @click="setWave('square')">Square</button>
+                    <button v-for="w in WAVE_IDS" :key="w" class="pt-seg-btn" :class="{ 'is-active': waveLocal === w }"
+                        :aria-pressed="waveLocal === w" @click="setWave(w)">
+                        {{ WAVE_LABELS[w] }}
+                    </button>
                 </div>
             </div>
 
@@ -77,7 +73,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import Knob from './Knob.vue';
 
 type AnchorRect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
-type Wave = 'sine' | 'triangle' | 'sawtooth' | 'square';
+import { WAVE_IDS, WAVE_LABELS, type Wave } from '../audio/waves';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 const NATURALS = [
@@ -308,9 +304,13 @@ watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
 }
 
 .wave-seg {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
-    flex-wrap: wrap;
+}
+
+.wave-seg .pt-seg-btn {
+    padding-inline: 4px;
 }
 
 .noise-toggle-wrap {

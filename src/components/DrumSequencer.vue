@@ -183,24 +183,10 @@
 						<!-- Oscillators -->
 						<div class="gen-panel osc-panel">
 							<div class="wave-row" role="radiogroup" aria-label="Waveforms">
-								<WaveButton :modelValue="selectedWaveform" value="sine" label="SINE"
-									:palette="['#fff', '#7bd0ff', '#666']" :randomIncluded="randomPool['sine']"
-									@toggle-random="onToggleRandom" @update:modelValue="() => applyWaveToAll('sine')" />
-
-								<WaveButton :modelValue="selectedWaveform" value="triangle" label="TRIANGLE"
-									:palette="['#7cf3c9', '#b47aff', '#ffd06b']"
-									:randomIncluded="randomPool['triangle']" @toggle-random="onToggleRandom"
-									@update:modelValue="() => applyWaveToAll('triangle')" />
-
-								<WaveButton :modelValue="selectedWaveform" value="sawtooth" label="SAW"
-									:palette="['#ff9a62', '#ffd06b', '#75f0ff']"
-									:randomIncluded="randomPool['sawtooth']" @toggle-random="onToggleRandom"
-									@update:modelValue="() => applyWaveToAll('sawtooth')" />
-
-								<WaveButton :modelValue="selectedWaveform" value="square" label="SQUARE"
-									:palette="['#a2f5a6', '#7bd0ff', '#ff7eb3']" :randomIncluded="randomPool['square']"
-									@toggle-random="onToggleRandom"
-									@update:modelValue="() => applyWaveToAll('square')" />
+								<WaveButton v-for="t in WAVE_TILES" :key="t.value" :modelValue="selectedWaveform"
+									:value="t.value" :label="t.label" :palette="t.palette"
+									:randomIncluded="randomPool[t.value]" @toggle-random="onToggleRandom"
+									@update:modelValue="() => applyWaveToAll(t.value)" />
 							</div>
 							<div class="pt-btn-group" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
 								<button class="pt-btn pt-btn-sm" :disabled="!randomPoolArray.length"
@@ -281,7 +267,19 @@
 						<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
 							v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
 						<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
-							v-model:detune="detuneCents" v-model:spread="stereoSpread" />
+							v-model:detune="detuneCents" v-model:spread="stereoSpread">
+							<template #below>
+								<!-- The pulse wave's width (Pulse tiles and pads only); the LFO's PW target moves it -->
+								<div class="pulse-width-row">
+									<div class="position-relative text-center">
+										<Knob v-model="pulseWidth" label="Pulse Width" size="small" :min="PULSE_WIDTH_MIN"
+											:max="PULSE_WIDTH_MAX" :step="1" :value-text="`${pulseWidth}%`" color="#ff7eb3"
+											@knobStart="pulseWidthTip = true" @knobEnd="pulseWidthTip = false" />
+										<span v-if="pulseWidthTip" class="custom-tooltip">{{ pulseWidth }}%</span>
+									</div>
+								</div>
+							</template>
+						</UnisonEffect>
 					</SectionWrap>
 				</div>
 
@@ -466,6 +464,7 @@ import PatternTools from './PatternTools.vue';
 import SynthStepGrid from './SynthStepGrid.vue'
 import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
+import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
 import MelodyMaker from './MelodyMaker.vue';
 import MidiToolbar from './MidiToolbar.vue';
 import { useMidiInput } from '../composables/useMidiInput';
@@ -1289,20 +1288,32 @@ const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
 
 const selectedWaveform = ref<Wave>("sine");
-const waves = ['sine', 'triangle', 'sawtooth', 'square'] as const;
+const waves = WAVE_IDS;
 
-const randomPool = reactive<Record<Wave, boolean>>({
-	sine: true, triangle: true, sawtooth: true, square: true
-});
+// The Waveforms panel's tiles (src/audio/waves.ts lists the waves)
+const WAVE_PALETTES: Record<Wave, string[]> = {
+	sine: ['#fff', '#7bd0ff', '#666'],
+	triangle: ['#7cf3c9', '#b47aff', '#ffd06b'],
+	sawtooth: ['#ff9a62', '#ffd06b', '#75f0ff'],
+	square: ['#a2f5a6', '#7bd0ff', '#ff7eb3'],
+	pulse: ['#ff7eb3', '#ffd06b', '#b47aff'],
+	organ: ['#ffb86b', '#ff7eb3', '#7bd0ff'],
+	hollow: ['#7cf3c9', '#7bd0ff', '#a2f5a6'],
+	glass: ['#e6c6ff', '#7bd0ff', '#fff'],
+};
+const WAVE_TILES = WAVE_IDS.map(value => ({
+	value, label: WAVE_LABELS[value].toUpperCase(), palette: WAVE_PALETTES[value],
+}));
 
-const randomPoolArray = computed<OscillatorType[]>(() =>
-	(['sine', 'triangle', 'sawtooth', 'square'] as OscillatorType[]).filter(w => randomPool[w])
+const randomPool = reactive<Record<Wave, boolean>>(
+	Object.fromEntries(WAVE_IDS.map(w => [w, true])) as Record<Wave, boolean>
 );
 
-function onToggleRandom(w: OscillatorType, next: boolean, only = false) {
+const randomPoolArray = computed<Wave[]>(() => WAVE_IDS.filter(w => randomPool[w]));
+
+function onToggleRandom(w: Wave, next: boolean, only = false) {
 	if (only) {
-		(['sine', 'triangle', 'sawtooth', 'square'] as OscillatorType[])
-			.forEach(k => randomPool[k] = false);
+		WAVE_IDS.forEach(k => randomPool[k] = false);
 		randomPool[w] = true;
 	} else {
 		randomPool[w] = next;
@@ -1311,7 +1322,7 @@ function onToggleRandom(w: OscillatorType, next: boolean, only = false) {
 
 const randomTooltip = computed(() =>
 	randomPoolArray.value.length
-		? `Random from: ${randomPoolArray.value.map(w => w[0].toUpperCase() + w.slice(1)).join(', ')}`
+		? `Random from: ${randomPoolArray.value.map(w => WAVE_LABELS[w]).join(', ')}`
 		: 'Select at least one wave using the little dice badges'
 );
 
@@ -1348,7 +1359,7 @@ function applyRandomWaves() {
 
 	const pool = randomPoolArray.value.length
 		? randomPoolArray.value
-		: (['sine', 'triangle', 'sawtooth', 'square'] as OscillatorType[]); // fallback
+		: [...WAVE_IDS]; // fallback
 
 	inst.waveforms = Array.from({ length: stepLength.value }, () =>
 		pool[Math.floor(Math.random() * pool.length)]
@@ -1616,6 +1627,9 @@ const pitchEnvSemitones = ref(0);
 const pitchEnvDecayMs = ref(300);
 
 const pitchMode = ref<'up' | 'down' | 'random'>('up');
+// The pulse wave's width, % (src/audio/waves.ts); 50 is a square
+const pulseWidth = ref(PULSE_WIDTH_DEFAULT);
+const pulseWidthTip = ref(false);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1814,7 +1828,7 @@ const exportState = computed<StepSequencerState>(() => {
 	const stepsCount = stepLength.value;
 
 	const wf = (idx: number) =>
-		(inst as any).waveforms?.[idx] ?? (selectedWaveform.value as OscillatorType);
+		(inst as any).waveforms?.[idx] ?? selectedWaveform.value;
 
 	// Derive LFO rate in Hz if synced
 	const rateHz = lfoSync.value
@@ -1904,6 +1918,7 @@ const exportState = computed<StepSequencerState>(() => {
 				decayMs: pitchEnvDecayMs.value,
 				mode: pitchMode.value,
 			},
+			pulse: { width: pulseWidth.value },
 		},
 
 		fx: {
@@ -1947,7 +1962,7 @@ const exportState = computed<StepSequencerState>(() => {
 const lfoEnabled = ref(true);
 const lfoRate = ref(5);
 const lfoDepth = ref(0);
-const lfoTarget = ref<'pitch' | 'filter'>('pitch');
+const lfoTarget = ref<'pitch' | 'filter' | 'pwm'>('pitch');
 
 const lfoWaveform = ref<'sine' | 'square'>('sine');
 const lfoSync = ref(true);
@@ -1959,6 +1974,7 @@ const lfoDepthMax = computed(() => {
 		case 'pitch': return 1200;
 
 		case 'filter': return 5000;
+		case 'pwm': return 45; // % of width
 		default: return 100;
 	}
 });
@@ -2005,6 +2021,7 @@ const projectState: ProjectState = {
 		},
 		fm: { enabled: fmEnabled, modFreq: fmModFreq, index: fmIndex, ratio: fmRatio },
 		pitchEnv: { enabled: pitchEnvEnabled, semitones: pitchEnvSemitones, decayMs: pitchEnvDecayMs, mode: pitchMode },
+		pulse: { width: pulseWidth },
 		tuning: { selectedKeyRoot, globalOctaveOffset, currentDefaultHz },
 	},
 	fx: {
@@ -2056,6 +2073,7 @@ const {
 	lfo: projectState.synth.lfo,
 	fm: projectState.synth.fm,
 	pitchEnv: projectState.synth.pitchEnv,
+	pulse: projectState.synth.pulse,
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
 	reverb: projectState.fx.reverb,
@@ -2078,7 +2096,7 @@ const midi = useMidiInput({
 	noteToPlay(note, velocity) {
 		const freq = midiToFreq(note);
 		const decayTime = synthDecay.value; // seconds, as for sequencer notes
-		const wf = selectedWaveform.value as OscillatorType;
+		const wf = selectedWaveform.value;
 
 		// Only if the synth lane exists and isn't muted
 		const inst = synthInstrument.value;
@@ -2977,21 +2995,48 @@ const { canUndo, canRedo, undo, redo } = useUndoHistory({
 	pointer-events: none;
 }
 
-.wave-row {
+/* Pulse Width: its own row under Unison's knobs, level with FM's Mod Freq / Amount */
+.pulse-width-row {
+	flex-basis: 100%;
+	width: 100%;
 	display: flex;
-	flex-wrap: wrap;
-	gap: 10px 12px;
-	justify-content: space-evenly;
+	justify-content: center;
+	margin-top: 22px;
 }
 
+.wave-row {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 8px;
+	justify-items: center;
+}
+
+/* Eight tiles in two rows: smaller than the four used to be */
 .wave-row :deep(.wave-btn) {
-	--w: 80px;
+	--w: 100%;
+	max-width: 84px;
+	padding: 4px 4px 5px;
 }
 
-@media (max-width: 720px) {
-	.wave-row :deep(.wave-btn) {
-		--w: 65px;
-	}
+.wave-row :deep(.wave-svg) {
+	width: 44px;
+	height: 44px;
+}
+
+.wave-row :deep(.wave-label) {
+	font-size: .62rem;
+}
+
+.wave-row :deep(.dice-badge) {
+	top: 3px;
+	right: 3px;
+	width: 18px;
+	height: 18px;
+}
+
+.wave-row :deep(.dice-badge svg) {
+	width: 16px;
+	height: 16px;
 }
 
 @media (min-width: 992px) {

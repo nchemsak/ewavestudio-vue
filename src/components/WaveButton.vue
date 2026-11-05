@@ -42,7 +42,7 @@ import { computed } from 'vue';
 
 const props = defineProps({
     modelValue: String,
-    value: { type: String, required: true }, // 'sine' | 'triangle' | 'sawtooth' | 'square'
+    value: { type: String, required: true }, // a wave from src/audio/waves.ts
     label: { type: String, default: '' },
     disabled: Boolean,
     palette: {
@@ -73,6 +73,12 @@ const shapeTag = computed(() => {
             return 'polygon';
         case 'sine':
             return 'circle';
+        case 'pulse':
+        case 'organ':
+        case 'hollow':
+            return 'path';
+        case 'glass':
+            return 'polygon';
         default:
             return 'rect';
     }
@@ -88,6 +94,18 @@ const shapeAttrs = computed(() => {
             return { points: '16,84 84,84 16,16' };
         case 'sine':
             return { cx: 50, cy: 50, r: 32 };
+        // Pulse: a narrow bar (a pulse spends little of its cycle high)
+        case 'pulse':
+            return { d: 'M12 84 V74 H38 V16 H58 V74 H88 V84 Z' };
+        // Organ: three drawbars
+        case 'organ':
+            return { d: 'M18 84 V44 H34 V84 Z M42 84 V16 H58 V84 Z M66 84 V56 H82 V84 Z' };
+        // Hollow: a ring
+        case 'hollow':
+            return { d: 'M50 16 A34 34 0 1 1 49.9 16 Z M50 36 A14 14 0 1 0 50.1 36 Z', 'fill-rule': 'evenodd' };
+        // Glass: a diamond
+        case 'glass':
+            return { points: '50,12 86,50 50,88 14,50' };
         default:
             return { x: 20, y: 20, width: 60, height: 60, rx: 12 };
     }

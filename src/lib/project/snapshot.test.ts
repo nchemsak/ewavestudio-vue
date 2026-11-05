@@ -57,6 +57,7 @@ function makeState(maxVoices = 6): ProjectState {
 			},
 			fm: { enabled: ref(true), modFreq: ref(1), index: ref(1), ratio: ref(null) },
 			pitchEnv: { enabled: ref(false), semitones: ref(5), decayMs: ref(1), mode: ref('down') },
+			pulse: { width: ref(7) },
 			tuning: {
 				selectedKeyRoot,
 				globalOctaveOffset,
@@ -114,6 +115,7 @@ function changeEverything(st: ProjectState) {
 	s.lfo.retrigger.value = true; s.lfo.bipolar.value = true;
 	s.fm.enabled.value = true; s.fm.modFreq.value = 440; s.fm.index.value = 9; s.fm.ratio.value = 2;
 	s.pitchEnv.enabled.value = false; s.pitchEnv.semitones.value = 12; s.pitchEnv.decayMs.value = 50; s.pitchEnv.mode.value = 'random';
+	s.pulse.width.value = 25;
 	s.tuning.selectedKeyRoot.value = 'Eb'; s.tuning.globalOctaveOffset.value = -1;
 	fx.delay.enabled.value = true; fx.delay.sync.value = false; fx.delay.division.value = '1/4'; fx.delay.time.value = 0.5; fx.delay.feedback.value = 0.6;
 	fx.delay.mix.value = 0.4; fx.delay.toneEnabled.value = false; fx.delay.toneHz.value = 2000; fx.delay.toneType.value = 'highpass';
@@ -155,6 +157,7 @@ describe('factory defaults (File → New)', () => {
 			},
 			fm: { enabled: false, modFreq: 200, index: 4, ratio: 1 },
 			pitchEnv: { enabled: true, semitones: 0, decayMs: 300, mode: 'up' },
+			pulse: { width: 50 },
 			tuning: { selectedKeyRoot: 'A', globalOctaveOffset: 0 },
 		});
 		expect(snap.fx).toEqual({
@@ -242,6 +245,19 @@ describe('saving and loading a project', () => {
 		expect(delay(100, 0.401)[0]).toBe('1/4T'); // within 1% of 0.4 s
 		// No division matches (File → New used to leave 0.2 s): the default, as the knob showed
 		expect(delay(80, 0.2)).toEqual(['1/8.', 0.5625]);
+	});
+
+	it('gives projects saved before the pulse wave the default width, and keeps the new waves', () => {
+		const st = fresh();
+		changeEverything(st);
+		applySnapshot(st, { synth: { envelope: { enabled: true, attackMs: 20, decayMs: 400 } } });
+		expect(st.synth.pulse.width.value).toBe(50);
+		applySnapshot(st, { synth: { pulse: { width: 99 } } });
+		expect(st.synth.pulse.width.value).toBe(95); // kept to 5–95%
+		applySnapshot(st, { synth: { lfo: { target: 'pwm' } } });
+		expect(st.synth.lfo.target.value).toBe('pwm');
+		applySnapshot(st, { selectedWaveform: 'glass' });
+		expect(st.selectedWaveform.value).toBe('glass');
 	});
 
 	it('gives projects saved before the filter envelope none', () => {

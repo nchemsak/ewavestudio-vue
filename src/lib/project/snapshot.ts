@@ -16,8 +16,11 @@ type R<T> = Readonly<Ref<T>>;
 
 export type KeyRoot = 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B';
 
-// The four oscillator shapes the synth uses (no custom periodic waves)
-export type Wave = Exclude<OscillatorType, 'custom'>;
+// The synth's waveforms (src/audio/waves.ts): the oscillator's own four, the pulse and three
+// harmonic shapes. Saved projects may hold any name; an unknown one plays as a sine.
+import type { Wave } from '../../audio/waves';
+import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX } from '../../audio/waves';
+export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
 export type Instrument = {
@@ -32,7 +35,7 @@ export type Instrument = {
 	steps: boolean[];
 	velocities: number[];
 	pitches?: number[];
-	waveforms?: OscillatorType[];
+	waveforms?: string[];
 	inputRef?: HTMLInputElement | null;
 };
 
@@ -81,7 +84,7 @@ export type ProjectState = {
 			enabled: Ref<boolean>;
 			rate: Ref<number>;
 			depth: Ref<number>;
-			target: Ref<'pitch' | 'filter'>;
+			target: Ref<'pitch' | 'filter' | 'pwm'>;
 			waveform: Ref<'sine' | 'square'>;
 			sync: Ref<boolean>;
 			division: Ref<string>;
@@ -95,6 +98,7 @@ export type ProjectState = {
 			decayMs: Ref<number>;
 			mode: Ref<'up' | 'down' | 'random'>;
 		};
+		pulse: { width: Ref<number> }; // the pulse wave's width, % (5–95)
 		tuning: {
 			selectedKeyRoot: Ref<KeyRoot>;
 			globalOctaveOffset: Ref<number>;
@@ -172,6 +176,7 @@ function byName(st: ProjectState) {
 		pitchEnvSemitones: sy.pitchEnv.semitones,
 		pitchEnvDecayMs: sy.pitchEnv.decayMs,
 		pitchMode: sy.pitchEnv.mode,
+		pulseWidth: sy.pulse.width,
 		selectedKeyRoot: sy.tuning.selectedKeyRoot,
 		globalOctaveOffset: sy.tuning.globalOctaveOffset,
 		currentDefaultHz: sy.tuning.currentDefaultHz,
@@ -212,7 +217,7 @@ export function buildSnapshot(st: ProjectState) {
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix,
@@ -286,6 +291,7 @@ export function buildSnapshot(st: ProjectState) {
 				decayMs: pitchEnvDecayMs.value,
 				mode: pitchMode.value
 			},
+			pulse: { width: pulseWidth.value },
 			tuning: {
 				selectedKeyRoot: selectedKeyRoot.value,
 				globalOctaveOffset: globalOctaveOffset.value,
@@ -364,7 +370,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix,
@@ -454,7 +460,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		if (typeof syn.lfo.depth === 'number') lfoDepth.value = syn.lfo.depth;
 
 		if (syn.lfo.target) {
-			lfoTarget.value = (syn.lfo.target === 'filter' || syn.lfo.target === 'pitch')
+			lfoTarget.value = (syn.lfo.target === 'filter' || syn.lfo.target === 'pitch' || syn.lfo.target === 'pwm')
 				? syn.lfo.target
 				: 'pitch';
 		}
@@ -476,6 +482,12 @@ export function applySnapshot(st: ProjectState, s: any) {
 		if (typeof syn.pitchEnv.semitones === 'number') pitchEnvSemitones.value = syn.pitchEnv.semitones;
 		if (typeof syn.pitchEnv.decayMs === 'number') pitchEnvDecayMs.value = syn.pitchEnv.decayMs;
 		if (syn.pitchEnv.mode) pitchMode.value = syn.pitchEnv.mode;
+	}
+	if (typeof syn.pulse?.width === 'number') {
+		pulseWidth.value = Math.min(PULSE_WIDTH_MAX, Math.max(PULSE_WIDTH_MIN, syn.pulse.width));
+	} else if (!syn.pulse && syn.envelope) {
+		// A whole project saved before the pulse wave: the default width (a square)
+		pulseWidth.value = PULSE_WIDTH_DEFAULT;
 	}
 	if (syn.tuning) {
 		if (typeof syn.tuning.selectedKeyRoot === 'string') (selectedKeyRoot as any).value = syn.tuning.selectedKeyRoot;
@@ -585,7 +597,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix,
@@ -648,6 +660,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	pitchEnvSemitones.value = 0;
 	pitchEnvDecayMs.value = 300;
 	pitchMode.value = 'up';
+	pulseWidth.value = PULSE_WIDTH_DEFAULT;
 
 	selectedKeyRoot.value = 'A';
 	globalOctaveOffset.value = 0;

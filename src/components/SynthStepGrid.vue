@@ -55,16 +55,7 @@
 
                     <div class="wave-badge" :class="{ 'is-off': !active }" :data-wave="waveFor(index)"
                         :title="waveFor(index)">
-                        <svg class="wave-ico" viewBox="0 0 12 12" width="12" height="12" fill="none"
-                            stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"
-                            aria-hidden="true" preserveAspectRatio="xMidYMid meet">
-                            <circle v-if="waveFor(index) === 'sine'" cx="6" cy="6" r="3.6" />
-                            <path v-else-if="waveFor(index) === 'triangle'" d="M2 10 L6 2 L10 10 Z" fill="none" />
-                            <path v-else-if="waveFor(index) === 'sawtooth'" d="M2 10 L2 2 L10 10 Z" fill="none" />
-                            <rect v-else-if="waveFor(index) === 'square'" x="2.2" y="2.2" width="7.6" height="7.6"
-                                rx="0.3" ry="0.3" fill="none" />
-                            <circle v-else cx="6" cy="6" r="3.6" />
-                        </svg>
+                        <WaveIcon :wave="waveFor(index)" />
                     </div>
 
                     <div v-if="active" class="note-chip">
@@ -96,7 +87,8 @@
 import { ref } from 'vue';
 
 type NoteNameFn = (hz: number) => string;
-type Wave = 'sine' | 'triangle' | 'sawtooth' | 'square';
+import WaveIcon from './WaveIcon.vue';
+import type { Wave } from '../audio/waves';
 
 const props = withDefaults(
     defineProps<{
@@ -341,7 +333,7 @@ const nearestNote = props.nearestNote;
     z-index: 2;
 }
 
-.wave-ico {
+.wave-badge :deep(.wave-ico) {
     width: 11px;
     height: 11px;
     display: block;
@@ -365,6 +357,22 @@ const nearestNote = props.nearestNote;
 
 .wave-badge[data-wave="square"] {
     color: #a2f5a6;
+}
+
+.wave-badge[data-wave="pulse"] {
+    color: #ff7eb3;
+}
+
+.wave-badge[data-wave="organ"] {
+    color: #ffb86b;
+}
+
+.wave-badge[data-wave="hollow"] {
+    color: #7cf3c9;
+}
+
+.wave-badge[data-wave="glass"] {
+    color: #e6c6ff;
 }
 
 .note-chip {

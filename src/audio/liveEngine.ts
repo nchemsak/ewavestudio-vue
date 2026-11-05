@@ -18,11 +18,11 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, type Ref } from 'vue';
 import { applyPitchEnv, pitchEnvStartCents } from './pitchEnv';
 import { applyFilterEnv } from './filterEnv';
+import { createVoiceSource, lfoPwmTapGain, waveGain, type Wave } from './waves';
 import { startFM } from './fm';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
 import {
-	waveformGain,
 	divisionToHz,
 	generateDriveCurve,
 	linearPassthroughCurve,
@@ -43,7 +43,7 @@ export type LiveLane = {
 	steps: boolean[];
 	velocities: number[];
 	pitches?: number[];
-	waveforms?: OscillatorType[];
+	waveforms?: string[];
 	buffer?: AudioBuffer | null;
 };
 
@@ -52,7 +52,7 @@ export type LiveEngineSettings = {
 	pattern: {
 		lanes: R<LiveLane[]>;
 		stepLength: R<number>;
-		selectedWaveform: R<OscillatorType>;
+		selectedWaveform: R<Wave>;
 		noiseMask: R<boolean[]>; // per step: may this step add noise?
 	};
 	envelope: { enabled: R<boolean>; attackMs: R<number>; decayMs: R<number> };
@@ -63,13 +63,14 @@ export type LiveEngineSettings = {
 		enabled: R<boolean>;
 		rate: R<number>;
 		depth: R<number>;
-		target: R<'pitch' | 'filter'>;
+		target: R<'pitch' | 'filter' | 'pwm'>;
 		waveform: R<'sine' | 'square'>;
 		sync: R<boolean>;
 		division: R<string>;
 	};
 	fm: { enabled: R<boolean>; modFreq: R<number>; index: R<number>; ratio: R<number | null> };
 	pitchEnv: { enabled: R<boolean>; semitones: R<number>; decayMs: R<number>; mode: R<'up' | 'down' | 'random'> };
+	pulse: { width: R<number> }; // pulse wave's width, % (waves.ts)
 	delay: {
 		enabled: R<boolean>;
 		time: R<number>;
@@ -479,6 +480,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 				lfoGain.gain.setValueAtTime(lfoDepth.value, t);
 				break;
 			case 'filter':
+			case 'pwm':
 				lfoGain.gain.setValueAtTime(lfoDepth.value, t);
 				break;
 
@@ -508,7 +510,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// Synth voice START
 
-	function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: OscillatorType, opts: { addNoise?: boolean } = {}) {
+	function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: Wave | string, opts: { addNoise?: boolean } = {}) {
 
 		const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
 		const decay = isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1;
@@ -531,7 +533,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const noiseBlend = blend;
 
 		// Apply waveform loudness compensation to the TONAL path only
-		const wfComp = waveformGain(waveType);
+		const wfComp = waveGain(waveType);
 		const safeOscGain = Math.max(0.0001, velocity * oscBlend * wfComp);
 
 		// Single amplitude envelope for the OSC path
@@ -566,12 +568,12 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		});
 
 		for (let i = 0; i < voices; i++) {
-			const osc = audioCtx.createOscillator();
+			// The voice's sound source: the oscillator, plus the pulse network for 'pulse'
+			const source = createVoiceSource(audioCtx, waveType, s.pulse.width.value);
+			const osc = source.osc;
 			const voiceFilter = audioCtx.createBiquadFilter();
 			const voiceGain = audioCtx.createGain();
 			const panner = audioCtx.createStereoPanner();
-			osc.type = waveType;
-
 			const dNorm = normIndex(i, voices);
 			const detuneC = dNorm * detuneStep;
 			// Frequency, and detune: the unison detune plus the pitch envelope's sweep
@@ -618,14 +620,20 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 					lfoGain.connect(lfoTap).connect(ctrlLP).connect(voiceFilter.frequency);
 					osc.addEventListener('ended', () => releaseLfoTap(lfoTap, ctrlLP));
+				} else if (lfoTarget.value === 'pwm' && source.width) {
+					// Pulse-width modulation: moves the pulse's threshold (pulse wave only)
+					const lfoTap = audioCtx.createGain();
+					lfoTap.gain.value = lfoPwmTapGain(s.pulse.width.value, lfoDepth.value);
+					lfoGain.connect(lfoTap).connect(source.width);
+					osc.addEventListener('ended', () => releaseLfoTap(lfoTap));
 				}
 			}
 
 			// voice chain into the shared envelope
-			osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
+			source.output.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
 
-			osc.start(startTime);
-			osc.stop(noteEnd);
+			source.start(startTime);
+			source.stop(noteEnd);
 			if (fmHandle) fmHandle.stop(noteEnd);
 		}
 
@@ -785,7 +793,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 					const t = startTime + swingOffset;
 
 					if (inst.type === 'synth') {
-						const wf = (inst.waveforms?.[stepIndex] ?? selectedWaveform.value) as OscillatorType;
+						const wf = (inst.waveforms?.[stepIndex] ?? selectedWaveform.value) as Wave;
 						const padNoiseOn = noiseMask.value?.[stepIndex] ?? true;
 
 						// pass the mask to playSynthNote so noise can be per-step enabled/disabled

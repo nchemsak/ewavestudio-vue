@@ -475,6 +475,23 @@ function wavCrossingRate(bytes: Buffer, fromMs: number, toMs: number) {
 	return crossings / (toMs - fromMs);
 }
 
+// Share of samples above 0, mean (DC) and RMS of the first channel of a 32-bit float WAV file,
+// from `fromMs` to `toMs` after the first sound
+function wavStats(bytes: Buffer, fromMs: number, toMs: number) {
+	const channels = bytes.readUInt16LE(22);
+	const rate = bytes.readUInt32LE(24);
+	const n = Math.floor((bytes.length - 44) / 4 / channels);
+	const at = (i: number) => bytes.readFloatLE(44 + i * channels * 4);
+	let onset = 0;
+	while (onset < n && Math.abs(at(onset)) < 1e-4) onset++;
+	const a = onset + Math.round((fromMs / 1000) * rate);
+	const b = Math.min(n, onset + Math.round((toMs / 1000) * rate));
+	let above = 0, sum = 0, sq = 0;
+	for (let i = a; i < b; i++) { const x = at(i); if (x > 0) above++; sum += x; sq += x * x; }
+	const len = Math.max(1, b - a);
+	return { above: above / len, mean: sum / len, rms: Math.sqrt(sq / len) };
+}
+
 // Loudest sample in a 32-bit float WAV file
 function wavPeak(bytes: Buffer) {
 	let peak = 0;
@@ -883,6 +900,51 @@ test('the filter envelope sweeps each note\'s cutoff, is saved, and shows on the
 
 	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.filter;
 	expect(saved).toMatchObject({ envAmount: 2, envDecayMs: ms });
+});
+
+test('every wave sounds, at a similar level, and the pulse follows its Width', async ({ page }) => {
+	await turnOnPads(page, [0]);
+	const tile = (label: string) => page.locator('.wave-row').getByRole('radio', { name: label, exact: true });
+	const level = async () => wavStats(await downloadFromFileMenu(page, 'Export WAV'), 40, 200);
+
+	// Every wave plays, within about ±6 dB of the sine (the waves' loudness balance)
+	await tile('SINE').click();
+	const sineStats = await level();
+	const sine = sineStats.rms;
+	expect(sine).toBeGreaterThan(0.01);
+	for (const label of ['TRIANGLE', 'SAW', 'SQUARE', 'PULSE', 'ORGAN', 'HOLLOW', 'GLASS']) {
+		await tile(label).click();
+		await expect(tile(label)).toHaveAttribute('aria-checked', 'true');
+		const { rms } = await level();
+		expect(rms / sine, label).toBeGreaterThan(0.5);
+		expect(rms / sine, label).toBeLessThan(2);
+	}
+	expect(JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.selectedWaveform).toBe('glass');
+
+	// Pulse: high for Width % of each cycle, and centred on 0 (its DC is cancelled)
+	await tile('PULSE').click();
+	const width = page.getByRole('slider', { name: 'Pulse Width', exact: true });
+	await expect(width).toHaveAttribute('aria-valuenow', '50');
+	let s = await level();
+	expect(s.above).toBeGreaterThan(0.45);
+	expect(s.above).toBeLessThan(0.55);
+	await width.focus();
+	await page.keyboard.press('Home'); // 5%
+	for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowUp');
+	await expect(width).toHaveAttribute('aria-valuenow', '25');
+	s = await level();
+	expect(s.above).toBeGreaterThan(0.2);
+	expect(s.above).toBeLessThan(0.3);
+	// Without the DC cancelling, a 25% pulse would sit about 0.58 × its RMS below 0. The WAV
+	// also has a small offset from the drive stage whatever the wave (planned to be fixed with
+	// the master limiter), so compare with the sine's and allow a little
+	expect(Math.abs(s.mean - sineStats.mean)).toBeLessThan(s.rms * 0.15);
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(saved.synth.pulse).toEqual({ width: 25 });
+
+	// The LFO can move the width
+	await page.locator('button[title="Modulate the pulse wave\'s width"]').click();
+	expect(JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.lfo.target).toBe('pwm');
 });
 
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {
