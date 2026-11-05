@@ -238,9 +238,10 @@
 					</div>
 				</div>
 
-				<!-- Envelope + Filter + Pitch Env: the note's three envelopes, side by side -->
-				<div class="module sound" :class="mockLayout">
-					<div class="split-three">
+				<!-- Envelope and Pitch stacked on the left, Filter (2×2 knobs: Cutoff, Resonance, then its
+					 envelope's Env Amt and Decay) on the right -->
+				<div class="module sound">
+					<div class="sound-grid">
 						<SectionWrap id="envelope" title="Envelope" v-model="collapsibleState['envelope']">
 							<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 								v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
@@ -1222,6 +1223,7 @@ onMounted(() => {
 			filterEnabled: () => filterEnabled.value,
 			cutoff: () => filterCutoff.value,
 			resonance: () => filterResonance.value,
+			envAmount: () => filterEnvAmount.value,
 			lfo: () => ({ enabled: lfoEnabled.value, target: lfoTarget.value, depth: lfoDepth.value }),
 		},
 	});
@@ -1602,7 +1604,6 @@ const filterCutoff = ref(5000);
 const filterResonance = ref(0.5);
 // Filter envelope: the cutoff starts filterEnvAmount octaves away and returns within
 // filterEnvDecayMs (0 octaves: off)
-const mockLayout = 'layout-' + (new URLSearchParams(location.search).get('layout') || 'B'); // MOCK
 const filterEnvAmount = ref(0);
 const filterEnvDecayMs = ref(200);
 
@@ -1852,6 +1853,8 @@ const exportState = computed<StepSequencerState>(() => {
 				enabled: filterEnabled.value,
 				cutoff: filterCutoff.value,
 				resonance: filterResonance.value,
+				envAmount: filterEnvAmount.value,
+				envDecayMs: filterEnvDecayMs.value,
 			},
 			noise: {
 				enabled: noiseEnabled.value,
@@ -1973,7 +1976,7 @@ const projectState: ProjectState = {
 	transport: { volume, tempo, swing },
 	synth: {
 		envelope: { enabled: envelopeEnabled, attackMs: ampEnvAttackMs, decayMs: ampEnvDecayMs },
-		filter: { enabled: filterEnabled, cutoff: filterCutoff, resonance: filterResonance },
+		filter: { enabled: filterEnabled, cutoff: filterCutoff, resonance: filterResonance, envAmount: filterEnvAmount, envDecayMs: filterEnvDecayMs },
 		noise: {
 			enabled: noiseEnabled,
 			color: noiseColor,
@@ -3389,10 +3392,31 @@ const { canUndo, canRedo, undo, redo } = useUndoHistory({
 	}
 }
 
-.module.sound .split-three {
+.module.sound .sound-grid {
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-template-areas: "env filter" "pitch filter";
 	gap: 12px;
+}
+
+.module.sound .sound-grid> :nth-child(1) {
+	grid-area: env;
+}
+
+.module.sound .sound-grid> :nth-child(2) {
+	grid-area: filter;
+}
+
+.module.sound .sound-grid> :nth-child(3) {
+	grid-area: pitch;
+}
+
+/* Filter: Cutoff and Resonance, then Env Amt and Decay below them */
+.module.sound :deep(.filter-card .pt-knob-row) {
+	display: grid;
+	grid-template-columns: repeat(2, 40px);
+	row-gap: 14px;
+	column-gap: var(--pt-gap, 10px);
 }
 
 /* Narrow cards: the knobs take the card's whole width (pt-subblock is half width from 992px) */
@@ -3459,16 +3483,9 @@ const { canUndo, canRedo, undo, redo } = useUndoHistory({
 		box-shadow: none;
 	}
 
-	.module.sound .split-three {
+	.module.sound .sound-grid {
 		gap: 8px;
 	}
 }
 
-/* MOCK layouts */
-.module.sound .split-three > :nth-child(1) { grid-area: env; }
-.module.sound .split-three > :nth-child(2) { grid-area: filter; }
-.module.sound .split-three > :nth-child(3) { grid-area: pitch; }
-.module.sound.layout-A .split-three { grid-template-columns: 1fr 1fr; grid-template-areas: "env pitch" "filter filter"; }
-.module.sound.layout-B .split-three { grid-template-columns: 1fr 1fr; grid-template-areas: "env filter" "pitch filter"; }
-.module.sound.layout-B :deep(.filter-card .pt-knob-row) { display: grid; grid-template-columns: repeat(2, 40px); row-gap: 14px; column-gap: var(--pt-gap, 10px); }
 </style>

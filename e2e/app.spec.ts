@@ -100,14 +100,25 @@ function instrument() {
 		if (this instanceof AudioContext) detunes.add(osc.detune);
 		return osc;
 	};
+	// ...and on each live note's filter detune (the filter envelope's sweep)
+	w.__filterDetuneCalls = [];
+	const filterDetunes = new WeakSet();
+	const origCreateBiquad = BaseAudioContext.prototype.createBiquadFilter;
+	BaseAudioContext.prototype.createBiquadFilter = function (this: BaseAudioContext) {
+		const f = origCreateBiquad.call(this);
+		if (this instanceof AudioContext) filterDetunes.add(f.detune);
+		return f;
+	};
 	const origSetValue = AudioParam.prototype.setValueAtTime;
 	AudioParam.prototype.setValueAtTime = function (this: AudioParam, v: number, t: number) {
 		if (detunes.has(this)) w.__detuneCalls.push(['set', v, t]);
+		if (filterDetunes.has(this)) w.__filterDetuneCalls.push(['set', v, t]);
 		return origSetValue.call(this, v, t);
 	};
 	const origSetTarget = AudioParam.prototype.setTargetAtTime;
 	AudioParam.prototype.setTargetAtTime = function (this: AudioParam, v: number, t: number, tau: number) {
 		if (detunes.has(this)) w.__detuneCalls.push(['target', v, t, tau]);
+		if (filterDetunes.has(this)) w.__filterDetuneCalls.push(['target', v, t, tau]);
 		return origSetTarget.call(this, v, t, tau);
 	};
 	// Counts JSON.stringify calls that turn a whole project snapshot into text (anything that
@@ -800,8 +811,8 @@ test('the pitch envelope sweeps each note down from Amount, and short decays are
 	await expect(amount).toHaveAttribute('aria-valuenow', '-12');
 });
 
-test('Envelope, Filter and Pitch fit on one row, even where the cards are narrowest', async ({ page }) => {
-	// 1280 px wide and a phone leave each card about 90 px inside: two knobs and a short title
+test('Envelope and Pitch sit beside a 2×2 Filter, even where the cards are narrowest', async ({ page }) => {
+	// 1280 px wide and a phone leave each card little room: two knobs across and a short title
 	for (const width of [1280, 390]) {
 		await page.setViewportSize({ width, height: 900 });
 		const cards = await page.locator('.module.sound .pt-card').evaluateAll((els) => els.map((el) => {
@@ -812,12 +823,66 @@ test('Envelope, Filter and Pitch fit on one row, even where the cards are narrow
 				const b = c.getBoundingClientRect();
 				return b.left >= box.left - 0.5 && b.right <= box.right + 0.5;
 			});
-			return { top: Math.round(box.top), oneLine: title.getBoundingClientRect().height < lineHeight * 1.5, inside };
+			const knobs = [...el.querySelectorAll('.knob-wrapper')].map((k) => k.getBoundingClientRect());
+			return {
+				title: title.textContent!.trim(),
+				left: Math.round(box.left), top: Math.round(box.top), bottom: Math.round(box.bottom),
+				oneLine: title.getBoundingClientRect().height < lineHeight * 1.5, inside,
+				rows: new Set(knobs.map((k) => Math.round(k.top))).size,
+			};
 		}));
-		expect(cards.length, `${width} px`).toBe(3);
-		expect(new Set(cards.map((c) => c.top)).size, `${width} px: one row`).toBe(1);
+		const [env, filter, pitch] = cards;
+		expect(cards.map((c) => c.title), `${width} px`).toEqual(['Envelope', 'Filter', 'Pitch']);
+		expect(pitch.left, `${width} px: Pitch under Envelope`).toBe(env.left);
+		expect(pitch.top).toBeGreaterThan(env.bottom);
+		expect(filter.left, `${width} px: Filter beside them`).toBeGreaterThan(env.left);
+		expect(filter.top).toBe(env.top);
+		expect(Math.abs(filter.bottom - pitch.bottom)).toBeLessThanOrEqual(1); // one block
+		expect(filter.rows, `${width} px: Filter is 2×2`).toBe(2);
 		for (const c of cards) expect(c, `${width} px`).toMatchObject({ oneLine: true, inside: true });
 	}
+});
+
+test('the filter envelope sweeps each note\'s cutoff, is saved, and shows on the filter view', async ({ page }) => {
+	const card = page.locator('.module.sound .pt-card').filter({ has: page.locator('#filter-panel') });
+	const amount = card.getByRole('slider', { name: 'Env Amt', exact: true });
+	const decay = card.getByRole('slider', { name: 'Decay', exact: true });
+	const filterCanvas = page.locator('.nac-screen__lcd canvas').nth(4);
+	const calls = () => page.evaluate(() => (window as any).__filterDetuneCalls as any[]);
+	await expect(amount).toHaveAttribute('aria-valuenow', '0'); // off by default
+	await expect(decay).toHaveAttribute('aria-valuenow', '200');
+
+	// Off: each note's filter gets no sweep
+	await turnOnPads(page, [0]);
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect.poll(async () => (await calls()).length).toBeGreaterThan(0);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	expect((await calls()).every((c) => c[0] === 'set' && c[1] === 0)).toBe(true);
+
+	// +2 octaves (bipolar knob, 0.1 octave per step); turning it shows the filter view
+	await amount.focus();
+	for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowUp');
+	await expect(amount).toHaveAttribute('aria-valuetext', 'cutoff starts 2.0 octaves higher and closes');
+	await expect(filterCanvas).toBeVisible();
+	await decay.focus();
+	await page.keyboard.press('Home'); // 5 ms
+	await expect(filterCanvas).toBeVisible();
+	for (let i = 0; i < 50; i++) await page.keyboard.press('ArrowUp'); // log knob: about half a turn
+	const ms = Number(await decay.getAttribute('aria-valuenow'));
+	await page.keyboard.press('Tab');
+	await expect(filterCanvas).toBeHidden();
+
+	await page.evaluate(() => { (window as any).__filterDetuneCalls = []; });
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect.poll(async () => (await calls()).length).toBeGreaterThanOrEqual(2);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	const [start, sweep] = await calls();
+	expect(start.slice(0, 2)).toEqual(['set', 2400]); // 2 octaves up
+	expect(sweep.slice(0, 2)).toEqual(['target', 0]); // back to the cutoff
+	expect(sweep[3]).toBeCloseTo(ms / 1000 / 4, 6); // time constant: Decay / 4
+
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.filter;
+	expect(saved).toMatchObject({ envAmount: 2, envDecayMs: ms });
 });
 
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {
