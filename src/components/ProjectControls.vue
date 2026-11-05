@@ -338,6 +338,7 @@ const dotClass = computed(() => (dirty.value ? 'unsaved' : 'saved'));
 
 // While the dot shows unsaved changes, ask before the page is closed or reloaded
 function onBeforeUnload(e: BeforeUnloadEvent) {
+    store.flushPending(); // a change made just now counts
     if (!dirty.value) return;
     e.preventDefault();
     e.returnValue = ''; // older browsers only show the prompt when this is set
@@ -348,6 +349,7 @@ onUnmounted(() => window.removeEventListener('beforeunload', onBeforeUnload));
 
 async function saveNow() {
     if (!store.loaded) return;
+    store.flushPending(); // include a change that hasn't reached the store yet
     if (!dirty.value && status.value !== 'saving') return;
 
     let nameToUse = (store.name || '').trim();
@@ -396,6 +398,7 @@ onMounted(() => {
 });
 
 function exportJson() {
+    store.flushPending();
     const file = buildExportFile({ projectId: store.projectId, name: store.name, data: store.data });
     downloadJson(file, `${store.name || 'project'}.json`);
 }

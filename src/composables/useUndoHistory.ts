@@ -74,8 +74,9 @@ export function useUndoHistory(opts: {
 		}, SETTLE_MS);
 	}
 
-	// ProjectSync copies every settings change into project.data (a new object each time), so
-	// a shallow watch sees each change without building another snapshot
+	// ProjectSync copies every settings change into project.data (a new object each time, once
+	// the settings have been still for its SYNC_MS), so a shallow watch sees each change without
+	// building another snapshot
 	watch(() => project.data, () => {
 		if (!applying) scheduleRecord();
 	});
@@ -86,8 +87,10 @@ export function useUndoHistory(opts: {
 
 	// Record what's pending now, so undo goes back past the latest change even if it hasn't
 	// settled yet
+	// (a change can also be too recent to have reached project.data: ProjectSync waits for the
+	// settings to settle, so compare the settings themselves)
 	function flush() {
-		if (changePending || startFresh) record();
+		if (changePending || startFresh || !history.isCurrent(undoable())) record();
 	}
 
 	async function step(dir: 'undo' | 'redo') {

@@ -2407,6 +2407,7 @@ function resetUiToFactoryDefaults() {
 }
 
 const { project } = useProjectSync({
+	settings: projectState,
 	buildSnapshot: () => buildSnapshot(projectState),
 	applySnapshot: (s) => applySnapshot(projectState, s),
 	resetUiToFactoryDefaults,

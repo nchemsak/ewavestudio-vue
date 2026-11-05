@@ -90,6 +90,15 @@ function instrument() {
 		if (args.length === 0) w.__paramSources.delete(this);
 		return (origDisconnect as any).apply(this, args);
 	};
+	// Counts JSON.stringify calls that turn a whole project snapshot into text (anything that
+	// long), to check that change tracking doesn't do it on every change
+	w.__bigJson = 0;
+	const origStringify = JSON.stringify;
+	JSON.stringify = function (...args: any[]) {
+		const out = (origStringify as any).apply(JSON, args);
+		if (typeof out === 'string' && out.length > 2000) w.__bigJson++;
+		return out;
+	} as typeof JSON.stringify;
 	w.__rafPaused = false;
 	const queued: FrameRequestCallback[] = [];
 	const origRaf = window.requestAnimationFrame.bind(window);
@@ -594,6 +603,47 @@ test('the synced delay time follows the TIME knob, the tempo and a loaded projec
 	expect((await projectData()).data.fx.delay).toMatchObject({ division: '1/8', time: 0.25 });
 	// Upgrading it on opening isn't an unsaved change
 	await expect(page.locator('.pc-dot')).toHaveClass(/\bsaved\b/);
+});
+
+test('a burst of changes is copied into the project once, and Save or Export right after includes it', async ({ page }) => {
+	const projectData = async () =>
+		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
+	await page.waitForTimeout(1000); // let the page's start-up settle
+	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+
+	// 30 tempo steps, 10 ms apart, like a knob drag: the snapshot used to be built and turned
+	// into JSON several times for each one (about 100 times in all)
+	const before = await page.evaluate(() => (window as any).__bigJson as number);
+	await page.evaluate(async () => {
+		const knob = document.querySelector('[role="slider"][aria-label="Tempo"]') as HTMLElement;
+		for (let i = 0; i < 30; i++) {
+			knob.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+			await new Promise((r) => setTimeout(r, 10));
+		}
+	});
+	await expect(tempo).toHaveAttribute('aria-valuenow', '110');
+	await page.waitForTimeout(1000); // until the change is in the project and the undo history
+	const during = (await page.evaluate(() => (window as any).__bigJson as number)) - before;
+	expect(during).toBeLessThan(10);
+	expect((await projectData()).transport.tempo).toBe(110);
+
+	// Export right after a change, before it has settled, includes it
+	await tempo.focus();
+	await page.keyboard.press('ArrowUp');
+	expect((await projectData()).transport.tempo).toBe(111);
+
+	// So does Save
+	const name = page.getByRole('textbox', { name: 'Project name' });
+	await name.fill('Burst');
+	await name.press('Enter');
+	await page.waitForTimeout(300);
+	await tempo.focus();
+	await page.keyboard.press('ArrowUp');
+	await page.keyboard.press('Control+s');
+	await expect(page.locator('.pc-dot')).toHaveClass(/\bsaved\b/);
+	await page.reload();
+	await expect(tempo).toHaveAttribute('aria-valuenow', '112');
 });
 
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {

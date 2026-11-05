@@ -22,6 +22,10 @@ type ProjectSnapshot = {
     name?: string; // legacy top-level name
 };
 
+// useProjectSync copies settings changes into `data` once they settle; this hook copies a
+// pending change at once. Kept outside the state: it's a function, not project data.
+let flushHook: (() => void) | null = null;
+
 export const useProjectStore = defineStore('project', {
     state: () => ({
         projectId: '' as string,
@@ -65,8 +69,20 @@ export const useProjectStore = defineStore('project', {
             return true;
         },
 
+        // Set by useProjectSync (null to remove)
+        setFlushHook(fn: (() => void) | null) {
+            flushHook = fn;
+        },
+
+        // Make `data` include a settings change that hasn't settled yet. Call before reading
+        // `data` for anything the user asked for (save, export, the unsaved-changes check).
+        flushPending() {
+            flushHook?.();
+        },
+
         async save(): Promise<void> {
             if (!this.projectId) return;
+            this.flushPending();
 
             const record: ProjectSnapshot = {
                 projectId: this.projectId,
