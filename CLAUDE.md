@@ -456,7 +456,13 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Large files are split into sections with `// X START` / `// X END` banner comments. Keep them.
 - Styling: Bootstrap 5 + custom SCSS in `src/assets/styles/`. There are three themes, selected
   by a `theme-*` class on `<html>`. Keep the current look and feel unless a change is
-  requested.
+  requested. The Light theme's button is commented out in `ThemeToggle.vue`, so only a choice
+  saved before that applies it; it still has rough spots (for example FM's Lock button and the
+  effect pedals' names are hard to read). Theme colors are CSS variables set per theme in
+  `_themes.scss`; use them rather than a fixed color that only suits the dark themes. For
+  example `--pt-inset` is the background of an inset panel inside a card (Pattern Tools'
+  sections, the Presets box): dark, or a light tint in the light theme. A browser test checks
+  that those panels' captions are readable in all three themes.
 - Only the Bootstrap parts the app uses are built (`_bootstrap-custom.scss`): root variables and
   reboot, the grid's `.container`, `.row` and `.col-12`, `.visually-hidden`, and the utilities
   `.d-flex`, `.position-relative`, `.align-items-center`, `.gap-2` and `.text-center`. Any other
@@ -538,19 +544,10 @@ that later features depend on, then sound features in the spirit of the design i
 this file), then presets that can use them (the first six presets came in PR 30; more can come
 with new sound features). Everything drum-related waits until the maintainer brings the drum
 lanes back.
-1. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
-   key-to-note map. Space, 1–4 and the Ctrl/Cmd shortcuts must keep working (see "Keyboard
-   shortcuts").
-2. **Master limiter/compressor** (louder output without clipping), together with the **DC
-   offset** fix: the drive shaper's curve has an even number of points (1024), so silence
-   maps to about −0.011 instead of 0. Even with Drive off, that reaches the speakers through
-   the drive wet gain, at about 0.004 with the default settings. It can't be heard, but it
-   shows up in measurements (the browser tests use `__swingOver` to ignore it) and wastes a
-   little headroom. Both change the sound slightly, so they are listen-tested together. The
-   export engine has the same curve and needs the same changes.
-3. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
+
+1. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
    outside, which works since PR 17.
-4. **Stage view for TVs, and an audio output picker.** Casting already works without code
+2. **Stage view for TVs, and an audio output picker.** Casting already works without code
    (Chrome or Edge "Cast tab", AirPlay screen mirroring, Windows Cast, HDMI), picture and
    sound together, but with a noticeable lag when turning knobs. A Cast button of our own
    isn't practical: the web's casting APIs are made for media files, not sound made live in
@@ -559,10 +556,10 @@ lanes back.
    lighting up) designed for a TV, to cast with the browser; and optionally an "Audio output"
    picker (`AudioContext.setSinkId()`, which not every browser supports; check before
    building).
-5. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
-6. **Several patterns (A/B/C/D) chained into a song.**
-7. **32 steps, or per-lane lengths** (the export code's types already allow 32).
-8. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
+3. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
+4. **Several patterns (A/B/C/D) chained into a song.**
+5. **32 steps, or per-lane lengths** (the export code's types already allow 32).
+6. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
    note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
    vary per step. Delay and reverb are shared by every note, so per step they become send
    amounts (how much of the step goes into them), not per-step effect settings, which would
@@ -570,23 +567,32 @@ lanes back.
    UI idea: select a step with its settings dot, then the knobs you turn change that step
    only; locked steps are marked, with a way to clear them. Build on velocity routing
    (PR 28).
-9. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
-    in a short delay loop that loses brightness each time round; the original paper also has a
-    drum variant), metallic (several square waves at odd ratios, as the 808 makes cymbals and
-    cowbell) and struck (a click ringing tuned resonant filters: wood block, marimba, toms,
-    bells). Karplus–Strong needs an AudioWorklet: a `DelayNode` in a feedback loop can't be
-    shorter than one render quantum (128 samples, about 3 ms), which caps the pitch around the
-    F above middle C. AudioWorklets also run in the `OfflineAudioContext` used for WAV export.
-10. **Export options:** N bars or loops, stems, MIDI file.
-11. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
-12. **Install as an app (PWA)** that works offline.
-13. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-14. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
+7. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
+   in a short delay loop that loses brightness each time round; the original paper also has a
+   drum variant), metallic (several square waves at odd ratios, as the 808 makes cymbals and
+   cowbell) and struck (a click ringing tuned resonant filters: wood block, marimba, toms,
+   bells). Karplus–Strong needs an AudioWorklet: a `DelayNode` in a feedback loop can't be
+   shorter than one render quantum (128 samples, about 3 ms), which caps the pitch around the
+   F above middle C. AudioWorklets also run in the `OfflineAudioContext` used for WAV export.
+8. **Export options:** N bars or loops, stems, MIDI file.
+9. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
+10. **Install as an app (PWA)** that works offline.
+11. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+12. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
     purpose so far.
-15. **User-saved presets, and more built-in ones.** Left out of PR 30 on purpose. A user
+13. **User-saved presets, and more built-in ones.** Left out of PR 30 on purpose. A user
     preset could be the sound part of a snapshot (`soundKey()`'s parts) kept in IndexedDB
     next to the projects; more built-in ones as new sound features arrive (toms, hats, organ
     and hollow sounds).
+
+Dropped after PR 30 (the maintainer and Claude agreed they add little): playing the synth
+from the computer keyboard (the synth is played by its sequencer, as a DFAM is, and a MIDI
+keyboard already works), and a master limiter/compressor together with the drive's DC offset
+fix. The DC offset stays: the drive shaper's curve has an even number of points (1024), so
+silence maps to about −0.011 instead of 0, which reaches the speakers through the drive wet
+gain at about 0.004 with the default settings, in the live and export engines. It can't be
+heard, and the presets peak well below clipping (0.2–0.5), but measurements see it: the
+browser tests use `__swingOver` to ignore it.
 
 On hold until the drum lanes come back (ask the maintainer before starting any of them):
 - Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan.
@@ -603,7 +609,7 @@ On hold until the drum lanes come back (ask the maintainer before starting any o
   phones are remote controls that each show their own part, so network lag only delays when a
   change takes effect, never the beat. Phones that each made the sound would drift apart and
   flam. Also to decide: who can join (a room code), and what undo means with several people.
-  Share links (item 3) build part of it (the project packed into a compact message).
+  Share links (item 1) build part of it (the project packed into a compact message).
 
 Done:
 
@@ -637,6 +643,7 @@ Done:
 | 28 | Velocity routing: a step's velocity (or a MIDI note's) also shapes Decay, Cutoff, the pitch envelope and the noise mix, each by a bipolar amount in the Step Sequencer's "Vel →" panel; full-velocity steps play as set; in the live and export engines (`velocity.ts`). |
 | 29 | LFO visualizer: while the LFO plays, an amber dot on the Cutoff knob (over an arc for the swing), the Pulse tile's bar widening and narrowing (over a ghost of the widest), or a bar sliding on each lit pad (pitch) shows what it's doing, without turning any knob; ranges only with reduced motion. |
 | 30 | Built-in presets: six buttons (Kick, Snare, Metal, Pluck, Acid, Bell) in the transport card, between Swing and the logo (a row of their own on narrower screens). A preset sets the sound from the factory sound up (synth, effects, the main wave and every pad's), never the pattern, tempo or key; one undo step; its button is lit while the sound matches. `src/lib/presets/`. |
+| 31 | The Pattern Tools section titles (and "Active Pads Only") are readable in the light theme: inset panels take their background from a theme variable, `--pt-inset`, instead of a fixed dark color. A browser test measures the captions' contrast in all three themes. The plan's next two items (computer keyboard, limiter and DC offset fix) dropped. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

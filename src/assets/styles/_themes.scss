@@ -105,6 +105,9 @@ $base: map.get($themes, synthwave);
     --pt-text-strong: #fff;
 
     --pt-hairline: rgba(255, 255, 255, 0.06);
+    /* An inset panel inside a card (Pattern Tools' sections, the Presets box): dark here, a
+       light tint in the light theme, where a dark one would hide its muted caption */
+    --pt-inset: rgba(15, 18, 26, 0.70);
     --pt-focus-ring: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / 0.35);
 
     --cc-chevron: #{map.get($base, chevron)};
@@ -129,6 +132,7 @@ $base: map.get($themes, synthwave);
     --pt-header-fg: #1f2328;
     --pt-text-strong: #1f2328;
     --pt-hairline: rgba(0, 0, 0, 0.12);
+    --pt-inset: rgba(31, 35, 40, 0.07);
 }
 
 @supports (color: color-mix(in oklab, #000, #fff)) {

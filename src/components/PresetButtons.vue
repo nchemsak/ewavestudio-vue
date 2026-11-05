@@ -33,18 +33,14 @@ const emit = defineEmits<{
 	min-width: 0;
 }
 
-/* Pattern Tools' section look: a dark inset panel with a centered title */
+/* Pattern Tools' section look: an inset panel (dark, or a light tint in the light theme)
+   with a centered title */
 .preset-box {
 	width: fit-content;
 	margin: 0 auto;
 	padding: 6px 8px 8px;
 	border-radius: var(--pt-radius);
-	background-color: rgba(15, 18, 26, .70);
-}
-
-/* (Pattern Tools' dark panel would hide the title in the light theme) */
-:global(.theme-light .preset-box) {
-	background-color: rgba(31, 35, 40, .07);
+	background-color: var(--pt-inset);
 }
 
 .preset-box .pt-section-title {
