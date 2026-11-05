@@ -10,7 +10,8 @@ harmonic shapes); amp envelope, pitch envelope (a drum-style sweep), filter with
 envelope, noise, FM,
 unison and LFO; delay, overdrive and reverb; Web MIDI note
 input; a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope
-display; six built-in presets that set the sound (not the pattern); WAV export; projects
+display; six built-in presets that set the sound (not the pattern), and a dice for a random
+sound; WAV export; projects
 saved in IndexedDB with JSON import and export; and undo/redo.
 Earlier versions also had sample drum lanes (kick, snare, hihat and user-loaded samples).
 Their UI is commented out and they are no longer part of the app, but some of their code
@@ -163,7 +164,8 @@ src/lib/project/snapshot.ts  Settings ↔ project snapshot, and factory defaults
 src/lib/project/history.ts   Undo/redo history of snapshots (pure; see "Undo / redo")
 src/lib/project/testState.ts  Settings for unit tests (not used by the app)
 src/lib/presets/         Built-in presets: library.ts (the sounds), presets.ts (applying one,
-                         and matching the sound to one; see "Presets")
+                         and matching the sound to one), random.ts (the dice's random sound);
+                         see "Presets"
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
@@ -384,7 +386,19 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   Turning a sound knob unlights it; undo back to it lights it again; a tempo change doesn't
   unlight it. A preset not clicked on this page has no sound noted, so a project that happens
   to match it lights nothing.
-- Analytics: `preset_select` with the preset's id.
+- The dice in the Presets box's top-right corner (`Random sound`, like the wave tiles' dice
+  badges) rolls a new sound: `randomPreset()` in `src/lib/presets/random.ts` builds a preset
+  from random settings, applied like any other (from the factory sound up, one undo step, the
+  pattern untouched, one wave on every pad). Nothing lights up after a roll. It's a recipe,
+  not every knob at random (that mostly gives noise or silence): always a short amp envelope
+  and a filter; some of the time a pitch sweep, a filter envelope, noise, FM, unison, the LFO,
+  velocity routing and each effect. Its limits keep rolls usable: resonance up to 10, drive
+  mix up to 0.35, and an opening filter envelope starts at 150 Hz or above and opens within
+  the note (one roll without that limit was nearly silent). Values sit on the knobs' steps.
+  Unit tests check 500 seeded rolls (ranges, steps, variety); a browser test exports rolls and
+  checks none is silent or clipping. 200 rolls of pads 1, 5, 9, 13 peaked between 0.10 and
+  0.65 (median 0.26, the same as the factory sound).
+- Analytics: `preset_select` with the preset's id; `preset_random` for a roll of the dice.
 
 ### Saving / projects
 - The settings stay refs in `DrumSequencer.vue`. It groups every saved one into `projectState`
@@ -644,6 +658,7 @@ Done:
 | 29 | LFO visualizer: while the LFO plays, an amber dot on the Cutoff knob (over an arc for the swing), the Pulse tile's bar widening and narrowing (over a ghost of the widest), or a bar sliding on each lit pad (pitch) shows what it's doing, without turning any knob; ranges only with reduced motion. |
 | 30 | Built-in presets: six buttons (Kick, Snare, Metal, Pluck, Acid, Bell) in the transport card, between Swing and the logo (a row of their own on narrower screens). A preset sets the sound from the factory sound up (synth, effects, the main wave and every pad's), never the pattern, tempo or key; one undo step; its button is lit while the sound matches. `src/lib/presets/`. |
 | 31 | The Pattern Tools section titles (and "Active Pads Only") are readable in the light theme: inset panels take their background from a theme variable, `--pt-inset`, instead of a fixed dark color. A browser test measures the captions' contrast in all three themes. The plan's next two items (computer keyboard, limiter and DC offset fix) dropped. |
+| 32 | A dice in the Presets box rolls a random sound: a recipe for a percussion voice (`src/lib/presets/random.ts`) applied like a preset, from the factory sound up; one undo step; never silent or clipping (500 seeded rolls checked in unit tests, rolls exported in a browser test). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

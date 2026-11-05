@@ -57,7 +57,7 @@
 						<!-- Presets: ready-made sounds (src/lib/presets/). Beside the knobs from 1280 px,
 							 else on a row of their own below -->
 						<PresetButtons class="transport-presets" :presets="PRESETS" :active="activePresetId"
-							@choose="choosePreset" />
+							@choose="choosePreset" @random="rollRandomSound" />
 
 						<!-- Right cluster: play + logo (+ MIDI fallback) -->
 						<div class="transport-right">
@@ -515,6 +515,7 @@ import { useLfoVisual } from '../composables/useLfoVisual';
 import PresetButtons from './PresetButtons.vue';
 import { PRESETS } from '../lib/presets/library';
 import { applyPreset, soundKey } from '../lib/presets/presets';
+import { randomPreset } from '../lib/presets/random';
 import {
 	lfoCutoffAt, lfoCutoffSwing, lfoPulseWidthAt, lfoPulseWidthRange, lfoBendAt, lfoBendRange, type LfoView,
 } from '../lib/lfoVisual';
@@ -2597,6 +2598,13 @@ async function choosePreset(id: string) {
 	project.flushPending();
 	presetKeys[id] = soundKey(project.data);
 	if (choosingPreset.value === id) choosingPreset.value = null;
+}
+
+// The dice: a new sound from random settings (src/lib/presets/random.ts), applied like a
+// preset. Nothing lights up; undo goes back to the sound before.
+function rollRandomSound() {
+	applyPreset(projectState, randomPreset());
+	trackEvent('preset_random');
 }
 
 // PRESETS END
