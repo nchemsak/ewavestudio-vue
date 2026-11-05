@@ -105,7 +105,16 @@
 						<span v-if="activeKnob === `vol-${synthInstrument.name}`" class="custom-tooltip">
 							{{ Math.round(synthInstrument.channelVolume * 100) }}%
 						</span>
+
+						<!-- Velocity routing: what a step's velocity does besides its loudness -->
+						<button type="button" class="vel-btn" :class="{ on: velRoutingOn }" :aria-expanded="velOpen"
+							:title="velRoutingOn ? 'Velocity routing is on' : 'Let velocity shape decay, cutoff, pitch and noise'"
+							@click.stop="velOpen = !velOpen">Vel →</button>
+						<VelocityRouting v-if="velOpen" v-model:decay="velocityRouting.decay.value"
+							v-model:cutoff="velocityRouting.cutoff.value" v-model:pitchEnv="velocityRouting.pitchEnv.value"
+							v-model:noise="velocityRouting.noise.value" @close="velOpen = false" />
 					</div>
+					<div v-if="velOpen" class="mm-overlay" @click="velOpen = false"></div>
 
 					<div class="pt-header-tools step-menu-anchor">
 						<button class="pt-info-icon" aria-label="Advanced options"
@@ -464,6 +473,8 @@ import PatternTools from './PatternTools.vue';
 import SynthStepGrid from './SynthStepGrid.vue'
 import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
+import VelocityRouting from './VelocityRouting.vue';
+import { velocityRoutingActive } from '../audio/velocity';
 import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
 import MelodyMaker from './MelodyMaker.vue';
 import MidiToolbar from './MidiToolbar.vue';
@@ -596,12 +607,14 @@ const lfoBipolar = ref(false)
 //Effects Panel Advanced Menu BEGIN
 
 const fxAdvanced = reactive({ open: false, x: 0, y: 0 });
+const velOpen = ref(false); // the Velocity routing panel (Step Sequencer header)
 const fxAnchor = ref<HTMLElement | null>(null);
 
 function onFxEsc(e: KeyboardEvent) {
 	if (e.key === 'Escape') {
 		if (fxAdvanced.open) fxAdvanced.open = false;
 		if (stepsAdvanced.open) stepsAdvanced.open = false;
+		if (velOpen.value) velOpen.value = false;
 	}
 }
 
@@ -1630,6 +1643,18 @@ const pitchMode = ref<'up' | 'down' | 'random'>('up');
 // The pulse wave's width, % (src/audio/waves.ts); 50 is a square
 const pulseWidth = ref(PULSE_WIDTH_DEFAULT);
 const pulseWidthTip = ref(false);
+// Velocity routing amounts, % −100..100 (src/audio/velocity.ts; 0 = off): what a step's
+// velocity does besides its loudness
+const velocityRouting = {
+	decay: ref(0),
+	cutoff: ref(0),
+	pitchEnv: ref(0),
+	noise: ref(0),
+};
+const velRoutingOn = computed(() => velocityRoutingActive({
+	decay: velocityRouting.decay.value, cutoff: velocityRouting.cutoff.value,
+	pitchEnv: velocityRouting.pitchEnv.value, noise: velocityRouting.noise.value,
+}));
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1919,6 +1944,12 @@ const exportState = computed<StepSequencerState>(() => {
 				mode: pitchMode.value,
 			},
 			pulse: { width: pulseWidth.value },
+			velocity: {
+				decay: velocityRouting.decay.value,
+				cutoff: velocityRouting.cutoff.value,
+				pitchEnv: velocityRouting.pitchEnv.value,
+				noise: velocityRouting.noise.value,
+			},
 		},
 
 		fx: {
@@ -2031,6 +2062,7 @@ const projectState: ProjectState = {
 		fm: { enabled: fmEnabled, modFreq: fmModFreq, index: fmIndex, ratio: fmRatio },
 		pitchEnv: { enabled: pitchEnvEnabled, semitones: pitchEnvSemitones, decayMs: pitchEnvDecayMs, mode: pitchMode },
 		pulse: { width: pulseWidth },
+		velocity: velocityRouting,
 		tuning: { selectedKeyRoot, globalOctaveOffset, currentDefaultHz },
 	},
 	fx: {
@@ -2083,6 +2115,7 @@ const {
 	fm: projectState.synth.fm,
 	pitchEnv: projectState.synth.pitchEnv,
 	pulse: projectState.synth.pulse,
+	velocity: projectState.synth.velocity,
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
 	reverb: projectState.fx.reverb,
@@ -2119,6 +2152,7 @@ const midi = useMidiInput({
 			startLfoIfNeeded();
 			playSynthNote(freq, amp, decayTime, audioCtx.currentTime + 0.003, wf, {
 				addNoise: true,
+				vel: velocity, // the key's velocity also goes through velocity routing
 			});
 		};
 	},
@@ -3171,6 +3205,37 @@ const { canUndo, canRedo, undo, redo } = useUndoHistory({
 	position: fixed;
 	inset: 0;
 	z-index: 2000;
+}
+
+/* Step Sequencer header: the Velocity routing button, and the panel opens under the header */
+.step-sequencer-subheader .channel-caption {
+	position: relative;
+}
+
+.vel-btn {
+	padding: 2px 8px;
+	border-radius: 999px;
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 10px;
+	line-height: 1.4;
+	letter-spacing: 0.06em;
+	opacity: 0.7;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.vel-btn.on {
+	opacity: 1;
+	border-color: hsl(var(--pt-accent) 80% 62% / 0.9);
+	background: hsl(var(--pt-accent) 80% 60% / 0.18);
+}
+
+.vel-btn:focus-visible {
+	outline: 2px solid hsl(var(--pt-accent) 80% 62%);
+	outline-offset: 2px;
 }
 
 @media (max-width: 768px) {

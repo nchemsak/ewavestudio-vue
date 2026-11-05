@@ -17,6 +17,8 @@ https://www.ephemeralwave.com/studio/ and is never changed.
   square, a pulse with adjustable width (and LFO pulse-width modulation), organ, hollow and glass
 - Amp envelope, a drum-style pitch envelope, a filter with its own envelope, noise, FM, unison
   and an LFO
+- Velocity routing: a step's velocity can also shape its decay, brightness, pitch sweep and
+  noise, so soft steps sound like softer hits
 - Delay (synced to the tempo), overdrive and reverb
 - A random melody and arpeggio maker
 - Oscilloscope, spectrogram, tuner and envelope views

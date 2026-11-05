@@ -492,6 +492,20 @@ function wavStats(bytes: Buffer, fromMs: number, toMs: number) {
 	return { above: above / len, mean: sum / len, rms: Math.sqrt(sq / len) };
 }
 
+// How long the first channel of a 32-bit float WAV file stays above `fraction` of its peak,
+// in ms from the first sound: a note's length, for a single note
+function wavSoundMs(bytes: Buffer, fraction = 0.01) {
+	const channels = bytes.readUInt16LE(22);
+	const rate = bytes.readUInt32LE(24);
+	const n = Math.floor((bytes.length - 44) / 4 / channels);
+	const at = (i: number) => bytes.readFloatLE(44 + i * channels * 4);
+	let peak = 0;
+	for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(at(i)));
+	let first = -1, last = -1;
+	for (let i = 0; i < n; i++) if (Math.abs(at(i)) > peak * fraction) { if (first < 0) first = i; last = i; }
+	return ((last - first) / rate) * 1000;
+}
+
 // Loudest sample in a 32-bit float WAV file
 function wavPeak(bytes: Buffer) {
 	let peak = 0;
@@ -991,6 +1005,46 @@ test('Pulse Width sits on the Pulse tile, and the LFO says when PW has no pulse 
 	// Back to Sine: no pulse again
 	await sine.click();
 	await expect(status).toHaveText('No Pulse');
+});
+
+test('velocity routing: a soft step rings shorter with Vel → Decay, and the setting is saved', async ({ page }) => {
+	// One step, at velocity 25%
+	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	const lane = project.data.instruments.find((i: any) => i.name === 'synth-voice');
+	lane.steps = lane.steps.map((_: boolean, i: number) => i === 0);
+	lane.velocities = lane.velocities.map(() => 0.25);
+	project.projectId = 'vel-routing';
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'vel.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)),
+	});
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(1);
+	const plain = wavSoundMs(await downloadFromFileMenu(page, 'Export WAV'));
+
+	// Vel → Decay at +100%: a 25% step gets a quarter of the Decay
+	const button = page.getByRole('button', { name: 'Vel →' });
+	await expect(button).not.toHaveClass(/\bon\b/);
+	await button.click();
+	const panel = page.getByRole('dialog', { name: 'Velocity routing' });
+	const decay = panel.getByRole('slider', { name: 'Decay', exact: true });
+	await expect(decay).toHaveAttribute('aria-valuetext', 'off');
+	await decay.focus();
+	await page.keyboard.press('End');
+	await expect(decay).toHaveAttribute('aria-valuetext', '100 percent: softer steps shorter');
+	await expect(button).toHaveClass(/\bon\b/);
+	// Escape closes the panel (a click outside it does too)
+	await page.keyboard.press('Escape');
+	await expect(panel).toBeHidden();
+	const routed = wavSoundMs(await downloadFromFileMenu(page, 'Export WAV'));
+	expect(routed).toBeLessThan(plain * 0.5);
+	expect(routed).toBeGreaterThan(plain * 0.1);
+
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.velocity;
+	expect(saved).toEqual({ decay: 100, cutoff: 0, pitchEnv: 0, noise: 0 });
+
+	// Reset sets every amount back to 0
+	await button.click();
+	await panel.getByRole('button', { name: 'Reset' }).click();
+	await expect(button).not.toHaveClass(/\bon\b/);
 });
 
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {
