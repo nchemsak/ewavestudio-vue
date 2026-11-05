@@ -90,6 +90,26 @@ function instrument() {
 		if (args.length === 0) w.__paramSources.delete(this);
 		return (origDisconnect as any).apply(this, args);
 	};
+	// The automation on each live note's oscillator detune (the pitch envelope's sweep):
+	// [kind, value, time, timeConstant?]
+	w.__detuneCalls = [];
+	const detunes = new WeakSet();
+	const origCreateOsc = BaseAudioContext.prototype.createOscillator;
+	BaseAudioContext.prototype.createOscillator = function (this: BaseAudioContext) {
+		const osc = origCreateOsc.call(this);
+		if (this instanceof AudioContext) detunes.add(osc.detune);
+		return osc;
+	};
+	const origSetValue = AudioParam.prototype.setValueAtTime;
+	AudioParam.prototype.setValueAtTime = function (this: AudioParam, v: number, t: number) {
+		if (detunes.has(this)) w.__detuneCalls.push(['set', v, t]);
+		return origSetValue.call(this, v, t);
+	};
+	const origSetTarget = AudioParam.prototype.setTargetAtTime;
+	AudioParam.prototype.setTargetAtTime = function (this: AudioParam, v: number, t: number, tau: number) {
+		if (detunes.has(this)) w.__detuneCalls.push(['target', v, t, tau]);
+		return origSetTarget.call(this, v, t, tau);
+	};
 	// Counts JSON.stringify calls that turn a whole project snapshot into text (anything that
 	// long), to check that change tracking doesn't do it on every change
 	w.__bigJson = 0;
@@ -389,6 +409,22 @@ async function downloadFromFileMenu(page: Page, item: string) {
 	return readFileSync((await download.path())!);
 }
 
+// Zero crossings per millisecond of the first channel of a 32-bit float WAV file, from
+// `fromMs` to `toMs` after the first sound: a rough measure of its pitch over time
+function wavCrossingRate(bytes: Buffer, fromMs: number, toMs: number) {
+	const channels = bytes.readUInt16LE(22);
+	const rate = bytes.readUInt32LE(24);
+	const n = Math.floor((bytes.length - 44) / 4 / channels);
+	const at = (i: number) => bytes.readFloatLE(44 + i * channels * 4);
+	let onset = 0;
+	while (onset < n && Math.abs(at(onset)) < 1e-4) onset++;
+	const a = onset + Math.round((fromMs / 1000) * rate);
+	const b = Math.min(n, onset + Math.round((toMs / 1000) * rate));
+	let crossings = 0;
+	for (let i = a + 1; i < b; i++) if ((at(i - 1) < 0) !== (at(i) < 0)) crossings++;
+	return crossings / (toMs - fromMs);
+}
+
 // Loudest sample in a 32-bit float WAV file
 function wavPeak(bytes: Buffer) {
 	let peak = 0;
@@ -654,6 +690,56 @@ test('a burst of changes is copied into the project once, and Save or Export rig
 	await expect(page.locator('.pc-dot')).toHaveClass(/\bsaved\b/);
 	await page.reload();
 	await expect(tempo).toHaveAttribute('aria-valuenow', '112');
+});
+
+test('the pitch envelope sweeps each note down from Amount, and short decays are easy to reach', async ({ page }) => {
+	const amount = page.locator('.module.pitch').getByRole('slider', { name: 'Amount', exact: true }).last();
+	const decay = page.locator('.module.pitch').getByRole('slider', { name: 'Decay', exact: true });
+	await expect(amount).toHaveAttribute('aria-valuenow', '0'); // off by default
+	const detuneCalls = () => page.evaluate(() => (window as any).__detuneCalls as any[]);
+
+	// Amount 0: the notes' pitch doesn't move
+	await turnOnPads(page, [0]);
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect.poll(async () => (await detuneCalls()).length).toBeGreaterThan(0);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	expect((await detuneCalls()).every((c) => c[0] === 'set' && c[1] === 0)).toBe(true);
+
+	// Amount 24 semitones up
+	await amount.focus();
+	for (let i = 0; i < 24; i++) await page.keyboard.press('ArrowUp');
+	await expect(amount).toHaveAttribute('aria-valuetext', '24 semitones');
+
+	// Decay's knob is logarithmic (5–2000 ms): half a turn is about 100 ms. Arrow keys move
+	// it 1% of the turn (or at least 1 ms), so from the top, 50 presses down are half a turn.
+	await decay.focus();
+	await page.keyboard.press('End');
+	await expect(decay).toHaveAttribute('aria-valuenow', '2000');
+	for (let i = 0; i < 50; i++) await page.keyboard.press('ArrowDown');
+	const half = Number(await decay.getAttribute('aria-valuenow'));
+	expect(half).toBeGreaterThanOrEqual(95);
+	expect(half).toBeLessThanOrEqual(105);
+
+	await page.evaluate(() => { (window as any).__detuneCalls = []; });
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect.poll(async () => (await detuneCalls()).length).toBeGreaterThanOrEqual(2);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	const [start, sweep] = await detuneCalls();
+	// Starts 2400 cents up, then decays back to the note (time constant: Decay / 4)
+	expect(start.slice(0, 2)).toEqual(['set', 2400]);
+	expect(sweep[0]).toBe('target');
+	expect(sweep[1]).toBe(0);
+	expect(sweep[2]).toBe(start[2]);
+	expect(sweep[3]).toBeCloseTo(half / 1000 / 4, 6);
+
+	// The WAV export has the same sweep: the note starts about two octaves up (A 220 Hz → 880
+	// Hz) and is back at its pitch well before 150 ms
+	const wav = await downloadFromFileMenu(page, 'Export WAV');
+	const early = wavCrossingRate(wav, 0, 8);
+	const late = wavCrossingRate(wav, 150, 250);
+	expect(late).toBeGreaterThan(0.4); // 220 Hz: 0.44 crossings per ms
+	expect(late).toBeLessThan(0.5);
+	expect(early).toBeGreaterThan(late * 3);
 });
 
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {

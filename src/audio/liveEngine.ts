@@ -16,7 +16,7 @@
 // mount/unmount hooks.
 
 import { ref, computed, watch, onMounted, onBeforeUnmount, type Ref } from 'vue';
-import { applyPitchEnv } from './pitchEnv';
+import { applyPitchEnv, pitchEnvStartCents } from './pitchEnv';
 import { startFM } from './fm';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
@@ -555,6 +555,14 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const filterEnabled = s.filter.enabled.value;
 		const filterCutoff = s.filter.cutoff.value;
 
+		// Pitch envelope: one starting offset for the whole note, so the voices sweep together
+		const pitchStartCents = pitchEnvStartCents({
+			enabled: s.pitchEnv.enabled.value,
+			semitones: s.pitchEnv.semitones.value,
+			mode: s.pitchEnv.mode.value,
+			decay: pitchEnvDecay.value,
+		});
+
 		for (let i = 0; i < voices; i++) {
 			const osc = audioCtx.createOscillator();
 			const voiceFilter = audioCtx.createBiquadFilter();
@@ -562,12 +570,10 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			const panner = audioCtx.createStereoPanner();
 			osc.type = waveType;
 
-			applyPitchEnv(osc, freq, startTime, {
-				enabled: s.pitchEnv.enabled.value,
-				semitones: s.pitchEnv.semitones.value,
-				mode: s.pitchEnv.mode.value,
-				decay: pitchEnvDecay.value
-			});
+			const dNorm = normIndex(i, voices);
+			const detuneC = dNorm * detuneStep;
+			// Frequency, and detune: the unison detune plus the pitch envelope's sweep
+			applyPitchEnv(osc, freq, startTime, pitchStartCents, pitchEnvDecay.value, detuneC);
 
 			const fmHandle = startFM(audioCtx, osc, freq, startTime, {
 				enabled: s.fm.enabled.value,
@@ -575,10 +581,6 @@ export function useLiveEngine(s: LiveEngineSettings) {
 				index: s.fm.index.value,
 				ratio: s.fm.ratio.value
 			});
-
-			const dNorm = normIndex(i, voices);
-			const detuneC = dNorm * detuneStep;
-			osc.detune.setValueAtTime(detuneC, startTime);
 
 			voiceFilter.type = 'lowpass';
 			if (filterEnabled) {

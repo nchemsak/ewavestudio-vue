@@ -5,8 +5,9 @@
         <template #header-content>
             <div class="pt-header-tools">
                 <InfoPopover title="Pitch Env Explained" aria-label="What is the Pitch Envelope?">
-                    Nudges the note’s frequency at start, then returns to normal pitch.
-        
+                    Starts each note higher (↑), lower (↓) or at a random offset (⇵) by Amount, then
+                    drops fast and settles on the note's pitch within Decay, like an analog drum.
+                    Short decays (10–100 ms) give kicks and toms their punch; longer ones a zap.
                 </InfoPopover>
             </div>
         </template>
@@ -38,7 +39,7 @@
                 </div>
 
                 <div class="position-relative text-center">
-                    <Knob :value-text="`${Math.round(localDecayMs)} ms`" v-model="localDecayMs" label="Decay" size="small" :min="5" :max="2000" :step="1"
+                    <Knob :value-text="`${Math.round(localDecayMs)} ms`" v-model="localDecayMs" label="Decay" size="small" :min="5" :max="2000" :step="1" taper="log"
                         :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'decay'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'decay'" class="custom-tooltip">{{ Math.round(localDecayMs) }} ms</span>
@@ -52,7 +53,7 @@
 import { ref, watch } from 'vue'
 import Knob from '../Knob.vue'
 import KnobGroup from '../KnobGroup.vue'
-import InfoPopover from '../InfoPopover.vue' // ⬅️ add this (omit if globally registered)
+import InfoPopover from '../InfoPopover.vue'
 
 type Mode = 'up' | 'down' | 'random'
 
