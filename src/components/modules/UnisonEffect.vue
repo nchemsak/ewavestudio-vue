@@ -31,9 +31,6 @@
 				</span>
 			</div>
 		</div>
-
-		<!-- Room below the knobs, level with FM's second row (the pulse wave's Width knob) -->
-		<slot name="below" />
 	</KnobGroup>
 </template>
 

@@ -183,10 +183,22 @@
 						<!-- Oscillators -->
 						<div class="gen-panel osc-panel">
 							<div class="wave-row" role="radiogroup" aria-label="Waveforms">
-								<WaveButton v-for="t in WAVE_TILES" :key="t.value" :modelValue="selectedWaveform"
-									:value="t.value" :label="t.label" :palette="t.palette"
-									:randomIncluded="randomPool[t.value]" @toggle-random="onToggleRandom"
-									@update:modelValue="() => applyWaveToAll(t.value)" />
+								<div v-for="t in WAVE_TILES" :key="t.value" class="wave-cell">
+									<WaveButton :modelValue="selectedWaveform" :value="t.value" :label="t.label"
+										:palette="t.palette" :pulseWidth="pulseWidth"
+										:randomIncluded="randomPool[t.value]" @toggle-random="onToggleRandom"
+										@update:modelValue="() => applyWaveToAll(t.value)" />
+									<!-- The pulse's width: a mini knob in the Pulse tile's corner (beside the tile's
+										 button, not inside it, so turning it doesn't pick the wave). The LFO's PW
+										 target moves it too. -->
+									<div v-if="t.value === 'pulse'" class="pulse-width-knob">
+										<Knob v-model="pulseWidth" label="Pulse Width" hideLabel size="mini"
+											:min="PULSE_WIDTH_MIN" :max="PULSE_WIDTH_MAX" :step="1"
+											:value-text="`${pulseWidth}%`" color="#ff7eb3"
+											@knobStart="pulseWidthTip = true" @knobEnd="pulseWidthTip = false" />
+										<span v-if="pulseWidthTip" class="custom-tooltip">Width {{ pulseWidth }}%</span>
+									</div>
+								</div>
 							</div>
 							<div class="pt-btn-group" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
 								<button class="pt-btn pt-btn-sm" :disabled="!randomPoolArray.length"
@@ -254,7 +266,7 @@
 							<button class="pt-info-icon" aria-label="Advanced options"
 								@click="lfoRef?.openAdvanced($event)">⋯</button>
 						</template>
-						<LFOGroup ref="lfoRef" :showToggle="false" v-model="lfoEnabled" v-model:rate="lfoRate"
+						<LFOGroup ref="lfoRef" :showToggle="false" :pulseInUse="pulseInUse" v-model="lfoEnabled" v-model:rate="lfoRate"
 							v-model:depth="lfoDepth" v-model:target="lfoTarget" v-model:waveform="lfoWaveform"
 							v-model:syncEnabled="lfoSync" v-model:division="lfoDivision"
 							v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
@@ -267,19 +279,7 @@
 						<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
 							v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
 						<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
-							v-model:detune="detuneCents" v-model:spread="stereoSpread">
-							<template #below>
-								<!-- The pulse wave's width (Pulse tiles and pads only); the LFO's PW target moves it -->
-								<div class="pulse-width-row">
-									<div class="position-relative text-center">
-										<Knob v-model="pulseWidth" label="Pulse Width" size="small" :min="PULSE_WIDTH_MIN"
-											:max="PULSE_WIDTH_MAX" :step="1" :value-text="`${pulseWidth}%`" color="#ff7eb3"
-											@knobStart="pulseWidthTip = true" @knobEnd="pulseWidthTip = false" />
-										<span v-if="pulseWidthTip" class="custom-tooltip">{{ pulseWidth }}%</span>
-									</div>
-								</div>
-							</template>
-						</UnisonEffect>
+							v-model:detune="detuneCents" v-model:spread="stereoSpread" />
 					</SectionWrap>
 				</div>
 
@@ -1964,6 +1964,15 @@ const lfoRate = ref(5);
 const lfoDepth = ref(0);
 const lfoTarget = ref<'pitch' | 'filter' | 'pwm'>('pitch');
 
+// Does anything play the pulse wave? (the LFO's PW target only affects pulse notes): the main
+// wave (MIDI notes play it), or any step that's on, in an unmuted lane, set to Pulse
+const pulseInUse = computed(() => {
+	if (selectedWaveform.value === 'pulse') return true;
+	const inst = synthInstrument.value as any;
+	if (!inst || inst.muted) return false;
+	return (inst.steps as boolean[]).some((on, i) => on && (inst.waveforms?.[i] ?? selectedWaveform.value) === 'pulse');
+});
+
 const lfoWaveform = ref<'sine' | 'square'>('sine');
 const lfoSync = ref(true);
 const lfoDivision = ref('1/8');
@@ -2995,13 +3004,27 @@ const { canUndo, canRedo, undo, redo } = useUndoHistory({
 	pointer-events: none;
 }
 
-/* Pulse Width: its own row under Unison's knobs, level with FM's Mod Freq / Amount */
-.pulse-width-row {
-	flex-basis: 100%;
+/* One tile per cell; the Pulse cell also holds the width knob in the tile's top-left corner
+   (the dice badge is top-right) */
+.wave-cell {
+	position: relative;
 	width: 100%;
-	display: flex;
-	justify-content: center;
-	margin-top: 22px;
+	max-width: 84px;
+}
+
+.pulse-width-knob {
+	position: absolute;
+	top: 2px;
+	left: 3px;
+	z-index: 3;
+}
+
+.pulse-width-knob .custom-tooltip {
+	white-space: nowrap;
+	/* open to the right: the knob sits at the panel's left edge */
+	left: 0;
+	right: auto;
+	transform: none;
 }
 
 .wave-row {

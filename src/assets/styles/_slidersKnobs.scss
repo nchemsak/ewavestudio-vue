@@ -301,6 +301,11 @@ input[type="range"]::-webkit-slider-thumb {
     width: 40px;
 }
 
+/* A tiny knob for a tile's corner (the Pulse tile's width) */
+.knob-mini {
+    width: 26px;
+}
+
 .knob-dial {
     position: relative;
     width: 100%;

@@ -4,9 +4,11 @@
         <div class="lfo-root lfo-container">
             <!-- One compact row: power tile, Rate and Depth, then the Wave and Target switches -->
             <div class="lfo-row">
-                <button type="button" class="lfo-power" :class="{ on: localEnabled }" :aria-pressed="localEnabled"
-                    title="Toggle LFO" aria-label="LFO on" @click="localEnabled = !localEnabled">
-                    <span class="lfo-status">{{ localEnabled ? 'On' : 'Off' }}</span>
+                <button type="button" class="lfo-power" :class="{ on: localEnabled, idle: pwIdle }"
+                    :aria-pressed="localEnabled" aria-label="LFO on"
+                    :title="pwIdle ? 'The LFO is set to PW, but no pads play Pulse' : 'Toggle LFO'"
+                    @click="localEnabled = !localEnabled">
+                    <span class="lfo-status">{{ pwIdle ? 'No Pulse' : localEnabled ? 'On' : 'Off' }}</span>
                     <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
                         <path :d="wavePath(localWaveform || 'sine')" class="wv" />
                     </svg>
@@ -61,9 +63,10 @@
                                 :aria-checked="currentTarget === 'filter' ? 'true' : 'false'"
                                 @click="updateTarget('filter')" title="Modulate Filter">Filter</button>
                             <button type="button" class="lfo-seg-btn"
-                                :class="{ active: currentTarget === 'pwm' }" :disabled="!localEnabled" role="radio"
+                                :class="{ active: currentTarget === 'pwm', 'no-pulse': !pulseInUse }" :disabled="!localEnabled" role="radio"
                                 :aria-checked="currentTarget === 'pwm' ? 'true' : 'false'" aria-label="Pulse width"
-                                @click="updateTarget('pwm')" title="Modulate the pulse wave's width">PW</button>
+                                @click="updateTarget('pwm')"
+                                :title="pulseInUse ? 'Modulate the pulse wave\'s width' : 'Only affects pads playing Pulse. None do right now.'">PW</button>
                         </div>
                     </div>
                 </div>
@@ -115,6 +118,8 @@ const props = withDefaults(
         showToggle?: boolean;
         retrigger?: boolean;
         bipolar?: boolean;
+        // Does any pad (or the main wave) play Pulse? PW only affects those
+        pulseInUse?: boolean;
     }>(),
     {
         modelValue: false,
@@ -130,7 +135,8 @@ const props = withDefaults(
         divisions: () => ['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32'],
         showToggle: false,
         retrigger: false,
-        bipolar: false
+        bipolar: false,
+        pulseInUse: true
     }
 );
 
@@ -236,6 +242,8 @@ watch(
 watch(localDepth, (v) => emit('update:depth', v));
 
 const currentTarget = computed<Target>(() => props.target);
+// Set to PW with nothing playing Pulse: the LFO changes nothing you can hear, so the tile says so
+const pwIdle = computed(() => localEnabled.value && currentTarget.value === 'pwm' && !props.pulseInUse);
 const updateTarget = (t: Target): void => {
     emit('update:target', t);
     // Reset depth when changing target
@@ -414,6 +422,21 @@ function wavePath(w: Wave | string): string {
     border-color: hsl(var(--pt-accent) 80% 62% / 0.8);
     background: radial-gradient(circle at 0% 0%, hsl(var(--pt-accent) 70% 30% / 0.42), transparent),
         var(--pt-surface-2);
+}
+
+.lfo-power.idle {
+    border-color: rgb(255 193 7 / 0.8);
+}
+
+.lfo-power.idle .lfo-status {
+    color: #ffc107;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+}
+
+/* PW with no pulse pads: still clickable, but looks dimmer (its title says why) */
+.lfo-seg-btn.no-pulse:not(.active) {
+    opacity: 0.45;
 }
 
 .lfo-power:active {

@@ -388,7 +388,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   by the same amount; min must be above 0), for times and frequencies with a wide range. The
   pitch envelope's Decay uses it (5–2000 ms, 100 ms at half a turn); Cutoff could too.
   `bipolar` (min = −max) draws the arc from a zero tick at the top, for amounts that go both
-  ways (the pitch envelope's Amount).
+  ways (the pitch envelope's Amount). `size="mini"` (26 px) with `hideLabel` is for a knob on a
+  tile (Pulse Width); the label is still its accessible name.
 - Layout: the module cards flow in CSS columns from 992 px (`.ds-modules`), so a module that
   grows taller reshuffles the columns and can leave a gap. Envelope and Pitch are stacked on
   the left of `.sound-grid` with Filter beside them as a 2×2 block (Cutoff, Resonance, Env Amt,
@@ -396,9 +397,13 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   five-letter title. The LFO is one compact row (on/off tile, Rate, Depth, Wave and Target
   switches), 118 px tall, which made room for the Filter's second row. A browser test checks
   the arrangement and one-line titles. The Waveforms panel shows its eight tiles as a 4×2 grid;
-  Pulse Width sits in "Pitch & Harmonics" under Unison's knobs (`UnisonEffect`'s `below`
-  slot), level with FM's second row, so that section didn't grow. The LFO hides its Wave /
-  Target captions when its card is under 352 px (a container query), so it stays one row.
+  Pulse Width is a mini knob in the Pulse tile's top-left corner (the dice badge is top-right),
+  placed beside the tile's button, not inside it, so turning it doesn't pick the wave; the
+  tile's bar is drawn as wide as the pulse. (It first sat under Unison, which looked tied to
+  Unison and greyed out with it.) The LFO hides its Wave / Target captions when its card is
+  under 352 px (a container query), so it stays one row. When the LFO's target is PW and
+  nothing plays Pulse (`pulseInUse`: the main wave, or any step that's on in an unmuted lane),
+  the PW button is dimmed with a title saying why, and the LFO's tile reads "No Pulse".
   The look is meant to be one piece of hardware
   that fills its frame: check a layout change at several widths (1600, 1280, 1100, 900, 390)
   against the build before it.
@@ -549,6 +554,7 @@ Done:
 | 23 | Filter view on the screen: while Cutoff or Resonance is turned (no F-key), the screen draws the filter's real response curve (log frequency, dB) with the live spectrum faintly behind, and dashed curves for the LFO's swing when it targets the filter. Picking another view while a knob is held now keeps that view. The LFO's filter depth limit is one helper shared by both engines. |
 | 24 | Filter envelope (Env Amt ±5 octaves, Decay; DFAM-style, in the live and export engines, drawn on the filter view), and room for it: the LFO redesigned as one compact row (284 → 118 px), Envelope and Pitch stacked beside a 2×2 Filter. |
 | 25 | Eight waves: Pulse (Pulse Width knob 5–95 %, and "PW" as a third LFO target: pulse-width modulation), and three harmonic shapes, Organ, Hollow and Glass, balanced in loudness; in the live and export engines (`waves.ts`). The Waveforms panel shows eight tiles (4×2); pads and the pad settings offer all eight. |
+| 26 | Pulse Width moved to a mini knob on the Pulse tile (it sat under Unison and greyed out with it), and the tile's bar shows the width. The LFO's PW target says when nothing plays Pulse: PW is dimmed with an explanation, and the LFO tile reads "No Pulse". |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

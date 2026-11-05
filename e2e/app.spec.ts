@@ -947,6 +947,36 @@ test('every wave sounds, at a similar level, and the pulse follows its Width', a
 	expect(JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.lfo.target).toBe('pwm');
 });
 
+test('Pulse Width sits on the Pulse tile, and the LFO says when PW has no pulse to move', async ({ page }) => {
+	const width = page.getByRole('slider', { name: 'Pulse Width', exact: true });
+	const sine = page.locator('.wave-row').getByRole('radio', { name: 'SINE', exact: true });
+	const pulse = page.locator('.wave-row').getByRole('radio', { name: 'PULSE', exact: true });
+	// On the Waveforms panel (not under Unison), and turning it doesn't pick the Pulse wave
+	await expect(page.locator('.module.generators').getByRole('slider', { name: 'Pulse Width' })).toHaveCount(1);
+	await expect(page.locator('.module.pitch').getByRole('slider', { name: 'Pulse Width' })).toHaveCount(0);
+	await expect(sine).toHaveAttribute('aria-checked', 'true');
+	await width.focus();
+	await page.keyboard.press('PageDown');
+	await expect(width).not.toHaveAttribute('aria-valuenow', '50');
+	await expect(sine).toHaveAttribute('aria-checked', 'true');
+	await expect(pulse).toHaveAttribute('aria-checked', 'false');
+
+	// The LFO on PW with no pulse playing: PW looks dimmer and says why; the tile says No Pulse
+	const pw = page.locator('.module.mod').getByRole('radio', { name: 'Pulse width' });
+	const status = page.locator('.module.mod .lfo-status');
+	await expect(pw).toHaveAttribute('title', /None do right now/);
+	await pw.click();
+	await expect(status).toHaveText('No Pulse');
+	// A pad set to Pulse (here: every pad, from its tile) and it's on again
+	await turnOnPads(page, [0]);
+	await pulse.click();
+	await expect(status).toHaveText('On');
+	await expect(pw).toHaveAttribute('title', "Modulate the pulse wave's width");
+	// Back to Sine: no pulse again
+	await sine.click();
+	await expect(status).toHaveText('No Pulse');
+});
+
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {
 	const listeners = () => page.evaluate(() => (window as any).__keydown.length as number);
 	const start = await listeners();
