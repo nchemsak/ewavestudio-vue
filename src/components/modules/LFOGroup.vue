@@ -2,66 +2,17 @@
 <template>
     <KnobGroup v-model="localEnabled" :color="color" :showToggle="showToggle" :showHeader="false">
         <div class="lfo-root lfo-container">
-            <div class="lfo-layout">
-                <button class="lfo-power-tile" :class="{ on: localEnabled }" :aria-pressed="localEnabled"
-                    title="Toggle LFO" @click="localEnabled = !localEnabled">
-                    <div class="lfo-power-header">
-                        <span class="lfo-power-label">LFO</span>
-                        <span class="lfo-status-pill" :class="{ on: localEnabled }">
-                            {{ localEnabled ? 'On' : 'Off' }}
-                        </span>
-                    </div>
-
-                    <span class="lfo-power-wave">
-                        <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
-                            <path :d="wavePath(localWaveform || 'sine')" class="wv" />
-                        </svg>
-                    </span>
+            <!-- One compact row: power tile, Rate and Depth, then the Wave and Target switches -->
+            <div class="lfo-row">
+                <button type="button" class="lfo-power" :class="{ on: localEnabled }" :aria-pressed="localEnabled"
+                    title="Toggle LFO" aria-label="LFO on" @click="localEnabled = !localEnabled">
+                    <span class="lfo-status">{{ localEnabled ? 'On' : 'Off' }}</span>
+                    <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
+                        <path :d="wavePath(localWaveform || 'sine')" class="wv" />
+                    </svg>
                 </button>
 
-                <div class="lfo-right">
-                    <section class="lfo-block" aria-label="LFO Waveform" role="group">
-                        <div class="lfo-block-label">Wave</div>
-                        <div class="lfo-waves" role="radiogroup" aria-label="LFO Waveform">
-                            <button v-for="w in waves" :key="w" class="lfo-wave-btn" :class="{
-                                active: localWaveform === w,
-                                disabled: !localEnabled
-                            }" role="radio" :aria-checked="localWaveform === w ? 'true' : 'false'"
-                                :disabled="!localEnabled" @click="setWave(w)" :title="waveLong(w)">
-                                <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
-                                    <path :d="wavePath(w)" class="wv" />
-                                </svg>
-                                <span class="label">{{ waveLabel(w) }}</span>
-                            </button>
-                        </div>
-                    </section>
-
-                    <section class="lfo-block" aria-label="LFO Target" role="group">
-                        <div class="lfo-block-label">Target</div>
-                        <div class="lfo-target-quick" role="radiogroup" aria-label="LFO Target">
-                            <button class="mm-pill" :class="{
-                                active: currentTarget === 'pitch',
-                                disabled: !localEnabled
-                            }" :disabled="!localEnabled" role="radio"
-                                :aria-checked="currentTarget === 'pitch' ? 'true' : 'false'"
-                                @click="updateTarget('pitch')" title="Modulate Pitch">
-                                Pitch
-                            </button>
-                            <button class="mm-pill" :class="{
-                                active: currentTarget === 'filter',
-                                disabled: !localEnabled
-                            }" :disabled="!localEnabled" role="radio"
-                                :aria-checked="currentTarget === 'filter' ? 'true' : 'false'"
-                                @click="updateTarget('filter')" title="Modulate Filter">
-                                Filter
-                            </button>
-                        </div>
-                    </section>
-                </div>
-            </div>
-
-            <div class="lfo-knobs">
-                <div class="pt-knob-row">
+                <div class="pt-knob-row lfo-knobs">
                     <div class="position-relative text-center">
                         <Knob :value-text="localSync ? String(localDivision) : `${Number(localRate).toFixed(1)} Hz`" v-model="rateKnobModel" size="small" :min="rateMin" :max="rateMax" :step="rateStep"
                             label="Rate" :color="color" :disabled="!localEnabled" :showMarkers="localSync"
@@ -80,6 +31,36 @@
                         <span v-if="activeKnob === 'depth'" class="custom-tooltip">
                             {{ depthReadout }}
                         </span>
+                    </div>
+                </div>
+
+                <div class="lfo-switches">
+                    <div class="lfo-switch">
+                        <span class="lfo-switch-label" aria-hidden="true">Wave</span>
+                        <div class="lfo-seg" role="radiogroup" aria-label="LFO Waveform">
+                            <button v-for="w in waves" :key="w" type="button" class="lfo-seg-btn"
+                                :class="{ active: localWaveform === w }" role="radio"
+                                :aria-checked="localWaveform === w ? 'true' : 'false'" :aria-label="waveLong(w)"
+                                :disabled="!localEnabled" @click="setWave(w)" :title="waveLong(w)">
+                                <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
+                                    <path :d="wavePath(w)" class="wv" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="lfo-switch">
+                        <span class="lfo-switch-label" aria-hidden="true">Target</span>
+                        <div class="lfo-seg" role="radiogroup" aria-label="LFO Target">
+                            <button type="button" class="lfo-seg-btn"
+                                :class="{ active: currentTarget === 'pitch' }" :disabled="!localEnabled" role="radio"
+                                :aria-checked="currentTarget === 'pitch' ? 'true' : 'false'"
+                                @click="updateTarget('pitch')" title="Modulate Pitch">Pitch</button>
+                            <button type="button" class="lfo-seg-btn"
+                                :class="{ active: currentTarget === 'filter' }" :disabled="!localEnabled" role="radio"
+                                :aria-checked="currentTarget === 'filter' ? 'true' : 'false'"
+                                @click="updateTarget('filter')" title="Modulate Filter">Filter</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -384,95 +365,59 @@ function wavePath(w: Wave | string): string {
 }
 
 .lfo-container {
-    max-width: 420px;
-    margin-inline: auto;
+    width: 100%;
 }
 
-.lfo-layout {
-    display: grid;
-    grid-template-columns: 140px minmax(0, 1fr);
-    gap: 16px;
-    align-items: stretch;
-    margin-bottom: 12px;
-}
-
-.lfo-right {
+.lfo-row {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    align-items: center;
+    gap: 12px;
 }
 
-.lfo-power-tile {
-    border-radius: 18px;
+/* Power: a small tile with the LFO's wave, lit when on */
+.lfo-power {
+    flex: none;
+    width: 62px;
+    height: 58px;
+    border-radius: 12px;
     border: 1px solid var(--pt-hairline);
-    background: radial-gradient(circle at 10% 0%, rgba(255, 255, 255, 0.04), transparent),
-        var(--pt-surface-2);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-    padding: 10px 12px;
+    background: var(--pt-surface-2);
+    color: inherit;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    min-height: 132px;
-    text-align: left;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px;
+    cursor: pointer;
+    opacity: 0.75;
 }
 
-.lfo-power-tile.on {
+.lfo-power.on {
+    opacity: 1;
     border-color: hsl(var(--pt-accent) 80% 62% / 0.8);
-    box-shadow:
-        0 16px 34px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(255, 255, 255, 0.06);
     background: radial-gradient(circle at 0% 0%, hsl(var(--pt-accent) 70% 30% / 0.42), transparent),
         var(--pt-surface-2);
 }
 
-.lfo-power-tile:active {
+.lfo-power:active {
     transform: translateY(1px);
 }
 
-.lfo-power-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.lfo-power-label {
-    font-weight: 700;
-    font-size: 14px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #e7ebff;
-}
-
-.lfo-status-pill {
-    padding: 2px 8px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    font-size: 11px;
+.lfo-status {
+    font-size: 10px;
+    line-height: 1;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    opacity: 0.65;
 }
 
-.lfo-status-pill.on {
-    border-color: hsl(var(--pt-accent) 80% 62% / 0.9);
-    background: hsl(var(--pt-accent) 80% 60% / 0.18);
-    opacity: 1;
-}
-
-.lfo-power-wave {
-    width: 100%;
-    height: 40px;
-    margin-top: 10px;
-    border-radius: 12px;
-    background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.02), transparent);
-    padding-inline: 4px;
+.lfo-power svg {
+    width: 44px;
+    height: 16px;
 }
 
 svg {
     display: block;
-    width: 100%;
-    height: 100%;
 }
 
 .wv {
@@ -483,111 +428,85 @@ svg {
     stroke-linejoin: round;
 }
 
-.lfo-block {
-    border-radius: 14px;
-    border: 1px solid var(--pt-hairline);
-    background: var(--pt-surface-2);
-    padding: 8px 10px 10px;
+.lfo-knobs {
+    flex: none;
+    gap: 10px;
+}
+
+/* Wave and Target: two small segmented switches, stacked */
+.lfo-switches {
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 6px;
+    align-items: flex-end;
 }
 
-.lfo-block-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: rgba(199, 206, 224, 0.75);
-}
-
-.lfo-waves {
+.lfo-switch {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    gap: 6px;
 }
 
-.lfo-wave-btn {
-    flex: 1 1 0;
-    height: 32px;
-    border-radius: 999px;
-    background: radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.03), transparent),
-        var(--pt-surface-2);
+.lfo-switch-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.7;
+}
+
+.lfo-seg {
+    display: inline-flex;
     border: 1px solid var(--pt-hairline);
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--pt-surface-2);
+}
+
+.lfo-seg-btn {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 11px;
+    line-height: 1;
+    min-width: 34px;
+    height: 24px;
+    padding: 0 8px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 4px 8px;
-    font-size: 12px;
+    cursor: pointer;
+    opacity: 0.75;
 }
 
-.lfo-wave-btn svg {
-    width: 32px;
-    height: 16px;
+.lfo-seg-btn + .lfo-seg-btn {
+    border-left: 1px solid var(--pt-hairline);
 }
 
-.lfo-wave-btn .label {
-    font-size: 12px;
-    color: #c7cee0;
+.lfo-seg-btn svg {
+    width: 22px;
+    height: 12px;
 }
 
-.lfo-wave-btn.active {
-    border-color: hsl(var(--pt-accent) 75% 62%);
+.lfo-seg-btn.active {
+    opacity: 1;
     background: linear-gradient(135deg,
-            hsl(var(--pt-accent) 70% 26% / 0.45),
-            hsl(var(--pt-accent) 70% 10% / 0.1));
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+            hsl(var(--pt-accent) 70% 26% / 0.55),
+            hsl(var(--pt-accent) 70% 10% / 0.15));
+    box-shadow: inset 0 0 0 1px hsl(var(--pt-accent) 75% 62% / 0.8);
 }
 
-.lfo-wave-btn.disabled {
-    opacity: 0.5;
-    pointer-events: none;
+.lfo-seg-btn:disabled {
+    cursor: default;
+    opacity: 0.4;
 }
 
-.lfo-wave-btn:active {
-    transform: translateY(1px);
-}
-
-.lfo-target-quick {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    justify-content: flex-start;
-}
-
-.mm-pill {
-    padding: 6px 12px;
-    border-radius: 999px;
-    border: 1px solid var(--pt-hairline);
-    background: var(--pt-surface-2);
-    color: #c7cee0;
-    font-size: 12px;
-}
-
-.mm-pill.active {
-    border-color: hsl(var(--pt-accent) 70% 55% / 0.8);
-    background: linear-gradient(135deg,
-            hsl(var(--pt-accent) 70% 26% / 0.45),
-            hsl(var(--pt-accent) 70% 10% / 0.08));
-}
-
-.mm-pill.disabled {
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-.mm-pill:active {
-    transform: translateY(1px);
-}
-
-.lfo-knobs {
-    margin-top: 2px;
-}
-
-.pt-knob-row {
-    display: flex;
-    justify-content: flex-start;
-    gap: 32px;
-    align-items: flex-end;
+.lfo-seg-btn:focus-visible,
+.lfo-power:focus-visible {
+    outline: 2px solid hsl(var(--pt-accent) 80% 62%);
+    outline-offset: 2px;
 }
 
 .mm-menu {
@@ -670,19 +589,4 @@ svg {
     z-index: 999;
 }
 
-@media (max-width: 720px) {
-    .lfo-power-tile {
-        min-height: auto;
-    }
-
-    .pt-knob-row {
-        justify-content: space-evenly;
-    }
-}
-
-@media (max-width: 440px) {
-    .lfo-layout {
-        grid-template-columns: 1fr;
-    }
-}
 </style>

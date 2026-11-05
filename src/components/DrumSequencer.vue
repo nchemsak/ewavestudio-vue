@@ -239,7 +239,7 @@
 				</div>
 
 				<!-- Envelope + Filter + Pitch Env: the note's three envelopes, side by side -->
-				<div class="module sound">
+				<div class="module sound" :class="mockLayout">
 					<div class="split-three">
 						<SectionWrap id="envelope" title="Envelope" v-model="collapsibleState['envelope']">
 							<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
@@ -248,9 +248,10 @@
 								@decay-knob-start="onEnvKnobStart" @decay-knob-end="onScreenKnobEnd" />
 						</SectionWrap>
 
-						<SectionWrap id="filter" title="Filter" v-model="collapsibleState['filter']">
+						<SectionWrap class="filter-card" id="filter" title="Filter" v-model="collapsibleState['filter']">
 							<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 								v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
+								v-model:envAmount="filterEnvAmount" v-model:envDecayMs="filterEnvDecayMs"
 								@knob-start="onFilterKnobStart" @knob-end="onScreenKnobEnd" />
 						</SectionWrap>
 
@@ -1599,6 +1600,11 @@ const filterEnabled = ref(true);
 
 const filterCutoff = ref(5000);
 const filterResonance = ref(0.5);
+// Filter envelope: the cutoff starts filterEnvAmount octaves away and returns within
+// filterEnvDecayMs (0 octaves: off)
+const mockLayout = 'layout-' + (new URLSearchParams(location.search).get('layout') || 'B'); // MOCK
+const filterEnvAmount = ref(0);
+const filterEnvDecayMs = ref(200);
 
 const ampEnvAttackMs = ref(20);
 const ampEnvDecayMs = ref(400);
@@ -3457,4 +3463,12 @@ const { canUndo, canRedo, undo, redo } = useUndoHistory({
 		gap: 8px;
 	}
 }
+
+/* MOCK layouts */
+.module.sound .split-three > :nth-child(1) { grid-area: env; }
+.module.sound .split-three > :nth-child(2) { grid-area: filter; }
+.module.sound .split-three > :nth-child(3) { grid-area: pitch; }
+.module.sound.layout-A .split-three { grid-template-columns: 1fr 1fr; grid-template-areas: "env pitch" "filter filter"; }
+.module.sound.layout-B .split-three { grid-template-columns: 1fr 1fr; grid-template-areas: "env filter" "pitch filter"; }
+.module.sound.layout-B :deep(.filter-card .pt-knob-row) { display: grid; grid-template-columns: repeat(2, 40px); row-gap: 14px; column-gap: var(--pt-gap, 10px); }
 </style>
