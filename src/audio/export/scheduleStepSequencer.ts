@@ -5,6 +5,7 @@
 import { applyPitchEnv, pitchEnvStartCents } from "../pitchEnv";
 import { lfoFilterTapGain } from "../synthHelpers";
 import { applyFilterEnv } from "../filterEnv";
+import { createVoiceSource, lfoPwmTapGain, waveGain, PULSE_WIDTH_DEFAULT } from "../waves";
 import { startFM } from "../fm";
 import { generateReverbIR } from "../reverb/generateIr";
 
@@ -19,7 +20,7 @@ export type StepSequencerState = {
 		active: boolean[];
 		velocities: number[];        // 0..1
 		pitches: number[];           // Hz
-		waveforms: OscillatorType[]; // per-step wave type
+		waveforms: string[]; // per-step wave (waves.ts)
 	};
 
 	synth: {
@@ -40,7 +41,7 @@ export type StepSequencerState = {
 
 		lfo: {
 			enabled: boolean;
-			target: "pitch" | "filter";
+			target: "pitch" | "filter" | "pwm";
 			waveform: "sine" | "square";
 			depth: number;       // detune cents for pitch, Hz for filter
 			rateHz: number;      // resolved from sync/division in the UI
@@ -57,6 +58,8 @@ export type StepSequencerState = {
 			decayMs: number;
 			mode: "up" | "down" | "random";
 		};
+
+		pulse?: { width: number }; // the pulse wave's width, % (missing: 50)
 	};
 
 	fx: {
@@ -95,17 +98,6 @@ export type StepSequencerState = {
 
 function clamp01(x: number) {
 	return Math.max(0, Math.min(1, x));
-}
-
-// Match your live waveform gain compensation
-function waveformGain(type: OscillatorType): number {
-	switch (type) {
-		case "square": return 0.5011872336;
-		case "sawtooth": return 0.7079457844;
-		case "triangle":
-		case "sine":
-		default: return 1.0;
-	}
 }
 
 // Noise setup (same stops + loudness behavior as DrumSequencer.vue)
@@ -429,7 +421,7 @@ export function scheduleStepSequencer(
 		if (baseVel <= 0) continue;
 
 		const freq = pitchArr[stepIndex] || 220;
-		const wave = (waveArr[stepIndex] ?? "sine") as OscillatorType;
+		const wave = waveArr[stepIndex] ?? "sine";
 
 		// Swing: same as live schedule()
 		const isEvenStep = stepIndex % 2 === 1;
@@ -452,6 +444,7 @@ export function scheduleStepSequencer(
 			unisonState: uni,
 			fmState,
 			pitchEnv,
+			pulseWidth: state.synth.pulse?.width ?? PULSE_WIDTH_DEFAULT,
 			driveEnabled,
 			driveDry,
 			driveShaper,
@@ -482,7 +475,7 @@ function scheduleSynthNote(opts: {
 	freq: number;
 	baseVelocity: number;
 	channelVolume: number;
-	wave: OscillatorType;
+	wave: string;
 	envState: EnvState;
 	filterState: FilterState;
 	noiseState: NoiseState;
@@ -490,6 +483,7 @@ function scheduleSynthNote(opts: {
 	unisonState: UnisonState;
 	fmState: FMState;
 	pitchEnv: PitchEnvState;
+	pulseWidth: number;
 	driveEnabled: boolean;
 	driveDry: GainNode;
 	driveShaper: WaveShaperNode;
@@ -502,7 +496,7 @@ function scheduleSynthNote(opts: {
 	const {
 		ctx, time, freq, baseVelocity, channelVolume, wave,
 		envState, filterState, noiseState, padNoiseOn,
-		unisonState, fmState, pitchEnv, driveEnabled,
+		unisonState, fmState, pitchEnv, pulseWidth, driveEnabled,
 		driveDry, driveShaper, driveSum,
 		lfoState, lfoGainNode,
 		masterGain, noiseBuffers,
@@ -535,7 +529,7 @@ function scheduleSynthNote(opts: {
 	// Tone envelope gain
 	const oscEnvGain = ctx.createGain();
 
-	const wfComp = waveformGain(wave);
+	const wfComp = waveGain(wave);
 	const oscPeak = Math.max(0.0001, baseAmp * oscBlend * wfComp);
 
 	if (envState.enabled) {
@@ -569,8 +563,9 @@ function scheduleSynthNote(opts: {
 	});
 
 	for (let i = 0; i < voices; i++) {
-		const osc = ctx.createOscillator();
-		osc.type = wave;
+		// The voice's sound source, as in the live engine (the pulse network for 'pulse')
+		const source = createVoiceSource(ctx, wave, pulseWidth);
+		const osc = source.osc;
 
 		const voiceFilter = ctx.createBiquadFilter();
 		voiceFilter.type = "lowpass";
@@ -620,13 +615,17 @@ function scheduleSynthNote(opts: {
 				ctrlLP.frequency.value = 120;
 
 				lfoGainNode.connect(tap).connect(ctrlLP).connect(voiceFilter.frequency);
+			} else if (lfoState.target === "pwm" && source.width) {
+				const tap = ctx.createGain();
+				tap.gain.value = lfoPwmTapGain(pulseWidth, lfoState.depth);
+				lfoGainNode.connect(tap).connect(source.width);
 			}
 		}
 
-		osc.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
+		source.output.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
 
-		osc.start(time);
-		osc.stop(noteEnd);
+		source.start(time);
+		source.stop(noteEnd);
 		if (fmHandle) fmHandle.stop(noteEnd);
 	}
 

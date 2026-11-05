@@ -5,16 +5,9 @@
 
 // Waveform loudness START
 
-// Equalize waveform volume: square and sawtooth are louder than sine at the same peak
-export function waveformGain(type: OscillatorType): number {
-	switch (type) {
-		case 'square': return 0.5011872336;
-		case 'sawtooth': return 0.7079457844;
-		case 'triangle':
-		case 'sine':
-		default: return 1.0;
-	}
-}
+// Each wave's loudness balance now lives with the waves (waves.ts: waveGain), so the live
+// and export engines share it; this name is kept for existing callers.
+export { waveGain as waveformGain } from './waves';
 
 // Waveform loudness END
 

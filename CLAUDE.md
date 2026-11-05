@@ -5,7 +5,8 @@ served from https://www.ephemeralwave.com/studio2/. The original version stays a
 https://www.ephemeralwave.com/studio/ and is never updated or overwritten, so the two can
 be compared; never deploy this code to `/studio/`. Everything runs client-side with the Web
 Audio API; there is no backend. Features: one 16-step synth lane with per-step pitch,
-velocity and waveform; amp envelope, pitch envelope (a drum-style sweep), filter with its own
+velocity and waveform (sine, triangle, saw, square, a pulse with adjustable width, and three
+harmonic shapes); amp envelope, pitch envelope (a drum-style sweep), filter with its own
 envelope, noise, FM,
 unison and LFO; delay, overdrive and reverb; Web MIDI note
 input; a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope
@@ -136,6 +137,7 @@ src/components/
                          Undo/Redo buttons
   MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
+  WaveButton.vue, WaveIcon.vue  A wave's big tile (Waveforms panel) and small line icon (pads)
   filterView.ts          The screen's filter view (drawing loop and its pure helpers)
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
 src/audio/
@@ -144,6 +146,8 @@ src/audio/
                          loudness, LFO division → Hz
   ticker.ts              Worker-driven timer for the sequencer clock
   pitchEnv.ts, filterEnv.ts, fm.ts  Per-note helpers shared by the live and offline engines
+  waves.ts               The eight waves: names, loudness balance, and each voice's source
+                         (the pulse network, the harmonic shapes)
   reverb/generateIr.ts   Algorithmic impulse response for the ConvolverNode
   export/scheduleStepSequencer.ts  Separate offline engine used for WAV export
   export/encodeWav.ts    AudioBuffer → 32-bit float WAV
@@ -206,6 +210,15 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   In the panel, Amount is one bipolar knob (−48…+48): right of centre is mode `up` (starts
   above, drops), left is `down`; the RND pill is `random`. Saved as before: `semitones` (0–48)
   and `mode`.
+- Waves (`waves.ts`, shared by both engines): `createVoiceSource()` builds each voice's
+  source; the engines set its `osc` (frequency, detune, FM, LFO pitch) and connect its `output`
+  to the voice's filter. sine, triangle, sawtooth and square are the oscillator's own; `pulse`
+  is the voice's sawtooth through a steep, oversampled tanh comparator whose threshold a
+  `ConstantSourceNode` sets from Pulse Width (`synth.pulse.width`, 5–95 %, default 50 = a
+  square), and the same source cancels the pulse's DC; `organ`, `hollow` and `glass` are fixed
+  harmonic recipes (`createPeriodicWave`). `waveGain()` balances their loudness (the harmonic
+  shapes are RMS-matched to the sine). An unknown wave name plays as a sine. The LFO's third
+  target, `pwm` ("PW", depth in % width), moves the pulse's threshold, kept within 5–95 %.
 - Filter envelope (`filterEnv.ts`; the Filter card's Env Amt and Decay knobs): each note's
   cutoff starts Env Amt octaves away (−5…+5; right of centre above, so the filter closes;
   left below, so it opens) and returns to Cutoff within Decay, as a decaying offset in cents
@@ -382,7 +395,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   Decay); at 1280 px and on phones each card has room for two small knobs (40 px) across and a
   five-letter title. The LFO is one compact row (on/off tile, Rate, Depth, Wave and Target
   switches), 118 px tall, which made room for the Filter's second row. A browser test checks
-  the arrangement and one-line titles. The look is meant to be one piece of hardware
+  the arrangement and one-line titles. The Waveforms panel shows its eight tiles as a 4×2 grid;
+  Pulse Width sits in "Pitch & Harmonics" under Unison's knobs (`UnisonEffect`'s `below`
+  slot), level with FM's second row, so that section didn't grow. The LFO hides its Wave /
+  Target captions when its card is under 352 px (a container query), so it stays one row.
+  The look is meant to be one piece of hardware
   that fills its frame: check a layout change at several widths (1600, 1280, 1100, 900, 390)
   against the build before it.
 - Knobs: give every `<Knob>` a `label` (or an `aria-label`), and a `value-text` (what a
@@ -429,43 +446,32 @@ Next, in this order (agreed after PR 15; the maintainer changes it as ideas come
 that later features depend on, then sound features in the spirit of the design intent (top of
 this file), then presets that can use them. Everything drum-related waits until the maintainer
 brings the drum lanes back.
-1. **Pulse wave with pulse-width modulation, and a few custom waveforms.** Pulse width is how
-   much of each cycle the wave spends up versus down; 50% is the current square. Web Audio has
-   no pulse oscillator with an adjustable width: feed a sawtooth into a comparator
-   (`WaveShaperNode`, with `oversample` to reduce aliasing) whose threshold is moved by a
-   `ConstantSourceNode`, or use an AudioWorklet if that sounds too harsh. Add a Width knob, and
-   "Pulse width" as a third LFO target next to Pitch and Filter. Add 2–3 custom harmonic shapes
-   (`createPeriodicWave`: for example organ-like, hollow, bell-like). The engines set
-   `osc.type` from the wave name (type `Wave` in `snapshot.ts`), and `synthHelpers.ts`
-   balances each wave's loudness, so both need the new waves. The project check accepts any
-   wave name (it only checks that it's a string), so saved projects need no migration. The
-   global and per-pad wave buttons need room for the new choices, especially on phones.
-2. **Velocity routing.** Each pad's velocity slider only sets its loudness. Let it also drive
+1. **Velocity routing.** Each pad's velocity slider only sets its loudness. Let it also drive
    other settings, as DFAM does by patching its velocity sequence: for example velocity to
    filter cutoff or filter envelope amount, to decay, to pitch envelope amount and to FM index,
    each with an amount knob. That gives per-step variety from a slider that's already there,
-   and is a first step toward parameter locks (item 11).
-3. **Built-in preset library of synth patches.** Planned shape (confirm the open questions
+   and is a first step toward parameter locks (item 10).
+2. **Built-in preset library of synth patches.** Planned shape (confirm the open questions
    before starting): a preset sets only the sound (the synth and fx groups of the snapshot, and
    the waveform), not the pattern, tempo, swing or volume; presets live in `src/lib/presets/`
    as partial snapshots applied with `applySnapshot()`; 8 to 12 of them, picked from a
-   "Preset" dropdown; one undo step each. It comes after items 1–2 so presets can use them
+   "Preset" dropdown; one undo step each. It comes after item 1 so presets can use it
    (kicks and toms use the pitch envelope, PR 21; plucks the filter envelope, PR 24). Open questions: sound
    only, or also starter patterns? What happens to per-pad waveforms? User-saved presets now or
    later? Which sounds? Dropdown above the synth panels or in the toolbar?
-4. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
+3. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
    key-to-note map. Space, 1–4 and the Ctrl/Cmd shortcuts must keep working (see "Keyboard
    shortcuts").
-5. **Master limiter/compressor** (louder output without clipping), together with the **DC
+4. **Master limiter/compressor** (louder output without clipping), together with the **DC
    offset** fix: the drive shaper's curve has an even number of points (1024), so silence
    maps to about −0.011 instead of 0. Even with Drive off, that reaches the speakers through
    the drive wet gain, at about 0.004 with the default settings. It can't be heard, but it
    shows up in measurements (the browser tests use `__swingOver` to ignore it) and wastes a
    little headroom. Both change the sound slightly, so they are listen-tested together. The
    export engine has the same curve and needs the same changes.
-6. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
+5. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
    outside, which works since PR 17.
-7. **Stage view for TVs, and an audio output picker.** Casting already works without code
+6. **Stage view for TVs, and an audio output picker.** Casting already works without code
    (Chrome or Edge "Cast tab", AirPlay screen mirroring, Windows Cast, HDMI), picture and
    sound together, but with a noticeable lag when turning knobs. A Cast button of our own
    isn't practical: the web's casting APIs are made for media files, not sound made live in
@@ -474,29 +480,29 @@ brings the drum lanes back.
    lighting up) designed for a TV, to cast with the browser; and optionally an "Audio output"
    picker (`AudioContext.setSinkId()`, which not every browser supports; check before
    building).
-8. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
-9. **Several patterns (A/B/C/D) chained into a song.**
-10. **32 steps, or per-lane lengths** (the export code's types already allow 32).
-11. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
+7. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
+8. **Several patterns (A/B/C/D) chained into a song.**
+9. **32 steps, or per-lane lengths** (the export code's types already allow 32).
+10. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
     note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
     vary per step. Delay and reverb are shared by every note, so per step they become send
     amounts (how much of the step goes into them), not per-step effect settings, which would
     cut off the previous note's tail; per-step drive would mean moving drive into each note.
     UI idea: select a step with its settings dot, then the knobs you turn change that step
-    only; locked steps are marked, with a way to clear them. Build on item 2 (velocity
+    only; locked steps are marked, with a way to clear them. Build on item 1 (velocity
     routing).
-12. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
+11. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
     in a short delay loop that loses brightness each time round; the original paper also has a
     drum variant), metallic (several square waves at odd ratios, as the 808 makes cymbals and
     cowbell) and struck (a click ringing tuned resonant filters: wood block, marimba, toms,
     bells). Karplus–Strong needs an AudioWorklet: a `DelayNode` in a feedback loop can't be
     shorter than one render quantum (128 samples, about 3 ms), which caps the pitch around the
     F above middle C. AudioWorklets also run in the `OfflineAudioContext` used for WAV export.
-13. **Export options:** N bars or loops, stems, MIDI file.
-14. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
-15. **Install as an app (PWA)** that works offline.
-16. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-17. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
+12. **Export options:** N bars or loops, stems, MIDI file.
+13. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
+14. **Install as an app (PWA)** that works offline.
+15. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+16. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
     purpose so far.
 
 On hold until the drum lanes come back (ask the maintainer before starting any of them):
@@ -514,7 +520,7 @@ On hold until the drum lanes come back (ask the maintainer before starting any o
   phones are remote controls that each show their own part, so network lag only delays when a
   change takes effect, never the beat. Phones that each made the sound would drift apart and
   flam. Also to decide: who can join (a room code), and what undo means with several people.
-  Share links (item 6) build part of it (the project packed into a compact message).
+  Share links (item 5) build part of it (the project packed into a compact message).
 
 Done:
 
@@ -542,6 +548,7 @@ Done:
 | 22 | Pitch envelope panel redesigned to fit the synth's frame: a compact "Pitch" card in a row of three with Envelope and Filter (instead of under "Pitch & Harmonics", which grew 149 px and left a gap on the left), a bipolar Amount knob instead of the ↑/↓ buttons, and an RND pill. Every module is back at its earlier size and place at all widths. |
 | 23 | Filter view on the screen: while Cutoff or Resonance is turned (no F-key), the screen draws the filter's real response curve (log frequency, dB) with the live spectrum faintly behind, and dashed curves for the LFO's swing when it targets the filter. Picking another view while a knob is held now keeps that view. The LFO's filter depth limit is one helper shared by both engines. |
 | 24 | Filter envelope (Env Amt ±5 octaves, Decay; DFAM-style, in the live and export engines, drawn on the filter view), and room for it: the LFO redesigned as one compact row (284 → 118 px), Envelope and Pitch stacked beside a 2×2 Filter. |
+| 25 | Eight waves: Pulse (Pulse Width knob 5–95 %, and "PW" as a third LFO target: pulse-width modulation), and three harmonic shapes, Organ, Hollow and Glass, balanced in loudness; in the live and export engines (`waves.ts`). The Waveforms panel shows eight tiles (4×2); pads and the pad settings offer all eight. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -60,6 +60,10 @@
                                 :class="{ active: currentTarget === 'filter' }" :disabled="!localEnabled" role="radio"
                                 :aria-checked="currentTarget === 'filter' ? 'true' : 'false'"
                                 @click="updateTarget('filter')" title="Modulate Filter">Filter</button>
+                            <button type="button" class="lfo-seg-btn"
+                                :class="{ active: currentTarget === 'pwm' }" :disabled="!localEnabled" role="radio"
+                                :aria-checked="currentTarget === 'pwm' ? 'true' : 'false'" aria-label="Pulse width"
+                                @click="updateTarget('pwm')" title="Modulate the pulse wave's width">PW</button>
                         </div>
                     </div>
                 </div>
@@ -92,7 +96,7 @@ import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 
-type Target = 'pitch' | 'filter';
+type Target = 'pitch' | 'filter' | 'pwm';
 type Wave = 'sine' | 'square';
 
 const props = withDefaults(
@@ -293,6 +297,8 @@ const depthReadout = computed<string>(() => {
             return `${Math.round(v)} cents`;
         case 'filter':
             return `${Math.round(v)} Hz`;
+        case 'pwm':
+            return `±${Math.round(v)}% width`;
     }
 });
 
@@ -366,12 +372,22 @@ function wavePath(w: Wave | string): string {
 
 .lfo-container {
     width: 100%;
+    container: lfo / inline-size;
 }
 
 .lfo-row {
     display: flex;
+    flex-wrap: wrap; /* safety net: never wider than the card */
     align-items: center;
     gap: 12px;
+}
+
+/* A narrow card (1280 px windows, phones) has no room for the Wave / Target captions; the
+   switches keep their accessible names */
+@container lfo (max-width: 352px) {
+    .lfo-switch-label {
+        display: none;
+    }
 }
 
 /* Power: a small tile with the LFO's wave, lit when on */

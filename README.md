@@ -13,7 +13,8 @@ https://www.ephemeralwave.com/studio/ and is never changed.
 
 ## Features
 
-- One 16-step synth lane with per-step pitch, velocity and waveform
+- One 16-step synth lane with per-step pitch, velocity and waveform: sine, triangle, saw,
+  square, a pulse with adjustable width (and LFO pulse-width modulation), organ, hollow and glass
 - Amp envelope, a drum-style pitch envelope, a filter with its own envelope, noise, FM, unison
   and an LFO
 - Delay (synced to the tempo), overdrive and reverb
