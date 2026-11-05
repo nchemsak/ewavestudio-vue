@@ -19,7 +19,7 @@ export type KeyRoot = 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 
 // The synth's waveforms (src/audio/waves.ts): the oscillator's own four, the pulse and three
 // harmonic shapes. Saved projects may hold any name; an unknown one plays as a sine.
 import type { Wave } from '../../audio/waves';
-import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX } from '../../audio/waves';
+import { PULSE_WIDTH_DEFAULT, foldPulseWidth } from '../../audio/waves';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -98,7 +98,7 @@ export type ProjectState = {
 			decayMs: Ref<number>;
 			mode: Ref<'up' | 'down' | 'random'>;
 		};
-		pulse: { width: Ref<number> }; // the pulse wave's width, % (5–95)
+		pulse: { width: Ref<number> }; // the pulse wave's width, % (5–50; 50 is the square)
 		tuning: {
 			selectedKeyRoot: Ref<KeyRoot>;
 			globalOctaveOffset: Ref<number>;
@@ -484,7 +484,8 @@ export function applySnapshot(st: ProjectState, s: any) {
 		if (syn.pitchEnv.mode) pitchMode.value = syn.pitchEnv.mode;
 	}
 	if (typeof syn.pulse?.width === 'number') {
-		pulseWidth.value = Math.min(PULSE_WIDTH_MAX, Math.max(PULSE_WIDTH_MIN, syn.pulse.width));
+		// 5–50%; a width above 50% (older projects) becomes its mirror, which sounds the same
+		pulseWidth.value = foldPulseWidth(syn.pulse.width);
 	} else if (!syn.pulse && syn.envelope) {
 		// A whole project saved before the pulse wave: the default width (a square)
 		pulseWidth.value = PULSE_WIDTH_DEFAULT;

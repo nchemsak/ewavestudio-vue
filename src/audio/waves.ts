@@ -4,7 +4,9 @@
 //
 // - sine, triangle, sawtooth, square: the oscillator's own shapes.
 // - pulse: a square whose width (the share of each cycle spent high) is the Width knob
-//   (5–95%; 50% is the square). Web Audio has no such oscillator, so the voice's sawtooth goes
+//   5–50%: from the thinnest to the square (50%, the fullest). A width w and 100 − w are the
+//   same wave upside down and sound the same, so the knob covers one side only. Web Audio
+//   has no such oscillator, so the voice's sawtooth goes
 //   through a comparator (a steep, smooth WaveShaper curve, oversampled to keep aliasing down)
 //   whose threshold a ConstantSourceNode moves. The same source also cancels the pulse's DC
 //   (a narrow pulse sits mostly at −1), so it can't push the drive or speakers off-centre.
@@ -72,11 +74,21 @@ export function waveGain(w: string): number {
 
 // Pulse width START
 
+// The knob's (and a saved project's) range: 5% (thinnest) to 50% (the square, fullest)
 export const PULSE_WIDTH_MIN = 5;
-export const PULSE_WIDTH_MAX = 95;
+export const PULSE_WIDTH_MAX = 50;
 export const PULSE_WIDTH_DEFAULT = 50;
+// How far the LFO may push the width: the same 5% from the other side (95%), which sounds the
+// same as 5%; past 50% the sound comes back the way it went
+const PULSE_SWING_MAX = 100 - PULSE_WIDTH_MIN;
 
-const clampWidth = (pct: number) => Math.min(PULSE_WIDTH_MAX, Math.max(PULSE_WIDTH_MIN, pct));
+// A width as the knob shows it: above 50% it's mirrored (75% sounds the same as 25%), then
+// kept to 5–50%. Older projects could save up to 95%.
+export function foldPulseWidth(pct: number): number {
+	const w = pct > 50 ? 100 - pct : pct;
+	return Math.min(PULSE_WIDTH_MAX, Math.max(PULSE_WIDTH_MIN, w));
+}
+const clampWidth = foldPulseWidth;
 
 // The threshold offset for a width: a sawtooth (−1..1) plus this is above 0 for `pct`% of
 // each cycle. It's also the pulse's DC, which is subtracted again.
@@ -87,7 +99,7 @@ export const pulseOffset = (pct: number) => (2 * clampWidth(pct)) / 100 - 1;
 export function lfoPwmTapGain(widthPct: number, depthPct: number): number {
 	if (!(depthPct > 0)) return 0;
 	const w = clampWidth(widthPct);
-	const room = Math.max(0, Math.min(w - PULSE_WIDTH_MIN, PULSE_WIDTH_MAX - w));
+	const room = Math.max(0, Math.min(w - PULSE_WIDTH_MIN, PULSE_SWING_MAX - w));
 	return (Math.min(1, room / depthPct) * 2) / 100;
 }
 

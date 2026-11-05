@@ -214,11 +214,14 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   source; the engines set its `osc` (frequency, detune, FM, LFO pitch) and connect its `output`
   to the voice's filter. sine, triangle, sawtooth and square are the oscillator's own; `pulse`
   is the voice's sawtooth through a steep, oversampled tanh comparator whose threshold a
-  `ConstantSourceNode` sets from Pulse Width (`synth.pulse.width`, 5–95 %, default 50 = a
-  square), and the same source cancels the pulse's DC; `organ`, `hollow` and `glass` are fixed
+  `ConstantSourceNode` sets from Pulse Width (`synth.pulse.width`, 5–50 %, default 50 = a
+  square; a width w and 100 − w sound the same, the wave upside down, so the knob covers one
+  side: 5 % thinnest to 50 % fullest, and `foldPulseWidth()` mirrors an older project's width
+  above 50 %), and the same source cancels the pulse's DC; `organ`, `hollow` and `glass` are fixed
   harmonic recipes (`createPeriodicWave`). `waveGain()` balances their loudness (the harmonic
   shapes are RMS-matched to the sine). An unknown wave name plays as a sine. The LFO's third
-  target, `pwm` ("PW", depth in % width), moves the pulse's threshold, kept within 5–95 %.
+  target, `pwm` ("PW", depth in % width), moves the pulse's threshold, kept within 5–95 %
+  (past 50 % the sound comes back the way it went).
 - Filter envelope (`filterEnv.ts`; the Filter card's Env Amt and Decay knobs): each note's
   cutoff starts Env Amt octaves away (−5…+5; right of centre above, so the filter closes;
   left below, so it opens) and returns to Cutoff within Decay, as a decaying offset in cents
@@ -555,6 +558,7 @@ Done:
 | 24 | Filter envelope (Env Amt ±5 octaves, Decay; DFAM-style, in the live and export engines, drawn on the filter view), and room for it: the LFO redesigned as one compact row (284 → 118 px), Envelope and Pitch stacked beside a 2×2 Filter. |
 | 25 | Eight waves: Pulse (Pulse Width knob 5–95 %, and "PW" as a third LFO target: pulse-width modulation), and three harmonic shapes, Organ, Hollow and Glass, balanced in loudness; in the live and export engines (`waves.ts`). The Waveforms panel shows eight tiles (4×2); pads and the pad settings offer all eight. |
 | 26 | Pulse Width moved to a mini knob on the Pulse tile (it sat under Unison and greyed out with it), and the tile's bar shows the width. The LFO's PW target says when nothing plays Pulse: PW is dimmed with an explanation, and the LFO tile reads "No Pulse". |
+| 27 | Pulse Width covers one side only, 5 % (thinnest) to 50 % (the square, fullest): a width and its mirror (25 % and 75 %) sound the same, so half the knob repeated the other. Older projects' widths above 50 % become their mirror, which sounds the same. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
