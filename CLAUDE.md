@@ -145,6 +145,8 @@ src/audio/
 src/stores/projectStore.ts  Pinia store: current projectId, name, data snapshot
 src/lib/project/snapshot.ts  Settings ↔ project snapshot, and factory defaults (see "Saving")
 src/lib/project/history.ts   Undo/redo history of snapshots (pure; see "Undo / redo")
+src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
+                         "Delay time")
 src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/export,
                          namespace.ts (storage names, one set per site folder)
 src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) + v1→v2
@@ -246,10 +248,25 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   project's) first 400 ms are its starting point.
 - Opening, importing or creating a project (a new `projectId`) starts a fresh history; File →
   New and Open can't be undone.
-- While an undo/redo is applied (two ticks), changes the panels make by themselves (the Delay
-  panel resets the delay time from the tempo) are folded into that entry, so they don't count
-  as a new change that throws away the redo side. A browser test covers this.
+- While an undo/redo is applied (two ticks), changes that follow by themselves (a panel
+  reacting to its props, or the synced delay time following the tempo) are folded into that
+  entry, so they don't count as a new change that throws away the redo side. A browser test
+  covers this.
 - Undo changes the project like any edit, so the unsaved dot shows; it doesn't stop playback.
+
+### Delay time
+- The Delay panel's TIME knob picks a note division (`fx.delay.division`, default dotted 1/8,
+  `'1/8.'`); the time is saved as `fx.delay.time` in seconds. With sync on (`fx.delay.sync`;
+  its switch is in the commented-out Advanced menu, so only a project can turn it off), the time is the division at the
+  tempo: 0.5625 s at 80 BPM. `src/lib/delaySync.ts` works it out (`syncedDelaySeconds`), and
+  `followDelaySync()` in `DrumSequencer.vue` keeps the time in step whenever the tempo,
+  division or sync changes (synchronously, so every snapshot already has the matching time).
+- `applySnapshot()` recomputes the time from the division when sync is on, so a time set from
+  outside (a project, a preset, a share link) can't disagree with the knob. A project saved
+  before the division was saved gets the division whose time matches its saved time (within
+  1%), else the default. With sync off the saved time is kept.
+- `DelayEffect.vue` only shows the division and time; turning its knob emits both. It never
+  sets the time or tone by itself, so loading a project doesn't change them.
 
 ### Saving / projects
 - The settings stay refs in `DrumSequencer.vue`. It groups every saved one into `projectState`
@@ -267,7 +284,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `ewave-db`, `ewave:*`, `seqOpen` and `ui-theme`, so the two never see each other's projects
   or settings. Always go through `STORAGE_NS` / `storageKey()`; never hard-code a name.
 - A deep watcher in `useProjectSync.ts` copies the snapshot into `projectStore.data`, and a
-  project put into the store (opened, imported, new) is applied back to the settings. Edits are written to IndexedDB
+  project put into the store (opened, imported, new) is applied back to the settings. What
+  `applySnapshot()` corrects while loading (for example an older project's delay time) is
+  stored straight back, before `ProjectControls` notes the project as saved, so the export
+  and undo history match the settings and the dot stays "saved". Edits are written to IndexedDB
   (`projects` store) only on an explicit Save in `ProjectControls` (the Save menu item or
   Ctrl/Cmd+S); creating a project also writes an initial record. A status dot shows unsaved
   changes.
@@ -355,31 +375,19 @@ Next, in this order (agreed after PR 15; the maintainer changes it as ideas come
 that later features depend on, then sound features in the spirit of the design intent (top of
 this file), then presets that can use them. Everything drum-related waits until the maintainer
 brings the drum lanes back.
-1. **Delay time isn't always the synced time.** With tempo sync on, the Delay panel
-   (`DelayEffect.vue`) works out the delay time from the tempo and its division knob (default
-   dotted 1/8), and sends it only when it first appears or when the tempo or division changes.
-   Its division knob isn't saved, and it ignores a delay time set from outside. So after
-   File → New the delay time can stay at the default 0.2 s (in the project, and in the sound if
-   the tempo didn't change) instead of the synced time (0.5625 s at 80 BPM), until the tempo
-   or division changes; and a reopened project plays its saved time while the knob shows
-   dotted 1/8. Presets and share links set the delay from outside, so they need this first.
-   Fix: save the division, and have the panel follow a time set from outside (or compute the
-   synced time from tempo and division in one place). The browser test "File → New gives the
-   same settings as a freshly opened page" skips the delay time and tone for now; include them
-   again.
-2. **A broken last-opened project fails silently.** If it fails the project check at startup,
+1. **A broken last-opened project fails silently.** If it fails the project check at startup,
    it isn't opened and no message appears. Save then does nothing (`store.loaded` stays false)
    until File → New, so work can be lost. Show a message and start a fresh project instead.
-3. **Change tracking is heavy.** Every change rebuilds the whole snapshot and turns it into
+2. **Change tracking is heavy.** Every change rebuilds the whole snapshot and turns it into
    JSON several times, even each frame of a knob drag. This happens in the UI → store watcher
    in `useProjectSync.ts` and in `hashOf` in `ProjectControls.vue`. Debounce it, before
    patterns, parameter locks and 32 steps make the snapshot several times bigger. The undo
    history (`useUndoHistory.ts`) relies on `projectStore.data` being replaced on each change;
    keep that working (its browser tests cover it).
-4. **Housekeeping**, one small PR: replace the Vite template in `README.md` with a real
+3. **Housekeeping**, one small PR: replace the Vite template in `README.md` with a real
    description, and stop `npm run dev` from sending analytics events (the gtag snippet in
    `index.html` always runs).
-5. **Bring back the pitch envelope, with a drum-style sweep.** Its panel (`PitchEnvModule.vue`:
+4. **Bring back the pitch envelope, with a drum-style sweep.** Its panel (`PitchEnvModule.vue`:
    Amount 0–48 semitones, Decay 5–2000 ms, modes up/down/random) is imported in
    `DrumSequencer.vue` but no longer shown under "Pitch & Harmonics"; the maintainer removed it
    because it didn't seem useful. The engine still applies it to every note (`applyPitchEnv()`
@@ -393,7 +401,7 @@ brings the drum lanes back.
    5% of the turn; a non-linear knob option would help the Cutoff knob too. Optionally, let
    velocity scale the amount. Old projects keep loading (`synth.pitchEnv` is already saved),
    but any with a non-zero amount will sound different with the new curve.
-6. **Filter envelope, and a filter view on the screen.** Each note's lowpass cutoff is fixed
+5. **Filter envelope, and a filter view on the screen.** Each note's lowpass cutoff is fixed
    for the whole note; only the LFO moves it. Add a DFAM-style filter envelope (Decay and
    Amount: the cutoff starts higher by the amount and decays back), in the live and export
    engines. Add a screen view that draws the filter's real response curve
@@ -401,7 +409,7 @@ brings the drum lanes back.
    faintly behind it, and shows the envelope's sweep. Like the envelope view, it appears while
    Cutoff, Resonance or the new knobs are turned (`knobStart`/`knobEnd`). Ask the maintainer
    whether it also gets its own F-key (the screen has four, keys 1–4).
-7. **Pulse wave with pulse-width modulation, and a few custom waveforms.** Pulse width is how
+6. **Pulse wave with pulse-width modulation, and a few custom waveforms.** Pulse width is how
    much of each cycle the wave spends up versus down; 50% is the current square. Web Audio has
    no pulse oscillator with an adjustable width: feed a sawtooth into a comparator
    (`WaveShaperNode`, with `oversample` to reduce aliasing) whose threshold is moved by a
@@ -412,32 +420,32 @@ brings the drum lanes back.
    balances each wave's loudness, so both need the new waves. The project check accepts any
    wave name (it only checks that it's a string), so saved projects need no migration. The
    global and per-pad wave buttons need room for the new choices, especially on phones.
-8. **Velocity routing.** Each pad's velocity slider only sets its loudness. Let it also drive
+7. **Velocity routing.** Each pad's velocity slider only sets its loudness. Let it also drive
    other settings, as DFAM does by patching its velocity sequence: for example velocity to
    filter cutoff or filter envelope amount, to decay, to pitch envelope amount and to FM index,
    each with an amount knob. That gives per-step variety from a slider that's already there,
-   and is a first step toward parameter locks (item 17).
-9. **Built-in preset library of synth patches.** Planned shape (confirm the open questions
+   and is a first step toward parameter locks (item 16).
+8. **Built-in preset library of synth patches.** Planned shape (confirm the open questions
    before starting): a preset sets only the sound (the synth and fx groups of the snapshot, and
    the waveform), not the pattern, tempo, swing or volume; presets live in `src/lib/presets/`
    as partial snapshots applied with `applySnapshot()`; 8 to 12 of them, picked from a
-   "Preset" dropdown; one undo step each. It comes after items 5–8 so presets can use them
+   "Preset" dropdown; one undo step each. It comes after items 4–7 so presets can use them
    (kicks and toms need the pitch envelope, plucks the filter envelope). Open questions: sound
    only, or also starter patterns? What happens to per-pad waveforms? User-saved presets now or
    later? Which sounds? Dropdown above the synth panels or in the toolbar?
-10. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
-    key-to-note map. Space, 1–4 and the Ctrl/Cmd shortcuts must keep working (see "Keyboard
-    shortcuts").
-11. **Master limiter/compressor** (louder output without clipping), together with the **DC
+9. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
+   key-to-note map. Space, 1–4 and the Ctrl/Cmd shortcuts must keep working (see "Keyboard
+   shortcuts").
+10. **Master limiter/compressor** (louder output without clipping), together with the **DC
     offset** fix: the drive shaper's curve has an even number of points (1024), so silence
     maps to about −0.011 instead of 0. Even with Drive off, that reaches the speakers through
     the drive wet gain, at about 0.004 with the default settings. It can't be heard, but it
     shows up in measurements (the browser tests use `__swingOver` to ignore it) and wastes a
     little headroom. Both change the sound slightly, so they are listen-tested together. The
     export engine has the same curve and needs the same changes.
-12. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
-    outside, so it needs item 1.
-13. **Stage view for TVs, and an audio output picker.** Casting already works without code
+11. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
+    outside, which works since PR 17.
+12. **Stage view for TVs, and an audio output picker.** Casting already works without code
     (Chrome or Edge "Cast tab", AirPlay screen mirroring, Windows Cast, HDMI), picture and
     sound together, but with a noticeable lag when turning knobs. A Cast button of our own
     isn't practical: the web's casting APIs are made for media files, not sound made live in
@@ -446,29 +454,29 @@ brings the drum lanes back.
     lighting up) designed for a TV, to cast with the browser; and optionally an "Audio output"
     picker (`AudioContext.setSinkId()`, which not every browser supports; check before
     building).
-14. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
-15. **Several patterns (A/B/C/D) chained into a song.**
-16. **32 steps, or per-lane lengths** (the export code's types already allow 32).
-17. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
+13. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
+14. **Several patterns (A/B/C/D) chained into a song.**
+15. **32 steps, or per-lane lengths** (the export code's types already allow 32).
+16. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
     note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
     vary per step. Delay and reverb are shared by every note, so per step they become send
     amounts (how much of the step goes into them), not per-step effect settings, which would
     cut off the previous note's tail; per-step drive would mean moving drive into each note.
     UI idea: select a step with its settings dot, then the knobs you turn change that step
-    only; locked steps are marked, with a way to clear them. Build on item 8 (velocity
+    only; locked steps are marked, with a way to clear them. Build on item 7 (velocity
     routing).
-18. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
+17. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
     in a short delay loop that loses brightness each time round; the original paper also has a
     drum variant), metallic (several square waves at odd ratios, as the 808 makes cymbals and
     cowbell) and struck (a click ringing tuned resonant filters: wood block, marimba, toms,
     bells). Karplus–Strong needs an AudioWorklet: a `DelayNode` in a feedback loop can't be
     shorter than one render quantum (128 samples, about 3 ms), which caps the pitch around the
     F above middle C. AudioWorklets also run in the `OfflineAudioContext` used for WAV export.
-19. **Export options:** N bars or loops, stems, MIDI file.
-20. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
-21. **Install as an app (PWA)** that works offline.
-22. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-23. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
+18. **Export options:** N bars or loops, stems, MIDI file.
+19. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
+20. **Install as an app (PWA)** that works offline.
+21. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+22. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
     purpose so far.
 
 On hold until the drum lanes come back (ask the maintainer before starting any of them):
@@ -486,7 +494,7 @@ On hold until the drum lanes come back (ask the maintainer before starting any o
   phones are remote controls that each show their own part, so network lag only delays when a
   change takes effect, never the beat. Phones that each made the sound would drift apart and
   flam. Also to decide: who can join (a room code), and what undo means with several people.
-  Share links (item 12) build part of it (the project packed into a compact message).
+  Share links (item 11) build part of it (the project packed into a compact message).
 
 Done:
 
@@ -506,6 +514,7 @@ Done:
 | 13 | Accessibility: knobs are sliders that work from the keyboard (arrows, Shift, Home/End) and tell screen readers their value; the step pads are one Tab stop (arrows move, Enter switches a pad). Space stays Play everywhere, on purpose (the planned "Space presses the focused button" was dropped). |
 | 14 | Trimmed the CSS from 334 kB to 119 kB (gzip 51 kB → 23 kB) by building only the Bootstrap parts in use, and silenced Bootstrap's Sass deprecation warnings (our own `mix()` calls moved to `color.mix()`). The look is unchanged: every element's computed style and every screenshot matched the old build in all three themes at five widths (before/after screenshots linked from the PR). |
 | 15 | Undo/redo: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl+Y, and Undo/Redo buttons next to File. A knob drag is one step; theme and panel layout aren't undone; opening a project starts a fresh history. |
+| 17 | Synced delay time: the Delay panel's division is saved, and the delay time is always the division at the tempo (after File → New, in reopened and older projects, and after undo); worked out in one place, `src/lib/delaySync.ts`. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

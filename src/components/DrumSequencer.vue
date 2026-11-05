@@ -285,8 +285,8 @@
 						<section class="pt-section">
 							<div class="fx-pair">
 								<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
-									v-model:syncEnabled="delaySync" :tempo="tempo" :maxSeconds="5"
-									v-model:delayTime="delayTime" v-model:delayFeedback="delayFeedback"
+									:tempo="tempo" v-model:division="delayDivision" v-model:delayTime="delayTime"
+									v-model:delayFeedback="delayFeedback"
 									v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled"
 									v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" />
 								<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" :driveType="'overdrive'"
@@ -444,6 +444,7 @@
 import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 import Knob from './Knob.vue';
 import DelayEffect from './modules/DelayEffect.vue';
+import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, followDelaySync } from '../lib/delaySync';
 import DriveEffect from './modules/DriveEffect.vue';
 import UnisonEffect from './modules/UnisonEffect.vue';
 import LFOGroup from './modules/LFOGroup.vue';
@@ -1654,12 +1655,16 @@ const noiseBurstMs = ref(80);
 
 const delayEnabled = ref(false);
 const delaySync = ref(true);
-const delayTime = ref(0.2);
+// The TIME knob's note division; with sync on, the delay time follows it and the tempo
+// (followDelaySync, just below). Starting values match the defaults in snapshot.ts.
+const delayDivision = ref(DEFAULT_DELAY_DIVISION);
+const delayTime = ref(DEFAULT_DELAY_TIME);
 const delayFeedback = ref(0.3);
 const delayMix = ref(0.3);
 const delayToneHz = ref(5000);
 const delayToneEnabled = ref(true);
 const delayToneType = ref<'lowpass' | 'highpass'>('lowpass');
+followDelaySync({ tempo, division: delayDivision, sync: delaySync, time: delayTime });
 
 //Delay END
 
@@ -1968,6 +1973,7 @@ const projectState: ProjectState = {
 		delay: {
 			enabled: delayEnabled,
 			sync: delaySync,
+			division: delayDivision,
 			time: delayTime,
 			feedback: delayFeedback,
 			mix: delayMix,

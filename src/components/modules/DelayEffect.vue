@@ -15,12 +15,12 @@
 
                 <!-- TIME (SYNCED ONLY) -->
                 <div class="knob-cell time">
-                    <Knob :value-text="`${currentDivLabel}, ${syncedMs.toFixed(0)} ms`" v-model="divIndexKnob" label="TIME" :min="0" :max="1" :step="knobStep" size="small"
+                    <Knob :value-text="`${currentDivLabel}, ${timeMs.toFixed(0)} ms`" v-model="divIndexKnob" label="TIME" :min="0" :max="1" :step="knobStep" size="small"
                         :color="color" :disabled="!localEnabled" :showMarkers="true" :markers="knobMarkers"
                         :markersOnly="true" :markersOffsetDeg="-90" @knobStart="activeKnob = 'time'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'time'" class="custom-tooltip">
-                        {{ currentDivLabel }} · {{ syncedMs.toFixed(0) }} ms
+                        {{ currentDivLabel }} · {{ timeMs.toFixed(0) }} ms
                     </span>
                 </div>
 
@@ -48,9 +48,14 @@
 </template>
 
 <script setup lang="ts">
+// The TIME knob picks a note division (v-model:division). Turning it also sets the delay time
+// to that division at the current tempo; while sync is on, DrumSequencer keeps the time in
+// step with the tempo and division (followDelaySync in src/lib/delaySync.ts), so the panel
+// never sets the time by itself and always shows the real one.
 import { ref, watch, computed, onMounted } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
+import { DELAY_DIVISIONS, DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, syncedDelaySeconds } from '../../lib/delaySync';
 
 type ToneType = 'lowpass' | 'highpass';
 
@@ -58,6 +63,7 @@ const props = withDefaults(
     defineProps<{
         audioCtx?: AudioContext | null;
         enabled: boolean;
+        division?: string;
         delayTime?: number;
         delayFeedback?: number;
         delayMix?: number;
@@ -65,36 +71,19 @@ const props = withDefaults(
         toneHz?: number;
         toneType?: ToneType;
         tempo?: number;
-        maxSeconds?: number;
-        divisions?: Array<{ label: string; steps: number }>;
         color?: string;
         showToggle?: boolean;
     }>(),
     {
         enabled: false,
-        delayTime: 0.2,
+        division: DEFAULT_DELAY_DIVISION,
+        delayTime: DEFAULT_DELAY_TIME,
         delayFeedback: 0.35,
         delayMix: 0.3,
         toneEnabled: true,
         toneHz: 5000,
         toneType: 'lowpass',
         tempo: 120,
-        maxSeconds: 5.0,
-        divisions: () => [
-            { label: '1/64', steps: 0.25 },
-            { label: '1/32T', steps: (2 / 3) * 0.5 },
-            { label: '1/32', steps: 0.5 },
-            { label: '1/16T', steps: (2 / 3) * 1 },
-            { label: '1/16', steps: 1 },
-            { label: '1/8T', steps: (2 / 3) * 2 },
-            { label: '1/8', steps: 2 },
-            { label: '1/4T', steps: (2 / 3) * 4 },
-            { label: '1/8.', steps: 3 },
-            { label: '1/4', steps: 4 },
-            { label: '1/2T', steps: (2 / 3) * 8 },
-            { label: '1/4.', steps: 6 }
-        ],
-
         color: '#00BCD4',
         showToggle: false
     }
@@ -102,6 +91,7 @@ const props = withDefaults(
 
 const emit = defineEmits([
     'update:enabled',
+    'update:division',
     'update:delayTime',
     'update:delayFeedback',
     'update:delayMix',
@@ -141,64 +131,46 @@ const mappedToneHz = computed(() => mapNormToHzLP(localToneNorm.value));
 
 const activeKnob = ref<null | 'time' | 'mix' | 'toneHz'>(null);
 
-// sync helpers
-const DIVS = computed(() => props.divisions ?? []);
-const stepDuration = computed(() => 60 / (props.tempo || 120) / 4); // 1/16
+// TIME knob: one position per division
+const DIVS = DELAY_DIVISIONS;
 
-const knobMarkers = computed(() => {
-    const n = DIVS.value.length;
-    return n > 1 ? DIVS.value.map((_, i) => i / (n - 1)) : [];
+const knobMarkers = DIVS.map((_, i) => i / (DIVS.length - 1));
+const knobStep = 1 / (DIVS.length - 1);
+
+const divIndex = computed(() => {
+    const i = DIVS.findIndex((d) => d.label === props.division);
+    return i >= 0 ? i : DIVS.findIndex((d) => d.label === DEFAULT_DELAY_DIVISION);
 });
-
-const defaultDivIndex = computed(() => {
-    const i = DIVS.value.findIndex((d) => d.label === '1/8.');
-    return i >= 0 ? i : Math.min(4, Math.max(0, DIVS.value.length - 1));
-});
-
-const divIndex = ref<number>(defaultDivIndex.value);
-
-const knobStep = computed(() =>
-    DIVS.value.length > 1 ? 1 / (DIVS.value.length - 1) : 1
-);
 
 const divIndexKnob = computed<number>({
-    get: () =>
-        DIVS.value.length > 1 ? divIndex.value / (DIVS.value.length - 1) : 0,
+    get: () => divIndex.value / (DIVS.length - 1),
     set: (v: number) => {
-        const idx = Math.round(v * (DIVS.value.length - 1));
-        divIndex.value = Math.max(0, Math.min(DIVS.value.length - 1, idx));
+        const idx = Math.max(0, Math.min(DIVS.length - 1, Math.round(v * (DIVS.length - 1))));
+        if (idx === divIndex.value) return;
+        const label = DIVS[idx].label;
+        emit('update:division', label);
+        emit('update:delayTime', syncedDelaySeconds(props.tempo, label));
     }
 });
 
-const syncedSeconds = computed(() => {
-    const s = DIVS.value[divIndex.value]?.steps ?? 1;
-    return Math.min(props.maxSeconds || 5, Math.max(0.005, s * stepDuration.value));
-});
-
-const syncedMs = computed(() => syncedSeconds.value * 1000);
-const currentDivLabel = computed(
-    () => DIVS.value[divIndex.value]?.label ?? '—'
-);
+const timeMs = computed(() => (props.delayTime ?? 0) * 1000);
+const currentDivLabel = computed(() => DIVS[divIndex.value]?.label ?? '—');
 
 watch(localEnabled, (v) => emit('update:enabled', v));
 watch(localFeedback, (v) => emit('update:delayFeedback', v));
 watch(localMix, (v) => emit('update:delayMix', v));
 
-watch(
-    [divIndex, stepDuration, DIVS],
-    () => {
-        emit('update:delayTime', syncedSeconds.value);
-    },
-    { immediate: true }
-);
-
-watch(localToneNorm, () => emit('update:toneHz', mappedToneHz.value));
+// Only a turn of the knob sets the tone: a value from outside (a loaded project) is shown,
+// not rounded or clamped back into the project
+watch(localToneNorm, (n) => {
+    if (typeof props.toneHz === 'number' && Math.abs(mapHzToNormLP(props.toneHz) - n) < 1e-9) return;
+    emit('update:toneHz', mappedToneHz.value);
+});
 
 onMounted(() => {
     // Ensure tone stage is always on for this pedal
     emit('update:toneEnabled', true);
     emit('update:toneType', 'lowpass');
-    emit('update:toneHz', mappedToneHz.value);
     // Push the fixed feedback value into the graph
     emit('update:delayFeedback', localFeedback.value);
 });

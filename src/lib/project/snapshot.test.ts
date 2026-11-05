@@ -66,7 +66,7 @@ function makeState(maxVoices = 6): ProjectState {
 		},
 		fx: {
 			delay: {
-				enabled: ref(true), sync: ref(false), time: ref(1), feedback: ref(0.9), mix: ref(0.9),
+				enabled: ref(true), sync: ref(false), division: ref('1/64'), time: ref(1), feedback: ref(0.9), mix: ref(0.9),
 				toneEnabled: ref(false), toneHz: ref(1), toneType: ref('highpass'),
 			},
 			drive: { enabled: ref(true), type: ref('fuzz'), amount: ref(0.9), tone: ref(1), mix: ref(0.9) },
@@ -114,7 +114,7 @@ function changeEverything(st: ProjectState) {
 	s.fm.enabled.value = true; s.fm.modFreq.value = 440; s.fm.index.value = 9; s.fm.ratio.value = 2;
 	s.pitchEnv.enabled.value = false; s.pitchEnv.semitones.value = 12; s.pitchEnv.decayMs.value = 50; s.pitchEnv.mode.value = 'random';
 	s.tuning.selectedKeyRoot.value = 'Eb'; s.tuning.globalOctaveOffset.value = -1;
-	fx.delay.enabled.value = true; fx.delay.sync.value = false; fx.delay.time.value = 0.5; fx.delay.feedback.value = 0.6;
+	fx.delay.enabled.value = true; fx.delay.sync.value = false; fx.delay.division.value = '1/4'; fx.delay.time.value = 0.5; fx.delay.feedback.value = 0.6;
 	fx.delay.mix.value = 0.4; fx.delay.toneEnabled.value = false; fx.delay.toneHz.value = 2000; fx.delay.toneType.value = 'highpass';
 	fx.drive.enabled.value = true; fx.drive.type.value = 'fuzz'; fx.drive.amount.value = 0.8; fx.drive.tone.value = 3000; fx.drive.mix.value = 0.7;
 	fx.reverb.enabled.value = true; fx.reverb.mix.value = 0.5; fx.reverb.decay.value = 3; fx.reverb.tone.value = 0.2;
@@ -158,7 +158,7 @@ describe('factory defaults (File → New)', () => {
 		});
 		expect(snap.fx).toEqual({
 			delay: {
-				enabled: false, sync: true, time: 0.2, feedback: 0.3, mix: 0.3,
+				enabled: false, sync: true, division: '1/8.', time: 0.5625, feedback: 0.3, mix: 0.3,
 				toneEnabled: true, toneHz: 5000, toneType: 'lowpass',
 			},
 			drive: { enabled: false, type: 'overdrive', amount: 0.4, tone: 5000, mix: 0.5 },
@@ -217,6 +217,30 @@ describe('saving and loading a project', () => {
 		applySnapshot(st, { synth: {}, fx: {}, instruments: [] });
 		applySnapshot(st, { transport: { tempo: '120' } }); // wrong type: ignored
 		expect(asSaved(st)).toEqual(before);
+	});
+
+	it('keeps a synced delay time at the division and tempo', () => {
+		const st = fresh();
+		// A project whose saved time doesn't match its division (saved before this was fixed)
+		applySnapshot(st, { transport: { tempo: 120 }, fx: { delay: { sync: true, division: '1/4', time: 0.2 } } });
+		expect(st.fx.delay.division.value).toBe('1/4');
+		expect(st.fx.delay.time.value).toBe(0.5); // a quarter note at 120 BPM
+		// Sync off: the saved time is kept
+		applySnapshot(st, { fx: { delay: { sync: false, division: '1/4', time: 0.2 } } });
+		expect(st.fx.delay.time.value).toBe(0.2);
+	});
+
+	it('works out the delay division of projects saved before it was saved', () => {
+		const delay = (tempo: number, time: number) => {
+			const st = fresh();
+			applySnapshot(st, { transport: { tempo }, fx: { delay: { sync: true, time } } });
+			return [st.fx.delay.division.value, st.fx.delay.time.value];
+		};
+		expect(delay(80, 0.5625)).toEqual(['1/8.', 0.5625]);
+		expect(delay(120, 0.25)).toEqual(['1/8', 0.25]);
+		expect(delay(100, 0.401)[0]).toBe('1/4T'); // within 1% of 0.4 s
+		// No division matches (File → New used to leave 0.2 s): the default, as the knob showed
+		expect(delay(80, 0.2)).toEqual(['1/8.', 0.5625]);
 	});
 
 	it('reads the noise color of projects saved before the color knob', () => {

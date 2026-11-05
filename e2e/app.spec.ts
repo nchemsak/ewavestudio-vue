@@ -524,6 +524,8 @@ test('File → New gives the same settings as a freshly opened page', async ({ p
 	changed.fx.reverb.enabled = true;
 	changed.melody.keyScale = 'dorian';
 	changed.selectedWaveform = 'square';
+	changed.fx.delay.division = '1/4';
+	changed.fx.delay.toneHz = 2000;
 	changed.instruments.find((i: any) => i.name === 'synth-voice').steps[0] = true;
 	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
 		name: 'Changed.json',
@@ -540,15 +542,58 @@ test('File → New gives the same settings as a freshly opened page', async ({ p
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(0);
 	const afterNew = await projectData();
 
-	// Only the screen layout (which panels are open) may differ. The delay time and tone are set
-	// by the Delay panel itself when it appears (from the tempo, its division knob and its tone
-	// knob), not from the defaults; after File → New the project keeps the defaults' 0.2 s and
-	// 5000 Hz (see "Delay time" under "Planned work" in CLAUDE.md).
-	const settings = ({ ui, ...rest }: any) => {
-		const { time, toneHz, ...delay } = rest.fx.delay;
-		return { ...rest, fx: { ...rest.fx, delay } };
-	};
+	// Only the screen layout (which panels are open) may differ. That includes the delay time
+	// (synced: dotted 1/8 at 80 BPM) and tone, which the Delay panel used to set by itself.
+	expect(fresh.fx.delay).toMatchObject({ division: '1/8.', time: 0.5625, toneHz: 5000 });
+	const settings = ({ ui, ...rest }: any) => rest;
 	expect(settings(afterNew)).toEqual(settings(fresh));
+});
+
+test('the synced delay time follows the TIME knob, the tempo and a loaded project', async ({ page }) => {
+	const projectData = async () =>
+		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	const time = page.getByRole('slider', { name: 'TIME', exact: true });
+	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
+	await expect(time).toHaveAttribute('aria-valuetext', '1/8., 563 ms');
+
+	// Turning the knob sets the division and the time (it works while the delay is on)
+	const delaySwitch = page.locator('.fx .footswitch').first();
+	await delaySwitch.click();
+	await expect(delaySwitch).toHaveAttribute('aria-pressed', 'true');
+	await time.focus();
+	await page.keyboard.press('ArrowRight');
+	await expect(time).toHaveAttribute('aria-valuetext', '1/4, 750 ms');
+	expect((await projectData()).data.fx.delay).toMatchObject({ division: '1/4', time: 0.75 });
+
+	// A tempo change moves the time
+	await tempo.focus();
+	await page.keyboard.press('ArrowUp');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '81');
+	await expect(time).toHaveAttribute('aria-valuetext', `1/4, ${Math.round(60000 / 81)} ms`);
+
+	// A project's saved division is shown, and its time follows it even if the saved time
+	// doesn't match (projects saved before the division was saved)
+	const project = await projectData();
+	project.projectId = 'delay-div';
+	project.data.transport.tempo = 120;
+	project.data.fx.delay = { ...project.data.fx.delay, sync: true, division: '1/16', time: 0.2 };
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'delay-div.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)),
+	});
+	await expect(time).toHaveAttribute('aria-valuetext', '1/16, 125 ms');
+	expect((await projectData()).data.fx.delay).toMatchObject({ division: '1/16', time: 0.125 });
+
+	// An older project without a division: the one matching its saved time
+	delete project.data.fx.delay.division;
+	project.projectId = 'delay-old';
+	project.data.fx.delay.time = 0.25;
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'delay-old.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)),
+	});
+	await expect(time).toHaveAttribute('aria-valuetext', '1/8, 250 ms');
+	expect((await projectData()).data.fx.delay).toMatchObject({ division: '1/8', time: 0.25 });
+	// Upgrading it on opening isn't an unsaved change
+	await expect(page.locator('.pc-dot')).toHaveClass(/\bsaved\b/);
 });
 
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {
@@ -688,10 +733,9 @@ test('undo and redo step through changes; a knob drag is one step', async ({ pag
 	await expect(page.locator('.pc-dot')).toHaveClass(/\bunsaved\b/);
 });
 
-test("after an undo, a panel's own follow-up change keeps redo available", async ({ page }) => {
-	// After File → New the delay time is the default 0.2 s, not the synced time; any tempo
-	// change makes the Delay panel set the synced time (see "Delay time" in CLAUDE.md). So
-	// undoing a tempo change restores 0.2 s, then the panel sets the synced time again.
+test('after an undo, its follow-up changes (the synced delay time) keep redo available', async ({ page }) => {
+	// Undoing a tempo change also moves the synced delay time (followDelaySync). That
+	// follow-up is part of the undo, so redo must stay available.
 	await chooseFromFileMenu(page, 'New');
 	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
 	await page.waitForTimeout(SETTLED);
