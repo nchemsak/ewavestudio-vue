@@ -34,10 +34,36 @@ export async function saveProject(snapshot: {
 }
 
 
+// A saved project that fails the project check (damaged, or not readable by this version).
+// Carries its name, so the message can say which project it is; `cause` is the check's error.
+export class BrokenProjectError extends Error {
+    constructor(public projectId: string, public projectName: string, cause: unknown) {
+        super(`Project ${projectId} failed the project check: ${(cause as any)?.message ?? cause}`);
+        this.name = 'BrokenProjectError';
+        (this as any).cause = cause;
+    }
+}
+
+// What to tell the user about a project that can't be opened. `unnamed` is used when the
+// record has no name; `after` says what happens next.
+export function brokenProjectMessage(err: BrokenProjectError, unnamed: string, after: string) {
+    const name = err.projectName ? `"${err.projectName}"` : unnamed;
+    return `${name} couldn't be opened: it is damaged, or this version of the app can't read it. ${after}`;
+}
+
+// The saved project, checked and upgraded; null if there's none with this id. Throws a
+// BrokenProjectError if it fails the check.
 export async function loadProject(projectId: string) {
     const db = await getDb();
     const row = await db.get('projects', projectId);
-    return row ? validateAndMigrate(row) : null;
+    if (!row) return null;
+    try {
+        return validateAndMigrate(row);
+    } catch (err) {
+        const raw: any = row;
+        const name = typeof raw?.meta?.name === 'string' ? raw.meta.name : typeof raw?.name === 'string' ? raw.name : '';
+        throw new BrokenProjectError(projectId, name, err);
+    }
 }
 
 export async function listProjects() {

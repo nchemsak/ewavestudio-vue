@@ -14,6 +14,7 @@
 import { watch, onMounted, nextTick } from 'vue';
 import { useProjectStore } from '../stores/projectStore';
 import { storageKey } from '../lib/storage/namespace';
+import { BrokenProjectError, brokenProjectMessage } from '../lib/storage/projects';
 
 export function useProjectSync(opts: {
 	// All saved settings as a plain object (snapshot.ts)
@@ -85,16 +86,29 @@ export function useProjectSync(opts: {
 		{ deep: false, flush: 'sync' }
 	);
 
-	// On first mount, open last project or create a new one from current defaults
+	// On first mount, open last project or create a new one from current defaults. If the last
+	// project fails the project check, say so and start a new one, so Save works (it needs a
+	// loaded project). The broken record stays in IndexedDB, untouched.
 	onMounted(async () => {
 		const lastId = localStorage.getItem(storageKey('lastProjectId'));
+		let opened = false;
+		let broken: BrokenProjectError | null = null;
 		if (lastId) {
-			const ok = await project.load(lastId);
-			if (!ok) {
-				await project.newProject('Untitled', buildSnapshot());
+			try {
+				opened = await project.load(lastId);
+			} catch (err) {
+				if (!(err instanceof BrokenProjectError)) throw err;
+				broken = err;
+				console.error(err, (err as any).cause);
 			}
-		} else {
+		}
+		if (!opened) {
 			await project.newProject('Untitled', buildSnapshot());
+		}
+		if (broken) {
+			// After the page has drawn the new project
+			const msg = brokenProjectMessage(broken, 'Your last project', 'A new project was started instead.');
+			setTimeout(() => window.alert(msg), 0);
 		}
 
 		if (project.data) {
