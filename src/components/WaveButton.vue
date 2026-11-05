@@ -51,6 +51,8 @@ const props = defineProps({
     },
     showDice: { type: Boolean, default: true },
     randomIncluded: { type: Boolean, default: true },
+    // Pulse tile: the width (%), drawn as the bar's width
+    pulseWidth: { type: Number, default: 50 },
 });
 
 const emit = defineEmits(['update:modelValue', 'toggle-random']);
@@ -94,9 +96,12 @@ const shapeAttrs = computed(() => {
             return { points: '16,84 84,84 16,16' };
         case 'sine':
             return { cx: 50, cy: 50, r: 32 };
-        // Pulse: a narrow bar (a pulse spends little of its cycle high)
-        case 'pulse':
-            return { d: 'M12 84 V74 H38 V16 H58 V74 H88 V84 Z' };
+        // Pulse: a bar on a baseline, as wide as the pulse's width (share of the cycle spent high)
+        case 'pulse': {
+            const bw = Math.max(6, Math.min(70, (76 * props.pulseWidth) / 100));
+            const a = (50 - bw / 2).toFixed(1), b = (50 + bw / 2).toFixed(1);
+            return { d: `M12 84 V74 H${a} V16 H${b} V74 H88 V84 Z` };
+        }
         // Organ: three drawbars
         case 'organ':
             return { d: 'M18 84 V44 H34 V84 Z M42 84 V16 H58 V84 Z M66 84 V56 H82 V84 Z' };

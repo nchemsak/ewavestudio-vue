@@ -6,7 +6,7 @@
 		:aria-valuemax="props.max" :aria-valuenow="props.modelValue" :aria-valuetext="props.valueText"
 		:aria-disabled="props.disabled" @mousedown="startDrag" @touchstart.prevent="startDrag($event, true)"
 		@keydown="onKeydown" @blur="endKeyboardTurn">
-		<div class="knob-label">{{ label }}</div>
+		<div v-if="!props.hideLabel" class="knob-label">{{ label }}</div>
 
 		<div class="knob-dial">
 			<div class="dial-grip"
@@ -79,7 +79,10 @@ const props = defineProps({
 	// as much of the turn as long or high ones; for example 5–2000 ms has 100 ms at half a turn.
 	taper: { type: String, default: 'linear' },
 	// Zero is in the middle of the turn (min = −max): the arc is drawn from the top
-	bipolar: { type: Boolean, default: false }
+	bipolar: { type: Boolean, default: false },
+	// No visible label (the label is still the knob's accessible name), for a knob sitting on
+	// something that already says what it is, such as the mini knob on the Pulse tile
+	hideLabel: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['update:modelValue', 'knobStart', 'knobEnd']);
