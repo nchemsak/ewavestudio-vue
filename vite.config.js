@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { googleAnalytics } from './build-plugins/googleAnalytics.js'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -7,7 +8,8 @@ export default defineConfig({
   // The original version on /studio/ is frozen: never deploy this code there.
   // Changing `base` also changes where saved projects are stored (src/lib/storage/namespace.ts).
   base: '/studio2/',
-  plugins: [vue()],
+  // googleAnalytics(): the gtag snippet, in builds only (not `npm run dev`)
+  plugins: [vue(), googleAnalytics()],
   css: {
     preprocessorOptions: {
       scss: {
