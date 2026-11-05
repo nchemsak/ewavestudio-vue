@@ -6,11 +6,12 @@
 //
 // Snapshot shape: { meta, ui, transport, synth, fx, instruments[], melody, selectedWaveform }.
 // Saved projects must keep loading: applySnapshot() treats a missing or wrongly typed field as
-// "keep the current value". A new parameter goes into all three functions below (and, if it
-// affects sound, into the live and export engines too; see CLAUDE.md).
+// "keep the current value". A new parameter goes into buildSnapshot, applySnapshot and the
+// factory defaults below (a sound setting into resetSoundToFactoryDefaults, which presets use
+// too), and, if it affects sound, into the live and export engines; see CLAUDE.md.
 
 import type { Ref } from 'vue';
-import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, divisionForTime, isDelayDivision, syncedDelaySeconds } from '../delaySync';
+import { DEFAULT_DELAY_DIVISION, divisionForTime, isDelayDivision, syncedDelaySeconds } from '../delaySync';
 
 type R<T> = Readonly<Ref<T>>;
 
@@ -611,17 +612,8 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	const {
 		currentTheme, stepLength, collapsibleState, seqOpen, setStepLength,
 		volume, tempo, swing,
-		envelopeEnabled, ampEnvAttackMs, ampEnvDecayMs,
-		filterEnabled, filterCutoff, filterResonance, filterEnvAmount, filterEnvDecayMs,
-		noiseEnabled, noiseColor, noiseAmount, noiseMask, noiseAttackBurst, noiseBurstMs,
-		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
-		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
-		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
+		noiseMask,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
-		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
-		driveEnabled, driveType, driveAmount, driveTone, driveMix,
-		reverbEnabled, reverbMix, reverbDecay, reverbTone,
 		instruments, melodyUi, selectedWaveform,
 	} = byName(st);
 
@@ -633,12 +625,62 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	// grid length
 	setStepLength();
 
-	// transport
+	// transport (first: the synced delay time below follows the tempo)
 	volume.value = 0.75;
 	tempo.value = 80;
 	swing.value = 0;
 
-	// synth
+	// synth and effects
+	resetSoundToFactoryDefaults(st);
+	noiseMask.value = Array(stepLength.value).fill(true);
+
+	selectedKeyRoot.value = 'A';
+	globalOctaveOffset.value = 0;
+
+	melodyUi.keyRoot = 'A';
+	melodyUi.keyScale = 'none';
+	melodyUi.rangePreset = 'wide';
+	melodyUi.arpPattern = 'up';
+	melodyUi.arpRate = '1/16';
+	melodyUi.arpOctaves = 1;
+	melodyUi.arpTones = 'chord';
+
+	// instruments
+	instruments.value.forEach((i: any) => {
+		i.muted = false;
+		i.channelVolume = 0.5;
+		i.steps = Array(stepLength.value).fill(false);
+		i.velocities = Array(stepLength.value).fill(1);
+		if (i.pitches) i.pitches = Array(stepLength.value).fill(currentDefaultHz.value);
+		if (i.waveforms) i.waveforms = Array(stepLength.value).fill('sine');
+	});
+	// remove custom channels
+	for (let idx = instruments.value.length - 1; idx >= 0; idx--) {
+		if ((instruments.value[idx] as any).isCustom) instruments.value.splice(idx, 1);
+	}
+
+	selectedWaveform.value = 'sine';
+}
+
+// The sound back to its defaults: every synth and effect setting, except what belongs to the
+// pattern (the key and octave, which tune the pads, and which steps get noise) and the wave
+// (the main wave and each pad's). File → New uses it, and a preset (src/lib/presets/) starts
+// from it. The synced delay time follows the current tempo.
+export function resetSoundToFactoryDefaults(st: ProjectState) {
+	const {
+		tempo,
+		envelopeEnabled, ampEnvAttackMs, ampEnvDecayMs,
+		filterEnabled, filterCutoff, filterResonance, filterEnvAmount, filterEnvDecayMs,
+		noiseEnabled, noiseColor, noiseAmount, noiseAttackBurst, noiseBurstMs,
+		unisonEnabled, unisonVoices, detuneCents, stereoSpread,
+		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
+		fmEnabled, fmModFreq, fmIndex, fmRatio,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
+		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
+		driveEnabled, driveType, driveAmount, driveTone, driveMix,
+		reverbEnabled, reverbMix, reverbDecay, reverbTone,
+	} = byName(st);
+
 	envelopeEnabled.value = true;
 	ampEnvAttackMs.value = 20;
 	ampEnvDecayMs.value = 400;
@@ -650,7 +692,6 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	filterEnvDecayMs.value = 200;
 
 	noiseEnabled.value = false;
-	noiseMask.value = Array(stepLength.value).fill(true);
 	noiseColor.value = 0.5;
 	noiseAmount.value = 0.25;
 	noiseAttackBurst.value = false;
@@ -683,52 +724,25 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	pulseWidth.value = PULSE_WIDTH_DEFAULT;
 	for (const k of VELOCITY_DESTINATIONS) velocityRouting[k].value = 0;
 
-	selectedKeyRoot.value = 'A';
-	globalOctaveOffset.value = 0;
-
-	melodyUi.keyRoot = 'A';
-	melodyUi.keyScale = 'none';
-	melodyUi.rangePreset = 'wide';
-	melodyUi.arpPattern = 'up';
-	melodyUi.arpRate = '1/16';
-	melodyUi.arpOctaves = 1;
-	melodyUi.arpTones = 'chord';
-
-	// instruments
-	instruments.value.forEach((i: any) => {
-		i.muted = false;
-		i.channelVolume = 0.5;
-		i.steps = Array(stepLength.value).fill(false);
-		i.velocities = Array(stepLength.value).fill(1);
-		if (i.pitches) i.pitches = Array(stepLength.value).fill(currentDefaultHz.value);
-		if (i.waveforms) i.waveforms = Array(stepLength.value).fill('sine');
-	});
-	// remove custom channels
-	for (let idx = instruments.value.length - 1; idx >= 0; idx--) {
-		if ((instruments.value[idx] as any).isCustom) instruments.value.splice(idx, 1);
-	}
-
-	selectedWaveform.value = 'sine';
-
-	// FX: Delay 
+	// FX: Delay
 	delayEnabled.value = false;
 	delaySync.value = true;
 	delayDivision.value = DEFAULT_DELAY_DIVISION;
-	delayTime.value = DEFAULT_DELAY_TIME; // the division at 80 BPM: 0.5625 s
+	delayTime.value = syncedDelaySeconds(tempo.value, DEFAULT_DELAY_DIVISION); // 0.5625 s at 80 BPM
 	delayFeedback.value = 0.3;
 	delayMix.value = 0.3;
 	delayToneEnabled.value = true;
 	delayToneHz.value = 5000;
 	delayToneType.value = 'lowpass';
 
-	// FX: Drive 
+	// FX: Drive
 	driveEnabled.value = false;
 	driveType.value = 'overdrive';
 	driveAmount.value = 0.4;
 	driveTone.value = 5000;
 	driveMix.value = 0.5;
 
-	// FX: Reverb 
+	// FX: Reverb
 	reverbEnabled.value = false;
 	reverbMix.value = 0.18;
 	reverbDecay.value = 1.4;

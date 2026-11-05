@@ -54,6 +54,11 @@
 							</div>
 						</div>
 
+						<!-- Presets: ready-made sounds (src/lib/presets/). Beside the knobs from 1280 px,
+							 else on a row of their own below -->
+						<PresetButtons class="transport-presets" :presets="PRESETS" :active="activePresetId"
+							@choose="choosePreset" />
+
 						<!-- Right cluster: play + logo (+ MIDI fallback) -->
 						<div class="transport-right">
 							<img class="transport-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral logo">
@@ -507,6 +512,9 @@ import ReverbEffect from './modules/ReverbEffect.vue';
 // Live sound engine
 import { useLiveEngine } from '../audio/liveEngine';
 import { useLfoVisual } from '../composables/useLfoVisual';
+import PresetButtons from './PresetButtons.vue';
+import { PRESETS } from '../lib/presets/library';
+import { applyPreset, soundKey } from '../lib/presets/presets';
 import {
 	lfoCutoffAt, lfoCutoffSwing, lfoPulseWidthAt, lfoPulseWidthRange, lfoBendAt, lfoBendRange, type LfoView,
 } from '../lib/lfoVisual';
@@ -2554,6 +2562,44 @@ const { canUndo, canRedo, undo, redo } = useUndoHistory({
 });
 
 // SAVING END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// PRESETS START
+
+// Built-in presets (src/lib/presets/): a click sets the sound (synth, effects, the main wave
+// and every pad's), never the pattern. It's one undo step, as any change is
+// (useUndoHistory records once the settings have settled).
+//
+// The button of the preset the sound matches is lit, as soon as it's clicked. Its sound is
+// noted once the panels have followed it (they may round a value), and compared with the
+// project store's copy, so turning any sound knob afterwards unlights it, and undoing back to
+// it lights it again. A preset not clicked yet on this page has no sound noted, so an opened
+// project that happens to match it lights nothing.
+const presetKeys = reactive<Record<string, string>>({});
+const choosingPreset = ref<string | null>(null);
+const activePresetId = computed<string | null>(() => {
+	if (choosingPreset.value) return choosingPreset.value;
+	const key = soundKey(project.data);
+	if (!key) return null;
+	return PRESETS.find(p => presetKeys[p.id] === key)?.id ?? null;
+});
+
+async function choosePreset(id: string) {
+	const preset = PRESETS.find(p => p.id === id);
+	if (!preset) return;
+	applyPreset(projectState, preset);
+	choosingPreset.value = id;
+	trackEvent('preset_select', { preset: id });
+	// Let the panels follow (props, their watchers and what they emit back), as undo does
+	await nextTick();
+	await nextTick();
+	project.flushPending();
+	presetKeys[id] = soundKey(project.data);
+	if (choosingPreset.value === id) choosingPreset.value = null;
+}
+
+// PRESETS END
 </script>
 
 <style scoped>
@@ -3630,6 +3676,25 @@ const { canUndo, canRedo, undo, redo } = useUndoHistory({
 	max-width: 130px;
 	height: auto;
 	display: block;
+}
+
+/* Presets: in the space between Swing and the logo from 1280 px (where it fits three across) */
+.transport-presets {
+	flex: 1 1 0;
+}
+
+/* Narrower: a row of their own under the knobs (and under Play on phones). The screen beside
+   the transport and steps grows with the card, so the frame stays filled. */
+@media (max-width: 1279.98px) {
+	.transport-row {
+		flex-wrap: wrap;
+		row-gap: 10px;
+	}
+
+	.transport-presets {
+		order: 3;
+		flex-basis: 100%;
+	}
 }
 
 @media (max-width: 720px) {
