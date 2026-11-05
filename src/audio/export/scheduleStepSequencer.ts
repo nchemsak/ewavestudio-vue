@@ -2,7 +2,7 @@
 // Pure offline scheduler for the Step Sequencer synth.
 // Rebuilds a minimal version of your live graph inside any BaseAudioContext.
 
-import { applyPitchEnv } from "../pitchEnv";
+import { applyPitchEnv, pitchEnvStartCents } from "../pitchEnv";
 import { startFM } from "../fm";
 import { generateReverbIR } from "../reverb/generateIr";
 
@@ -557,6 +557,15 @@ function scheduleSynthNote(opts: {
 	const normIndex = (i: number, n: number) =>
 		n === 1 ? 0 : (i / (n - 1)) * 2 - 1;
 
+	// Pitch envelope: one starting offset for the whole note, as in the live engine
+	const pitchDecay = pitchEnv.decayMs / 1000;
+	const pitchStartCents = pitchEnvStartCents({
+		enabled: pitchEnv.enabled,
+		semitones: pitchEnv.semitones,
+		mode: pitchEnv.mode,
+		decay: pitchDecay,
+	});
+
 	for (let i = 0; i < voices; i++) {
 		const osc = ctx.createOscillator();
 		osc.type = wave;
@@ -567,12 +576,10 @@ function scheduleSynthNote(opts: {
 		const voiceGain = ctx.createGain();
 		const panner = ctx.createStereoPanner();
 
-		applyPitchEnv(osc, freq, time, {
-			enabled: pitchEnv.enabled,
-			semitones: pitchEnv.semitones,
-			mode: pitchEnv.mode,
-			decay: Math.max(0.01, pitchEnv.decayMs / 1000),
-		});
+		const dNorm = normIndex(i, voices);
+		const detuneC = dNorm * detuneStep;
+		// Frequency, and detune: the unison detune plus the pitch envelope's sweep
+		applyPitchEnv(osc, freq, time, pitchStartCents, pitchDecay, detuneC);
 
 		const fmHandle = startFM(ctx, osc, freq, time, {
 			enabled: fmState.enabled,
@@ -581,9 +588,6 @@ function scheduleSynthNote(opts: {
 			ratio: fmState.ratio,
 		});
 
-		const dNorm = normIndex(i, voices);
-		const detuneC = dNorm * detuneStep;
-		osc.detune.setValueAtTime(detuneC, time);
 
 		if (filterState.enabled) {
 			voiceFilter.frequency.setValueAtTime(filterState.cutoff, time);

@@ -276,6 +276,9 @@
 							v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
 						<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
 							v-model:detune="detuneCents" v-model:spread="stereoSpread" />
+						<PitchEnvModule :showToggle="false" v-model:enabled="pitchEnvEnabled"
+							v-model:semitones="pitchEnvSemitones" v-model:decayMs="pitchEnvDecayMs"
+							v-model:mode="pitchMode" />
 					</SectionWrap>
 				</div>
 

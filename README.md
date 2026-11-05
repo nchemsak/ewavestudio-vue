@@ -14,7 +14,7 @@ https://www.ephemeralwave.com/studio/ and is never changed.
 ## Features
 
 - One 16-step synth lane with per-step pitch, velocity and waveform
-- Amp envelope, filter, noise, FM, unison and an LFO
+- Amp envelope, a drum-style pitch envelope, filter, noise, FM, unison and an LFO
 - Delay (synced to the tempo), overdrive and reverb
 - A random melody and arpeggio maker
 - Oscilloscope, spectrogram, tuner and envelope views

@@ -5,8 +5,8 @@ served from https://www.ephemeralwave.com/studio2/. The original version stays a
 https://www.ephemeralwave.com/studio/ and is never updated or overwritten, so the two can
 be compared; never deploy this code to `/studio/`. Everything runs client-side with the Web
 Audio API; there is no backend. Features: one 16-step synth lane with per-step pitch,
-velocity and waveform; amp envelope, filter, noise, FM, unison and LFO (and a pitch envelope
-whose panel is hidden for now, see "Planned work"); delay, overdrive and reverb; Web MIDI note
+velocity and waveform; amp envelope, pitch envelope (a drum-style sweep), filter, noise, FM,
+unison and LFO; delay, overdrive and reverb; Web MIDI note
 input; a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope
 display; WAV export; projects saved in IndexedDB with JSON import and export; and undo/redo.
 Earlier versions also had sample drum lanes (kick, snare, hihat and user-loaded samples).
@@ -194,6 +194,13 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - `playSynthNote()` builds a new set of nodes for every note (oscillator per unison voice,
   biquad filter, panner, FM modulator, noise buffer sources, envelope gain). Pitch envelope and
   FM come from `src/audio/pitchEnv.ts` and `src/audio/fm.ts`.
+- Pitch envelope (`pitchEnv.ts`, panel `PitchEnvModule.vue` under "Pitch & Harmonics"): each
+  note starts Amount semitones up, down or at a random offset, as an offset in cents on the
+  oscillator's `detune` that decays exponentially (`setTargetAtTime`, time constant Decay / 4,
+  so after Decay it's about 2% of where it started) to the voice's unison detune. That's the
+  curve of an analog decay envelope into an exponential oscillator: fast, then settling. The
+  frequency itself stays at the note's pitch. The offset is picked once per note
+  (`pitchEnvStartCents`), so unison voices sweep together. Amount 0 (the default) is off.
 - Envelope: the on/off switch is hidden in the interface (`EnvelopeModule` with
   `:showToggle="false"`), but saved or imported projects can have the envelope off. A note
   then holds the level the envelope would peak at (waveform balance and noise mix included),
@@ -351,6 +358,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Reference runtime assets in `public/` relative to the page (for example `audio/kick.mp3`)
   or through `import.meta.env.BASE_URL`. Never start the path with `/`, or it breaks under
   the `/studio2/` base.
+- Knobs: `taper="log"` makes a knob logarithmic (each part of the turn multiplies the value
+  by the same amount; min must be above 0), for times and frequencies with a wide range. The
+  pitch envelope's Decay uses it (5–2000 ms, 100 ms at half a turn); Cutoff could too.
 - Knobs: give every `<Knob>` a `label` (or an `aria-label`), and a `value-text` (what a
   screen reader says, such as "120 ms") when its number isn't the real value, for example a
   0..1 position. The text is usually the knob's tooltip.
@@ -395,21 +405,7 @@ Next, in this order (agreed after PR 15; the maintainer changes it as ideas come
 that later features depend on, then sound features in the spirit of the design intent (top of
 this file), then presets that can use them. Everything drum-related waits until the maintainer
 brings the drum lanes back.
-1. **Bring back the pitch envelope, with a drum-style sweep.** Its panel (`PitchEnvModule.vue`:
-   Amount 0–48 semitones, Decay 5–2000 ms, modes up/down/random) is imported in
-   `DrumSequencer.vue` but no longer shown under "Pitch & Harmonics"; the maintainer removed it
-   because it didn't seem useful. The engine still applies it to every note (`applyPitchEnv()`
-   in `src/audio/pitchEnv.ts`, shared with the export engine), but the default amount is 0, so
-   it does nothing. Why it sounded weak: `exponentialRampToValueAtTime` on the frequency glides
-   by the same number of semitones every millisecond, like a laser or siren slide. A drum's
-   pitch drops fast and then settles, as an analog decay envelope into an exponential VCO does
-   (DFAM's VCO decay): use that curve, for example an exponentially decaying offset in cents on
-   `detune` (which already carries the unison detune and the LFO pitch tap). Also make short
-   decays (10–100 ms, where kicks live) easy to reach: `Knob.vue` is linear, so they are under
-   5% of the turn; a non-linear knob option would help the Cutoff knob too. Optionally, let
-   velocity scale the amount. Old projects keep loading (`synth.pitchEnv` is already saved),
-   but any with a non-zero amount will sound different with the new curve.
-2. **Filter envelope, and a filter view on the screen.** Each note's lowpass cutoff is fixed
+1. **Filter envelope, and a filter view on the screen.** Each note's lowpass cutoff is fixed
    for the whole note; only the LFO moves it. Add a DFAM-style filter envelope (Decay and
    Amount: the cutoff starts higher by the amount and decays back), in the live and export
    engines. Add a screen view that draws the filter's real response curve
@@ -417,7 +413,7 @@ brings the drum lanes back.
    faintly behind it, and shows the envelope's sweep. Like the envelope view, it appears while
    Cutoff, Resonance or the new knobs are turned (`knobStart`/`knobEnd`). Ask the maintainer
    whether it also gets its own F-key (the screen has four, keys 1–4).
-3. **Pulse wave with pulse-width modulation, and a few custom waveforms.** Pulse width is how
+2. **Pulse wave with pulse-width modulation, and a few custom waveforms.** Pulse width is how
    much of each cycle the wave spends up versus down; 50% is the current square. Web Audio has
    no pulse oscillator with an adjustable width: feed a sawtooth into a comparator
    (`WaveShaperNode`, with `oversample` to reduce aliasing) whose threshold is moved by a
@@ -428,32 +424,32 @@ brings the drum lanes back.
    balances each wave's loudness, so both need the new waves. The project check accepts any
    wave name (it only checks that it's a string), so saved projects need no migration. The
    global and per-pad wave buttons need room for the new choices, especially on phones.
-4. **Velocity routing.** Each pad's velocity slider only sets its loudness. Let it also drive
+3. **Velocity routing.** Each pad's velocity slider only sets its loudness. Let it also drive
    other settings, as DFAM does by patching its velocity sequence: for example velocity to
    filter cutoff or filter envelope amount, to decay, to pitch envelope amount and to FM index,
    each with an amount knob. That gives per-step variety from a slider that's already there,
-   and is a first step toward parameter locks (item 13).
-5. **Built-in preset library of synth patches.** Planned shape (confirm the open questions
+   and is a first step toward parameter locks (item 12).
+4. **Built-in preset library of synth patches.** Planned shape (confirm the open questions
    before starting): a preset sets only the sound (the synth and fx groups of the snapshot, and
    the waveform), not the pattern, tempo, swing or volume; presets live in `src/lib/presets/`
    as partial snapshots applied with `applySnapshot()`; 8 to 12 of them, picked from a
-   "Preset" dropdown; one undo step each. It comes after items 1–4 so presets can use them
-   (kicks and toms need the pitch envelope, plucks the filter envelope). Open questions: sound
+   "Preset" dropdown; one undo step each. It comes after items 1–3 so presets can use them
+   (kicks and toms use the pitch envelope, done in PR 21; plucks the filter envelope). Open questions: sound
    only, or also starter patterns? What happens to per-pad waveforms? User-saved presets now or
    later? Which sounds? Dropdown above the synth panels or in the toolbar?
-6. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
+5. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
    key-to-note map. Space, 1–4 and the Ctrl/Cmd shortcuts must keep working (see "Keyboard
    shortcuts").
-7. **Master limiter/compressor** (louder output without clipping), together with the **DC
+6. **Master limiter/compressor** (louder output without clipping), together with the **DC
    offset** fix: the drive shaper's curve has an even number of points (1024), so silence
    maps to about −0.011 instead of 0. Even with Drive off, that reaches the speakers through
    the drive wet gain, at about 0.004 with the default settings. It can't be heard, but it
    shows up in measurements (the browser tests use `__swingOver` to ignore it) and wastes a
    little headroom. Both change the sound slightly, so they are listen-tested together. The
    export engine has the same curve and needs the same changes.
-8. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
+7. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
    outside, which works since PR 17.
-9. **Stage view for TVs, and an audio output picker.** Casting already works without code
+8. **Stage view for TVs, and an audio output picker.** Casting already works without code
    (Chrome or Edge "Cast tab", AirPlay screen mirroring, Windows Cast, HDMI), picture and
    sound together, but with a noticeable lag when turning knobs. A Cast button of our own
    isn't practical: the web's casting APIs are made for media files, not sound made live in
@@ -462,29 +458,29 @@ brings the drum lanes back.
    lighting up) designed for a TV, to cast with the browser; and optionally an "Audio output"
    picker (`AudioContext.setSinkId()`, which not every browser supports; check before
    building).
-10. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
-11. **Several patterns (A/B/C/D) chained into a song.**
-12. **32 steps, or per-lane lengths** (the export code's types already allow 32).
-13. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
+9. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
+10. **Several patterns (A/B/C/D) chained into a song.**
+11. **32 steps, or per-lane lengths** (the export code's types already allow 32).
+12. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
     note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
     vary per step. Delay and reverb are shared by every note, so per step they become send
     amounts (how much of the step goes into them), not per-step effect settings, which would
     cut off the previous note's tail; per-step drive would mean moving drive into each note.
     UI idea: select a step with its settings dot, then the knobs you turn change that step
-    only; locked steps are marked, with a way to clear them. Build on item 4 (velocity
+    only; locked steps are marked, with a way to clear them. Build on item 3 (velocity
     routing).
-14. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
+13. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
     in a short delay loop that loses brightness each time round; the original paper also has a
     drum variant), metallic (several square waves at odd ratios, as the 808 makes cymbals and
     cowbell) and struck (a click ringing tuned resonant filters: wood block, marimba, toms,
     bells). Karplus–Strong needs an AudioWorklet: a `DelayNode` in a feedback loop can't be
     shorter than one render quantum (128 samples, about 3 ms), which caps the pitch around the
     F above middle C. AudioWorklets also run in the `OfflineAudioContext` used for WAV export.
-15. **Export options:** N bars or loops, stems, MIDI file.
-16. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
-17. **Install as an app (PWA)** that works offline.
-18. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-19. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
+14. **Export options:** N bars or loops, stems, MIDI file.
+15. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
+16. **Install as an app (PWA)** that works offline.
+17. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+18. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
     purpose so far.
 
 On hold until the drum lanes come back (ask the maintainer before starting any of them):
@@ -502,7 +498,7 @@ On hold until the drum lanes come back (ask the maintainer before starting any o
   phones are remote controls that each show their own part, so network lag only delays when a
   change takes effect, never the beat. Phones that each made the sound would drift apart and
   flam. Also to decide: who can join (a room code), and what undo means with several people.
-  Share links (item 8) build part of it (the project packed into a compact message).
+  Share links (item 7) build part of it (the project packed into a compact message).
 
 Done:
 
@@ -526,6 +522,7 @@ Done:
 | 18 | A saved project that fails the project check is no longer opened silently: at startup a new project is started with a message (so Save works); from File → Open a message says so and the current project stays. |
 | 19 | Lighter change tracking: the project snapshot is built and compared once the settings have been still for 100 ms, not on every change (a burst of 30 knob steps: about 150 JSON conversions of the snapshot → 3). Save, Export file and the leave-page warning include a change made just before them. |
 | 20 | Housekeeping: a real `README.md` (what the app is, running it, checks, deploy), and the Google Analytics tag is added by the build only, so `npm run dev` sends no analytics events. |
+| 21 | Pitch envelope back under "Pitch & Harmonics", with a drum-style sweep: an exponentially decaying offset on `detune` (fast, then settling) instead of a glide of the frequency, in the live and export engines, the same for every unison voice of a note. Its Decay knob is logarithmic (new `taper="log"` knob option), so 10–100 ms is a third of the turn. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

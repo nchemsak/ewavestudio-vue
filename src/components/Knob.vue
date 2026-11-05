@@ -68,22 +68,32 @@ const props = defineProps({
 	markers: { type: Array, default: () => [] },
 	markersOnly: { type: Boolean, default: false },
 	// small rotation to line up with tick
-	markersOffsetDeg: { type: Number, default: -6 }
+	markersOffsetDeg: { type: Number, default: -6 },
+	// How the turn maps to the value. 'linear': evenly. 'log': each part of the turn multiplies
+	// the value by the same amount (min must be above 0), so short times or low frequencies get
+	// as much of the turn as long or high ones; for example 5–2000 ms has 100 ms at half a turn.
+	taper: { type: String, default: 'linear' }
 });
 
 const emit = defineEmits(['update:modelValue', 'knobStart', 'knobEnd']);
 
+// Value ↔ position along the turn (0..1), by the taper
+const isLog = computed(() => props.taper === 'log' && props.min > 0 && props.max > props.min);
+function toPos(v) {
+	if (isLog.value) return Math.log(Math.max(v, props.min) / props.min) / Math.log(props.max / props.min);
+	return (v - props.min) / (props.max - props.min);
+}
+function fromPos(p) {
+	const t = Math.min(1, Math.max(0, p));
+	if (isLog.value) return props.min * Math.pow(props.max / props.min, t);
+	return props.min + t * (props.max - props.min);
+}
+
 // rotation math (−132°..+132° sweep)
-const rotation = computed(() => {
-	const percent = (props.modelValue - props.min) / (props.max - props.min);
-	return percent * 264 - 132;
-});
+const rotation = computed(() => toPos(props.modelValue) * 264 - 132);
 
 // Markers
-const norm = computed(() => {
-	const pct = (props.modelValue - props.min) / (props.max - props.min);
-	return Math.min(1, Math.max(0, pct || 0));
-});
+const norm = computed(() => Math.min(1, Math.max(0, toPos(props.modelValue) || 0)));
 
 const activeMarkerIndex = computed(() => {
 	if (!props.markers?.length) return -1;
@@ -137,7 +147,7 @@ const activeStroke = computed(() => {
 
 // drag behavior
 let startY = 0;
-let startVal = 0;
+let startPos = 0;
 
 function startDrag(e, isTouch = false) {
 	if (props.disabled) return;
@@ -145,22 +155,14 @@ function startDrag(e, isTouch = false) {
 	const end = isTouch ? 'touchend' : 'mouseup';
 
 	startY = isTouch ? e.touches[0].pageY : e.pageY;
-	startVal = props.modelValue;
+	startPos = toPos(props.modelValue);
 	emit('knobStart');
 
 	function onMove(ev) {
 		const currentY = isTouch ? ev.touches[0].pageY : ev.pageY;
 		const deltaY = startY - currentY;
-		const sensitivity = 0.005 * (props.max - props.min);
-		let newVal = startVal + deltaY * sensitivity;
-		newVal = Math.min(
-			props.max,
-			Math.max(
-				props.min,
-				Math.round(newVal / props.step) * props.step
-			)
-		);
-		emit('update:modelValue', newVal);
+		// 200 px of drag is the whole turn
+		emit('update:modelValue', snap(fromPos(startPos + deltaY * 0.005)));
 	}
 
 	function onUp() {
@@ -193,7 +195,17 @@ function onKeydown(e) {
 	const value = props.modelValue;
 
 	let next;
-	switch (e.key) {
+	if (isLog.value) {
+		// Steps along the turn: about 1% (Shift, Page Up/Down: 10%), at least one step of value
+		const pos = toPos(value);
+		const along = { ArrowUp: 0.01, ArrowRight: 0.01, ArrowDown: -0.01, ArrowLeft: -0.01, PageUp: 0.1, PageDown: -0.1 }[e.key];
+		if (along !== undefined) {
+			const d = e.shiftKey && Math.abs(along) < 0.1 ? along * 10 : along;
+			next = snap(fromPos(pos + d));
+			if (next === value) next = snap(value + Math.sign(d) * step);
+		}
+	}
+	if (next === undefined) switch (e.key) {
 		case 'ArrowUp':
 		case 'ArrowRight': next = value + (e.shiftKey ? big : small); break;
 		case 'ArrowDown':
