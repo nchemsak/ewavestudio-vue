@@ -1454,7 +1454,7 @@ test('presets set the sound but not the pattern, light up, and are one undo step
 	await expect(lit).toHaveText(['Bell']);
 });
 
-test('the preset buttons sit between Swing and the logo, or on a row of their own', async ({ page }) => {
+test('the preset buttons and the dice sit between Swing and the logo, or on a row of their own', async ({ page }) => {
 	for (const width of [1600, 1280, 1100, 900, 390]) {
 		await page.setViewportSize({ width, height: 900 });
 		const m = await page.evaluate(() => {
@@ -1464,7 +1464,11 @@ test('the preset buttons sit between Swing and the logo, or on a row of their ow
 			};
 			const row = document.querySelector('.transport-row')!;
 			const buttons = [...document.querySelectorAll('.preset-grid .pt-btn')] as HTMLElement[];
+			const title = document.createRange();
+			title.selectNodeContents(document.querySelector('.preset-box .pt-section-title')!);
 			return {
+				dice: rect(document.querySelector('.preset-dice')!),
+				title: rect(title),
 				card: rect(document.querySelector('.ds-transport')!),
 				swing: rect(row.children[2]),
 				logo: rect(document.querySelector('.transport-logo')!),
@@ -1483,6 +1487,11 @@ test('the preset buttons sit between Swing and the logo, or on a row of their ow
 			expect(b.right, at).toBeLessThanOrEqual(m.card.right);
 			expect(b.bottom, at).toBeLessThanOrEqual(m.card.bottom);
 		}
+		// The dice in the box's top-right corner, clear of the title and the buttons
+		expect(m.dice.right, at).toBeLessThanOrEqual(m.box.right);
+		expect(m.dice.top, at).toBeGreaterThanOrEqual(m.box.top);
+		expect(m.dice.left, `${at}: dice clear of the title`).toBeGreaterThan(m.title.right);
+		expect(m.dice.bottom, `${at}: dice above the buttons`).toBeLessThanOrEqual(Math.min(...m.buttons.map((b) => b.top)));
 		if (width >= 1280) {
 			// In the space between Swing and the logo, three across, and the card is no taller
 			expect(m.box.left, at).toBeGreaterThan(m.swing.right);
@@ -1546,5 +1555,55 @@ test('the Pattern Tools and Presets captions are readable in every theme', async
 			const name = (await caption.textContent())!.trim();
 			expect(await textContrast(page, caption), `${theme}: ${name}`).toBeGreaterThanOrEqual(4.5);
 		}
+	}
+});
+
+test('the dice rolls a new sound, keeps the pattern, lights no preset, and undo goes back', async ({ page }) => {
+	const projectData = async () =>
+		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	const dice = page.getByRole('button', { name: 'Random sound', exact: true });
+	const lit = page.locator('.preset-grid .pt-btn[aria-pressed="true"]');
+	const sound = (d: any) => JSON.stringify({ synth: { ...d.synth, tuning: 0, noise: { ...d.synth.noise, mask: 0 } }, fx: d.fx, wave: d.selectedWaveform });
+	const pattern = (d: any) => ({
+		transport: d.transport, melody: d.melody, tuning: d.synth.tuning, noiseMask: d.synth.noise.mask,
+		lanes: d.instruments.map(({ waveforms, ...lane }: any) => lane),
+	});
+
+	await page.waitForTimeout(SETTLED);
+	await turnOnPads(page, [0, 4, 9]);
+	await page.locator('.preset-grid').getByRole('button', { name: 'Kick', exact: true }).click();
+	await page.waitForTimeout(SETTLED);
+	await expect(lit).toHaveText(['Kick']);
+	const kick = await projectData();
+
+	// Three rolls: three new sounds, each on every pad, the pattern untouched, nothing lit
+	const seen = new Set([sound(kick)]);
+	for (let i = 0; i < 3; i++) {
+		await dice.click();
+		await expect(lit).toHaveCount(0);
+		await page.waitForTimeout(SETTLED);
+		const data = await projectData();
+		seen.add(sound(data));
+		expect(pattern(data)).toEqual(pattern(kick));
+		expect(new Set(data.instruments.find((l: any) => l.name === 'synth-voice').waveforms)).toEqual(new Set([data.selectedWaveform]));
+	}
+	expect(seen.size).toBe(4);
+
+	// Each roll is one undo step
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	for (let i = 0; i < 3; i++) await page.keyboard.press('Control+z');
+	await expect(lit).toHaveText(['Kick']);
+	expect(sound(await projectData())).toBe(sound(kick));
+});
+
+test('dice rolls are never silent or clipping', async ({ page }) => {
+	await turnOnPads(page, [0, 4, 8, 12]);
+	const dice = page.getByRole('button', { name: 'Random sound', exact: true });
+	// 200 rolls measured while building it peaked between 0.10 and 0.65 (the presets: 0.2 to 0.5)
+	for (let i = 0; i < 8; i++) {
+		await dice.click();
+		const peak = wavPeak(await downloadFromFileMenu(page, 'Export WAV'));
+		expect(peak, `roll ${i + 1}`).toBeGreaterThan(0.04);
+		expect(peak, `roll ${i + 1}`).toBeLessThan(0.9);
 	}
 });

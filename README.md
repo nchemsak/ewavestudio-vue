@@ -22,7 +22,7 @@ https://www.ephemeralwave.com/studio/ and is never changed.
   noise, so soft steps sound like softer hits
 - Delay (synced to the tempo), overdrive and reverb
 - Six built-in presets (Kick, Snare, Metal, Pluck, Acid, Bell) that set the sound without
-  touching your pattern
+  touching your pattern, and a dice that rolls a random sound
 - A random melody and arpeggio maker
 - Oscilloscope, spectrogram, tuner and envelope views
 - Play it from a MIDI keyboard (Web MIDI: Chrome, Edge and other Chromium browsers)

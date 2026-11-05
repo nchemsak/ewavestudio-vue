@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { applyPreset, soundKey } from './presets';
 import { PRESETS } from './library';
+import { randomPreset, OPEN_FROM_HZ } from './random';
 import { buildSnapshot, resetSoundToFactoryDefaults } from '../project/snapshot';
 import { STEPS, fresh, asSaved, changeEverything, leaves } from '../project/testState';
 import { WAVE_IDS } from '../../audio/waves';
@@ -41,6 +42,62 @@ const RANGES: Record<string, [number, number]> = {
 const LFO_DEPTH_MAX = { pitch: 1200, filter: 5000, pwm: 45 };
 const LFO_DIVISIONS = ['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32'];
 
+// Knobs whose panel rounds what it's given to its step: a value off the step would be changed
+const KNOB_STEPS: Record<string, number> = {
+	'synth.envelope.attackMs': 1,
+	'synth.envelope.decayMs': 1,
+	'synth.filter.cutoff': 1,
+	'synth.filter.envAmount': 0.1,
+	'synth.filter.envDecayMs': 1,
+	'synth.noise.burstMs': 1,
+	'synth.unison.voices': 1,
+	'synth.unison.detuneCents': 1,
+	'synth.unison.stereoSpread': 1,
+	'synth.pitchEnv.semitones': 1,
+	'synth.pitchEnv.decayMs': 1,
+	'synth.pulse.width': 1,
+	'synth.velocity.decay': 1,
+	'synth.velocity.cutoff': 1,
+	'synth.velocity.pitchEnv': 1,
+	'synth.velocity.noise': 1,
+};
+
+// Every setting a preset sets exists, within its knob's range, and on its step
+function expectValid(p: (typeof PRESETS)[number], where: string) {
+	const known = Object.keys(soundLeaves(asSaved(fresh())));
+	const lfoTarget = p.synth?.lfo?.target ?? 'pitch';
+	expect(WAVE_IDS, `${where}: wave`).toContain(p.wave);
+	for (const [path, json] of Object.entries(presetLeaves(p))) {
+		const at = `${where}: ${path}`;
+		expect(known, at).toContain(path);
+		const v = JSON.parse(json as string);
+		if (RANGES[path]) {
+			expect(v, at).toBeGreaterThanOrEqual(RANGES[path][0]);
+			expect(v, at).toBeLessThanOrEqual(RANGES[path][1]);
+		}
+		const step = KNOB_STEPS[path];
+		if (step) expect(Math.abs(v / step - Math.round(v / step)), at).toBeLessThan(1e-9);
+		if (path === 'synth.lfo.depth') expect(v, at).toBeLessThanOrEqual(LFO_DEPTH_MAX[lfoTarget]);
+		if (path === 'synth.lfo.division') expect(LFO_DIVISIONS, at).toContain(v);
+		if (path === 'synth.fm.ratio') expect([1, 1.5, 2, null], at).toContain(v);
+		if (path === 'synth.pitchEnv.mode') expect(['up', 'down', 'random'], at).toContain(v);
+		if (path === 'fx.delay.division') expect(isDelayDivision(v), at).toBe(true);
+	}
+}
+
+// The same "random" numbers every run (mulberry32)
+function seeded(seed: number) {
+	let a = seed >>> 0;
+	return () => {
+		a = (a + 0x6d2b79f5) >>> 0;
+		let t = a;
+		t = Math.imul(t ^ (t >>> 15), t | 1);
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
+}
+const ROLLS = Array.from({ length: 500 }, (_, i) => randomPreset(seeded(i + 1)));
+
 // The preset's own settings, by snapshot path
 const presetLeaves = (p: (typeof PRESETS)[number]) => leaves({ synth: p.synth ?? {}, fx: p.fx ?? {} });
 
@@ -62,25 +119,8 @@ describe('the preset library', () => {
 		}
 	});
 
-	it('only sets settings that exist, within their knobs\' ranges', () => {
-		const known = soundLeaves(asSaved(fresh()));
-		for (const p of PRESETS) {
-			const lfoTarget = p.synth?.lfo?.target ?? 'pitch';
-			for (const [path, json] of Object.entries(presetLeaves(p))) {
-				const where = `${p.id}: ${path}`;
-				expect(Object.keys(known), where).toContain(path);
-				const v = JSON.parse(json as string);
-				if (RANGES[path]) {
-					expect(v, where).toBeGreaterThanOrEqual(RANGES[path][0]);
-					expect(v, where).toBeLessThanOrEqual(RANGES[path][1]);
-				}
-				if (path === 'synth.lfo.depth') expect(v, where).toBeLessThanOrEqual(LFO_DEPTH_MAX[lfoTarget]);
-				if (path === 'synth.lfo.division') expect(LFO_DIVISIONS, where).toContain(v);
-				if (path === 'synth.fm.ratio') expect([1, 1.5, 2, null], where).toContain(v);
-				if (path === 'synth.pitchEnv.mode') expect(['up', 'down', 'random'], where).toContain(v);
-				if (path === 'fx.delay.division') expect(isDelayDivision(v), where).toBe(true);
-			}
-		}
+	it('only sets settings that exist, within their knobs\' ranges and on their steps', () => {
+		for (const p of PRESETS) expectValid(p, p.id);
 	});
 });
 
@@ -212,5 +252,70 @@ describe('sound keys', () => {
 	it('are empty for an empty project', () => {
 		expect(soundKey({})).toBe('');
 		expect(soundKey(null)).toBe('');
+	});
+});
+
+describe('the dice (a random sound)', () => {
+	it('stays within the knobs\' ranges and on their steps, roll after roll', () => {
+		ROLLS.forEach((p, i) => expectValid(p, `roll ${i + 1}`));
+	});
+
+	it('keeps the level in the presets\' range: resonance up to 10, drive mix up to 0.35', () => {
+		for (const p of ROLLS) {
+			expect(p.synth?.filter?.resonance ?? 0.5).toBeLessThanOrEqual(10);
+			expect(p.fx?.drive?.mix ?? 0).toBeLessThanOrEqual(0.35);
+			expect(p.synth?.envelope?.decayMs).toBeGreaterThanOrEqual(80); // never a silent click
+		}
+	});
+
+	it('never muffles a note with an opening filter envelope', () => {
+		const opening = ROLLS.filter(p => (p.synth?.filter?.envAmount ?? 0) < 0);
+		expect(opening.length).toBeGreaterThan(20);
+		for (const { synth } of opening) {
+			// It starts at 150 Hz or above, and has opened before the note fades
+			expect(synth!.filter!.cutoff! / 2 ** -synth!.filter!.envAmount!).toBeGreaterThanOrEqual(OPEN_FROM_HZ);
+			expect(synth!.filter!.envDecayMs!).toBeLessThanOrEqual(synth!.envelope!.decayMs! * 0.6);
+		}
+	});
+
+	it('lands exactly, with every other sound setting at its default', () => {
+		const defaults = soundLeaves(asSaved(fresh()));
+		ROLLS.slice(0, 60).forEach((p, i) => {
+			const st = fresh();
+			changeEverything(st);
+			applyPreset(st, p);
+			const own = presetLeaves(p);
+			for (const [path, v] of Object.entries(soundLeaves(asSaved(st)))) {
+				expect(v, `roll ${i + 1}: ${path}`).toBe(path in own ? own[path] : defaults[path]);
+			}
+			expect(st.instruments.value.find(l => l.name === 'synth-voice')!.waveforms).toEqual(Array(STEPS).fill(p.wave));
+		});
+	});
+
+	it('varies: every wave comes up, and each part is on in some rolls and off in others', () => {
+		expect(new Set(ROLLS.map(p => p.wave))).toEqual(new Set(WAVE_IDS));
+		const share = (on: (p: (typeof ROLLS)[number]) => boolean) => ROLLS.filter(on).length / ROLLS.length;
+		const parts = {
+			pitchEnv: share(p => !!p.synth?.pitchEnv),
+			filterEnv: share(p => !!p.synth?.filter?.envAmount),
+			noise: share(p => !!p.synth?.noise),
+			fm: share(p => !!p.synth?.fm),
+			unison: share(p => !!p.synth?.unison),
+			lfo: share(p => !!p.synth?.lfo),
+			velocity: share(p => !!p.synth?.velocity),
+			reverb: share(p => !!p.fx?.reverb),
+			delay: share(p => !!p.fx?.delay),
+			drive: share(p => !!p.fx?.drive),
+		};
+		for (const [part, s] of Object.entries(parts)) {
+			expect(s, part).toBeGreaterThan(0.1);
+			expect(s, part).toBeLessThan(0.7);
+		}
+		expect(new Set(ROLLS.map(p => JSON.stringify(p))).size).toBe(ROLLS.length); // no two alike
+	});
+
+	it('is the same roll for the same random numbers, and uses Math.random by default', () => {
+		expect(randomPreset(seeded(7))).toEqual(randomPreset(seeded(7)));
+		expect(WAVE_IDS).toContain(randomPreset().wave);
 	});
 });
