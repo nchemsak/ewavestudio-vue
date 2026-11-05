@@ -214,7 +214,7 @@ function shapeReset(): void {
 }
 
 .pt-section {
-	background-color: rgba(15, 18, 26, .70);
+	background-color: var(--pt-inset);
 	border-radius: var(--pt-radius);
 
 }

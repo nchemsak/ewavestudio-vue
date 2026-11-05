@@ -1496,3 +1496,55 @@ test('the preset buttons sit between Swing and the logo, or on a row of their ow
 		}
 	}
 });
+
+// Contrast between an element's text and what's behind it, from a screenshot of just the
+// text (not the whole element, whose rounded corners could show something else): the
+// background is the most common shade (the median), the text the shade farthest from it.
+// WCAG contrast ratio, 1 (invisible) to 21 (black on white).
+async function textContrast(page: Page, text: ReturnType<Page['locator']>) {
+	const clip = await text.evaluate((el) => {
+		const range = document.createRange();
+		range.selectNodeContents(el);
+		const r = range.getBoundingClientRect();
+		return { x: r.left, y: r.top, width: r.width, height: r.height };
+	});
+	const png = (await page.screenshot({ clip })).toString('base64');
+	return page.evaluate(async (b64) => {
+		const img = new Image();
+		img.src = `data:image/png;base64,${b64}`;
+		await img.decode();
+		const canvas = document.createElement('canvas');
+		canvas.width = img.width;
+		canvas.height = img.height;
+		const ctx = canvas.getContext('2d')!;
+		ctx.drawImage(img, 0, 0);
+		const px = ctx.getImageData(0, 0, img.width, img.height).data;
+		const lin = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+		const lum: number[] = [];
+		for (let i = 0; i < px.length; i += 4) lum.push(0.2126 * lin(px[i]) + 0.7152 * lin(px[i + 1]) + 0.0722 * lin(px[i + 2]));
+		lum.sort((a, b) => a - b);
+		const bg = lum[Math.floor(lum.length / 2)];
+		const fg = bg - lum[0] > lum[lum.length - 1] - bg ? lum[0] : lum[lum.length - 1];
+		return (Math.max(bg, fg) + 0.05) / (Math.min(bg, fg) + 0.05);
+	}, png);
+}
+
+test('the Pattern Tools and Presets captions are readable in every theme', async ({ page }) => {
+	// The Light theme has no button at the moment (ThemeToggle.vue), but a saved choice still
+	// applies it
+	for (const theme of ['synthwave', 'dark', 'light']) {
+		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), theme);
+		await page.reload();
+		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${theme}`));
+		const captions = [
+			...await page.locator('.pattern-tools .pt-section-title').all(),
+			page.locator('.pattern-tools .pt-inline-check'),
+			page.locator('.preset-box .pt-section-title'),
+		];
+		expect(captions).toHaveLength(5); // Step Fills, Humanize, Octave, Active Pads Only, Presets
+		for (const caption of captions) {
+			const name = (await caption.textContent())!.trim();
+			expect(await textContrast(page, caption), `${theme}: ${name}`).toBeGreaterThanOrEqual(4.5);
+		}
+	}
+});
