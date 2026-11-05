@@ -20,12 +20,28 @@
                     Q: {{ localResonance.toFixed(1) }}
                 </span>
             </div>
+
+            <!-- Filter envelope: how far the cutoff jumps at each note (octaves, either way), and
+                 how fast it comes back -->
+            <div class="position-relative text-center">
+                <Knob v-model="envAmountModel" bipolar label="Env Amt" size="small" :min="-ENV_OCTAVES" :max="ENV_OCTAVES"
+                    :step="0.1" :value-text="envAmountText" :disabled="!localEnabled" :color="color"
+                    @knobStart="onKnobStart('envAmt')" @knobEnd="onKnobEnd" />
+                <span v-if="activeKnob === 'envAmt'" class="custom-tooltip">{{ envAmountTip }}</span>
+            </div>
+
+            <div class="position-relative text-center">
+                <Knob v-model="envDecayModel" label="Decay" size="small" :min="5" :max="2000" :step="1" taper="log"
+                    :value-text="`${Math.round(envDecayMs)} ms`" :disabled="!localEnabled" :color="color"
+                    @knobStart="onKnobStart('envDecay')" @knobEnd="onKnobEnd" />
+                <span v-if="activeKnob === 'envDecay'" class="custom-tooltip">{{ Math.round(envDecayMs) }} ms</span>
+            </div>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 
 const props = withDefaults(
@@ -33,6 +49,8 @@ const props = withDefaults(
         enabled: boolean;
         cutoff: number;
         resonance: number;
+        envAmount?: number; // octaves, −ENV_OCTAVES..+ENV_OCTAVES (0: off)
+        envDecayMs?: number;
         title?: string;
         color?: string;
         showToggle?: boolean;
@@ -60,6 +78,8 @@ const emit = defineEmits<{
     (e: 'update:enabled', v: boolean): void;
     (e: 'update:cutoff', v: number): void;
     (e: 'update:resonance', v: number): void;
+    (e: 'update:envAmount', v: number): void;
+    (e: 'update:envDecayMs', v: number): void;
     // A knob is being turned (drag or keys) / let go: the screen shows the filter meanwhile
     (e: 'knob-start'): void;
     (e: 'knob-end'): void;
@@ -102,9 +122,33 @@ watch(localResonance, (v) => {
     emit('update:resonance', clamped);
 });
 
-const activeKnob = ref<null | 'cutoff' | 'res'>(null);
+const activeKnob = ref<null | 'cutoff' | 'res' | 'envAmt' | 'envDecay'>(null);
 
-function onKnobStart(which: 'cutoff' | 'res') {
+const ENV_OCTAVES = 5;
+const envAmount = computed(() => props.envAmount ?? 0);
+const envDecayMs = computed(() => props.envDecayMs ?? 200);
+const envAmountModel = computed<number>({
+    get: () => envAmount.value,
+    set: (v) => emit('update:envAmount', Math.round(Math.max(-ENV_OCTAVES, Math.min(ENV_OCTAVES, v)) * 10) / 10),
+});
+const envDecayModel = computed<number>({
+    get: () => envDecayMs.value,
+    set: (v) => emit('update:envDecayMs', Math.max(5, Math.min(2000, Math.round(v)))),
+});
+const envAmountTip = computed(() => {
+    const a = envAmount.value;
+    if (a === 0) return 'Off';
+    return `${a > 0 ? '+' : '−'}${Math.abs(a).toFixed(1)} oct, ${a > 0 ? 'closes' : 'opens'}`;
+});
+const envAmountText = computed(() => {
+    const a = envAmount.value;
+    if (a === 0) return 'off';
+    return a > 0
+        ? `cutoff starts ${a.toFixed(1)} octaves higher and closes`
+        : `cutoff starts ${Math.abs(a).toFixed(1)} octaves lower and opens`;
+});
+
+function onKnobStart(which: 'cutoff' | 'res' | 'envAmt' | 'envDecay') {
     activeKnob.value = which;
     emit('knob-start');
 }

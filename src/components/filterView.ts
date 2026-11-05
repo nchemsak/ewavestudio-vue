@@ -2,7 +2,9 @@
 // The screen's filter view: the low-pass filter's real response curve on a log-frequency
 // axis, with the live spectrum faintly behind it. DrumSequencer shows it while Cutoff or
 // Resonance is turned (like the envelope view, but without an F-key). When the LFO moves the
-// cutoff, faint dashed curves show how far it goes either way.
+// cutoff, faint dashed curves show how far it goes either way. With the filter envelope on
+// (Env Amt), a lighter curve shows where each note's filter starts, and an arrow its sweep
+// back to the cutoff.
 //
 // The curve comes from BiquadFilterNode.getFrequencyResponse() on a node set up as each
 // note's filter is (liveEngine.ts): type lowpass, the cutoff and Q, or 20 kHz and Q 0.0001
@@ -49,6 +51,13 @@ export function engineFilter(enabled: boolean, cutoff: number, resonance: number
 	return enabled ? { frequency: cutoff, Q: resonance } : { frequency: 20000, Q: 0.0001 };
 }
 
+// Where each note's cutoff starts with the filter envelope (Env Amt octaves away), or null
+// when there's no sweep (envelope at 0, or the filter off)
+export function filterEnvStartHz(enabled: boolean, cutoff: number, envOctaves: number): number | null {
+	if (!enabled || !envOctaves) return null;
+	return cutoff * Math.pow(2, envOctaves);
+}
+
 // The cutoffs the LFO swings between ([low, high]), or null when it doesn't move the filter
 export function lfoCutoffRange(
 	lfo: { enabled: boolean; target: string; depth: number },
@@ -71,6 +80,7 @@ type Settings = {
 	filterEnabled: () => boolean;
 	cutoff: () => number;
 	resonance: () => number;
+	envAmount: () => number; // filter envelope, octaves
 	lfo: () => { enabled: boolean; target: string; depth: number };
 };
 
@@ -181,6 +191,25 @@ export function startFilterView(opts: {
 			ctx!.setLineDash([4, 4]);
 			for (const f of range) stroke(response(f, Q));
 			ctx!.setLineDash([]);
+		}
+
+		// The filter envelope: where each note starts (lighter), and an arrow back to the cutoff
+		const envStart = filterEnvStartHz(on, frequency, settings.envAmount());
+		if (envStart) {
+			ctx!.globalAlpha = 0.5;
+			ctx!.lineWidth = 1.5;
+			ctx!.strokeStyle = ink;
+			stroke(response(envStart, Q));
+			const ay = T + 6;
+			const x0 = xOf(envStart), x1 = xOf(frequency);
+			const dir = Math.sign(x1 - x0);
+			if (Math.abs(x1 - x0) > 8) {
+				ctx!.beginPath();
+				ctx!.moveTo(x0, ay); ctx!.lineTo(x1, ay);
+				ctx!.moveTo(x1, ay); ctx!.lineTo(x1 - dir * 5, ay - 4);
+				ctx!.moveTo(x1, ay); ctx!.lineTo(x1 - dir * 5, ay + 4);
+				ctx!.stroke();
+			}
 		}
 
 		// The response curve

@@ -4,6 +4,7 @@
 
 import { applyPitchEnv, pitchEnvStartCents } from "../pitchEnv";
 import { lfoFilterTapGain } from "../synthHelpers";
+import { applyFilterEnv } from "../filterEnv";
 import { startFM } from "../fm";
 import { generateReverbIR } from "../reverb/generateIr";
 
@@ -23,7 +24,7 @@ export type StepSequencerState = {
 
 	synth: {
 		envelope: { enabled: boolean; attackMs: number; decayMs: number; };
-		filter: { enabled: boolean; cutoff: number; resonance: number; };
+		filter: { enabled: boolean; cutoff: number; resonance: number; envAmount?: number; envDecayMs?: number };
 
 		noise: {
 			enabled: boolean;
@@ -593,6 +594,8 @@ function scheduleSynthNote(opts: {
 		if (filterState.enabled) {
 			voiceFilter.frequency.setValueAtTime(filterState.cutoff, time);
 			voiceFilter.Q.setValueAtTime(filterState.resonance, time);
+			// Filter envelope, as in the live engine
+			applyFilterEnv(voiceFilter, time, filterState.envAmount ?? 0, (filterState.envDecayMs ?? 200) / 1000);
 		} else {
 			voiceFilter.frequency.setValueAtTime(20000, time);
 			voiceFilter.Q.setValueAtTime(0.0001, time);

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	FREQ_MIN, FREQ_MAX, DB_TOP, DB_BOTTOM,
-	logFrequencies, freqToPos, posToFreq, dbToPos, engineFilter, lfoCutoffRange, formatHz,
+	logFrequencies, freqToPos, posToFreq, dbToPos, engineFilter, lfoCutoffRange, formatHz, filterEnvStartHz,
 } from './filterView';
 import { lfoFilterTapGain } from '../audio/synthHelpers';
 
@@ -36,6 +36,11 @@ describe('filter view settings', () => {
 	it('draws the filter the engine uses: wide open when it is off', () => {
 		expect(engineFilter(true, 1200, 4)).toEqual({ frequency: 1200, Q: 4 });
 		expect(engineFilter(false, 1200, 4)).toEqual({ frequency: 20000, Q: 0.0001 });
+		// The filter envelope's starting cutoff: Env Amt octaves away; none when off or at 0
+		expect(filterEnvStartHz(true, 1000, 2)).toBe(4000);
+		expect(filterEnvStartHz(true, 1000, -1)).toBe(500);
+		expect(filterEnvStartHz(true, 1000, 0)).toBeNull();
+		expect(filterEnvStartHz(false, 1000, 2)).toBeNull();
 	});
 
 	it("shows the LFO swing only when the LFO moves the filter, kept in the engine safe band", () => {

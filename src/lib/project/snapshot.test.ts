@@ -42,7 +42,7 @@ function makeState(maxVoices = 6): ProjectState {
 		transport: { volume: ref(0.1), tempo: ref(140), swing: ref(0.5) },
 		synth: {
 			envelope: { enabled: ref(false), attackMs: ref(1), decayMs: ref(2) },
-			filter: { enabled: ref(false), cutoff: ref(1), resonance: ref(2) },
+			filter: { enabled: ref(false), cutoff: ref(1), resonance: ref(2), envAmount: ref(3), envDecayMs: ref(9) },
 			noise: {
 				enabled: ref(true), color: ref(0.9), amount: ref(0.9), mask: noiseMask,
 				attackBurst: ref(true), burstMs: ref(5),
@@ -104,6 +104,7 @@ function changeEverything(st: ProjectState) {
 	t.volume.value = 0.5; t.tempo.value = 123; t.swing.value = 0.25;
 	s.envelope.enabled.value = false; s.envelope.attackMs.value = 7; s.envelope.decayMs.value = 900;
 	s.filter.enabled.value = false; s.filter.cutoff.value = 1200; s.filter.resonance.value = 3;
+	s.filter.envAmount.value = -2.5; s.filter.envDecayMs.value = 80;
 	s.noise.enabled.value = true; s.noise.color.value = 0.8; s.noise.amount.value = 0.6;
 	s.noise.mask.value = s.noise.mask.value.map((_, i) => i % 2 === 0);
 	s.noise.attackBurst.value = true; s.noise.burstMs.value = 40;
@@ -142,7 +143,7 @@ describe('factory defaults (File → New)', () => {
 		expect(snap.transport).toEqual({ volume: 0.75, tempo: 80, swing: 0 });
 		expect(snap.synth).toEqual({
 			envelope: { enabled: true, attackMs: 20, decayMs: 400 },
-			filter: { enabled: true, cutoff: 5000, resonance: 0.5 },
+			filter: { enabled: true, cutoff: 5000, resonance: 0.5, envAmount: 0, envDecayMs: 200 },
 			noise: {
 				enabled: false, type: 'legacy', color: 0.5, amount: 0.25,
 				mask: Array(STEPS).fill(true), attackBurst: false, burstMs: 80,
@@ -241,6 +242,16 @@ describe('saving and loading a project', () => {
 		expect(delay(100, 0.401)[0]).toBe('1/4T'); // within 1% of 0.4 s
 		// No division matches (File → New used to leave 0.2 s): the default, as the knob showed
 		expect(delay(80, 0.2)).toEqual(['1/8.', 0.5625]);
+	});
+
+	it('gives projects saved before the filter envelope none', () => {
+		const st = fresh();
+		changeEverything(st);
+		applySnapshot(st, { synth: { filter: { enabled: true, cutoff: 900, resonance: 2 } } });
+		expect(st.synth.filter.envAmount.value).toBe(0);
+		expect(st.synth.filter.envDecayMs.value).toBe(200);
+		applySnapshot(st, { synth: { filter: { envAmount: 12 } } });
+		expect(st.synth.filter.envAmount.value).toBe(5); // kept to ±5 octaves
 	});
 
 	it('reads the noise color of projects saved before the color knob', () => {

@@ -17,6 +17,7 @@
 
 import { ref, computed, watch, onMounted, onBeforeUnmount, type Ref } from 'vue';
 import { applyPitchEnv, pitchEnvStartCents } from './pitchEnv';
+import { applyFilterEnv } from './filterEnv';
 import { startFM } from './fm';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
@@ -55,7 +56,7 @@ export type LiveEngineSettings = {
 		noiseMask: R<boolean[]>; // per step: may this step add noise?
 	};
 	envelope: { enabled: R<boolean>; attackMs: R<number>; decayMs: R<number> };
-	filter: { enabled: R<boolean>; cutoff: R<number>; resonance: R<number> };
+	filter: { enabled: R<boolean>; cutoff: R<number>; resonance: R<number>; envAmount: R<number>; envDecayMs: R<number> };
 	noise: { enabled: R<boolean>; color: R<number>; amount: R<number>; attackBurst: R<boolean>; burstMs: R<number> };
 	unison: { enabled: R<boolean>; voices: R<number>; maxVoices: R<number>; detuneCents: R<number>; stereoSpread: R<number> };
 	lfo: {
@@ -587,6 +588,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			if (filterEnabled) {
 				voiceFilter.frequency.setValueAtTime(filterCutoff, startTime);
 				voiceFilter.Q.setValueAtTime(s.filter.resonance.value, startTime);
+				// Filter envelope: the cutoff starts Env Amt octaves away and returns within Decay
+				applyFilterEnv(voiceFilter, startTime, s.filter.envAmount.value, s.filter.envDecayMs.value / 1000);
 			} else {
 				voiceFilter.frequency.setValueAtTime(20000, startTime);
 				voiceFilter.Q.setValueAtTime(0.0001, startTime);

@@ -60,7 +60,8 @@ export type ProjectState = {
 	transport: { volume: Ref<number>; tempo: Ref<number>; swing: Ref<number> };
 	synth: {
 		envelope: { enabled: Ref<boolean>; attackMs: Ref<number>; decayMs: Ref<number> };
-		filter: { enabled: Ref<boolean>; cutoff: Ref<number>; resonance: Ref<number> };
+		// envAmount: the filter envelope in octaves (−5..+5, 0 off); envDecayMs: its decay
+		filter: { enabled: Ref<boolean>; cutoff: Ref<number>; resonance: Ref<number>; envAmount: Ref<number>; envDecayMs: Ref<number> };
 		noise: {
 			enabled: Ref<boolean>;
 			color: Ref<number>;
@@ -141,6 +142,8 @@ function byName(st: ProjectState) {
 		filterEnabled: sy.filter.enabled,
 		filterCutoff: sy.filter.cutoff,
 		filterResonance: sy.filter.resonance,
+		filterEnvAmount: sy.filter.envAmount,
+		filterEnvDecayMs: sy.filter.envDecayMs,
 		noiseEnabled: sy.noise.enabled,
 		noiseColor: sy.noise.color,
 		noiseAmount: sy.noise.amount,
@@ -204,7 +207,7 @@ export function buildSnapshot(st: ProjectState) {
 		currentTheme, stepLength, collapsibleState, seqOpen, setStepLength,
 		volume, tempo, swing,
 		envelopeEnabled, ampEnvAttackMs, ampEnvDecayMs,
-		filterEnabled, filterCutoff, filterResonance,
+		filterEnabled, filterCutoff, filterResonance, filterEnvAmount, filterEnvDecayMs,
 		noiseEnabled, noiseColor, noiseAmount, noiseMask, noiseAttackBurst, noiseBurstMs,
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
@@ -242,6 +245,8 @@ export function buildSnapshot(st: ProjectState) {
 				enabled: filterEnabled.value,
 				cutoff: filterCutoff.value,
 				resonance: filterResonance.value,
+				envAmount: filterEnvAmount.value,
+				envDecayMs: filterEnvDecayMs.value,
 			},
 			noise: {
 				enabled: noiseEnabled.value,
@@ -354,7 +359,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		currentTheme, stepLength, collapsibleState, seqOpen, setStepLength,
 		volume, tempo, swing,
 		envelopeEnabled, ampEnvAttackMs, ampEnvDecayMs,
-		filterEnabled, filterCutoff, filterResonance,
+		filterEnabled, filterCutoff, filterResonance, filterEnvAmount, filterEnvDecayMs,
 		noiseEnabled, noiseColor, noiseAmount, noiseMask, noiseAttackBurst, noiseBurstMs,
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
@@ -399,6 +404,9 @@ export function applySnapshot(st: ProjectState, s: any) {
 		filterEnabled.value = !!syn.filter.enabled;
 		if (typeof syn.filter.cutoff === 'number') filterCutoff.value = syn.filter.cutoff;
 		if (typeof syn.filter.resonance === 'number') filterResonance.value = syn.filter.resonance;
+		// Projects saved before the filter envelope: none (0 octaves), default decay
+		filterEnvAmount.value = typeof syn.filter.envAmount === 'number' ? Math.max(-5, Math.min(5, syn.filter.envAmount)) : 0;
+		filterEnvDecayMs.value = typeof syn.filter.envDecayMs === 'number' ? syn.filter.envDecayMs : 200;
 	}
 
 	if (syn.noise) {
@@ -572,7 +580,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 		currentTheme, stepLength, collapsibleState, seqOpen, setStepLength,
 		volume, tempo, swing,
 		envelopeEnabled, ampEnvAttackMs, ampEnvDecayMs,
-		filterEnabled, filterCutoff, filterResonance,
+		filterEnabled, filterCutoff, filterResonance, filterEnvAmount, filterEnvDecayMs,
 		noiseEnabled, noiseColor, noiseAmount, noiseMask, noiseAttackBurst, noiseBurstMs,
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
@@ -606,6 +614,8 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	filterEnabled.value = true;
 	filterCutoff.value = 5000;
 	filterResonance.value = 0.5;
+	filterEnvAmount.value = 0;
+	filterEnvDecayMs.value = 200;
 
 	noiseEnabled.value = false;
 	noiseMask.value = Array(stepLength.value).fill(true);
