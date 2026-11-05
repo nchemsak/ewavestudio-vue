@@ -66,7 +66,7 @@
                                 :class="{ active: currentTarget === 'pwm', 'no-pulse': !pulseInUse }" :disabled="!localEnabled" role="radio"
                                 :aria-checked="currentTarget === 'pwm' ? 'true' : 'false'" aria-label="Pulse width"
                                 @click="updateTarget('pwm')"
-                                :title="pulseInUse ? 'Modulate the pulse wave\'s width' : 'Only affects pads playing Pulse. None do right now.'">PW</button>
+                                :title="pulseInUse ? 'Modulate the pulse wave\'s width' : 'Only affects pads playing Pulse. None do right now.'">Pulse</button>
                         </div>
                     </div>
                 </div>
@@ -395,6 +395,15 @@ function wavePath(w: Wave | string): string {
 @container lfo (max-width: 352px) {
     .lfo-switch-label {
         display: none;
+    }
+
+    /* ...and a little less room between things, so Pitch / Filter / Pulse still fit */
+    .lfo-row {
+        gap: 8px;
+    }
+
+    .lfo-seg-btn {
+        padding: 0 6px;
     }
 }
 

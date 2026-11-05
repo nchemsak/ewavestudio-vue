@@ -856,6 +856,9 @@ test('Envelope and Pitch sit beside a 2×2 Filter, even where the cards are narr
 		expect(filter.top).toBe(env.top);
 		expect(Math.abs(filter.bottom - pitch.bottom)).toBeLessThanOrEqual(1); // one block
 		expect(filter.rows, `${width} px: Filter is 2×2`).toBe(2);
+		// The LFO stays one compact row (power, knobs, and the Wave / Target switches)
+		const lfo = await page.locator('.module.mod').boundingBox();
+		expect(lfo!.height, `${width} px: LFO one row`).toBeLessThan(140);
 		for (const c of cards) expect(c, `${width} px`).toMatchObject({ oneLine: true, inside: true });
 	}
 });
@@ -961,8 +964,21 @@ test('Pulse Width sits on the Pulse tile, and the LFO says when PW has no pulse 
 	await expect(sine).toHaveAttribute('aria-checked', 'true');
 	await expect(pulse).toHaveAttribute('aria-checked', 'false');
 
+	// One side of the pulse only: from 5% (thinnest) to 50% (the square, fullest), and the
+	// tile's bar follows: thinnest at 5%, widest at 50%
+	const barWidth = () => pulse.locator('svg.wave-svg path').first().getAttribute('d')
+		.then((d) => { const [a, b] = [...d!.matchAll(/H(\d+(?:\.\d+)?)/g)].map((m) => Number(m[1])); return b - a; });
+	await width.focus();
+	await page.keyboard.press('Home');
+	await expect(width).toHaveAttribute('aria-valuenow', '5');
+	const thin = await barWidth();
+	await page.keyboard.press('End');
+	await expect(width).toHaveAttribute('aria-valuenow', '50');
+	expect(await barWidth()).toBeGreaterThan(thin * 3);
+
 	// The LFO on PW with no pulse playing: PW looks dimmer and says why; the tile says No Pulse
 	const pw = page.locator('.module.mod').getByRole('radio', { name: 'Pulse width' });
+	await expect(pw).toHaveText('Pulse'); // spelled out: "PW" meant little to a newcomer
 	const status = page.locator('.module.mod .lfo-status');
 	await expect(pw).toHaveAttribute('title', /None do right now/);
 	await pw.click();

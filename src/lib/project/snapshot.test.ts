@@ -252,8 +252,10 @@ describe('saving and loading a project', () => {
 		changeEverything(st);
 		applySnapshot(st, { synth: { envelope: { enabled: true, attackMs: 20, decayMs: 400 } } });
 		expect(st.synth.pulse.width.value).toBe(50);
+		applySnapshot(st, { synth: { pulse: { width: 75 } } });
+		expect(st.synth.pulse.width.value).toBe(25); // above 50%: its mirror, which sounds the same
 		applySnapshot(st, { synth: { pulse: { width: 99 } } });
-		expect(st.synth.pulse.width.value).toBe(95); // kept to 5–95%
+		expect(st.synth.pulse.width.value).toBe(5); // and kept to 5–50%
 		applySnapshot(st, { synth: { lfo: { target: 'pwm' } } });
 		expect(st.synth.lfo.target.value).toBe('pwm');
 		applySnapshot(st, { selectedWaveform: 'glass' });

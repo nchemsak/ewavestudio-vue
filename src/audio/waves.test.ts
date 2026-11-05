@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	WAVE_IDS, isWave, waveGain, harmonicCycle, HARMONICS, pulseOffset, lfoPwmTapGain,
-	createVoiceSource, PULSE_WIDTH_DEFAULT,
+	createVoiceSource, PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MAX, foldPulseWidth,
 } from './waves';
 
 const rms = (a: Float32Array) => Math.sqrt(a.reduce((s, x) => s + x * x, 0) / a.length);
@@ -50,13 +50,24 @@ describe('pulse wave', () => {
 	}
 
 	it('is high for Width % of each cycle, and centred on 0 (no DC)', () => {
-		for (const w of [5, 25, 50, 80, 95]) {
+		for (const w of [5, 25, 40, 50]) {
 			const c = pulseCycle(w);
 			expect(c.high).toBeCloseTo(w / 100, 2);
 			expect(Math.abs(c.mean)).toBeLessThan(0.02);
 		}
+		// Above 50% (older projects): played as its mirror, which sounds the same
+		expect(pulseCycle(80).high).toBeCloseTo(0.2, 2);
 		expect(pulseOffset(50)).toBe(0); // 50% is the square
-		expect(pulseOffset(0)).toBe(pulseOffset(5)); // kept to 5–95%
+		expect(pulseOffset(0)).toBe(pulseOffset(5)); // kept to 5–50%
+		expect(pulseOffset(75)).toBe(pulseOffset(25)); // the mirror sounds the same
+	});
+
+	it('mirrors a width above 50% (an upside-down pulse sounds the same)', () => {
+		expect(foldPulseWidth(75)).toBe(25);
+		expect(foldPulseWidth(95)).toBe(5);
+		expect(foldPulseWidth(50)).toBe(50);
+		expect(foldPulseWidth(30)).toBe(30);
+		expect(foldPulseWidth(1)).toBe(5);
 	});
 
 	it('limits the LFO\'s width swing to 5–95%', () => {
@@ -89,5 +100,6 @@ describe('pulse wave', () => {
 		expect((createVoiceSource(ctx, 'organ').osc as any).periodic).toEqual({ periodic: true });
 		expect((createVoiceSource(ctx, 'nonsense').osc as any).type).toBe('sine');
 		expect(PULSE_WIDTH_DEFAULT).toBe(50);
+		expect(PULSE_WIDTH_MAX).toBe(50); // the knob goes from 5% (thinnest) to the square
 	});
 });
