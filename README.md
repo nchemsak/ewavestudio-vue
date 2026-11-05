@@ -16,7 +16,8 @@ https://www.ephemeralwave.com/studio/ and is never changed.
 - One 16-step synth lane with per-step pitch, velocity and waveform: sine, triangle, saw,
   square, a pulse with adjustable width (and LFO pulse-width modulation), organ, hollow and glass
 - Amp envelope, a drum-style pitch envelope, a filter with its own envelope, noise, FM, unison
-  and an LFO
+  and an LFO, whose movement shows on what it moves (the Cutoff knob, the Pulse tile or the
+  step pads)
 - Velocity routing: a step's velocity can also shape its decay, brightness, pitch sweep and
   noise, so soft steps sound like softer hits
 - Delay (synced to the tempo), overdrive and reverb

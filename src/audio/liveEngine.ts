@@ -423,6 +423,24 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		if (lfoOsc) { try { lfoOsc.stop(); } catch { } lfoOsc.disconnect(); lfoOsc = null; }
 	}
 
+	// Where the LFO is now (−1..1), for the LFO visualizer (DrumSequencer shows it on the
+	// control the LFO moves): a tiny AnalyserNode on the LFO oscillator, read on demand. An
+	// analyser is processed even though it isn't connected to the speakers.
+	const lfoProbe = audioCtx.createAnalyser();
+	lfoProbe.fftSize = 32;
+	const lfoProbeBuf = new Float32Array(lfoProbe.fftSize);
+	function lfoNow(): number | null {
+		if (!lfoOsc || audioCtx.state !== 'running') return null;
+		lfoProbe.getFloatTimeDomainData(lfoProbeBuf);
+		const v = lfoProbeBuf[lfoProbeBuf.length - 1];
+		return Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : null;
+	}
+
+	// Is anything sounding? The sequencer is playing, or a note (MIDI) started in the last
+	// `ms`. The LFO visualizer only moves then.
+	let lastNoteAt = -Infinity;
+	const soundingRecently = (ms = 1500) => isPlaying.value || performance.now() - lastNoteAt < ms;
+
 	function ensureLfoSource() {
 		stopLfo();
 
@@ -431,6 +449,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		lfoOsc.type = lfoWaveform.value;
 		lfoOsc.frequency.setValueAtTime(hz, audioCtx.currentTime);
 		lfoOsc.connect(lfoGain);
+		lfoOsc.connect(lfoProbe);
 		lfoOsc.start();
 	}
 
@@ -516,6 +535,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	// `velocity` is the note's loudness (its step's velocity × the lane's volume); `opts.vel` is
 	// the step's (or MIDI note's) own velocity 0..1, for velocity routing (velocity.ts)
 	function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: Wave | string, opts: { addNoise?: boolean; vel?: number } = {}) {
+
+		lastNoteAt = performance.now();
 
 		// Velocity routing: what this note's velocity does to decay, cutoff, pitch env and noise
 		const routed = routeVelocity({
@@ -858,6 +879,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		currentStep,
 		playSynthNote,
 		startLfoIfNeeded,
+		lfoNow,
+		soundingRecently,
 		togglePlay,
 		hardStopSequencer,
 		loadSample,

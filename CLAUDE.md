@@ -42,8 +42,8 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
 - **Type check:** `tsconfig.json` is deliberately lenient (`strict` and `noImplicitAny` off),
   because the code was written without a type checker. It must stay at zero errors.
 - **Unit tests** (Vitest, in Node): pure logic such as loading and upgrading saved projects,
-  WAV encoding, storage names, the playback clock, synth helpers, MIDI input (with a fake
-  MIDI system), the undo history and project snapshots (save → load round trip, older
+  WAV encoding, storage names, the playback clock, synth helpers, the LFO visualizer's
+  arithmetic, MIDI input (with a fake MIDI system), the undo history and project snapshots (save → load round trip, older
   projects, factory defaults). `vitest.config.js` reuses `vite.config.js` and sets `BASE_URL`
   to the real base, so code sees `/studio2/` as in the app.
 - **Browser tests** (Playwright, Chromium), `e2e/app.spec.ts`: build, serve with
@@ -130,6 +130,7 @@ src/components/
   modules/*.vue          Synth and effect panels: Envelope, Filter, PitchEnv, Noise, FM,
                          Unison, LFOGroup, Delay, Drive, Reverb (UI only; mostly v-model)
   SynthStepGrid.vue      16 synth step pads with velocity and pitch sliders
+  LfoBendMark.vue        The LFO's pitch bend drawn on a lit pad (see "LFO visualizer")
   MelodyMaker.vue        Scale, key and range; random melody and arpeggio generator
   PatternTools.vue       Synth-lane tools: step fills (all, every 2/4, invert, random, clear),
                          velocity shapes ("Humanize") and octave shift
@@ -158,6 +159,7 @@ src/lib/project/snapshot.ts  Settings ↔ project snapshot, and factory defaults
 src/lib/project/history.ts   Undo/redo history of snapshots (pure; see "Undo / redo")
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
+src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
 src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/export,
                          namespace.ts (storage names, one set per site folder)
 src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) + v1→v2
@@ -166,6 +168,7 @@ src/composables/useTheme.ts      synthwave | dark | light theme, stored in local
 src/composables/useMidiInput.ts  Web MIDI note input (see "MIDI")
 src/composables/useProjectSync.ts  Keeps the settings and the project store in step (see "Saving")
 src/composables/useUndoHistory.ts  When to record an undo step, and applying undo/redo
+src/composables/useLfoVisual.ts  The LFO visualizer's frame clock
 src/assets/styles/       _bootstrap-custom.scss (the Bootstrap parts in use, then main.scss),
                          and all global SCSS (themes are in _themes.scss). _sequencer.scss and
                          _keyboard.scss are not built (main.scss doesn't load them)
@@ -183,8 +186,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   component's own refs: the transport, synth and effect groups of `projectState` (see
   "Saving / projects"), plus the pattern lanes. The engine only reads them, and follows
   changes with watchers. It returns `audioCtx`, `analyser`, `isPlaying`,
-  `currentStep`, `playSynthNote`, `startLfoIfNeeded`, `togglePlay`, `hardStopSequencer` and
-  `loadSample`. A new sound setting is passed in here (see "If you add a parameter").
+  `currentStep`, `playSynthNote`, `startLfoIfNeeded`, `togglePlay`, `hardStopSequencer`,
+  `loadSample`, and for the LFO visualizer `lfoNow` and `soundingRecently`. A new sound setting is passed in here (see "If you add a parameter").
 - One `AudioContext` is created when `useLiveEngine` runs. It is resumed on the first Play
   click.
 - Graph: per-note synth voices → drive (dry + shaper → `driveSum`). From `driveSum` two paths
@@ -246,9 +249,35 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - The LFO is one shared oscillator → `lfoGain`. Each note connects a tap from it to the voice's
   `detune` or filter frequency, and `releaseLfoTap()` disconnects it when the note ends.
   Anything else per-note that connects to a long-lived node needs the same cleanup.
+  The oscillator also feeds a tiny `AnalyserNode` (`lfoProbe`, not connected onward), which
+  `lfoNow()` reads: where the LFO is now, −1..1 (null while it isn't running).
 - WAV export uses a **separate** offline engine (`scheduleStepSequencer.ts`), fed by the
   `exportState` computed. It renders only the synth lane. Changes to the live sound (new
   parameters, changed gain staging) must be mirrored there, or exports will sound different.
+
+### LFO visualizer
+- While the LFO moves something, its movement is drawn on the control it moves, in amber
+  (`--lfo-mod`, darker in the light theme; every theme's knob arcs are blue to purple or pink),
+  without turning that control, so it can still be turned while the LFO runs:
+  - Filter: an amber dot on the Cutoff knob's ring at the cutoff the LFO has now, over a faint
+    outer arc for its whole swing (`Knob.vue`'s `modValue` and `modRange`). The swing is the
+    engine's own, shrunk to its safe band (`lfoFilterTapGain`).
+  - Pulse: the Pulse tile's bar is drawn at the width the pulse plays at now, over a dashed
+    ghost of the widest (`WaveButton.vue`). Only while something plays Pulse (`pulseInUse`).
+    The Pulse Width mini knob doesn't get a dot (too small to read).
+  - Pitch: on each lit step pad, an amber bar slides up (sharper) and down (flatter) along a
+    faint track for the whole bend; an octave fills the track (`LfoBendMark.vue`).
+- The ranges (arc, ghost, track) show whenever the LFO is on with depth above 0 on that
+  target; the moving parts only while something sounds (`soundingRecently()`: playing, or a
+  note in the last 1.5 s, for MIDI). With `prefers-reduced-motion` only the ranges show.
+- `src/composables/useLfoVisual.ts` reads `lfoNow()` every frame (requestAnimationFrame, so it
+  stops in hidden tabs), or four times a second while nothing sounds; it doesn't run at all
+  while the LFO is off or at depth 0. `src/lib/lfoVisual.ts` turns the position into what each
+  indicator shows, with the engines' own limits (unit-tested against them).
+- `DrumSequencer.vue` passes one reactive object, `lfoView` (type `LfoView`), down to
+  `FilterModule`, the Pulse tile's `WaveButton` and `SynthStepGrid`. Only components that read
+  its fields redraw every frame; `DrumSequencer` itself must never read them in its template,
+  or its whole template would re-render 60 times a second.
 
 ### MIDI
 - `src/composables/useMidiInput.ts` handles Web MIDI (`navigator.requestMIDIAccess`): access,
@@ -403,7 +432,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   pitch envelope's Decay uses it (5–2000 ms, 100 ms at half a turn); Cutoff could too.
   `bipolar` (min = −max) draws the arc from a zero tick at the top, for amounts that go both
   ways (the pitch envelope's Amount). `size="mini"` (26 px) with `hideLabel` is for a knob on a
-  tile (Pulse Width); the label is still its accessible name.
+  tile (Pulse Width); the label is still its accessible name. `modValue` (a dot on the ring)
+  and `modRange` ([low, high], a faint outer arc) draw where something else, the LFO, moves
+  the setting, without moving the knob (see "LFO visualizer").
 - Layout: the module cards flow in CSS columns from 992 px (`.ds-modules`), so a module that
   grows taller reshuffles the columns and can leave a gap. Envelope and Pitch are stacked on
   the left of `.sound-grid` with Filter beside them as a 2×2 block (Cutoff, Resonance, Env Amt,
@@ -467,23 +498,7 @@ Next, in this order (agreed after PR 15; the maintainer changes it as ideas come
 that later features depend on, then sound features in the spirit of the design intent (top of
 this file), then presets that can use them. Everything drum-related waits until the maintainer
 brings the drum lanes back.
-1. **LFO visualizer: show what the LFO is doing.** (Asked for after PR 27.) While the LFO
-   runs, show its movement on the control it moves, without turning that control's knob
-   (turning the knob itself would stop the user from adjusting it while the LFO runs): a
-   separate, differently coloured indicator instead.
-   - Target Pulse: the Pulse tile's bar widens and narrows with the LFO (the actual width).
-   - Target Filter: a second ring or marker around the Cutoff knob, in another colour,
-     moving with the LFO (the actual cutoff, within the engine's safe band,
-     `lfoFilterTapGain`). The filter view on the screen already draws the swing's range.
-   - Target Pitch: a similar indicator; there's no single pitch knob, so ask the maintainer
-     where (for example the step pads' note chips, or a marker on the Tuner view).
-   How: the LFO is one shared oscillator, so its position can be worked out from its start
-   time, rate (or synced division) and wave in a `requestAnimationFrame` loop, with no audio
-   analysis; or read through an `AnalyserNode` tapped from `lfoGain`. `Knob.vue` would get an
-   optional modulated value (say `modValue`) drawn as a second arc or dot. Only animate while
-   the LFO is on with depth above 0 and something plays; stop when the tab is hidden; respect
-   `prefers-reduced-motion` (a static range instead).
-2. **Built-in preset library of synth patches.** Planned shape (confirm the open questions
+1. **Built-in preset library of synth patches.** Planned shape (confirm the open questions
    before starting): a preset sets only the sound (the synth and fx groups of the snapshot, and
    the waveform), not the pattern, tempo, swing or volume; presets live in `src/lib/presets/`
    as partial snapshots applied with `applySnapshot()`; 8 to 12 of them, picked from a
@@ -491,19 +506,19 @@ brings the drum lanes back.
    (kicks and toms use the pitch envelope, PR 21; plucks the filter envelope, PR 24). Open questions: sound
    only, or also starter patterns? What happens to per-pad waveforms? User-saved presets now or
    later? Which sounds? Dropdown above the synth panels or in the toolbar?
-3. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
+2. **Play the synth from the computer keyboard.** `ComputerKeyboard.vue` in git history has a
    key-to-note map. Space, 1–4 and the Ctrl/Cmd shortcuts must keep working (see "Keyboard
    shortcuts").
-4. **Master limiter/compressor** (louder output without clipping), together with the **DC
+3. **Master limiter/compressor** (louder output without clipping), together with the **DC
    offset** fix: the drive shaper's curve has an even number of points (1024), so silence
    maps to about −0.011 instead of 0. Even with Drive off, that reaches the speakers through
    the drive wet gain, at about 0.004 with the default settings. It can't be heard, but it
    shows up in measurements (the browser tests use `__swingOver` to ignore it) and wastes a
    little headroom. Both change the sound slightly, so they are listen-tested together. The
    export engine has the same curve and needs the same changes.
-5. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
+4. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
    outside, which works since PR 17.
-6. **Stage view for TVs, and an audio output picker.** Casting already works without code
+5. **Stage view for TVs, and an audio output picker.** Casting already works without code
    (Chrome or Edge "Cast tab", AirPlay screen mirroring, Windows Cast, HDMI), picture and
    sound together, but with a noticeable lag when turning knobs. A Cast button of our own
    isn't practical: the web's casting APIs are made for media files, not sound made live in
@@ -512,29 +527,29 @@ brings the drum lanes back.
    lighting up) designed for a TV, to cast with the browser; and optionally an "Audio output"
    picker (`AudioContext.setSinkId()`, which not every browser supports; check before
    building).
-7. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
-8. **Several patterns (A/B/C/D) chained into a song.**
-9. **32 steps, or per-lane lengths** (the export code's types already allow 32).
-10. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
-    note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
-    vary per step. Delay and reverb are shared by every note, so per step they become send
-    amounts (how much of the step goes into them), not per-step effect settings, which would
-    cut off the previous note's tail; per-step drive would mean moving drive into each note.
-    UI idea: select a step with its settings dot, then the knobs you turn change that step
-    only; locked steps are marked, with a way to clear them. Build on velocity routing
-    (PR 28).
-11. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
+6. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
+7. **Several patterns (A/B/C/D) chained into a song.**
+8. **32 steps, or per-lane lengths** (the export code's types already allow 32).
+9. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
+   note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
+   vary per step. Delay and reverb are shared by every note, so per step they become send
+   amounts (how much of the step goes into them), not per-step effect settings, which would
+   cut off the previous note's tail; per-step drive would mean moving drive into each note.
+   UI idea: select a step with its settings dot, then the knobs you turn change that step
+   only; locked steps are marked, with a way to clear them. Build on velocity routing
+   (PR 28).
+10. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
     in a short delay loop that loses brightness each time round; the original paper also has a
     drum variant), metallic (several square waves at odd ratios, as the 808 makes cymbals and
     cowbell) and struck (a click ringing tuned resonant filters: wood block, marimba, toms,
     bells). Karplus–Strong needs an AudioWorklet: a `DelayNode` in a feedback loop can't be
     shorter than one render quantum (128 samples, about 3 ms), which caps the pitch around the
     F above middle C. AudioWorklets also run in the `OfflineAudioContext` used for WAV export.
-12. **Export options:** N bars or loops, stems, MIDI file.
-13. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
-14. **Install as an app (PWA)** that works offline.
-15. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-16. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
+11. **Export options:** N bars or loops, stems, MIDI file.
+12. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
+13. **Install as an app (PWA)** that works offline.
+14. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+15. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
     purpose so far.
 
 On hold until the drum lanes come back (ask the maintainer before starting any of them):
@@ -552,7 +567,7 @@ On hold until the drum lanes come back (ask the maintainer before starting any o
   phones are remote controls that each show their own part, so network lag only delays when a
   change takes effect, never the beat. Phones that each made the sound would drift apart and
   flam. Also to decide: who can join (a room code), and what undo means with several people.
-  Share links (item 5) build part of it (the project packed into a compact message).
+  Share links (item 4) build part of it (the project packed into a compact message).
 
 Done:
 
@@ -584,6 +599,7 @@ Done:
 | 26 | Pulse Width moved to a mini knob on the Pulse tile (it sat under Unison and greyed out with it), and the tile's bar shows the width. The LFO's PW target says when nothing plays Pulse: PW is dimmed with an explanation, and the LFO tile reads "No Pulse". |
 | 27 | Pulse Width covers one side only, 5 % (thinnest) to 50 % (the square, fullest): a width and its mirror (25 % and 75 %) sound the same, so half the knob repeated the other. Older projects' widths above 50 % become their mirror, which sounds the same. The LFO's third target is labelled "Pulse" instead of "PW", and the LFO visualizer idea added to the plan.
 | 28 | Velocity routing: a step's velocity (or a MIDI note's) also shapes Decay, Cutoff, the pitch envelope and the noise mix, each by a bipolar amount in the Step Sequencer's "Vel →" panel; full-velocity steps play as set; in the live and export engines (`velocity.ts`). |
+| 29 | LFO visualizer: while the LFO plays, an amber dot on the Cutoff knob (over an arc for the swing), the Pulse tile's bar widening and narrowing (over a ghost of the widest), or a bar sliding on each lit pad (pitch) shows what it's doing, without turning any knob; ranges only with reduced motion. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -4,8 +4,9 @@
             <!-- Cutoff -->
             <div class="position-relative text-center">
                 <Knob :value-text="`${Math.round(localCutoff)} Hz`" v-model="localCutoff" label="Cutoff" size="small" :min="minCutoff" :max="maxCutoff"
-                    :step="cutoffStep" :disabled="!localEnabled" :color="color" @knobStart="onKnobStart('cutoff')"
-                    @knobEnd="onKnobEnd" />
+                    :step="cutoffStep" :disabled="!localEnabled" :color="color"
+                    :modValue="lfoView?.cutoff ?? null" :modRange="lfoView?.cutoffRange ?? null"
+                    @knobStart="onKnobStart('cutoff')" @knobEnd="onKnobEnd" />
                 <span v-if="activeKnob === 'cutoff'" class="custom-tooltip">
                     {{ Math.round(localCutoff) }} Hz
                 </span>
@@ -43,6 +44,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
+import type { LfoView } from '../../lib/lfoVisual';
 
 const props = withDefaults(
     defineProps<{
@@ -60,6 +62,9 @@ const props = withDefaults(
         minResonance?: number;
         maxResonance?: number;
         resonanceStep?: number;
+        // The LFO visualizer: when the LFO moves the cutoff, a dot on the Cutoff knob shows where
+        // it has it now, over an arc for its whole swing (the knob itself stays where it's set)
+        lfoView?: LfoView | null;
     }>(),
     {
         title: 'Filter',
