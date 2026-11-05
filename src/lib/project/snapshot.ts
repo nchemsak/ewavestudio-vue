@@ -10,6 +10,7 @@
 // affects sound, into the live and export engines too; see CLAUDE.md).
 
 import type { Ref } from 'vue';
+import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, divisionForTime, isDelayDivision, syncedDelaySeconds } from '../delaySync';
 
 type R<T> = Readonly<Ref<T>>;
 
@@ -103,7 +104,8 @@ export type ProjectState = {
 		delay: {
 			enabled: Ref<boolean>;
 			sync: Ref<boolean>;
-			time: Ref<number>;
+			division: Ref<string>; // TIME knob's note division (delaySync.ts)
+			time: Ref<number>; // seconds; with sync on, the division at the tempo
 			feedback: Ref<number>;
 			mix: Ref<number>;
 			toneEnabled: Ref<boolean>;
@@ -172,6 +174,7 @@ function byName(st: ProjectState) {
 		currentDefaultHz: sy.tuning.currentDefaultHz,
 		delayEnabled: fx.delay.enabled,
 		delaySync: fx.delay.sync,
+		delayDivision: fx.delay.division,
 		delayTime: fx.delay.time,
 		delayFeedback: fx.delay.feedback,
 		delayMix: fx.delay.mix,
@@ -208,7 +211,7 @@ export function buildSnapshot(st: ProjectState) {
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
 		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
-		delayEnabled, delaySync, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
+		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone,
 		instruments, melodyUi, selectedWaveform,
@@ -287,6 +290,7 @@ export function buildSnapshot(st: ProjectState) {
 			delay: {
 				enabled: delayEnabled.value,
 				sync: delaySync.value,
+				division: delayDivision.value,
 				time: delayTime.value,
 				feedback: delayFeedback.value,
 				mix: delayMix.value,
@@ -357,7 +361,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
 		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
-		delayEnabled, delaySync, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
+		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone,
 		instruments, melodyUi, selectedWaveform,
@@ -475,6 +479,13 @@ export function applySnapshot(st: ProjectState, s: any) {
 		delayEnabled.value = !!s.fx.delay.enabled;
 		delaySync.value = !!s.fx.delay.sync;
 		if (typeof s.fx.delay.time === 'number') delayTime.value = s.fx.delay.time;
+		// Projects saved before the division was saved: the division that matches the saved
+		// time at the project's tempo, else the default (as the TIME knob showed)
+		const d = s.fx.delay.division;
+		delayDivision.value = isDelayDivision(d) ? d : (divisionForTime(delayTime.value, tempo.value) ?? DEFAULT_DELAY_DIVISION);
+		// With sync on, the time is the division's at the tempo (older projects could hold a
+		// time that didn't match the knob)
+		if (delaySync.value) delayTime.value = syncedDelaySeconds(tempo.value, delayDivision.value);
 		if (typeof s.fx.delay.feedback === 'number') delayFeedback.value = s.fx.delay.feedback;
 		if (typeof s.fx.delay.mix === 'number') delayMix.value = s.fx.delay.mix;
 		delayToneEnabled.value = !!s.fx.delay.toneEnabled;
@@ -568,7 +579,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
 		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
-		delayEnabled, delaySync, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
+		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone,
 		instruments, melodyUi, selectedWaveform,
@@ -658,7 +669,8 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	// FX: Delay 
 	delayEnabled.value = false;
 	delaySync.value = true;
-	delayTime.value = 0.2;
+	delayDivision.value = DEFAULT_DELAY_DIVISION;
+	delayTime.value = DEFAULT_DELAY_TIME; // the division at 80 BPM: 0.5625 s
 	delayFeedback.value = 0.3;
 	delayMix.value = 0.3;
 	delayToneEnabled.value = true;

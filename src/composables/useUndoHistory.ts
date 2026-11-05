@@ -8,9 +8,9 @@
 //   is held down, so a knob drag, a slider drag or a burst of arrow keys is one undo step.
 // - Opening, importing or creating a project (a new projectId) starts a fresh history, so
 //   File → New and Open can't be undone; their own project is the starting point.
-// - After an undo or redo the panels may adjust settings by themselves (the Delay panel sets
-//   the delay time from the tempo). Those follow-ups are folded into the entry, so they don't
-//   count as a new change that would throw away the redo side.
+// - After an undo or redo, settings may adjust by themselves (a panel reacting to its props,
+//   or a watcher such as the synced delay time). Those follow-ups are folded into the entry,
+//   so they don't count as a new change that would throw away the redo side.
 //
 // The history is in memory only; it isn't saved with the project. Call once, from
 // DrumSequencer's setup.

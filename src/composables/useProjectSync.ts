@@ -70,6 +70,14 @@ export function useProjectSync(opts: {
 			applyingFromStore = true;
 			try {
 				applySnapshot(data);
+				// applySnapshot() may correct what it loads (an older project's delay time is
+				// recomputed from its division, values are fitted to this device). Store the
+				// result right away, so the project, its export and its undo history hold what
+				// the settings are. This runs before ProjectControls notes the loaded project
+				// as saved, so it doesn't count as an unsaved change. Applying the result again
+				// changes nothing, so this happens once.
+				const snap = buildSnapshot();
+				if (JSON.stringify(snap) !== JSON.stringify(data)) project.data = snap;
 			} finally {
 				nextTick(() => { applyingFromStore = false; });
 			}
