@@ -18,14 +18,21 @@
 			</div>
 		</div>
 	</div>
-	<a href="/" class="return">Return to Ephemeral Wave</a>
+	<!-- In the installed app the main site opens in the browser, not in the app's window -->
+	<a href="/" class="return" :target="pwa.state.standalone ? '_blank' : undefined"
+		:rel="pwa.state.standalone ? 'noopener' : undefined">Return to Ephemeral Wave</a>
+	<PwaNotice />
 </template>
 
 <script setup>
 import DrumSequencer from './components/DrumSequencer.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
+import PwaNotice from './components/PwaNotice.vue';
 import { useTheme } from './composables/useTheme';
+import { usePwa } from './composables/usePwa';
 useTheme();
+// Installing the app and using it offline: registers the service worker (builds only)
+const pwa = usePwa();
 </script>
 
 <style scoped>

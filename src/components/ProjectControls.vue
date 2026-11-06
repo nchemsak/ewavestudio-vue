@@ -68,6 +68,15 @@
                         <span v-if="props.exporting">Exporting…</span>
                         <span v-else>Export audio…</span>
                     </button>
+
+                    <!-- Only while the browser offers it (Chrome, Edge; not once installed) -->
+                    <template v-if="pwa.state.canInstall">
+                        <div class="pc-menu-divider"></div>
+                        <button class="pc-menu-row" role="menuitem" @click="installApp"
+                            title="Its own window and icon, and it works offline">
+                            Install app…
+                        </button>
+                    </template>
                 </div>
             </div>
 
@@ -128,6 +137,7 @@ import {
 } from '../lib/storage/projects';
 import { buildExportFile, downloadJson, importJson } from '../lib/storage/exportImport';
 import { storageKey } from '../lib/storage/namespace';
+import { usePwa } from '../composables/usePwa';
 
 const TITLE_MAX_CHARS = 28;
 const store = useProjectStore();
@@ -158,6 +168,14 @@ function trackEvent(event: string, params: Record<string, any> = {}) {
     if (typeof w.gtag === 'function') {
         w.gtag('event', event, params);
     }
+}
+
+// Installing the app (src/composables/usePwa.ts): the browser's own install dialog
+const pwa = usePwa();
+async function installApp() {
+    closeAllMenus();
+    const outcome = await pwa.install();
+    if (outcome) trackEvent('pwa_install', { outcome });
 }
 
 // Opens the Export audio dialog (ExportDialog.vue, in DrumSequencer)
@@ -372,6 +390,7 @@ async function saveNow() {
         lastSavedName.value = store.name || '';
         isNewUnsaved.value = false;
         status.value = 'saved';
+        pwa.keepProjects(); // ask the browser to keep saved projects when the disk runs low
         if (showOpen.value || showFile.value) await refreshList();
     } catch (err) {
         console.error('Save failed:', err);
