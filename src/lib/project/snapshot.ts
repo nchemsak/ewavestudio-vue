@@ -52,6 +52,7 @@ export type MelodyUi = {
 	arpRate: '1/4' | '1/8' | '1/16';
 	arpOctaves: 1 | 2 | 3;
 	arpTones: 'chord' | 'scale';
+	mode: 'random' | 'arp'; // what Generate makes: random notes or an arpeggio
 };
 
 // Every setting a project saves, as the component's refs, grouped like the snapshot. The live
@@ -360,6 +361,7 @@ export function buildSnapshot(st: ProjectState) {
 			arpRate: melodyUi.arpRate,
 			arpOctaves: melodyUi.arpOctaves,
 			arpTones: melodyUi.arpTones,
+			mode: melodyUi.mode,
 		},
 
 		selectedWaveform: selectedWaveform.value,
@@ -560,6 +562,8 @@ export function applySnapshot(st: ProjectState, s: any) {
 		if (s.melody.arpRate) melodyUi.arpRate = s.melody.arpRate;
 		if (s.melody.arpOctaves) melodyUi.arpOctaves = s.melody.arpOctaves;
 		if (s.melody.arpTones) melodyUi.arpTones = s.melody.arpTones;
+		// Projects saved before PR 39 have no mode: Generate keeps what it was
+		if (s.melody.mode === 'random' || s.melody.mode === 'arp') melodyUi.mode = s.melody.mode;
 		// The Melody Maker panel follows these through its initial-* props
 	}
 
@@ -653,6 +657,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	melodyUi.arpRate = '1/16';
 	melodyUi.arpOctaves = 1;
 	melodyUi.arpTones = 'chord';
+	melodyUi.mode = 'random';
 
 	// instruments
 	instruments.value.forEach((i: any) => {

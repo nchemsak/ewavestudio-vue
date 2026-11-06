@@ -9,7 +9,8 @@ velocity, waveform (sine, triangle, saw, square, a pulse with adjustable width, 
 harmonic shapes) and ratchet (2–4 quick hits within the step); amp envelope, pitch envelope (a drum-style sweep), filter with its own
 envelope, noise, FM,
 unison and LFO; delay, overdrive and reverb; Web MIDI note
-input, and MIDI learn (a controller's knobs turn the app's); a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope
+input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
+arpeggio in a key and scale; a new key or scale moves the pattern with it); an oscilloscope, spectrogram, tuner and envelope
 display; six built-in presets that set the sound (not the pattern), and a dice for a random
 sound; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
 saved in IndexedDB with JSON import and export; undo/redo; and it installs as an app that
@@ -49,7 +50,8 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   arithmetic, MIDI input (with a fake MIDI system), MIDI learn (and that every learnable knob
   is in the app), the undo history, project snapshots (save → load round trip, older
   projects, factory defaults), presets (exact values, knob ranges, pattern untouched),
-  ratchet timing, knob notches, and the export helpers (loop folding, MIDI and zip files read
+  ratchet timing, knob notches, the Melody Maker's theory (moving a pattern to another key or
+  scale), and the export helpers (loop folding, MIDI and zip files read
   back, names).
   `src/lib/project/testState.ts` builds the settings those tests use (`makeState`,
   `changeEverything`). `vitest.config.js` reuses `vite.config.js` and sets `BASE_URL`
@@ -154,7 +156,8 @@ src/components/
                          Unison, LFOGroup, Delay, Drive, Reverb (UI only; mostly v-model)
   SynthStepGrid.vue      16 synth step pads with velocity and pitch sliders
   LfoBendMark.vue        The LFO's pitch bend drawn on a lit pad (see "LFO visualizer")
-  MelodyMaker.vue        Scale, key and range; random melody and arpeggio generator
+  MelodyMaker.vue        Key, scale and range; one Generate (Random or Arpeggio); a key or scale
+                         picked moves the pattern (see "Melody Maker")
   PatternTools.vue       Synth-lane tools: step fills (all, every 2/4, invert, random, clear),
                          velocity shapes ("Humanize") and octave shift
   ProjectControls.vue    File menu: new, open, save, rename, delete, import/export JSON,
@@ -195,6 +198,7 @@ src/lib/random.ts        Seeded random numbers (export stems; tests)
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
+src/lib/melody/theory.ts  Keys and scales; moving a pattern to another key or scale (pure)
 src/lib/knobDetents.ts   Knob notches: the drag's travel with a hold at each, and the Tempo and
                          Swing notches (pure; see "Knobs" under Conventions)
 src/lib/midiLearn.ts     MIDI learn's bookkeeping (pure): the learnable knobs (MIDI_KNOBS) and
@@ -376,6 +380,35 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   bar uses). The ids are saved, so never rename one. The pop-up knobs (the "Vel →" panel, a
   pad's Fine) aren't learnable: they'd only follow while open. A unit test checks every id is
   on exactly one knob.
+
+### Melody Maker
+- `MelodyMaker.vue`, with its music theory in `src/lib/melody/theory.ts` (unit-tested).
+- Clicking a key on its keyboard moves the whole pattern to that key, every pad (on or off)
+  by the same interval, the shorter way round (`shortestInterval()`: C → D up 2, C → A down 3,
+  a tritone up), so it's the same melody in the same register (`transposePitches()`). If that
+  would take a pad outside the pads' 100–2000 Hz, the whole pattern goes the other way round
+  when that fits, else that pad moves an octave. Then the key plays: its root in the octave
+  nearest the pattern (`nearestRootHz()` of `patternCenterHz()`), with the synth lane's sound,
+  not while the lane is muted (`auditionNote()` in `DrumSequencer.vue`; the click lets audio
+  start). People click the keyboard expecting a sound.
+- Picking a scale moves each pad to the same degree of the new scale when both have as many
+  notes (minor → major: the 3rd, 6th and 7th go up a semitone), otherwise to the nearest note
+  of the new scale, the lower when two are as near (`remapScale()`). From "None", every pad
+  goes to the nearest scale note; to "None", nothing moves. Pads keep their fine tuning (their
+  cents off the nearest note) through both.
+- Only a person's choice moves pads: the component emits `key-chosen` and `scale-chosen` from
+  the click and the select; `key-root-change` and `key-scale-change` (from watchers, also when
+  a project loads, on undo and File → New) only record the setting (`onKeyRootChange()`).
+  A project or an undo step brings its own pads and key together (`synth.tuning`). A key click
+  is one undo step, pads and key together. (Before PR 39, a key change moved only the pads that
+  were off and still on the old default note.)
+- One Generate button: a Random / Arpeggio switch (`mode`, saved). Random keeps its old
+  behaviour (random notes from the scale and range, the first pad that's on gets the key; with
+  no scale, the key's note in the range's octaves, which the note under the switch says). The
+  arpeggio's Pattern, Rate, Octaves and Tones show only for Arpeggio. Random's note and the
+  arpeggio's settings sit in one grid cell, the other hidden (`visibility`), so the card is
+  as tall in both modes and the module columns around it never move. The Advanced menu (⋯) is
+  unchanged.
 
 ### Install as an app (PWA)
 - In Chrome and Edge, the address bar's install button or File → Install app… (shown while
@@ -598,7 +631,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `midi-map` (MIDI learn's links, see "MIDI learn").
 - `instruments[]` still contains the hidden kick, snare and hihat lanes (normally with no
   steps on). Keep them so saved projects stay compatible.
-- Melody Maker settings (key, scale, range, and arp pattern, rate, octaves and tones) live in
+- Melody Maker settings (key, scale, range, what Generate makes (`mode`: `random` or `arp`;
+  older projects keep the current one), and arp pattern, rate, octaves and tones) live in
   `melodyUi`. `MelodyMaker.vue` reports each change with an event, and follows `melodyUi`
   through its `initial-*` props when a project loads. Its Advanced-menu toggles are not saved.
 - The JSON import/export format is `{ version, projectId, meta, data }`, validated by
@@ -723,14 +757,7 @@ Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the m
 changes it as ideas come up). Everything drum-related waits until the maintainer brings the
 drum lanes back.
 
-1. **Melody Maker rework.** Clicking a key on its keyboard moves the pattern to that key: same
-   melody, every pad moved by the same interval, the shorter way (C → D up 2, C → A down 3),
-   so it stays in its register. Changing the scale (minor → major) keeps each note on the same
-   degree of the scale, so the melody keeps its shape and changes its mood. Clicking a key
-   also plays it (people click the keyboard expecting a sound). One Generate button instead of
-   two: a Random / Arpeggio switch, the arpeggio's settings shown only for Arpeggio, the key,
-   scale and range shared.
-2. **Layout design project, mockups first** (two or three options at desktop, laptop and
+1. **Layout design project, mockups first** (two or three options at desktop, laptop and
    tablet widths for the maintainer to pick from, before any code):
    - Better use of space in Pitch & Harmonics, Filter and LFO: more uniform, not every gap
      filled.
@@ -741,9 +768,9 @@ drum lanes back.
    - The pads in the spectrogram's colors: its four theme colors by loudness (low, mid, high,
      peak), so each pad's velocity picks its color.
    - Then a new or more balanced logo, once the preset boxes have settled.
-3. **Themes**: fix the light theme's rough spots and bring its button back, or design a better
-   third theme. After 2, so the styling isn't done twice.
-4. **Phone mode**, designed for phones rather than shrunk (after 2; mockups first): landscape,
+2. **Themes**: fix the light theme's rough spots and bring its button back, or design a better
+   third theme. After 1, so the styling isn't done twice.
+3. **Phone mode**, designed for phones rather than shrunk (after 1; mockups first): landscape,
    one screen without scrolling: 16 big pads (tap: on/off, hold: the note), Play, Sounds,
    Patterns and the dice, and three or four big macro knobs (for example Decay, Tone, Sweep,
    Space), other screens behind a swipe. A page can't force landscape; the installed app can
@@ -751,16 +778,16 @@ drum lanes back.
    perhaps Google Play: the PWA wrapped as a Trusted Web Activity (PWABuilder or Bubblewrap;
    Web MIDI still works), a $25 developer account, `/.well-known/assetlinks.json` on the main
    site, and for a new personal account a closed test with 12 testers for 14 days first.
-5. **Effects, as switches on the existing pedals**: a bit crusher on the overdrive pedal, and
+4. **Effects, as switches on the existing pedals**: a bit crusher on the overdrive pedal, and
    ping-pong (left/right echoes) on the delay pedal. No ring modulator or chorus (the
    maintainer's call), and no compressor: Chrome's adds about 6 ms of delay.
-6. **Patch cables**: animated cables from the LFO to what it moves (Cutoff, the Pulse tile,
+5. **Patch cables**: animated cables from the LFO to what it moves (Cutoff, the Pulse tile,
    the pads), swaying a little, never over a control, still with `prefers-reduced-motion`.
-   After 2, since they depend on where things sit.
-7. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+   After 1, since they depend on where things sit.
+6. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
    Checked after PR 37: ESLint 10.14 and typescript-eslint 8.72 still need `minimatch` 10, and
    `npm audit` reports 10 moderate advisories for them.
-8. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+7. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -776,7 +803,7 @@ Not now (looked into after PR 37):
 - **Apple's App Store.** $99 a year, a Mac (or a paid cloud build) to build it, Apple turns
   down apps that are a wrapped website, iPhones have no Web MIDI (it would need native code),
   and the silent switch mutes web audio unless handled. Google Play is the easier store (Next,
-  4).
+  3).
 
 Dropped in PR 34 (the maintainer and Claude agreed): export stems by register (bass / top
 notes) or by wave, and "arrangement variations" (sparse, half-time, build, fill, wash, reverse
@@ -815,7 +842,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
 - **User-saved presets, and more built-in sounds** (the maintainer isn't sure they're needed,
   after PR 37). A user preset could be the sound part of a snapshot (`soundKey()`'s parts) in
   IndexedDB next to the projects; more built-in sounds as new sound features arrive (toms,
-  hats, organ and hollow sounds). Built-in patterns are part of the layout project (Next, 2).
+  hats, organ and hollow sounds). Built-in patterns are part of the layout project (Next, 1).
 - **MIDI clock sync and MIDI out** (from the "More MIDI" item, whose MIDI learn came in PR 36;
   the maintainer isn't sure they're worth it). Clock sync would follow a DAW's or drum
   machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
@@ -896,6 +923,7 @@ Done:
 | 36 | MIDI learn: Learn in the MIDI toolbar, click a knob, turn a controller knob, and it follows (32 knobs; its own curve and step, its tooltip and screen view, one undo step per sweep). Links are kept in the browser, not in projects. Plan: MIDI clock sync and MIDI out on hold. |
 | 37 | Install as an app (PWA): a manifest and icons, and a hand-written service worker (`build-plugins/serviceWorker.js`, no dependency) that saves the build, works offline from the first visit, refuses a half-uploaded deploy (checksums), and offers a new version with "A new version of the app is ready" (Reload / Later). File → Install app…; saved projects asked to persist. Plan: MIDI keyboard latency added. |
 | 38 | Knob notches: soft stops at common values (Tempo 90–174 BPM, Swing 8–42 % with the triplet at 33 %, the middle of two-way knobs, a pad's Fine at 0, Noise Color's named colors), each with a tick, where a drag holds for 8 px; a MIDI controller reaches them too (`src/lib/knobDetents.ts`). Plan: the maintainer's brainstorm sorted (Melody Maker, layout project, themes, phone mode, effect switches, patch cables); MIDI latency (measured) and user presets on hold; TV app, FL Studio plugin and Apple's store not now. |
+| 39 | Melody Maker rework: clicking a key moves the pattern there the shorter way round (the same melody) and plays the key; a new scale keeps each note on its degree (minor ↔ major) or goes to the nearest note; one Generate button with a Random / Arpeggio switch (saved), the card the same height in both. `src/lib/melody/theory.ts`. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
