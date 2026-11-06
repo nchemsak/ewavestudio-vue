@@ -3,7 +3,7 @@
         <div class="pt-knob-row">
             <!-- Cutoff -->
             <div class="position-relative text-center">
-                <Knob :value-text="`${Math.round(localCutoff)} Hz`" v-model="localCutoff" label="Cutoff" size="small" :min="minCutoff" :max="maxCutoff"
+                <Knob midi-id="filter.cutoff" :value-text="`${Math.round(localCutoff)} Hz`" v-model="localCutoff" label="Cutoff" size="small" :min="minCutoff" :max="maxCutoff"
                     :step="cutoffStep" :disabled="!localEnabled" :color="color"
                     :modValue="lfoView?.cutoff ?? null" :modRange="lfoView?.cutoffRange ?? null"
                     @knobStart="onKnobStart('cutoff')" @knobEnd="onKnobEnd" />
@@ -14,7 +14,7 @@
 
             <!-- Resonance -->
             <div class="position-relative text-center">
-                <Knob :value-text="`Q ${localResonance.toFixed(1)}`" v-model="localResonance" label="Resonance" size="small" :min="minResonance" :max="maxResonance"
+                <Knob midi-id="filter.resonance" :value-text="`Q ${localResonance.toFixed(1)}`" v-model="localResonance" label="Resonance" size="small" :min="minResonance" :max="maxResonance"
                     :step="resonanceStep" :disabled="!localEnabled" :color="color" @knobStart="onKnobStart('res')"
                     @knobEnd="onKnobEnd" />
                 <span v-if="activeKnob === 'res'" class="custom-tooltip">
@@ -25,14 +25,14 @@
             <!-- Filter envelope: how far the cutoff jumps at each note (octaves, either way), and
                  how fast it comes back -->
             <div class="position-relative text-center">
-                <Knob v-model="envAmountModel" bipolar label="Env Amt" size="small" :min="-ENV_OCTAVES" :max="ENV_OCTAVES"
+                <Knob midi-id="filter.envAmount" v-model="envAmountModel" bipolar label="Env Amt" size="small" :min="-ENV_OCTAVES" :max="ENV_OCTAVES"
                     :step="0.1" :value-text="envAmountText" :disabled="!localEnabled" :color="color"
                     @knobStart="onKnobStart('envAmt')" @knobEnd="onKnobEnd" />
                 <span v-if="activeKnob === 'envAmt'" class="custom-tooltip">{{ envAmountTip }}</span>
             </div>
 
             <div class="position-relative text-center">
-                <Knob v-model="envDecayModel" label="Decay" size="small" :min="5" :max="2000" :step="1" taper="log"
+                <Knob midi-id="filter.envDecay" v-model="envDecayModel" label="Decay" size="small" :min="5" :max="2000" :step="1" taper="log"
                     :value-text="`${Math.round(envDecayMs)} ms`" :disabled="!localEnabled" :color="color"
                     @knobStart="onKnobStart('envDecay')" @knobEnd="onKnobEnd" />
                 <span v-if="activeKnob === 'envDecay'" class="custom-tooltip">{{ Math.round(envDecayMs) }} ms</span>

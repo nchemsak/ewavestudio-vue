@@ -1,14 +1,20 @@
 <!-- components/Knob.vue -->
 <template>
 	<!-- A slider for keyboards and screen readers: Tab to it, then the arrow keys (see onKeydown) -->
-	<div class="knob-wrapper" :class="[`knob-${props.size}`, { disabled: props.disabled }]" role="slider"
-		:tabindex="props.disabled ? -1 : 0" :aria-label="label" :aria-valuemin="props.min"
+	<!-- In MIDI learn mode (useMidiLearn.ts) a knob with a midi-id is outlined, a click or Enter
+		 arms it, and a badge says which controller knob it follows -->
+	<div class="knob-wrapper"
+		:class="[`knob-${props.size}`, { disabled: props.disabled, 'midi-learnable': learnable, 'midi-armed': armed }]"
+		role="slider" :tabindex="props.disabled ? -1 : 0" :aria-label="label" :aria-valuemin="props.min"
 		:aria-valuemax="props.max" :aria-valuenow="props.modelValue" :aria-valuetext="props.valueText"
-		:aria-disabled="props.disabled" @mousedown="startDrag" @touchstart.prevent="startDrag($event, true)"
+		:aria-disabled="props.disabled" :aria-description="learnable ? (midiLabel ? `Follows ${midiLabel}` : 'Not linked') : undefined"
+		:data-midi-id="props.midiId || undefined"
+		@mousedown="onPress($event)" @touchstart.prevent="onPress($event, true)"
 		@keydown="onKeydown" @blur="endKeyboardTurn">
 		<div v-if="!props.hideLabel" class="knob-label">{{ label }}</div>
 
 		<div class="knob-dial">
+			<span v-if="learnable && midiLabel" class="knob-midi-badge" aria-hidden="true">{{ midiLabel }}</span>
 			<div class="dial-grip"
 				:style="{ backgroundColor: props.disabled ? 'rgba(34,34,34,.2)' : 'var(--knob-face, #222)' }">
 				<div class="dial-rotor" :style="{ transform: `rotate(${rotation}deg)` }"></div>
@@ -55,7 +61,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, onMounted, onBeforeUnmount } from 'vue';
+import { useMidiLearn } from '../composables/useMidiLearn';
 
 const props = defineProps({
 	modelValue: Number,
@@ -96,7 +103,10 @@ const props = defineProps({
 	modValue: { type: Number, default: null },
 	modRange: { type: Array, default: null },
 	// Amber: every theme's knob arcs are blue to purple or pink, so it stands apart from them
-	modColor: { type: String, default: 'var(--lfo-mod, #ffc53d)' }
+	modColor: { type: String, default: 'var(--lfo-mod, #ffc53d)' },
+	// MIDI learn: this knob's id in MIDI_KNOBS (src/lib/midiLearn.ts), so a knob on a MIDI
+	// controller can turn it. null: it can't be learned.
+	midiId: { type: String, default: null }
 });
 
 const emit = defineEmits(['update:modelValue', 'knobStart', 'knobEnd']);
@@ -238,6 +248,11 @@ function snap(v) {
 }
 
 function onKeydown(e) {
+	// In MIDI learn mode, Enter arms the knob and Delete or Backspace unlinks it
+	if (learnable.value && !e.altKey && !e.ctrlKey && !e.metaKey) {
+		if (e.key === 'Enter') { e.preventDefault(); midiLearn.arm(props.midiId); return; }
+		if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); midiLearn.clear(props.midiId); return; }
+	}
 	if (props.disabled || e.altKey || e.ctrlKey || e.metaKey) return;
 	const range = props.max - props.min;
 	const step = props.step > 0 ? props.step : range / 100;
@@ -284,6 +299,45 @@ function endKeyboardTurn() {
 	keyboardTurning = false;
 	emit('knobEnd');
 }
+
+// MIDI learn (src/composables/useMidiLearn.ts)
+const midiLearn = useMidiLearn();
+const learnable = computed(() => !!props.midiId && midiLearn.state.learning);
+const armed = computed(() => learnable.value && midiLearn.state.armed === props.midiId);
+const midiLabel = computed(() => (props.midiId ? midiLearn.labelFor(props.midiId) : ''));
+
+// A controller knob turns it as a drag would: knobStart first (the value tooltip, the
+// envelope or filter view), the value along this knob's own curve and step, and knobEnd once
+// the controller knob has rested a moment. A disabled knob ignores it, as it ignores the mouse.
+const MIDI_REST_MS = 600;
+let midiTurning = null;
+function setPosition(position) {
+	if (props.disabled) return;
+	if (midiTurning) clearTimeout(midiTurning);
+	else emit('knobStart');
+	midiTurning = setTimeout(() => { midiTurning = null; emit('knobEnd'); }, MIDI_REST_MS);
+	const next = snap(fromPos(position));
+	if (next !== props.modelValue) emit('update:modelValue', next);
+}
+
+let leaveMidiLearn = null;
+onMounted(() => {
+	if (props.midiId) leaveMidiLearn = midiLearn.register(props.midiId, { setPosition, disabled: () => props.disabled });
+});
+onBeforeUnmount(() => {
+	leaveMidiLearn?.();
+	if (midiTurning) clearTimeout(midiTurning);
+});
+
+// In learn mode a press arms the knob for the next controller knob turned, instead of turning it
+function onPress(e, isTouch = false) {
+	if (learnable.value) {
+		e.preventDefault();
+		midiLearn.arm(props.midiId);
+		return;
+	}
+	startDrag(e, isTouch);
+}
 </script>
 
 <style scoped>
@@ -304,6 +358,50 @@ function endKeyboardTurn() {
 	stroke: var(--knob-marker, rgba(192, 120, 255, .55));
 	stroke-width: 3;
 	stroke-linecap: round;
+}
+
+/* MIDI learn mode: a learnable knob is outlined; the armed one glows; the badge names the
+   controller knob it follows. Outlines don't move anything. */
+.knob-wrapper.midi-learnable {
+	outline: 1px dashed hsl(var(--pt-accent) 80% 62% / 0.75);
+	outline-offset: 3px;
+	border-radius: 8px;
+	cursor: pointer;
+}
+
+.knob-wrapper.midi-armed {
+	outline: 2px solid hsl(var(--pt-accent) 85% 62%);
+	box-shadow: 0 0 14px hsl(var(--pt-accent) 90% 60% / 0.55);
+	animation: midi-armed 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes midi-armed {
+	to {
+		box-shadow: 0 0 4px hsl(var(--pt-accent) 90% 60% / 0.25);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.knob-wrapper.midi-armed {
+		animation: none;
+	}
+}
+
+.knob-midi-badge {
+	position: absolute;
+	top: -4px;
+	right: -12px;
+	z-index: 3;
+	padding: 1px 4px;
+	border-radius: 6px;
+	font-size: 9px;
+	line-height: 1.2;
+	font-weight: 700;
+	white-space: nowrap;
+	color: #fff;
+	background: hsl(var(--pt-accent) 70% 42%);
+	box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+	pointer-events: none;
 }
 
 /* Keyboard focus only (a mouse click doesn't show it), like the app's buttons */

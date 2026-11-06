@@ -5,7 +5,7 @@
 				<span class="check-led" :class="{ on: localEnabled }" aria-hidden="true"></span>
 
 				<div class="knob-cell mix">
-					<Knob :value-text="`${Math.round(localMix * 100)}%`" v-model="localMix" label="MIX" :min="0" :max="1" :step="0.01" size="small"
+					<Knob midi-id="reverb.mix" :value-text="`${Math.round(localMix * 100)}%`" v-model="localMix" label="MIX" :min="0" :max="1" :step="0.01" size="small"
 						:disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'mix'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'mix'" class="custom-tooltip">
@@ -14,7 +14,7 @@
 				</div>
 
 				<div class="knob-cell decay">
-					<Knob :value-text="`${localDecay.toFixed(2)} s`" v-model="localDecay" label="DECAY" :min="0.2" :max="4.0" :step="0.05" size="small"
+					<Knob midi-id="reverb.decay" :value-text="`${localDecay.toFixed(2)} s`" v-model="localDecay" label="DECAY" :min="0.2" :max="4.0" :step="0.05" size="small"
 						:disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'decay'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'decay'" class="custom-tooltip">
@@ -23,7 +23,7 @@
 				</div>
 
 				<div class="knob-cell tone">
-					<Knob :value-text="toneLabel" v-model="localTone" label="TONE" :min="0" :max="1" :step="0.01" size="small"
+					<Knob midi-id="reverb.tone" :value-text="toneLabel" v-model="localTone" label="TONE" :min="0" :max="1" :step="0.01" size="small"
 						:disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'tone'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'tone'" class="custom-tooltip">

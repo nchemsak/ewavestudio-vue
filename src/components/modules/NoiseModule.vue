@@ -4,7 +4,7 @@
             <div class="controls-row">
                 <!-- Burst -->
                 <div class="control-block knob-wrap">
-                    <Knob :value-text="Math.round(burstMsLocal) >= 250 ? 'Full decay' : `${Math.round(burstMsLocal)} ms`" v-model="burstMsLocal" label="Burst" :min="5" :max="250" :step="1" size="small"
+                    <Knob midi-id="noise.burst" :value-text="Math.round(burstMsLocal) >= 250 ? 'Full decay' : `${Math.round(burstMsLocal)} ms`" v-model="burstMsLocal" label="Burst" :min="5" :max="250" :step="1" size="small"
                         :color="accent" :disabled="!enabledLocal" @knobStart="activeKnob = 'burstMs'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'burstMs'" class="custom-tooltip">
@@ -14,7 +14,7 @@
 
                 <!-- Amount -->
                 <div class="control-block knob-wrap">
-                    <Knob :value-text="`${Math.round(amountLocal * 100)}%`" v-model="amountLocal" label="Amount" :min="0" :max="1" :step="0.01" size="small"
+                    <Knob midi-id="noise.amount" :value-text="`${Math.round(amountLocal * 100)}%`" v-model="amountLocal" label="Amount" :min="0" :max="1" :step="0.01" size="small"
                         :color="accent" :disabled="!enabledLocal" @knobStart="activeKnob = 'noiseAmount'"
                         @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'noiseAmount'" class="custom-tooltip">
@@ -30,7 +30,7 @@
                         </div>
                     </div>
 
-                    <Knob v-model="colorLocal" aria-label="Noise color" :value-text="colorLabel" :min="0" :max="1" :step="0.01"
+                    <Knob midi-id="noise.color" v-model="colorLocal" aria-label="Noise color" :value-text="colorLabel" :min="0" :max="1" :step="0.01"
                         size="small" :color="accent" :disabled="!enabledLocal" />
                 </div>
             </div>

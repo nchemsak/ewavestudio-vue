@@ -16,14 +16,14 @@
         <div class="pt-subblock">
             <div class="pt-knob-row">
                 <div class="position-relative text-center">
-                    <Knob v-model="signedAmount" bipolar label="Amount" size="small" :min="-AMOUNT_MAX" :max="AMOUNT_MAX"
+                    <Knob midi-id="pitchEnv.amount" v-model="signedAmount" bipolar label="Amount" size="small" :min="-AMOUNT_MAX" :max="AMOUNT_MAX"
                         :step="1" :value-text="amountText" :disabled="!enabled" :color="color"
                         @knobStart="activeKnob = 'amt'" @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'amt'" class="custom-tooltip">{{ amountTip }}</span>
                 </div>
 
                 <div class="position-relative text-center">
-                    <Knob v-model="decay" label="Decay" size="small" :min="5" :max="2000" :step="1" taper="log"
+                    <Knob midi-id="pitchEnv.decay" v-model="decay" label="Decay" size="small" :min="5" :max="2000" :step="1" taper="log"
                         :value-text="`${Math.round(decay)} ms`" :disabled="!enabled" :color="color"
                         @knobStart="activeKnob = 'decay'" @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'decay'" class="custom-tooltip">{{ Math.round(decay) }} ms</span>

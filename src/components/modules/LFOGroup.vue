@@ -16,7 +16,7 @@
 
                 <div class="pt-knob-row lfo-knobs">
                     <div class="position-relative text-center">
-                        <Knob :value-text="localSync ? String(localDivision) : `${Number(localRate).toFixed(1)} Hz`" v-model="rateKnobModel" size="small" :min="rateMin" :max="rateMax" :step="rateStep"
+                        <Knob midi-id="lfo.rate" :value-text="localSync ? String(localDivision) : `${Number(localRate).toFixed(1)} Hz`" v-model="rateKnobModel" size="small" :min="rateMin" :max="rateMax" :step="rateStep"
                             label="Rate" :color="color" :disabled="!localEnabled" :showMarkers="localSync"
                             :markers="rateMarkers" :markersOnly="localSync" :markersOffsetDeg="-90"
                             @knobStart="activeKnob = 'rate'" @knobEnd="activeKnob = null" />
@@ -27,7 +27,7 @@
                     </div>
 
                     <div class="position-relative text-center">
-                        <Knob :value-text="depthReadout" v-model="localDepth" size="small" :min="0" :max="depthMax" :step="depthStep" label="Depth"
+                        <Knob midi-id="lfo.depth" :value-text="depthReadout" v-model="localDepth" size="small" :min="0" :max="depthMax" :step="depthStep" label="Depth"
                             :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'depth'"
                             @knobEnd="activeKnob = null" />
                         <span v-if="activeKnob === 'depth'" class="custom-tooltip">
