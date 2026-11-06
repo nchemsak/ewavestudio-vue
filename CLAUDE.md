@@ -424,7 +424,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `src/audio/export/exportFiles.ts` makes the files and `runExport()` in `DrumSequencer.vue`
   downloads them: one file as itself, several as one `.zip` (`src/lib/export/zip.ts`, stored,
   not compressed: WAV audio hardly compresses, and it needs no library). The dialog starts from
-  the last choices of the session (not saved).
+  the last export's choices (in memory, not saved), also after opening another project; File →
+  New puts back the defaults (1 bar, Loop, the mix only, Normalize on), as it does everything
+  else (`resetUiToFactoryDefaults()`). The one-shot's note starts on the key's root each time.
 - **Bars** 1, 2, 4 or 8 (the pattern played that many times, `bars` in the engine's state).
   **Loop** (the default): exactly N bars, to the sample (`barFrames()`), with whatever rings
   past the end (reverb, echoes, a long decay) added onto the start (`foldLoop()`, wrapping as
@@ -718,6 +720,7 @@ Done:
 | 32 | A dice in the Presets box rolls a random sound: a recipe for a percussion voice (`src/lib/presets/random.ts`) applied like a preset, from the factory sound up; one undo step; never silent or clipping (500 seeded rolls checked in unit tests, rolls exported in a browser test). |
 | 33 | Ratchets: "Repeats" ×1–×4 in each pad's ⋮ menu (and a "×3" badge on the pad) make a step play 2–4 quick hits within its time, swing included; each hit ends where the next begins, the last rings out; in the live and export engines (`src/audio/ratchet.ts`); saved per step, older projects get 1s. The pad menu now stays on screen on short laptop screens. Plan: share link put on hold; stage view, step probability and timing humanize dropped. |
 | 34 | Export audio: File → Export audio… opens a dialog: 1–8 bars as a seamless loop (the tail folded onto the start) or with the tail; the mix, effects stems (dry, delay, reverb, noise, adding up to the mix), a MIDI file, and a one-shot at a chosen note; normalize to −1 dBFS; several files in one .zip, named with project, tempo, key and length. The export engine's noise now matches the live engine (it went through the effects). Chosen segment buttons readable in the light theme. Plan: song chaining, 32 steps, parameter locks and sound sources part 2 on hold; register and variation stems dropped. |
+| 35 | File → New puts the Export audio dialog's choices back to their defaults (they carried over from the last export). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -1806,3 +1806,44 @@ test('Export audio: effects stems add up to the mix; a MIDI file and a one-shot 
 	expect(shot.frames / shot.rate).toBeGreaterThan(0.1);
 	expect(wavWindow(files['Stems_oneshot_A2.wav'], 0, 6).peak).toBeGreaterThan(0.8);
 });
+
+test("Export audio: the dialog keeps the last export's choices, until File → New puts back the defaults", async ({ page }) => {
+	await turnOnPads(page, [0]);
+	const dialog = page.getByRole('dialog', { name: 'Export audio' });
+	const choices = async () => {
+		await chooseFromFileMenu(page, 'Export audio…');
+		await expect(dialog).toBeVisible();
+		const pressed = async (group: string) =>
+			(await dialog.getByRole('group', { name: group }).locator('[aria-pressed="true"]').textContent())!.trim();
+		const checked = (name: RegExp) => dialog.getByRole('checkbox', { name }).isChecked();
+		const now = {
+			bars: await pressed('Bars'), ending: await pressed('Ending'),
+			mix: await checked(/^Mix/), stems: await checked(/^Effects stems/), midi: await checked(/^MIDI file/),
+			oneShot: await checked(/^One-shot at/), normalize: await checked(/^Normalize/),
+		};
+		await page.keyboard.press('Escape');
+		await expect(dialog).toBeHidden();
+		return now;
+	};
+	const defaults = { bars: '1', ending: 'Loop', mix: true, stems: false, midi: false, oneShot: false, normalize: true };
+	expect(await choices()).toEqual(defaults);
+
+	await exportAudio(page, { bars: 4, ending: 'With tail', mix: true, stems: true, midi: true, oneShot: false, normalize: false });
+	const used = { bars: '4', ending: 'With tail', mix: true, stems: true, midi: true, oneShot: false, normalize: false };
+	expect(await choices()).toEqual(used);
+
+	// Opening another project keeps them
+	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'Other.json', mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify({ ...project, projectId: 'other', meta: { name: 'Other' } })),
+	});
+	await expect(page.getByRole('textbox', { name: 'Project name' })).toHaveValue('Other');
+	expect(await choices()).toEqual(used);
+
+	// A new project starts from the defaults, like everything else
+	await chooseFromFileMenu(page, 'New');
+	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(0);
+	expect(await choices()).toEqual(defaults);
+});

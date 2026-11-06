@@ -2426,7 +2426,9 @@ function onPlayClick() {
 // EXPORT AUDIO START
 
 // File → Export audio…: the dialog (ExportDialog.vue) picks the files, exportFiles.ts renders
-// them, and they download as one file or one .zip
+// them, and they download as one file or one .zip. The dialog starts from the last export's
+// choices (in memory only, not saved); File → New puts back the defaults
+// (resetUiToFactoryDefaults)
 const exportOpen = ref(false);
 const exportOptions = reactive<ExportOptions>({ ...DEFAULT_EXPORT_OPTIONS, oneShotHz: 220 });
 const exportProgress = ref('');
@@ -2587,6 +2589,11 @@ function resetUiToFactoryDefaults() {
 	fxAdvanced.open = false;
 	stepsAdvanced.open = false;
 	closeOverlays?.();
+
+	// The Export audio dialog starts from its defaults again (it keeps the last export's
+	// choices otherwise, also when another project is opened)
+	exportOpen.value = false;
+	Object.assign(exportOptions, DEFAULT_EXPORT_OPTIONS);
 
 	// Force-reset components that hold local state (e.g., Melody Maker)
 	resetNonce.value++;
