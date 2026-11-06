@@ -25,6 +25,16 @@
                     <span class="noise-state">{{ noiseLocal ? 'On' : 'Off' }}</span>
                 </div>
             </div>
+            <!-- Ratchet: the step plays 1–4 quick hits within its time (src/audio/ratchet.ts) -->
+            <div v-if="showRatchetRow" class="pad-row">
+                <div class="pad-label">Repeats</div>
+                <div class="pt-seg pt-seg-sm" role="group" aria-label="Repeats"
+                    title="Quick hits within the step: a roll or stutter (a ratchet)">
+                    <button v-for="n in RATCHET_COUNTS" :key="n" class="pt-seg-btn"
+                        :class="{ 'is-active': ratchet === n }" :aria-pressed="ratchet === n"
+                        @click="emit('update:ratchet', n)">×{{ n }}</button>
+                </div>
+            </div>
 
             <div class="kb" role="group" aria-label="Note selector">
                 <div v-for="(key, i) in NATURALS" :key="key.n" class="kb-cell" :class="{ 'has-sharp': key.hasSharp }">
@@ -74,6 +84,7 @@ import Knob from './Knob.vue';
 
 type AnchorRect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
 import { WAVE_IDS, WAVE_LABELS, type Wave } from '../audio/waves';
+import { RATCHET_COUNTS } from '../audio/ratchet';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 const NATURALS = [
@@ -97,6 +108,7 @@ const props = withDefaults(defineProps<{
     title?: string;
     wave?: Wave;
     noiseEnabled?: boolean;
+    ratchet?: number; // hits per step, 1–4; no Repeats row when not given
 }>(), { title: 'Pad' });
 
 const emit = defineEmits<{
@@ -104,6 +116,7 @@ const emit = defineEmits<{
     (e: 'update:hz', v: number): void;
     (e: 'update:wave', v: Wave): void;
     (e: 'update:noiseEnabled', v: boolean): void;
+    (e: 'update:ratchet', v: number): void;
     (e: 'close'): void;
 }>();
 
@@ -131,7 +144,9 @@ onBeforeUnmount(() => {
 
 // positioning
 const POP_W = 380;
-const EST_H = 300;
+// About its real height (with the Repeats row, 450 px), so it opens above the pad when there
+// isn't room below, and stays on screen either way
+const EST_H = 460;
 const OFFSET_X = 40;
 
 const pos = computed(() => {
@@ -154,6 +169,7 @@ const pos = computed(() => {
     if (y + EST_H > window.innerHeight) {
         y = Math.max(m, r.top - EST_H - m);
     }
+    y = Math.max(m, Math.min(y, window.innerHeight - EST_H - m));
 
     return { x, y };
 });
@@ -231,6 +247,7 @@ watch(waveLocal, (v) => emit('update:wave', v));
 function setWave(w: Wave): void { waveLocal.value = w; }
 
 const showNoiseRow = computed(() => typeof props.noiseEnabled === 'boolean');
+const showRatchetRow = computed(() => typeof props.ratchet === 'number');
 const noiseLocal = ref<boolean>(props.noiseEnabled ?? false);
 watch(() => props.noiseEnabled, (v) => {
     if (typeof v === 'boolean') noiseLocal.value = v;

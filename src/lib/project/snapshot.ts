@@ -22,6 +22,7 @@ export type KeyRoot = 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 
 import type { Wave } from '../../audio/waves';
 import { PULSE_WIDTH_DEFAULT, foldPulseWidth } from '../../audio/waves';
 import { VELOCITY_DESTINATIONS } from '../../audio/velocity';
+import { clampRatchet } from '../../audio/ratchet';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -38,6 +39,7 @@ export type Instrument = {
 	velocities: number[];
 	pitches?: number[];
 	waveforms?: string[];
+	ratchets?: number[]; // per step: 1 hit, or 2–4 quick hits (src/audio/ratchet.ts); synth lane only
 	inputRef?: HTMLInputElement | null;
 };
 
@@ -346,6 +348,7 @@ export function buildSnapshot(st: ProjectState) {
 			velocities: [...i.velocities],
 			pitches: i.pitches ? [...i.pitches] : null,
 			waveforms: (i as any).waveforms ? [...(i as any).waveforms] : null,
+			ratchets: i.ratchets ? [...i.ratchets] : null,
 		})),
 
 		// melodyUi mirrors the Melody Maker panel, which reports every change through events
@@ -576,6 +579,12 @@ export function applySnapshot(st: ProjectState, s: any) {
 			if (Array.isArray(from.velocities)) inst.velocities = [...from.velocities];
 			if (Array.isArray(from.pitches)) (inst as any).pitches = [...from.pitches];
 			if (Array.isArray(from.waveforms)) (inst as any).waveforms = [...from.waveforms];
+			// Ratchets (the synth lane): projects saved before them play one hit per step
+			if (inst.ratchets) {
+				inst.ratchets = Array.isArray(from.ratchets)
+					? from.ratchets.map(clampRatchet)
+					: Array(inst.ratchets.length).fill(1);
+			}
 		});
 
 		// If there are saved *custom* instruments that don't exist yet, append them
@@ -653,6 +662,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 		i.velocities = Array(stepLength.value).fill(1);
 		if (i.pitches) i.pitches = Array(stepLength.value).fill(currentDefaultHz.value);
 		if (i.waveforms) i.waveforms = Array(stepLength.value).fill('sine');
+		if (i.ratchets) i.ratchets = Array(stepLength.value).fill(1);
 	});
 	// remove custom channels
 	for (let idx = instruments.value.length - 1; idx >= 0; idx--) {

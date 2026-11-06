@@ -53,6 +53,10 @@
                         </div>
                     </div>
 
+                    <!-- A ratchet: the step plays this many quick hits -->
+                    <div v-if="ratchetFor(index) > 1" class="ratchet-badge" :class="{ 'is-off': !active }"
+                        aria-hidden="true">×{{ ratchetFor(index) }}</div>
+
                     <div class="wave-badge" :class="{ 'is-off': !active }" :data-wave="waveFor(index)"
                         :title="waveFor(index)">
                         <WaveIcon :wave="waveFor(index)" />
@@ -114,6 +118,9 @@ const props = withDefaults(
 
         waveforms?: Wave[];
         defaultWave?: Wave;
+
+        // Hits per step: 1, or 2–4 quick hits (a ratchet; src/audio/ratchet.ts)
+        ratchets?: number[];
 
         noiseMask?: boolean[];
         noiseTint?: string;
@@ -200,8 +207,13 @@ function onMouseUp() {
 const focusIndex = ref(0);
 const padEls: HTMLElement[] = [];
 
+function ratchetFor(i: number) {
+    return props.ratchets?.[i] ?? 1;
+}
+
 function padLabel(i: number, active: boolean) {
-    return active ? `Step ${i + 1}, ${props.nearestNote(props.pitches[i])}` : `Step ${i + 1}`;
+    const repeats = ratchetFor(i) > 1 ? `, ${ratchetFor(i)} hits` : '';
+    return active ? `Step ${i + 1}, ${props.nearestNote(props.pitches[i])}${repeats}` : `Step ${i + 1}`;
 }
 
 function onPadKeydown(e: KeyboardEvent, index: number) {
@@ -381,6 +393,29 @@ const nearestNote = props.nearestNote;
 
 .wave-badge[data-wave="glass"] {
     color: #e6c6ff;
+}
+
+/* A ratchet's hit count, at the top of the pad (the wave badge is at the bottom) */
+.ratchet-badge {
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+    padding: 1px 4px;
+    border-radius: 6px;
+    font-size: 9px;
+    line-height: 1.1;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(145deg, rgba(0, 0, 0, .55), rgba(0, 0, 0, .35));
+    border: 1px solid rgba(255, 255, 255, .14);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.ratchet-badge.is-off {
+    opacity: .45;
 }
 
 .note-chip {

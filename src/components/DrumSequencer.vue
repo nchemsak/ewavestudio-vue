@@ -145,7 +145,7 @@
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
 						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
-						:waveforms="(synthInstrument as any).waveforms"
+						:waveforms="(synthInstrument as any).waveforms" :ratchets="synthInstrument.ratchets"
 						:defaultWave="selectedWaveform" :noiseMask="noiseMask"
 						:noiseTint="noiseHexFromMorph(noiseColor)" noise-mode="static" :noise-alpha="0.32"
 						:noise-fps="14" :noise-speed="40" :noise-enabled="noiseEnabled" :pepper-alpha="0.2"
@@ -453,7 +453,7 @@
 		</div>
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
-			v-model:noiseEnabled="padNoiseEnabled" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
+			v-model:noiseEnabled="padNoiseEnabled" v-model:ratchet="currentPadRatchet" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
 			:anchorRect="padPopover.anchorRect" :title="padPopover.title" />
 	</div>
 </template>
@@ -481,6 +481,7 @@ import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
 import VelocityRouting from './VelocityRouting.vue';
 import { velocityRoutingActive } from '../audio/velocity';
+import { clampRatchet } from '../audio/ratchet';
 import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
 import MelodyMaker from './MelodyMaker.vue';
 import MidiToolbar from './MidiToolbar.vue';
@@ -598,6 +599,7 @@ function setStepLength() {
 		if (inst.pitches) inst.pitches = resize(inst.pitches, currentDefaultHz.value);
 		if ((inst as any).waveforms)
 			(inst as any).waveforms = resize((inst as any).waveforms, selectedWaveform.value as any);
+		if (inst.ratchets) inst.ratchets = resize(inst.ratchets, 1);
 	});
 
 	noiseMask.value = resize(noiseMask.value, true);
@@ -677,6 +679,7 @@ function resetSynthPadsToDefaults() {
 	inst.velocities = Array(len).fill(1.0);
 	inst.pitches = Array(len).fill(baseHz);
 	inst.waveforms = Array(len).fill('sine' as OscillatorType);
+	inst.ratchets = Array(len).fill(1);
 
 	// Keep the global waveform selector consistent with pad defaults
 	selectedWaveform.value = 'sine';
@@ -1459,6 +1462,7 @@ const instruments = ref<Instrument[]>([
 		velocities: Array(stepLength.value).fill(1.0),
 		pitches: Array(stepLength.value).fill(currentDefaultHz.value),
 		waveforms: Array(stepLength.value).fill('sine' as OscillatorType),
+		ratchets: Array(stepLength.value).fill(1), // hits per step (src/audio/ratchet.ts)
 	},
 ]);
 
@@ -1500,6 +1504,23 @@ const currentPadWave = computed<Wave>({
 			inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as Wave);
 		}
 		inst.waveforms[padSettings.index] = w;
+	}
+});
+
+// Per-pad ratchet (Repeats: 1–4 quick hits within the step) for the pad settings popover;
+// undefined (no row) for a lane without ratchets
+const currentPadRatchet = computed<number | undefined>({
+	get() {
+		const inst = instruments.value.find(i => i.name === padSettings.name);
+		if (!inst?.ratchets) return undefined;
+		return inst.ratchets[padSettings.index] ?? 1;
+	},
+	set(n) {
+		const inst = instruments.value.find(i => i.name === padSettings.name);
+		if (!inst?.ratchets || padSettings.index < 0) return;
+		const next = [...inst.ratchets];
+		next[padSettings.index] = clampRatchet(n);
+		inst.ratchets = next;
 	}
 });
 
@@ -1894,6 +1915,7 @@ const exportState = computed<StepSequencerState>(() => {
 				...(inst.pitches ?? Array(stepsCount).fill(currentDefaultHz.value)),
 			],
 			waveforms: Array.from({ length: stepsCount }, (_, i) => wf(i)),
+			ratchets: Array.from({ length: stepsCount }, (_, i) => inst.ratchets?.[i] ?? 1),
 		},
 
 		synth: {

@@ -1607,3 +1607,50 @@ test('dice rolls are never silent or clipping', async ({ page }) => {
 		expect(peak, `roll ${i + 1}`).toBeLessThan(0.9);
 	}
 });
+
+// --- Ratchets --------------------------------------------------------------------------------
+
+test("a step's Repeats play quick hits within the step, live and in WAV exports", async ({ page }) => {
+	const setRepeats = async (step: number, label: string) => {
+		await page.locator('.pad-settings-dot').nth(step).click();
+		await page.getByRole('group', { name: 'Repeats' }).getByRole('button', { name: label, exact: true }).click();
+		await page.keyboard.press('Escape');
+	};
+	await turnOnPads(page, [0]);
+	await setRepeats(0, '×3');
+	await expect(pads(page).nth(0).locator('..').locator('.ratchet-badge')).toHaveText('×3');
+	await expect(pads(page).nth(0)).toHaveAttribute('aria-label', /3 hits$/);
+
+	// Live: three notes in the step's time, a third of a step apart (a 16th at 80 BPM is 187.5 ms)
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await page.waitForTimeout(400);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	const times = await page.evaluate(() => [...new Set((window as any).__starts
+		.filter((s: any) => s.osc).map((s: any) => s.when as number))].sort((a: any, b: any) => a - b));
+	const first = times.find((t) => times.some((u) => Math.abs(u - t - 0.0625) < 1e-6))!;
+	expect(first, `note times: ${times.join(', ')}`).toBeDefined();
+	expect(times.some((t) => Math.abs(t - first - 0.125) < 1e-6)).toBe(true);
+	expect(times.some((t) => Math.abs(t - first - 0.1875) < 1e-6)).toBe(false); // the next step is off
+
+	// Export, two hits: the first ends before the second begins (93.75 ms later), instead of
+	// ringing on under it; with one hit, the note just fades
+	const levels = async () => {
+		const wav = await downloadFromFileMenu(page, 'Export WAV');
+		return { before: wavStats(wav, 80, 90).rms, after: wavStats(wav, 110, 130).rms };
+	};
+	await setRepeats(0, '×2');
+	const two = await levels();
+	expect(two.after).toBeGreaterThan(two.before * 5);
+	await setRepeats(0, '×1');
+	await expect(pads(page).nth(0).locator('..').locator('.ratchet-badge')).toHaveCount(0);
+	const one = await levels();
+	expect(one.after).toBeLessThan(one.before);
+
+	// Saved with the project, and Reset Pads puts every step back to one hit
+	await setRepeats(4, '×4');
+	expect(JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data
+		.instruments.find((l: any) => l.name === 'synth-voice').ratchets[4]).toBe(4);
+	await page.locator('.step-menu-anchor .pt-info-icon').click();
+	await page.getByRole('menuitem', { name: 'Reset Pads' }).click();
+	await expect(page.locator('.ratchet-badge')).toHaveCount(0);
+});
