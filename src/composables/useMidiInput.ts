@@ -1,8 +1,9 @@
 // src/composables/useMidiInput.ts
-// Web MIDI note input: asks for MIDI access when the visitor clicks "Enable MIDI", lists the
+// Web MIDI input: asks for MIDI access when the visitor clicks "Enable MIDI", lists the
 // connected inputs, listens to the chosen one, and plays its note-on messages. It knows nothing
 // about the synth: the caller's noteToPlay() decides what a note plays (or that it plays
-// nothing). Only note-on is used; note-off, CC, pitch bend and MIDI clock are ignored.
+// nothing). Control changes (a controller's knobs) go to the caller's onControlChange(), for
+// MIDI learn (useMidiLearn.ts). Note-off, pitch bend and MIDI clock are ignored.
 //
 // The audio engine starts suspended (browsers wait for a click). Enabling MIDI resumes it, and
 // a note that arrives while it is suspended resumes it and then plays, unless resuming takes
@@ -18,6 +19,7 @@ export type MidiInputInfo = {
 
 const NOTE_ON = 0x90;
 const NOTE_OFF = 0x80;
+const CONTROL_CHANGE = 0xb0;
 const RESUME_LIMIT_MS = 250;
 
 // A note-on message as { note, velocity 0..1 }, or null for anything else. A note-on with
@@ -31,11 +33,22 @@ export function parseNoteOn(data: ArrayLike<number> | null | undefined): { note:
 	return { note: data[1], velocity: Math.max(0.0, Math.min(1.0, data[2] / 127)) };
 }
 
+// A control change (a controller's knob or fader) as { channel 0–15, controller, value 0–127 },
+// or null for anything else. Controllers 120–127 are channel mode messages (all notes off,
+// reset), not knobs, so they're left out too.
+export function parseControlChange(data: ArrayLike<number> | null | undefined): { channel: number; controller: number; value: number } | null {
+	if (!data || data.length < 3) return null;
+	if ((data[0] & 0xf0) !== CONTROL_CHANGE || data[1] > 119) return null;
+	return { channel: data[0] & 0x0f, controller: data[1], value: data[2] & 0x7f };
+}
+
 export function useMidiInput(opts: {
 	audioCtx: Pick<AudioContext, 'state' | 'resume'>;
 	// Called for each note-on, before the audio engine is woken. Returns a function that plays
 	// the note (called once audio is running), or null to ignore the note.
 	noteToPlay: (note: number, velocity: number) => (() => void) | null;
+	// Called for each control change (MIDI learn)
+	onControlChange?: (cc: { channel: number; controller: number; value: number }) => void;
 }) {
 	const { audioCtx } = opts;
 
@@ -49,6 +62,12 @@ export function useMidiInput(opts: {
 
 	function handleMidiMessage(e: MIDIMessageEvent) {
 		if (!listening.value) return;
+
+		const cc = parseControlChange(e.data);
+		if (cc) {
+			opts.onControlChange?.(cc);
+			return;
+		}
 
 		const msg = parseNoteOn(e.data);
 		if (!msg) return;

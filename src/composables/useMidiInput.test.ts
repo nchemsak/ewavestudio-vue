@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { effectScope } from 'vue';
-import { parseNoteOn, useMidiInput } from './useMidiInput';
+import { parseNoteOn, parseControlChange, useMidiInput } from './useMidiInput';
 
 describe('parseNoteOn', () => {
 	it('reads a note-on on any channel, with velocity scaled to 0..1', () => {
@@ -16,6 +16,23 @@ describe('parseNoteOn', () => {
 		expect(parseNoteOn([0xe0, 0, 64])).toBeNull();  // pitch bend
 		expect(parseNoteOn([0xf8])).toBeNull();         // MIDI clock
 		expect(parseNoteOn(null)).toBeNull();
+	});
+});
+
+describe('parseControlChange', () => {
+	it("reads a controller's knob on any channel", () => {
+		expect(parseControlChange([0xb0, 21, 64])).toEqual({ channel: 0, controller: 21, value: 64 });
+		expect(parseControlChange([0xbf, 74, 127])).toEqual({ channel: 15, controller: 74, value: 127 });
+		expect(parseControlChange([0xb0, 119, 0])?.controller).toBe(119);
+	});
+
+	it('ignores channel mode messages (120–127), notes, other messages and short ones', () => {
+		expect(parseControlChange([0xb0, 123, 0])).toBeNull(); // all notes off
+		expect(parseControlChange([0xb0, 121, 0])).toBeNull(); // reset all controllers
+		expect(parseControlChange([0x90, 21, 64])).toBeNull();
+		expect(parseControlChange([0xe0, 0, 64])).toBeNull();
+		expect(parseControlChange([0xb0, 21])).toBeNull();
+		expect(parseControlChange(undefined)).toBeNull();
 	});
 });
 
@@ -97,6 +114,24 @@ describe('useMidiInput', () => {
 		midi.select(''); // None
 		m.send('b', [0x90, 67, 127]);
 		expect(played).toHaveLength(2);
+	});
+
+	it("passes the chosen input's control changes on, and plays no note for them", async () => {
+		const m = fakeMidi();
+		m.add('a');
+		m.add('b');
+		const ccs: unknown[] = [];
+		const noteToPlay = vi.fn(() => null);
+		const scope = effectScope();
+		const midi = scope.run(() => useMidiInput({ audioCtx: fakeAudio() as any, noteToPlay, onControlChange: (cc) => ccs.push(cc) }))!;
+		await midi.enable();
+		m.send('a', [0xb0, 21, 10]);
+		expect(ccs).toEqual([]); // nothing chosen yet
+		midi.select('a');
+		m.send('a', [0xb2, 21, 100]);
+		m.send('b', [0xb0, 22, 5]); // not the chosen input
+		expect(ccs).toEqual([{ channel: 2, controller: 21, value: 100 }]);
+		expect(noteToPlay).not.toHaveBeenCalled();
 	});
 
 	it('plays nothing when noteToPlay says so (a muted synth), without waking the audio engine', async () => {

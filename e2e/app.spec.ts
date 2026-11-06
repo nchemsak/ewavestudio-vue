@@ -1847,3 +1847,150 @@ test("Export audio: the dialog keeps the last export's choices, until File → N
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(0);
 	expect(await choices()).toEqual(defaults);
 });
+
+// --- MIDI learn ------------------------------------------------------------------------------
+
+// A fake MIDI controller, chosen in the MIDI list; returns how to turn one of its knobs
+async function connectController(page: Page) {
+	await page.addInitScript(() => {
+		const w = window as any;
+		w.__midiInput = { id: 'test-controller', name: 'Test Controller', onmidimessage: null };
+		const access = { inputs: new Map([['test-controller', w.__midiInput]]), outputs: new Map(), onstatechange: null };
+		(navigator as any).requestMIDIAccess = async () => access;
+	});
+	await page.reload();
+	await expect(pads(page)).toHaveCount(16);
+	await page.getByRole('button', { name: 'Enable MIDI' }).click();
+	const learn = page.getByRole('button', { name: 'Learn', exact: true });
+	await expect(learn).toBeDisabled(); // no controller chosen yet
+	await page.locator('#midi-input-select').selectOption('test-controller');
+	await expect(learn).toBeEnabled();
+	// Control change `controller` to `value` (0–127), on MIDI channel `channel` (1–16)
+	return (controller: number, value: number, channel = 1) => page.evaluate(([c, v, ch]) =>
+		(window as any).__midiInput.onmidimessage({ data: new Uint8Array([0xb0 + ch - 1, c, v]) }), [controller, value, channel]);
+}
+
+test("MIDI learn: a controller knob turns the knob it's linked to, along its range, as one undo step, and the link is kept", async ({ page }) => {
+	const turn = await connectController(page);
+	const learn = page.getByRole('button', { name: 'Learn', exact: true });
+	const bar = page.getByRole('region', { name: 'MIDI learn' });
+	const cutoff = page.getByRole('slider', { name: 'Cutoff' });
+	const pitchDecay = page.locator('[data-midi-id="pitchEnv.decay"]');
+
+	// Before learning, a controller knob turns nothing
+	await turn(21, 127);
+	await expect(cutoff).toHaveAttribute('aria-valuenow', '5000');
+
+	await learn.click();
+	await expect(learn).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(32);
+	await cutoff.click();
+	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
+	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');
+	await turn(21, 127);
+	// Linked, and the knob jumps to where the controller's knob is
+	await expect(bar).toContainText('Cutoff follows CC 21.');
+	await expect(cutoff.locator('.knob-midi-badge')).toHaveText('CC 21');
+	await expect(cutoff).toHaveAttribute('aria-description', 'Follows CC 21');
+	await expect(cutoff).toHaveAttribute('aria-valuenow', '10000');
+
+	// A knob with a logarithmic taper follows its own curve: halfway is about 100 ms, not 1000
+	await pitchDecay.click();
+	await turn(22, 64, 3);
+	await expect(pitchDecay.locator('.knob-midi-badge')).toHaveText('CC 22 ch 3');
+	await expect(pitchDecay).toHaveAttribute('aria-valuenow', '102');
+
+	await bar.getByRole('button', { name: 'Done' }).click();
+	await expect(bar).toBeHidden();
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(0);
+	await expect(page.locator('.knob-midi-badge')).toHaveCount(0);
+
+	// After learning: the ends of the controller's turn are the knob's ends. The knob shows
+	// its value as a drag would, and lets go once the controller knob rests.
+	await turn(21, 0);
+	await expect(cutoff).toHaveAttribute('aria-valuenow', '100');
+	await expect(page.locator('.custom-tooltip', { hasText: '100 Hz' })).toBeVisible();
+	await expect(page.locator('.custom-tooltip')).toHaveCount(0, { timeout: 2000 });
+	await turn(22, 127); // channel 1: not the knob linked on channel 3
+	await expect(pitchDecay).toHaveAttribute('aria-valuenow', '102');
+	await turn(22, 0, 3);
+	await expect(pitchDecay).toHaveAttribute('aria-valuenow', '5');
+
+	// A sweep of the controller knob is one undo step, like a drag
+	await page.waitForTimeout(700);
+	for (let v = 10; v <= 120; v += 10) await turn(21, v);
+	await expect.poll(async () => Number(await cutoff.getAttribute('aria-valuenow'))).toBeGreaterThan(9000);
+	await page.waitForTimeout(700);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(cutoff).toHaveAttribute('aria-valuenow', '100');
+
+	// The links belong to this browser, not to the project: kept after a reload
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('Control+s');
+	await expect(page.locator('.pc-dot')).toHaveClass(/\bsaved\b/);
+	expect(JSON.parse((await page.evaluate(() => localStorage.getItem('ewave-studio2:midi-map')))!))
+		.toEqual({ '1:21': 'filter.cutoff', '3:22': 'pitchEnv.decay' });
+	await page.reload();
+	await expect(pads(page)).toHaveCount(16);
+	await page.getByRole('button', { name: 'Enable MIDI' }).click();
+	await page.locator('#midi-input-select').selectOption('test-controller');
+	await turn(21, 127);
+	await expect(cutoff).toHaveAttribute('aria-valuenow', '10000');
+});
+
+test('MIDI learn: one controller knob per knob; Delete, Clear all and Escape; greyed-out knobs wait', async ({ page }) => {
+	const turn = await connectController(page);
+	const learn = page.getByRole('button', { name: 'Learn', exact: true });
+	const bar = page.getByRole('region', { name: 'MIDI learn' });
+	const cutoff = page.getByRole('slider', { name: 'Cutoff' });
+	const resonance = page.getByRole('slider', { name: 'Resonance' });
+	const attack = page.getByRole('slider', { name: 'Attack' });
+	const badge = (knob: typeof cutoff) => knob.locator('.knob-midi-badge');
+	await learn.click();
+
+	// A controller knob linked to another knob leaves the first
+	await cutoff.click();
+	await turn(21, 64);
+	await resonance.click();
+	await turn(21, 64);
+	await expect(badge(resonance)).toHaveText('CC 21');
+	await expect(badge(cutoff)).toHaveCount(0);
+	// ... and a knob linked to another controller knob leaves the first
+	await resonance.click();
+	await turn(30, 64);
+	await expect(badge(resonance)).toHaveText('CC 30');
+	expect(JSON.parse((await page.evaluate(() => localStorage.getItem('ewave-studio2:midi-map')))!))
+		.toEqual({ '1:30': 'filter.resonance' });
+
+	// From the keyboard: Enter arms the focused knob, Delete unlinks it
+	await attack.focus();
+	await page.keyboard.press('Enter');
+	await turn(22, 0);
+	await expect(badge(attack)).toHaveText('CC 22');
+	await page.keyboard.press('Delete');
+	await expect(badge(attack)).toHaveCount(0);
+	await expect(bar).toContainText('Attack no longer follows the controller.');
+
+	// A greyed-out knob (the delay is off) can be linked; it moves once its module is on
+	const delayMix = page.locator('[data-midi-id="delay.mix"]');
+	await expect(delayMix).toHaveAttribute('aria-disabled', 'true');
+	await delayMix.focus();
+	await page.keyboard.press('Enter');
+	await turn(23, 127);
+	await expect(bar).toContainText('Delay mix follows CC 23 once its module is on.');
+	await expect(delayMix).toHaveAttribute('aria-valuenow', '0.3');
+
+	await bar.getByRole('button', { name: 'Clear all' }).click();
+	await expect(page.locator('.knob-midi-badge')).toHaveCount(0);
+	await expect(bar.getByRole('button', { name: 'Clear all' })).toHaveCount(0);
+	const q = (await resonance.getAttribute('aria-valuenow'))!;
+	await turn(30, 0);
+	await page.waitForTimeout(100);
+	await expect(resonance).toHaveAttribute('aria-valuenow', q);
+
+	// Escape ends learn mode
+	await page.keyboard.press('Escape');
+	await expect(bar).toBeHidden();
+	await expect(learn).toHaveAttribute('aria-pressed', 'false');
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(0);
+});

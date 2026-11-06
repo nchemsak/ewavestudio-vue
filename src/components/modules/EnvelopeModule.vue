@@ -3,7 +3,7 @@
 		<div class="pt-knob-row">
 			<!-- Attack -->
 			<div class="position-relative text-center">
-				<Knob :value-text="`${Math.round(attackMsLocal)} ms`" v-model="attackNorm" label="Attack" size="small" :min="0" :max="100" :step="1"
+				<Knob midi-id="env.attack" :value-text="`${Math.round(attackMsLocal)} ms`" v-model="attackNorm" label="Attack" size="small" :min="0" :max="100" :step="1"
 					:disabled="!localEnabled" :color="color" @knobStart="onAttackStart" @knobEnd="onAttackEnd" />
 				<span v-if="activeKnob === 'attack'" class="custom-tooltip">
 					{{ Math.round(attackMsLocal) }} ms
@@ -12,7 +12,7 @@
 
 			<!-- Decay -->
 			<div class="position-relative text-center">
-				<Knob :value-text="`${Math.round(decayMsLocal)} ms`" v-model="decayNorm" label="Decay" size="small" :min="0" :max="100" :step="1"
+				<Knob midi-id="env.decay" :value-text="`${Math.round(decayMsLocal)} ms`" v-model="decayNorm" label="Decay" size="small" :min="0" :max="100" :step="1"
 					:disabled="!localEnabled" :color="color" @knobStart="onDecayStart" @knobEnd="onDecayEnd" />
 				<span v-if="activeKnob === 'decay'" class="custom-tooltip">
 					{{ Math.round(decayMsLocal) }} ms

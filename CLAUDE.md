@@ -9,7 +9,7 @@ velocity, waveform (sine, triangle, saw, square, a pulse with adjustable width, 
 harmonic shapes) and ratchet (2–4 quick hits within the step); amp envelope, pitch envelope (a drum-style sweep), filter with its own
 envelope, noise, FM,
 unison and LFO; delay, overdrive and reverb; Web MIDI note
-input; a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope
+input, and MIDI learn (a controller's knobs turn the app's); a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope
 display; six built-in presets that set the sound (not the pattern), and a dice for a random
 sound; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
 saved in IndexedDB with JSON import and export; and undo/redo.
@@ -45,7 +45,8 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   because the code was written without a type checker. It must stay at zero errors.
 - **Unit tests** (Vitest, in Node): pure logic such as loading and upgrading saved projects,
   WAV encoding, storage names, the playback clock, synth helpers, the LFO visualizer's
-  arithmetic, MIDI input (with a fake MIDI system), the undo history, project snapshots (save → load round trip, older
+  arithmetic, MIDI input (with a fake MIDI system), MIDI learn (and that every learnable knob
+  is in the app), the undo history, project snapshots (save → load round trip, older
   projects, factory defaults), presets (exact values, knob ranges, pattern untouched),
   ratchet timing, and the export helpers (loop folding, MIDI and zip files read back, names).
   `src/lib/project/testState.ts` builds the settings those tests use (`makeState`,
@@ -56,7 +57,8 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   (`__ctx`), records every scheduled note and the per-note LFO taps, measures the output
   level (`__peakOver(ms)`, and `__swingOver(ms)`, which ignores a steady offset), tracks keydown
   listeners on `window` (`__keydown`), and can pause
-  `requestAnimationFrame` the way hidden tabs do. The MIDI test installs a fake MIDI keyboard.
+  `requestAnimationFrame` the way hidden tabs do. The MIDI tests install a fake MIDI keyboard
+  or controller.
   Google Analytics is stubbed out. Before the first local run: `npx playwright install chromium`.
 - **No linter yet.** Current ESLint and typescript-eslint releases depend on `minimatch` 10,
   which has a moderate advisory (GHSA-g3hv-75wg-m249) that only `minimatch` 11 fixes. Adding
@@ -143,7 +145,8 @@ src/components/
                          Export audio…; Undo/Redo buttons
   ExportDialog.vue       The Export audio dialog (see "Export audio")
   PresetButtons.vue      The Presets buttons in the transport card (see "Presets")
-  MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list
+  MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list and Learn
+                         (and the MIDI learn bar, at the bottom of the screen)
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
   WaveButton.vue, WaveIcon.vue  A wave's big tile (Waveforms panel) and small line icon (pads)
   VelocityRouting.vue    The "Vel →" panel (Step Sequencer header): four velocity amounts
@@ -176,12 +179,15 @@ src/lib/random.ts        Seeded random numbers (export stems; tests)
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
+src/lib/midiLearn.ts     MIDI learn's bookkeeping (pure): the learnable knobs (MIDI_KNOBS) and
+                         which controller knob drives which
 src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/export,
                          namespace.ts (storage names, one set per site folder)
 src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) + v1→v2
                          migration (CURRENT_VERSION = 2)
 src/composables/useTheme.ts      synthwave | dark | light theme, stored in localStorage
 src/composables/useMidiInput.ts  Web MIDI note input (see "MIDI")
+src/composables/useMidiLearn.ts  MIDI learn mode and the controller's links (see "MIDI learn")
 src/composables/useProjectSync.ts  Keeps the settings and the project store in step (see "Saving")
 src/composables/useUndoHistory.ts  When to record an undo step, and applying undo/redo
 src/composables/useLfoVisual.ts  The LFO visualizer's frame clock
@@ -309,19 +315,45 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### MIDI
 - `src/composables/useMidiInput.ts` handles Web MIDI (`navigator.requestMIDIAccess`): access,
-  the input list, the chosen input, note-on parsing (`parseNoteOn`) and waking the audio
-  engine. It doesn't know about the synth: `DrumSequencer.vue` calls
-  `useMidiInput({ audioCtx, noteToPlay })`, and `noteToPlay(note, velocity)` returns what to
-  play, or `null` to ignore the note (a muted synth lane), before audio is woken.
+  the input list, the chosen input, note-on and control change parsing (`parseNoteOn`,
+  `parseControlChange`) and waking the audio engine. It doesn't know about the synth:
+  `DrumSequencer.vue` calls `useMidiInput({ audioCtx, noteToPlay, onControlChange })`, and
+  `noteToPlay(note, velocity)` returns what to play, or `null` to ignore the note (a muted
+  synth lane), before audio is woken. Control changes go to MIDI learn (below).
 - Opt-in through an "Enable MIDI" button. `MidiToolbar.vue` (button, then the input list) is
   teleported into `#midi-toolbar-slot` in `App.vue`, or shown in the transport row if there
   is no slot. At 768 px wide or less, `App.vue` hides its toolbar, MIDI controls included.
-- Only note-on messages are handled. Each one plays `playSynthNote()` with the global waveform
-  and current synth settings, scaled by velocity and the synth channel volume. Note-off, CC,
-  pitch bend and MIDI clock are ignored.
+- Only note-on and control change (CC) messages are handled. Each note-on plays
+  `playSynthNote()` with the global waveform and current synth settings, scaled by velocity
+  and the synth channel volume. Note-off, pitch bend and MIDI clock are ignored, and so are
+  CC 120–127 (channel mode messages such as All Notes Off).
 - The AudioContext starts suspended. Clicking "Enable MIDI" resumes it, and a note that arrives
   while it's suspended resumes it and then plays (or is dropped if resuming takes more than
   250 ms, so it's never played late). MIDI notes also start the LFO, as Play does.
+
+### MIDI learn
+- A controller's knobs turn the app's knobs. Learn (in the MIDI toolbar, once an input is
+  chosen) starts learn mode: the 32 learnable knobs get a dashed outline and a badge ("CC 21",
+  or "CC 7 ch 3" off channel 1) for the controller knob they follow, and a bar at the bottom of
+  the screen says what to do (with Clear all and Done; a spacer under the page lets the last
+  knobs scroll clear of it). Click a knob (or Enter on it) to arm it, then turn a controller
+  knob: they're linked, and the app's knob jumps to where the controller's is. Delete or
+  Backspace on a knob unlinks it; Done or Escape ends learn mode.
+- One controller knob drives one knob, and a knob follows one controller knob: a new link
+  replaces the old (`assign()` in `src/lib/midiLearn.ts`).
+- A controller knob turns its knob as a drag does: `Knob.vue`'s `setPosition()` maps 0–127 to
+  the knob's turn (its own taper and step), and emits `knobStart`, then `knobEnd` once the
+  controller knob has rested 600 ms, so the tooltip and the screen's envelope or filter view
+  work as with the mouse. Undo, saving and the engines need nothing new: a sweep is one undo
+  step. It jumps (no pickup). A greyed-out knob (its module off) ignores it, as it ignores the
+  mouse; it can still be linked, and the bar says it follows once its module is on.
+- The links belong to the controller, not to a song: they're kept in this browser
+  (`localStorage` `midi-map`, `{ "1:21": "filter.cutoff" }`, channel 1–16 : controller), not
+  in projects, and File → New doesn't clear them.
+- Learnable knobs: each `<Knob midi-id="...">` whose id is in `MIDI_KNOBS` (with the name the
+  bar uses). The ids are saved, so never rename one. The pop-up knobs (the "Vel →" panel, a
+  pad's Fine) aren't learnable: they'd only follow while open. A unit test checks every id is
+  on exactly one knob.
 
 ### Keyboard shortcuts
 - Space: play/stop (`onGlobalKeydown` in `DrumSequencer.vue`, ignored while typing). It does
@@ -331,7 +363,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   typing or while a dropdown list is open. While Attack/Decay or Cutoff/Resonance is turned,
   the screen shows the envelope view (F4) or the filter view (no F-key), then goes back
   (`holdScreen`/`onScreenKnobEnd` in `DrumSequencer.vue`); a view picked meanwhile stays.
-- Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers.
+- Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers, and ends MIDI
+  learn mode (where Enter arms the focused knob and Delete unlinks it).
 - Ctrl/Cmd+Z: undo; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: redo (same handler as Space). Ignored in
   a text box, which keeps its own undo (the project name).
 - Knobs (`Knob.vue`, `role="slider"`): Tab to one, then arrows (Up/Right turn it up) move one
@@ -500,7 +533,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - While the dot shows unsaved changes, `ProjectControls` asks before the page is closed or
   reloaded (`beforeunload`). A project made with File → New counts as unsaved until it's saved.
 - `localStorage` keys (all prefixed): `lastProjectId` (reopened on load), `reset-ui-next`
-  (one-shot flag that ProjectControls sets to reset the UI on New Project), `seqOpen`, `ui-theme`.
+  (one-shot flag that ProjectControls sets to reset the UI on New Project), `seqOpen`, `ui-theme`,
+  `midi-map` (MIDI learn's links, see "MIDI learn").
 - `instruments[]` still contains the hidden kick, snare and hihat lanes (normally with no
   steps on). Keep them so saved projects stay compatible.
 - Melody Maker settings (key, scale, range, and arp pattern, rate, octaves and tones) live in
@@ -574,7 +608,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   against the build before it.
 - Knobs: give every `<Knob>` a `label` (or an `aria-label`), and a `value-text` (what a
   screen reader says, such as "120 ms") when its number isn't the real value, for example a
-  0..1 position. The text is usually the knob's tooltip.
+  0..1 position. The text is usually the knob's tooltip. A new knob on the panel also gets a
+  `midi-id` and an entry in `MIDI_KNOBS` (`src/lib/midiLearn.ts`), so MIDI learn can link it.
 - Analytics: `trackEvent(name, params)` calls `window.gtag` (missing under `npm run dev`, so
   it does nothing there). Separate copies of this helper
   live in DrumSequencer and ProjectControls.
@@ -618,12 +653,11 @@ this file), then presets that can use them (the first six presets came in PR 30;
 with new sound features). Everything drum-related waits until the maintainer brings the drum
 lanes back.
 
-1. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
-2. **Install as an app (PWA)** that works offline.
-3. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-4. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
+1. **Install as an app (PWA)** that works offline.
+2. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+3. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
    purpose so far.
-5. **User-saved presets, and more built-in ones.** Left out of PR 30 on purpose. A user
+4. **User-saved presets, and more built-in ones.** Left out of PR 30 on purpose. A user
    preset could be the sound part of a snapshot (`soundKey()`'s parts) kept in IndexedDB
    next to the projects; more built-in ones as new sound features arrive (toms, hats, organ
    and hollow sounds).
@@ -649,6 +683,11 @@ heard, and the presets peak well below clipping (0.2–0.5), but measurements se
 browser tests use `__swingOver` to ignore it.
 
 On hold (ask the maintainer before starting; put on hold after PR 33, "not now"):
+- **MIDI clock sync and MIDI out** (from the "More MIDI" item, whose MIDI learn came in PR 36;
+  the maintainer isn't sure they're worth it). Clock sync would follow a DAW's or drum
+  machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
+  ticks, 24 a quarter note, which jitter); MIDI out would send the pattern's notes to another
+  synth, timed against the audio clock.
 - **Several patterns (A/B/C/D) chained into a song.**
 - **32 steps, or per-lane lengths** (the export code's types already allow 32).
 - **Per-step parameter locks** (for example a different filter cutoff on each step). Each
@@ -721,6 +760,7 @@ Done:
 | 33 | Ratchets: "Repeats" ×1–×4 in each pad's ⋮ menu (and a "×3" badge on the pad) make a step play 2–4 quick hits within its time, swing included; each hit ends where the next begins, the last rings out; in the live and export engines (`src/audio/ratchet.ts`); saved per step, older projects get 1s. The pad menu now stays on screen on short laptop screens. Plan: share link put on hold; stage view, step probability and timing humanize dropped. |
 | 34 | Export audio: File → Export audio… opens a dialog: 1–8 bars as a seamless loop (the tail folded onto the start) or with the tail; the mix, effects stems (dry, delay, reverb, noise, adding up to the mix), a MIDI file, and a one-shot at a chosen note; normalize to −1 dBFS; several files in one .zip, named with project, tempo, key and length. The export engine's noise now matches the live engine (it went through the effects). Chosen segment buttons readable in the light theme. Plan: song chaining, 32 steps, parameter locks and sound sources part 2 on hold; register and variation stems dropped. |
 | 35 | File → New puts the Export audio dialog's choices back to their defaults (they carried over from the last export). |
+| 36 | MIDI learn: Learn in the MIDI toolbar, click a knob, turn a controller knob, and it follows (32 knobs; its own curve and step, its tooltip and screen view, one undo step per sweep). Links are kept in the browser, not in projects. Plan: MIDI clock sync and MIDI out on hold. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

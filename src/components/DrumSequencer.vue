@@ -21,7 +21,7 @@
 					<div class="pt-knob-row transport-row">
 						<!-- Volume -->
 						<div class="position-relative text-center knob-wrap">
-							<Knob v-model="volume" label="Volume" :value-text="`${Math.round(volume * 100)}%`" :min="0" :max="1" :step="0.01" size="medium"
+							<Knob midi-id="transport.volume" v-model="volume" label="Volume" :value-text="`${Math.round(volume * 100)}%`" :min="0" :max="1" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(volume * 100)}%`">
 								{{ Math.round(volume * 100) }}%
@@ -30,7 +30,7 @@
 
 						<!-- Tempo -->
 						<div class="position-relative text-center tempo-wrap">
-							<Knob v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium"
+							<Knob midi-id="transport.tempo" v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
 							<div class="tempo-stepper" role="group" aria-label="Tempo">
 								<button class="stepper-btn" type="button" title="Tempo −1"
@@ -47,7 +47,7 @@
 
 						<!-- Swing -->
 						<div class="position-relative text-center knob-wrap">
-							<Knob v-model="swing" label="Swing" :value-text="`${Math.round(swing * 100)}%`" :min="0" :max="0.5" :step="0.01" size="medium"
+							<Knob midi-id="transport.swing" v-model="swing" label="Swing" :value-text="`${Math.round(swing * 100)}%`" :min="0" :max="0.5" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(swing * 100)}% swing`">
 								{{ Math.round(swing * 100) }}%
@@ -103,7 +103,7 @@
 							:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
 						<h2 class="pt-title">Step Sequencer</h2>
 
-						<Knob v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
+						<Knob midi-id="synth.volume" v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
 							label="Vol" aria-label="Synth volume"
 							:value-text="`${Math.round(synthInstrument.channelVolume * 100)}%`" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
 							@knobEnd="activeKnob = null" />
@@ -207,7 +207,7 @@
 										 button, not inside it, so turning it doesn't pick the wave). The LFO's PW
 										 target moves it too. -->
 									<div v-if="t.value === 'pulse'" class="pulse-width-knob">
-										<Knob v-model="pulseWidth" label="Pulse Width" hideLabel size="mini"
+										<Knob midi-id="pulse.width" v-model="pulseWidth" label="Pulse Width" hideLabel size="mini"
 											:min="PULSE_WIDTH_MIN" :max="PULSE_WIDTH_MAX" :step="1"
 											:value-text="`${pulseWidth}%`" color="#ff7eb3"
 											@knobStart="pulseWidthTip = true" @knobEnd="pulseWidthTip = false" />
@@ -490,6 +490,7 @@ import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_L
 import MelodyMaker from './MelodyMaker.vue';
 import MidiToolbar from './MidiToolbar.vue';
 import { useMidiInput } from '../composables/useMidiInput';
+import { useMidiLearn } from '../composables/useMidiLearn';
 
 // Saving Imports
 import { storageKey } from "../lib/storage/namespace";
@@ -2205,9 +2206,12 @@ const lfoView: LfoView = reactive({
 
 // Device access and note input live in src/composables/useMidiInput.ts, the toolbar in
 // MidiToolbar.vue. This decides what a MIDI note plays: the synth lane's sound at the note's
-// pitch, with the global waveform, scaled by velocity and the synth channel volume.
+// pitch, with the global waveform, scaled by velocity and the synth channel volume. A
+// controller's knobs (control changes) go to MIDI learn (src/composables/useMidiLearn.ts),
+// which turns the knobs they're linked to.
 const midi = useMidiInput({
 	audioCtx,
+	onControlChange: useMidiLearn().handleControlChange,
 	noteToPlay(note, velocity) {
 		const freq = midiToFreq(note);
 		const decayTime = synthDecay.value; // seconds, as for sequencer notes

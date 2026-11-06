@@ -8,7 +8,7 @@
 
 		<div class="pt-knob-row" :class="{ 'is-unison-off': !localEnabled }">
 			<div class="position-relative text-center">
-				<Knob v-model="localVoices" size="small" :min="1" :max="maxVoices" :step="1" label="Voices"
+				<Knob midi-id="unison.voices" v-model="localVoices" size="small" :min="1" :max="maxVoices" :step="1" label="Voices"
 					:color="color" @knobStart="activeKnob = 'voices'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'voices'" class="custom-tooltip">
 					{{ localVoices }}
@@ -16,7 +16,7 @@
 			</div>
 
 			<div class="position-relative text-center">
-				<Knob :value-text="`${localDetune} cents`" v-model="localDetune" size="small" :min="0" :max="100" :step="1" label="Detune" :color="color"
+				<Knob midi-id="unison.detune" :value-text="`${localDetune} cents`" v-model="localDetune" size="small" :min="0" :max="100" :step="1" label="Detune" :color="color"
 					@knobStart="activeKnob = 'detune'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'detune'" class="custom-tooltip">
 					{{ localDetune }}¢
@@ -24,7 +24,7 @@
 			</div>
 
 			<div class="position-relative text-center">
-				<Knob :value-text="`${localSpread}%`" v-model="localSpread" size="small" :min="0" :max="100" :step="1" label="Spread" :color="color"
+				<Knob midi-id="unison.spread" :value-text="`${localSpread}%`" v-model="localSpread" size="small" :min="0" :max="100" :step="1" label="Spread" :color="color"
 					@knobStart="activeKnob = 'spread'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'spread'" class="custom-tooltip">
 					{{ localSpread }}%
