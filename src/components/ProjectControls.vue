@@ -63,10 +63,10 @@
                         Import file
                     </button>
 
-                    <button class="pc-menu-row" role="menuitem" @click="exportWavFromMenu"
+                    <button class="pc-menu-row" role="menuitem" @click="exportAudioFromMenu"
                         :disabled="!store.loaded || props.exporting" :aria-busy="props.exporting ? 'true' : 'false'">
                         <span v-if="props.exporting">Exporting…</span>
-                        <span v-else>Export WAV</span>
+                        <span v-else>Export audio…</span>
                     </button>
                 </div>
             </div>
@@ -149,7 +149,7 @@ const lastSavedHash = ref<string>('');
 const lastSavedName = ref<string>('');
 
 const props = defineProps<{ exporting?: boolean; canUndo?: boolean; canRedo?: boolean }>();
-const emit = defineEmits<{ (e: 'export-wav'): void; (e: 'undo'): void; (e: 'redo'): void }>();
+const emit = defineEmits<{ (e: 'export-audio'): void; (e: 'undo'): void; (e: 'redo'): void }>();
 
 // GOOGLE ANALYTICS
 function trackEvent(event: string, params: Record<string, any> = {}) {
@@ -160,15 +160,16 @@ function trackEvent(event: string, params: Record<string, any> = {}) {
     }
 }
 
-function exportWavFromMenu() {
-    // Analytics: user clicked "Export WAV"
-    trackEvent('export_wav_click', {
+// Opens the Export audio dialog (ExportDialog.vue, in DrumSequencer)
+function exportAudioFromMenu() {
+    // Analytics: user opened "Export audio…"
+    trackEvent('export_audio_click', {
         project_id: store.projectId,
         project_name: store.name || '(unnamed)',
     });
 
     closeAllMenus();
-    emit('export-wav');
+    emit('export-audio');
 }
 
 function formatDate(ms?: number) {

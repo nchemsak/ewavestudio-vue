@@ -409,12 +409,7 @@ test('exports a WAV file with sound in it, and a project file that imports again
 	await name.fill('Export Test');
 	await name.press('Enter');
 
-	await page.getByRole('button', { name: 'File ▾' }).click();
-	const [wav] = await Promise.all([
-		page.waitForEvent('download'),
-		page.getByRole('menuitem', { name: 'Export WAV' }).click(),
-	]);
-	const bytes = readFileSync((await wav.path())!);
+	const bytes = await exportWav(page);
 	expect(bytes.subarray(0, 4).toString('latin1')).toBe('RIFF');
 	expect(bytes.subarray(8, 12).toString('latin1')).toBe('WAVE');
 	expect(bytes.readUInt16LE(20)).toBe(3); // 32-bit float
@@ -458,6 +453,75 @@ async function chooseFromFileMenu(page: Page, item: string) {
 async function downloadFromFileMenu(page: Page, item: string) {
 	const [download] = await Promise.all([page.waitForEvent('download'), chooseFromFileMenu(page, item)]);
 	return readFileSync((await download.path())!);
+}
+
+type ExportChoices = {
+	bars?: 1 | 2 | 4 | 8; ending?: 'Loop' | 'With tail';
+	mix?: boolean; stems?: boolean; midi?: boolean; oneShot?: boolean; oneShotNote?: string; normalize?: boolean;
+};
+
+// File → Export audio…, with these choices (the rest as the dialog has them); the download
+async function exportAudio(page: Page, c: ExportChoices) {
+	await chooseFromFileMenu(page, 'Export audio…');
+	const dialog = page.getByRole('dialog', { name: 'Export audio' });
+	await expect(dialog).toBeVisible();
+	if (c.bars) await dialog.getByRole('group', { name: 'Bars' }).getByRole('button', { name: String(c.bars), exact: true }).click();
+	if (c.ending) await dialog.getByRole('group', { name: 'Ending' }).getByRole('button', { name: c.ending, exact: true }).click();
+	const boxes: [keyof ExportChoices, RegExp][] = [
+		['mix', /^Mix/], ['stems', /^Effects stems/], ['midi', /^MIDI file/], ['oneShot', /^One-shot at/], ['normalize', /^Normalize/],
+	];
+	for (const [key, name] of boxes) {
+		if (c[key] !== undefined) await dialog.getByRole('checkbox', { name }).setChecked(!!c[key]);
+	}
+	if (c.oneShotNote) await dialog.getByRole('combobox', { name: 'One-shot note' }).selectOption({ label: c.oneShotNote });
+	const [download] = await Promise.all([page.waitForEvent('download'), dialog.getByRole('button', { name: 'Export', exact: true }).click()]);
+	await expect(dialog).toBeHidden();
+	return { name: download.suggestedFilename(), bytes: readFileSync((await download.path())!) };
+}
+
+// As the File menu's "Export WAV" did before the Export audio dialog: one bar with its tail,
+// the mix only, at the level it plays
+async function exportWav(page: Page) {
+	return (await exportAudio(page, {
+		bars: 1, ending: 'With tail', mix: true, stems: false, midi: false, oneShot: false, normalize: false,
+	})).bytes;
+}
+
+// The files in a stored (uncompressed) zip, by name
+function unzip(bytes: Buffer) {
+	const files: Record<string, Buffer> = {};
+	const eocd = bytes.length - 22;
+	expect(bytes.readUInt32LE(eocd)).toBe(0x06054b50);
+	let at = bytes.readUInt32LE(eocd + 16);
+	for (let i = 0; i < bytes.readUInt16LE(eocd + 10); i++) {
+		const size = bytes.readUInt32LE(at + 24);
+		const nameLen = bytes.readUInt16LE(at + 28);
+		const local = bytes.readUInt32LE(at + 42);
+		const name = bytes.subarray(at + 46, at + 46 + nameLen).toString('utf8');
+		const dataAt = local + 30 + bytes.readUInt16LE(local + 26) + bytes.readUInt16LE(local + 28);
+		files[name] = bytes.subarray(dataAt, dataAt + size);
+		at += 46 + nameLen;
+	}
+	return files;
+}
+
+// A 32-bit float WAV file's samples (channel 0, or the channel given), sample rate and length
+function wavSamples(bytes: Buffer, channel = 0) {
+	const channels = bytes.readUInt16LE(22);
+	const rate = bytes.readUInt32LE(24);
+	const frames = Math.floor((bytes.length - 44) / 4 / channels);
+	const samples = new Float32Array(frames);
+	for (let i = 0; i < frames; i++) samples[i] = bytes.readFloatLE(44 + (i * channels + channel) * 4);
+	return { rate, frames, samples };
+}
+
+// Peak and RMS of channel 0 from `fromS` to `toS` seconds into the file
+function wavWindow(bytes: Buffer, fromS: number, toS: number) {
+	const { rate, samples } = wavSamples(bytes);
+	const part = samples.subarray(Math.round(fromS * rate), Math.round(toS * rate));
+	let peak = 0, sq = 0;
+	for (const x of part) { peak = Math.max(peak, Math.abs(x)); sq += x * x; }
+	return { peak, rms: Math.sqrt(sq / Math.max(1, part.length)) };
 }
 
 // Zero crossings per millisecond of the first channel of a 32-bit float WAV file, from
@@ -575,7 +639,7 @@ test('with the envelope off, notes are as loud as with it on, live and in WAV ex
 		return peak;
 	};
 	const liveOn = await livePeak();
-	const wavOn = wavPeak(await downloadFromFileMenu(page, 'Export WAV'));
+	const wavOn = wavPeak(await exportWav(page));
 
 	// The Envelope switch is hidden in the interface, but saved projects can have the envelope
 	// off; import one that does
@@ -590,7 +654,7 @@ test('with the envelope off, notes are as loud as with it on, live and in WAV ex
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(4);
 
 	const liveOff = await livePeak();
-	const wavOff = wavPeak(await downloadFromFileMenu(page, 'Export WAV'));
+	const wavOff = wavPeak(await exportWav(page));
 
 	// Before the fix, square notes with the envelope off came out about twice as loud
 	expect(liveOn).toBeGreaterThan(0.01);
@@ -818,7 +882,7 @@ test('the pitch envelope sweeps each note down from Amount, and short decays are
 
 	// The WAV export has the same sweep: the note starts about two octaves up (A 220 Hz → 880
 	// Hz) and is back at its pitch well before 150 ms
-	const wav = await downloadFromFileMenu(page, 'Export WAV');
+	const wav = await exportWav(page);
 	const early = wavCrossingRate(wav, 0, 8);
 	const late = wavCrossingRate(wav, 150, 250);
 	expect(late).toBeGreaterThan(0.4); // 220 Hz: 0.44 crossings per ms
@@ -923,7 +987,7 @@ test('the filter envelope sweeps each note\'s cutoff, is saved, and shows on the
 test('every wave sounds, at a similar level, and the pulse follows its Width', async ({ page }) => {
 	await turnOnPads(page, [0]);
 	const tile = (label: string) => page.locator('.wave-row').getByRole('radio', { name: label, exact: true });
-	const level = async () => wavStats(await downloadFromFileMenu(page, 'Export WAV'), 40, 200);
+	const level = async () => wavStats(await exportWav(page), 40, 200);
 
 	// Every wave plays, within about ±6 dB of the sine (the waves' loudness balance)
 	await tile('SINE').click();
@@ -1093,7 +1157,7 @@ test('velocity routing: a soft step rings shorter with Vel → Decay, and the se
 		name: 'vel.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)),
 	});
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(1);
-	const plain = wavSoundMs(await downloadFromFileMenu(page, 'Export WAV'));
+	const plain = wavSoundMs(await exportWav(page));
 
 	// Vel → Decay at +100%: a 25% step gets a quarter of the Decay
 	const button = page.getByRole('button', { name: 'Vel →' });
@@ -1109,7 +1173,7 @@ test('velocity routing: a soft step rings shorter with Vel → Decay, and the se
 	// Escape closes the panel (a click outside it does too)
 	await page.keyboard.press('Escape');
 	await expect(panel).toBeHidden();
-	const routed = wavSoundMs(await downloadFromFileMenu(page, 'Export WAV'));
+	const routed = wavSoundMs(await exportWav(page));
 	expect(routed).toBeLessThan(plain * 0.5);
 	expect(routed).toBeGreaterThan(plain * 0.1);
 
@@ -1602,7 +1666,7 @@ test('dice rolls are never silent or clipping', async ({ page }) => {
 	// 200 rolls measured while building it peaked between 0.10 and 0.65 (the presets: 0.2 to 0.5)
 	for (let i = 0; i < 8; i++) {
 		await dice.click();
-		const peak = wavPeak(await downloadFromFileMenu(page, 'Export WAV'));
+		const peak = wavPeak(await exportWav(page));
 		expect(peak, `roll ${i + 1}`).toBeGreaterThan(0.04);
 		expect(peak, `roll ${i + 1}`).toBeLessThan(0.9);
 	}
@@ -1635,7 +1699,7 @@ test("a step's Repeats play quick hits within the step, live and in WAV exports"
 	// Export, two hits: the first ends before the second begins (93.75 ms later), instead of
 	// ringing on under it; with one hit, the note just fades
 	const levels = async () => {
-		const wav = await downloadFromFileMenu(page, 'Export WAV');
+		const wav = await exportWav(page);
 		return { before: wavStats(wav, 80, 90).rms, after: wavStats(wav, 110, 130).rms };
 	};
 	await setRepeats(0, '×2');
@@ -1653,4 +1717,92 @@ test("a step's Repeats play quick hits within the step, live and in WAV exports"
 	await page.locator('.step-menu-anchor .pt-info-icon').click();
 	await page.getByRole('menuitem', { name: 'Reset Pads' }).click();
 	await expect(page.locator('.ratchet-badge')).toHaveCount(0);
+});
+
+// --- Export audio ----------------------------------------------------------------------------
+
+test('Export audio: a loop is exactly N bars, with the echoes from its end folded onto its start', async ({ page }) => {
+	const name = page.getByRole('textbox', { name: 'Project name' });
+	await name.fill('Loop Test');
+	await name.press('Enter');
+	// One note, late in the bar (step 13, 2.25 s in at 80 BPM): its second echo, 1.125 s later,
+	// crosses the loop's end
+	await turnOnPads(page, [12]);
+	const delaySwitch = page.locator('.fx .footswitch').first();
+	await delaySwitch.click();
+	await expect(delaySwitch).toHaveAttribute('aria-pressed', 'true');
+
+	// Escape and Cancel leave without exporting
+	await chooseFromFileMenu(page, 'Export audio…');
+	const dialog = page.getByRole('dialog', { name: 'Export audio' });
+	await expect(dialog).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(dialog).toBeHidden();
+
+	// A loop, normalized (the defaults): exactly 2 bars, the last echoes heard at its start
+	const loop = await exportAudio(page, { bars: 2, ending: 'Loop', mix: true, stems: false, midi: false, oneShot: false, normalize: true });
+	expect(loop.name).toBe('Loop Test_80bpm_2bars_mix.wav');
+	const l = wavSamples(loop.bytes);
+	expect(l.frames).toBe(Math.round(2 * 4 * (60 / 80) * l.rate));
+	expect(wavWindow(loop.bytes, 0, 2).peak).toBeGreaterThan(0.02);
+	expect(wavWindow(loop.bytes, 0, 6).peak).toBeCloseTo(0.891, 2); // −1 dBFS
+
+	// With the tail: a clean start, and the echoes ring on past the 2 bars
+	const tail = await exportAudio(page, { ending: 'With tail' });
+	expect(tail.name).toBe('Loop Test_80bpm_2bars-tail_mix.wav');
+	const t = wavSamples(tail.bytes);
+	expect(t.frames).toBeGreaterThan(l.frames);
+	expect(wavWindow(tail.bytes, 0, 2).peak).toBe(0);
+	expect(wavWindow(tail.bytes, 6, 6.5).rms).toBeGreaterThan(0.001);
+});
+
+test('Export audio: effects stems add up to the mix; a MIDI file and a one-shot come in the same zip', async ({ page }) => {
+	const name = page.getByRole('textbox', { name: 'Project name' });
+	await name.fill('Stems');
+	await name.press('Enter');
+	await turnOnPads(page, [0, 4, 8, 12]);
+	// Noise and reverb (Snare), the delay, and random pitch sweeps: every stem has sound, and
+	// each is rendered with the same random numbers as the mix
+	await page.locator('.preset-grid').getByRole('button', { name: 'Snare', exact: true }).click();
+	await page.locator('.fx .footswitch').first().click();
+	await page.getByRole('button', { name: 'Random sweep', exact: true }).click();
+
+	const zip = await exportAudio(page, {
+		bars: 1, ending: 'Loop', mix: true, stems: true, midi: true, oneShot: true, oneShotNote: 'A2 (110 Hz)', normalize: true,
+	});
+	expect(zip.name).toBe('Stems_80bpm_1bar.zip');
+	const files = unzip(zip.bytes);
+	expect(Object.keys(files).sort()).toEqual([
+		'Stems_80bpm_1bar.mid',
+		'Stems_80bpm_1bar_delay.wav', 'Stems_80bpm_1bar_dry.wav', 'Stems_80bpm_1bar_mix.wav',
+		'Stems_80bpm_1bar_noise.wav', 'Stems_80bpm_1bar_reverb.wav',
+		'Stems_oneshot_A2.wav',
+	]);
+
+	// The stems add up to the mix, sample for sample, in both channels
+	for (const ch of [0, 1]) {
+		const mix = wavSamples(files['Stems_80bpm_1bar_mix.wav'], ch).samples;
+		const stems = ['dry', 'delay', 'reverb', 'noise'].map((p) => wavSamples(files[`Stems_80bpm_1bar_${p}.wav`], ch).samples);
+		let worst = 0, loudest = 0;
+		for (let i = 0; i < mix.length; i++) {
+			const sum = stems.reduce((a, s) => a + s[i], 0);
+			worst = Math.max(worst, Math.abs(sum - mix[i]));
+			loudest = Math.max(loudest, Math.abs(mix[i]));
+		}
+		expect(worst, `channel ${ch}`).toBeLessThan(1e-3);
+		if (ch === 0) expect(loudest).toBeLessThanOrEqual(0.892);
+		for (const s of stems) expect(s.length).toBe(mix.length);
+	}
+
+	// The MIDI file: 4 notes at A3 (MIDI 57) in a bar at 80 BPM
+	const midi = files['Stems_80bpm_1bar.mid'];
+	expect(midi.subarray(0, 4).toString('latin1')).toBe('MThd');
+	const noteOns = [...midi.subarray(22)].flatMap((b, i, a) => (b === 0x90 ? [a[i + 1]] : []));
+	expect(noteOns).toEqual([57, 57, 57, 57]);
+
+	// The one-shot: one hit, trimmed where it fades, normalized on its own
+	const shot = wavSamples(files['Stems_oneshot_A2.wav']);
+	expect(shot.frames / shot.rate).toBeLessThan(6);
+	expect(shot.frames / shot.rate).toBeGreaterThan(0.1);
+	expect(wavWindow(files['Stems_oneshot_A2.wav'], 0, 6).peak).toBeGreaterThan(0.8);
 });
