@@ -95,6 +95,14 @@ describe('validateAndMigrate', () => {
 		expect(() => validateAndMigrate({ data: 'not a project' })).toThrow();
 	});
 
+	it('checks a lane\'s ratchets (hits per step) when it has them', () => {
+		expect(() => validateAndMigrate({ data: { instruments: [lane({ ratchets: Array(16).fill(2) })] } })).not.toThrow();
+		expect(() => validateAndMigrate({ data: { instruments: [lane({ ratchets: null })] } })).not.toThrow();
+		expect(() => validateAndMigrate({ data: { instruments: [lane()] } })).not.toThrow(); // saved before ratchets
+		expect(() => validateAndMigrate({ data: { instruments: [lane({ ratchets: [1, 'x'] })] } })).toThrow();
+		expect(() => validateAndMigrate({ data: { instruments: [lane({ ratchets: 3 })] } })).toThrow();
+	});
+
 	it('does not check the free-form sections (ui, transport, synth, fx)', () => {
 		expect(() => validateAndMigrate({ data: { ui: 'x', transport: null, synth: [1], fx: 5 } })).not.toThrow();
 	});

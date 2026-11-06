@@ -9,6 +9,7 @@ import { createVoiceSource, lfoPwmTapGain, waveGain, PULSE_WIDTH_DEFAULT } from 
 import { routeVelocity, routedCutoff, routedSemitones, routedNoise, type VelocityRouting } from "../velocity";
 import { startFM } from "../fm";
 import { generateReverbIR } from "../reverb/generateIr";
+import { cutNoteEnd, ratchetHits, stepSpan } from "../ratchet";
 
 export type StepSequencerState = {
 	bpm: number;
@@ -22,6 +23,7 @@ export type StepSequencerState = {
 		velocities: number[];        // 0..1
 		pitches: number[];           // Hz
 		waveforms: string[]; // per-step wave (waves.ts)
+		ratchets?: number[]; // per step: 1 hit, or 2–4 quick hits (ratchet.ts)
 	};
 
 	synth: {
@@ -433,9 +435,12 @@ export function scheduleStepSequencer(
 
 		const padNoiseOn = noiseState.mask?.[stepIndex] ?? true;
 
-		scheduleSynthNote({
+		// One note, or a ratchet's 2–4 quick hits within the step, as in the live engine
+		const span = stepSpan(stepIndex, state.stepsCount, stepDuration, clamp01(state.swing));
+		for (const hit of ratchetHits(t, span, state.pattern.ratchets?.[stepIndex])) scheduleSynthNote({
 			ctx,
-			time: t,
+			time: hit.time,
+			maxDuration: hit.maxDuration,
 			freq,
 			baseVelocity: baseVel,
 			channelVolume: chanVol,
@@ -476,6 +481,7 @@ type LfoState = StepSequencerState["synth"]["lfo"];
 function scheduleSynthNote(opts: {
 	ctx: BaseAudioContext;
 	time: number;
+	maxDuration?: number; // a ratchet hit ends by then, where the next hit begins
 	freq: number;
 	baseVelocity: number;
 	channelVolume: number;
@@ -499,7 +505,7 @@ function scheduleSynthNote(opts: {
 	noiseBuffers: Record<NoiseKey, AudioBuffer>;
 }) {
 	const {
-		ctx, time, freq, baseVelocity, channelVolume, wave,
+		ctx, time, maxDuration, freq, baseVelocity, channelVolume, wave,
 		envState, filterState, noiseState, padNoiseOn,
 		unisonState, fmState, pitchEnv, pulseWidth, velocityRouting, driveEnabled,
 		driveDry, driveShaper, driveSum,
@@ -523,7 +529,7 @@ function scheduleSynthNote(opts: {
 	const attackEnd = time + attackSec;
 	const naturalEnd = attackEnd + decaySec;
 	const gateEnd = time + Math.max(0.02, (envState.decayMs / 1000) * routed.decayFactor);
-	const noteEnd = envState.enabled ? naturalEnd : gateEnd;
+	const noteEnd = cutNoteEnd(envState.enabled ? naturalEnd : gateEnd, time, attackSec, maxDuration);
 
 	const baseAmp = baseVelocity * channelVolume;
 

@@ -56,6 +56,8 @@ describe('factory defaults (File → New)', () => {
 		// A at the default octave: the key is reset before the pads are
 		expect(synth.pitches).toEqual(Array(STEPS).fill(220));
 		expect(synth.waveforms).toEqual(Array(STEPS).fill('sine'));
+		expect(synth.ratchets).toEqual(Array(STEPS).fill(1)); // one hit per step
+		expect(st.instruments.value[0].ratchets).toBeUndefined(); // sample lanes have none
 		expect(st.instruments.value[0].pitches).toBeUndefined(); // sample lanes have no pitches
 		expect(st.instruments.value[0].buffer).toEqual({ fake: 'decoded kick' }); // keeps its sample
 	});
@@ -113,6 +115,19 @@ describe('saving and loading a project', () => {
 		expect(delay(100, 0.401)[0]).toBe('1/4T'); // within 1% of 0.4 s
 		// No division matches (File → New used to leave 0.2 s): the default, as the knob showed
 		expect(delay(80, 0.2)).toEqual(['1/8.', 0.5625]);
+	});
+
+	it('gives projects saved before ratchets one hit per step, and keeps hit counts to 1–4', () => {
+		const st = fresh();
+		changeEverything(st); // ratchets 1, 2, 3, 4, 1, ...
+		const synth = () => st.instruments.value.find(i => i.name === 'synth-voice')!;
+		const saved = asSaved(st);
+		const older = saved.instruments.map(({ ratchets, ...lane }: any) => lane);
+		applySnapshot(st, { instruments: older });
+		expect(synth().ratchets).toEqual(Array(STEPS).fill(1));
+
+		applySnapshot(st, { instruments: [{ name: 'synth-voice', ratchets: [0, 7, 2.6, -1, ...Array(STEPS - 4).fill(2)] }] });
+		expect(synth().ratchets).toEqual([1, 4, 3, 1, ...Array(STEPS - 4).fill(2)]);
 	});
 
 	it('gives projects saved before velocity routing none', () => {

@@ -60,6 +60,7 @@ const LANE_FIELDS: Record<string, Check> = {
     velocities: arrayOf(isNumber),
     pitches: optionalOrNull(arrayOf(isNumber)),
     waveforms: optionalOrNull(arrayOf(anything)),
+    ratchets: optionalOrNull(arrayOf(isNumber)), // hits per step (synth lane; since PR 33)
 };
 
 function invalid(where: string): never {

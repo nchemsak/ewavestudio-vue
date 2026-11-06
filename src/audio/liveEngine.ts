@@ -23,6 +23,7 @@ import { routeVelocity, routedCutoff, routedSemitones, routedNoise } from './vel
 import { startFM } from './fm';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
+import { cutNoteEnd, ratchetHits, stepSpan } from './ratchet';
 import {
 	divisionToHz,
 	generateDriveCurve,
@@ -45,6 +46,7 @@ export type LiveLane = {
 	velocities: number[];
 	pitches?: number[];
 	waveforms?: string[];
+	ratchets?: number[]; // per step: 1 hit, or 2–4 quick hits (ratchet.ts)
 	buffer?: AudioBuffer | null;
 };
 
@@ -534,7 +536,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// `velocity` is the note's loudness (its step's velocity × the lane's volume); `opts.vel` is
 	// the step's (or MIDI note's) own velocity 0..1, for velocity routing (velocity.ts)
-	function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: Wave | string, opts: { addNoise?: boolean; vel?: number } = {}) {
+	// opts.maxDuration: a ratchet hit ends by then, where the next hit begins (ratchet.ts)
+	function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: Wave | string, opts: { addNoise?: boolean; vel?: number; maxDuration?: number } = {}) {
 
 		lastNoteAt = performance.now();
 
@@ -556,7 +559,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const attackEnd = startTime + attackTime;
 		const naturalEnd = attackEnd + decay;
 		const gateEnd = startTime + Math.max(0.02, (s.envelope.decayMs.value / 1000) * routed.decayFactor);
-		const noteEnd = s.envelope.enabled.value ? naturalEnd : gateEnd;
+		const noteEnd = cutNoteEnd(s.envelope.enabled.value ? naturalEnd : gateEnd, startTime, attackTime, opts.maxDuration);
 
 		//  Per-step blend (masked)
 		const addNoiseForThisPad = opts.addNoise !== false;
@@ -830,8 +833,12 @@ export function useLiveEngine(s: LiveEngineSettings) {
 						const wf = (inst.waveforms?.[stepIndex] ?? selectedWaveform.value) as Wave;
 						const padNoiseOn = noiseMask.value?.[stepIndex] ?? true;
 
-						// pass the mask to playSynthNote so noise can be per-step enabled/disabled
-						playSynthNote(pitch, amp, safeDecay, t, wf, { addNoise: padNoiseOn, vel });
+						// One note, or a ratchet's 2–4 quick hits within the step (ratchet.ts).
+						// The noise mask makes noise per step.
+						const span = stepSpan(stepIndex, stepLength.value, stepDuration, swing.value);
+						for (const hit of ratchetHits(t, span, inst.ratchets?.[stepIndex])) {
+							playSynthNote(pitch, amp, safeDecay, hit.time, wf, { addNoise: padNoiseOn, vel, maxDuration: hit.maxDuration });
+						}
 
 					} else if (inst.buffer) {
 						playBuffer(inst.buffer, t, amp);

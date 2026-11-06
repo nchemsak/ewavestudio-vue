@@ -5,8 +5,8 @@ served from https://www.ephemeralwave.com/studio2/. The original version stays a
 https://www.ephemeralwave.com/studio/ and is never updated or overwritten, so the two can
 be compared; never deploy this code to `/studio/`. Everything runs client-side with the Web
 Audio API; there is no backend. Features: one 16-step synth lane with per-step pitch,
-velocity and waveform (sine, triangle, saw, square, a pulse with adjustable width, and three
-harmonic shapes); amp envelope, pitch envelope (a drum-style sweep), filter with its own
+velocity, waveform (sine, triangle, saw, square, a pulse with adjustable width, and three
+harmonic shapes) and ratchet (2–4 quick hits within the step); amp envelope, pitch envelope (a drum-style sweep), filter with its own
 envelope, noise, FM,
 unison and LFO; delay, overdrive and reverb; Web MIDI note
 input; a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope
@@ -46,7 +46,8 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
 - **Unit tests** (Vitest, in Node): pure logic such as loading and upgrading saved projects,
   WAV encoding, storage names, the playback clock, synth helpers, the LFO visualizer's
   arithmetic, MIDI input (with a fake MIDI system), the undo history, project snapshots (save → load round trip, older
-  projects, factory defaults) and presets (exact values, knob ranges, pattern untouched).
+  projects, factory defaults), presets (exact values, knob ranges, pattern untouched) and
+  ratchet timing.
   `src/lib/project/testState.ts` builds the settings those tests use (`makeState`,
   `changeEverything`). `vitest.config.js` reuses `vite.config.js` and sets `BASE_URL`
   to the real base, so code sees `/studio2/` as in the app.
@@ -156,6 +157,7 @@ src/audio/
   waves.ts               The eight waves: names, loudness balance, and each voice's source
                          (the pulse network, the harmonic shapes)
   velocity.ts            Velocity routing: what a step's velocity does besides loudness
+  ratchet.ts             Ratchets: when a step's 2–4 quick hits start and end
   reverb/generateIr.ts   Algorithmic impulse response for the ConvolverNode
   export/scheduleStepSequencer.ts  Separate offline engine used for WAV export
   export/encodeWav.ts    AudioBuffer → 32-bit float WAV
@@ -245,6 +247,16 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   steps get less, left more (`routeVelocity()`). `playSynthNote()` takes the step's own
   velocity as `opts.vel` (its `velocity` argument is the loudness, with the lane volume).
   Saved as `synth.velocity` { decay, cutoff, pitchEnv, noise }; older projects get none.
+- Ratchets (`ratchet.ts`, both engines; "Repeats" ×1–×4 in each pad's ⋮ menu, a "×3" badge
+  at the top of the pad): the step plays that many quick hits, evenly spaced from its start
+  to the next step's start (`stepSpan()`: swing makes an on-beat step longer and a swung one
+  shorter). Each hit is a whole note (its own pitch and filter sweeps, the step's velocity,
+  noise mask and wave), but it ends where the next hit begins (`opts.maxDuration` →
+  `cutNoteEnd()`, never before its attack is done), the way a single-voice synth retriggers,
+  so a long sound repeated doesn't pile up into a louder smear; the last hit rings out as
+  usual. Saved per step as the synth lane's `ratchets` (1–4; projects saved before get 1s,
+  other values are clamped by `clampRatchet()`); Reset Pads and File → New put them back to 1.
+  Ratchets are part of the pattern: presets and the dice leave them alone.
 - Filter envelope (`filterEnv.ts`; the Filter card's Env Amt and Decay knobs): each note's
   cutoff starts Env Amt octaves away (−5…+5; right of centre above, so the filter closes;
   left below, so it opens) and returns to Cutoff within Decay, as a decaying offset in cents
@@ -450,7 +462,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - The JSON import/export format is `{ version, projectId, meta, data }`, validated by
   `validateAndMigrate()`, which also checks every project loaded from IndexedDB. It only
   checks the types of `data.meta.name`, `data.selectedWaveform` and each lane's fields
-  (`LANE_FIELDS`); other sections are free-form, and unknown fields are kept, so a new
+  (`LANE_FIELDS`, including the synth lane's `ratchets`, a list of numbers); other sections are free-form, and unknown fields are kept, so a new
   parameter needs no change there. A file that fails the check is refused as a whole
   ("Import failed"), and the console says which field was wrong.
 - If you add a parameter: add its ref to `projectState` in `DrumSequencer.vue` (and the
@@ -559,21 +571,9 @@ this file), then presets that can use them (the first six presets came in PR 30;
 with new sound features). Everything drum-related waits until the maintainer brings the drum
 lanes back.
 
-1. **Share a project as a link** (the project encoded in the URL). It sets the delay time from
-   outside, which works since PR 17.
-2. **Stage view for TVs, and an audio output picker.** Casting already works without code
-   (Chrome or Edge "Cast tab", AirPlay screen mirroring, Windows Cast, HDMI), picture and
-   sound together, but with a noticeable lag when turning knobs. A Cast button of our own
-   isn't practical: the web's casting APIs are made for media files, not sound made live in
-   the page, and a Google Cast receiver app would really be the shared session (see "On
-   hold"). Instead: a full-screen version of the screen (scope or spectrogram, with the steps
-   lighting up) designed for a TV, to cast with the browser; and optionally an "Audio output"
-   picker (`AudioContext.setSinkId()`, which not every browser supports; check before
-   building).
-3. **Step probability, ratchets** (quick repeats within a step) **and timing humanize.**
-4. **Several patterns (A/B/C/D) chained into a song.**
-5. **32 steps, or per-lane lengths** (the export code's types already allow 32).
-6. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
+1. **Several patterns (A/B/C/D) chained into a song.**
+2. **32 steps, or per-lane lengths** (the export code's types already allow 32).
+3. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
    note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
    vary per step. Delay and reverb are shared by every note, so per step they become send
    amounts (how much of the step goes into them), not per-step effect settings, which would
@@ -581,23 +581,29 @@ lanes back.
    UI idea: select a step with its settings dot, then the knobs you turn change that step
    only; locked steps are marked, with a way to clear them. Build on velocity routing
    (PR 28).
-7. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
+4. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
    in a short delay loop that loses brightness each time round; the original paper also has a
    drum variant), metallic (several square waves at odd ratios, as the 808 makes cymbals and
    cowbell) and struck (a click ringing tuned resonant filters: wood block, marimba, toms,
    bells). Karplus–Strong needs an AudioWorklet: a `DelayNode` in a feedback loop can't be
    shorter than one render quantum (128 samples, about 3 ms), which caps the pitch around the
    F above middle C. AudioWorklets also run in the `OfflineAudioContext` used for WAV export.
-8. **Export options:** N bars or loops, stems, MIDI file.
-9. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
-10. **Install as an app (PWA)** that works offline.
-11. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-12. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
-    purpose so far.
-13. **User-saved presets, and more built-in ones.** Left out of PR 30 on purpose. A user
+5. **Export options:** N bars or loops, stems, MIDI file.
+6. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
+7. **Install as an app (PWA)** that works offline.
+8. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+9. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
+   purpose so far.
+10. **User-saved presets, and more built-in ones.** Left out of PR 30 on purpose. A user
     preset could be the sound part of a snapshot (`soundKey()`'s parts) kept in IndexedDB
     next to the projects; more built-in ones as new sound features arrive (toms, hats, organ
     and hollow sounds).
+
+Dropped after PR 32 (the maintainer's call: not worth it for now): a stage view for TVs and an
+audio output picker (casting a tab already shows the page on a TV; the planned version, a
+visuals-only second window to cast while the sound stays local, so knob turns aren't heard
+late, isn't needed), and step probability and timing humanize (ratchets, from the same item,
+were built in PR 33).
 
 Dropped after PR 30 (the maintainer and Claude agreed they add little): playing the synth
 from the computer keyboard (the synth is played by its sequencer, as a DFAM is, and a MIDI
@@ -607,6 +613,11 @@ silence maps to about −0.011 instead of 0, which reaches the speakers through 
 gain at about 0.004 with the default settings, in the live and export engines. It can't be
 heard, and the presets peak well below clipping (0.2–0.5), but measurements see it: the
 browser tests use `__swingOver` to ignore it.
+
+On hold (ask the maintainer before starting):
+- **Share a project as a link** (the project encoded in the URL). The maintainer sees no need
+  yet: File → Export file and Import file do the same, if less easily. It sets the delay time
+  from outside, which works since PR 17, and the shared session below would build on it.
 
 On hold until the drum lanes come back (ask the maintainer before starting any of them):
 - Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan.
@@ -619,11 +630,12 @@ On hold until the drum lanes come back (ask the maintainer before starting any o
 - **Shared session ("jam"):** several people on one URL, for example one phone playing the
   drum lanes and another the synth. It needs a realtime relay between devices; the site is
   static files on shared hosting, so that means a third-party service (not decided yet).
-  Design: one device (a laptop, or a TV with the Stage view) makes all the sound, and the
+  Design: one device (a laptop, perhaps plugged into a TV) makes all the sound, and the
   phones are remote controls that each show their own part, so network lag only delays when a
   change takes effect, never the beat. Phones that each made the sound would drift apart and
   flam. Also to decide: who can join (a room code), and what undo means with several people.
-  Share links (item 1) build part of it (the project packed into a compact message).
+  Share links (on hold, above) would build part of it (the project packed into a compact
+  message).
 
 Done:
 
@@ -659,6 +671,7 @@ Done:
 | 30 | Built-in presets: six buttons (Kick, Snare, Metal, Pluck, Acid, Bell) in the transport card, between Swing and the logo (a row of their own on narrower screens). A preset sets the sound from the factory sound up (synth, effects, the main wave and every pad's), never the pattern, tempo or key; one undo step; its button is lit while the sound matches. `src/lib/presets/`. |
 | 31 | The Pattern Tools section titles (and "Active Pads Only") are readable in the light theme: inset panels take their background from a theme variable, `--pt-inset`, instead of a fixed dark color. A browser test measures the captions' contrast in all three themes. The plan's next two items (computer keyboard, limiter and DC offset fix) dropped. |
 | 32 | A dice in the Presets box rolls a random sound: a recipe for a percussion voice (`src/lib/presets/random.ts`) applied like a preset, from the factory sound up; one undo step; never silent or clipping (500 seeded rolls checked in unit tests, rolls exported in a browser test). |
+| 33 | Ratchets: "Repeats" ×1–×4 in each pad's ⋮ menu (and a "×3" badge on the pad) make a step play 2–4 quick hits within its time, swing included; each hit ends where the next begins, the last rings out; in the live and export engines (`src/audio/ratchet.ts`); saved per step, older projects get 1s. The pad menu now stays on screen on short laptop screens. Plan: share link put on hold; stage view, step probability and timing humanize dropped. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
