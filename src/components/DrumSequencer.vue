@@ -31,6 +31,7 @@
 						<!-- Tempo -->
 						<div class="position-relative text-center tempo-wrap">
 							<Knob midi-id="transport.tempo" v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium"
+								:detents="TEMPO_DETENTS"
 								:useThemeArc="true" @knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
 							<div class="tempo-stepper" role="group" aria-label="Tempo">
 								<button class="stepper-btn" type="button" title="Tempo −1"
@@ -47,9 +48,10 @@
 
 						<!-- Swing -->
 						<div class="position-relative text-center knob-wrap">
-							<Knob midi-id="transport.swing" v-model="swing" label="Swing" :value-text="`${Math.round(swing * 100)}%`" :min="0" :max="0.5" :step="0.01" size="medium"
+							<Knob midi-id="transport.swing" v-model="swing" label="Swing" :value-text="swingText" :min="0" :max="0.5" :step="0.01" size="medium"
+								:detents="SWING_DETENTS"
 								:useThemeArc="true" @knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
-							<div class="stepper-value" aria-live="polite" :title="`${Math.round(swing * 100)}% swing`">
+							<div class="stepper-value" aria-live="polite" :title="`${swingText} swing`">
 								{{ Math.round(swing * 100) }}%
 							</div>
 						</div>
@@ -468,6 +470,7 @@ import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed } 
 import Knob from './Knob.vue';
 import DelayEffect from './modules/DelayEffect.vue';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, followDelaySync } from '../lib/delaySync';
+import { TEMPO_DETENTS, SWING_DETENTS, TRIPLET_SWING } from '../lib/knobDetents';
 import DriveEffect from './modules/DriveEffect.vue';
 import UnisonEffect from './modules/UnisonEffect.vue';
 import LFOGroup from './modules/LFOGroup.vue';
@@ -1322,6 +1325,8 @@ const padSettings = reactive({
 const volume = ref(0.75);
 const tempo = ref(80);
 const swing = ref(0);
+// The Swing knob's readout; its notch at 33 % is a triplet feel (src/lib/knobDetents.ts)
+const swingText = computed(() => `${Math.round(swing.value * 100)}%${Math.abs(swing.value - TRIPLET_SWING) < 1e-9 ? ' (triplet)' : ''}`);
 const activeKnob = ref(null);
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);

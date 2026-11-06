@@ -62,7 +62,7 @@
                 <div class="fine">
                     <div class="fine-label">Fine (¢)</div>
                     <div class="position-relative text-center">
-                        <Knob aria-label="Fine tune" :value-text="`${detuneCentsLocal} cents`" v-model="detuneCentsLocal" :min="-100" :max="100" :step="1" size="small" color="#3F51B5"
+                        <Knob aria-label="Fine tune" :value-text="`${detuneCentsLocal} cents`" v-model="detuneCentsLocal" :min="-100" :max="100" :step="1" :detents="[0]" size="small" color="#3F51B5"
                             @knobStart="activeKnob = 'fine'" @knobEnd="activeKnob = null" />
                         <span v-if="activeKnob === 'fine'" class="custom-tooltip">{{ detuneCentsLocal }}¢</span>
                     </div>

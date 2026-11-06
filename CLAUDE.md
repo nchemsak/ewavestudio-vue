@@ -49,7 +49,8 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   arithmetic, MIDI input (with a fake MIDI system), MIDI learn (and that every learnable knob
   is in the app), the undo history, project snapshots (save → load round trip, older
   projects, factory defaults), presets (exact values, knob ranges, pattern untouched),
-  ratchet timing, and the export helpers (loop folding, MIDI and zip files read back, names).
+  ratchet timing, knob notches, and the export helpers (loop folding, MIDI and zip files read
+  back, names).
   `src/lib/project/testState.ts` builds the settings those tests use (`makeState`,
   `changeEverything`). `vitest.config.js` reuses `vite.config.js` and sets `BASE_URL`
   to the real base, so code sees `/studio2/` as in the app.
@@ -194,6 +195,8 @@ src/lib/random.ts        Seeded random numbers (export stems; tests)
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
+src/lib/knobDetents.ts   Knob notches: the drag's travel with a hold at each, and the Tempo and
+                         Swing notches (pure; see "Knobs" under Conventions)
 src/lib/midiLearn.ts     MIDI learn's bookkeeping (pure): the learnable knobs (MIDI_KNOBS) and
                          which controller knob drives which
 src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/export,
@@ -361,7 +364,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - One controller knob drives one knob, and a knob follows one controller knob: a new link
   replaces the old (`assign()` in `src/lib/midiLearn.ts`).
 - A controller knob turns its knob as a drag does: `Knob.vue`'s `setPosition()` maps 0–127 to
-  the knob's turn (its own taper and step), and emits `knobStart`, then `knobEnd` once the
+  the knob's turn (its own taper, step and notches), and emits `knobStart`, then `knobEnd` once the
   controller knob has rested 600 ms, so the tooltip and the screen's envelope or filter view
   work as with the mouse. Undo, saving and the engines need nothing new: a sweep is one undo
   step. It jumps (no pickup). A greyed-out knob (its module off) ignores it, as it ignores the
@@ -644,7 +647,18 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   ways (the pitch envelope's Amount). `size="mini"` (26 px) with `hideLabel` is for a knob on a
   tile (Pulse Width); the label is still its accessible name. `modValue` (a dot on the ring)
   and `modRange` ([low, high], a faint outer arc) draw where something else, the LFO, moves
-  the setting, without moving the knob (see "LFO visualizer").
+  the setting, without moving the knob (see "LFO visualizer"). `detents` (values) are soft
+  notches: a drag holds on each for 8 px (`DETENT_HOLD`, 4 % of the 200 px turn) before
+  carrying on, never jumping, and lands on the exact value; each gets a tick on the ring
+  (`src/lib/knobDetents.ts`: the drag moves along a "travel" one hold longer per notch). A
+  `bipolar` knob has one at zero unless given others. The arrow keys ignore them (they move
+  one step anyway); a MIDI controller's knob goes along the same travel, so it reaches them
+  (128 steps over 20–300 BPM would otherwise skip from 119 to 121). Notches now: Tempo 90,
+  100, 120, 128, 140, 160, 174 (`TEMPO_DETENTS`); Swing 8, 16, 24, 33, 42 % (`SWING_DETENTS`:
+  the knob's 0–50 % moves every second step up to half a step, a drum machine's 75 %, so
+  these are its usual 54, 58, 62, 66 and 71 %; 33 % is a triplet and reads "33% (triplet)");
+  every bipolar knob's middle; a pad's Fine at 0; Noise Color's Pink, White and Blue. Knobs
+  with hard stops (Delay Time, a synced LFO Rate) have none.
 - Layout: the module cards flow in CSS columns from 992 px (`.ds-modules`), so a module that
   grows taller reshuffles the columns and can leave a gap. Envelope and Pitch are stacked on
   the left of `.sound-grid` with Filter beside them as a 2×2 block (Cutoff, Resonance, Env Amt,
@@ -705,33 +719,64 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
   each item, and "do the next item" means the first one under "Next, in this order".
 - The PR that finishes an item also updates this list: move the item to "Done".
 
-Next, in this order (agreed after PR 15; the maintainer changes it as ideas come up): fixes
-that later features depend on, then sound features in the spirit of the design intent (top of
-this file), then presets that can use them (the first six presets came in PR 30; more can come
-with new sound features). Everything drum-related waits until the maintainer brings the drum
-lanes back.
+Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the maintainer
+changes it as ideas come up). Everything drum-related waits until the maintainer brings the
+drum lanes back.
 
-1. **MIDI keyboard latency** (added in PR 37, to explore later). The maintainer hears a
-   delay between a key on a MIDI keyboard and the sound (wired, no Bluetooth), enough to make
-   playing it like a piano distracting. Measure first; suspects:
-   - The amp envelope's attack (20 ms by default, 1–100 ms on the knob) is an exponential
-     ramp from 0.0001 (−80 dB), so the note is still about 20 dB down three-quarters of the
-     way through it: the default attack sounds about 15 ms late. A linear ramp, or one that
-     starts higher, would sound at once (both engines; it changes every sound, presets
-     included, a little). Quick check: does Attack at its minimum feel immediate?
-   - The audio output: the AudioContext uses the default `latencyHint` (`'interactive'`);
-     its `baseLatency` + `outputLatency` show what the browser and sound device add (often
-     10–40 ms on Windows). A smaller hint, or another output device, may help.
-   - The page's main thread: a MIDI message waits for whatever runs there (the screen views
-     draw every frame). The note itself is played 3 ms ahead.
-   Installing the app (PR 37) changes none of these.
-2. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-3. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
-   purpose so far.
-4. **User-saved presets, and more built-in ones.** Left out of PR 30 on purpose. A user
-   preset could be the sound part of a snapshot (`soundKey()`'s parts) kept in IndexedDB
-   next to the projects; more built-in ones as new sound features arrive (toms, hats, organ
-   and hollow sounds).
+1. **Melody Maker rework.** Clicking a key on its keyboard moves the pattern to that key: same
+   melody, every pad moved by the same interval, the shorter way (C → D up 2, C → A down 3),
+   so it stays in its register. Changing the scale (minor → major) keeps each note on the same
+   degree of the scale, so the melody keeps its shape and changes its mood. Clicking a key
+   also plays it (people click the keyboard expecting a sound). One Generate button instead of
+   two: a Random / Arpeggio switch, the arpeggio's settings shown only for Arpeggio, the key,
+   scale and range shared.
+2. **Layout design project, mockups first** (two or three options at desktop, laptop and
+   tablet widths for the maintainer to pick from, before any code):
+   - Better use of space in Pitch & Harmonics, Filter and LFO: more uniform, not every gap
+     filled.
+   - The in-between widths, which look bad now (anything but desktop).
+   - Presets split into "Sounds" (today's six and the dice) and "Patterns" (built-in
+     patterns: steps, velocities, pitches relative to the key, ratchets). A new project then
+     needn't be silent: people press Play and hear nothing.
+   - The pads in the spectrogram's colors: its four theme colors by loudness (low, mid, high,
+     peak), so each pad's velocity picks its color.
+   - Then a new or more balanced logo, once the preset boxes have settled.
+3. **Themes**: fix the light theme's rough spots and bring its button back, or design a better
+   third theme. After 2, so the styling isn't done twice.
+4. **Phone mode**, designed for phones rather than shrunk (after 2; mockups first): landscape,
+   one screen without scrolling: 16 big pads (tap: on/off, hold: the note), Play, Sounds,
+   Patterns and the dice, and three or four big macro knobs (for example Decay, Tone, Sweep,
+   Space), other screens behind a swipe. A page can't force landscape; the installed app can
+   on Android (`"orientation"` in the manifest); iPhones get a "turn your phone" hint. Then
+   perhaps Google Play: the PWA wrapped as a Trusted Web Activity (PWABuilder or Bubblewrap;
+   Web MIDI still works), a $25 developer account, `/.well-known/assetlinks.json` on the main
+   site, and for a new personal account a closed test with 12 testers for 14 days first.
+5. **Effects, as switches on the existing pedals**: a bit crusher on the overdrive pedal, and
+   ping-pong (left/right echoes) on the delay pedal. No ring modulator or chorus (the
+   maintainer's call), and no compressor: Chrome's adds about 6 ms of delay.
+6. **Patch cables**: animated cables from the LFO to what it moves (Cutoff, the Pulse tile,
+   the pads), swaying a little, never over a control, still with `prefers-reduced-motion`.
+   After 2, since they depend on where things sit.
+7. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+   Checked after PR 37: ESLint 10.14 and typescript-eslint 8.72 still need `minimatch` 10, and
+   `npm audit` reports 10 moderate advisories for them.
+8. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+   the maintainer wants some maintenance, each as its own PR.
+
+Not now (looked into after PR 37):
+- **A smart TV app with a phone as the controller.** Casting a tab already shows the app on a
+  TV. A phone controlling a TV needs live messages between devices, which a static site on
+  shared hosting can only get from a third-party relay; TV browsers are slow and have no MIDI.
+  The same technology as the shared session ("jam", on hold below).
+- **A plugin for FL Studio** (VST3, or CLAP). A plugin is compiled software, and the browser's
+  Web Audio engine can't run inside FL Studio, so the engine would have to be rewritten: in C++
+  with JUCE (whose screens can stay web pages), or in Faust or Cmajor, which build a plugin and
+  a web version from one source. Months of work; the exports (loops, stems, MIDI, one-shots)
+  already bring the sounds into FL Studio.
+- **Apple's App Store.** $99 a year, a Mac (or a paid cloud build) to build it, Apple turns
+  down apps that are a wrapped website, iPhones have no Web MIDI (it would need native code),
+  and the silent switch mutes web audio unless handled. Google Play is the easier store (Next,
+  4).
 
 Dropped in PR 34 (the maintainer and Claude agreed): export stems by register (bass / top
 notes) or by wave, and "arrangement variations" (sparse, half-time, build, fill, wash, reverse
@@ -754,6 +799,23 @@ heard, and the presets peak well below clipping (0.2–0.5), but measurements se
 browser tests use `__swingOver` to ignore it.
 
 On hold (ask the maintainer before starting; put on hold after PR 33, "not now"):
+- **MIDI keyboard latency** (put on hold after PR 37). The maintainer hears a delay between a
+  key on a MIDI keyboard and the sound (wired), even with Attack at its 1 ms minimum. Measured
+  after PR 37: the page handles a MIDI message within about 1 ms (2 ms at worst, while the
+  screen views draw), builds the note in about 0.3 ms and plays it 3 ms ahead. The rest is the
+  sound output. On the maintainer's Windows PC, Chrome reported a 10 ms buffer and 64 ms for
+  the sound device (`baseLatency`, `outputLatency`); asking for the smallest buffer
+  (`latencyHint: 0`) left the buffer at 10 ms (Chrome's minimum there) and the device at 56 ms,
+  8 ms less. So the output (the device, HDMI or a monitor's speakers, audio enhancements,
+  spatial sound, a maker's sound app) is the place to look; if it ever comes back: a Low
+  latency switch for the 8 ms (it takes effect after a reload, as Chrome sets its buffer when
+  audio starts) and a readout of the delay and of glitches (`AudioContext.playbackStats`). The
+  amp envelope's attack is an exponential ramp from −80 dB, so the 20 ms default sounds about
+  15 ms late; a linear or higher-starting ramp would sound at once.
+- **User-saved presets, and more built-in sounds** (the maintainer isn't sure they're needed,
+  after PR 37). A user preset could be the sound part of a snapshot (`soundKey()`'s parts) in
+  IndexedDB next to the projects; more built-in sounds as new sound features arrive (toms,
+  hats, organ and hollow sounds). Built-in patterns are part of the layout project (Next, 2).
 - **MIDI clock sync and MIDI out** (from the "More MIDI" item, whose MIDI learn came in PR 36;
   the maintainer isn't sure they're worth it). Clock sync would follow a DAW's or drum
   machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
@@ -833,6 +895,7 @@ Done:
 | 35 | File → New puts the Export audio dialog's choices back to their defaults (they carried over from the last export). |
 | 36 | MIDI learn: Learn in the MIDI toolbar, click a knob, turn a controller knob, and it follows (32 knobs; its own curve and step, its tooltip and screen view, one undo step per sweep). Links are kept in the browser, not in projects. Plan: MIDI clock sync and MIDI out on hold. |
 | 37 | Install as an app (PWA): a manifest and icons, and a hand-written service worker (`build-plugins/serviceWorker.js`, no dependency) that saves the build, works offline from the first visit, refuses a half-uploaded deploy (checksums), and offers a new version with "A new version of the app is ready" (Reload / Later). File → Install app…; saved projects asked to persist. Plan: MIDI keyboard latency added. |
+| 38 | Knob notches: soft stops at common values (Tempo 90–174 BPM, Swing 8–42 % with the triplet at 33 %, the middle of two-way knobs, a pad's Fine at 0, Noise Color's named colors), each with a tick, where a drag holds for 8 px; a MIDI controller reaches them too (`src/lib/knobDetents.ts`). Plan: the maintainer's brainstorm sorted (Melody Maker, layout project, themes, phone mode, effect switches, patch cables); MIDI latency (measured) and user presets on hold; TV app, FL Studio plugin and Apple's store not now. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

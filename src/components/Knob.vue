@@ -48,6 +48,9 @@
 					<path v-if="bipolarArc" :d="bipolarArc" fill="none" :stroke="activeStroke" stroke-width="6" />
 					<line x1="50" y1="3" x2="50" y2="8" class="dial-zero" />
 				</template>
+				<!-- Soft notches (`detents`): a tick like the zero tick at each -->
+				<line v-for="(t, i) in detentTicks" :key="`detent-${i}`" :x1="t.x1" :y1="t.y1" :x2="t.x2" :y2="t.y2"
+					class="dial-zero dial-detent" />
 
 				<!-- Something else moving this setting (the LFO): its range as a faint outer arc, and
 					 where it is now as a dot on the ring. The knob itself stays where it was set. -->
@@ -63,6 +66,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount } from 'vue';
 import { useMidiLearn } from '../composables/useMidiLearn';
+import { detentTravel } from '../lib/knobDetents';
 
 const props = defineProps({
 	modelValue: Number,
@@ -94,6 +98,10 @@ const props = defineProps({
 	taper: { type: String, default: 'linear' },
 	// Zero is in the middle of the turn (min = −max): the arc is drawn from the top
 	bipolar: { type: Boolean, default: false },
+	// Soft notches: values where a drag (or a MIDI controller's knob) holds for a moment, so
+	// they're easy to land on, each with a tick on the ring (src/lib/knobDetents.ts). A bipolar
+	// knob has one at zero unless given others; [] for none.
+	detents: { type: Array, default: null },
 	// No visible label (the label is still the knob's accessible name), for a knob sitting on
 	// something that already says what it is, such as the mini knob on the Pulse tile
 	hideLabel: { type: Boolean, default: false },
@@ -125,6 +133,26 @@ function fromPos(p) {
 
 // rotation math (−132°..+132° sweep)
 const rotation = computed(() => toPos(props.modelValue) * 264 - 132);
+
+// Soft notches: a drag moves along their travel (see knobDetents.ts), slightly longer than the
+// turn, and lands on the notch's exact value while it holds
+const detentValues = computed(() => (props.detents ?? (props.bipolar ? [0] : []))
+	.filter((v) => v > props.min && v < props.max));
+const travel = computed(() => detentTravel(detentValues.value.map((v) => ({ pos: toPos(v), value: v }))));
+function valueAtTravel(t) {
+	const k = travel.value.toKnob(t);
+	return k.value ?? snap(fromPos(k.pos));
+}
+// Ticks on the ring (a bipolar knob's zero already has one)
+const detentTicks = computed(() => detentValues.value
+	.filter((v) => !(props.bipolar && v === 0))
+	.map((v) => {
+		const a = ((toPos(v) * 264 - 132) * Math.PI) / 180;
+		const at = (r) => [50 + r * Math.sin(a), 50 - r * Math.cos(a)];
+		const [x1, y1] = at(42);
+		const [x2, y2] = at(47);
+		return { x1, y1, x2, y2 };
+	}));
 
 // Bipolar arc: from the top of the dial (radius 40 around 50,50, as the track) to the pointer
 const bipolarArc = computed(() => {
@@ -208,7 +236,7 @@ const activeStroke = computed(() => {
 
 // drag behavior
 let startY = 0;
-let startPos = 0;
+let startTravel = 0;
 
 function startDrag(e, isTouch = false) {
 	if (props.disabled) return;
@@ -216,14 +244,14 @@ function startDrag(e, isTouch = false) {
 	const end = isTouch ? 'touchend' : 'mouseup';
 
 	startY = isTouch ? e.touches[0].pageY : e.pageY;
-	startPos = toPos(props.modelValue);
+	startTravel = travel.value.toTravel(toPos(props.modelValue));
 	emit('knobStart');
 
 	function onMove(ev) {
 		const currentY = isTouch ? ev.touches[0].pageY : ev.pageY;
 		const deltaY = startY - currentY;
-		// 200 px of drag is the whole turn
-		emit('update:modelValue', snap(fromPos(startPos + deltaY * 0.005)));
+		// 200 px of drag is the whole turn, plus 8 px at each notch
+		emit('update:modelValue', valueAtTravel(startTravel + deltaY * 0.005));
 	}
 
 	function onUp() {
@@ -316,7 +344,8 @@ function setPosition(position) {
 	if (midiTurning) clearTimeout(midiTurning);
 	else emit('knobStart');
 	midiTurning = setTimeout(() => { midiTurning = null; emit('knobEnd'); }, MIDI_REST_MS);
-	const next = snap(fromPos(position));
+	// Along the notches' travel too, so a controller can land on them
+	const next = valueAtTravel(position * travel.value.length);
 	if (next !== props.modelValue) emit('update:modelValue', next);
 }
 
