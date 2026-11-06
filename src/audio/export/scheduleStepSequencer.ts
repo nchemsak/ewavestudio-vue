@@ -1,6 +1,12 @@
 // src/audio/export/scheduleStepSequencer.ts
 // Pure offline scheduler for the Step Sequencer synth.
 // Rebuilds a minimal version of your live graph inside any BaseAudioContext.
+//
+// For the Export audio dialog (src/audio/export/exportFiles.ts) it plays the pattern `bars`
+// times, can render one part of the mix on its own (`part`: the dry sound, the delay's echoes,
+// the reverb, or the noise layer, which add up to the mix), and takes its random numbers
+// (noise, the pitch envelope's random mode) from `random`, so every part of one export plays
+// the same noise and the same random sweeps.
 
 import { applyPitchEnv, pitchEnvStartCents } from "../pitchEnv";
 import { lfoFilterTapGain } from "../synthHelpers";
@@ -95,7 +101,15 @@ export type StepSequencerState = {
 
 	sampleRate: number;
 	tailSeconds: number;
+
+	bars?: number;          // how many times the pattern plays (default 1)
+	part?: ExportPart;      // which part of the mix to render (default 'mix')
+	random?: () => number;  // 0 ≤ x < 1 (default Math.random); seeded for an export's parts
 };
+
+// The mix, or one part of it: the parts add up to the mix. 'dry' is the sound with drive but
+// without the delay's echoes or the reverb; the noise layer skips the effects, as live.
+export type ExportPart = 'mix' | 'dry' | 'delay' | 'reverb' | 'noise';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -125,13 +139,13 @@ const NOISE_LOUDNESS: Record<NoiseKey, number> = {
 	violet: 2.0,
 };
 
-function generateNoiseBuffers(ctx: BaseAudioContext): Record<NoiseKey, AudioBuffer> {
+function generateNoiseBuffers(ctx: BaseAudioContext, random: () => number): Record<NoiseKey, AudioBuffer> {
 	const length = ctx.sampleRate * 2; // 2 seconds
 	const createBuffer = () => ctx.createBuffer(1, length, ctx.sampleRate);
 
 	const white = createBuffer();
 	const wd = white.getChannelData(0);
-	for (let i = 0; i < length; i++) wd[i] = Math.random() * 2 - 1;
+	for (let i = 0; i < length; i++) wd[i] = random() * 2 - 1;
 
 	// Normalize helper
 	const norm = (buf: Float32Array) => {
@@ -237,14 +251,31 @@ export function scheduleStepSequencer(
 	offsetSeconds = 0
 ): void {
 	const sr = Math.max(3000, Math.min(192000, state.sampleRate || ctx.sampleRate || 48000));
+	const random = state.random ?? Math.random;
+	const bars = Math.max(1, Math.round(state.bars ?? 1));
 
 	// Master
 	const masterGain = ctx.createGain();
 	masterGain.gain.setValueAtTime(clamp01(state.masterVolume), ctx.currentTime + offsetSeconds);
 	masterGain.connect(ctx.destination);
 
+	// The parts of the mix, each through its own gate to the master: all open for the mix, one
+	// for a part. Everything is scheduled the same either way, so a part uses the same random
+	// numbers as the mix.
+	const part = state.part ?? 'mix';
+	const partOut = (name: ExportPart) => {
+		const g = ctx.createGain();
+		g.gain.value = part === 'mix' || part === name ? 1 : 0;
+		g.connect(masterGain);
+		return g;
+	};
+	const dryOut = partOut('dry');
+	const delayOut = partOut('delay');
+	const reverbOut = partOut('reverb');
+	const noiseOut = partOut('noise');
+
 	// Noise buffers (shared by all notes)
-	const noiseBuffers = generateNoiseBuffers(ctx);
+	const noiseBuffers = generateNoiseBuffers(ctx, random);
 
 	// -------------------------------------------------------------------------
 	// FX: Drive
@@ -368,9 +399,9 @@ export function scheduleStepSequencer(
 	// -------------------------------------------------------------------------
 	// Connect FX to master
 	// -------------------------------------------------------------------------
-	delayDry.connect(masterGain);
-	delayWet.connect(masterGain);
-	reverbWet.connect(masterGain);
+	delayDry.connect(dryOut);
+	delayWet.connect(delayOut);
+	reverbWet.connect(reverbOut);
 
 	// -------------------------------------------------------------------------
 	// Global LFO (audio-rate) – optional, minimal parity
@@ -391,7 +422,7 @@ export function scheduleStepSequencer(
 		const beatsPerStep = 0.25; // 16th notes
 		const secondsPerBeat = 60 / state.bpm;
 		const stepDur = secondsPerBeat * beatsPerStep;
-		const patternDuration = state.stepsCount * stepDur + state.tailSeconds;
+		const patternDuration = bars * state.stepsCount * stepDur + state.tailSeconds;
 
 		lfoOsc.start(now);
 		lfoOsc.stop(now + patternDuration);
@@ -419,7 +450,8 @@ export function scheduleStepSequencer(
 	const pitchArr = state.pattern.pitches;
 	const waveArr = state.pattern.waveforms;
 
-	for (let stepIndex = 0; stepIndex < state.stepsCount; stepIndex++) {
+	// The pattern, `bars` times over
+	for (let bar = 0; bar < bars; bar++) for (let stepIndex = 0; stepIndex < state.stepsCount; stepIndex++) {
 		if (!steps[stepIndex]) continue;
 
 		const baseVel = clamp01(velArr[stepIndex] ?? 1);
@@ -431,7 +463,8 @@ export function scheduleStepSequencer(
 		// Swing: same as live schedule()
 		const isEvenStep = stepIndex % 2 === 1;
 		const swingOffset = isEvenStep ? stepDuration * clamp01(state.swing) : 0;
-		const t = ctx.currentTime + offsetSeconds + stepIndex * stepDuration + swingOffset;
+		const barStart = bar * state.stepsCount * stepDuration;
+		const t = ctx.currentTime + offsetSeconds + barStart + stepIndex * stepDuration + swingOffset;
 
 		const padNoiseOn = noiseState.mask?.[stepIndex] ?? true;
 
@@ -460,8 +493,9 @@ export function scheduleStepSequencer(
 			driveSum,
 			lfoState,
 			lfoGainNode,
-			masterGain,
+			noiseOut,
 			noiseBuffers,
+			random,
 		});
 	}
 }
@@ -501,8 +535,9 @@ function scheduleSynthNote(opts: {
 	driveSum: GainNode;
 	lfoState: LfoState;
 	lfoGainNode: GainNode | null;
-	masterGain: GainNode;
+	noiseOut: GainNode; // the noise layer's way to the master (it skips the effects, as live)
 	noiseBuffers: Record<NoiseKey, AudioBuffer>;
+	random: () => number;
 }) {
 	const {
 		ctx, time, maxDuration, freq, baseVelocity, channelVolume, wave,
@@ -510,7 +545,7 @@ function scheduleSynthNote(opts: {
 		unisonState, fmState, pitchEnv, pulseWidth, velocityRouting, driveEnabled,
 		driveDry, driveShaper, driveSum,
 		lfoState, lfoGainNode,
-		masterGain, noiseBuffers,
+		noiseOut, noiseBuffers, random,
 	} = opts;
 
 	const attackSec = envState.enabled
@@ -576,7 +611,7 @@ function scheduleSynthNote(opts: {
 		semitones: routedSemitones(pitchEnv.semitones, routed),
 		mode: pitchEnv.mode,
 		decay: pitchDecay,
-	});
+	}, random);
 
 	for (let i = 0; i < voices; i++) {
 		// The voice's sound source, as in the live engine (the pulse network for 'pulse')
@@ -712,9 +747,16 @@ function scheduleSynthNote(opts: {
 			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, burstEnd);
 			noiseEnvGain.gain.setTargetAtTime(0.0001, burstEnd, 0.01);
 
-			const noiseTarget = driveSum; // common pre-FX bus for tone + noise
+			// As in the live engine: band-limited, then straight to the master, skipping drive,
+			// delay and reverb (exports before PR 34 sent it through the effects)
+			const noiseHP = ctx.createBiquadFilter();
+			noiseHP.type = "highpass";
+			noiseHP.frequency.setValueAtTime(40, time);    // remove sub-rumble
+			const noiseLP = ctx.createBiquadFilter();
+			noiseLP.type = "lowpass";
+			noiseLP.frequency.setValueAtTime(16000, time); // tame ultra-high fizz
 
-			mix.connect(noiseEnvGain).connect(noiseTarget);
+			mix.connect(noiseHP).connect(noiseLP).connect(noiseEnvGain).connect(noiseOut);
 
 		}
 	}

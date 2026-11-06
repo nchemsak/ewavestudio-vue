@@ -11,7 +11,7 @@ envelope, noise, FM,
 unison and LFO; delay, overdrive and reverb; Web MIDI note
 input; a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope
 display; six built-in presets that set the sound (not the pattern), and a dice for a random
-sound; WAV export; projects
+sound; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
 saved in IndexedDB with JSON import and export; and undo/redo.
 Earlier versions also had sample drum lanes (kick, snare, hihat and user-loaded samples).
 Their UI is commented out and they are no longer part of the app, but some of their code
@@ -46,8 +46,8 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
 - **Unit tests** (Vitest, in Node): pure logic such as loading and upgrading saved projects,
   WAV encoding, storage names, the playback clock, synth helpers, the LFO visualizer's
   arithmetic, MIDI input (with a fake MIDI system), the undo history, project snapshots (save → load round trip, older
-  projects, factory defaults), presets (exact values, knob ranges, pattern untouched) and
-  ratchet timing.
+  projects, factory defaults), presets (exact values, knob ranges, pattern untouched),
+  ratchet timing, and the export helpers (loop folding, MIDI and zip files read back, names).
   `src/lib/project/testState.ts` builds the settings those tests use (`makeState`,
   `changeEverything`). `vitest.config.js` reuses `vite.config.js` and sets `BASE_URL`
   to the real base, so code sees `/studio2/` as in the app.
@@ -139,8 +139,9 @@ src/components/
   MelodyMaker.vue        Scale, key and range; random melody and arpeggio generator
   PatternTools.vue       Synth-lane tools: step fills (all, every 2/4, invert, random, clear),
                          velocity shapes ("Humanize") and octave shift
-  ProjectControls.vue    File menu: new, open, save, rename, delete, import/export JSON, WAV;
-                         Undo/Redo buttons
+  ProjectControls.vue    File menu: new, open, save, rename, delete, import/export JSON,
+                         Export audio…; Undo/Redo buttons
+  ExportDialog.vue       The Export audio dialog (see "Export audio")
   PresetButtons.vue      The Presets buttons in the transport card (see "Presets")
   MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
@@ -159,8 +160,9 @@ src/audio/
   velocity.ts            Velocity routing: what a step's velocity does besides loudness
   ratchet.ts             Ratchets: when a step's 2–4 quick hits start and end
   reverb/generateIr.ts   Algorithmic impulse response for the ConvolverNode
-  export/scheduleStepSequencer.ts  Separate offline engine used for WAV export
-  export/encodeWav.ts    AudioBuffer → 32-bit float WAV
+  export/scheduleStepSequencer.ts  Separate offline engine used for audio export
+  export/exportFiles.ts  The Export audio dialog's files: renders, loops, stems, one-shot
+  export/encodeWav.ts    AudioBuffer (or plain channels) → 32-bit float WAV
 src/stores/projectStore.ts  Pinia store: current projectId, name, data snapshot
 src/lib/project/snapshot.ts  Settings ↔ project snapshot, and factory defaults (see "Saving")
 src/lib/project/history.ts   Undo/redo history of snapshots (pure; see "Undo / redo")
@@ -168,6 +170,9 @@ src/lib/project/testState.ts  Settings for unit tests (not used by the app)
 src/lib/presets/         Built-in presets: library.ts (the sounds), presets.ts (applying one,
                          and matching the sound to one), random.ts (the dice's random sound);
                          see "Presets"
+src/lib/export/          Export helpers (pure, unit-tested): audio.ts (loop folding, tail
+                         trimming, normalizing), midi.ts (MIDI file), zip.ts, names.ts
+src/lib/random.ts        Seeded random numbers (export stems; tests)
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
@@ -272,9 +277,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   Anything else per-note that connects to a long-lived node needs the same cleanup.
   The oscillator also feeds a tiny `AnalyserNode` (`lfoProbe`, not connected onward), which
   `lfoNow()` reads: where the LFO is now, −1..1 (null while it isn't running).
-- WAV export uses a **separate** offline engine (`scheduleStepSequencer.ts`), fed by the
+- Audio export uses a **separate** offline engine (`scheduleStepSequencer.ts`), fed by the
   `exportState` computed. It renders only the synth lane. Changes to the live sound (new
   parameters, changed gain staging) must be mirrored there, or exports will sound different.
+  (Until PR 34 it sent the noise layer through drive, delay and reverb, unfiltered; now it
+  matches the live engine: 40 Hz–16 kHz, straight to the master.) See "Export audio".
 
 ### LFO visualizer
 - While the LFO moves something, its movement is drawn on the control it moves, in amber
@@ -412,6 +419,44 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   0.65 (median 0.26, the same as the factory sound).
 - Analytics: `preset_select` with the preset's id; `preset_random` for a roll of the dice.
 
+### Export audio
+- File → **Export audio…** opens `ExportDialog.vue`; `buildExportFiles()` in
+  `src/audio/export/exportFiles.ts` makes the files and `runExport()` in `DrumSequencer.vue`
+  downloads them: one file as itself, several as one `.zip` (`src/lib/export/zip.ts`, stored,
+  not compressed: WAV audio hardly compresses, and it needs no library). The dialog starts from
+  the last choices of the session (not saved).
+- **Bars** 1, 2, 4 or 8 (the pattern played that many times, `bars` in the engine's state).
+  **Loop** (the default): exactly N bars, to the sample (`barFrames()`), with whatever rings
+  past the end (reverb, echoes, a long decay) added onto the start (`foldLoop()`, wrapping as
+  often as needed), so it repeats in a DAW as it loops in the app; only its very first play
+  from silence has a faint tail of a bar that never played. **With tail**: a clean start, and
+  the sound rings out after the bars until it fades below −80 dBFS (`trimTail()`, 5 s at most).
+- **Files**: the **mix**; **effects stems** (dry, delay, reverb, noise; the engine renders one
+  `part` at a time, each through its own gate to the master, so they add up to the mix: a
+  browser test sums them sample for sample. A stem that's silent, its effect off, is left out;
+  dry is always there. With the tail, every file ends where the last of them fades, so they
+  line up); a **MIDI file** (`src/lib/export/midi.ts`: type 0, 480 ticks a quarter, tempo and
+  4/4, each step's nearest note and velocity, swing and ratchets timed as the audio, a note
+  lasting until the next hit less a tick; fine tuning in cents is lost); a **one-shot**: one
+  full-velocity hit of the sound on the main wave at a chosen note, effects included, trimmed
+  where it fades (6 s at most), for a sampler or drum rack. Its note defaults to the key's root
+  in the pads' octave (A3 unless the key or Octave changed), picked from the pads' range.
+- The mix and stems are rendered with the same seed (`seededRandom()`, `src/lib/random.ts`),
+  which the engine uses for its noise buffers and the pitch envelope's random mode
+  (`state.random`), so every stem has the same noise and sweeps as the mix (unseeded, the
+  stems missed the mix by more than 1). The reverb's impulse response has its own fixed seed.
+- **Normalize** (on by default): the mix and stems get one gain, so the loudest sample of any
+  of them is −1 dBFS and the stems still add up; the one-shot is normalized on its own.
+- **Names** (`src/lib/export/names.ts`): `Project_80bpm_Amin_4bars_mix.wav` (the key only
+  when the Melody Maker has a scale; `4bars-tail` with the tail), `..._dry.wav` and so on,
+  `Project_80bpm_Amin_4bars.mid`, `Project_80bpm_Amin_4bars.zip`, `Project_oneshot_A3.wav`.
+  The note names are the app's (A3 = 220 Hz, which Ableton and Logic call A2).
+- Files are 32-bit float WAV at the AudioContext's sample rate, as before.
+- Analytics: `export_audio_click` (the menu item) and `export_audio` (the choices).
+- Browser tests drive the dialog with `exportAudio(page, choices)`; `exportWav(page)` asks for
+  what the old Export WAV item made (1 bar with its tail, the mix only, not normalized), so the
+  sound tests keep measuring real levels.
+
 ### Saving / projects
 - The settings stay refs in `DrumSequencer.vue`. It groups every saved one into `projectState`
   (type `ProjectState`), shaped like a snapshot:
@@ -483,8 +528,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Styling: Bootstrap 5 + custom SCSS in `src/assets/styles/`. There are three themes, selected
   by a `theme-*` class on `<html>`. Keep the current look and feel unless a change is
   requested. The Light theme's button is commented out in `ThemeToggle.vue`, so only a choice
-  saved before that applies it; it still has rough spots (for example FM's Lock button and the
-  effect pedals' names are hard to read). Theme colors are CSS variables set per theme in
+  saved before that applies it; it still has rough spots (for example the effect pedals'
+  names are hard to read; a chosen segment button's text, white on light, was fixed in PR 34). Theme colors are CSS variables set per theme in
   `_themes.scss`; use them rather than a fixed color that only suits the dark themes. For
   example `--pt-inset` is the background of an inset panel inside a card (Pattern Tools'
   sections, the Presets box): dark, or a light tint in the light theme. A browser test checks
@@ -571,33 +616,20 @@ this file), then presets that can use them (the first six presets came in PR 30;
 with new sound features). Everything drum-related waits until the maintainer brings the drum
 lanes back.
 
-1. **Several patterns (A/B/C/D) chained into a song.**
-2. **32 steps, or per-lane lengths** (the export code's types already allow 32).
-3. **Per-step parameter locks** (for example a different filter cutoff on each step). Each
-   note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
-   vary per step. Delay and reverb are shared by every note, so per step they become send
-   amounts (how much of the step goes into them), not per-step effect settings, which would
-   cut off the previous note's tail; per-step drive would mean moving drive into each note.
-   UI idea: select a step with its settings dot, then the knobs you turn change that step
-   only; locked steps are marked, with a way to clear them. Build on velocity routing
-   (PR 28).
-4. **More sound sources, part 2:** plucked string (Karplus–Strong: a noise burst circulating
-   in a short delay loop that loses brightness each time round; the original paper also has a
-   drum variant), metallic (several square waves at odd ratios, as the 808 makes cymbals and
-   cowbell) and struck (a click ringing tuned resonant filters: wood block, marimba, toms,
-   bells). Karplus–Strong needs an AudioWorklet: a `DelayNode` in a feedback loop can't be
-   shorter than one render quantum (128 samples, about 3 ms), which caps the pitch around the
-   F above middle C. AudioWorklets also run in the `OfflineAudioContext` used for WAV export.
-5. **Export options:** N bars or loops, stems, MIDI file.
-6. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
-7. **Install as an app (PWA)** that works offline.
-8. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-9. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
+1. **More MIDI:** MIDI learn for knobs, MIDI clock sync, MIDI out.
+2. **Install as an app (PWA)** that works offline.
+3. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+4. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
    purpose so far.
-10. **User-saved presets, and more built-in ones.** Left out of PR 30 on purpose. A user
-    preset could be the sound part of a snapshot (`soundKey()`'s parts) kept in IndexedDB
-    next to the projects; more built-in ones as new sound features arrive (toms, hats, organ
-    and hollow sounds).
+5. **User-saved presets, and more built-in ones.** Left out of PR 30 on purpose. A user
+   preset could be the sound part of a snapshot (`soundKey()`'s parts) kept in IndexedDB
+   next to the projects; more built-in ones as new sound features arrive (toms, hats, organ
+   and hollow sounds).
+
+Dropped in PR 34 (the maintainer and Claude agreed): export stems by register (bass / top
+notes) or by wave, and "arrangement variations" (sparse, half-time, build, fill, wash, reverse
+swell, sub layer). One voice playing one pattern makes register stems of little use, and most
+variations take a few seconds in the app (edit, export, undo) or are plain DAW work.
 
 Dropped after PR 32 (the maintainer's call: not worth it for now): a stage view for TVs and an
 audio output picker (casting a tab already shows the page on a TV; the planned version, a
@@ -614,7 +646,20 @@ gain at about 0.004 with the default settings, in the live and export engines. I
 heard, and the presets peak well below clipping (0.2–0.5), but measurements see it: the
 browser tests use `__swingOver` to ignore it.
 
-On hold (ask the maintainer before starting):
+On hold (ask the maintainer before starting; put on hold after PR 33, "not now"):
+- **Several patterns (A/B/C/D) chained into a song.**
+- **32 steps, or per-lane lengths** (the export code's types already allow 32).
+- **Per-step parameter locks** (for example a different filter cutoff on each step). Each
+  note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
+  vary per step. Delay and reverb are shared by every note, so per step they become send
+  amounts, not per-step effect settings; per-step drive would mean moving drive into each
+  note. UI idea: select a step with its settings dot, then the knobs you turn change that
+  step only. Build on velocity routing (PR 28).
+- **More sound sources, part 2:** plucked string (Karplus–Strong, which needs an
+  AudioWorklet: a `DelayNode` in a feedback loop can't be shorter than one render quantum, 128
+  samples, which caps the pitch around the F above middle C; AudioWorklets also run in the
+  `OfflineAudioContext` used for export), metallic (several square waves at odd ratios, as the
+  808 makes cymbals and cowbell) and struck (a click ringing tuned resonant filters).
 - **Share a project as a link** (the project encoded in the URL). The maintainer sees no need
   yet: File → Export file and Import file do the same, if less easily. It sets the delay time
   from outside, which works since PR 17, and the shared session below would build on it.
@@ -672,6 +717,7 @@ Done:
 | 31 | The Pattern Tools section titles (and "Active Pads Only") are readable in the light theme: inset panels take their background from a theme variable, `--pt-inset`, instead of a fixed dark color. A browser test measures the captions' contrast in all three themes. The plan's next two items (computer keyboard, limiter and DC offset fix) dropped. |
 | 32 | A dice in the Presets box rolls a random sound: a recipe for a percussion voice (`src/lib/presets/random.ts`) applied like a preset, from the factory sound up; one undo step; never silent or clipping (500 seeded rolls checked in unit tests, rolls exported in a browser test). |
 | 33 | Ratchets: "Repeats" ×1–×4 in each pad's ⋮ menu (and a "×3" badge on the pad) make a step play 2–4 quick hits within its time, swing included; each hit ends where the next begins, the last rings out; in the live and export engines (`src/audio/ratchet.ts`); saved per step, older projects get 1s. The pad menu now stays on screen on short laptop screens. Plan: share link put on hold; stage view, step probability and timing humanize dropped. |
+| 34 | Export audio: File → Export audio… opens a dialog: 1–8 bars as a seamless loop (the tail folded onto the start) or with the tail; the mix, effects stems (dry, delay, reverb, noise, adding up to the mix), a MIDI file, and a one-shot at a chosen note; normalize to −1 dBFS; several files in one .zip, named with project, tempo, key and length. The export engine's noise now matches the live engine (it went through the effects). Chosen segment buttons readable in the light theme. Plan: song chaining, 32 steps, parameter locks and sound sources part 2 on hold; register and variation stems dropped. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

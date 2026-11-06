@@ -7,8 +7,15 @@ function writeString(view: DataView, offset: number, str: string) {
 
 export function audioBufferToWavFloat32(buffer: AudioBuffer): ArrayBuffer {
     const numChannels = buffer.numberOfChannels || 2;
-    const sampleRate = buffer.sampleRate;
-    const frames = buffer.length;
+    const channels: Float32Array[] = [];
+    for (let c = 0; c < numChannels; c++) channels.push(buffer.getChannelData(Math.min(c, buffer.numberOfChannels - 1)));
+    return encodeWavFloat32(channels, buffer.sampleRate);
+}
+
+// The same from plain channels (one Float32Array each, all the same length)
+export function encodeWavFloat32(channels: Float32Array[], sampleRate: number): ArrayBuffer {
+    const numChannels = channels.length || 2;
+    const frames = channels[0]?.length ?? 0;
     const bytesPerSample = 4; // Float32
     const blockAlign = numChannels * bytesPerSample;
     const byteRate = sampleRate * blockAlign;
@@ -40,13 +47,10 @@ export function audioBufferToWavFloat32(buffer: AudioBuffer): ArrayBuffer {
     view.setUint32(40, dataSize, true);
 
     // Interleave
-    const channels: Float32Array[] = [];
-    for (let c = 0; c < numChannels; c++) channels.push(buffer.getChannelData(Math.min(c, buffer.numberOfChannels - 1)));
-
     let offset = 44;
     for (let i = 0; i < frames; i++) {
         for (let c = 0; c < numChannels; c++) {
-            view.setFloat32(offset, channels[c][i] || 0, true);
+            view.setFloat32(offset, channels[c]?.[i] || 0, true);
             offset += 4;
         }
     }

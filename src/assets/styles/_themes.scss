@@ -653,6 +653,13 @@ $base: map.get($themes, synthwave);
     transform: translateY(-1px);
 }
 
+/* The light theme's segment buttons are light, so the chosen one keeps dark text (white text
+   on it was unreadable: FM's Lock, the pad menu, the Export audio dialog) */
+.theme-light .pt-seg-btn.is-active,
+.theme-light .pt-seg-btn[aria-pressed="true"] {
+    color: var(--pt-text-strong);
+}
+
 .pt-seg-btn[disabled].is-active {
     opacity: 0.8;
 }

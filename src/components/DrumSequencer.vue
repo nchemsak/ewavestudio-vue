@@ -3,7 +3,7 @@
 		<!-- Save/Open/Import/Export toolbar -->
 		<section class="pt-card" style="margin-bottom:12px">
 			<ProjectControls :exporting="isExporting" :can-undo="canUndo" :can-redo="canRedo"
-				@export-wav="exportCurrentPattern" @undo="undo" @redo="redo" />
+				@export-audio="openExportDialog" @undo="undo" @redo="redo" />
 		</section>
 		<div class="ds-grid">
 
@@ -451,6 +451,10 @@
 				</div>
 			</section> -->
 		</div>
+		<!-- File → Export audio… (src/audio/export/exportFiles.ts makes the files) -->
+		<ExportDialog :open="exportOpen" :options="exportOptions" :notes="oneShotNotes" :bpm="tempo"
+			:effectsOn="exportEffectsOn" :busy="isExporting" :progress="exportProgress"
+			@export="runExport" @close="exportOpen = false" />
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
 			v-model:noiseEnabled="padNoiseEnabled" v-model:ratchet="currentPadRatchet" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
@@ -504,8 +508,7 @@ import { useProjectSync } from '../composables/useProjectSync';
 import { useUndoHistory } from '../composables/useUndoHistory';
 
 // WAV Export
-import { scheduleStepSequencer, type StepSequencerState } from '../audio/export/scheduleStepSequencer';
-import { audioBufferToWavFloat32 } from '../audio/export/encodeWav';
+import type { StepSequencerState } from '../audio/export/scheduleStepSequencer';
 
 // Reverb
 import ReverbEffect from './modules/ReverbEffect.vue';
@@ -514,6 +517,11 @@ import ReverbEffect from './modules/ReverbEffect.vue';
 import { useLiveEngine } from '../audio/liveEngine';
 import { useLfoVisual } from '../composables/useLfoVisual';
 import PresetButtons from './PresetButtons.vue';
+import ExportDialog from './ExportDialog.vue';
+import { buildExportFiles, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from '../audio/export/exportFiles';
+import { midiNoteOf, midiToHz, notesInRange } from '../lib/export/midi';
+import { exportNames, keyLabel } from '../lib/export/names';
+import { zipFiles } from '../lib/export/zip';
 import { PRESETS } from '../lib/presets/library';
 import { applyPreset, soundKey } from '../lib/presets/presets';
 import { randomPreset } from '../lib/presets/random';
@@ -2415,67 +2423,81 @@ function onPlayClick() {
 	togglePlay();
 }
 // GOOGLE ANALYTICS END
-async function exportCurrentPattern() {
-	if (!synthInstrument.value) return;
+// EXPORT AUDIO START
 
-	// Compute safe render length
-	const bpm = tempo.value;
-	const steps = stepLength.value;
-	const bars = steps / 16;
-	const secondsPerBeat = 60 / bpm;
-	const patternDuration = bars * secondsPerBeat * 4;
-	const tail = exportState.value.tailSeconds;
-	const renderSeconds = patternDuration + tail;
+// File → Export audio…: the dialog (ExportDialog.vue) picks the files, exportFiles.ts renders
+// them, and they download as one file or one .zip
+const exportOpen = ref(false);
+const exportOptions = reactive<ExportOptions>({ ...DEFAULT_EXPORT_OPTIONS, oneShotHz: 220 });
+const exportProgress = ref('');
 
-	// Guard against extreme cases
-	if (renderSeconds > 30) {
-		const ok = confirm(`This export will be ~${renderSeconds.toFixed(1)}s long. Continue?`);
-		if (!ok) return;
-	}
+// The one-shot's notes: the pads' range, each "A3 (220 Hz)"
+const oneShotNotes = computed(() => notesInRange(MIN_PAD_HZ, MAX_PAD_HZ).map((n) => {
+	const hz = midiToHz(n);
+	return { hz, label: `${nearestNote(hz)} (${Math.round(hz)} Hz)` };
+}));
 
+// Which effects stems would have sound in them
+const exportEffectsOn = computed(() => ({
+	delay: delayEnabled.value && delayMix.value > 0,
+	reverb: reverbEnabled.value && reverbMix.value > 0,
+	noise: noiseEnabled.value && noiseAmount.value > 0,
+}));
+
+function openExportDialog() {
+	// The one-shot starts on the key's root in the pads' octave (A3 unless the key or octave
+	// changed), as an exact note of the list
+	exportOptions.oneShotHz = midiToHz(midiNoteOf(currentDefaultHz.value));
+	exportOpen.value = true;
+}
+
+function downloadFile(name: string, data: Uint8Array, type: string) {
+	const url = URL.createObjectURL(new Blob([data as BlobPart], { type }));
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = name;
+	document.body.appendChild(a);
+	a.click();
+	a.remove();
+	setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+async function runExport(options: ExportOptions) {
+	if (!synthInstrument.value || isExporting.value) return;
+	Object.assign(exportOptions, options); // the next export starts from these choices
+	isExporting.value = true;
 	try {
-		isExporting.value = true;
-
-		// Prepare OfflineAudioContext
-		const sampleRate = Math.max(3000, Math.min(192000, exportState.value.sampleRate || 48000));
-		const totalFrames = Math.ceil(renderSeconds * sampleRate);
-		const OfflineAC = (window as any).OfflineAudioContext || (window as any).webkitOfflineAudioContext;
-		const off = new OfflineAC(2, totalFrames, sampleRate);
-
-		// Schedule the step sequencer synth only
-		scheduleStepSequencer(off, exportState.value, 0);
-
-		// Render
-		const rendered: AudioBuffer = await off.startRendering();
-
-		// Encode to 32-bit float WAV
-		const wav = audioBufferToWavFloat32(rendered);
-		const blob = new Blob([wav], { type: "audio/wav" });
-
-		// Filename
-		const nameGuess = (project as any)?.name || (project as any)?.projectName || "Untitled";
-		const pad = (n: number) => String(n).padStart(2, "0");
-		const d = new Date();
-		const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
-		const fname = `${nameGuess}_stepseq_${steps}stp_${bpm}bpm_${stamp}.wav`;
-
-		// Download
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement("a");
-		a.href = url;
-		a.download = fname;
-		document.body.appendChild(a);
-		a.click();
-		a.remove();
-		setTimeout(() => URL.revokeObjectURL(url), 5000);
-
+		const files = await buildExportFiles(exportState.value, options, {
+			project: project.name || 'Untitled',
+			key: keyLabel(melodyUi.keyRoot, melodyUi.keyScale),
+			oneShotWave: selectedWaveform.value,
+			noteName: (hz) => nearestNote(hz),
+		}, (done, total) => { exportProgress.value = `${done} of ${total}`; });
+		if (!files.length) return;
+		if (files.length === 1) {
+			downloadFile(files[0].name, files[0].data, files[0].type);
+		} else {
+			const names = exportNames({
+				project: project.name || 'Untitled', bpm: tempo.value,
+				key: keyLabel(melodyUi.keyRoot, melodyUi.keyScale), bars: options.bars, ending: options.ending,
+			});
+			downloadFile(names.zip, zipFiles(files), 'application/zip');
+		}
+		exportOpen.value = false;
+		trackEvent('export_audio', {
+			bars: options.bars, ending: options.ending, mix: options.mix, stems: options.stems,
+			midi: options.midi, one_shot: options.oneShot, normalize: options.normalize, files: files.length,
+		});
 	} catch (err) {
-		console.error("Export failed:", err);
-		alert("Export failed. See console for details.");
+		console.error('Export failed:', err);
+		alert('Export failed. See console for details.');
 	} finally {
 		isExporting.value = false;
+		exportProgress.value = '';
 	}
 }
+
+// EXPORT AUDIO END
 
 function toggleMute(instrumentName) {
 	const inst = instruments.value.find(i => i.name === instrumentName);
