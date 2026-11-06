@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { PRESETS } from '../src/lib/presets/library';
@@ -2116,4 +2116,90 @@ test.describe('Install as an app (PWA)', () => {
 			writeFileSync(htmlFile, html);
 		}
 	});
+});
+
+// --- Knob notches --------------------------------------------------------------------------------
+
+// Drag a knob up (or down) one pixel at a time; the value after each pixel
+async function dragKnob(page: Page, knob: Locator, pixels: number) {
+	await knob.scrollIntoViewIfNeeded();
+	const box = (await knob.boundingBox())!;
+	const x = box.x + box.width / 2, y = box.y + box.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	const values: number[] = [];
+	for (let i = 1; i <= Math.abs(pixels); i++) {
+		await page.mouse.move(x, y - Math.sign(pixels) * i);
+		values.push(Number(await knob.getAttribute('aria-valuenow')));
+	}
+	await page.mouse.up();
+	return values;
+}
+
+// How many pixels in a row the drag stayed on `value`
+const heldFor = (values: number[], value: number) =>
+	Math.max(0, ...values.map((_, i) => values.slice(i).findIndex((v) => v !== value)).map((n, i) => (values[i] === value ? (n < 0 ? values.length - i : n) : 0)));
+
+test('knob notches: Tempo and Swing hold at common values while dragged, with a tick for each', async ({ page }) => {
+	const tempo = page.getByRole('slider', { name: 'Tempo' });
+	const swing = page.getByRole('slider', { name: 'Swing' });
+	await expect(tempo.locator('.dial-detent')).toHaveCount(7);
+	await expect(swing.locator('.dial-detent')).toHaveCount(5);
+	await expect(page.getByRole('slider', { name: 'Volume' }).locator('.dial-detent')).toHaveCount(0);
+
+	// From 80 BPM up: about 1.4 BPM a pixel, but each notch holds for several pixels
+	const bpm = await dragKnob(page, tempo, 70);
+	for (const notch of [90, 100, 120, 128]) expect(heldFor(bpm, notch)).toBeGreaterThanOrEqual(6);
+	expect(heldFor(bpm, 110)).toBeLessThanOrEqual(2); // not a notch
+	// It never jumps: each pixel moves it by at most two steps
+	bpm.reduce((a, b) => { expect(b - a).toBeLessThanOrEqual(2); expect(b).toBeGreaterThanOrEqual(a); return b; }, 80);
+
+	// Swing (4 px a 1 % step): each notch holds for its step and then some
+	const amounts = await dragKnob(page, swing, 220);
+	for (const notch of [0.08, 0.16, 0.24, 0.33, 0.42]) expect(heldFor(amounts, notch)).toBeGreaterThanOrEqual(10);
+	expect(heldFor(amounts, 0.3)).toBeLessThanOrEqual(5);
+	// The triplet notch says so: from 0, 160 px is the middle of its hold
+	await dragKnob(page, swing, -250);
+	await expect(swing).toHaveAttribute('aria-valuenow', '0');
+	await dragKnob(page, swing, 160);
+	await expect(swing).toHaveAttribute('aria-valuenow', '0.33');
+	await expect(swing).toHaveAttribute('aria-valuetext', '33% (triplet)');
+	await expect(page.locator('.stepper-value', { hasText: '33%' })).toBeVisible();
+});
+
+test('knob notches: a two-way knob holds at its middle; a MIDI controller can reach 120 BPM', async ({ page }) => {
+	// Filter Env Amt starts at 0: a drag first holds there, then moves
+	const envAmt = page.getByRole('slider', { name: 'Env Amt' });
+	await expect(envAmt).toHaveAttribute('aria-valuenow', '0');
+	const up = await dragKnob(page, envAmt, 20);
+	expect(heldFor(up, 0)).toBeGreaterThanOrEqual(3);
+	expect(up.at(-1)).toBeGreaterThan(0);
+	// Dragged through from below, it holds again at 0
+	await dragKnob(page, envAmt, -60);
+	expect(heldFor(await dragKnob(page, envAmt, 60), 0)).toBeGreaterThanOrEqual(6);
+
+	// Noise Color: a notch at each named color
+	await expect(page.getByRole('slider', { name: 'Noise color' }).locator('.dial-detent')).toHaveCount(3);
+
+	// A controller knob linked to Tempo, swept from one end to the other, lands on every notch
+	// (without notches its 128 steps go 119, 121)
+	const turn = await connectController(page);
+	await page.getByRole('button', { name: 'Learn', exact: true }).click();
+	const tempo = page.getByRole('slider', { name: 'Tempo' });
+	await tempo.click();
+	await turn(20, 0);
+	await page.keyboard.press('Escape');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '20');
+	const reached = await page.evaluate(async () => {
+		const seen: number[] = [];
+		const knob = document.querySelector('[data-midi-id="transport.tempo"]')!;
+		for (let cc = 0; cc < 128; cc++) {
+			(window as any).__midiInput.onmidimessage({ data: new Uint8Array([0xb0, 20, cc]) });
+			await new Promise((r) => setTimeout(r));
+			seen.push(Number(knob.getAttribute('aria-valuenow')));
+		}
+		return seen;
+	});
+	for (const notch of [90, 100, 120, 128, 140, 160, 174]) expect(reached).toContain(notch);
+	expect(reached.at(-1)).toBe(300);
 });

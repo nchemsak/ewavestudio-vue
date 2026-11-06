@@ -31,6 +31,7 @@
                     </div>
 
                     <Knob midi-id="noise.color" v-model="colorLocal" aria-label="Noise color" :value-text="colorLabel" :min="0" :max="1" :step="0.01"
+                        :detents="colorDetents"
                         size="small" :color="accent" :disabled="!enabledLocal" />
                 </div>
             </div>
@@ -154,6 +155,9 @@ const stops = [
     { pos: 0.75, name: 'Blue', hex: '#7bbcff' },
     { pos: 1.0, name: 'Violet', hex: '#c7a4ff' }
 ] as const;
+
+// Soft notches on the knob at each named color (the ends stop there anyway)
+const colorDetents = stops.map((s) => s.pos);
 
 const colorLabel = computed(() => {
     const t = colorLocal.value;

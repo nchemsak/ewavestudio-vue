@@ -34,6 +34,8 @@ https://www.ephemeralwave.com/studio/ and is never changed.
   the sound at any note, as one .zip
 - Keyboard shortcuts: Space plays and stops, 1–4 switch the screen view, Ctrl/Cmd+S saves,
   Ctrl/Cmd+Z undoes
+- Knobs with soft notches at common values: Tempo (90, 100, 120, 128, 140, 160, 174 BPM),
+  Swing (including a triplet feel), the middle of two-way knobs
 - Install it as an app (Chrome or Edge: the install button in the address bar, or File →
   Install app…): its own window and icon, and it works offline
 
