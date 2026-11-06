@@ -12,7 +12,8 @@ unison and LFO; delay, overdrive and reverb; Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a random melody and arpeggio maker; an oscilloscope, spectrogram, tuner and envelope
 display; six built-in presets that set the sound (not the pattern), and a dice for a random
 sound; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
-saved in IndexedDB with JSON import and export; and undo/redo.
+saved in IndexedDB with JSON import and export; undo/redo; and it installs as an app that
+works offline (a PWA).
 Earlier versions also had sample drum lanes (kick, snare, hihat and user-loaded samples).
 Their UI is commented out and they are no longer part of the app, but some of their code
 remains (see "Dead code").
@@ -58,7 +59,10 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   level (`__peakOver(ms)`, and `__swingOver(ms)`, which ignores a steady offset), tracks keydown
   listeners on `window` (`__keydown`), and can pause
   `requestAnimationFrame` the way hidden tabs do. The MIDI tests install a fake MIDI keyboard
-  or controller.
+  or controller. Service workers are blocked (`playwright.config.ts`), so every test loads
+  the build itself, except the PWA tests, which turn them on; the update test stages a deploy
+  by editing `dist/sw.js` and `dist/index.html` (the preview server reads files on every
+  request) and puts them back afterwards.
   Google Analytics is stubbed out. Before the first local run: `npx playwright install chromium`.
 - **No linter yet.** Current ESLint and typescript-eslint releases depend on `minimatch` 10,
   which has a moderate advisory (GHSA-g3hv-75wg-m249) that only `minimatch` 11 fixes. Adding
@@ -108,8 +112,13 @@ Secrets:
 The job refuses a login that can see `public_html` or WordPress files (such as the main
 hosting login), a server without TLS (FTP over TLS), and a certificate that doesn't match
 `FTP_HOST`. The Actions tab shows each run; its "Re-run jobs" and "Run workflow" buttons
-re-deploy by hand. After a deploy, hard-refresh https://www.ephemeralwave.com/studio2/
-(Ctrl+F5).
+re-deploy by hand. After a deploy, open https://www.ephemeralwave.com/studio2/ (or the installed
+app): within a moment "A new version of the app is ready" shows; click Reload (see "Install
+as an app"). Ctrl+F5 loads the new files too, but for that one load only.
+
+The build includes `sw.js` (the service worker) and `manifest.json`. The upload order needs
+no care for them: an installed copy only takes a new version once every file matches the
+checksums in the new `sw.js`, so a deploy caught halfway is ignored until it's complete.
 
 Manual fallback with FileZilla: `npm run build`, then upload the **contents** of `dist/` (not
 the folder itself) into `/public_html/studio2/`. Never upload to `/public_html/studio/`.
@@ -121,15 +130,21 @@ Notes:
   (`build-plugins/googleAnalytics.js`, a Vite plugin with `apply: 'build'`), so `npm run dev`
   sends no analytics events. The deployed site, `npm run preview` and the browser tests (which
   stub it out) have it.
-- The "Return to Ephemeral Wave" link points to `/`, the main site, which is not part of this repo.
+- The "Return to Ephemeral Wave" link points to `/`, the main site, which is not part of this
+  repo. In the installed app it opens in the browser (`target="_blank"`), not in the app's
+  window.
 
 ## Architecture
 
 ```
 index.html               Entry HTML (the build adds the Google Analytics tag)
 build-plugins/googleAnalytics.js  Vite plugin: the gtag snippet, in builds only
+build-plugins/serviceWorker.js  Vite plugin: writes dist/sw.js (builds only), the service worker
+                         (serviceWorkerSource.js) with the build's files and checksums; see
+                         "Install as an app"
 src/main.ts              createApp + Pinia, imports the global SCSS (Bootstrap + theme)
-src/App.vue              Toolbar (ThemeToggle, #midi-toolbar-slot) + <DrumSequencer/>
+src/App.vue              Toolbar (ThemeToggle, #midi-toolbar-slot) + <DrumSequencer/> +
+                         <PwaNotice/> (the "new version" notice)
 src/components/
   DrumSequencer.vue      ~3400 lines; holds nearly all app state (as refs) and the screen
                          views; groups the saved settings as `projectState` for saving and
@@ -188,6 +203,7 @@ src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) +
 src/composables/useTheme.ts      synthwave | dark | light theme, stored in localStorage
 src/composables/useMidiInput.ts  Web MIDI note input (see "MIDI")
 src/composables/useMidiLearn.ts  MIDI learn mode and the controller's links (see "MIDI learn")
+src/composables/usePwa.ts  Installing the app, offline use and updates, the page's side
 src/composables/useProjectSync.ts  Keeps the settings and the project store in step (see "Saving")
 src/composables/useUndoHistory.ts  When to record an undo step, and applying undo/redo
 src/composables/useLfoVisual.ts  The LFO visualizer's frame clock
@@ -197,6 +213,9 @@ src/assets/styles/       _bootstrap-custom.scss (the Bootstrap parts in use, the
 public/audio/            kick.mp3, snare.mp3, hihat.mp3: still fetched at startup, but only
                          used by the hidden drum lanes
 public/images/           Background textures/GIFs referenced from SCSS via ../images/
+                         (circleWave.gif and retroSpeaker.gif only from the unbuilt _sequencer.scss)
+public/manifest.json, public/icons/  The web app manifest and its icons (the sun from
+                         src/assets/eWaveLogo1.png: 192, 512, maskable 512, iPhone 180)
 .github/workflows/deploy-studio2.yml  Builds `main` and uploads it to /studio2/ (see Deploy)
 .github/workflows/checks.yml  Type check, unit tests and browser tests (every PR, every deploy)
 src/**/*.test.ts         Unit tests (Vitest; vitest.config.js)
@@ -354,6 +373,45 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   bar uses). The ids are saved, so never rename one. The pop-up knobs (the "Vel →" panel, a
   pad's Fine) aren't learnable: they'd only follow while open. A unit test checks every id is
   on exactly one knob.
+
+### Install as an app (PWA)
+- In Chrome and Edge, the address bar's install button or File → Install app… (shown while
+  the browser offers it: `beforeinstallprompt`) installs the app: its own window and icon,
+  starting from its saved copy, offline too. It is the same site underneath: it shares saved
+  projects, MIDI links and theme with the `/studio2/` tab, and MIDI and audio work the same
+  (installing doesn't make MIDI faster). Android installs it full screen; an iPhone can add
+  it to the home screen, but has no Web MIDI.
+- `public/manifest.json`: name "Ephemeral Wave Synth 2" (the page title), short name
+  "Ephemeral Wave", `start_url` and `scope` `./` (so `/studio2/`), standalone, `#050713` (the
+  page's `theme-color`). Paths in it are relative to it, never starting with `/`.
+- The service worker (`build-plugins/serviceWorkerSource.js`; `build-plugins/serviceWorker.js`
+  writes it into the build as `sw.js`, with every built file and its SHA-256 in front):
+  - Its scope is `/studio2/` only; the main site and `/studio/` are never touched. It
+    ignores other sites' requests (Google Analytics).
+  - Install saves every built file in Cache Storage (`ewave-studio2-app-<version>`; the
+    version is a hash of the file list and the worker's code, so any change makes a new one).
+    A file the previous version saved, unchanged, is copied instead of downloaded, so an update
+    downloads only what changed. Every file must match its checksum, or the install fails and
+    the browser tries again later. Not saved: source maps, dot files, and the two unused GIFs
+    (`SKIP`; 1.8 MB).
+  - It serves the app's files from the cache, falling back to the network; opening the app
+    gets the cached `index.html`. On the very first visit it takes the page over at once
+    (`clients.claim()`), so it works offline from then on.
+  - A new version waits (no `skipWaiting()` on its own) until the page asks.
+- `src/composables/usePwa.ts` (the page's side, created once from `App.vue`): registers
+  `sw.js` after the page has loaded, in builds only (never under `npm run dev`); `updateReady`
+  shows `PwaNotice.vue` in the bottom-right corner ("A new version of the app is ready." Later
+  / Reload): Reload sends `skip-waiting` and reloads once the new version has taken over
+  (with the unsaved-changes prompt as usual); Later leaves it for the next time the app is
+  opened. The first install shows nothing. An open app checks for a new version every hour.
+  `keepProjects()` asks for persistent storage (`navigator.storage.persist()`), so the browser
+  doesn't clear saved projects when the disk runs low: when the installed app opens, and after
+  the first Save of a visit (Chrome decides without asking; Firefox asks once). It's still
+  no backup: File → Export file is.
+- No dependency: `vite-plugin-pwa` (→ `workbox-build` → `glob` → `minimatch` 10) would bring
+  the advisory that keeps ESLint out (see "No linter yet").
+- Analytics: `pwa_install` (with `outcome`, from File → Install app…) and `pwa_launch` (the
+  installed app opened).
 
 ### Keyboard shortcuts
 - Space: play/stop (`onGlobalKeydown` in `DrumSequencer.vue`, ignored while typing). It does
@@ -653,7 +711,20 @@ this file), then presets that can use them (the first six presets came in PR 30;
 with new sound features). Everything drum-related waits until the maintainer brings the drum
 lanes back.
 
-1. **Install as an app (PWA)** that works offline.
+1. **MIDI keyboard latency** (added in PR 37, to explore later). The maintainer hears a
+   delay between a key on a MIDI keyboard and the sound (wired, no Bluetooth), enough to make
+   playing it like a piano distracting. Measure first; suspects:
+   - The amp envelope's attack (20 ms by default, 1–100 ms on the knob) is an exponential
+     ramp from 0.0001 (−80 dB), so the note is still about 20 dB down three-quarters of the
+     way through it: the default attack sounds about 15 ms late. A linear ramp, or one that
+     starts higher, would sound at once (both engines; it changes every sound, presets
+     included, a little). Quick check: does Attack at its minimum feel immediate?
+   - The audio output: the AudioContext uses the default `latencyHint` (`'interactive'`);
+     its `baseLatency` + `outputLatency` show what the browser and sound device add (often
+     10–40 ms on Windows). A smaller hint, or another output device, may help.
+   - The page's main thread: a MIDI message waits for whatever runs there (the screen views
+     draw every frame). The note itself is played 3 ms ahead.
+   Installing the app (PR 37) changes none of these.
 2. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
 3. **Major-version upgrades** (Vite 8, Pinia 4), if wanted, each as its own PR. Left out on
    purpose so far.
@@ -761,6 +832,7 @@ Done:
 | 34 | Export audio: File → Export audio… opens a dialog: 1–8 bars as a seamless loop (the tail folded onto the start) or with the tail; the mix, effects stems (dry, delay, reverb, noise, adding up to the mix), a MIDI file, and a one-shot at a chosen note; normalize to −1 dBFS; several files in one .zip, named with project, tempo, key and length. The export engine's noise now matches the live engine (it went through the effects). Chosen segment buttons readable in the light theme. Plan: song chaining, 32 steps, parameter locks and sound sources part 2 on hold; register and variation stems dropped. |
 | 35 | File → New puts the Export audio dialog's choices back to their defaults (they carried over from the last export). |
 | 36 | MIDI learn: Learn in the MIDI toolbar, click a knob, turn a controller knob, and it follows (32 knobs; its own curve and step, its tooltip and screen view, one undo step per sweep). Links are kept in the browser, not in projects. Plan: MIDI clock sync and MIDI out on hold. |
+| 37 | Install as an app (PWA): a manifest and icons, and a hand-written service worker (`build-plugins/serviceWorker.js`, no dependency) that saves the build, works offline from the first visit, refuses a half-uploaded deploy (checksums), and offers a new version with "A new version of the app is ready" (Reload / Later). File → Install app…; saved projects asked to persist. Plan: MIDI keyboard latency added. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
@@ -768,8 +840,9 @@ every PR, and the result (a green check or a red ✗) shows on the PR page; merg
 green. **Merging a PR into `main`
 deploys it to `/studio2/` within a few minutes** (`/studio/` is never touched), so the usual
 way to test is: merge, wait for the Actions run to finish, then try it on
-https://www.ephemeralwave.com/studio2/ (on any device). If something is wrong, fix it in a
-new PR.
+https://www.ephemeralwave.com/studio2/ (on any device): a page or installed app that is open
+(or opened) shows "A new version of the app is ready"; click Reload. If something is wrong, fix
+it in a new PR.
 
 To try a PR on your own computer before merging (Git Bash, in the project folder):
 
@@ -786,4 +859,7 @@ http://localhost:4173/studio2/. Afterwards, `git checkout main`. (Use `git check
 `git switch`: the maintainer's Git predates `switch`.) Saved projects are stored per website
 and folder, so the live `/studio/`, the live `/studio2/`, `localhost:5173` and
 `localhost:4173` each have their own. To test with a real project, use File → Export file
-where it lives and File → Import file where you're testing.
+where it lives and File → Import file where you're testing. The build (`npm run preview`) installs the
+service worker on `localhost:4173` too, so after building another branch the page first opens
+the copy it saved: click Reload when "A new version of the app is ready" shows (or press
+Ctrl+F5). `npm run dev` never uses it.

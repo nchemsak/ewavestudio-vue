@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { PRESETS } from '../src/lib/presets/library';
 
 // Injected before the app loads. Keeps a handle on the app's AudioContext (__ctx), records
@@ -1993,4 +1994,126 @@ test('MIDI learn: one controller knob per knob; Delete, Clear all and Escape; gr
 	await expect(bar).toBeHidden();
 	await expect(learn).toHaveAttribute('aria-pressed', 'false');
 	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(0);
+});
+
+// --- Install as an app (PWA) -------------------------------------------------------------------
+
+test.describe('Install as an app (PWA)', () => {
+	test.use({ serviceWorkers: 'allow' });
+
+	// The service worker has saved the app's files and serves this page
+	const workerReady = (page: Page) => page.waitForFunction(() => !!navigator.serviceWorker.controller);
+
+	test('Chrome can install it: manifest, icons and a service worker for /studio2/ only', async ({ page, context }) => {
+		await workerReady(page);
+		const cdp = await context.newCDPSession(page);
+		expect((await cdp.send('Page.getInstallabilityErrors')).installabilityErrors).toEqual([]);
+		const manifest = await cdp.send('Page.getAppManifest');
+		expect(manifest.errors).toEqual([]);
+		expect(manifest.url).toMatch(/\/studio2\/manifest\.json$/);
+		const m = JSON.parse(manifest.data!);
+		expect(m).toMatchObject({ name: 'Ephemeral Wave Synth 2', start_url: './', scope: './', display: 'standalone' });
+		// Each icon is the size it says
+		for (const icon of m.icons) {
+			expect(await page.evaluate(async (src) => {
+				const img = new Image();
+				img.src = src;
+				await img.decode();
+				return `${img.naturalWidth}x${img.naturalHeight}`;
+			}, icon.src)).toBe(icon.sizes);
+		}
+		// Never the main site or /studio/
+		expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())!.scope))
+			.toBe(new URL('/studio2/', page.url()).href);
+	});
+
+	test("File → Install app… appears while the browser offers to install, and shows the browser's dialog", async ({ page }) => {
+		const fileMenu = page.getByRole('button', { name: 'File ▾' });
+		const install = page.getByRole('menuitem', { name: 'Install app…' });
+		await fileMenu.click();
+		await expect(page.getByRole('menuitem', { name: 'Export audio…' })).toBeVisible();
+		await expect(install).toHaveCount(0); // not offered (yet)
+		await fileMenu.click(); // closes it
+		await expect(page.getByRole('menuitem', { name: 'Export audio…' })).toBeHidden();
+
+		// Chrome offers it (headless Chrome doesn't by itself)
+		await page.evaluate(() => {
+			const w = window as any;
+			w.__installPrompts = 0;
+			const offer = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
+				prompt: async () => { w.__installPrompts++; },
+				userChoice: Promise.resolve({ outcome: 'accepted' }),
+			});
+			window.dispatchEvent(offer);
+			w.__offerPrevented = offer.defaultPrevented; // no mini-infobar: the menu item instead
+		});
+		expect(await page.evaluate(() => (window as any).__offerPrevented)).toBe(true);
+		await fileMenu.click();
+		await install.click();
+		expect(await page.evaluate(() => (window as any).__installPrompts)).toBe(1);
+		await expect(install).toHaveCount(0); // the menu closed
+		await fileMenu.click();
+		await expect(page.getByRole('menuitem', { name: 'Export audio…' })).toBeVisible();
+		await expect(install).toHaveCount(0); // a browser's offer can be used once
+	});
+
+	test('works offline once it has been opened, sound included', async ({ page, context }) => {
+		await workerReady(page);
+		await context.setOffline(true);
+		await page.reload();
+		await expect(pads(page)).toHaveCount(16);
+		await turnOnPads(page, [0]);
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		await expect.poll(() => notesPlayed(page)).toBeGreaterThan(0);
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+		await context.setOffline(false);
+	});
+
+	test('a new version installs in the background and waits for Reload; a half-uploaded deploy is never used', async ({ page }) => {
+		await workerReady(page);
+		// A deploy, staged in the build the test server serves (put back afterwards): a new
+		// index.html, and the sw.js that lists it
+		const swFile = 'dist/sw.js', htmlFile = 'dist/index.html';
+		const sw = readFileSync(swFile, 'utf8'), html = readFileSync(htmlFile, 'utf8');
+		const nextHtml = html.replace('</body>', '<!-- next version --></body>');
+		const sha = (s: string) => createHash('sha256').update(s).digest('hex');
+		const nextSw = sw.replace(/"version": "\w{12}"/, '"version": "000000000002"').replace(sha(html), sha(nextHtml));
+		expect(nextSw).toContain(sha(nextHtml));
+
+		const checkForUpdate = () => page.evaluate(async () => { await (await navigator.serviceWorker.getRegistration())!.update(); });
+		const installing = () => page.evaluate(async () => {
+			const r = (await navigator.serviceWorker.getRegistration())!;
+			return { installing: !!r.installing, waiting: !!r.waiting };
+		});
+		const versions = () => page.evaluate(() => caches.keys());
+		const notice = page.getByRole('region', { name: 'New version' });
+		const before = await versions();
+		try {
+			// The new sw.js is up, but index.html is still the old one: that install fails, and
+			// the app keeps its files
+			writeFileSync(swFile, nextSw);
+			await checkForUpdate();
+			await expect.poll(installing).toEqual({ installing: false, waiting: false });
+			expect(await versions()).toEqual(before);
+			await expect(notice).toHaveCount(0);
+
+			// The upload has finished: the new version installs, then waits to be asked
+			writeFileSync(htmlFile, nextHtml);
+			await checkForUpdate();
+			await expect(notice).toBeVisible();
+			await expect(notice).toContainText('A new version of the app is ready.');
+			expect(await page.content()).not.toContain('next version');
+
+			const reloaded = page.waitForEvent('load');
+			await notice.getByRole('button', { name: 'Reload' }).click();
+			await reloaded;
+			expect(await page.content()).toContain('<!-- next version -->');
+			await expect(pads(page)).toHaveCount(16);
+			await expect(notice).toHaveCount(0);
+			expect(await versions()).toEqual(['ewave-studio2-app-000000000002']); // the old files are gone
+		} finally {
+			writeFileSync(swFile, sw);
+			writeFileSync(htmlFile, html);
+		}
+	});
 });

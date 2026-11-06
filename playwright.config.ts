@@ -15,6 +15,9 @@ export default defineConfig({
 		baseURL: 'http://localhost:4173/studio2/',
 		viewport: { width: 1600, height: 1200 },
 		launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] },
+		// No service worker (build-plugins/serviceWorker.js), so every test loads the build
+		// itself; the PWA tests in e2e/app.spec.ts turn it back on
+		serviceWorkers: 'block',
 	},
 	webServer: {
 		command: 'npm run preview -- --port 4173 --strictPort',

@@ -34,6 +34,8 @@ https://www.ephemeralwave.com/studio/ and is never changed.
   the sound at any note, as one .zip
 - Keyboard shortcuts: Space plays and stops, 1–4 switch the screen view, Ctrl/Cmd+S saves,
   Ctrl/Cmd+Z undoes
+- Install it as an app (Chrome or Edge: the install button in the address bar, or File →
+  Install app…): its own window and icon, and it works offline
 
 ## Running it locally
 
@@ -64,7 +66,8 @@ so `npm run dev` sends no analytics.
 
 Every push to `main` runs the checks (type check, unit and browser tests) and, if they pass,
 uploads the build to `/studio2/` on the website (`.github/workflows/deploy-studio2.yml`). Pull
-requests run the same checks.
+requests run the same checks. Open copies of the app (tabs and installed apps) then show "A new
+version of the app is ready"; Reload switches to it.
 
 ## Working on the code
 
