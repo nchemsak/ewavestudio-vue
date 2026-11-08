@@ -204,6 +204,8 @@ src/lib/random.ts        Seeded random numbers (export stems; tests)
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
+src/lib/padColour.ts     The pads' colours, which the spectrogram uses too (see "Pad and
+                         spectrogram colours")
 src/lib/melody/theory.ts  Keys and scales; moving a pattern to another key or scale (pure)
 src/lib/knobDetents.ts   Knob notches: the drag's travel with a hold at each, and the Tempo and
                          Swing notches (pure; see "Knobs" under Conventions)
@@ -345,6 +347,18 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `FilterModule`, the Pulse tile's `WaveButton` and `SynthStepGrid`. Only components that read
   its fields redraw every frame; `DrumSequencer` itself must never read them in its template,
   or its whole template would re-render 60 times a second.
+
+### Pad and spectrogram colours
+- A lit pad's colour shows its note: blue for the lowest pad pitch (100 Hz) to red for the
+  highest (2 kHz), linear in Hz (`padHue()` in `src/lib/padColour.ts`); its fill height shows
+  its velocity. The screen's spectrogram (F2) draws each frequency in that same colour,
+  brighter when louder (`spectrumColour()`; darker when louder on the light theme's pale
+  screen), so a note shows in its pad's colour; above the pads' range, harmonics go on from
+  red toward magenta. Since PR 41 (the maintainer's call: the spectrogram in the pads'
+  colours, not the reverse). Before, the spectrogram coloured loudness in four colours per
+  theme (`--nac-spec-low/mid/high/peak` in `Screen.vue`, still defined); `SPEC_COLOURS` in
+  `startSpectrogram()` (`DrumSequencer.vue`) switches back to them in one line. A unit test
+  checks the colours; a browser test checks a played A3 is drawn in its pad's blue.
 
 ### MIDI
 - `src/composables/useMidiInput.ts` handles Web MIDI (`navigator.requestMIDIAccess`): access,
@@ -970,7 +984,7 @@ Done:
 | 38 | Knob notches: soft stops at common values (Tempo 90–174 BPM, Swing 8–42 % with the triplet at 33 %, the middle of two-way knobs, a pad's Fine at 0, Noise Color's named colors), each with a tick, where a drag holds for 8 px; a MIDI controller reaches them too (`src/lib/knobDetents.ts`). Plan: the maintainer's brainstorm sorted (Melody Maker, layout project, themes, phone mode, effect switches, patch cables); MIDI latency (measured) and user presets on hold; TV app, FL Studio plugin and Apple's store not now. |
 | 39 | Melody Maker rework: clicking a key moves the pattern there the shorter way round (the same melody) and plays the key; a new scale keeps each note on its degree (minor ↔ major) or goes to the nearest note; one Generate button with a Random / Arpeggio switch (saved), the card the same height in both. `src/lib/melody/theory.ts`. |
 | 40 | Knob stops, refined: the app starts at 120 BPM (most DAWs' default; was 80); Tempo's stops are 60, 90, 100, 120, 140, 160, 174 (128 dropped, 60 added); a drag holds 14 px at a stop (was 8; a MIDI controller keeps the lighter hold); stops show in a colour of their own (mint, green in the light theme): their ticks, and while a knob sits on one its tick and pointer light up, and the Tempo and Swing readouts too. |
-| 41 | Layout C1, picked from mockups (two rounds: three options, then three ways to balance C): the frame fills the window; the logo moves to the top bar; Sounds (the presets) and a new Patterns box side by side in the transport, six built-in patterns from the key's root and a dice (`src/lib/patterns/`); under the steps, Sound (three rows, each filled edge to edge) and Compose end on one line, like a piece of hardware; FM and Unison cards of their own (their tile shows Off / On); Envelope, Pitch and Filter knobs on one line; Pattern Tools' octave arrows up first; cards fit their own width (container queries); under 1200 px, Sound / Effects / Compose tabs under the steps. File → Export file now closes the menu. |
+| 41 | Layout C1, picked from mockups (two rounds: three options, then three ways to balance C): the frame fills the window; the logo moves to the top bar; Sounds (the presets) and a new Patterns box side by side in the transport, six built-in patterns from the key's root and a dice (`src/lib/patterns/`); under the steps, Sound (three rows, each filled edge to edge) and Compose end on one line, like a piece of hardware; FM and Unison cards of their own (their tile shows Off / On); Envelope, Pitch and Filter knobs on one line; Pattern Tools' octave arrows up first; cards fit their own width (container queries); under 1200 px, Sound / Effects / Compose tabs under the steps. File → Export file now closes the menu. The spectrogram draws each note in its pad's colour (`src/lib/padColour.ts`; its own commit, easy to revert). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

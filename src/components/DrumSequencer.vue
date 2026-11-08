@@ -550,6 +550,7 @@ import { applyPreset, soundKey } from '../lib/presets/presets';
 import { randomPreset } from '../lib/presets/random';
 import { PATTERNS } from '../lib/patterns/library';
 import { applyPattern, patternKey } from '../lib/patterns/patterns';
+import { padHue, spectrumColour, spectrumHue } from '../lib/padColour';
 import { randomPattern } from '../lib/patterns/random';
 import {
 	lfoCutoffAt, lfoCutoffSwing, lfoPulseWidthAt, lfoPulseWidthRange, lfoBendAt, lfoBendRange, type LfoView,
@@ -1064,10 +1065,32 @@ function startSpectrogram() {
 	let theme = readTheme();
 	let lastSig = signatureOf(theme);
 
-	const colorFor = (v: number, t = theme) =>
-		v < 64 ? t.low :
-			v < 128 ? t.mid :
-				v < 192 ? t.high : t.peak;
+	// The colours: each frequency in the colour its pad would have, brighter when louder
+	// (src/lib/padColour.ts), so a note shows in its pad's colour. 'loudness' brings back the
+	// theme's four loudness colours (--nac-spec-low/mid/high/peak in Screen.vue).
+	const SPEC_COLOURS = 'note' as 'note' | 'loudness';
+	const binHz = audioCtx.sampleRate / analyser.fftSize;
+	// The theme's screen is light (the light theme): louder notes are darker there
+	const isLightScreen = (bg: string) => {
+		const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg);
+		if (!m) return false;
+		const [r, g, b] = [m[1], m[2], m[3]].map((h) => parseInt(h, 16) / 255);
+		return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5;
+	};
+	// One colour string per hue and level step, made once
+	const noteColours = new Map<string, string>();
+	const colorFor = (v: number, bin: number, t = theme): string => {
+		if (SPEC_COLOURS === 'loudness') return v < 64 ? t.low : v < 128 ? t.mid : v < 192 ? t.high : t.peak;
+		const level = Math.min(255, Math.round(v / 8) * 8);
+		const hz = Math.round(bin * binHz);
+		const key = `${spectrumHue(hz)}|${level}|${t.bg}`;
+		let c = noteColours.get(key);
+		if (!c) {
+			c = spectrumColour(hz, level, isLightScreen(t.bg));
+			noteColours.set(key, c);
+		}
+		return c;
+	};
 
 	function draw() {
 		requestAnimationFrame(draw);
@@ -1130,7 +1153,7 @@ function startSpectrogram() {
 			const v = Math.max(0, freqBins[bin] - floor);
 			if (v < 6) continue;
 
-			ctx.fillStyle = colorFor(v, theme);
+			ctx.fillStyle = colorFor(v, bin, theme);
 			ctx.fillRect(x, y, 1, 1);
 		}
 	}
@@ -2634,9 +2657,9 @@ async function loadAllSamples() {
 	}
 }
 
+// The pads' colour for a pitch, blue→red (src/lib/padColour.ts)
 function hueFor(hz: number, lo = MIN_PAD_HZ, hi = MAX_PAD_HZ) {
-	const t = Math.min(1, Math.max(0, (hz - lo) / (hi - lo)));
-	return Math.round(220 * (1 - t)); // blue→red
+	return padHue(hz, lo, hi);
 }
 
 function getPadStyle(instrument: any, index: number) {

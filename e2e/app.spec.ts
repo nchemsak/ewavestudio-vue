@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { PRESETS } from '../src/lib/presets/library';
 import { PATTERNS } from '../src/lib/patterns/library';
 import { noteHz } from '../src/lib/patterns/patterns';
+import { padHue } from '../src/lib/padColour';
 import { DETENT_HOLD, SWING_DETENTS, TEMPO_DETENTS } from '../src/lib/knobDetents';
 
 // Injected before the app loads. Keeps a handle on the app's AudioContext (__ctx), records
@@ -262,6 +263,51 @@ test('number keys 1–4 switch the screen view, except while typing', async ({ p
 	await name.click();
 	await page.keyboard.type('23');
 	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
+});
+
+test('the spectrogram draws a note in its pad\'s colour', async ({ page }) => {
+	// Every pad on A3 (220 Hz, a blue pad), the default sine
+	await turnOnPads(page, [0, 4, 8, 12]);
+	const padHueNow = await pads(page).nth(0).evaluate((el) => Number(getComputedStyle(el).getPropertyValue('--heat-h')));
+	expect(padHueNow).toBe(padHue(220));
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('2');
+	await expect(screenView(page)).toHaveAttribute('title', 'Spectrogram');
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await page.waitForTimeout(2500);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	// The hues drawn in the lowest fifth of the screen, where the note's fundamental is
+	const hues = await page.locator('.nac-screen__lcd canvas').nth(1).evaluate((c: HTMLCanvasElement) => {
+		const ctx = c.getContext('2d')!;
+		const { data } = ctx.getImageData(0, Math.floor(c.height * 0.8), c.width, Math.floor(c.height * 0.2));
+		// The screen's background: the most common colour of what's been drawn (columns not yet
+		// scrolled in are still transparent)
+		const counts = new Map<number, number>();
+		for (let i = 0; i < data.length; i += 4) {
+			if (data[i + 3] < 255) continue;
+			const k = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
+			counts.set(k, (counts.get(k) ?? 0) + 1);
+		}
+		const bgKey = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+		const bg = [bgKey >> 16, (bgKey >> 8) & 255, bgKey & 255];
+		const out: number[] = [];
+		for (let i = 0; i < data.length; i += 4) {
+			if (data[i + 3] < 255) continue;
+			if (Math.abs(data[i] - bg[0]) + Math.abs(data[i + 1] - bg[1]) + Math.abs(data[i + 2] - bg[2]) < 40) continue;
+			const [r, g, b] = [data[i] / 255, data[i + 1] / 255, data[i + 2] / 255];
+			const max = Math.max(r, g, b), min = Math.min(r, g, b);
+			if (max - min < 0.15) continue; // greys
+			const d = max - min;
+			let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+			h = Math.round(h * 60);
+			out.push(h < 0 ? h + 360 : h);
+		}
+		return out;
+	});
+	expect(hues.length, 'the note is drawn').toBeGreaterThan(20);
+	// Most of what's drawn there is the pad's blue (hue 206), give or take rounding
+	const near = hues.filter((h) => Math.abs(h - padHue(220)) <= 12).length;
+	expect(near / hues.length).toBeGreaterThan(0.6);
 });
 
 test('knobs work from the keyboard, and turning Attack shows the envelope until focus moves on', async ({ page }) => {
