@@ -9,16 +9,16 @@
                         <div v-for="k in NATURALS" :key="k.n" class="kb-cell" :class="{ 'has-sharp': k.hasSharp }">
                             <!-- White key -->
                             <button type="button" class="kb-white" :class="{ 'is-active': keyRoot === k.n }"
-                                role="radio" :aria-checked="keyRoot === k.n ? 'true' : 'false'" @click="keyRoot = k.n"
-                                :title="`Set key: ${k.n}`">
+                                role="radio" :aria-checked="keyRoot === k.n ? 'true' : 'false'" @click="chooseKey(k.n)"
+                                :title="keyTitle(k.n)">
                                 <span class="wlabel">{{ k.n }}</span>
                             </button>
 
                             <!-- Black key -->
                             <button v-if="k.hasSharp && k.sharp" type="button" class="kb-black"
                                 :class="{ 'is-active': keyRoot === k.sharp }" role="radio"
-                                :aria-checked="keyRoot === k.sharp ? 'true' : 'false'" @click="keyRoot = k.sharp"
-                                :title="`Set key: ${k.sharp}`">
+                                :aria-checked="keyRoot === k.sharp ? 'true' : 'false'" @click="chooseKey(k.sharp)"
+                                :title="keyTitle(k.sharp)">
                                 <span class="blabel">{{ k.sharp }}</span>
                             </button>
                         </div>
@@ -29,7 +29,8 @@
             <div class="mm-head-row2">
                 <label class="mm-field">
                     <span class="mm-label">Scale / Mode</span>
-                    <PtSelect v-model="keyScale" :options="scaleOptions" aria-label="Scale" />
+                    <PtSelect :modelValue="keyScale" @update:modelValue="chooseScale" :options="scaleOptions"
+                        aria-label="Scale" />
                 </label>
 
                 <label class="mm-field">
@@ -40,16 +41,20 @@
 
             <div class="mm-hint">{{ poolSummary }}</div>
 
-            <div class="mm-primary">
-                <button class="mm-btn mm-primary-btn melody-btn" @click="smartGenerate()">
-                    Generate melody
-                </button>
-            </div>
-
-            <!-- ARPEGGIATOR GRID  -->
+            <!-- What Generate makes: random notes, or an arpeggio (its settings below). Both
+                 sit in the same place, the one not chosen hidden, so the card keeps its height
+                 and the columns around it don't move. -->
             <div class="mm-group">
-                <h2 class="pt-title" style="padding-bottom: 15px;">Arpeggio</h2>
-                <div class="mm-grid">
+                <div class="pt-seg pt-seg-sm mm-mode" role="group" aria-label="Generate">
+                    <button type="button" class="pt-seg-btn" :class="{ 'is-active': mode === 'random' }"
+                        :aria-pressed="mode === 'random'" @click="mode = 'random'">Random</button>
+                    <button type="button" class="pt-seg-btn" :class="{ 'is-active': mode === 'arp' }"
+                        :aria-pressed="mode === 'arp'" @click="mode = 'arp'">Arpeggio</button>
+                </div>
+
+                <div class="mm-mode-body">
+                <p class="mm-mode-note" :class="{ 'is-hidden': mode !== 'random' }">{{ randomNote }}</p>
+                <div class="mm-grid" :class="{ 'is-hidden': mode !== 'arp' }">
                     <label class="mm-field">
                         <span class="mm-label">Pattern</span>
                         <PtSelect v-model="arpPattern" :options="arpPatternOptions" aria-label="Arp pattern" />
@@ -70,10 +75,10 @@
                         <PtSelect v-model="arpTones" :options="arpToneOptions" aria-label="Arp tones" />
                     </label>
                 </div>
+                </div>
+
                 <div class="mm-primary">
-                    <button class="mm-btn mm-primary-btn arp-btn" @click="bakeArp()">
-                        Generate arpeggio
-                    </button>
+                    <button class="mm-btn mm-primary-btn melody-btn" @click="generate()">Generate</button>
                 </div>
             </div>
 
@@ -138,6 +143,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, defineExpose } from 'vue';
 import PtSelect from './PtSelect.vue';
+import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
 
 const props = defineProps<{
     frequencies?: number[];
@@ -163,6 +169,7 @@ const props = defineProps<{
     initialArpRate?: '1/4' | '1/8' | '1/16';
     initialArpOctaves?: 1 | 2 | 3;
     initialArpTones?: 'chord' | 'scale';
+    initialMode?: 'random' | 'arp';
 }>();
 
 /*  Defaults  */
@@ -190,21 +197,15 @@ const emit = defineEmits<{
     (e: 'arp-rate-change', v: '1/4' | '1/8' | '1/16'): void;
     (e: 'arp-octaves-change', v: 1 | 2 | 3): void;
     (e: 'arp-tones-change', v: 'chord' | 'scale'): void;
+    (e: 'mode-change', v: 'random' | 'arp'): void;
+    // Someone picked a key or a scale (not a project loading): the pads follow it
+    (e: 'key-chosen', root: RootNote): void;
+    (e: 'scale-chosen', change: { from: KeyScale; to: KeyScale }): void;
 }>();
 
-/*  Theory  */
-const ROOTS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+/*  Theory (src/lib/melody/theory.ts)  */
 type RootNote = typeof ROOTS[number];
-
-const SCALES: Record<string, number[]> = {
-    major: [0, 2, 4, 5, 7, 9, 11],
-    naturalMinor: [0, 2, 3, 5, 7, 8, 10],
-    pentMajor: [0, 2, 4, 7, 9],
-    pentMinor: [0, 3, 5, 7, 10],
-    dorian: [0, 2, 3, 5, 7, 9, 10],
-    lydian: [0, 2, 4, 6, 7, 9, 11],
-    mixolydian: [0, 2, 4, 5, 7, 9, 10]
-};
+const SCALE_STEPS: Record<string, readonly number[]> = SCALES;
 
 const SCALE_LABELS: Record<string, string> = {
     major: 'Major',
@@ -268,26 +269,6 @@ watch(
     { immediate: true }
 );
 
-const NOTE_TO_SEMITONE: Record<string, number> = {
-    C: 0,
-    'C#': 1,
-    Db: 1,
-    D: 2,
-    'D#': 3,
-    Eb: 3,
-    E: 4,
-    F: 5,
-    'F#': 6,
-    Gb: 6,
-    G: 7,
-    'G#': 8,
-    Ab: 8,
-    A: 9,
-    'A#': 10,
-    Bb: 10,
-    B: 11
-};
-
 const midiToFreq = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 const freqToMidi = (f: number) =>
     Math.round(69 + 12 * Math.log2(f / 440));
@@ -300,7 +281,7 @@ function buildCandidateMidiPool(
     fMin: number,
     fMax: number
 ) {
-    const steps = SCALES[scaleName] ?? SCALES.major;
+    const steps = SCALE_STEPS[scaleName] ?? SCALES.major;
     const rootSemi = NOTE_TO_SEMITONE[root] ?? 0;
     const pool: number[] = [];
     const lo = Math.min(minOct, maxOct);
@@ -413,6 +394,35 @@ watch(
     }
 );
 
+// A key or scale picked here: the parent moves the pads (key-chosen, scale-chosen) and plays
+// the key; a project loading sets keyRoot and keyScale through the initial-* props instead
+function chooseKey(root: RootNote | undefined) {
+    if (!root) return;
+    emit('key-chosen', root);
+    keyRoot.value = root;
+}
+function chooseScale(v: string | number) {
+    const to = v as KeyScale;
+    if (to === keyScale.value) return;
+    emit('scale-chosen', { from: keyScale.value, to });
+    keyScale.value = to;
+}
+const keyTitle = (root: string) => (root === keyRoot.value
+    ? `${root}: the key now (click to hear it)`
+    : `Key of ${root}: moves the pattern to ${root}, and plays it`);
+
+// What Generate makes, saved with the project like the arpeggio's settings
+const mode = ref<'random' | 'arp'>(props.initialMode ?? 'random');
+watch(mode, (v) => emit('mode-change', v));
+watch(() => props.initialMode, (v) => { if (v) mode.value = v; });
+const randomNote = computed(() => (keyScale.value === 'none'
+    ? `No scale chosen: every pad gets ${keyRoot.value}, in the range's octaves. Pick a scale for a melody.`
+    : 'Random notes from the scale and range above; the first pad that\'s on gets the key.'));
+function generate() {
+    if (mode.value === 'arp') bakeArp();
+    else smartGenerate();
+}
+
 // RNG helpers
 function makeRng(s: number) {
     return () => {
@@ -517,7 +527,7 @@ function smartGenerate(): void {
     ).sort((a, b) => a - b);
     if (!pool.length) return;
 
-    const stepsArr = SCALES[keyScale.value] ?? SCALES.major;
+    const stepsArr = SCALE_STEPS[keyScale.value] ?? SCALES.major;
     const rootSemi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
 
     const tonicSemi = (rootSemi + stepsArr[0]) % 12;
@@ -703,7 +713,7 @@ function bakeArp(): void {
     ).sort((a, b) => a - b);
     if (!pool.length) return;
 
-    const stepsArr = SCALES[keyScale.value] ?? SCALES.major;
+    const stepsArr = SCALE_STEPS[keyScale.value] ?? SCALES.major;
     const rootSemi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
     const center = pool[Math.floor(pool.length / 2)];
 
@@ -985,6 +995,7 @@ type UiSnapshot = {
     arpRate: '1/4' | '1/8' | '1/16';
     arpOctaves: 1 | 2 | 3;
     arpTones: 'chord' | 'scale';
+    mode: 'random' | 'arp';
 };
 
 function getUi(): UiSnapshot {
@@ -995,7 +1006,8 @@ function getUi(): UiSnapshot {
         arpPattern: arpPattern.value,
         arpRate: arpRate.value,
         arpOctaves: arpOctaves.value,
-        arpTones: arpTones.value
+        arpTones: arpTones.value,
+        mode: mode.value
     };
 }
 
@@ -1008,6 +1020,7 @@ function setUi(u: Partial<UiSnapshot>) {
     if (u.arpRate) arpRate.value = u.arpRate;
     if (u.arpOctaves) arpOctaves.value = clampArpOctaves(u.arpOctaves);
     if (u.arpTones) arpTones.value = u.arpTones;
+    if (u.mode) mode.value = u.mode;
 }
 
 defineExpose({ openAdvanced, getUi, setUi });
@@ -1094,6 +1107,38 @@ defineExpose({ openAdvanced, getUi, setUi });
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
+}
+
+.mm-mode {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.mm-mode .pt-seg-btn {
+    flex: 1 1 0;
+}
+
+/* Random's note and the arpeggio's settings share one place: as tall as the taller, the one
+   not chosen hidden (and out of the Tab order and screen readers) */
+.mm-mode-body {
+    display: grid;
+}
+
+.mm-mode-body > * {
+    grid-area: 1 / 1;
+}
+
+.mm-mode-body > .is-hidden {
+    visibility: hidden;
+}
+
+.mm-mode-note {
+    margin: 0;
+    align-self: center;
+    color: var(--pt-muted);
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
 }
 
 .mm-menu {

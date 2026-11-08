@@ -79,7 +79,7 @@ export function makeState(maxVoices = 6): ProjectState {
 		instruments,
 		melody: reactive({
 			keyRoot: 'C', keyScale: 'major', rangePreset: 'low', arpPattern: 'down', arpRate: '1/4',
-			arpOctaves: 3, arpTones: 'scale',
+			arpOctaves: 3, arpTones: 'scale', mode: 'random',
 		}),
 		selectedWaveform: ref<Wave>('square'),
 		setStepLength: () => {
@@ -127,6 +127,7 @@ export function changeEverything(st: ProjectState) {
 	fx.reverb.enabled.value = true; fx.reverb.mix.value = 0.5; fx.reverb.decay.value = 3; fx.reverb.tone.value = 0.2;
 	Object.assign(st.melody, {
 		keyRoot: 'D', keyScale: 'dorian', rangePreset: 'high', arpPattern: 'updown', arpRate: '1/8', arpOctaves: 2, arpTones: 'scale',
+		mode: 'arp',
 	});
 	st.selectedWaveform.value = 'sawtooth';
 	const synth = st.instruments.value.find(i => i.name === 'synth-voice')!;

@@ -366,6 +366,7 @@ test('the step pads are one Tab stop: arrows move, Enter switches a pad, Space s
 
 test("saves a project, restores it after a reload, and keeps it in /studio2/'s own storage", async ({ page }) => {
 	await turnOnPads(page, [0, 5, 10]);
+	await page.getByRole('button', { name: 'Arpeggio', exact: true }).click();
 	await page.getByRole('button', { name: 'Arp pattern' }).click();
 	await page.getByRole('option', { name: 'Down', exact: true }).click();
 	await page.getByRole('button', { name: 'Arp rate' }).click();
@@ -400,6 +401,7 @@ test("saves a project, restores it after a reload, and keeps it in /studio2/'s o
 	await expect(pads(page)).toHaveCount(16);
 	await expect(name).toHaveValue('E2E Song');
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(3);
+	await expect(page.getByRole('button', { name: 'Arpeggio', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.getByRole('button', { name: 'Arp pattern' })).toContainText('Down');
 	await expect(page.getByRole('button', { name: 'Arp rate' })).toContainText('1/8');
 });
@@ -1194,7 +1196,7 @@ test('starting new projects does not leave old keyboard listeners behind', async
 		await chooseFromFileMenu(page, 'New');
 		// The menu closes once the new project has been created
 		await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
-		await expect(page.getByRole('button', { name: 'Arp pattern' })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Generate', exact: true })).toBeVisible();
 	}
 	await page.waitForTimeout(500);
 	expect(await listeners()).toBe(start);
@@ -2202,4 +2204,116 @@ test('knob notches: a two-way knob holds at its middle; a MIDI controller can re
 	});
 	for (const notch of [90, 100, 120, 128, 140, 160, 174]) expect(reached).toContain(notch);
 	expect(reached.at(-1)).toBe(300);
+});
+
+// --- Melody Maker --------------------------------------------------------------------------------
+
+// The note on each of these pads (they must be on): "C4", "D#4", ...
+const padNotes = (page: Page, indexes: number[]) => Promise.all(indexes.map(async (i) =>
+	((await pads(page).nth(i).getAttribute('aria-label')) ?? '').replace(/^Step \d+, /, '').split(',')[0]));
+const NOTE_INDEX: Record<string, number> = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
+const noteMidi = (name: string) => {
+	const m = /^([A-G][#b]?)(-?\d+)$/.exec(name)!;
+	return (Number(m[2]) + 1) * 12 + NOTE_INDEX[m[1]];
+};
+const keyButton = (page: Page, key: string) => page.locator('.mm-kb').getByRole('radio', { name: key, exact: true });
+
+async function chooseOption(page: Page, select: string, option: string) {
+	await page.getByRole('button', { name: select }).click();
+	await page.getByRole('option', { name: option, exact: true }).click();
+}
+
+test('Melody Maker: clicking a key moves the pattern there, the shorter way, plays it, and is one undo step', async ({ page }) => {
+	const on = [0, 4, 8, 12];
+	await turnOnPads(page, on);
+	expect(await padNotes(page, on)).toEqual(['A3', 'A3', 'A3', 'A3']);
+	await page.waitForTimeout(600); // let the undo history note the starting pattern
+
+	const before = await notesPlayed(page);
+	await keyButton(page, 'C').click();
+	await expect(keyButton(page, 'C')).toHaveAttribute('aria-checked', 'true');
+	expect(await padNotes(page, on)).toEqual(['C4', 'C4', 'C4', 'C4']); // A → C: up 3, not down 9
+	await expect.poll(() => notesPlayed(page)).toBeGreaterThan(before); // and the key sounded
+
+	await page.waitForTimeout(600);
+	await keyButton(page, 'G').click();
+	expect(await padNotes(page, on)).toEqual(['G3', 'G3', 'G3', 'G3']); // C → G: down 5, not up 7
+	// Pads that are off moved with the rest (G3 is 196 Hz)
+	const pitches = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'))
+		.data.instruments.find((i: any) => i.name === 'synth-voice').pitches as number[];
+	for (const hz of pitches) expect(hz).toBeCloseTo(196, 1);
+
+	// Undo goes back to C, pads and key together
+	await page.waitForTimeout(600);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(keyButton(page, 'C')).toHaveAttribute('aria-checked', 'true');
+	expect(await padNotes(page, on)).toEqual(['C4', 'C4', 'C4', 'C4']);
+});
+
+test('Melody Maker: a new scale keeps each note on its degree; a project opening keeps its notes', async ({ page }) => {
+	const on = [0, 1, 2, 3, 4, 5, 6, 7];
+	await turnOnPads(page, on);
+	await keyButton(page, 'C').click();
+	await chooseOption(page, 'Scale', 'Minor');
+	// An arpeggio up the C minor scale: C D Eb F G Ab Bb C
+	await page.getByRole('button', { name: 'Arpeggio', exact: true }).click();
+	await chooseOption(page, 'Arp tones', 'Scale');
+	await page.getByRole('button', { name: 'Generate', exact: true }).click();
+	const minor = (await padNotes(page, on)).map(noteMidi);
+	expect(minor.map((m) => (m - minor[0] + 120) % 12)).toEqual([0, 2, 3, 5, 7, 8, 10, 0]);
+
+	// Major: the third, sixth and seventh go up a semitone, nothing else moves
+	await chooseOption(page, 'Scale', 'Major');
+	const major = (await padNotes(page, on)).map(noteMidi);
+	expect(major.map((m, i) => m - minor[i])).toEqual([0, 0, 1, 0, 0, 1, 1, 0]);
+	// Back to minor: as it was
+	await chooseOption(page, 'Scale', 'Minor');
+	expect((await padNotes(page, on)).map(noteMidi)).toEqual(minor);
+	// "None" moves nothing
+	await chooseOption(page, 'Scale', 'None');
+	expect((await padNotes(page, on)).map(noteMidi)).toEqual(minor);
+
+	// A project opening brings its own notes and key: they aren't moved again
+	await chooseOption(page, 'Scale', 'Minor');
+	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	await keyButton(page, 'E').click();
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'Minor.json', mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify({ ...project, projectId: 'minor', meta: { name: 'Minor' } })),
+	});
+	await expect(page.getByRole('textbox', { name: 'Project name' })).toHaveValue('Minor');
+	await expect(keyButton(page, 'C')).toHaveAttribute('aria-checked', 'true');
+	expect((await padNotes(page, on)).map(noteMidi)).toEqual(minor);
+});
+
+test('Melody Maker: one Generate button, Random or Arpeggio, the card keeps its height, the choice is saved', async ({ page }) => {
+	const generate = page.getByRole('button', { name: /^Generate/ });
+	await expect(generate).toHaveCount(1);
+	await expect(generate).toHaveText('Generate');
+	const mode = page.getByRole('group', { name: 'Generate' });
+	const random = mode.getByRole('button', { name: 'Random', exact: true });
+	const arp = mode.getByRole('button', { name: 'Arpeggio', exact: true });
+	await expect(random).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.getByRole('button', { name: 'Arp pattern' })).toBeHidden();
+	await expect(page.locator('.mm-mode-note')).toContainText('No scale chosen: every pad gets A');
+	const card = page.locator('.module.melody');
+	const height = (await card.boundingBox())!.height;
+
+	await arp.click();
+	await expect(page.getByRole('button', { name: 'Arp pattern' })).toBeVisible();
+	await expect(page.locator('.mm-mode-note')).toBeHidden();
+	expect((await card.boundingBox())!.height).toBe(height);
+
+	// Generate makes an arpeggio now: up the A major chord (no scale: major) from A
+	const on = [0, 1, 2, 3];
+	await turnOnPads(page, on);
+	await generate.click();
+	const notes = (await padNotes(page, on)).map(noteMidi);
+	expect(notes.map((m) => (m - notes[0] + 120) % 12)).toEqual([0, 4, 7, 0]);
+
+	// Saved with the project; File → New goes back to Random
+	expect(JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.melody.mode).toBe('arp');
+	await chooseFromFileMenu(page, 'New');
+	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
+	await expect(random).toHaveAttribute('aria-pressed', 'true');
 });

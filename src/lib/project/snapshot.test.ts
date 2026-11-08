@@ -38,6 +38,7 @@ describe('factory defaults (File → New)', () => {
 		});
 		expect(snap.melody).toEqual({
 			keyRoot: 'A', keyScale: 'none', rangePreset: 'wide', arpPattern: 'up', arpRate: '1/16', arpOctaves: 1, arpTones: 'chord',
+			mode: 'random',
 		});
 		expect(snap.selectedWaveform).toBe('sine');
 		expect(snap.ui).toEqual({ currentTheme: '', stepLength: STEPS, collapsibleState: {}, seqOpen: false });

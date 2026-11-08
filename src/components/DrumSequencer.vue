@@ -181,8 +181,11 @@
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
-							:initial-arp-tones="melodyUi.arpTones" @update:frequencies="padFrequencies = $event"
+							:initial-arp-tones="melodyUi.arpTones" :initial-mode="melodyUi.mode"
+							@update:frequencies="padFrequencies = $event"
 							@octave-shift="octaveShiftAllSkip($event)"
+							@key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
+							@mode-change="(v) => { melodyUi.mode = v }"
 							@key-root-change="(r) => { onKeyRootChange(r); melodyUi.keyRoot = r as any; }"
 							@key-scale-change="(s) => { melodyUi.keyScale = s as any }"
 							@range-preset-change="(p) => { melodyUi.rangePreset = p as any }"
@@ -471,6 +474,7 @@ import Knob from './Knob.vue';
 import DelayEffect from './modules/DelayEffect.vue';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, followDelaySync } from '../lib/delaySync';
 import { TEMPO_DETENTS, SWING_DETENTS, TRIPLET_SWING } from '../lib/knobDetents';
+import { shortestInterval, transposePitches, remapScale, nearestRootHz, patternCenterHz } from '../lib/melody/theory';
 import DriveEffect from './modules/DriveEffect.vue';
 import UnisonEffect from './modules/UnisonEffect.vue';
 import LFOGroup from './modules/LFOGroup.vue';
@@ -592,6 +596,7 @@ const melodyUi = reactive<MelodyUi>({
 	arpRate: '1/16',
 	arpOctaves: 1,
 	arpTones: 'chord',
+	mode: 'random',
 });
 
 function setStepLength() {
@@ -1649,20 +1654,43 @@ function onPatternOctaveShift(payload: number | { delta: number; onlyActive?: bo
 	octaveShiftAllSkip(delta, { onlyActive });
 }
 
-// Called when PatternTools reports a new key root
+// The Melody Maker's key, whoever set it (a click, a project loading, undo). The pads only
+// move when someone picks a key (onKeyChosen); loading or undoing brings its own pads.
 function onKeyRootChange(root: typeof selectedKeyRoot.value) {
-	const inst = synthInstrument.value;
-	if (!inst) { selectedKeyRoot.value = root; return; }
-
-	const oldBaseline = currentDefaultHz.value;
 	selectedKeyRoot.value = root;
-	const newBaseline = currentDefaultHz.value;
+}
 
-	const EPS = 0.5; // Hz
+// Someone clicked a key on the Melody Maker's keyboard: the pattern moves to it, the shorter
+// way round (the same melody, src/lib/melody/theory.ts), and the key plays
+function onKeyChosen(root: typeof selectedKeyRoot.value) {
+	const inst = synthInstrument.value;
+	const semitones = shortestInterval(selectedKeyRoot.value, root);
+	if (inst && semitones) inst.pitches = transposePitches(inst.pitches, semitones, MIN_PAD_HZ, MAX_PAD_HZ);
+	selectedKeyRoot.value = root;
+	melodyUi.keyRoot = root;
+	if (inst) auditionNote(nearestRootHz(root, patternCenterHz(inst.pitches, inst.steps)));
+}
 
-	inst.pitches = inst.pitches.map((hz, i) =>
-		(!inst.steps[i] && Math.abs(hz - oldBaseline) <= EPS) ? newBaseline : hz
-	);
+// Someone picked a scale: each pad keeps its place in the scale (or goes to the nearest note
+// of the new one); to "None", nothing moves
+function onScaleChosen({ from, to }: { from: MelodyUi['keyScale']; to: MelodyUi['keyScale'] }) {
+	const inst = synthInstrument.value;
+	if (inst) inst.pitches = remapScale(inst.pitches, selectedKeyRoot.value, from, to, MIN_PAD_HZ, MAX_PAD_HZ);
+	melodyUi.keyScale = to;
+}
+
+// One note of the synth lane's sound, now, as a MIDI key would play it (not while the lane is
+// muted). The click that asks for it lets audio start.
+function auditionNote(hz: number) {
+	const inst = synthInstrument.value;
+	if (!inst || inst.muted) return;
+	const play = () => {
+		startLfoIfNeeded();
+		playSynthNote(hz, Math.min(1, 0.8 * (inst.channelVolume ?? 1)), synthDecay.value, audioCtx.currentTime + 0.003,
+			selectedWaveform.value, { addNoise: true, vel: 0.8 });
+	};
+	if (audioCtx.state === 'running') play();
+	else audioCtx.resume().then(play, () => { });
 }
 
 // Pad pitch and volume sliders
