@@ -38,7 +38,8 @@
 									@mousedown.prevent="startTempoRepeat(-1)" @touchstart.prevent="startTempoRepeat(-1)"
 									@mouseup.prevent="stopTempoRepeat" @mouseleave="stopTempoRepeat">−</button>
 
-								<div class="stepper-value" aria-live="polite" :title="`${tempo} BPM`">{{ tempo }}</div>
+								<div class="stepper-value" :class="{ 'on-stop': TEMPO_DETENTS.includes(tempo) }" aria-live="polite"
+									:title="`${tempo} BPM`">{{ tempo }}</div>
 
 								<button class="stepper-btn" type="button" title="Tempo +1"
 									@mousedown.prevent="startTempoRepeat(1)" @touchstart.prevent="startTempoRepeat(1)"
@@ -51,7 +52,8 @@
 							<Knob midi-id="transport.swing" v-model="swing" label="Swing" :value-text="swingText" :min="0" :max="0.5" :step="0.01" size="medium"
 								:detents="SWING_DETENTS"
 								:useThemeArc="true" @knobStart="activeKnob = 'swing'" @knobEnd="activeKnob = null" />
-							<div class="stepper-value" aria-live="polite" :title="`${swingText} swing`">
+							<div class="stepper-value" :class="{ 'on-stop': SWING_DETENTS.includes(swing) }" aria-live="polite"
+								:title="`${swingText} swing`">
 								{{ Math.round(swing * 100) }}%
 							</div>
 						</div>
@@ -472,7 +474,7 @@
 import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 import Knob from './Knob.vue';
 import DelayEffect from './modules/DelayEffect.vue';
-import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, followDelaySync } from '../lib/delaySync';
+import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, DEFAULT_TEMPO, followDelaySync } from '../lib/delaySync';
 import { TEMPO_DETENTS, SWING_DETENTS, TRIPLET_SWING } from '../lib/knobDetents';
 import { shortestInterval, transposePitches, remapScale, nearestRootHz, patternCenterHz } from '../lib/melody/theory';
 import DriveEffect from './modules/DriveEffect.vue';
@@ -1328,7 +1330,7 @@ const padSettings = reactive({
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 const volume = ref(0.75);
-const tempo = ref(80);
+const tempo = ref(DEFAULT_TEMPO);
 const swing = ref(0);
 // The Swing knob's readout; its notch at 33 % is a triplet feel (src/lib/knobDetents.ts)
 const swingText = computed(() => `${Math.round(swing.value * 100)}%${Math.abs(swing.value - TRIPLET_SWING) < 1e-9 ? ' (triplet)' : ''}`);
@@ -3599,6 +3601,13 @@ function rollRandomSound() {
 .knob-wrap .stepper-value {
 	font-variant-numeric: tabular-nums;
 	min-width: 42px;
+}
+
+/* The Tempo or Swing knob sits on one of its notches (src/lib/knobDetents.ts) */
+.stepper-value.on-stop {
+	color: var(--knob-detent-on, #5effb0);
+	border-color: var(--knob-detent, rgba(94, 255, 176, 0.65));
+	box-shadow: 0 0 8px var(--knob-detent, rgba(94, 255, 176, 0.65));
 }
 
 .module.pitch :deep(.knob-group.pitch-col) {

@@ -9,7 +9,7 @@ import { STEPS, makeState, fresh, asSaved, changeEverything, leaves } from './te
 describe('factory defaults (File → New)', () => {
 	it('sets every saved setting to its default', () => {
 		const snap = asSaved(fresh());
-		expect(snap.transport).toEqual({ volume: 0.75, tempo: 80, swing: 0 });
+		expect(snap.transport).toEqual({ volume: 0.75, tempo: 120, swing: 0 });
 		expect(snap.synth).toEqual({
 			envelope: { enabled: true, attackMs: 20, decayMs: 400 },
 			filter: { enabled: true, cutoff: 5000, resonance: 0.5, envAmount: 0, envDecayMs: 200 },
@@ -30,7 +30,7 @@ describe('factory defaults (File → New)', () => {
 		});
 		expect(snap.fx).toEqual({
 			delay: {
-				enabled: false, sync: true, division: '1/8.', time: 0.5625, feedback: 0.3, mix: 0.3,
+				enabled: false, sync: true, division: '1/8.', time: 0.375, feedback: 0.3, mix: 0.3,
 				toneEnabled: true, toneHz: 5000, toneType: 'lowpass',
 			},
 			drive: { enabled: false, type: 'overdrive', amount: 0.4, tone: 5000, mix: 0.5 },

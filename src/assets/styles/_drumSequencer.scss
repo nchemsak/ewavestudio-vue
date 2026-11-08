@@ -28,6 +28,9 @@
 	--knob-pointer: #c078ff;
 	/* The LFO visualizer's marks (Cutoff knob, Pulse tile, step pads): apart from the knob arcs */
 	--lfo-mod: #ffc53d;
+	/* Knob notches (Knob.vue's detents): their ticks, and a knob sitting on one */
+	--knob-detent: rgba(94, 255, 176, 0.65);
+	--knob-detent-on: #5effb0;
 	--knob-track: #444;
 	--knob-track-disabled: #333;
 	--knob-arc-disabled: #555;
@@ -271,6 +274,8 @@
 	--knob-marker: rgba(79, 163, 255, 0.55);
 	--knob-marker-active: #cfe2ff;
 	--lfo-mod: #e08a00; /* darker, to show on white */
+	--knob-detent: rgba(0, 150, 90, 0.6);
+	--knob-detent-on: #009a5e;
 
 	--pad-bg: #eef1f6;
 	--pad-tint: #7c4dff;
