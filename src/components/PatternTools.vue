@@ -32,8 +32,8 @@
 			<section class="pt-section">
 				<div class="pt-section-title">Octave</div>
 				<div class="pt-btn-group pt-btn-octave" role="group" aria-label="Octave">
-					<button class="pt-btn octave-btn" @click="shiftOctave(-1)">↓</button>
-					<button class="pt-btn octave-btn" @click="shiftOctave(+1)">↑</button>
+					<button class="pt-btn octave-btn" aria-label="Octave up" @click="shiftOctave(+1)">↑</button>
+					<button class="pt-btn octave-btn" aria-label="Octave down" @click="shiftOctave(-1)">↓</button>
 				</div>
 				<div class="pt-inline">
 					<label class="pt-inline-check">
@@ -154,53 +154,72 @@ function shapeReset(): void {
 </script>
 
 <style scoped>
+/* The card's width decides the layout (container queries), not the window's */
 .pattern-tools {
 	max-width: none;
+	container: pattern-tools / inline-size;
 }
 
+/* Three sections side by side, the same height, two buttons across */
 .pt-tools-grid {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 12px;
+	gap: 10px;
+	align-items: stretch;
 }
 
-@media (max-width: 720px) {
-	.pt-tools-grid {
-		grid-template-columns: 1fr;
-	}
+.pt-section {
+	display: flex;
+	flex-direction: column;
+	padding-bottom: 10px;
+	background-color: var(--pt-inset);
+	border-radius: var(--pt-radius);
+}
 
-	.pattern-tools .pt-btn-group {
-		justify-content: space-evenly;
-	}
+.pt-section-title {
+	text-align: center;
 }
 
 .pt-btn-group {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 10px;
-	justify-content: space-between;
-
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px 6px;
+	padding: 0 6px;
 }
 
 .pt-btn {
 	min-height: auto;
 	line-height: 1;
 	font-size: 0.65rem;
-	width: 56px;
-	padding: 4px;
+	width: 100%;
+	padding: 4px 2px;
+	white-space: nowrap;
+}
+
+/* Octave: up, then down, side by side */
+.pt-btn-octave {
+	display: flex;
+	flex-wrap: nowrap;
+	justify-content: center;
+	gap: 8px;
 }
 
 .octave-btn {
-	height: 50px;
-	font-size: 30px;
+	width: 42px;
+	height: 44px;
+	padding: 0;
+	font-size: 22px;
 }
 
 .pt-inline {
 	display: block;
-	margin-top: 12px;
+	margin-top: auto;
+	padding: 8px 4px 0;
+	text-align: center;
 	color: var(--pt-muted);
-	font-size: 0.7rem;
+	font-size: 0.64rem;
 	line-height: normal;
+	white-space: nowrap;
 }
 
 .pt-inline-check {
@@ -209,44 +228,19 @@ function shapeReset(): void {
 	gap: 6px;
 }
 
-.pt-section-title {
-	text-align: center;
-}
+/* A narrow card (phones): the sections one under another, three buttons across */
+@container pattern-tools (max-width: 340px) {
+	.pt-tools-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
 
-.pt-section {
-	background-color: var(--pt-inset);
-	border-radius: var(--pt-radius);
+	.pt-btn-group {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 8px 10px;
+	}
 
-}
-
-@media (max-width: 720px) {
 	.pt-inline {
 		display: none;
 	}
-
-	.pt-tools-grid {
-		grid-template-columns: 1fr;
-	}
-
-	/* Step Fills / Humanize: 2 rows of 3 */
-	.pattern-tools .pt-btn-grid-6 {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 8px 10px;
-		justify-content: stretch;
-	}
-
-	.pattern-tools .pt-btn-grid-6 .pt-btn {
-		width: 100%;
-	}
-
-	/* Octave: keep just 2 buttons, centered, not stretched */
-	.pattern-tools .pt-btn-octave {
-		display: flex;
-		justify-content: center;
-		gap: 12px;
-	}
-
 }
-
 </style>

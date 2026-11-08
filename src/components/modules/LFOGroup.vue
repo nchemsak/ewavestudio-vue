@@ -390,9 +390,9 @@ function wavePath(w: Wave | string): string {
     gap: 12px;
 }
 
-/* A narrow card (1280 px windows, phones) has no room for the Wave / Target captions; the
-   switches keep their accessible names */
-@container lfo (max-width: 352px) {
+/* A narrow card (beside Noise in the Sound section, phones) has no room for the Wave / Target
+   captions; the switches keep their accessible names */
+@container lfo (max-width: 440px) {
     .lfo-switch-label {
         display: none;
     }

@@ -41,7 +41,7 @@
             </g>
         </svg>
 
-        <span class="wave-label">{{ label }}</span>
+        <span class="wave-label">{{ showState ? (modelValue ? 'On' : 'Off') : label }}</span>
     </button>
 </template>
 
@@ -51,6 +51,8 @@ import { computed, ref, watch } from 'vue';
 const props = defineProps({
     modelValue: { type: Boolean, default: false },
     label: { type: String, default: 'FM' },
+    // Show On / Off under the icon instead of the name (the card's title names it, as the LFO's tile does)
+    showState: { type: Boolean, default: false },
     disabled: { type: Boolean, default: false },
     palette: {
         type: Array,

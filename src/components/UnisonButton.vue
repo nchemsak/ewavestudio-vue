@@ -5,7 +5,7 @@
         @keydown.space.prevent="toggle" @keydown.enter.prevent="toggle">
         <UnisonIcon class="wave-svg" :voices="voices" :detune="detune" :spread="spread" :enabled="modelValue"
             :palette="palette" />
-        <span class="wave-label">{{ label }}</span>
+        <span class="wave-label">{{ showState ? (modelValue ? 'On' : 'Off') : label }}</span>
     </button>
 </template>
 
@@ -18,6 +18,8 @@ const props = defineProps({
     detune: { type: Number, default: 10 },
     spread: { type: Number, default: 50 },
     label: { type: String, default: 'Unison' },
+    // Show On / Off under the icon instead of the name (the card's title names it, as the LFO's tile does)
+    showState: { type: Boolean, default: false },
     disabled: { type: Boolean, default: false },
     palette: {
         type: Array,

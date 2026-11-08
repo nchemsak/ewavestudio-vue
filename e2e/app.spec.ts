@@ -2,6 +2,8 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { PRESETS } from '../src/lib/presets/library';
+import { PATTERNS } from '../src/lib/patterns/library';
+import { noteHz } from '../src/lib/patterns/patterns';
 import { DETENT_HOLD, SWING_DETENTS, TEMPO_DETENTS } from '../src/lib/knobDetents';
 
 // Injected before the app loads. Keeps a handle on the app's AudioContext (__ctx), records
@@ -153,6 +155,9 @@ const lateNotes = (page: Page, from: number) =>
 
 const pads = (page: Page) => page.locator('.pad-row .padTEST');
 const screenView = (page: Page) => page.locator('.fkey[aria-pressed="true"]');
+// The two preset boxes in the transport card
+const soundsBox = (page: Page) => page.getByRole('group', { name: 'Sounds', exact: true });
+const patternsBox = (page: Page) => page.getByRole('group', { name: 'Patterns', exact: true });
 
 let problems: string[] = [];
 
@@ -855,8 +860,8 @@ test('a burst of changes is copied into the project once, and Save or Export rig
 });
 
 test('the pitch envelope sweeps each note down from Amount, and short decays are easy to reach', async ({ page }) => {
-	// The "Pitch" card in the Envelope / Filter row
-	const card = page.locator('.module.sound .pt-card').filter({ has: page.locator('#pitch-env-panel') });
+	// The "Pitch" card in the Envelope / Pitch / Filter row
+	const card = page.locator('.module.pitch-env');
 	const amount = card.getByRole('slider', { name: 'Amount', exact: true });
 	const decay = card.getByRole('slider', { name: 'Decay', exact: true });
 	await expect(amount).toHaveAttribute('aria-valuenow', '0'); // off by default
@@ -923,43 +928,86 @@ test('the pitch envelope sweeps each note down from Amount, and short decays are
 	await expect(amount).toHaveAttribute('aria-valuenow', '-12');
 });
 
-test('Envelope and Pitch sit beside a 2×2 Filter, even where the cards are narrowest', async ({ page }) => {
-	// 1280 px wide and a phone leave each card little room: two knobs across and a short title
-	for (const width of [1280, 390]) {
+test('laid out like hardware: Sound in rows beside Compose, ending on one line; tabs on tablets', async ({ page }) => {
+	const rect = (sel: string) => page.locator(sel).first().evaluate((el) => {
+		const b = el.getBoundingClientRect();
+		return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, height: b.height };
+	});
+	const near = (a: number, b: number) => Math.abs(a - b) <= 1;
+	for (const width of [1600, 1280]) {
 		await page.setViewportSize({ width, height: 900 });
-		const cards = await page.locator('.module.sound .pt-card').evaluateAll((els) => els.map((el) => {
+		const at = `${width} px`;
+		const [transport, steps, screen, sound, compose] = await Promise.all(
+			['.ds-transport', '.ds-steps', '.ds-visualizer', '.ds-sound', '.ds-compose'].map(rect));
+		// The screen beside the transport and the steps, as tall as both
+		expect(screen.left, at).toBeGreaterThan(transport.right);
+		expect(near(screen.top, transport.top) && near(screen.bottom, steps.bottom), `${at}: screen spans both`).toBe(true);
+		// Sound and Compose side by side, ending on one line
+		expect(compose.left, at).toBeGreaterThan(sound.right);
+		expect(near(sound.top, compose.top) && near(sound.bottom, compose.bottom), `${at}: one bottom line`).toBe(true);
+
+		// Each row of Sound is filled edge to edge: its cells end on one line
+		for (const row of ['.sound-row-1', '.sound-row-2', '.sound-row-3']) {
+			const bottoms = await page.locator(`${row} > *`).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().bottom)));
+			expect(Math.max(...bottoms) - Math.min(...bottoms), `${at}: ${row} cells end level`).toBeLessThanOrEqual(1);
+		}
+		// Envelope, Pitch and Filter: their eight knobs on one line
+		const knobTops = await page.locator('.sound-row-2 .knob-wrapper').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+		expect(knobTops, at).toHaveLength(8);
+		expect(Math.max(...knobTops) - Math.min(...knobTops), `${at}: one line of knobs`).toBeLessThanOrEqual(1);
+		// FM and Unison: cards of their own, the tile saying Off or On
+		await expect(page.locator('.module.fm .pt-title')).toHaveText('FM');
+		await expect(page.locator('.module.unison .pt-title')).toHaveText('Unison');
+		await expect(page.getByRole('switch', { name: 'FM' })).toHaveText('Off');
+		await expect(page.getByRole('switch', { name: 'Unison' })).toHaveText('Off');
+		// The LFO's controls stay on one line
+		expect((await rect('.module.mod .lfo-row')).height, `${at}: LFO one row`).toBeLessThan(80);
+		// Titles on one line, and every control inside its card
+		const cards = await page.locator('.ds-section .module').evaluateAll((els) => els.map((el) => {
 			const box = el.getBoundingClientRect();
-			const title = el.querySelector('.pt-title') as HTMLElement;
-			const lineHeight = parseFloat(getComputedStyle(title).lineHeight) || parseFloat(getComputedStyle(title).fontSize) * 1.3;
-			const inside = [...el.querySelectorAll('.knob-wrapper, .pt-title, button')].every((c) => {
+			const title = el.querySelector('.pt-title') as HTMLElement | null;
+			const lh = title ? parseFloat(getComputedStyle(title).lineHeight) || parseFloat(getComputedStyle(title).fontSize) * 1.3 : 0;
+			const inside = [...el.querySelectorAll('.knob-wrapper, .pt-btn, button')].every((c) => {
 				const b = c.getBoundingClientRect();
-				return b.left >= box.left - 0.5 && b.right <= box.right + 0.5;
+				return b.width === 0 || (b.left >= box.left - 0.5 && b.right <= box.right + 0.5);
 			});
-			const knobs = [...el.querySelectorAll('.knob-wrapper')].map((k) => k.getBoundingClientRect());
-			return {
-				title: title.textContent!.trim(),
-				left: Math.round(box.left), top: Math.round(box.top), bottom: Math.round(box.bottom),
-				oneLine: title.getBoundingClientRect().height < lineHeight * 1.5, inside,
-				rows: new Set(knobs.map((k) => Math.round(k.top))).size,
-			};
+			return { cls: el.className, oneLine: !title || title.textContent!.trim() === '' || title.getBoundingClientRect().height < lh * 1.5, inside };
 		}));
-		const [env, filter, pitch] = cards;
-		expect(cards.map((c) => c.title), `${width} px`).toEqual(['Envelope', 'Filter', 'Pitch']);
-		expect(pitch.left, `${width} px: Pitch under Envelope`).toBe(env.left);
-		expect(pitch.top).toBeGreaterThan(env.bottom);
-		expect(filter.left, `${width} px: Filter beside them`).toBeGreaterThan(env.left);
-		expect(filter.top).toBe(env.top);
-		expect(Math.abs(filter.bottom - pitch.bottom)).toBeLessThanOrEqual(1); // one block
-		expect(filter.rows, `${width} px: Filter is 2×2`).toBe(2);
-		// The LFO stays one compact row (power, knobs, and the Wave / Target switches)
-		const lfo = await page.locator('.module.mod').boundingBox();
-		expect(lfo!.height, `${width} px: LFO one row`).toBeLessThan(140);
-		for (const c of cards) expect(c, `${width} px`).toMatchObject({ oneLine: true, inside: true });
+		for (const c of cards) expect(c, at).toMatchObject({ oneLine: true, inside: true });
+		await expect(page.locator('.ds-tabs'), `${at}: no tabs`).toBeHidden();
+		expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), `${at}: no sideways scroll`).toBe(false);
+	}
+
+	// Tablets and phones: Sound, Effects and Compose as tabs under the steps
+	for (const width of [1024, 390]) {
+		await page.setViewportSize({ width, height: 900 });
+		const at = `${width} px`;
+		const tab = (name: string) => page.getByRole('tab', { name, exact: true });
+		await tab('Sound').click();
+		await expect(tab('Sound')).toHaveAttribute('aria-selected', 'true');
+		await expect(page.locator('.module.generators'), at).toBeVisible();
+		await expect(page.locator('.module.fx'), at).toBeHidden();
+		await expect(page.locator('.module.melody'), at).toBeHidden();
+		await tab('Effects').click();
+		await expect(page.locator('.module.fx'), at).toBeVisible();
+		await expect(page.locator('.module.generators'), at).toBeHidden();
+		await expect(page.locator('.module.noise'), at).toBeHidden();
+		// The arrow keys move between the tabs
+		await page.keyboard.press('ArrowRight');
+		await expect(tab('Compose')).toBeFocused();
+		await expect(tab('Compose')).toHaveAttribute('aria-selected', 'true');
+		await expect(page.locator('.module.melody'), at).toBeVisible();
+		await expect(page.locator('.module.pattern-tools'), at).toBeVisible();
+		await expect(page.locator('.ds-sound'), at).toBeHidden();
+		expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), `${at}: no sideways scroll`).toBe(false);
+		await tab('Sound').click();
+		// The LFO stays one compact row, even on a phone
+		expect((await rect('.module.mod .lfo-row')).height, `${at}: LFO one row`).toBeLessThan(80);
 	}
 });
 
 test('the filter envelope sweeps each note\'s cutoff, is saved, and shows on the filter view', async ({ page }) => {
-	const card = page.locator('.module.sound .pt-card').filter({ has: page.locator('#filter-panel') });
+	const card = page.locator('.module.filter');
 	const amount = card.getByRole('slider', { name: 'Env Amt', exact: true });
 	const decay = card.getByRole('slider', { name: 'Decay', exact: true });
 	const filterCanvas = page.locator('.nac-screen__lcd canvas').nth(4);
@@ -1051,7 +1099,7 @@ test('Pulse Width sits on the Pulse tile, and the LFO says when PW has no pulse 
 	const pulse = page.locator('.wave-row').getByRole('radio', { name: 'PULSE', exact: true });
 	// On the Waveforms panel (not under Unison), and turning it doesn't pick the Pulse wave
 	await expect(page.locator('.module.generators').getByRole('slider', { name: 'Pulse Width' })).toHaveCount(1);
-	await expect(page.locator('.module.pitch').getByRole('slider', { name: 'Pulse Width' })).toHaveCount(0);
+	await expect(page.locator('.module.unison').getByRole('slider', { name: 'Pulse Width' })).toHaveCount(0);
 	await expect(sine).toHaveAttribute('aria-checked', 'true');
 	await width.focus();
 	await page.keyboard.press('PageDown');
@@ -1472,9 +1520,9 @@ const valueAt = (o: any, path: string) => path.split('.').reduce((v, k) => v?.[k
 test('presets set the sound but not the pattern, light up, and are one undo step each', async ({ page }) => {
 	const projectData = async () =>
 		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
-	const presetButton = (label: string) => page.locator('.preset-grid').getByRole('button', { name: label, exact: true });
-	const lit = page.locator('.preset-grid .pt-btn[aria-pressed="true"]');
-	await expect(page.locator('.preset-grid .pt-btn')).toHaveText(PRESETS.map((p) => p.label));
+	const presetButton = (label: string) => soundsBox(page).getByRole('button', { name: label, exact: true });
+	const lit = soundsBox(page).locator('.pt-btn[aria-pressed="true"]');
+	await expect(soundsBox(page).locator('.preset-grid .pt-btn')).toHaveText(PRESETS.map((p) => p.label));
 
 	// A pattern, and a tempo of its own
 	await page.waitForTimeout(SETTLED);
@@ -1534,7 +1582,7 @@ test('presets set the sound but not the pattern, light up, and are one undo step
 	await expect(lit).toHaveText(['Bell']);
 });
 
-test('the preset buttons and the dice sit between Swing and the logo, or on a row of their own', async ({ page }) => {
+test('Sounds and Patterns sit side by side between Swing and Play, or on a row of their own', async ({ page }) => {
 	for (const width of [1600, 1280, 1100, 900, 390]) {
 		await page.setViewportSize({ width, height: 900 });
 		const m = await page.evaluate(() => {
@@ -1542,47 +1590,65 @@ test('the preset buttons and the dice sit between Swing and the logo, or on a ro
 				const b = el.getBoundingClientRect();
 				return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, height: b.height };
 			};
-			const row = document.querySelector('.transport-row')!;
-			const buttons = [...document.querySelectorAll('.preset-grid .pt-btn')] as HTMLElement[];
-			const title = document.createRange();
-			title.selectNodeContents(document.querySelector('.preset-box .pt-section-title')!);
+			const boxes = [...document.querySelectorAll('.transport-presets .preset-box')].map((box) => {
+				const buttons = [...box.querySelectorAll('.preset-grid .pt-btn')] as HTMLElement[];
+				const title = document.createRange();
+				title.selectNodeContents(box.querySelector('.pt-section-title')!);
+				return {
+					box: rect(box), title: rect(title), dice: rect(box.querySelector('.preset-dice')!),
+					buttons: buttons.map(rect),
+					clipped: buttons.filter((b) => b.scrollWidth > b.clientWidth).map((b) => b.textContent),
+				};
+			});
+			const logo = document.querySelector('.topbar-logo');
 			return {
-				dice: rect(document.querySelector('.preset-dice')!),
-				title: rect(title),
+				boxes,
 				card: rect(document.querySelector('.ds-transport')!),
-				swing: rect(row.children[2]),
-				logo: rect(document.querySelector('.transport-logo')!),
-				box: rect(document.querySelector('.preset-box')!),
-				buttons: buttons.map(rect),
-				clipped: buttons.filter((b) => b.scrollWidth > b.clientWidth).map((b) => b.textContent),
+				swing: rect(document.querySelector('.transport-knobs')!.children[2]),
+				play: rect(document.querySelector('.ds-transport .btn3d')!),
+				logo: logo && getComputedStyle(logo).display !== 'none' ? rect(logo) : null,
+				file: rect([...document.querySelectorAll('.pc-btn')].find((b) => b.textContent!.includes('File'))!),
 				pageScrolls: document.documentElement.scrollWidth > window.innerWidth,
 			};
 		});
 		const at = `${width} px`;
-		expect(m.buttons, at).toHaveLength(6);
-		expect(m.clipped, `${at}: names fit`).toEqual([]);
+		expect(m.boxes, at).toHaveLength(2);
 		expect(m.pageScrolls, `${at}: no sideways scroll`).toBe(false);
-		for (const b of m.buttons) {
-			expect(b.left, at).toBeGreaterThanOrEqual(m.card.left);
-			expect(b.right, at).toBeLessThanOrEqual(m.card.right);
-			expect(b.bottom, at).toBeLessThanOrEqual(m.card.bottom);
+		for (const b of m.boxes) {
+			expect(b.buttons, at).toHaveLength(6);
+			expect(b.clipped, `${at}: names fit`).toEqual([]);
+			for (const btn of b.buttons) {
+				expect(btn.left, at).toBeGreaterThanOrEqual(m.card.left);
+				expect(btn.right, at).toBeLessThanOrEqual(m.card.right);
+				expect(btn.bottom, at).toBeLessThanOrEqual(m.card.bottom);
+			}
+			// Three across; the dice in the box's top-right corner, clear of the title and buttons
+			expect(new Set(b.buttons.map((x) => Math.round(x.top))).size, at).toBe(2);
+			expect(b.dice.right, at).toBeLessThanOrEqual(b.box.right);
+			expect(b.dice.top, at).toBeGreaterThanOrEqual(b.box.top);
+			expect(b.dice.left, `${at}: dice clear of the title`).toBeGreaterThan(b.title.right);
+			expect(b.dice.bottom, `${at}: dice above the buttons`).toBeLessThanOrEqual(Math.min(...b.buttons.map((x) => x.top)));
 		}
-		// The dice in the box's top-right corner, clear of the title and the buttons
-		expect(m.dice.right, at).toBeLessThanOrEqual(m.box.right);
-		expect(m.dice.top, at).toBeGreaterThanOrEqual(m.box.top);
-		expect(m.dice.left, `${at}: dice clear of the title`).toBeGreaterThan(m.title.right);
-		expect(m.dice.bottom, `${at}: dice above the buttons`).toBeLessThanOrEqual(Math.min(...m.buttons.map((b) => b.top)));
-		if (width >= 1280) {
-			// In the space between Swing and the logo, three across, and the card is no taller
-			expect(m.box.left, at).toBeGreaterThan(m.swing.right);
-			expect(m.box.right, at).toBeLessThan(m.logo.left);
-			expect(new Set(m.buttons.map((b) => Math.round(b.top))).size, at).toBe(2);
+		const [sounds, patterns] = m.boxes.map((b) => b.box);
+		if (width > 720) {
+			// Side by side, Sounds first
+			expect(Math.round(sounds.top), at).toBe(Math.round(patterns.top));
+			expect(patterns.left, at).toBeGreaterThan(sounds.right);
+		} else {
+			expect(patterns.top, `${at}: one under the other`).toBeGreaterThan(sounds.bottom);
+		}
+		if (width >= 1200) {
+			// Between Swing and Play, and the card is no taller than the knobs need
+			expect(sounds.left, at).toBeGreaterThan(m.swing.right);
+			expect(patterns.right, at).toBeLessThan(m.play.left);
 			expect(m.card.height, at).toBeLessThan(130);
 		} else {
-			// A row of their own below the knobs: six across, or three across on a phone
-			expect(m.box.top, at).toBeGreaterThan(m.swing.bottom);
-			expect(new Set(m.buttons.map((b) => Math.round(b.top))).size, at).toBe(width <= 720 ? 2 : 1);
+			// A row of their own below the knobs
+			expect(sounds.top, at).toBeGreaterThan(m.swing.bottom);
 		}
+		// The logo sits at the top bar's left end, before File (hidden on phones)
+		if (width >= 576) expect(m.logo!.right, at).toBeLessThanOrEqual(m.file.left);
+		else expect(m.logo, at).toBeNull();
 	}
 });
 
@@ -1618,7 +1684,7 @@ async function textContrast(page: Page, text: ReturnType<Page['locator']>) {
 	}, png);
 }
 
-test('the Pattern Tools and Presets captions are readable in every theme', async ({ page }) => {
+test('the Pattern Tools, Sounds, Patterns and section captions are readable in every theme', async ({ page }) => {
 	// The Light theme has no button at the moment (ThemeToggle.vue), but a saved choice still
 	// applies it
 	for (const theme of ['synthwave', 'dark', 'light']) {
@@ -1628,9 +1694,11 @@ test('the Pattern Tools and Presets captions are readable in every theme', async
 		const captions = [
 			...await page.locator('.pattern-tools .pt-section-title').all(),
 			page.locator('.pattern-tools .pt-inline-check'),
-			page.locator('.preset-box .pt-section-title'),
+			...await page.locator('.preset-box .pt-section-title').all(),
+			...await page.locator('.ds-section-title').all(),
 		];
-		expect(captions).toHaveLength(5); // Step Fills, Humanize, Octave, Active Pads Only, Presets
+		// Step Fills, Humanize, Octave, Active Pads Only, Sounds, Patterns, Sound, Compose
+		expect(captions).toHaveLength(8);
 		for (const caption of captions) {
 			const name = (await caption.textContent())!.trim();
 			expect(await textContrast(page, caption), `${theme}: ${name}`).toBeGreaterThanOrEqual(4.5);
@@ -1642,7 +1710,7 @@ test('the dice rolls a new sound, keeps the pattern, lights no preset, and undo 
 	const projectData = async () =>
 		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
 	const dice = page.getByRole('button', { name: 'Random sound', exact: true });
-	const lit = page.locator('.preset-grid .pt-btn[aria-pressed="true"]');
+	const lit = soundsBox(page).locator('.pt-btn[aria-pressed="true"]');
 	const sound = (d: any) => JSON.stringify({ synth: { ...d.synth, tuning: 0, noise: { ...d.synth.noise, mask: 0 } }, fx: d.fx, wave: d.selectedWaveform });
 	const pattern = (d: any) => ({
 		transport: d.transport, melody: d.melody, tuning: d.synth.tuning, noiseMask: d.synth.noise.mask,
@@ -1651,7 +1719,7 @@ test('the dice rolls a new sound, keeps the pattern, lights no preset, and undo 
 
 	await page.waitForTimeout(SETTLED);
 	await turnOnPads(page, [0, 4, 9]);
-	await page.locator('.preset-grid').getByRole('button', { name: 'Kick', exact: true }).click();
+	await soundsBox(page).getByRole('button', { name: 'Kick', exact: true }).click();
 	await page.waitForTimeout(SETTLED);
 	await expect(lit).toHaveText(['Kick']);
 	const kick = await projectData();
@@ -1674,6 +1742,81 @@ test('the dice rolls a new sound, keeps the pattern, lights no preset, and undo 
 	for (let i = 0; i < 3; i++) await page.keyboard.press('Control+z');
 	await expect(lit).toHaveText(['Kick']);
 	expect(sound(await projectData())).toBe(sound(kick));
+});
+
+test('patterns set the pattern from the key, never the sound, light up, are one undo step; the dice rolls new ones', async ({ page }) => {
+	const projectData = async () =>
+		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	const lane = (d: any) => d.instruments.find((l: any) => l.name === 'synth-voice');
+	const sound = (d: any) => JSON.stringify({ synth: d.synth, fx: d.fx, wave: d.selectedWaveform, waves: lane(d).waveforms, transport: d.transport, melody: d.melody });
+	const lit = patternsBox(page).locator('.pt-btn[aria-pressed="true"]');
+	const soundLit = soundsBox(page).locator('.pt-btn[aria-pressed="true"]');
+	await expect(patternsBox(page).locator('.preset-grid .pt-btn')).toHaveText(PATTERNS.map((p) => p.label));
+	await expect(lit).toHaveCount(0); // a new project's pads match no pattern
+
+	// A sound of its own, which patterns leave alone
+	await page.waitForTimeout(SETTLED);
+	await soundsBox(page).getByRole('button', { name: 'Acid', exact: true }).click();
+	await page.waitForTimeout(SETTLED);
+	const before = await projectData();
+
+	for (const p of PATTERNS) {
+		await patternsBox(page).getByRole('button', { name: p.label, exact: true }).click();
+		await expect(lit).toHaveText([p.label]);
+		await page.waitForTimeout(SETTLED);
+		await expect(lit).toHaveText([p.label]); // still lit once saved
+		const data = await projectData();
+		const l = lane(data);
+		expect(l.steps, p.id).toEqual(p.steps.map((s) => s !== null));
+		expect(l.velocities, p.id).toEqual(p.steps.map((s) => s?.vel ?? 1));
+		expect(l.ratchets, p.id).toEqual(p.steps.map((s) => s?.repeats ?? 1));
+		// Notes from the key's root in the pads' octave: A3, 220 Hz
+		l.pitches.forEach((hz: number, i: number) => expect(hz, `${p.id} step ${i + 1}`).toBeCloseTo(noteHz(220, p.steps[i]?.note ?? 0), 6));
+		expect(sound(data), `${p.id} keeps the sound`).toBe(sound(before));
+		await expect(soundLit).toHaveText(['Acid']);
+	}
+
+	// It plays
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect.poll(() => notesPlayed(page)).toBeGreaterThan(3);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+
+	// Turning a pad off unlights it; undo lights it again; each pattern is one undo step
+	await pads(page).nth(0).click();
+	await expect(lit).toHaveCount(0);
+	await page.waitForTimeout(SETTLED);
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('Control+z');
+	await expect(lit).toHaveText(['Broken']);
+	await page.keyboard.press('Control+z');
+	await expect(lit).toHaveText(['Bassline']);
+
+	// In another key, a pattern starts on that key's root
+	await page.waitForTimeout(SETTLED);
+	await keyButton(page, 'C').click();
+	await patternsBox(page).getByRole('button', { name: 'Pulse', exact: true }).click();
+	await page.waitForTimeout(SETTLED);
+	const inC = lane(await projectData());
+	const pc = (hz: number) => ((Math.round(69 + 12 * Math.log2(hz / 440)) % 12) + 12) % 12;
+	expect(inC.pitches.filter((_: number, i: number) => inC.steps[i]).map(pc), 'C, the root').toEqual([0, 0, 0, 0]);
+
+	// The dice: a new pattern each roll, the sound untouched, nothing lit, one undo step each
+	const dice = page.getByRole('button', { name: 'Random pattern', exact: true });
+	const pulse = await projectData();
+	const seen = new Set([JSON.stringify(lane(pulse).steps)]);
+	for (let i = 0; i < 3; i++) {
+		await dice.click();
+		await expect(lit).toHaveCount(0);
+		await page.waitForTimeout(SETTLED);
+		const data = await projectData();
+		seen.add(JSON.stringify([lane(data).steps, lane(data).velocities, lane(data).pitches, lane(data).ratchets]));
+		expect(lane(data).steps[0], 'step 1 plays').toBe(true);
+		expect(JSON.stringify(data.synth)).toBe(JSON.stringify(pulse.synth));
+	}
+	expect(seen.size).toBe(4);
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	for (let i = 0; i < 3; i++) await page.keyboard.press('Control+z');
+	await expect(lit).toHaveText(['Pulse']);
 });
 
 test('dice rolls are never silent or clipping', async ({ page }) => {
@@ -1782,7 +1925,7 @@ test('Export audio: effects stems add up to the mix; a MIDI file and a one-shot 
 	await turnOnPads(page, [0, 4, 8, 12]);
 	// Noise and reverb (Snare), the delay, and random pitch sweeps: every stem has sound, and
 	// each is rendered with the same random numbers as the mix
-	await page.locator('.preset-grid').getByRole('button', { name: 'Snare', exact: true }).click();
+	await soundsBox(page).getByRole('button', { name: 'Snare', exact: true }).click();
 	await page.locator('.fx .footswitch').first().click();
 	await page.getByRole('button', { name: 'Random sweep', exact: true }).click();
 

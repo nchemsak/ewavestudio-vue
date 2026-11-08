@@ -1,11 +1,21 @@
 <template>
 	<div class="drum-sequencer" :class="currentTheme" :style="padSizeStyle">
-		<!-- Save/Open/Import/Export toolbar -->
-		<section class="pt-card" style="margin-bottom:12px">
+		<!-- Top bar: the logo, then Save/Open/Import/Export and Undo/Redo -->
+		<section class="pt-card ds-topbar">
 			<ProjectControls :exporting="isExporting" :can-undo="canUndo" :can-redo="canRedo"
-				@export-audio="openExportDialog" @undo="undo" @redo="redo" />
+				@export-audio="openExportDialog" @undo="undo" @redo="redo">
+				<template #brand>
+					<img class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave">
+				</template>
+			</ProjectControls>
 		</section>
-		<div class="ds-grid">
+
+		<!-- LAYOUT START
+			 Laid out like one piece of hardware: the transport and the Step Sequencer, with the
+			 screen beside them; under them Sound (three rows, each filled edge to edge) and Compose,
+			 ending on one line. Under 1200 px, Sound, Effects and Compose are tabs under the steps
+			 (data-tab says which one shows). -->
+		<div class="ds-grid" :data-tab="activeTab">
 
 			<!-- Visualizer Screen -->
 			<aside class="pt-card ds-visualizer">
@@ -15,10 +25,10 @@
 				</div>
 			</aside>
 
-			<!-- Transport -->
+			<!-- Transport: Volume, Tempo, Swing, then Sounds and Patterns side by side, then Play -->
 			<section class="pt-card transport-card ds-transport">
-				<div class="transport-left">
-					<div class="pt-knob-row transport-row">
+				<div class="transport-row">
+					<div class="transport-knobs">
 						<!-- Volume -->
 						<div class="position-relative text-center knob-wrap">
 							<Knob midi-id="transport.volume" v-model="volume" label="Volume" :value-text="`${Math.round(volume * 100)}%`" :min="0" :max="1" :step="0.01" size="medium"
@@ -57,36 +67,36 @@
 								{{ Math.round(swing * 100) }}%
 							</div>
 						</div>
+					</div>
 
-						<!-- Presets: ready-made sounds (src/lib/presets/). Beside the knobs from 1280 px,
-							 else on a row of their own below -->
-						<PresetButtons class="transport-presets" :presets="PRESETS" :active="activePresetId"
+					<!-- Sounds and Patterns, side by side: ready-made sounds (src/lib/presets/) and
+						 patterns (src/lib/patterns/), each with a dice. Between the knobs and Play from
+						 1200 px; a row of their own under them narrower. -->
+					<div class="transport-presets">
+						<PresetButtons title="Sounds" dice-label="Random sound" :presets="PRESETS" :active="activePresetId"
 							@choose="choosePreset" @random="rollRandomSound" />
+						<PresetButtons title="Patterns" dice-label="Random pattern" :presets="PATTERNS"
+							:active="activePatternId" @choose="choosePattern" @random="rollRandomPattern" />
+					</div>
 
-						<!-- Right cluster: play + logo (+ MIDI fallback) -->
-						<div class="transport-right">
-							<img class="transport-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral logo">
-							<!-- Play/Stop -->
-							<!-- <button type="button" class="pt-btn btn-lg btn3d" @click="togglePlay"
-								:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
-								:aria-pressed="isPlaying"> -->
-							<button type="button" class="pt-btn btn-lg btn3d" @click="onPlayClick"
-								:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
-								:aria-pressed="isPlaying">
-								<span class="btn-face">
-									<svg v-if="!isPlaying" viewBox="0 0 24 24" aria-hidden="true">
-										<path d="M8 6v12l10-6-10-6z" />
-									</svg>
-									<svg v-else viewBox="0 0 24 24" aria-hidden="true">
-										<rect x="7" y="7" width="10" height="10" rx="1.5" />
-									</svg>
-								</span>
-								<span class="visually-hidden">{{ isPlaying ? 'Stop' : 'Play' }}</span>
-							</button>
+					<!-- Play (+ the MIDI fallback) -->
+					<div class="transport-right">
+						<button type="button" class="pt-btn btn-lg btn3d" @click="onPlayClick"
+							:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
+							:aria-pressed="isPlaying">
+							<span class="btn-face">
+								<svg v-if="!isPlaying" viewBox="0 0 24 24" aria-hidden="true">
+									<path d="M8 6v12l10-6-10-6z" />
+								</svg>
+								<svg v-else viewBox="0 0 24 24" aria-hidden="true">
+									<rect x="7" y="7" width="10" height="10" rx="1.5" />
+								</svg>
+							</span>
+							<span class="visually-hidden">{{ isPlaying ? 'Stop' : 'Play' }}</span>
+						</button>
 
-							<!-- MIDI fallback lives in the right cluster -->
-							<MidiToolbar v-if="midi.supported && !hasMidiTarget" :midi="midi" />
-						</div>
+						<!-- MIDI fallback lives in the right cluster -->
+						<MidiToolbar v-if="midi.supported && !hasMidiTarget" :midi="midi" />
 					</div>
 				</div>
 
@@ -159,11 +169,167 @@
 				</div>
 			</section>
 
-			<!-- Modules grid (two compact rows) -->
-			<section class="pt-cards controlsWrapper ds-modules">
+			<!-- Tabs (under 1200 px): which of Sound, Effects and Compose shows -->
+			<div class="ds-tabs" role="tablist" aria-label="Panels" @keydown="onTabKeydown">
+				<button v-for="t in PANEL_TABS" :key="t.id" :id="`tab-${t.id}`" type="button" role="tab" class="ds-tab"
+					:class="{ on: activeTab === t.id }" :aria-selected="activeTab === t.id"
+					:aria-controls="t.panel" :tabindex="activeTab === t.id ? 0 : -1" @click="activeTab = t.id">
+					{{ t.label }}
+				</button>
+			</div>
+
+			<!-- Sound: three rows, each filled edge to edge -->
+			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title">
+				<h2 id="sound-title" class="ds-section-title">Sound</h2>
+
+				<!-- Row 1: the waves, beside FM and Unison -->
+				<div class="sound-row sound-row-1">
+					<div class="module generators">
+						<SectionWrap id="generators" title="" v-model="collapsibleState['generators']">
+							<div class="gen-panel osc-panel">
+								<div class="wave-row" role="radiogroup" aria-label="Waveforms">
+									<div v-for="t in WAVE_TILES" :key="t.value" class="wave-cell">
+										<WaveButton :modelValue="selectedWaveform" :value="t.value" :label="t.label"
+											:palette="t.palette" :pulseWidth="pulseWidth"
+											:lfoView="t.value === 'pulse' ? lfoView : null"
+											:randomIncluded="randomPool[t.value]" @toggle-random="onToggleRandom"
+											@update:modelValue="() => applyWaveToAll(t.value)" />
+										<!-- The pulse's width: a mini knob in the Pulse tile's corner (beside the tile's
+											 button, not inside it, so turning it doesn't pick the wave). The LFO's PW
+											 target moves it too. -->
+										<div v-if="t.value === 'pulse'" class="pulse-width-knob">
+											<Knob midi-id="pulse.width" v-model="pulseWidth" label="Pulse Width" hideLabel size="mini"
+												:min="PULSE_WIDTH_MIN" :max="PULSE_WIDTH_MAX" :step="1"
+												:value-text="`${pulseWidth}%`" color="#ff7eb3"
+												@knobStart="pulseWidthTip = true" @knobEnd="pulseWidthTip = false" />
+											<span v-if="pulseWidthTip" class="custom-tooltip">Width {{ pulseWidth }}%</span>
+										</div>
+									</div>
+								</div>
+								<div class="pt-btn-group wave-random">
+									<button class="pt-btn pt-btn-sm" :disabled="!randomPoolArray.length"
+										:title="randomTooltip" @click="applyRandomWaves()">
+										Random
+									</button>
+								</div>
+							</div>
+						</SectionWrap>
+					</div>
+
+					<div class="sound-stack">
+						<!-- FM: its tile switches it on and off -->
+						<div class="module fm">
+							<SectionWrap id="fm" title="FM" v-model="collapsibleState['fm']">
+								<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
+									v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
+							</SectionWrap>
+						</div>
+
+						<!-- Unison: its tile switches it on and off -->
+						<div class="module unison">
+							<SectionWrap id="unison" title="Unison" v-model="collapsibleState['unison']">
+								<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
+									v-model:detune="detuneCents" v-model:spread="stereoSpread" />
+							</SectionWrap>
+						</div>
+					</div>
+				</div>
+
+				<!-- Row 2: Envelope, Pitch and Filter, their knobs on one line -->
+				<div class="sound-row sound-row-2">
+					<div class="module envelope">
+						<SectionWrap id="envelope" title="Envelope" v-model="collapsibleState['envelope']">
+							<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
+								v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
+								@attack-knob-start="onEnvKnobStart" @attack-knob-end="onScreenKnobEnd"
+								@decay-knob-start="onEnvKnobStart" @decay-knob-end="onScreenKnobEnd" />
+						</SectionWrap>
+					</div>
+
+					<div class="module pitch-env">
+						<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
+							v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
+					</div>
+
+					<div class="module filter">
+						<SectionWrap class="filter-card" id="filter" title="Filter" v-model="collapsibleState['filter']">
+							<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
+								v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
+								v-model:envAmount="filterEnvAmount" v-model:envDecayMs="filterEnvDecayMs"
+								:lfoView="lfoView" @knob-start="onFilterKnobStart" @knob-end="onScreenKnobEnd" />
+						</SectionWrap>
+					</div>
+				</div>
+
+				<!-- Row 3: Noise over the LFO, beside Effects (Effects is its own tab under 1200 px) -->
+				<div class="sound-row sound-row-3">
+					<div class="sound-stack">
+						<div class="module noise">
+							<div class="noise-tv-bg" :class="{ on: noiseEnabled }" :style="noiseModuleStyle">
+								<!-- vertical ribbon toggle -->
+								<button type="button" class="noise-ribbon" :class="{ 'is-on': noiseEnabled }"
+									:aria-pressed="noiseEnabled" aria-label="Toggle noise"
+									:style="{ '--noise-ribbon-accent': '#9C27B0' }" @click="noiseEnabled = !noiseEnabled">
+									<span class="noise-ribbon-label">NOISE</span>
+								</button>
+
+								<div v-if="noiseEnabled" class="noise-overlay mode-static" aria-hidden="true">
+									<div class="grain"></div>
+								</div>
+
+								<SectionWrap id="noise" title="" v-model="collapsibleState['noise']">
+									<div class="gen-panel noise-panel">
+										<div class="noise-inline">
+											<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
+												v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
+												v-model:mask="noiseMask" v-model:attackBurst="noiseAttackBurst"
+												v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
+										</div>
+									</div>
+								</SectionWrap>
+							</div>
+						</div>
+
+						<!-- LFO -->
+						<div class="module mod">
+							<SectionWrap id="mod" title="LFO" v-model="collapsibleState['mod']">
+								<template #tools>
+									<button class="pt-info-icon" aria-label="Advanced options"
+										@click="lfoRef?.openAdvanced($event)">⋯</button>
+								</template>
+								<LFOGroup ref="lfoRef" :showToggle="false" :pulseInUse="pulseInUse" v-model="lfoEnabled" v-model:rate="lfoRate"
+									v-model:depth="lfoDepth" v-model:target="lfoTarget" v-model:waveform="lfoWaveform"
+									v-model:syncEnabled="lfoSync" v-model:division="lfoDivision"
+									v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
+									color="#00BCD4" :divisions="['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32']" />
+							</SectionWrap>
+						</div>
+					</div>
+
+					<div id="effects-panel" class="module fx">
+						<SectionWrap id="fx" title="Effects" v-model="collapsibleState['fx']">
+							<div class="fx-pair">
+								<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
+									:tempo="tempo" v-model:division="delayDivision" v-model:delayTime="delayTime"
+									v-model:delayFeedback="delayFeedback"
+									v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled"
+									v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" />
+								<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" :driveType="'overdrive'"
+									v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
+									v-model:driveMix="driveMix" />
+								<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
+									v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone" />
+							</div>
+						</SectionWrap>
+					</div>
+				</div>
+			</section>
+
+			<!-- Compose: Pattern Tools and Melody Maker -->
+			<section id="compose-panel" class="ds-section ds-compose" aria-labelledby="compose-title">
+				<h2 id="compose-title" class="ds-section-title">Compose</h2>
 
 				<div class="module pattern-tools">
-					<!-- Pattern Tools -->
 					<SectionWrap id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
 						<PatternTools :steps="steps" :velocities="velocities" :currentTheme="currentTheme"
 							@update:steps="steps = $event" @update:velocities="velocities = $event"
@@ -171,7 +337,6 @@
 					</SectionWrap>
 				</div>
 
-				<!-- Melody Maker -->
 				<div class="module melody">
 					<SectionWrap id="melody" title="Melody Maker" v-model="collapsibleState['melody']">
 						<template #tools>
@@ -197,160 +362,8 @@
 							@arp-tones-change="(v) => { melodyUi.arpTones = v as any }" />
 					</SectionWrap>
 				</div>
-
-				<div class="module generators">
-					<SectionWrap id="generators" title="" v-model="collapsibleState['generators']">
-
-						<!-- Oscillators -->
-						<div class="gen-panel osc-panel">
-							<div class="wave-row" role="radiogroup" aria-label="Waveforms">
-								<div v-for="t in WAVE_TILES" :key="t.value" class="wave-cell">
-									<WaveButton :modelValue="selectedWaveform" :value="t.value" :label="t.label"
-										:palette="t.palette" :pulseWidth="pulseWidth"
-										:lfoView="t.value === 'pulse' ? lfoView : null"
-										:randomIncluded="randomPool[t.value]" @toggle-random="onToggleRandom"
-										@update:modelValue="() => applyWaveToAll(t.value)" />
-									<!-- The pulse's width: a mini knob in the Pulse tile's corner (beside the tile's
-										 button, not inside it, so turning it doesn't pick the wave). The LFO's PW
-										 target moves it too. -->
-									<div v-if="t.value === 'pulse'" class="pulse-width-knob">
-										<Knob midi-id="pulse.width" v-model="pulseWidth" label="Pulse Width" hideLabel size="mini"
-											:min="PULSE_WIDTH_MIN" :max="PULSE_WIDTH_MAX" :step="1"
-											:value-text="`${pulseWidth}%`" color="#ff7eb3"
-											@knobStart="pulseWidthTip = true" @knobEnd="pulseWidthTip = false" />
-										<span v-if="pulseWidthTip" class="custom-tooltip">Width {{ pulseWidth }}%</span>
-									</div>
-								</div>
-							</div>
-							<div class="pt-btn-group" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-								<button class="pt-btn pt-btn-sm" :disabled="!randomPoolArray.length"
-									:title="randomTooltip" @click="applyRandomWaves()">
-									Random
-								</button>
-							</div>
-						</div>
-					</SectionWrap>
-				</div>
-
-				<div class="module noise">
-					<div class="noise-tv-bg" :class="{ on: noiseEnabled }" :style="noiseModuleStyle">
-						<!-- vertical ribbon toggle -->
-						<button type="button" class="noise-ribbon" :class="{ 'is-on': noiseEnabled }"
-							:aria-pressed="noiseEnabled" aria-label="Toggle noise"
-							:style="{ '--noise-ribbon-accent': '#9C27B0' }" @click="noiseEnabled = !noiseEnabled">
-							<span class="noise-ribbon-label">NOISE</span>
-						</button>
-
-						<div v-if="noiseEnabled" class="noise-overlay mode-static" aria-hidden="true">
-							<div class="grain"></div>
-						</div>
-
-						<SectionWrap id="noise" title="" v-model="collapsibleState['noise']">
-							<div class="gen-panel noise-panel">
-								<div class="noise-inline">
-									<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
-										v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
-										v-model:mask="noiseMask" v-model:attackBurst="noiseAttackBurst"
-										v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
-								</div>
-							</div>
-						</SectionWrap>
-					</div>
-				</div>
-
-				<!-- Envelope and Pitch stacked on the left, Filter (2×2 knobs: Cutoff, Resonance, then its
-					 envelope's Env Amt and Decay) on the right -->
-				<div class="module sound">
-					<div class="sound-grid">
-						<SectionWrap id="envelope" title="Envelope" v-model="collapsibleState['envelope']">
-							<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
-								v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
-								@attack-knob-start="onEnvKnobStart" @attack-knob-end="onScreenKnobEnd"
-								@decay-knob-start="onEnvKnobStart" @decay-knob-end="onScreenKnobEnd" />
-						</SectionWrap>
-
-						<SectionWrap class="filter-card" id="filter" title="Filter" v-model="collapsibleState['filter']">
-							<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
-								v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
-								v-model:envAmount="filterEnvAmount" v-model:envDecayMs="filterEnvDecayMs"
-								:lfoView="lfoView" @knob-start="onFilterKnobStart" @knob-end="onScreenKnobEnd" />
-						</SectionWrap>
-
-						<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
-							v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
-					</div>
-				</div>
-
-				<!-- LFO -->
-				<div class="module mod">
-					<SectionWrap id="mod" title="LFO" v-model="collapsibleState['mod']">
-						<template #tools>
-							<button class="pt-info-icon" aria-label="Advanced options"
-								@click="lfoRef?.openAdvanced($event)">⋯</button>
-						</template>
-						<LFOGroup ref="lfoRef" :showToggle="false" :pulseInUse="pulseInUse" v-model="lfoEnabled" v-model:rate="lfoRate"
-							v-model:depth="lfoDepth" v-model:target="lfoTarget" v-model:waveform="lfoWaveform"
-							v-model:syncEnabled="lfoSync" v-model:division="lfoDivision"
-							v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
-							color="#00BCD4" :divisions="['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32']" />
-					</SectionWrap>
-				</div>
-
-				<div class="module pitch">
-					<SectionWrap id="pitch" title="Pitch & Harmonics" v-model="collapsibleState['pitch']">
-						<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
-							v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
-						<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
-							v-model:detune="detuneCents" v-model:spread="stereoSpread" />
-					</SectionWrap>
-				</div>
-
-				<div class="module fx fx-adv-anchor" ref="fxAnchor">
-					<SectionWrap id="fx" title="Effects" v-model="collapsibleState['fx']">
-
-						<section class="pt-section">
-							<div class="fx-pair">
-								<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
-									:tempo="tempo" v-model:division="delayDivision" v-model:delayTime="delayTime"
-									v-model:delayFeedback="delayFeedback"
-									v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled"
-									v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" />
-								<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" :driveType="'overdrive'"
-									v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
-									v-model:driveMix="driveMix" />
-
-								<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
-									v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone" />
-
-							</div>
-						</section>
-						<!-- Effects — Advanced -->
-						<!-- <Teleport to="body">
-							<div v-if="fxAdvanced.open">
-								<div class="mm-overlay" @click="fxAdvanced.open = false"></div>
-
-								<div class="mm-menu" :style="{ left: fxAdvanced.x + 'px', top: fxAdvanced.y + 'px' }"
-									@click.stop>
-									<div class="mm-menu-title">Advanced Options</div>
-
-									<div class="mm-opt" role="menuitem" @click="delaySync = !delaySync">
-										<span>Delay: Sync with tempo</span>
-										<button class="mm-switch" :class="{ on: delaySync }"><span
-												class="kn"></span></button>
-									</div>
-
-									<div class="mm-reset" role="menuitem" @click.stop="resetDelayDrive()">
-										Reset to defaults
-									</div>
-								</div>
-							</div>
-						</Teleport> -->
-						<!-- overlay to close -->
-						<!-- <div v-if="fxAdvanced.open" class="mm-overlay" @click="fxAdvanced.open = false"></div> -->
-					</SectionWrap>
-				</div>
-
 			</section>
+			<!-- LAYOUT END -->
 
 			<!-- Bottom Sequencer -->
 			<!-- <section class="pt-panel ds-sequencer">
@@ -535,6 +548,9 @@ import { zipFiles } from '../lib/export/zip';
 import { PRESETS } from '../lib/presets/library';
 import { applyPreset, soundKey } from '../lib/presets/presets';
 import { randomPreset } from '../lib/presets/random';
+import { PATTERNS } from '../lib/patterns/library';
+import { applyPattern, patternKey } from '../lib/patterns/patterns';
+import { randomPattern } from '../lib/patterns/random';
 import {
 	lfoCutoffAt, lfoCutoffSwing, lfoPulseWidthAt, lfoPulseWidthRange, lfoBendAt, lfoBendRange, type LfoView,
 } from '../lib/lfoVisual';
@@ -765,7 +781,8 @@ const collapseIds = [
 	'generators',
 	'envelope',
 	'filter',
-	'pitch',
+	'fm',
+	'unison',
 	'mod',
 	'fx',
 ] as const;
@@ -778,7 +795,8 @@ const collapsibleState = reactive<Record<CollapseId, boolean | undefined>>({
 	'generators': undefined,
 	'envelope': undefined,
 	'filter': undefined,
-	'pitch': undefined,
+	'fm': undefined,
+	'unison': undefined,
 	'mod': undefined,
 	'fx': undefined,
 });
@@ -787,6 +805,30 @@ const allOpen = computed(() => collapseIds.every(id => collapsibleState[id] === 
 const allClosed = computed(() => collapseIds.every(id => collapsibleState[id] === false));
 
 //Collapsible Cards END
+
+// Panel tabs START
+// Under 1200 px, Sound, Effects and Compose are tabs under the Step Sequencer; the grid's
+// data-tab says which shows (from 1200 px all three show and the tabs are hidden). Not saved.
+type PanelTab = 'sound' | 'fx' | 'compose';
+const PANEL_TABS: { id: PanelTab; label: string; panel: string }[] = [
+	{ id: 'sound', label: 'Sound', panel: 'sound-panel' },
+	{ id: 'fx', label: 'Effects', panel: 'effects-panel' },
+	{ id: 'compose', label: 'Compose', panel: 'compose-panel' },
+];
+const activeTab = ref<PanelTab>('sound');
+
+// Left/Right (and Home/End) move between the tabs, as in any tab list
+function onTabKeydown(e: KeyboardEvent) {
+	const i = PANEL_TABS.findIndex(t => t.id === activeTab.value);
+	const next = e.key === 'ArrowRight' ? (i + 1) % PANEL_TABS.length
+		: e.key === 'ArrowLeft' ? (i + PANEL_TABS.length - 1) % PANEL_TABS.length
+			: e.key === 'Home' ? 0 : e.key === 'End' ? PANEL_TABS.length - 1 : -1;
+	if (next < 0) return;
+	e.preventDefault();
+	activeTab.value = PANEL_TABS[next].id;
+	nextTick(() => document.getElementById(`tab-${PANEL_TABS[next].id}`)?.focus());
+}
+// Panel tabs END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2697,16 +2739,42 @@ function rollRandomSound() {
 	trackEvent('preset_random');
 }
 
+// Built-in patterns (src/lib/patterns/), beside Sounds: a click sets the synth lane's pattern
+// (steps, velocities, pitches from the key's root, repeats), never the sound. One undo step.
+// Its button is lit while the pattern matches, the same way as a preset's.
+const patternKeys = reactive<Record<string, string>>({});
+const choosingPattern = ref<string | null>(null);
+const activePatternId = computed<string | null>(() => {
+	if (choosingPattern.value) return choosingPattern.value;
+	const key = patternKey(project.data);
+	if (!key) return null;
+	return PATTERNS.find(p => patternKeys[p.id] === key)?.id ?? null;
+});
+
+async function choosePattern(id: string) {
+	const pattern = PATTERNS.find(p => p.id === id);
+	if (!pattern) return;
+	applyPattern(projectState, pattern, { min: MIN_PAD_HZ, max: MAX_PAD_HZ });
+	choosingPattern.value = id;
+	trackEvent('pattern_select', { pattern: id });
+	await nextTick();
+	await nextTick();
+	project.flushPending();
+	patternKeys[id] = patternKey(project.data);
+	if (choosingPattern.value === id) choosingPattern.value = null;
+}
+
+// The Patterns dice: a new pattern from random choices (src/lib/patterns/random.ts), applied
+// like a built-in one. Nothing lights up; undo goes back to the pattern before.
+function rollRandomPattern() {
+	applyPattern(projectState, randomPattern(), { min: MIN_PAD_HZ, max: MAX_PAD_HZ });
+	trackEvent('pattern_random');
+}
+
 // PRESETS END
 </script>
 
 <style scoped>
-.ds-grid {
-	display: grid;
-	gap: 12px;
-	grid-template-columns: 1fr;
-}
-
 .pt-card .pt-section {
 	margin-bottom: 8px;
 }
@@ -2715,78 +2783,7 @@ function rollRandomSound() {
 	margin: 10px 0;
 }
 
-@media (max-width: 768px) {
-	.ds-modules {
-		columns: auto;
-	}
-
-	.ds-modules .module {
-		margin: 0 0 12px;
-	}
-}
-
-/* lg: 8-col grid */
-@media (min-width: 992px) {
-	.ds-grid {
-		grid-template-columns: repeat(8, minmax(0, 1fr));
-		gap: 14px;
-	}
-
-	.ds-transport {
-		grid-column: 1 / span 5;
-	}
-
-	.ds-steps {
-		grid-column: 1 / span 5;
-	}
-
-	.ds-visualizer {
-		grid-column: 6 / -1;
-		grid-row: 1 / span 2;
-		position: relative;
-		align-self: start;
-	}
-
-	.ds-modules {
-		column-width: 340px;
-		column-gap: 14px;
-		column-fill: balance;
-		grid-column: 1 / -1;
-	}
-
-	.ds-modules .module {
-		break-inside: avoid;
-		display: inline-block;
-		width: 100%;
-		margin: 0 0 14px;
-	}
-
-	.ds-sequencer {
-		grid-column: 1 / -1;
-	}
-}
-
-/* xl: 12-col grid */
 @media (min-width: 1280px) {
-	.ds-grid {
-		grid-template-columns: repeat(12, minmax(0, 1fr));
-		gap: 16px;
-	}
-
-	.ds-transport {
-		grid-column: 1 / span 9;
-	}
-
-	.ds-steps {
-		grid-column: 1 / span 9;
-	}
-
-	.ds-visualizer {
-		grid-column: 10 / -1;
-		grid-row: 1 / span 2;
-		position: relative;
-	}
-
 	.pt-card,
 	.pt-panel {
 		padding: 10px 12px;
@@ -2809,12 +2806,6 @@ function rollRandomSound() {
 	.pt-knob-row {
 		gap: 10px;
 	}
-}
-
-.ds-modules .module>.pt-card,
-.ds-modules .module>* {
-	height: auto;
-	display: block;
 }
 
 .pt-card,
@@ -2848,176 +2839,405 @@ function rollRandomSound() {
 	filter: grayscale(.7) brightness(.7);
 }
 
+/* LAYOUT START
+   Like one piece of hardware (see the template's LAYOUT comment). From 1200 px: the transport
+   and the Step Sequencer on the left two thirds, the screen beside them; under them Sound (two
+   thirds) and Compose (one third), which end on one line: Sound's last row and Melody Maker
+   take up any difference. Inside Sound each row is filled edge to edge, and a card stretched
+   taller than its controls keeps them centred. Under 1200 px: the screen beside the transport,
+   the steps across, then the tabs (Sound, Effects, Compose) and the one they show. Under
+   720 px (phones) everything is one column. */
+
+.ds-topbar {
+	margin-bottom: 12px;
+}
+
+/* The logo, at the top bar's left end (ProjectControls' brand slot) */
+.topbar-logo {
+	display: block;
+	height: 44px;
+	width: auto;
+	margin: -4px 6px -4px 0;
+	border-radius: 4px;
+}
+
+/* Phones: the project name needs the room (phone mode, planned, will place the logo) */
+@media (max-width: 575.98px) {
+	.topbar-logo {
+		display: none;
+	}
+}
+
+.ds-grid {
+	display: grid;
+	gap: 14px;
+	grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+	grid-template-areas:
+		"transport screen"
+		"steps screen"
+		"sound compose";
+	align-items: start;
+}
+
+.ds-transport {
+	grid-area: transport;
+}
+
+.ds-steps {
+	grid-area: steps;
+}
+
 .ds-visualizer {
+	grid-area: screen;
+	align-self: stretch;
+	display: flex;
+	min-height: 0;
 	overflow: hidden;
-	align-self: start;
+	position: relative;
 }
 
-/* OVERRIDES */
-@media (min-width: 992px) {
+.ds-sound {
+	grid-area: sound;
+	align-self: stretch;
+}
+
+.ds-compose {
+	grid-area: compose;
+	align-self: stretch;
+}
+
+.ds-tabs {
+	display: none;
+}
+
+/* The screen fills its cell: the LCD takes all the height the F-keys leave */
+.ds-visualizer .nac-wrap {
+	flex: 1 1 auto;
+	display: flex;
+	min-height: 0;
+	width: 100%;
+}
+
+.ds-visualizer .nac-wrap>* {
+	flex: 1 1 auto;
+	min-height: 0;
+	width: 100%;
+}
+
+.ds-visualizer :deep(.nac-screen) {
+	display: grid !important;
+	grid-template-rows: 1fr auto;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+}
+
+.ds-visualizer :deep(.nac-screen__lcd) {
+	height: 100% !important;
+	aspect-ratio: auto !important;
+	min-height: 0;
+}
+
+.ds-visualizer :deep(.nac-screen__lcd canvas) {
+	display: block;
+	width: 100%;
+	height: 100% !important;
+}
+
+.ds-visualizer :deep(.nac-screen__fkeys) {
+	display: grid !important;
+	grid-template-columns: repeat(4, 1fr);
+	gap: .4rem;
+	padding: 0 .75rem;
+}
+
+/* Transport: the knobs, Sounds and Patterns side by side, Play */
+.transport-row {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+}
+
+.transport-knobs {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+
+.transport-presets {
+	display: flex;
+	gap: 12px;
+	margin: 0 auto;
+	min-width: 0;
+}
+
+.transport-right {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+}
+
+/* Sections: a recessed panel with its name */
+.ds-section {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	min-width: 0;
+	padding: 10px;
+	border: 1px solid var(--pt-hairline);
+	border-radius: 16px;
+	background: color-mix(in oklab, var(--pt-inset) 55%, transparent);
+}
+
+.ds-section-title {
+	margin: 2px 6px 0;
+	font-size: 13px;
+	font-weight: 700;
+	line-height: 1.3;
+	letter-spacing: .2em;
+	text-transform: uppercase;
+	color: var(--pt-text);
+	opacity: .85;
+}
+
+/* Sound: three rows, each filled edge to edge */
+.sound-row {
+	display: grid;
+	gap: 14px;
+	align-items: stretch;
+	min-width: 0;
+}
+
+.sound-row-1 {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr);
+}
+
+.sound-row-2 {
+	grid-template-columns: minmax(0, 2fr) minmax(0, 2.2fr) minmax(0, 4.2fr);
+}
+
+.sound-row-3 {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	flex: 1 1 auto;
+}
+
+.sound-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	min-width: 0;
+}
+
+.sound-stack>.module {
+	flex: 1 1 auto;
+}
+
+/* Every module fills its cell; a stretched card keeps its controls centred */
+.ds-section .module {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.ds-section .module> :deep(.pt-card),
+.ds-section .module>.noise-tv-bg,
+.ds-section .module>.noise-tv-bg> :deep(.pt-card) {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+}
+
+.ds-section .module :deep(.pt-collapse-body) {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+}
+
+/* Envelope, Pitch and Filter: knobs spread evenly across each card */
+.sound-row-2 :deep(.pt-subblock) {
+	width: 100%;
+	margin: 0;
+}
+
+.sound-row-2 :deep(.pt-knob-row) {
+	justify-content: space-evenly;
+	flex-wrap: nowrap;
+}
+
+/* Compose: Melody Maker takes up any difference with Sound */
+.ds-compose .module.melody {
+	flex: 1 1 auto;
+}
+
+/* Noise: its ribbon (the switch) stays above the stretched card */
+.module.noise .noise-tv-bg>.noise-ribbon {
+	z-index: 3;
+}
+
+/* Tablets: the tabs, and the panel they show */
+@media (max-width: 1199.98px) {
+	.ds-grid {
+		grid-template-areas:
+			"transport screen"
+			"steps steps"
+			"tabs tabs"
+			"panel panel";
+	}
+
 	.ds-visualizer {
-		display: flex;
-		min-height: 0;
+		min-height: 170px;
 	}
 
-	.ds-visualizer .nac-wrap {
-		flex: 1 1 auto;
-		display: flex;
-		min-height: 0;
+	.ds-sound,
+	.ds-compose {
+		grid-area: panel;
 	}
 
-	.ds-visualizer :deep(.nac-screen),
-	.ds-visualizer ::v-deep(.nac-screen) {
+	.ds-tabs {
+		grid-area: tabs;
+		display: flex;
+		gap: 8px;
+		margin-bottom: -4px;
+	}
+
+	.ds-tab {
+		flex: 1;
+		padding: 10px 14px;
+		border-radius: 12px 12px 4px 4px;
+		border: 1px solid var(--pt-hairline);
+		background: var(--pt-surface-2);
+		color: var(--pt-text);
+		font: inherit;
+		font-size: .8rem;
+		font-weight: 700;
+		letter-spacing: .14em;
+		text-transform: uppercase;
+		opacity: .7;
+		cursor: pointer;
+	}
+
+	.ds-tab.on {
+		opacity: 1;
+		border-color: hsl(var(--pt-accent) 80% 62% / .8);
+		background: radial-gradient(circle at 50% 0%, hsl(var(--pt-accent) 70% 40% / .45), transparent 70%), var(--pt-surface-2);
+		box-shadow: 0 0 14px hsl(var(--pt-accent) 80% 60% / .25);
+	}
+
+	.ds-tab:focus-visible {
+		outline: 2px solid hsl(var(--pt-accent) 80% 62%);
+		outline-offset: 2px;
+	}
+
+	/* The tab names the panel */
+	.ds-section-title {
+		display: none;
+	}
+
+	.ds-grid[data-tab="sound"] .ds-compose,
+	.ds-grid[data-tab="sound"] .module.fx,
+	.ds-grid[data-tab="fx"] .ds-compose,
+	.ds-grid[data-tab="fx"] .sound-row-1,
+	.ds-grid[data-tab="fx"] .sound-row-2,
+	.ds-grid[data-tab="fx"] .sound-row-3>.sound-stack,
+	.ds-grid[data-tab="compose"] .ds-sound {
+		display: none;
+	}
+
+	/* Sound tab: Noise and the LFO side by side under Envelope, Pitch and Filter */
+	.sound-row-3 {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.sound-row-3>.sound-stack {
 		display: grid;
-		grid-template-rows: auto 1fr auto;
-		width: 100%;
-		height: 100%;
-		min-height: 0;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
-	.ds-visualizer :deep(.nac-screen__lcd),
-	.ds-visualizer ::v-deep(.nac-screen__lcd) {
-		height: auto !important;
-		min-height: 0;
+	/* Effects tab: the pedals at a size that suits them, centred */
+	.module.fx .fx-pair {
+		grid-template-columns: repeat(3, minmax(0, 190px));
+		justify-content: center;
+	}
+
+	/* The transport: Sounds and Patterns on a row of their own under the knobs */
+	.transport-row {
+		flex-wrap: wrap;
+		row-gap: 12px;
+		justify-content: space-between;
+	}
+
+	.transport-presets {
+		order: 3;
+		flex: 1 1 100%;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		margin: 0;
 	}
 }
 
-@media (min-width: 1280px) {
-	.ds-transport {
-		grid-column: 1 / span 8 !important;
+/* Phones: one column, the screen on top */
+@media (max-width: 719.98px) {
+	.ds-grid {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-areas:
+			"screen"
+			"transport"
+			"steps"
+			"tabs"
+			"panel";
+		gap: 12px;
 	}
 
-	.ds-steps {
-		grid-column: 1 / span 8 !important;
+	.drum-sequencer {
+		background: none;
+		box-shadow: none;
 	}
 
-	.ds-visualizer {
-		grid-column: 9 / -1 !important;
-		grid-row: 1 / span 2 !important;
-		position: relative;
-		align-self: start;
+	/* The tabs frame the panel: no recessed section around it, so the cards keep the width */
+	.ds-section {
+		padding: 0;
+		border: 0;
+		background: none;
 	}
 
-	.ds-modules {
-		display: grid !important;
-		grid-template-columns: repeat(12, minmax(0, 1fr));
-		gap: 16px;
-		column-width: auto !important;
-		column-gap: 0 !important;
+	.transport-row {
+		justify-content: space-evenly;
 	}
 
-	.ds-sequencer {
-		grid-column: 10 / span 3 !important;
+	.transport-right {
+		justify-content: space-evenly;
+	}
+
+	.transport-presets {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.sound-row-1,
+	.sound-row-3>.sound-stack {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.sound-row-2 {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.sound-row-2>.module.filter {
+		grid-column: 1 / -1;
+	}
+
+	/* Effects tab: the pedals one under another, as before */
+	.module.fx .fx-pair {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.ds-tab {
+		padding: 10px 6px;
+		letter-spacing: .08em;
 	}
 }
 
-@media (min-width: 992px) {
-	.ds-visualizer {
-		display: flex;
-		align-items: stretch;
-		position: relative;
-	}
-
-	.ds-visualizer .nac-wrap {
-		flex: 1 1 auto;
-		min-height: 0;
-		display: flex;
-	}
-
-	.ds-visualizer .nac-wrap>* {
-		flex: 1 1 auto;
-		min-height: 0;
-		width: 100%;
-	}
-
-	.ds-visualizer :deep([class*="lcd"]) {
-		flex: 1 1 auto;
-		min-height: 0;
-		height: auto !important;
-	}
-
-	.ds-visualizer :deep(canvas) {
-		display: block;
-		width: 100%;
-		height: 100% !important;
-	}
-}
-
-@media (min-width: 992px) {
-	.ds-modules {
-		display: block !important;
-		column-width: 340px !important;
-		column-gap: 14px !important;
-		column-fill: balance !important;
-	}
-
-	.ds-modules .module {
-		display: inline-block !important;
-		width: 100% !important;
-		margin: 0 0 14px !important;
-		break-inside: avoid !important;
-	}
-
-	.ds-sequencer {
-		grid-column: 1 / -1 !important;
-	}
-}
-
-@media (min-width: 1280px) {
-	.ds-modules {
-		display: block !important;
-		column-width: 360px !important;
-		column-gap: 16px !important;
-	}
-
-	.ds-sequencer {
-		grid-column: 1 / -1 !important;
-	}
-}
-
-@media (min-width: 992px) {
-	.ds-visualizer {
-		align-self: stretch !important;
-		position: relative;
-		display: flex;
-		min-height: 0;
-		z-index: 999;
-	}
-
-	.ds-visualizer .nac-wrap {
-		display: flex;
-		height: 100%;
-		min-height: 0;
-		width: 100%;
-	}
-
-	.ds-visualizer :deep(.nac-screen) {
-		display: grid !important;
-		grid-template-rows: 1fr auto;
-		height: 100%;
-		min-height: 0;
-		width: 100%;
-	}
-
-	.ds-visualizer :deep(.nac-screen__lcd) {
-		height: 100% !important;
-		aspect-ratio: auto !important;
-		min-height: 0;
-	}
-
-	.ds-visualizer :deep(.nac-screen__lcd canvas) {
-		width: 100%;
-		height: 100% !important;
-		display: block;
-	}
-
-	.ds-visualizer :deep(.nac-screen__fkeys) {
-		display: grid !important;
-		grid-template-columns: repeat(4, 1fr);
-		gap: .4rem;
-		padding: 0 .75rem;
-	}
-}
+/* LAYOUT END */
 
 .gen-toolbar {
 	display: flex;
@@ -3272,30 +3492,6 @@ function rollRandomSound() {
 .wave-row :deep(.dice-badge svg) {
 	width: 16px;
 	height: 16px;
-}
-
-@media (min-width: 992px) {
-	.ds-modules {
-		display: block !important;
-		column-width: 340px;
-		column-gap: 14px;
-		column-fill: balance;
-		grid-column: 1 / -1;
-	}
-
-	.ds-modules .module {
-		display: inline-block;
-		width: 100%;
-		margin: 0 0 14px;
-		break-inside: avoid;
-	}
-}
-
-@media (min-width: 1280px) {
-	.ds-modules {
-		column-width: 360px;
-		column-gap: 16px;
-	}
 }
 
 .mm-menu {
@@ -3610,20 +3806,6 @@ function rollRandomSound() {
 	box-shadow: 0 0 8px var(--knob-detent, rgba(94, 255, 176, 0.65));
 }
 
-.module.pitch :deep(.knob-group.pitch-col) {
-	margin-top: 0;
-	width: 50%;
-	display: inline-block;
-	vertical-align: top;
-}
-
-@media (max-width: 900px) {
-	.module.pitch :deep(.knob-group.pitch-col) {
-		width: 100%;
-		display: block;
-	}
-}
-
 .module.noise .noise-tv-bg {
 	border-radius: var(--pt-card-radius, 12px);
 	overflow: hidden;
@@ -3710,43 +3892,6 @@ function rollRandomSound() {
 	}
 }
 
-.module.sound .sound-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	grid-template-areas: "env filter" "pitch filter";
-	gap: 12px;
-}
-
-.module.sound .sound-grid> :nth-child(1) {
-	grid-area: env;
-}
-
-.module.sound .sound-grid> :nth-child(2) {
-	grid-area: filter;
-}
-
-.module.sound .sound-grid> :nth-child(3) {
-	grid-area: pitch;
-}
-
-/* Filter: Cutoff and Resonance, then Env Amt and Decay below them */
-.module.sound :deep(.filter-card .pt-knob-row) {
-	display: grid;
-	grid-template-columns: repeat(2, 40px);
-	row-gap: 14px;
-	column-gap: var(--pt-gap, 10px);
-}
-
-/* Narrow cards: the knobs take the card's whole width (pt-subblock is half width from 992px) */
-.module.sound :deep(.pt-subblock) {
-	width: 100%;
-}
-
-.module.sound :deep(.pt-card) {
-	padding-left: 10px;
-	padding-right: 10px;
-}
-
 .fx-pair {
 	display: grid;
 	grid-template-columns: 1fr 1fr 1fr;
@@ -3764,65 +3909,5 @@ function rollRandomSound() {
 	width: 100%;
 }
 
-.transport-row {
-	display: flex;
-	align-items: center;
-	gap: 14px;
-}
-
-.transport-right {
-	margin-left: auto;
-	display: flex;
-	align-items: center;
-	gap: 18px;
-}
-
-.transport-logo {
-	max-width: 130px;
-	height: auto;
-	display: block;
-}
-
-/* Presets: in the space between Swing and the logo from 1280 px (where it fits three across) */
-.transport-presets {
-	flex: 1 1 0;
-}
-
-/* Narrower: a row of their own under the knobs (and under Play on phones). The screen beside
-   the transport and steps grows with the card, so the frame stays filled. */
-@media (max-width: 1279.98px) {
-	.transport-row {
-		flex-wrap: wrap;
-		row-gap: 10px;
-	}
-
-	.transport-presets {
-		order: 3;
-		flex-basis: 100%;
-	}
-}
-
-@media (max-width: 720px) {
-	.transport-row {
-		flex-wrap: wrap;
-		row-gap: 10px;
-		justify-content: space-evenly;
-	}
-
-	.transport-right {
-		margin-left: 0;
-		width: 100%;
-		justify-content: space-evenly;
-	}
-
-	.drum-sequencer {
-		background: none;
-		box-shadow: none;
-	}
-
-	.module.sound .sound-grid {
-		gap: 8px;
-	}
-}
 
 </style>
