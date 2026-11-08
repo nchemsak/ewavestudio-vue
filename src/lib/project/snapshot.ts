@@ -11,7 +11,7 @@
 // too), and, if it affects sound, into the live and export engines; see CLAUDE.md.
 
 import type { Ref } from 'vue';
-import { DEFAULT_DELAY_DIVISION, divisionForTime, isDelayDivision, syncedDelaySeconds } from '../delaySync';
+import { DEFAULT_DELAY_DIVISION, DEFAULT_TEMPO, divisionForTime, isDelayDivision, syncedDelaySeconds } from '../delaySync';
 
 type R<T> = Readonly<Ref<T>>;
 
@@ -640,7 +640,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 
 	// transport (first: the synced delay time below follows the tempo)
 	volume.value = 0.75;
-	tempo.value = 80;
+	tempo.value = DEFAULT_TEMPO;
 	swing.value = 0;
 
 	// synth and effects
@@ -743,7 +743,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 	delayEnabled.value = false;
 	delaySync.value = true;
 	delayDivision.value = DEFAULT_DELAY_DIVISION;
-	delayTime.value = syncedDelaySeconds(tempo.value, DEFAULT_DELAY_DIVISION); // 0.5625 s at 80 BPM
+	delayTime.value = syncedDelaySeconds(tempo.value, DEFAULT_DELAY_DIVISION); // 0.375 s at 120 BPM
 	delayFeedback.value = 0.3;
 	delayMix.value = 0.3;
 	delayToneEnabled.value = true;

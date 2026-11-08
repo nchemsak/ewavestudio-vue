@@ -12,7 +12,7 @@ import {
 describe('synced delay time', () => {
 	it('is the division at the tempo', () => {
 		expect(syncedDelaySeconds(80, '1/8.')).toBe(0.5625);
-		expect(DEFAULT_DELAY_TIME).toBe(0.5625);
+		expect(DEFAULT_DELAY_TIME).toBe(0.375); // dotted 1/8 at 120 BPM, the starting tempo
 		expect(syncedDelaySeconds(120, '1/4')).toBe(0.5);
 		expect(syncedDelaySeconds(120, '1/16')).toBe(0.125);
 		expect(syncedDelaySeconds(120, 'nonsense')).toBe(syncedDelaySeconds(120, '1/8.'));

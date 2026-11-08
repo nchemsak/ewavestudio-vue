@@ -2,6 +2,7 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { PRESETS } from '../src/lib/presets/library';
+import { DETENT_HOLD, SWING_DETENTS, TEMPO_DETENTS } from '../src/lib/knobDetents';
 
 // Injected before the app loads. Keeps a handle on the app's AudioContext (__ctx), records
 // every note it schedules, tracks nodes that feed an audio parameter (the per-note LFO taps),
@@ -176,6 +177,16 @@ async function turnOnPads(page: Page, indexes: number[]) {
 	for (const i of indexes) await pads(page).nth(i).click();
 }
 
+// The tempo, one BPM per arrow key (for tests whose timings were worked out at a given tempo)
+async function setTempo(page: Page, bpm: number) {
+	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
+	const now = Number(await tempo.getAttribute('aria-valuenow'));
+	await tempo.focus();
+	for (let i = 0; i < Math.abs(bpm - now); i++) await page.keyboard.press(bpm > now ? 'ArrowUp' : 'ArrowDown');
+	await expect(tempo).toHaveAttribute('aria-valuenow', String(bpm));
+	await tempo.blur();
+}
+
 test('loads as version 2 with the synth lane and the four screen views', async ({ page }) => {
 	await expect(page).toHaveTitle('Ephemeral Wave Synth 2');
 	await expect(page.locator('.fkey')).toHaveCount(4);
@@ -251,14 +262,14 @@ test('number keys 1–4 switch the screen view, except while typing', async ({ p
 test('knobs work from the keyboard, and turning Attack shows the envelope until focus moves on', async ({ page }) => {
 	// One step per arrow on a knob with few steps (tempo: 1 BPM)
 	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
-	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '120');
 	await tempo.focus();
 	await page.keyboard.press('ArrowUp');
-	await expect(tempo).toHaveAttribute('aria-valuenow', '81');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '121');
 	await page.keyboard.press('ArrowLeft');
-	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '120');
 	await page.keyboard.press('Shift+ArrowUp'); // about 10% of 20..300
-	await expect(tempo).toHaveAttribute('aria-valuenow', '108');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '148');
 	await page.keyboard.press('End');
 	await expect(tempo).toHaveAttribute('aria-valuenow', '300');
 	await page.keyboard.press('Home');
@@ -747,8 +758,8 @@ test('File → New gives the same settings as a freshly opened page', async ({ p
 	const afterNew = await projectData();
 
 	// Only the screen layout (which panels are open) may differ. That includes the delay time
-	// (synced: dotted 1/8 at 80 BPM) and tone, which the Delay panel used to set by itself.
-	expect(fresh.fx.delay).toMatchObject({ division: '1/8.', time: 0.5625, toneHz: 5000 });
+	// (synced: dotted 1/8 at 120 BPM) and tone, which the Delay panel used to set by itself.
+	expect(fresh.fx.delay).toMatchObject({ division: '1/8.', time: 0.375, toneHz: 5000 });
 	const settings = ({ ui, ...rest }: any) => rest;
 	expect(settings(afterNew)).toEqual(settings(fresh));
 });
@@ -758,6 +769,8 @@ test('the synced delay time follows the TIME knob, the tempo and a loaded projec
 		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
 	const time = page.getByRole('slider', { name: 'TIME', exact: true });
 	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
+	await expect(time).toHaveAttribute('aria-valuetext', '1/8., 375 ms'); // at 120 BPM, the starting tempo
+	await setTempo(page, 80); // the times below are at 80 BPM
 	await expect(time).toHaveAttribute('aria-valuetext', '1/8., 563 ms');
 
 	// Turning the knob sets the division and the time (it works while the delay is on)
@@ -805,7 +818,7 @@ test('a burst of changes is copied into the project once, and Save or Export rig
 		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
 	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
 	await page.waitForTimeout(1000); // let the page's start-up settle
-	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '120');
 
 	// 30 tempo steps, 10 ms apart, like a knob drag: the snapshot used to be built and turned
 	// into JSON several times for each one (about 100 times in all)
@@ -817,16 +830,16 @@ test('a burst of changes is copied into the project once, and Save or Export rig
 			await new Promise((r) => setTimeout(r, 10));
 		}
 	});
-	await expect(tempo).toHaveAttribute('aria-valuenow', '110');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '150');
 	await page.waitForTimeout(1000); // until the change is in the project and the undo history
 	const during = (await page.evaluate(() => (window as any).__bigJson as number)) - before;
 	expect(during).toBeLessThan(10);
-	expect((await projectData()).transport.tempo).toBe(110);
+	expect((await projectData()).transport.tempo).toBe(150);
 
 	// Export right after a change, before it has settled, includes it
 	await tempo.focus();
 	await page.keyboard.press('ArrowUp');
-	expect((await projectData()).transport.tempo).toBe(111);
+	expect((await projectData()).transport.tempo).toBe(151);
 
 	// So does Save
 	const name = page.getByRole('textbox', { name: 'Project name' });
@@ -838,7 +851,7 @@ test('a burst of changes is copied into the project once, and Save or Export rig
 	await page.keyboard.press('Control+s');
 	await expect(page.locator('.pc-dot')).toHaveClass(/\bsaved\b/);
 	await page.reload();
-	await expect(tempo).toHaveAttribute('aria-valuenow', '112');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '152');
 });
 
 test('the pitch envelope sweeps each note down from Amount, and short decays are easy to reach', async ({ page }) => {
@@ -1353,13 +1366,13 @@ test('undo and redo step through changes; a knob drag is one step', async ({ pag
 	await page.waitForTimeout(SETTLED); // still held: nothing is recorded yet
 	await page.mouse.up();
 	const dragged = Number(await tempo.getAttribute('aria-valuenow'));
-	expect(dragged).toBeGreaterThan(80);
+	expect(dragged).toBeGreaterThan(120);
 	await expect(undoBtn).toBeEnabled();
 
 	// Undo right away, before the drag has settled: it still goes back past the whole drag
 	await page.locator('body').click({ position: { x: 5, y: 5 } });
 	await page.keyboard.press('Control+z');
-	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '120');
 	await expect(selected).toHaveCount(2);
 	await undoBtn.click();
 	await expect(selected).toHaveCount(1);
@@ -1377,7 +1390,7 @@ test('undo and redo step through changes; a knob drag is one step', async ({ pag
 	await expect(redoBtn).toBeDisabled();
 
 	await page.keyboard.press('Control+z');
-	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '120');
 	await page.waitForTimeout(SETTLED);
 	await expect(redoBtn).toBeEnabled();
 
@@ -1387,7 +1400,7 @@ test('undo and redo step through changes; a knob drag is one step', async ({ pag
 	await expect(redoBtn).toBeDisabled();
 	await page.keyboard.press('Control+z');
 	await expect(selected).toHaveCount(2);
-	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '120');
 
 	// Undo changes the project, so the unsaved dot shows
 	await expect(page.locator('.pc-dot')).toHaveClass(/\bunsaved\b/);
@@ -1402,16 +1415,16 @@ test('after an undo, its follow-up changes (the synced delay time) keep redo ava
 	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
 	await tempo.focus();
 	await page.keyboard.press('ArrowUp');
-	await expect(tempo).toHaveAttribute('aria-valuenow', '81');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '121');
 	await page.waitForTimeout(SETTLED);
 
 	await page.keyboard.press('Control+z');
-	await expect(tempo).toHaveAttribute('aria-valuenow', '80');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '120');
 	await page.waitForTimeout(SETTLED);
 	const redoBtn = page.getByRole('button', { name: 'Redo', exact: true });
 	await expect(redoBtn).toBeEnabled();
 	await redoBtn.click();
-	await expect(tempo).toHaveAttribute('aria-valuenow', '81');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '121');
 });
 
 test('Ctrl+Z in the project name box undoes typing, not the pattern', async ({ page }) => {
@@ -1469,7 +1482,7 @@ test('presets set the sound but not the pattern, light up, and are one undo step
 	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
 	await tempo.focus();
 	await page.keyboard.press('ArrowUp');
-	await expect(tempo).toHaveAttribute('aria-valuenow', '81');
+	await expect(tempo).toHaveAttribute('aria-valuenow', '121');
 	await page.waitForTimeout(SETTLED);
 	await expect(lit).toHaveCount(0);
 	const before = await projectData();
@@ -1492,7 +1505,7 @@ test('presets set the sound but not the pattern, light up, and are one undo step
 		expect(new Set(data.instruments.find((i: any) => i.name === 'synth-voice').waveforms)).toEqual(new Set([p.wave]));
 		expect(pattern(data), `${p.id} keeps the pattern`).toEqual(pattern(before));
 		// The delay time stays the division at this tempo
-		expect(data.fx.delay.time).toBeCloseTo((60 / 81) * 0.75, 6);
+		expect(data.fx.delay.time).toBeCloseTo((60 / 121) * 0.75, 6);
 	}
 	// What the last preset (Bell) doesn't set is back at its default, though Acid set it
 	const bell = await projectData();
@@ -1683,6 +1696,7 @@ test("a step's Repeats play quick hits within the step, live and in WAV exports"
 		await page.getByRole('group', { name: 'Repeats' }).getByRole('button', { name: label, exact: true }).click();
 		await page.keyboard.press('Escape');
 	};
+	await setTempo(page, 80); // the timings below are at 80 BPM
 	await turnOnPads(page, [0]);
 	await setRepeats(0, '×3');
 	await expect(pads(page).nth(0).locator('..').locator('.ratchet-badge')).toHaveText('×3');
@@ -1725,6 +1739,7 @@ test("a step's Repeats play quick hits within the step, live and in WAV exports"
 // --- Export audio ----------------------------------------------------------------------------
 
 test('Export audio: a loop is exactly N bars, with the echoes from its end folded onto its start', async ({ page }) => {
+	await setTempo(page, 80); // the timings below are at 80 BPM
 	const name = page.getByRole('textbox', { name: 'Project name' });
 	await name.fill('Loop Test');
 	await name.press('Enter');
@@ -1760,6 +1775,7 @@ test('Export audio: a loop is exactly N bars, with the echoes from its end folde
 });
 
 test('Export audio: effects stems add up to the mix; a MIDI file and a one-shot come in the same zip', async ({ page }) => {
+	await setTempo(page, 80); // the names and the MIDI file's timing below are at 80 BPM
 	const name = page.getByRole('textbox', { name: 'Project name' });
 	await name.fill('Stems');
 	await name.press('Enter');
@@ -2142,37 +2158,53 @@ async function dragKnob(page: Page, knob: Locator, pixels: number) {
 const heldFor = (values: number[], value: number) =>
 	Math.max(0, ...values.map((_, i) => values.slice(i).findIndex((v) => v !== value)).map((n, i) => (values[i] === value ? (n < 0 ? values.length - i : n) : 0)));
 
-test('knob notches: Tempo and Swing hold at common values while dragged, with a tick for each', async ({ page }) => {
+test('knob notches: Tempo and Swing hold at common values while dragged, and light up on one', async ({ page }) => {
 	const tempo = page.getByRole('slider', { name: 'Tempo' });
 	const swing = page.getByRole('slider', { name: 'Swing' });
+	const tempoBox = page.locator('.tempo-stepper .stepper-value');
 	await expect(tempo.locator('.dial-detent')).toHaveCount(7);
 	await expect(swing.locator('.dial-detent')).toHaveCount(5);
 	await expect(page.getByRole('slider', { name: 'Volume' }).locator('.dial-detent')).toHaveCount(0);
 
-	// From 80 BPM up: about 1.4 BPM a pixel, but each notch holds for several pixels
-	const bpm = await dragKnob(page, tempo, 70);
-	for (const notch of [90, 100, 120, 128]) expect(heldFor(bpm, notch)).toBeGreaterThanOrEqual(6);
+	// The page starts at 120 BPM, a notch: its tick, the pointer and the readout light up
+	await expect(tempo).toHaveAttribute('aria-valuenow', '120');
+	await expect(tempo).toHaveClass(/\bat-detent\b/);
+	await expect(tempo.locator('.dial-detent.is-on')).toHaveCount(1);
+	await expect(tempoBox).toHaveClass(/\bon-stop\b/);
+
+	// Down from 120: about 1.4 BPM a pixel, but each notch holds for 14 px
+	const bpm = await dragKnob(page, tempo, -150);
+	for (const notch of [100, 90, 60]) expect(heldFor(bpm, notch)).toBeGreaterThanOrEqual(14);
 	expect(heldFor(bpm, 110)).toBeLessThanOrEqual(2); // not a notch
 	// It never jumps: each pixel moves it by at most two steps
-	bpm.reduce((a, b) => { expect(b - a).toBeLessThanOrEqual(2); expect(b).toBeGreaterThanOrEqual(a); return b; }, 80);
+	bpm.reduce((a, b) => { expect(a - b).toBeLessThanOrEqual(2); expect(b).toBeLessThanOrEqual(a); return b; }, 120);
+	// Off a notch, nothing is lit
+	await dragKnob(page, tempo, 10);
+	await expect(tempo).not.toHaveClass(/\bat-detent\b/);
+	await expect(tempo.locator('.dial-detent.is-on')).toHaveCount(0);
+	await expect(tempoBox).not.toHaveClass(/\bon-stop\b/);
 
-	// Swing (4 px a 1 % step): each notch holds for its step and then some
-	const amounts = await dragKnob(page, swing, 220);
-	for (const notch of [0.08, 0.16, 0.24, 0.33, 0.42]) expect(heldFor(amounts, notch)).toBeGreaterThanOrEqual(10);
+	// Swing (4 px a 1 % step): each notch holds for its step and 14 px more
+	const amounts = await dragKnob(page, swing, 260);
+	for (const notch of SWING_DETENTS) expect(heldFor(amounts, notch)).toBeGreaterThanOrEqual(16);
 	expect(heldFor(amounts, 0.3)).toBeLessThanOrEqual(5);
-	// The triplet notch says so: from 0, 160 px is the middle of its hold
-	await dragKnob(page, swing, -250);
+	// The triplet notch says so, and lights up: from 0, the middle of its hold
+	await dragKnob(page, swing, -300);
 	await expect(swing).toHaveAttribute('aria-valuenow', '0');
-	await dragKnob(page, swing, 160);
+	const triplet = SWING_DETENTS.indexOf(0.33);
+	await dragKnob(page, swing, Math.round((0.33 / 0.5 + (triplet + 0.5) * DETENT_HOLD) * 200));
 	await expect(swing).toHaveAttribute('aria-valuenow', '0.33');
 	await expect(swing).toHaveAttribute('aria-valuetext', '33% (triplet)');
-	await expect(page.locator('.stepper-value', { hasText: '33%' })).toBeVisible();
+	await expect(swing).toHaveClass(/\bat-detent\b/);
+	await expect(page.locator('.stepper-value.on-stop', { hasText: '33%' })).toBeVisible();
 });
 
 test('knob notches: a two-way knob holds at its middle; a MIDI controller can reach 120 BPM', async ({ page }) => {
 	// Filter Env Amt starts at 0: a drag first holds there, then moves
 	const envAmt = page.getByRole('slider', { name: 'Env Amt' });
 	await expect(envAmt).toHaveAttribute('aria-valuenow', '0');
+	await expect(envAmt).toHaveClass(/\bat-detent\b/); // its zero tick is a notch, lit
+	await expect(envAmt.locator('.dial-zero.dial-detent.is-on')).toHaveCount(1);
 	const up = await dragKnob(page, envAmt, 20);
 	expect(heldFor(up, 0)).toBeGreaterThanOrEqual(3);
 	expect(up.at(-1)).toBeGreaterThan(0);
@@ -2202,7 +2234,7 @@ test('knob notches: a two-way knob holds at its middle; a MIDI controller can re
 		}
 		return seen;
 	});
-	for (const notch of [90, 100, 120, 128, 140, 160, 174]) expect(reached).toContain(notch);
+	for (const notch of TEMPO_DETENTS) expect(reached).toContain(notch);
 	expect(reached.at(-1)).toBe(300);
 });
 

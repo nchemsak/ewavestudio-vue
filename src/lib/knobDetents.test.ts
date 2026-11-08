@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detentTravel, DETENT_HOLD, SWING_DETENTS, TEMPO_DETENTS, TRIPLET_SWING } from './knobDetents';
+import { detentTravel, DETENT_HOLD, CONTROLLER_DETENT_HOLD, SWING_DETENTS, TEMPO_DETENTS, TRIPLET_SWING } from './knobDetents';
 
 // A 20–300 BPM knob, as the Tempo knob
 const tempoPos = (bpm: number) => (bpm - 20) / 280;
@@ -60,8 +60,11 @@ describe('soft notches on a knob', () => {
 	});
 
 	it('let a MIDI controller reach 120 BPM, which its 128 steps miss without notches', () => {
+		// A controller's knob gets the lighter hold (Knob.vue's setPosition)
+		const controller = detentTravel(TEMPO_DETENTS.map((v) => ({ pos: tempoPos(v), value: v })), CONTROLLER_DETENT_HOLD);
+		expect(CONTROLLER_DETENT_HOLD).toBeLessThan(DETENT_HOLD);
 		const bpmAt = (cc: number) => {
-			const k = tempo.toKnob((cc / 127) * tempo.length);
+			const k = controller.toKnob((cc / 127) * controller.length);
 			return k.value ?? Math.round(20 + k.pos * 280);
 		};
 		const plain = Array.from({ length: 128 }, (_, cc) => Math.round(20 + (cc / 127) * 280));

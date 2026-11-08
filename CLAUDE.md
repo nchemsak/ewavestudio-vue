@@ -494,7 +494,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - The Delay panel's TIME knob picks a note division (`fx.delay.division`, default dotted 1/8,
   `'1/8.'`); the time is saved as `fx.delay.time` in seconds. With sync on (`fx.delay.sync`;
   its switch is in the commented-out Advanced menu, so only a project can turn it off), the time is the division at the
-  tempo: 0.5625 s at 80 BPM. `src/lib/delaySync.ts` works it out (`syncedDelaySeconds`), and
+  tempo: 0.375 s at 120 BPM, the starting tempo. `src/lib/delaySync.ts` works it out (`syncedDelaySeconds`), and
   `followDelaySync()` in `DrumSequencer.vue` keeps the time in step whenever the tempo,
   division or sync changes (synchronously, so every snapshot already has the matching time).
 - `applySnapshot()` recomputes the time from the division when sync is on, so a time set from
@@ -576,9 +576,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   stems missed the mix by more than 1). The reverb's impulse response has its own fixed seed.
 - **Normalize** (on by default): the mix and stems get one gain, so the loudest sample of any
   of them is −1 dBFS and the stems still add up; the one-shot is normalized on its own.
-- **Names** (`src/lib/export/names.ts`): `Project_80bpm_Amin_4bars_mix.wav` (the key only
+- **Names** (`src/lib/export/names.ts`): `Project_120bpm_Amin_4bars_mix.wav` (the key only
   when the Melody Maker has a scale; `4bars-tail` with the tail), `..._dry.wav` and so on,
-  `Project_80bpm_Amin_4bars.mid`, `Project_80bpm_Amin_4bars.zip`, `Project_oneshot_A3.wav`.
+  `Project_120bpm_Amin_4bars.mid`, `Project_120bpm_Amin_4bars.zip`, `Project_oneshot_A3.wav`.
   The note names are the app's (A3 = 220 Hz, which Ableton and Logic call A2).
 - Files are 32-bit float WAV at the AudioContext's sample rate, as before.
 - Analytics: `export_audio_click` (the menu item) and `export_audio` (the choices).
@@ -597,6 +597,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `snapshot.test.ts` tests them in Node. `resetUiToFactoryDefaults()` in `DrumSequencer.vue`
   wraps the last one with what isn't saved (stop playback, pad sliders, menus, Melody Maker).
 - `src/composables/useProjectSync.ts` connects them to the project store (below).
+- The starting tempo (a fresh page, File → New) is 120 BPM, most DAWs' default, so an export
+  drops into a new DAW project at its tempo: `DEFAULT_TEMPO` in `src/lib/delaySync.ts`, which
+  the `tempo` ref, `resetToFactoryDefaults()` and the default delay time use. It was 80 until
+  PR 40; browser tests whose timings were worked out at 80 set it first (`setTempo(page, 80)`).
 - Storage names come from `src/lib/storage/namespace.ts` and include the site folder, because
   browsers share storage across a whole website: `/studio2/` uses the IndexedDB database
   `ewave-studio2-db` and `localStorage` keys `ewave-studio2:*`. Version 1 on `/studio/` uses
@@ -682,17 +686,22 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   tile (Pulse Width); the label is still its accessible name. `modValue` (a dot on the ring)
   and `modRange` ([low, high], a faint outer arc) draw where something else, the LFO, moves
   the setting, without moving the knob (see "LFO visualizer"). `detents` (values) are soft
-  notches: a drag holds on each for 8 px (`DETENT_HOLD`, 4 % of the 200 px turn) before
-  carrying on, never jumping, and lands on the exact value; each gets a tick on the ring
-  (`src/lib/knobDetents.ts`: the drag moves along a "travel" one hold longer per notch). A
-  `bipolar` knob has one at zero unless given others. The arrow keys ignore them (they move
-  one step anyway); a MIDI controller's knob goes along the same travel, so it reaches them
-  (128 steps over 20–300 BPM would otherwise skip from 119 to 121). Notches now: Tempo 90,
-  100, 120, 128, 140, 160, 174 (`TEMPO_DETENTS`); Swing 8, 16, 24, 33, 42 % (`SWING_DETENTS`:
-  the knob's 0–50 % moves every second step up to half a step, a drum machine's 75 %, so
-  these are its usual 54, 58, 62, 66 and 71 %; 33 % is a triplet and reads "33% (triplet)");
-  every bipolar knob's middle; a pad's Fine at 0; Noise Color's Pink, White and Blue. Knobs
-  with hard stops (Delay Time, a synced LFO Rate) have none.
+  notches: a drag holds on each for 14 px (`DETENT_HOLD`, 7 % of the 200 px turn) before
+  carrying on, never jumping, and lands on the exact value (`src/lib/knobDetents.ts`: the drag
+  moves along a "travel" one hold longer per notch). A `bipolar` knob has one at zero unless
+  given others. The arrow keys ignore them (they move one step anyway). A MIDI controller's
+  knob goes along the same notches with a lighter hold (`CONTROLLER_DETENT_HOLD`, 4 %: its turn
+  is short, and at 7 % a third of Tempo's turn would sit on notches), so it reaches them (128
+  steps over 20–300 BPM would otherwise skip from 119 to 121). Each notch has a tick on the
+  ring in the notch colour (`--knob-detent`, mint in the dark themes, green in the light one:
+  apart from the blue-to-pink arcs and the LFO's amber); while the knob sits on a notch
+  (`at-detent`), that tick and the pointer light up (`--knob-detent-on`), and the Tempo and
+  Swing readouts under their knobs too (`.stepper-value.on-stop`). Notches now: Tempo 60, 90,
+  100, 120, 140, 160, 174 (`TEMPO_DETENTS`); Swing 8, 16, 24, 33, 42 % (`SWING_DETENTS`: the
+  knob's 0–50 % moves every second step up to half a step, a drum machine's 75 %, so these are
+  its usual 54, 58, 62, 66 and 71 %; 33 % is a triplet and reads "33% (triplet)"); every
+  bipolar knob's middle; a pad's Fine at 0; Noise Color's Pink, White and Blue. Knobs with
+  hard stops (Delay Time, a synced LFO Rate) have none.
 - Layout: the module cards flow in CSS columns from 992 px (`.ds-modules`), so a module that
   grows taller reshuffles the columns and can leave a gap. Envelope and Pitch are stacked on
   the left of `.sound-grid` with Filter beside them as a 2×2 block (Cutoff, Resonance, Env Amt,
@@ -924,6 +933,7 @@ Done:
 | 37 | Install as an app (PWA): a manifest and icons, and a hand-written service worker (`build-plugins/serviceWorker.js`, no dependency) that saves the build, works offline from the first visit, refuses a half-uploaded deploy (checksums), and offers a new version with "A new version of the app is ready" (Reload / Later). File → Install app…; saved projects asked to persist. Plan: MIDI keyboard latency added. |
 | 38 | Knob notches: soft stops at common values (Tempo 90–174 BPM, Swing 8–42 % with the triplet at 33 %, the middle of two-way knobs, a pad's Fine at 0, Noise Color's named colors), each with a tick, where a drag holds for 8 px; a MIDI controller reaches them too (`src/lib/knobDetents.ts`). Plan: the maintainer's brainstorm sorted (Melody Maker, layout project, themes, phone mode, effect switches, patch cables); MIDI latency (measured) and user presets on hold; TV app, FL Studio plugin and Apple's store not now. |
 | 39 | Melody Maker rework: clicking a key moves the pattern there the shorter way round (the same melody) and plays the key; a new scale keeps each note on its degree (minor ↔ major) or goes to the nearest note; one Generate button with a Random / Arpeggio switch (saved), the card the same height in both. `src/lib/melody/theory.ts`. |
+| 40 | Knob stops, refined: the app starts at 120 BPM (most DAWs' default; was 80); Tempo's stops are 60, 90, 100, 120, 140, 160, 174 (128 dropped, 60 added); a drag holds 14 px at a stop (was 8; a MIDI controller keeps the lighter hold); stops show in a colour of their own (mint, green in the light theme): their ticks, and while a knob sits on one its tick and pointer light up, and the Tempo and Swing readouts too. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -4,7 +4,7 @@
 	<!-- In MIDI learn mode (useMidiLearn.ts) a knob with a midi-id is outlined, a click or Enter
 		 arms it, and a badge says which controller knob it follows -->
 	<div class="knob-wrapper"
-		:class="[`knob-${props.size}`, { disabled: props.disabled, 'midi-learnable': learnable, 'midi-armed': armed }]"
+		:class="[`knob-${props.size}`, { disabled: props.disabled, 'midi-learnable': learnable, 'midi-armed': armed, 'at-detent': onDetent }]"
 		role="slider" :tabindex="props.disabled ? -1 : 0" :aria-label="label" :aria-valuemin="props.min"
 		:aria-valuemax="props.max" :aria-valuenow="props.modelValue" :aria-valuetext="props.valueText"
 		:aria-disabled="props.disabled" :aria-description="learnable ? (midiLabel ? `Follows ${midiLabel}` : 'Not linked') : undefined"
@@ -46,11 +46,12 @@
 				<!-- Bipolar: the arc grows from the top (zero) towards either side, and a tick marks zero -->
 				<template v-if="showArcPaths && props.bipolar">
 					<path v-if="bipolarArc" :d="bipolarArc" fill="none" :stroke="activeStroke" stroke-width="6" />
-					<line x1="50" y1="3" x2="50" y2="8" class="dial-zero" />
+					<line x1="50" y1="3" x2="50" y2="8" class="dial-zero"
+						:class="{ 'dial-detent': zeroIsDetent, 'is-on': zeroIsDetent && onDetent && props.modelValue === 0 }" />
 				</template>
-				<!-- Soft notches (`detents`): a tick like the zero tick at each -->
+				<!-- Soft notches (`detents`): a tick at each in the notch colour, lit while the knob is on it -->
 				<line v-for="(t, i) in detentTicks" :key="`detent-${i}`" :x1="t.x1" :y1="t.y1" :x2="t.x2" :y2="t.y2"
-					class="dial-zero dial-detent" />
+					class="dial-zero dial-detent" :class="{ 'is-on': t.on }" />
 
 				<!-- Something else moving this setting (the LFO): its range as a faint outer arc, and
 					 where it is now as a dot on the ring. The knob itself stays where it was set. -->
@@ -66,7 +67,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount } from 'vue';
 import { useMidiLearn } from '../composables/useMidiLearn';
-import { detentTravel } from '../lib/knobDetents';
+import { detentTravel, CONTROLLER_DETENT_HOLD } from '../lib/knobDetents';
 
 const props = defineProps({
 	modelValue: Number,
@@ -138,11 +139,17 @@ const rotation = computed(() => toPos(props.modelValue) * 264 - 132);
 // turn, and lands on the notch's exact value while it holds
 const detentValues = computed(() => (props.detents ?? (props.bipolar ? [0] : []))
 	.filter((v) => v > props.min && v < props.max));
-const travel = computed(() => detentTravel(detentValues.value.map((v) => ({ pos: toPos(v), value: v }))));
-function valueAtTravel(t) {
-	const k = travel.value.toKnob(t);
+const detentPoints = computed(() => detentValues.value.map((v) => ({ pos: toPos(v), value: v })));
+const travel = computed(() => detentTravel(detentPoints.value));
+// A MIDI controller's knob: the same notches, a lighter hold (its turn is short)
+const controllerTravel = computed(() => detentTravel(detentPoints.value, CONTROLLER_DETENT_HOLD));
+function valueAtTravel(t, along = travel.value) {
+	const k = along.toKnob(t);
 	return k.value ?? snap(fromPos(k.pos));
 }
+// On a notch now: the knob's pointer and that notch's tick light up in the notch colour
+const onDetent = computed(() => detentValues.value.some((v) => Math.abs(v - props.modelValue) < 1e-9));
+const zeroIsDetent = computed(() => props.bipolar && detentValues.value.includes(0));
 // Ticks on the ring (a bipolar knob's zero already has one)
 const detentTicks = computed(() => detentValues.value
 	.filter((v) => !(props.bipolar && v === 0))
@@ -151,7 +158,7 @@ const detentTicks = computed(() => detentValues.value
 		const at = (r) => [50 + r * Math.sin(a), 50 - r * Math.cos(a)];
 		const [x1, y1] = at(42);
 		const [x2, y2] = at(47);
-		return { x1, y1, x2, y2 };
+		return { x1, y1, x2, y2, on: Math.abs(v - props.modelValue) < 1e-9 };
 	}));
 
 // Bipolar arc: from the top of the dial (radius 40 around 50,50, as the track) to the pointer
@@ -250,7 +257,7 @@ function startDrag(e, isTouch = false) {
 	function onMove(ev) {
 		const currentY = isTouch ? ev.touches[0].pageY : ev.pageY;
 		const deltaY = startY - currentY;
-		// 200 px of drag is the whole turn, plus 8 px at each notch
+		// 200 px of drag is the whole turn, plus 14 px at each notch
 		emit('update:modelValue', valueAtTravel(startTravel + deltaY * 0.005));
 	}
 
@@ -344,8 +351,8 @@ function setPosition(position) {
 	if (midiTurning) clearTimeout(midiTurning);
 	else emit('knobStart');
 	midiTurning = setTimeout(() => { midiTurning = null; emit('knobEnd'); }, MIDI_REST_MS);
-	// Along the notches' travel too, so a controller can land on them
-	const next = valueAtTravel(position * travel.value.length);
+	// Along the notches' travel too (with their lighter hold), so a controller can land on them
+	const next = valueAtTravel(position * controllerTravel.value.length, controllerTravel.value);
 	if (next !== props.modelValue) emit('update:modelValue', next);
 }
 
@@ -387,6 +394,28 @@ function onPress(e, isTouch = false) {
 	stroke: var(--knob-marker, rgba(192, 120, 255, .55));
 	stroke-width: 3;
 	stroke-linecap: round;
+}
+
+/* Soft notches: their ticks in the notch colour (each theme's --knob-detent, mint: apart from
+   the blue-to-pink arcs and the LFO's amber); on a notch, its tick lights up and the pointer
+   takes the colour too. Not on a greyed-out knob. */
+.dial-zero.dial-detent {
+	stroke: var(--knob-detent, rgba(94, 255, 176, 0.65));
+}
+
+.dial-zero.dial-detent.is-on {
+	stroke: var(--knob-detent-on, #5effb0);
+	stroke-width: 4.5;
+	filter: drop-shadow(0 0 2.5px var(--knob-detent-on, #5effb0));
+}
+
+.knob-wrapper.at-detent:not(.disabled) {
+	--knob-pointer: var(--knob-detent-on, #5effb0);
+}
+
+.knob-wrapper.disabled .dial-zero.dial-detent {
+	stroke: var(--knob-arc-disabled, #555);
+	filter: none;
 }
 
 /* MIDI learn mode: a learnable knob is outlined; the armed one glows; the badge names the

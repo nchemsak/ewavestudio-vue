@@ -26,7 +26,9 @@ export const DELAY_DIVISIONS: readonly DelayDivision[] = [
 ];
 
 export const DEFAULT_DELAY_DIVISION = '1/8.';
-export const DEFAULT_TEMPO = 80; // the app's starting tempo
+// The app's starting tempo (a fresh page, File → New): 120, most DAWs' default, so an export
+// drops into a new DAW project at its tempo
+export const DEFAULT_TEMPO = 120;
 const MAX_DELAY_S = 5; // the live engine's DelayNode maximum
 const MIN_DELAY_S = 0.005;
 

@@ -9,10 +9,13 @@
 // carries on from it. A MIDI controller's knob goes along the same travel, so it can reach
 // the notches too (128 steps over 20–300 BPM would otherwise skip from 119 to 121).
 
-// Each notch's hold, as a share of the turn: 8 px of a knob's 200 px drag
-export const DETENT_HOLD = 0.04;
+// Each notch's hold, as a share of the turn: 14 px of a knob's 200 px drag, enough to feel
+// without feeling stuck. A MIDI controller's knob has a short turn, so it gets a lighter hold
+// (at 14 px a third of Tempo's turn would sit on notches).
+export const DETENT_HOLD = 0.07;
+export const CONTROLLER_DETENT_HOLD = 0.04;
 
-export const TEMPO_DETENTS = [90, 100, 120, 128, 140, 160, 174];
+export const TEMPO_DETENTS = [60, 90, 100, 120, 140, 160, 174];
 
 // The Swing knob's 0–50 % is how far every second step moves towards the next (50 % is half a
 // step, a drum machine's 75 %). Drum machines' usual 54, 58, 62, 66 (triplet) and 71 % are:
