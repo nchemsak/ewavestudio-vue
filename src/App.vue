@@ -22,6 +22,10 @@
 	<a v-show="!phoneActive" href="/" class="return" :target="pwa.state.standalone ? '_blank' : undefined"
 		:rel="pwa.state.standalone ? 'noopener' : undefined">Return to Ephemeral Wave</a>
 	<PwaNotice />
+	<!-- On a phone showing the full layout: always a way back to the phone layout -->
+	<button v-if="phoneOnPhone && phoneFull" type="button" class="pt-btn phone-back" @click="setPhoneFull(false)">
+		Phone layout
+	</button>
 	<!-- A phone held upright: the phone layout is made for landscape (usePhoneMode.ts) -->
 	<div v-if="phoneHint" class="phone-hint" role="dialog" aria-label="Turn your phone">
 		<div>
@@ -45,7 +49,7 @@ useTheme();
 // Installing the app and using it offline: registers the service worker (builds only)
 const pwa = usePwa();
 // Phone mode: the phone layout covers the page, so the page itself doesn't scroll
-const { active: phoneActive, hint: phoneHint, setFull: setPhoneFull } = usePhoneMode();
+const { active: phoneActive, hint: phoneHint, onPhone: phoneOnPhone, full: phoneFull, setFull: setPhoneFull } = usePhoneMode();
 watchEffect(() => document.documentElement.classList.toggle('phone-mode', phoneActive.value || phoneHint.value));
 </script>
 
@@ -108,6 +112,15 @@ watchEffect(() => document.documentElement.classList.toggle('phone-mode', phoneA
 		display: none;
 	}
 
+}
+
+.phone-back {
+	position: fixed;
+	z-index: 40;
+	right: max(12px, env(safe-area-inset-right, 0px));
+	bottom: max(12px, env(safe-area-inset-bottom, 0px));
+	padding: 8px 14px;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
 }
 
 .phone-hint {
