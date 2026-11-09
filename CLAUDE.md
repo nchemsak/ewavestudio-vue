@@ -480,25 +480,27 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   normal layout), `DrumSequencer.vue` hides its layout (`v-show`, so the screen's canvases and
   the desktop panels stay mounted) and shows `PhoneLayout.vue`, fixed over the whole page: one
   screen, no scrolling.
-  - **Play** page: the 16 pads in two rows of 8 (a tap turns a step on or off; a finger drawn
+  - **Pads** page (the tab was "Play" until PR 48, which read like a play button): the 16 pads in two rows of 8 (a tap turns a step on or off; a finger drawn
     across pads paints them all the way the first one went, on or off, as a drag does on the
     desktop: the pad a touch began on lets go of its pointer capture, and the pads' container
     finds the pad under the finger; a hold, 400 ms, opens its note: 16 notes of the Melody
     Maker's key and scale around the pad's own, every semitone with no scale, within
     100–2000 Hz, plus Off, velocity and repeats; picking a note turns the step on and plays
     it; the playing step has a thick outline, a glowing bar along its top and a brighter
-    colour), Play, the tempo (− / +) over Octave (↓ / ↑: every pad, as Pattern Tools'
-    arrows), and four big knobs:
+    colour); beside them the Sound and Pattern steppers (◂ name ▸ steps through the six, the
+    caption small above the name, a tap on the name lists them, a dice beside each; the name
+    reads Random after a roll; Clear beside Pattern: every step off, one undo step), the tempo
+    (− / +) and Octave (↓ / ↑: every pad, as Pattern Tools' arrows), and four knobs (small, so
+    they fit under the rest on a 320 px tall screen):
     **Decay** (`ampEnvDecayMs`, 50–2000 ms, log), **Tone** (`filterCutoff`, 100 Hz–10 kHz, log;
     turns the filter on), **Sweep** (the pitch envelope's amount, −48…+48, as the Pitch card's
     knob) and **Space** (`reverbMix`, turning the reverb on above 0 and off at 0, and the delay's
     mix at 0.6 times it while the delay is on). The top bar: a tiny oscilloscope of the output
     (on every page; the analyser's waveform from a rising zero crossing, in each theme's screen
-    colours), tabs (Play, Sound, FX, Key; a horizontal swipe of 70 px moves between them too,
-    not from a knob, slider or the pads), steppers for Sound and Pattern (◂ name ▸ steps
-    through the six, the caption small above the name, a tap on the name lists them, a dice
-    beside each; the name reads Random after a roll), Clear, Undo and ☰. It fits on one line
-    from 568 px (the first iPhone SE) up: tighter under 720 px, no stepper arrows under 640.
+    colours), the tabs as one segmented bar (Pads, Sound, FX, Key; the chosen one filled and
+    outlined in the accent; a horizontal swipe of 70 px moves between them too, not from a
+    knob, slider or the pads), **Play / Stop** (on every page, PR 48), Undo and ☰. It fits on
+    one line from 568 px (the first iPhone SE) up (Play's word hidden under 600 px).
   - **Sound**, **FX** and **Key** pages are the desktop's own panels again (slots in
     DrumSequencer's `PHONE` section: Envelope, Pitch and Filter cards, the eight waves, Noise,
     FM and Unison as a switch and one knob each; the three pedals; the Melody Maker), so they
@@ -507,9 +509,17 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     knob's link). MIDI isn't offered in phone mode.
   - ☰ opens a menu with the File bar itself (`ProjectControls`, moved there by a `Teleport`
     whose `to` changes with the mode, since a Teleport looks its target up again only when `to`
-    changes), the theme buttons, and **Desktop View**.
+    changes), the theme buttons, **Reset…** and **Desktop View**. Reset asks first, then
+    offers **Reset pads** (the Step Sequencer's Reset Pads: every pad off, full velocity, on A,
+    one hit, sine) or **Pads and sound** (also `resetSoundToFactoryDefaults()`); one undo
+    step, so Undo brings it back. Two taps in a menu, so it isn't hit by accident.
+  - File → Export audio… in phone mode is shorter (`ExportDialog`'s `simple`): Bars and
+    Ending only, and it exports one normalized mix; stems, MIDI, the one-shot and Normalize
+    stay in the desktop view, whose remembered choices it doesn't change (only bars and
+    ending).
 - Desktop View is remembered on that phone (`localStorage` `phone-layout` = `full`). A
-  "Phone view" button in the bottom-right corner (`App.vue`, on a phone only, while it shows
+  "Phone view" button in the bottom-right corner (a pill in the accent, with a phone icon,
+  above everything: z-index 2500, over the pad numbers' 1000) (`App.vue`, on a phone only, while it shows
   the desktop view) brings phone mode back, and so does File → Phone view (PR 46: the
   maintainer didn't find the File item alone).
 - ☰'s menu is a panel from the left as tall as the screen, so the File menu opens in it
@@ -1074,6 +1084,7 @@ Done:
 | 45 | Phone mode, picked from mockups (option B of three): on a touch phone held sideways a layout of its own, one screen without scrolling: 16 pads in two rows of 8 (tap: on/off; hold: the note from the key, velocity, repeats), Play and tempo, Sound and Pattern steppers with their dice, four big knobs (Decay, Tone, Sweep, Space); Sound, FX and Key pages a swipe away; ☰ with the File bar, themes and Full layout (remembered; File → Phone layout comes back). Upright, a hint to turn the phone. Plan: Google Play on hold. |
 | 46 | Phone mode, after trying it: a Phone layout button in the corner of the full layout on a phone (the way back was only in the File menu); the ☰ menu is a full-height panel from the left, so the File menu fits without scrolling; Clear in the top bar starts a new pattern in one tap. |
 | 47 | Phone mode, round two: the "Turn your phone" screen covers the app (the pad numbers showed through and the page scrolled under it); its text and Desktop View / Phone view renamed; Octave ↓ / ↑ under the tempo; a tiny oscilloscope beside the tabs; a finger drawn across pads paints them; the playing pad stands out (outline, a bar along its top, brighter); the top bar fits down to 568 px. |
+| 48 | Phone mode, round three: Play / Stop in the top bar on every page; the Play tab renamed Pads, the tabs one segmented bar; Sound and Pattern steppers and Clear beside the pads; Reset… in the menu (asks first: pads, or pads and sound; Undo brings them back); a shorter Export audio on the phone (bars and ending, one normalized mix); the Phone view button in the accent and above the pad numbers. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

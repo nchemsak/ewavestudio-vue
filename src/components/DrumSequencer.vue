@@ -571,7 +571,7 @@
 		</div>
 		<!-- File → Export audio… (src/audio/export/exportFiles.ts makes the files) -->
 		<ExportDialog :open="exportOpen" :options="exportOptions" :notes="oneShotNotes" :bpm="tempo"
-			:effectsOn="exportEffectsOn" :busy="isExporting" :progress="exportProgress"
+			:effectsOn="exportEffectsOn" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
 			@export="runExport" @close="exportOpen = false" />
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
@@ -626,6 +626,7 @@ import {
 	type MelodyUi,
 	type Wave,
 	type KeyRoot,
+	resetSoundToFactoryDefaults,
 } from '../lib/project/snapshot';
 import { useProjectSync } from '../composables/useProjectSync';
 import { useUndoHistory } from '../composables/useUndoHistory';
@@ -2670,7 +2671,9 @@ function downloadFile(name: string, data: Uint8Array, type: string) {
 
 async function runExport(options: ExportOptions) {
 	if (!synthInstrument.value || isExporting.value) return;
-	Object.assign(exportOptions, options); // the next export starts from these choices
+	// The next export starts from these choices (from phone mode's shorter dialog, only its bars
+	// and ending, so the desktop's file choices stay as they were)
+	Object.assign(exportOptions, phoneActive.value ? { bars: options.bars, ending: options.ending } : options);
 	isExporting.value = true;
 	try {
 		const files = await buildExportFiles(exportState.value, options, {
@@ -2945,6 +2948,12 @@ const phoneCtx = reactive({
 	fullLayout: () => setPhoneFull(true),
 	// Every pad an octave up or down (Pattern Tools' octave arrows)
 	octave: (delta: number) => onPatternOctaveShift(delta),
+	// The menu's Reset: the pads as File → New has them (the Step Sequencer's Reset Pads), and
+	// with `sound` the factory sound too (as File → New, presets' starting point)
+	reset: (sound: boolean) => {
+		resetSynthPadsToDefaults();
+		if (sound) resetSoundToFactoryDefaults(projectState as any);
+	},
 	// For the top bar's tiny oscilloscope (not made reactive: a Web Audio node)
 	analyser: markRaw(analyser),
 });
