@@ -2644,3 +2644,149 @@ test('Melody Maker: one Generate button, Random or Arpeggio, the card keeps its 
 	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
 	await expect(random).toHaveAttribute('aria-pressed', 'true');
 });
+
+// --- Phone mode ------------------------------------------------------------------------------
+
+test.describe('Phone mode', () => {
+	// An iPhone held sideways: a touch screen 390 px tall (usePhoneMode.ts)
+	test.use({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
+
+	const phonePads = (page: Page) => page.locator('.pl-pad');
+	async function holdPad(page: Page, i: number) {
+		const box = (await phonePads(page).nth(i).boundingBox())!;
+		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+		await page.mouse.down();
+		await page.waitForTimeout(600);
+		await page.mouse.up();
+	}
+
+	test('a phone held sideways gets the phone layout: pads, Play, steppers and four knobs', async ({ page }) => {
+		await expect(page.locator('.phone-layout')).toBeVisible();
+		await expect(page.locator('.ds-grid')).toBeHidden();
+		await expect(page.locator('.app-toolbar')).toBeHidden();
+		await expect(phonePads(page)).toHaveCount(16);
+		// One screen, no scrolling
+		expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1)).toBe(true);
+		for (const name of ['Decay', 'Tone', 'Sweep', 'Space']) await expect(page.getByRole('slider', { name, exact: true })).toBeVisible();
+		// Every pad a comfortable size for a finger
+		const box = (await phonePads(page).first().boundingBox())!;
+		expect(box.width).toBeGreaterThanOrEqual(44);
+		expect(box.height).toBeGreaterThanOrEqual(100);
+
+		// A tap turns a step on and off
+		await phonePads(page).nth(0).click();
+		await expect(phonePads(page).nth(0)).toHaveAttribute('aria-pressed', 'true');
+		await phonePads(page).nth(0).click();
+		await expect(phonePads(page).nth(0)).toHaveAttribute('aria-pressed', 'false');
+
+		// Play starts the sequencer
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	});
+
+	test('holding a pad picks its note from the key, its velocity and repeats', async ({ page }) => {
+		// A minor: the picker offers only its notes
+		await page.getByRole('tab', { name: 'Key' }).click();
+		await page.getByRole('button', { name: 'Scale' }).click();
+		await page.getByRole('option', { name: 'Minor', exact: true }).click();
+		await page.getByRole('tab', { name: 'Play' }).click();
+
+		await holdPad(page, 2);
+		const picker = page.getByRole('dialog', { name: 'Step 3' });
+		await expect(picker).toBeVisible();
+		const notes = await picker.locator('.pl-n').allTextContents();
+		expect(notes).toHaveLength(16);
+		for (const n of notes) expect(['A', 'B', 'C', 'D', 'E', 'F', 'G']).toContain(n.replace(/\d/g, ''));
+		await picker.getByRole('button', { name: 'C4', exact: true }).click();
+		await picker.getByRole('button', { name: '×3' }).click();
+		await picker.getByRole('button', { name: 'Done' }).click();
+		// Picking a note turns the step on
+		await expect(phonePads(page).nth(2)).toHaveAttribute('aria-pressed', 'true');
+		await expect(phonePads(page).nth(2)).toHaveAccessibleName('Step 3, C4');
+		await expect(phonePads(page).nth(2).locator('.pl-rat')).toHaveText('×3');
+	});
+
+	test('the steppers choose sounds and patterns; the dice roll them', async ({ page }) => {
+		await page.getByRole('button', { name: 'Next sound' }).click();
+		await expect(page.getByRole('button', { name: 'All sounds' })).toHaveText(PRESETS[0].label);
+		await page.getByRole('button', { name: 'Next sound' }).click();
+		await expect(page.getByRole('button', { name: 'All sounds' })).toHaveText(PRESETS[1].label);
+		await page.getByRole('button', { name: 'Random sound' }).click();
+		await expect(page.getByRole('button', { name: 'All sounds' })).toHaveText('Random');
+
+		await page.getByRole('button', { name: 'Next pattern' }).click();
+		await expect(page.getByRole('button', { name: 'All patterns' })).toHaveText(PATTERNS[0].label);
+		expect(await phonePads(page).evaluateAll((els) => els.filter((e) => e.getAttribute('aria-pressed') === 'true').length)).toBeGreaterThan(0);
+		// A tap on the name: all six
+		await page.getByRole('button', { name: 'All patterns' }).click();
+		await page.getByRole('dialog', { name: 'Patterns' }).getByRole('button', { name: PATTERNS[3].label }).click();
+		await expect(page.getByRole('button', { name: 'All patterns' })).toHaveText(PATTERNS[3].label);
+	});
+
+	test('the four knobs turn the desktop settings: Tone is Cutoff, Space turns the reverb on', async ({ page }) => {
+		const tone = page.getByRole('slider', { name: 'Tone', exact: true });
+		await tone.focus();
+		await page.keyboard.press('End');
+		const space = page.getByRole('slider', { name: 'Space', exact: true });
+		await space.focus();
+		await page.keyboard.press('End');
+		await page.getByRole('tab', { name: 'Sound' }).click();
+		await expect(page.getByRole('slider', { name: 'Cutoff' })).toHaveAttribute('aria-valuenow', '10000');
+		await page.getByRole('tab', { name: 'FX' }).click();
+		await expect(page.getByRole('slider', { name: 'MIX' }).last()).toHaveAttribute('aria-valuenow', '1');
+		await expect(page.locator('.phone-layout .pl-fx')).toBeVisible();
+	});
+
+	test('a swipe moves between pages', async ({ page }) => {
+		const swipe = async (from: number, to: number) => {
+			await page.mouse.move(from, 200);
+			await page.mouse.down();
+			await page.mouse.move((from + to) / 2, 205, { steps: 4 });
+			await page.mouse.move(to, 205, { steps: 4 });
+			await page.mouse.up();
+		};
+		await swipe(500, 200);
+		await expect(page.getByRole('tab', { name: 'Sound' })).toHaveAttribute('aria-selected', 'true');
+		await swipe(200, 500);
+		await expect(page.getByRole('tab', { name: 'Play' })).toHaveAttribute('aria-selected', 'true');
+		// A swipe across the pads turns none on
+		expect(await phonePads(page).evaluateAll((els) => els.some((e) => e.getAttribute('aria-pressed') === 'true'))).toBe(false);
+	});
+
+	test('the menu has the File bar and themes; Full layout is remembered, and File → Phone layout comes back', async ({ page }) => {
+		await page.getByRole('button', { name: 'Menu' }).click();
+		const menu = page.getByRole('dialog', { name: 'Menu' });
+		await expect(menu.getByRole('button', { name: 'File ▾' })).toBeVisible();
+		await expect(menu.getByRole('button', { name: 'Sand', exact: true })).toBeVisible();
+		// The File menu opens there and works (Export audio… opens its dialog over the phone layout)
+		await menu.getByRole('button', { name: 'File ▾' }).click();
+		await page.getByRole('menuitem', { name: 'Export audio…' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Export audio' });
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: 'Close' }).click();
+		await expect(dialog).toBeHidden();
+		if (!(await menu.isVisible())) await page.getByRole('button', { name: 'Menu' }).click();
+		await menu.getByRole('button', { name: 'Full layout' }).click();
+		await expect(page.locator('.phone-layout')).toHaveCount(0);
+		await expect(page.locator('.ds-grid')).toBeVisible();
+		await expect(page.locator('.ds-topbar')).toBeVisible();
+		await page.reload();
+		await expect(page.locator('.ds-grid')).toBeVisible();
+		await expect(page.locator('.phone-layout')).toHaveCount(0);
+		await chooseFromFileMenu(page, 'Phone layout');
+		await expect(page.locator('.phone-layout')).toBeVisible();
+	});
+});
+
+test.describe('Phone mode, upright', () => {
+	test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+	test('a phone held upright asks to be turned, or shows the full layout', async ({ page }) => {
+		const hint = page.getByRole('dialog', { name: 'Turn your phone' });
+		await expect(hint).toBeVisible();
+		await hint.getByRole('button', { name: 'Use the full layout instead' }).click();
+		await expect(hint).toHaveCount(0);
+		await expect(page.locator('.ds-grid')).toBeVisible();
+	});
+});

@@ -71,6 +71,14 @@
                         <span v-else>Export audio…</span>
                     </button>
 
+                    <!-- On a phone where someone chose the full layout: back to phone mode -->
+                    <template v-if="phone.onPhone.value && phone.full.value">
+                        <div class="pc-menu-divider"></div>
+                        <button class="pc-menu-row" role="menuitem" @click="closeAllMenus(); phone.setFull(false)">
+                            Phone layout
+                        </button>
+                    </template>
+
                     <!-- Only while the browser offers it (Chrome, Edge; not once installed) -->
                     <template v-if="pwa.state.canInstall">
                         <div class="pc-menu-divider"></div>
@@ -140,6 +148,7 @@ import {
 import { buildExportFile, downloadJson, importJson } from '../lib/storage/exportImport';
 import { storageKey } from '../lib/storage/namespace';
 import { usePwa } from '../composables/usePwa';
+import { usePhoneMode } from '../composables/usePhoneMode';
 
 const TITLE_MAX_CHARS = 28;
 const store = useProjectStore();
@@ -174,6 +183,7 @@ function trackEvent(event: string, params: Record<string, any> = {}) {
 
 // Installing the app (src/composables/usePwa.ts): the browser's own install dialog
 const pwa = usePwa();
+const phone = usePhoneMode();
 async function installApp() {
     closeAllMenus();
     const outcome = await pwa.install();
