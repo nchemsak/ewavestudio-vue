@@ -4,7 +4,7 @@ import { storageKey } from '../lib/storage/namespace';
 
 // 'light' has no button (only a choice saved before it was hidden applies it); 'sand' is the
 // light-coloured theme with a button
-export const THEMES = ['dark', 'light', 'synthwave', 'sand'] as const;
+export const THEMES = ['dark', 'light', 'synthwave', 'sand', 'analog', 'slate'] as const;
 export type ThemeName = (typeof THEMES)[number];
 
 const THEME_KEY = storageKey('ui-theme');

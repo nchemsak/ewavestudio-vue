@@ -215,7 +215,7 @@ src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/e
                          namespace.ts (storage names, one set per site folder)
 src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) + v1→v2
                          migration (CURRENT_VERSION = 2)
-src/composables/useTheme.ts      synthwave | dark | sand | light theme, stored in localStorage
+src/composables/useTheme.ts      synthwave | dark | sand | analog | slate | light theme, in localStorage
 src/composables/useMidiInput.ts  Web MIDI note input (see "MIDI")
 src/composables/useMidiLearn.ts  MIDI learn mode and the controller's links (see "MIDI learn")
 src/composables/usePwa.ts  Installing the app, offline use and updates, the page's side
@@ -704,14 +704,23 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Indentation is mostly tabs in `DrumSequencer.vue` and 4 spaces elsewhere. Match the
   surrounding file.
 - Large files are split into sections with `// X START` / `// X END` banner comments. Keep them.
-- Styling: Bootstrap 5 + custom SCSS in `src/assets/styles/`. There are four themes, selected
-  by a `theme-*` class on `<html>` (`useTheme.ts`, `THEMES`): **Synthwave** (the default) and
-  **Dark**, and two light ones, **Sand** and **Light**. Keep the current look and feel unless
-  a change is requested.
+- Styling: Bootstrap 5 + custom SCSS in `src/assets/styles/`. There are six themes, selected
+  by a `theme-*` class on `<html>` (`useTheme.ts`, `THEMES`): **Synthwave** (the default),
+  **Dark**, **Analog** and **Slate**, and two light ones, **Sand** and **Light**. Five have a
+  button (Dark, Synthwave, Sand, Analog, Slate); the maintainer may cut some once they've used
+  them (PR 44). Keep the current look and feel unless a change is requested.
   - **Sand** (PR 43, replacing Light as the third button: the maintainer found its white harsh
     on the eyes): matte warm greys instead of white, dark knob caps as on a hardware panel, a
     teal-to-orange knob arc, an orange accent, a green-grey reflective LCD with dark ink in a
     dark bezel, softer pad colours (still one per note), a taupe page and an apricot wash.
+    Its tiles (the waves, FM, Unison, the LFO's switch) are dark caps with light lettering
+    (PR 44: their pastel icons, made for dark tiles, vanished on light ones), and the LFO's
+    wave switch and the Vel → pill have dark ink.
+  - **Analog** (PR 44): a warm dark panel, charcoal with cream lettering and amber accents,
+    an amber-to-orange knob arc (so the LFO's marks are cyan there), an amber monochrome
+    screen, a wood-brown page and a copper wash.
+  - **Slate** (PR 44): a mid-tone blue-grey between Dark and a light theme, teal accents, a
+    teal-to-blue arc, a deep blue-green screen and a blue-grey page.
   - **Light**: its button is commented out in `ThemeToggle.vue`, so only a choice saved before
     that applies it; it still has rough spots (for example the effect pedals' names are hard
     to read, as in every theme).
@@ -730,8 +739,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     a chosen segment button and on titles, the pads' multiplied note colour).
   - In a scoped `<style>`, write `.theme-sand .x` (Vue scopes the last part only, so the class
     on `<html>` still matches); `:global(.theme-sand) .x` drops the `.x`.
-  - Browser tests check that those panels' captions are readable in all four themes, and that
-    Sand's own trouble spots are (the MIDI caption, NOISE switch, chosen key, ⋯ menu, link).
+  - Browser tests check that those panels' captions are readable in every theme, that
+    Sand's own trouble spots are (the MIDI caption, NOISE switch, chosen key, ⋯ menu, link,
+    its tiles' lettering), and that each button applies and remembers its theme.
 - Only the Bootstrap parts the app uses are built (`_bootstrap-custom.scss`): root variables and
   reboot, the grid's `.container`, `.row` and `.col-12`, `.visually-hidden`, and the utilities
   `.d-flex`, `.position-relative`, `.align-items-center`, `.gap-2` and `.text-center`. Any other
@@ -1008,6 +1018,7 @@ Done:
 | 41 | Layout C1, picked from mockups (two rounds: three options, then three ways to balance C): the frame fills the window; the logo moves to the top bar; Sounds (the presets) and a new Patterns box side by side in the transport, six built-in patterns from the key's root and a dice (`src/lib/patterns/`); under the steps, Sound (three rows, each filled edge to edge) and Compose end on one line, like a piece of hardware; FM and Unison cards of their own (their tile shows Off / On); Envelope, Pitch and Filter knobs on one line; Pattern Tools' octave arrows up first; cards fit their own width (container queries); under 1200 px, Sound / Effects / Compose tabs under the steps. File → Export file now closes the menu. The spectrogram draws each note in its pad's colour (`src/lib/padColour.ts`; its own commit, easy to revert). |
 | 42 | Fix: the Noise switch (the NOISE ribbon on the Noise card's left edge) was hidden under its own card since PR 41, so noise couldn't be turned on or off: the stretched card had become a flex item, and an old `z-index` rule drew it over the ribbon (and over the card's TV static). Every control of the build before PR 41 was checked against PR 41's: all there and clickable but that one. A browser test now checks every control can be clicked at four widths and in every tab. |
 | 43 | A new theme, **Sand**, with its own button next to Dark and Synthwave (the Light theme's white was harsh on the eyes): matte warm greys, dark knob caps, a teal-to-orange arc, an orange accent, a green-grey LCD with dark ink, softer pad colours, a taupe page; remembered like the others. The pink-to-violet wash, the NOISE switch's colour and the ⋯ menus' captions became theme variables, and light-on-light text fixed on light themes (⋯ menu captions, the NOISE switch when off, the RND pill). Plan: the logo on hold; the themes item done. |
+| 44 | Sand's pale spots fixed (the maintainer's screenshot): its wave, FM, Unison and LFO tiles are dark caps with light lettering, and the LFO's wave switch and the Vel → pill have dark ink. Two more themes with buttons, **Analog** (warm dark, amber, a wood-brown page) and **Slate** (mid-tone blue-grey, teal), to try out before deciding which themes to keep. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -45,7 +45,31 @@ $themes: (
         accent: 18,
         accent2: 186,
         accent3: 40,
-        chevron: #4a453e)
+        chevron: #4a453e),
+    /* Analog: a warm dark hardware panel, charcoal with cream lettering and amber accents, an
+       amber monochrome screen, the page behind like a wooden case */
+    analog: (bg: #141210,
+        panel: #1d1b18,
+        text: #efe6d4,
+        muted: #b3a892,
+        surface1: #2a2723,
+        surface2: #201e1b,
+        accent: 30,
+        accent2: 46,
+        accent3: 10,
+        chevron: #efe6d4),
+    /* Slate: a calm mid-tone blue-grey between Dark and a light theme, teal accents, a deep
+       blue-green screen */
+    slate: (bg: #252a33,
+        panel: #2c323e,
+        text: #e3e8ef,
+        muted: #a6afbf,
+        surface1: #39404e,
+        surface2: #323845,
+        accent: 172,
+        accent2: 214,
+        accent3: 350,
+        chevron: #e3e8ef)
 );
 
 /* Mixin to emit CSS custom properties for a theme class */
@@ -94,6 +118,20 @@ $themes: (
             /* a muted ring: the full-strength accent glares on warm grey */
             --pt-btn-border: hsl(var(--pt-accent) 58% 48%);
             --pt-btn-glow: hsl(var(--pt-accent) 80% 50% / 0.22);
+        }
+
+        @if $name ==analog {
+            --pt-tile-1: #24211d;
+            --pt-tile-2: #1b1916;
+            --pt-btn-border: hsl(var(--pt-accent) 78% 56%);
+            --pt-btn-glow: hsl(var(--pt-accent) 90% 55% / 0.32);
+        }
+
+        @if $name ==slate {
+            --pt-tile-1: #333a47;
+            --pt-tile-2: #2c323e;
+            --pt-btn-border: hsl(var(--pt-accent) 52% 52%);
+            --pt-btn-glow: hsl(var(--pt-accent) 70% 50% / 0.28);
         }
     }
 }
@@ -154,8 +192,32 @@ $base: map.get($themes, synthwave);
 
 :root,
 .theme-dark,
-.theme-synthwave {
+.theme-synthwave,
+.theme-analog,
+.theme-slate {
     color-scheme: dark;
+}
+
+.theme-analog {
+    --pt-header-fg: #efe6d4;
+    --pt-text-strong: #f6efe2;
+    --pt-hairline: rgba(239, 230, 212, 0.09);
+    --pt-inset: rgba(10, 9, 8, 0.55);
+    --pt-wash: radial-gradient(circle at center, #b8763f 0%, #8a5530 70%, #6a3f24 100%);
+    --pt-page: radial-gradient(circle at center, #6b4b34 0%, #46301f 65%, #2e1f15 100%);
+    --pt-noise-on: #c8642a;
+    --pt-menu-caption: #b3a892;
+}
+
+.theme-slate {
+    --pt-header-fg: #eceff4;
+    --pt-text-strong: #f2f4f8;
+    --pt-hairline: rgba(227, 232, 239, 0.1);
+    --pt-inset: rgba(20, 24, 31, 0.42);
+    --pt-wash: radial-gradient(circle at center, #7fb3b0 0%, #5f7f92 70%, #4c6175 100%);
+    --pt-page: radial-gradient(circle at center, #77849a 0%, #4f596c 68%, #3b4352 100%);
+    --pt-noise-on: #2f9c8c;
+    --pt-menu-caption: #a6afbf;
 }
 
 .theme-light {
@@ -191,6 +253,59 @@ $base: map.get($themes, synthwave);
 
 .theme-sand a.return {
     color: #3b1a0b;
+}
+
+/* Sand's tiles (the waves, FM, Unison, the LFO's switch) are dark caps with light lettering,
+   like its knobs: their pastel icons were made for dark tiles and vanished on light ones */
+html.theme-sand .wave-btn {
+    --tile-1: #3b3733;
+    --tile-2: #2b2825;
+    color: #efe9df;
+}
+
+html.theme-sand .lfo-power {
+    --pt-surface-2: #34312d;
+    color: #efe9df;
+    opacity: 0.9;
+}
+
+html.theme-sand .lfo-power.on {
+    opacity: 1;
+}
+
+/* The LFO's wave switch: darker ink on the light pill, white on the chosen one */
+html.theme-sand .lfo-seg-btn .wv {
+    stroke: hsl(var(--pt-accent) 65% 36%);
+}
+
+html.theme-sand .lfo-seg-btn.active {
+    background: hsl(var(--pt-accent) 60% 42%);
+    color: #fff;
+}
+
+html.theme-sand .lfo-seg-btn.active .wv {
+    stroke: #fff;
+}
+
+/* The Step Sequencer's Vel → pill: a dark outline and more ink on light themes */
+html.theme-sand .vel-btn,
+html.theme-light .vel-btn {
+    border-color: color-mix(in oklab, var(--pt-text), transparent 72%);
+    opacity: 0.9;
+}
+
+html.theme-sand .vel-btn.on,
+html.theme-light .vel-btn.on {
+    border-color: hsl(var(--pt-accent) 60% 48%);
+    opacity: 1;
+}
+
+.theme-analog a.return {
+    color: #f2b04a;
+}
+
+.theme-slate a.return {
+    color: #bfeee4;
 }
 
 @supports (color: color-mix(in oklab, #000, #fff)) {
