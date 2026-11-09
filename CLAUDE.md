@@ -500,8 +500,13 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   - ☰ opens a menu with the File bar itself (`ProjectControls`, moved there by a `Teleport`
     whose `to` changes with the mode, since a Teleport looks its target up again only when `to`
     changes), the theme buttons, and **Full layout**.
-- Full layout is remembered on that phone (`localStorage` `phone-layout` = `full`); File →
-  Phone layout (shown only on a phone, after that choice) brings phone mode back.
+- Full layout is remembered on that phone (`localStorage` `phone-layout` = `full`). A
+  "Phone layout" button in the bottom-right corner (`App.vue`, on a phone only, while it shows
+  the full layout) brings phone mode back, and so does File → Phone layout (PR 46: the
+  maintainer didn't find the File item alone).
+- ☰'s menu is a panel from the left as tall as the screen, so the File menu opens in it
+  without scrolling (tighter rows there; Open's list of projects beside the panel). The top
+  bar's **Clear** (Play page) turns every step off: a new pattern in one tap, one undo step.
 - A phone held upright shows "Turn your phone" (`App.vue`), with "Use the full layout instead".
   A page can't turn itself; Android's installed app could (the manifest's `orientation`, not
   set yet: it would turn tablets too).
@@ -1055,6 +1060,7 @@ Done:
 | 43 | A new theme, **Sand**, with its own button next to Dark and Synthwave (the Light theme's white was harsh on the eyes): matte warm greys, dark knob caps, a teal-to-orange arc, an orange accent, a green-grey LCD with dark ink, softer pad colours, a taupe page; remembered like the others. The pink-to-violet wash, the NOISE switch's colour and the ⋯ menus' captions became theme variables, and light-on-light text fixed on light themes (⋯ menu captions, the NOISE switch when off, the RND pill). Plan: the logo on hold; the themes item done. |
 | 44 | Sand's pale spots fixed (the maintainer's screenshot): its wave, FM, Unison and LFO tiles are dark caps with light lettering, and the LFO's wave switch and the Vel → pill have dark ink. Two more themes with buttons, **Analog** (warm dark, amber, a wood-brown page) and **Slate** (mid-tone blue-grey, teal), to try out before deciding which themes to keep. |
 | 45 | Phone mode, picked from mockups (option B of three): on a touch phone held sideways a layout of its own, one screen without scrolling: 16 pads in two rows of 8 (tap: on/off; hold: the note from the key, velocity, repeats), Play and tempo, Sound and Pattern steppers with their dice, four big knobs (Decay, Tone, Sweep, Space); Sound, FX and Key pages a swipe away; ☰ with the File bar, themes and Full layout (remembered; File → Phone layout comes back). Upright, a hint to turn the phone. Plan: Google Play on hold. |
+| 46 | Phone mode, after trying it: a Phone layout button in the corner of the full layout on a phone (the way back was only in the File menu); the ☰ menu is a full-height panel from the left, so the File menu fits without scrolling; Clear in the top bar starts a new pattern in one tap. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

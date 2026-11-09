@@ -2679,6 +2679,15 @@ test.describe('Phone mode', () => {
 		await phonePads(page).nth(0).click();
 		await expect(phonePads(page).nth(0)).toHaveAttribute('aria-pressed', 'false');
 
+		// Clear: a new pattern in one tap, and Undo brings the steps back
+		for (const i of [0, 4, 8]) await phonePads(page).nth(i).click();
+		await page.waitForTimeout(700); // the undo history records a step once things are still
+		await page.getByRole('button', { name: 'Clear', exact: true }).click();
+		expect(await phonePads(page).evaluateAll((els) => els.some((e) => e.getAttribute('aria-pressed') === 'true'))).toBe(false);
+		await page.waitForTimeout(700);
+		await page.getByRole('button', { name: 'Undo', exact: true }).click();
+		await expect(phonePads(page).nth(8)).toHaveAttribute('aria-pressed', 'true');
+
 		// Play starts the sequencer
 		await page.getByRole('button', { name: 'Play', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
@@ -2759,8 +2768,11 @@ test.describe('Phone mode', () => {
 		const menu = page.getByRole('dialog', { name: 'Menu' });
 		await expect(menu.getByRole('button', { name: 'File ▾' })).toBeVisible();
 		await expect(menu.getByRole('button', { name: 'Sand', exact: true })).toBeVisible();
-		// The File menu opens there and works (Export audio… opens its dialog over the phone layout)
+		// The File menu opens there without scrolling, and works (Export audio… opens its dialog
+		// over the phone layout)
 		await menu.getByRole('button', { name: 'File ▾' }).click();
+		expect(await menu.evaluate((el) => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+		await expect(page.getByRole('menuitem', { name: 'Export audio…' })).toBeInViewport({ ratio: 1 });
 		await page.getByRole('menuitem', { name: 'Export audio…' }).click();
 		const dialog = page.getByRole('dialog', { name: 'Export audio' });
 		await expect(dialog).toBeVisible();
@@ -2774,8 +2786,16 @@ test.describe('Phone mode', () => {
 		await page.reload();
 		await expect(page.locator('.ds-grid')).toBeVisible();
 		await expect(page.locator('.phone-layout')).toHaveCount(0);
-		await chooseFromFileMenu(page, 'Phone layout');
+		// The way back: File → Phone layout, and a button always in view
+		await page.getByRole('button', { name: 'File ▾' }).click();
+		await expect(page.getByRole('menuitem', { name: 'Phone layout' })).toBeVisible();
+		await page.keyboard.press('Escape');
+		const back = page.getByRole('button', { name: 'Phone layout', exact: true });
+		await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+		await expect(back).toBeInViewport();
+		await back.click();
 		await expect(page.locator('.phone-layout')).toBeVisible();
+		await expect(back).toHaveCount(0);
 	});
 });
 

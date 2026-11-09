@@ -31,6 +31,8 @@
 					<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3" /><circle cx="5" cy="5" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="11" cy="11" r="1.2" /></svg>
 				</button>
 			</template>
+			<button v-if="page === 'play'" type="button" class="pl-clear" title="Turn every step off (Undo brings them back)"
+				@click="clearSteps">Clear</button>
 			<button type="button" class="pl-icon" aria-label="Undo" title="Undo" :disabled="!ctx.canUndo" @click="ctx.undo()">↶</button>
 			<button type="button" class="pl-icon" aria-label="Menu" title="Menu" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">☰</button>
 		</header>
@@ -125,9 +127,10 @@
 			</div>
 		</div>
 
-		<!-- The menu: the File bar (moved here by DrumSequencer), themes, back to the full layout -->
+		<!-- The menu, a panel from the left: the File bar (moved here by DrumSequencer), themes,
+			 back to the full layout -->
 		<div v-show="menuOpen" class="pl-scrim" @click="menuOpen = false"></div>
-		<div v-show="menuOpen" class="pl-sheet pl-menu" role="dialog" aria-label="Menu">
+		<div v-show="menuOpen" class="pl-menu" role="dialog" aria-label="Menu">
 			<div id="phone-menu-slot"></div>
 			<div class="pl-row">
 				<span class="pl-cap">Theme</span>
@@ -135,7 +138,10 @@
 			</div>
 			<div class="pl-row">
 				<button type="button" class="pt-btn" @click="menuOpen = false; ctx.fullLayout()">Full layout</button>
-				<span class="pl-cap pl-grow">The whole synth, as on a computer. File → Phone layout comes back here.</span>
+				<span class="pl-cap pl-grow">The whole synth, as on a computer. Its Phone layout button comes back here.</span>
+			</div>
+			<div class="pl-row">
+				<span class="pl-grow"></span>
 				<button type="button" class="pt-btn pl-small" @click="menuOpen = false">Close</button>
 			</div>
 		</div>
@@ -249,6 +255,8 @@ function padCancel() {
 onBeforeUnmount(padCancel);
 
 const replace = (arr: any[], i: number, v: any) => arr.map((x, j) => (j === i ? v : x));
+// Clear: a new pattern from scratch, every step off (one undo step)
+function clearSteps() { ctx.inst.steps = ctx.inst.steps.map(() => false); }
 function setStepOn(i: number, on: boolean) { ctx.inst.steps = replace(ctx.inst.steps, i, on); }
 function toggleStep(i: number) { setStepOn(i, !ctx.inst.steps[i]); }
 function setVelocity(i: number, v: number) { ctx.inst.velocities = replace(ctx.inst.velocities, i, v); }
@@ -724,7 +732,77 @@ function hzText(hz: number) {
 	accent-color: hsl(var(--pt-accent) 75% 55%);
 }
 
+.pl-clear {
+	height: 32px;
+	padding: 0 9px;
+	border-radius: 9px;
+	flex: none;
+	background: var(--pt-panel);
+	color: var(--pt-text);
+	border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 55%);
+	font: inherit;
+	font-size: 11px;
+	letter-spacing: .06em;
+}
+
+/* The menu: a panel from the left, as tall as the screen, so the File menu opens in it without
+   scrolling (its rows tighter than on a computer; Open's list of projects beside the panel) */
+.pl-menu {
+	--pl-menu-w: min(400px, 62vw);
+	position: fixed;
+	z-index: 61;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: var(--pl-menu-w);
+	overflow-y: auto;
+	padding: 10px max(10px, env(safe-area-inset-left, 0px)) 10px 10px;
+	padding-left: max(10px, env(safe-area-inset-left, 0px));
+	border-radius: 0 14px 14px 0;
+	background: var(--pt-panel);
+	color: var(--pt-text);
+	border-right: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 40%);
+	box-shadow: 10px 0 30px rgba(0, 0, 0, .5);
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
 .pl-menu :deep(.pt-card) {
 	margin: 0;
+	padding: 6px;
+}
+
+.pl-menu :deep(.pc-toolbar) {
+	flex-wrap: wrap;
+	row-gap: 6px;
+}
+
+.pl-menu :deep(.topbar-logo) {
+	display: none;
+}
+
+.pl-menu :deep(.pc-file-menu) {
+	inline-size: 230px;
+	padding: 4px;
+}
+
+.pl-menu :deep(.pc-file-menu > .pc-menu-row),
+.pl-menu :deep(.pc-file-menu .pc-sub-btn) {
+	padding: .38rem .6rem;
+	font-size: 13px;
+}
+
+.pl-menu :deep(.pc-open-submenu) {
+	position: fixed;
+	top: 8px;
+	bottom: auto;
+	left: calc(var(--pl-menu-w) + 8px);
+	right: 8px;
+	transform: none;
+	inline-size: auto;
+	max-height: calc(100vh - 16px);
+	overflow-y: auto;
+	z-index: 70;
 }
 </style>
