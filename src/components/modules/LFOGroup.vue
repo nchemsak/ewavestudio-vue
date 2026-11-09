@@ -571,7 +571,7 @@ svg {
 
 .mm-menu-title {
     font-weight: 700;
-    color: #c7cee0;
+    color: var(--pt-menu-caption);
     opacity: 0.9;
     padding: 8px 8px 6px;
 }
@@ -591,7 +591,7 @@ svg {
 
 .mm-reset {
     text-align: center;
-    color: #c7cee0;
+    color: var(--pt-menu-caption);
     opacity: 0.9;
     padding: 10px 8px 4px;
     cursor: pointer;

@@ -142,6 +142,23 @@ const amountText = computed(() => {
     opacity: 0.35;
 }
 
+/* On a light theme the pill needs a dark outline, and a little more ink (unless it's off) */
+.theme-light .pe-rnd,
+.theme-sand .pe-rnd {
+    border-color: color-mix(in oklab, var(--pt-text), transparent 72%);
+}
+
+.theme-light .pe-rnd:not(:disabled),
+.theme-sand .pe-rnd:not(:disabled) {
+    opacity: 0.8;
+}
+
+.theme-light .pe-rnd.on,
+.theme-sand .pe-rnd.on {
+    border-color: hsl(var(--pt-accent) 60% 48%);
+    opacity: 1;
+}
+
 .pe-rnd:focus-visible {
     outline: 2px solid hsl(var(--pt-accent) 80% 62%);
     outline-offset: 2px;

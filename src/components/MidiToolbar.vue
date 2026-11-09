@@ -108,6 +108,11 @@ onBeforeUnmount(() => {
     text-align: right;
 }
 
+/* On Sand's warm grey page the caption needs its full ink */
+.theme-sand .midi-label {
+    opacity: 1;
+}
+
 .midi-led {
     width: 10px;
     height: 10px;

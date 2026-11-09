@@ -269,7 +269,7 @@
 								<!-- vertical ribbon toggle -->
 								<button type="button" class="noise-ribbon" :class="{ 'is-on': noiseEnabled }"
 									:aria-pressed="noiseEnabled" aria-label="Toggle noise"
-									:style="{ '--noise-ribbon-accent': '#9C27B0' }" @click="noiseEnabled = !noiseEnabled">
+									@click="noiseEnabled = !noiseEnabled">
 									<span class="noise-ribbon-label">NOISE</span>
 								</button>
 
@@ -3355,7 +3355,7 @@ function rollRandomPattern() {
 }
 
 .noise-ribbon {
-	--noise-ribbon-accent: #9C27B0;
+	--noise-ribbon-accent: var(--pt-noise-on, #9C27B0);
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -3526,7 +3526,7 @@ function rollRandomPattern() {
 
 .mm-menu-title {
 	font-weight: 700;
-	color: #c7cee0;
+	color: var(--pt-menu-caption);
 	opacity: .9;
 	padding: 8px 8px 6px;
 }
@@ -3548,7 +3548,7 @@ function rollRandomPattern() {
 
 .mm-reset {
 	text-align: center;
-	color: #c7cee0;
+	color: var(--pt-menu-caption);
 	opacity: .9;
 	padding: 10px 8px 4px;
 	cursor: pointer;

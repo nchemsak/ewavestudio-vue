@@ -302,6 +302,32 @@
 	--pad-tint: #e793ff;
 }
 
+/* Sand: dark knob caps on warm grey, a teal-to-orange arc, a green notch */
+.theme-sand .drum-sequencer,
+.drum-sequencer.theme-sand {
+	--slider-bg: rgba(45, 42, 38, 0.1);
+	--slider-track: rgba(45, 42, 38, 0.25);
+	--slider-thumb: #dc6436;
+	--slider-thumb-border: rgba(45, 42, 38, 0.3);
+	--knob-arc-start: #2f9a92;
+	--knob-arc-end: #dc6436;
+	--knob-pointer: #f3eee6;
+	--knob-track: #c3bdb2;
+	--knob-track-disabled: #cfcac1;
+	--knob-arc-disabled: #b7b1a6;
+	--knob-face: #34312d;
+
+	--knob-marker: rgba(220, 100, 54, 0.55);
+	--knob-marker-active: #f6d2c2;
+	/* The LFO's marks: amber, darker than the dark themes' to show on warm grey */
+	--lfo-mod: #b86e00;
+	--knob-detent: rgba(29, 133, 125, 0.7);
+	--knob-detent-on: #1d857d;
+
+	--pad-bg: #dbd6cd;
+	--pad-tint: #dc6436;
+}
+
 /* ----------------------------------------------------------
    Pad Settings Popover
 ---------------------------------------------------------- */
@@ -491,7 +517,7 @@
 
 .generators {
 	.pt-card {
-		background: radial-gradient(circle at center, #d9a0c3 0%, #9b8cb4 75%, #736c92 100%);
+		background: var(--pt-wash);
 	}
 
 	.pt-collapse-body {

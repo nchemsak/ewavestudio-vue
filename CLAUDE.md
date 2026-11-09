@@ -215,7 +215,7 @@ src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/e
                          namespace.ts (storage names, one set per site folder)
 src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) + v1→v2
                          migration (CURRENT_VERSION = 2)
-src/composables/useTheme.ts      synthwave | dark | light theme, stored in localStorage
+src/composables/useTheme.ts      synthwave | dark | sand | light theme, stored in localStorage
 src/composables/useMidiInput.ts  Web MIDI note input (see "MIDI")
 src/composables/useMidiLearn.ts  MIDI learn mode and the controller's links (see "MIDI learn")
 src/composables/usePwa.ts  Installing the app, offline use and updates, the page's side
@@ -326,7 +326,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### LFO visualizer
 - While the LFO moves something, its movement is drawn on the control it moves, in amber
-  (`--lfo-mod`, darker in the light theme; every theme's knob arcs are blue to purple or pink),
+  (`--lfo-mod`, darker in the light themes; the dark themes' knob arcs are blue to purple or
+  pink, Sand's teal to orange),
   without turning that control, so it can still be turned while the LFO runs:
   - Filter: an amber dot on the Cutoff knob's ring at the cutoff the LFO has now, over a faint
     outer arc for its whole swing (`Knob.vue`'s `modValue` and `modRange`). The swing is the
@@ -352,7 +353,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - A lit pad's colour shows its note: blue for the lowest pad pitch (100 Hz) to red for the
   highest (2 kHz), linear in Hz (`padHue()` in `src/lib/padColour.ts`); its fill height shows
   its velocity. The screen's spectrogram (F2) draws each frequency in that same colour,
-  brighter when louder (`spectrumColour()`; darker when louder on the light theme's pale
+  brighter when louder (`spectrumColour()`; darker when louder on a light theme's pale
   screen), so a note shows in its pad's colour; above the pads' range, harmonics go on from
   red toward magenta. Since PR 41 (the maintainer's call: the spectrogram in the pads'
   colours, not the reverse). Before, the spectrogram coloured loudness in four colours per
@@ -703,16 +704,34 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Indentation is mostly tabs in `DrumSequencer.vue` and 4 spaces elsewhere. Match the
   surrounding file.
 - Large files are split into sections with `// X START` / `// X END` banner comments. Keep them.
-- Styling: Bootstrap 5 + custom SCSS in `src/assets/styles/`. There are three themes, selected
-  by a `theme-*` class on `<html>`. Keep the current look and feel unless a change is
-  requested. The Light theme's button is commented out in `ThemeToggle.vue`, so only a choice
-  saved before that applies it; it still has rough spots (for example the effect pedals'
-  names are hard to read; a chosen segment button's text, white on light, was fixed in PR 34). Theme colors are CSS variables set per theme in
-  `_themes.scss`; use them rather than a fixed color that only suits the dark themes. For
-  example `--pt-inset` is the background of an inset panel inside a card (Pattern Tools'
-  sections, the Sounds and Patterns boxes; mixed lighter, the Sound and Compose sections):
-  dark, or a light tint in the light theme. A browser test checks that those panels' captions
-  are readable in all three themes.
+- Styling: Bootstrap 5 + custom SCSS in `src/assets/styles/`. There are four themes, selected
+  by a `theme-*` class on `<html>` (`useTheme.ts`, `THEMES`): **Synthwave** (the default) and
+  **Dark**, and two light ones, **Sand** and **Light**. Keep the current look and feel unless
+  a change is requested.
+  - **Sand** (PR 43, replacing Light as the third button: the maintainer found its white harsh
+    on the eyes): matte warm greys instead of white, dark knob caps as on a hardware panel, a
+    teal-to-orange knob arc, an orange accent, a green-grey reflective LCD with dark ink in a
+    dark bezel, softer pad colours (still one per note), a taupe page and an apricot wash.
+  - **Light**: its button is commented out in `ThemeToggle.vue`, so only a choice saved before
+    that applies it; it still has rough spots (for example the effect pedals' names are hard
+    to read, as in every theme).
+  - Theme colors are CSS variables set per theme in `_themes.scss` (the `$themes` map, plus
+    per-theme blocks; the knobs' and pads' in `_drumSequencer.scss`, the screen's in
+    `Screen.vue`); use them rather than a fixed color that only suits the dark themes. For
+    example `--pt-inset` is the background of an inset panel inside a card (Pattern Tools'
+    sections, the Sounds and Patterns boxes; mixed lighter, the Sound and Compose sections):
+    dark, or a light tint in the light themes. Others: `--pt-wash` (the pink-to-violet
+    gradient of the Waveforms card and the Melody Maker's chosen key; `--pt-wash-ink` is the
+    text on it), `--pt-page` (the page behind the frame, the wash unless a theme sets it),
+    `--pt-noise-on` (the NOISE switch when on), `--pt-surface-3` (the NOISE switch when off;
+    unset in the dark themes, which use the fallback), `--pt-menu-caption` (captions in the ⋯
+    menus). A new theme needs a button, its name in `THEMES`, a `$themes` entry, and the
+    blocks above; a light one also joins the `.theme-light, .theme-sand` rules (dark text on
+    a chosen segment button and on titles, the pads' multiplied note colour).
+  - In a scoped `<style>`, write `.theme-sand .x` (Vue scopes the last part only, so the class
+    on `<html>` still matches); `:global(.theme-sand) .x` drops the `.x`.
+  - Browser tests check that those panels' captions are readable in all four themes, and that
+    Sand's own trouble spots are (the MIDI caption, NOISE switch, chosen key, ⋯ menu, link).
 - Only the Bootstrap parts the app uses are built (`_bootstrap-custom.scss`): root variables and
   reboot, the grid's `.container`, `.row` and `.col-12`, `.visually-hidden`, and the utilities
   `.d-flex`, `.position-relative`, `.align-items-center`, `.gap-2` and `.text-center`. Any other
@@ -737,7 +756,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   knob goes along the same notches with a lighter hold (`CONTROLLER_DETENT_HOLD`, 4 %: its turn
   is short, and at 7 % a third of Tempo's turn would sit on notches), so it reaches them (128
   steps over 20–300 BPM would otherwise skip from 119 to 121). Each notch has a tick on the
-  ring in the notch colour (`--knob-detent`, mint in the dark themes, green in the light one:
+  ring in the notch colour (`--knob-detent`, mint in the dark themes, green in the light ones:
   apart from the blue-to-pink arcs and the LFO's amber); while the knob sits on a notch
   (`at-detent`), that tick and the pointer light up (`--knob-detent-on`), and the Tempo and
   Swing readouts under their knobs too (`.stepper-value.on-stop`). Notches now: Tempo 60, 90,
@@ -827,13 +846,7 @@ Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the m
 changes it as ideas come up). Everything drum-related waits until the maintainer brings the
 drum lanes back.
 
-1. **Layout design project: the logo.** The rest of the project (mockups in two rounds, then
-   the C1 layout, Sounds and Patterns, and the spectrogram in the pads' colours) was PR 41.
-   Left: a new or more balanced logo, now that the preset boxes have settled. It sits as a
-   badge at the left end of the top bar for now, hidden on phones.
-2. **Themes**: fix the light theme's rough spots and bring its button back, or design a better
-   third theme. After 1, so the styling isn't done twice.
-3. **Phone mode**, designed for phones rather than shrunk (after 1; mockups first): landscape,
+1. **Phone mode**, designed for phones rather than shrunk (mockups first): landscape,
    one screen without scrolling: 16 big pads (tap: on/off, hold: the note), Play, Sounds,
    Patterns and the dice, and three or four big macro knobs (for example Decay, Tone, Sweep,
    Space), other screens behind a swipe. A page can't force landscape; the installed app can
@@ -841,16 +854,16 @@ drum lanes back.
    perhaps Google Play: the PWA wrapped as a Trusted Web Activity (PWABuilder or Bubblewrap;
    Web MIDI still works), a $25 developer account, `/.well-known/assetlinks.json` on the main
    site, and for a new personal account a closed test with 12 testers for 14 days first.
-4. **Effects, as switches on the existing pedals**: a bit crusher on the overdrive pedal, and
+2. **Effects, as switches on the existing pedals**: a bit crusher on the overdrive pedal, and
    ping-pong (left/right echoes) on the delay pedal. No ring modulator or chorus (the
    maintainer's call), and no compressor: Chrome's adds about 6 ms of delay.
-5. **Patch cables**: animated cables from the LFO to what it moves (Cutoff, the Pulse tile,
+3. **Patch cables**: animated cables from the LFO to what it moves (Cutoff, the Pulse tile,
    the pads), swaying a little, never over a control, still with `prefers-reduced-motion`.
-   After 1, since they depend on where things sit.
-6. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+   They depend on where things sit, which the layout (PR 41) settled.
+4. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
    Checked after PR 37: ESLint 10.14 and typescript-eslint 8.72 still need `minimatch` 10, and
    `npm audit` reports 10 moderate advisories for them.
-7. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+5. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -866,7 +879,7 @@ Not now (looked into after PR 37):
 - **Apple's App Store.** $99 a year, a Mac (or a paid cloud build) to build it, Apple turns
   down apps that are a wrapped website, iPhones have no Web MIDI (it would need native code),
   and the silent switch mutes web audio unless handled. Google Play is the easier store (Next,
-  3).
+  1).
 
 Dropped in PR 34 (the maintainer and Claude agreed): export stems by register (bass / top
 notes) or by wave, and "arrangement variations" (sparse, half-time, build, fill, wash, reverse
@@ -889,6 +902,10 @@ heard, and the presets peak well below clipping (0.2–0.5), but measurements se
 browser tests use `__swingOver` to ignore it.
 
 On hold (ask the maintainer before starting; put on hold after PR 33, "not now"):
+- **The logo** (skipped for now after PR 42, the maintainer's call; the last part of the
+  layout project, whose mockups, C1 layout, Sounds and Patterns, and spectrogram in the pads'
+  colours were PR 41): a new or more balanced logo, now that the preset boxes have settled. It
+  sits as a badge at the left end of the top bar for now, hidden on phones.
 - **MIDI keyboard latency** (put on hold after PR 37). The maintainer hears a delay between a
   key on a MIDI keyboard and the sound (wired), even with Attack at its 1 ms minimum. Measured
   after PR 37: the page handles a MIDI message within about 1 ms (2 ms at worst, while the
@@ -905,7 +922,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
 - **User-saved presets, and more built-in sounds** (the maintainer isn't sure they're needed,
   after PR 37). A user preset could be the sound part of a snapshot (`soundKey()`'s parts) in
   IndexedDB next to the projects; more built-in sounds as new sound features arrive (toms,
-  hats, organ and hollow sounds). Built-in patterns are part of the layout project (Next, 1).
+  hats, organ and hollow sounds). Built-in patterns came with the layout (PR 41).
 - **MIDI clock sync and MIDI out** (from the "More MIDI" item, whose MIDI learn came in PR 36;
   the maintainer isn't sure they're worth it). Clock sync would follow a DAW's or drum
   machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
@@ -990,6 +1007,7 @@ Done:
 | 40 | Knob stops, refined: the app starts at 120 BPM (most DAWs' default; was 80); Tempo's stops are 60, 90, 100, 120, 140, 160, 174 (128 dropped, 60 added); a drag holds 14 px at a stop (was 8; a MIDI controller keeps the lighter hold); stops show in a colour of their own (mint, green in the light theme): their ticks, and while a knob sits on one its tick and pointer light up, and the Tempo and Swing readouts too. |
 | 41 | Layout C1, picked from mockups (two rounds: three options, then three ways to balance C): the frame fills the window; the logo moves to the top bar; Sounds (the presets) and a new Patterns box side by side in the transport, six built-in patterns from the key's root and a dice (`src/lib/patterns/`); under the steps, Sound (three rows, each filled edge to edge) and Compose end on one line, like a piece of hardware; FM and Unison cards of their own (their tile shows Off / On); Envelope, Pitch and Filter knobs on one line; Pattern Tools' octave arrows up first; cards fit their own width (container queries); under 1200 px, Sound / Effects / Compose tabs under the steps. File → Export file now closes the menu. The spectrogram draws each note in its pad's colour (`src/lib/padColour.ts`; its own commit, easy to revert). |
 | 42 | Fix: the Noise switch (the NOISE ribbon on the Noise card's left edge) was hidden under its own card since PR 41, so noise couldn't be turned on or off: the stretched card had become a flex item, and an old `z-index` rule drew it over the ribbon (and over the card's TV static). Every control of the build before PR 41 was checked against PR 41's: all there and clickable but that one. A browser test now checks every control can be clicked at four widths and in every tab. |
+| 43 | A new theme, **Sand**, with its own button next to Dark and Synthwave (the Light theme's white was harsh on the eyes): matte warm greys, dark knob caps, a teal-to-orange arc, an orange accent, a green-grey LCD with dark ink, softer pad colours, a taupe page; remembered like the others. The pink-to-violet wash, the NOISE switch's colour and the ⋯ menus' captions became theme variables, and light-on-light text fixed on light themes (⋯ menu captions, the NOISE switch when off, the RND pill). Plan: the logo on hold; the themes item done. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
