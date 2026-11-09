@@ -2718,19 +2718,19 @@ test.describe('Phone mode', () => {
 
 	test('the steppers choose sounds and patterns; the dice roll them', async ({ page }) => {
 		await page.getByRole('button', { name: 'Next sound' }).click();
-		await expect(page.getByRole('button', { name: 'All sounds' })).toHaveText(PRESETS[0].label);
+		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText(PRESETS[0].label);
 		await page.getByRole('button', { name: 'Next sound' }).click();
-		await expect(page.getByRole('button', { name: 'All sounds' })).toHaveText(PRESETS[1].label);
+		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText(PRESETS[1].label);
 		await page.getByRole('button', { name: 'Random sound' }).click();
-		await expect(page.getByRole('button', { name: 'All sounds' })).toHaveText('Random');
+		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText('Random');
 
 		await page.getByRole('button', { name: 'Next pattern' }).click();
-		await expect(page.getByRole('button', { name: 'All patterns' })).toHaveText(PATTERNS[0].label);
+		await expect(page.getByRole('button', { name: 'All patterns' })).toContainText(PATTERNS[0].label);
 		expect(await phonePads(page).evaluateAll((els) => els.filter((e) => e.getAttribute('aria-pressed') === 'true').length)).toBeGreaterThan(0);
 		// A tap on the name: all six
 		await page.getByRole('button', { name: 'All patterns' }).click();
 		await page.getByRole('dialog', { name: 'Patterns' }).getByRole('button', { name: PATTERNS[3].label }).click();
-		await expect(page.getByRole('button', { name: 'All patterns' })).toHaveText(PATTERNS[3].label);
+		await expect(page.getByRole('button', { name: 'All patterns' })).toContainText(PATTERNS[3].label);
 	});
 
 	test('the four knobs turn the desktop settings: Tone is Cutoff, Space turns the reverb on', async ({ page }) => {
@@ -2748,22 +2748,79 @@ test.describe('Phone mode', () => {
 	});
 
 	test('a swipe moves between pages', async ({ page }) => {
-		const swipe = async (from: number, to: number) => {
-			await page.mouse.move(from, 200);
+		// Along the top bar (a swipe across the pads paints them instead, below)
+		const y = 20;
+		const swipeAt = async (from: number, to: number) => {
+			await page.mouse.move(from, y);
 			await page.mouse.down();
-			await page.mouse.move((from + to) / 2, 205, { steps: 4 });
-			await page.mouse.move(to, 205, { steps: 4 });
+			await page.mouse.move((from + to) / 2, y + 3, { steps: 4 });
+			await page.mouse.move(to, y + 3, { steps: 4 });
 			await page.mouse.up();
 		};
-		await swipe(500, 200);
+		await swipeAt(560, 260);
 		await expect(page.getByRole('tab', { name: 'Sound' })).toHaveAttribute('aria-selected', 'true');
-		await swipe(200, 500);
+		await swipeAt(260, 560);
 		await expect(page.getByRole('tab', { name: 'Play' })).toHaveAttribute('aria-selected', 'true');
-		// A swipe across the pads turns none on
 		expect(await phonePads(page).evaluateAll((els) => els.some((e) => e.getAttribute('aria-pressed') === 'true'))).toBe(false);
 	});
 
-	test('the menu has the File bar and themes; Full layout is remembered, and File → Phone layout comes back', async ({ page }) => {
+	test('a finger drawn across the pads paints them on, or off from a lit one', async ({ page }) => {
+		// A real touch (a touch keeps sending its moves to the pad it began on)
+		const cdp = await page.context().newCDPSession(page);
+		const centre = async (i: number) => {
+			const b = (await phonePads(page).nth(i).boundingBox())!;
+			return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+		};
+		const draw = async (from: number, to: number) => {
+			const a = await centre(from), z = await centre(to);
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [a] });
+			for (let k = 1; k <= 12; k++) {
+				await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: a.x + (z.x - a.x) * k / 12, y: a.y + (z.y - a.y) * k / 12 }] });
+			}
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+		};
+		const lit = () => phonePads(page).evaluateAll((els) => els.map((e) => e.getAttribute('aria-pressed') === 'true'));
+		await draw(0, 3);
+		expect((await lit()).slice(0, 5)).toEqual([true, true, true, true, false]);
+		// Drawn from a lit pad: off
+		await draw(1, 2);
+		expect((await lit()).slice(0, 5)).toEqual([true, false, false, true, false]);
+		// A tap still turns one on or off, and the page stayed on Play
+		const t = await centre(7);
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [t] });
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+		await expect(phonePads(page).nth(7)).toHaveAttribute('aria-pressed', 'true');
+		await expect(page.getByRole('tab', { name: 'Play' })).toHaveAttribute('aria-selected', 'true');
+	});
+
+	test('octave buttons move every pad; the tiny scope draws while it plays; the playing pad stands out', async ({ page }) => {
+		await phonePads(page).nth(0).click();
+		await expect(phonePads(page).nth(0)).toHaveAccessibleName('Step 1, A3');
+		await page.getByRole('button', { name: 'Octave up' }).click();
+		await expect(phonePads(page).nth(0)).toHaveAccessibleName('Step 1, A4');
+		await page.getByRole('button', { name: 'Octave down' }).click();
+		await page.getByRole('button', { name: 'Octave down' }).click();
+		await expect(phonePads(page).nth(0)).toHaveAccessibleName('Step 1, A2');
+
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		await page.waitForTimeout(600);
+		// The scope has drawn something
+		const inked = await page.locator('.pl-scope').evaluate((c: HTMLCanvasElement) => {
+			const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+			let n = 0;
+			for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+			return n;
+		});
+		expect(inked).toBeGreaterThan(20);
+		// The playing pad: a bar along its top and a thick outline
+		const now = page.locator('.pl-pad.now');
+		await expect(now).toHaveCount(1);
+		expect(await now.evaluate((el) => getComputedStyle(el, '::before').height)).toBe('6px');
+		expect(await now.evaluate((el) => getComputedStyle(el).outlineWidth)).toBe('3px');
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	});
+
+	test('the menu has the File bar and themes; Desktop View is remembered, and Phone view comes back', async ({ page }) => {
 		await page.getByRole('button', { name: 'Menu' }).click();
 		const menu = page.getByRole('dialog', { name: 'Menu' });
 		await expect(menu.getByRole('button', { name: 'File ▾' })).toBeVisible();
@@ -2779,18 +2836,19 @@ test.describe('Phone mode', () => {
 		await dialog.getByRole('button', { name: 'Close' }).click();
 		await expect(dialog).toBeHidden();
 		if (!(await menu.isVisible())) await page.getByRole('button', { name: 'Menu' }).click();
-		await menu.getByRole('button', { name: 'Full layout' }).click();
+		await expect(menu.getByText('The whole synth')).toHaveCount(0);
+		await menu.getByRole('button', { name: 'Desktop View' }).click();
 		await expect(page.locator('.phone-layout')).toHaveCount(0);
 		await expect(page.locator('.ds-grid')).toBeVisible();
 		await expect(page.locator('.ds-topbar')).toBeVisible();
 		await page.reload();
 		await expect(page.locator('.ds-grid')).toBeVisible();
 		await expect(page.locator('.phone-layout')).toHaveCount(0);
-		// The way back: File → Phone layout, and a button always in view
+		// The way back: File → Phone view, and a button always in view
 		await page.getByRole('button', { name: 'File ▾' }).click();
-		await expect(page.getByRole('menuitem', { name: 'Phone layout' })).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'Phone view' })).toBeVisible();
 		await page.keyboard.press('Escape');
-		const back = page.getByRole('button', { name: 'Phone layout', exact: true });
+		const back = page.getByRole('button', { name: 'Phone view', exact: true });
 		await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 		await expect(back).toBeInViewport();
 		await back.click();
@@ -2805,7 +2863,16 @@ test.describe('Phone mode, upright', () => {
 	test('a phone held upright asks to be turned, or shows the full layout', async ({ page }) => {
 		const hint = page.getByRole('dialog', { name: 'Turn your phone' });
 		await expect(hint).toBeVisible();
-		await hint.getByRole('button', { name: 'Use the full layout instead' }).click();
+		await expect(hint).toContainText('The synth is laid out sideways. Turn your phone to landscape to play.');
+		// Nothing of the app shows through or scrolls under it
+		await expect(page.locator('.app-frame')).toBeHidden();
+		expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe('hidden');
+		const top = await page.evaluate(() => {
+			const b = document.querySelector('.phone-hint')!.getBoundingClientRect();
+			return document.elementFromPoint(b.width / 2, b.height - 5)?.closest('.phone-hint') !== null;
+		});
+		expect(top).toBe(true);
+		await hint.getByRole('button', { name: 'Use the desktop view instead' }).click();
 		await expect(hint).toHaveCount(0);
 		await expect(page.locator('.ds-grid')).toBeVisible();
 	});
