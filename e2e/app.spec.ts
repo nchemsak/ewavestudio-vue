@@ -1052,6 +1052,42 @@ test('laid out like hardware: Sound in rows beside Compose, ending on one line; 
 	}
 });
 
+test('every control can be clicked, none drawn over by another, at every width and in every tab', async ({ page }) => {
+	// Each control's centre, once scrolled into view, must reach the control itself (PR 41's
+	// stretched Noise card was drawn over the Noise switch)
+	const covered = () => page.evaluate(() => {
+		const sel = 'button, [role=button], [role=switch], [role=slider], [role=radio], [role=tab], input, select, a[href]';
+		const out: string[] = [];
+		for (const el of document.querySelectorAll<HTMLElement>(sel)) {
+			const box = el.getBoundingClientRect();
+			if (box.width === 0 || box.height === 0 || getComputedStyle(el).visibility === 'hidden') continue;
+			el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' as ScrollBehavior });
+			const b = el.getBoundingClientRect();
+			const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+			const label = hit?.closest('label');
+			if (hit && (hit === el || el.contains(hit) || (label && label.contains(el)))) continue;
+			out.push(`${el.getAttribute('aria-label') || el.textContent!.trim().slice(0, 30)} (under ${hit ? hit.className : 'nothing'})`);
+		}
+		return out;
+	});
+	for (const [width, tabs] of [[1600, ['']], [1280, ['']], [1024, ['Sound', 'Effects', 'Compose']], [390, ['Sound', 'Effects', 'Compose']]] as const) {
+		await page.setViewportSize({ width, height: 900 });
+		for (const tab of tabs) {
+			if (tab) await page.getByRole('tab', { name: tab, exact: true }).click();
+			expect(await covered(), `${width} px${tab ? `, ${tab} tab` : ''}`).toEqual([]);
+		}
+	}
+
+	// The Noise switch turns noise on and off with a real click (its card shows the static)
+	await page.setViewportSize({ width: 1600, height: 900 });
+	const noise = page.getByRole('button', { name: 'Toggle noise' });
+	await noise.click();
+	await expect(noise).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('.module.noise .noise-overlay')).toBeVisible();
+	await noise.click();
+	await expect(noise).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('the filter envelope sweeps each note\'s cutoff, is saved, and shows on the filter view', async ({ page }) => {
 	const card = page.locator('.module.filter');
 	const amount = card.getByRole('slider', { name: 'Env Amt', exact: true });
