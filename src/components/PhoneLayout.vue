@@ -12,26 +12,13 @@
 					:class="{ on: page === p.id }" :aria-selected="page === p.id" @click="page = p.id">{{ p.label }}</button>
 			</div>
 			<span class="pl-grow"></span>
-			<template v-if="page === 'play'">
-				<div class="pl-stepper" role="group" aria-label="Sound">
-					<button type="button" class="pl-arr" aria-label="Previous sound" @click="stepSound(-1)">◂</button>
-					<button type="button" class="pl-val" aria-label="All sounds" @click="list = 'sound'"><span class="pl-cap" aria-hidden="true">Sound</span>{{ soundName }}</button>
-					<button type="button" class="pl-arr" aria-label="Next sound" @click="stepSound(1)">▸</button>
-				</div>
-				<button type="button" class="pl-icon pl-dice" aria-label="Random sound" title="Random sound" @click="rollSound">
-					<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3" /><circle cx="5" cy="5" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="11" cy="11" r="1.2" /></svg>
-				</button>
-				<div class="pl-stepper" role="group" aria-label="Pattern">
-					<button type="button" class="pl-arr" aria-label="Previous pattern" @click="stepPattern(-1)">◂</button>
-					<button type="button" class="pl-val" aria-label="All patterns" @click="list = 'pattern'"><span class="pl-cap" aria-hidden="true">Pattern</span>{{ patternName }}</button>
-					<button type="button" class="pl-arr" aria-label="Next pattern" @click="stepPattern(1)">▸</button>
-				</div>
-				<button type="button" class="pl-icon pl-dice" aria-label="Random pattern" title="Random pattern" @click="rollPattern">
-					<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3" /><circle cx="5" cy="5" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="11" cy="11" r="1.2" /></svg>
-				</button>
-			</template>
-			<button v-if="page === 'play'" type="button" class="pl-clear" title="Turn every step off (Undo brings them back)"
-				@click="clearSteps">Clear</button>
+			<!-- Play / Stop, on every page -->
+			<button type="button" class="pl-go" :class="{ playing: ctx.isPlaying }" :aria-label="ctx.isPlaying ? 'Stop' : 'Play'"
+				:aria-pressed="ctx.isPlaying" @click="ctx.togglePlay()">
+				<svg v-if="!ctx.isPlaying" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6v12l10-6-10-6z" /></svg>
+				<svg v-else viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5" /></svg>
+				<span aria-hidden="true">{{ ctx.isPlaying ? 'Stop' : 'Play' }}</span>
+			</button>
 			<button type="button" class="pl-icon" aria-label="Undo" title="Undo" :disabled="!ctx.canUndo" @click="ctx.undo()">↶</button>
 			<button type="button" class="pl-icon" aria-label="Menu" title="Menu" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">☰</button>
 		</header>
@@ -53,43 +40,59 @@
 					</button>
 				</div>
 				<div class="pl-side">
-					<div class="pl-transport">
-						<button type="button" class="pl-play-btn" :aria-label="ctx.isPlaying ? 'Stop' : 'Play'"
-							:aria-pressed="ctx.isPlaying" @click="ctx.togglePlay()">
-							<svg v-if="!ctx.isPlaying" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6v12l10-6-10-6z" /></svg>
-							<svg v-else viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5" /></svg>
+					<!-- Sound and Pattern: step through the six, a tap on the name lists them, a dice -->
+					<div class="pl-pick">
+						<div class="pl-stepper" role="group" aria-label="Sound">
+							<button type="button" class="pl-arr" aria-label="Previous sound" @click="stepSound(-1)">◂</button>
+							<button type="button" class="pl-val" aria-label="All sounds" @click="list = 'sound'"><span class="pl-cap" aria-hidden="true">Sound</span>{{ soundName }}</button>
+							<button type="button" class="pl-arr" aria-label="Next sound" @click="stepSound(1)">▸</button>
+						</div>
+						<button type="button" class="pl-icon pl-dice" aria-label="Random sound" title="Random sound" @click="rollSound">
+							<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3" /><circle cx="5" cy="5" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="11" cy="11" r="1.2" /></svg>
 						</button>
-						<div class="pl-steppers">
-							<div class="pl-mini" role="group" aria-label="Tempo">
-								<button type="button" aria-label="Tempo −1" @click="ctx.tempo = Math.max(20, ctx.tempo - 1)">−</button>
-								<span><b>{{ ctx.tempo }}</b> BPM</span>
-								<button type="button" aria-label="Tempo +1" @click="ctx.tempo = Math.min(300, ctx.tempo + 1)">+</button>
-							</div>
-							<div class="pl-mini" role="group" aria-label="Octave">
-								<button type="button" aria-label="Octave down" title="Every pad an octave down" @click="ctx.octave(-1)">↓</button>
-								<span>Octave</span>
-								<button type="button" aria-label="Octave up" title="Every pad an octave up" @click="ctx.octave(1)">↑</button>
-							</div>
+					</div>
+					<div class="pl-pick">
+						<div class="pl-stepper" role="group" aria-label="Pattern">
+							<button type="button" class="pl-arr" aria-label="Previous pattern" @click="stepPattern(-1)">◂</button>
+							<button type="button" class="pl-val" aria-label="All patterns" @click="list = 'pattern'"><span class="pl-cap" aria-hidden="true">Pattern</span>{{ patternName }}</button>
+							<button type="button" class="pl-arr" aria-label="Next pattern" @click="stepPattern(1)">▸</button>
+						</div>
+						<button type="button" class="pl-icon pl-dice" aria-label="Random pattern" title="Random pattern" @click="rollPattern">
+							<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3" /><circle cx="5" cy="5" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="11" cy="11" r="1.2" /></svg>
+						</button>
+						<button type="button" class="pl-clear" title="Turn every step off (Undo brings them back)"
+							@click="clearSteps">Clear</button>
+					</div>
+					<div class="pl-pick">
+						<div class="pl-mini" role="group" aria-label="Tempo">
+							<button type="button" aria-label="Tempo −1" @click="ctx.tempo = Math.max(20, ctx.tempo - 1)">−</button>
+							<span><b>{{ ctx.tempo }}</b> BPM</span>
+							<button type="button" aria-label="Tempo +1" @click="ctx.tempo = Math.min(300, ctx.tempo + 1)">+</button>
+						</div>
+						<div class="pl-mini" role="group" aria-label="Octave">
+							<button type="button" aria-label="Octave down" title="Every pad an octave down" @click="ctx.octave(-1)">↓</button>
+							<span>Oct</span>
+							<button type="button" aria-label="Octave up" title="Every pad an octave up" @click="ctx.octave(1)">↑</button>
 						</div>
 					</div>
 					<div class="pl-macros">
 						<div class="pl-macro">
-							<Knob v-model="ctx.decayMs" label="Decay" :min="50" :max="2000" :step="1" taper="log" size="medium"
+							<Knob v-model="ctx.decayMs" label="Decay" :min="50" :max="2000" :step="1" taper="log" size="small"
 								:value-text="`${Math.round(ctx.decayMs)} ms`" />
 							<span class="pl-mv">{{ Math.round(ctx.decayMs) }} ms</span>
 						</div>
 						<div class="pl-macro">
-							<Knob v-model="ctx.cutoff" label="Tone" :min="100" :max="10000" :step="1" taper="log" size="medium"
+							<Knob v-model="ctx.cutoff" label="Tone" :min="100" :max="10000" :step="1" taper="log" size="small"
 								:value-text="hzText(ctx.cutoff)" />
 							<span class="pl-mv">{{ hzText(ctx.cutoff) }}</span>
 						</div>
 						<div class="pl-macro">
-							<Knob v-model="ctx.sweep" label="Sweep" :min="-48" :max="48" :step="1" bipolar size="medium"
+							<Knob v-model="ctx.sweep" label="Sweep" :min="-48" :max="48" :step="1" bipolar size="small"
 								:value-text="`${ctx.sweep > 0 ? '+' : ''}${ctx.sweep} st`" />
 							<span class="pl-mv">{{ ctx.sweep > 0 ? '+' : '' }}{{ ctx.sweep }} st</span>
 						</div>
 						<div class="pl-macro">
-							<Knob v-model="ctx.space" label="Space" :min="0" :max="1" :step="0.01" size="medium"
+							<Knob v-model="ctx.space" label="Space" :min="0" :max="1" :step="0.01" size="small"
 								:value-text="`${Math.round(ctx.space * 100)}%`" />
 							<span class="pl-mv">{{ Math.round(ctx.space * 100) }}%</span>
 						</div>
@@ -142,6 +145,19 @@
 				<span class="pl-cap">Theme</span>
 				<ThemeToggle />
 			</div>
+			<!-- Start over: two taps (Reset…, then what to reset), and Undo brings it all back -->
+			<div class="pl-row pl-reset">
+				<template v-if="!resetAsk">
+					<button type="button" class="pt-btn" @click="resetAsk = true">Reset…</button>
+					<span class="pl-cap">Start over with blank pads</span>
+				</template>
+				<template v-else>
+					<span class="pl-reset-q">Every pad off, at full velocity, on A, one hit each.</span>
+					<button type="button" class="pt-btn pl-small" @click="doReset(false)">Reset pads</button>
+					<button type="button" class="pt-btn pl-small" @click="doReset(true)">Pads and sound</button>
+					<button type="button" class="pt-btn pl-small" @click="resetAsk = false">Cancel</button>
+				</template>
+			</div>
 			<div class="pl-row">
 				<button type="button" class="pt-btn" @click="menuOpen = false; ctx.fullLayout()">Desktop View</button>
 				<span class="pl-grow"></span>
@@ -164,7 +180,7 @@ const ctx = props.ctx;
 provide('noMidiLearn', true);
 
 const PAGES = [
-	{ id: 'play', label: 'Play' },
+	{ id: 'play', label: 'Pads' },
 	{ id: 'sound', label: 'Sound' },
 	{ id: 'fx', label: 'FX' },
 	{ id: 'key', label: 'Key' },
@@ -172,6 +188,13 @@ const PAGES = [
 type PageId = typeof PAGES[number]['id'];
 const page = ref<PageId>('play');
 const menuOpen = ref(false);
+// The menu's Reset: asked first, then pads only or pads and sound
+const resetAsk = ref(false);
+function doReset(sound: boolean) {
+	ctx.reset(sound);
+	resetAsk.value = false;
+	menuOpen.value = false;
+}
 const list = ref<null | 'sound' | 'pattern'>(null);
 
 // Swipe left or right between pages (not from a knob, a slider or an open sheet)
@@ -400,53 +423,25 @@ function hzText(hz: number) {
 	flex: none;
 }
 
-/* Small phones (an iPhone SE is 667 px wide sideways): everything in the top bar a little
-   narrower, so it fits on one line */
+/* Small phones (an iPhone SE is 667 px wide sideways; the first one 568) */
 @media (max-width: 720px) {
 	.pl-scope {
 		width: 48px;
 	}
 
 	.pl-tab {
-		padding: 8px 4px;
-		letter-spacing: .04em;
-	}
-
-	.pl-icon {
-		width: 28px;
-	}
-
-	.pl-clear {
-		padding: 0 6px;
-	}
-
-	.pl-val {
-		width: 58px;
-		font-size: 11px;
+		padding: 7px 8px;
+		min-width: 0;
 	}
 }
 
-/* The smallest phones (640 px or less sideways): the steppers lose their arrows; a tap on the
-   name still lists all six */
-@media (max-width: 640px) {
-	.pl-arr {
+@media (max-width: 600px) {
+	.pl-go span {
 		display: none;
 	}
 
-	.pl-val {
-		padding: 0 6px;
-	}
-
-	.pl-top {
-		gap: 3px;
-	}
-
-	.pl-scope {
-		width: 40px;
-	}
-
-	.pl-tab {
-		padding: 8px 3px;
+	.pl-arr {
+		display: none;
 	}
 }
 
@@ -469,27 +464,64 @@ function hzText(hz: number) {
 
 .pl-tabs {
 	display: flex;
-	gap: 2px;
+	gap: 3px;
+	padding: 3px;
+	border-radius: 11px;
+	background: var(--pt-inset);
+	box-shadow: inset 0 0 0 1px var(--pt-hairline);
 }
 
 .pl-tab {
 	border: 0;
 	background: transparent;
 	color: var(--pt-header-fg);
-	opacity: .7;
+	opacity: .75;
 	font: inherit;
-	font-size: 10px;
+	font-size: 11px;
 	letter-spacing: .08em;
 	text-transform: uppercase;
-	padding: 8px 5px;
+	padding: 7px 12px;
+	min-width: 58px;
 	border-radius: 8px;
 }
 
+/* The chosen tab: filled, outlined in the accent, like a pressed segment */
 .pl-tab.on {
 	opacity: 1;
-	background: var(--pt-inset);
+	font-weight: 700;
+	background: hsl(var(--pt-accent) 70% 50% / .28);
 	color: var(--pt-text);
-	box-shadow: inset 0 -2px 0 hsl(var(--pt-accent) 80% 60%);
+	box-shadow: inset 0 0 0 1px hsl(var(--pt-accent) 75% 60% / .8);
+}
+
+/* Play / Stop in the top bar */
+.pl-go {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 32px;
+	padding: 0 12px 0 9px;
+	border: 0;
+	border-radius: 9px;
+	color: #fff;
+	font: inherit;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	background: linear-gradient(135deg, hsl(var(--pt-accent) 78% 62%), hsl(var(--pt-accent-2) 82% 48%));
+	box-shadow: 0 3px 10px rgba(0, 0, 0, .4), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+
+.pl-go svg {
+	width: 16px;
+	height: 16px;
+	fill: currentColor;
+}
+
+.pl-go.playing {
+	box-shadow: 0 0 0 2px hsl(var(--pt-accent) 90% 70% / .6), 0 0 14px hsl(var(--pt-accent) 90% 60% / .7);
 }
 
 .pl-grow {
@@ -714,43 +746,28 @@ function hzText(hz: number) {
 
 .pl-side {
 	display: grid;
-	grid-template-rows: auto 1fr;
-	gap: 8px;
+	grid-template-rows: auto auto auto minmax(0, 1fr);
+	gap: 6px;
 	min-height: 0;
 }
 
-.pl-transport {
+.pl-pick {
 	display: flex;
-	gap: 8px;
 	align-items: center;
+	gap: 5px;
+	min-width: 0;
 }
 
-.pl-play-btn {
+.pl-pick > .pl-stepper,
+.pl-pick > .pl-mini {
 	flex: 1;
-	height: 58px;
-	border: 0;
-	border-radius: 14px;
-	display: grid;
-	place-items: center;
-	color: #fff;
-	background: radial-gradient(circle at 30% 20%, hsl(var(--pt-accent) 78% 74%) 0, hsl(var(--pt-accent) 78% 66%) 38%, hsl(var(--pt-accent-2) 82% 58%) 80%, hsl(var(--pt-accent-2) 90% 46%) 100%);
-	box-shadow: 0 8px 18px rgba(0, 0, 0, .45), 0 0 0 1px rgba(0, 0, 0, .7), inset 0 2px 6px rgba(0, 0, 0, .4);
+	min-width: 0;
 }
 
-.pl-play-btn[aria-pressed="true"] {
-	box-shadow: 0 0 0 3px hsl(var(--pt-accent) 90% 70% / .5), 0 8px 18px rgba(0, 0, 0, .45);
-}
-
-.pl-play-btn svg {
-	width: 28px;
-	height: 28px;
-	fill: currentColor;
-}
-
-.pl-steppers {
-	display: grid;
-	gap: 4px;
-	flex: none;
+.pl-pick .pl-val {
+	flex: 1;
+	width: auto;
+	min-width: 0;
 }
 
 .pl-mini {
@@ -759,7 +776,6 @@ function hzText(hz: number) {
 	align-items: center;
 	gap: 2px;
 	height: 27px;
-	min-width: 112px;
 	border-radius: 8px;
 	background: var(--pt-inset);
 	font-size: 10px;

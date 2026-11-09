@@ -33,7 +33,10 @@
 				</div>
 				<p class="export-note">{{ endingText }}</p>
 
-				<fieldset class="export-files">
+				<!-- On a phone (phone mode): just the mix, normalized; the rest is for a computer -->
+				<p v-if="simple" class="export-note">One WAV file of the mix, as loud as it can go without clipping.
+					Stems, a MIDI file and one-shots are in the desktop view.</p>
+				<fieldset v-if="!simple" class="export-files">
 					<legend class="export-label">Files</legend>
 					<label class="export-check">
 						<input type="checkbox" v-model="o.mix" />
@@ -63,7 +66,7 @@
 					</div>
 				</fieldset>
 
-				<label class="export-check export-normalize">
+				<label v-if="!simple" class="export-check export-normalize">
 					<input type="checkbox" v-model="o.normalize" />
 					<span>Normalize</span>
 					<span class="export-hint">louder: peaks at −1 dB, the mix and stems by the same amount</span>
@@ -73,7 +76,7 @@
 					<span class="export-hint export-status" aria-live="polite">{{ statusText }}</span>
 					<button class="pt-btn" type="button" :disabled="busy" @click="close">Cancel</button>
 					<button class="pt-btn export-go" type="button" :disabled="busy || fileCount === 0"
-						@click="emit('export', { ...o })">{{ busy ? 'Exporting…' : 'Export' }}</button>
+						@click="emit('export', simple ? { ...o, mix: true, stems: false, midi: false, oneShot: false, normalize: true } : { ...o })">{{ busy ? 'Exporting…' : 'Export' }}</button>
 				</div>
 			</div>
 		</div>
@@ -92,6 +95,7 @@ const props = defineProps<{
 	effectsOn: { delay: boolean; reverb: boolean; noise: boolean };
 	busy: boolean;
 	progress: string;                           // "2 of 5" while rendering
+	simple?: boolean;                           // phone mode: Bars and Ending only, the mix normalized
 }>();
 
 const emit = defineEmits<{
@@ -132,7 +136,7 @@ const stemsText = computed(() => {
 	return `${list(stems.value)}: they add up to the mix${off.length ? `; ${list([...off])} ${off.length === 1 ? 'is' : 'are'} off` : ''}`;
 });
 
-const fileCount = computed(() =>
+const fileCount = computed(() => props.simple ? 1 :
 	(o.mix ? 1 : 0) + (o.stems ? stems.value.length : 0) + (o.midi ? 1 : 0) + (o.oneShot ? 1 : 0));
 
 const statusText = computed(() => {

@@ -24,7 +24,8 @@
 		:rel="pwa.state.standalone ? 'noopener' : undefined">Return to Ephemeral Wave</a>
 	<PwaNotice />
 	<!-- On a phone showing the desktop view: always a way back to the phone view -->
-	<button v-if="phoneOnPhone && phoneFull" type="button" class="pt-btn phone-back" @click="setPhoneFull(false)">
+	<button v-if="phoneOnPhone && phoneFull" type="button" class="phone-back" @click="setPhoneFull(false)">
+		<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2.5" /><circle cx="18" cy="12" r="1" /></svg>
 		Phone view
 	</button>
 	<!-- A phone held upright: the phone layout is made for landscape (usePhoneMode.ts) -->
@@ -116,12 +117,31 @@ watchEffect(() => document.documentElement.classList.toggle('phone-mode', phoneA
 }
 
 .phone-back {
+	/* Above everything (the desktop's pad numbers sit at z-index 1000), and in the accent, so it
+	   stands out from the page under it */
 	position: fixed;
-	z-index: 40;
+	z-index: 2500;
 	right: max(12px, env(safe-area-inset-right, 0px));
 	bottom: max(12px, env(safe-area-inset-bottom, 0px));
-	padding: 8px 14px;
-	box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 11px 18px 11px 14px;
+	border: 2px solid rgba(255, 255, 255, .85);
+	border-radius: 999px;
+	color: #fff;
+	font: 700 14px/1 monospace;
+	letter-spacing: .04em;
+	background: linear-gradient(135deg, hsl(var(--pt-accent) 78% 56%), hsl(var(--pt-accent-2) 82% 44%));
+	box-shadow: 0 8px 22px rgba(0, 0, 0, .55), 0 0 18px hsl(var(--pt-accent) 90% 60% / .55);
+}
+
+.phone-back svg {
+	width: 20px;
+	height: 20px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
 }
 
 .phone-hint {

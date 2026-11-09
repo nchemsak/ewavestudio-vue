@@ -2688,10 +2688,54 @@ test.describe('Phone mode', () => {
 		await page.getByRole('button', { name: 'Undo', exact: true }).click();
 		await expect(phonePads(page).nth(8)).toHaveAttribute('aria-pressed', 'true');
 
-		// Play starts the sequencer
+		// Play starts the sequencer, and Play / Stop is in the top bar on every page
 		await page.getByRole('button', { name: 'Play', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+		for (const tab of ['Sound', 'FX', 'Key']) {
+			await page.getByRole('tab', { name: tab }).click();
+			await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+		}
 		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+	});
+
+	test('Reset in the menu asks first, then resets the pads (and the sound, if asked); Undo brings them back', async ({ page }) => {
+		await page.getByRole('button', { name: 'Next sound' }).click();
+		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText(PRESETS[0].label);
+		for (const i of [0, 4, 8]) await phonePads(page).nth(i).click();
+		await page.getByRole('button', { name: 'Octave up' }).click();
+		await page.waitForTimeout(700);
+		await page.getByRole('button', { name: 'Menu' }).click();
+		const menu = page.getByRole('dialog', { name: 'Menu' });
+		await menu.getByRole('button', { name: 'Reset…' }).click();
+		// Nothing changed yet
+		await expect(phonePads(page).nth(0)).toHaveAttribute('aria-pressed', 'true');
+		await menu.getByRole('button', { name: 'Reset pads' }).click();
+		await expect(menu).toBeHidden();
+		expect(await phonePads(page).evaluateAll((els) => els.some((e) => e.getAttribute('aria-pressed') === 'true'))).toBe(false);
+		await phonePads(page).nth(0).click();
+		await expect(phonePads(page).nth(0)).toHaveAccessibleName('Step 1, A3');
+		// The sound stayed
+		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText(PRESETS[0].label);
+		// Pads and sound: the sound goes back to the factory one too
+		await page.getByRole('button', { name: 'Menu' }).click();
+		await menu.getByRole('button', { name: 'Reset…' }).click();
+		await menu.getByRole('button', { name: 'Pads and sound' }).click();
+		await expect(page.getByRole('button', { name: 'All sounds' })).not.toContainText(PRESETS[0].label);
+		expect(await page.getByRole('slider', { name: 'Decay', exact: true }).getAttribute('aria-valuenow')).toBe('400');
+	});
+
+	test('Export audio on a phone: bars and ending only, one normalized mix', async ({ page }) => {
+		await phonePads(page).nth(0).click();
+		await page.getByRole('button', { name: 'Menu' }).click();
+		await page.getByRole('dialog', { name: 'Menu' }).getByRole('button', { name: 'File ▾' }).click();
+		await page.getByRole('menuitem', { name: 'Export audio…' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Export audio' });
+		await expect(dialog.getByRole('group', { name: 'Bars' })).toBeVisible();
+		await expect(dialog.getByRole('group', { name: 'Ending' })).toBeVisible();
+		for (const name of ['Mix', 'Effects stems', 'MIDI file', 'Normalize']) await expect(dialog.getByText(name, { exact: true })).toHaveCount(0);
+		const [download] = await Promise.all([page.waitForEvent('download'), dialog.getByRole('button', { name: 'Export', exact: true }).click()]);
+		expect(download.suggestedFilename()).toMatch(/_mix\.wav$/);
 	});
 
 	test('holding a pad picks its note from the key, its velocity and repeats', async ({ page }) => {
@@ -2699,7 +2743,7 @@ test.describe('Phone mode', () => {
 		await page.getByRole('tab', { name: 'Key' }).click();
 		await page.getByRole('button', { name: 'Scale' }).click();
 		await page.getByRole('option', { name: 'Minor', exact: true }).click();
-		await page.getByRole('tab', { name: 'Play' }).click();
+		await page.getByRole('tab', { name: 'Pads' }).click();
 
 		await holdPad(page, 2);
 		const picker = page.getByRole('dialog', { name: 'Step 3' });
@@ -2760,7 +2804,7 @@ test.describe('Phone mode', () => {
 		await swipeAt(560, 260);
 		await expect(page.getByRole('tab', { name: 'Sound' })).toHaveAttribute('aria-selected', 'true');
 		await swipeAt(260, 560);
-		await expect(page.getByRole('tab', { name: 'Play' })).toHaveAttribute('aria-selected', 'true');
+		await expect(page.getByRole('tab', { name: 'Pads' })).toHaveAttribute('aria-selected', 'true');
 		expect(await phonePads(page).evaluateAll((els) => els.some((e) => e.getAttribute('aria-pressed') === 'true'))).toBe(false);
 	});
 
@@ -2790,7 +2834,7 @@ test.describe('Phone mode', () => {
 		await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [t] });
 		await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 		await expect(phonePads(page).nth(7)).toHaveAttribute('aria-pressed', 'true');
-		await expect(page.getByRole('tab', { name: 'Play' })).toHaveAttribute('aria-selected', 'true');
+		await expect(page.getByRole('tab', { name: 'Pads' })).toHaveAttribute('aria-selected', 'true');
 	});
 
 	test('octave buttons move every pad; the tiny scope draws while it plays; the playing pad stands out', async ({ page }) => {
@@ -2851,6 +2895,14 @@ test.describe('Phone mode', () => {
 		const back = page.getByRole('button', { name: 'Phone view', exact: true });
 		await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 		await expect(back).toBeInViewport();
+		// Nothing on the page draws over it (the pad numbers sit at z-index 1000)
+		for (const y of [0, 400, 800]) {
+			await page.evaluate((top) => window.scrollTo(0, top), y);
+			expect(await back.evaluate((el) => {
+				const r = el.getBoundingClientRect();
+				return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+			})).toBe(true);
+		}
 		await back.click();
 		await expect(page.locator('.phone-layout')).toBeVisible();
 		await expect(back).toHaveCount(0);
