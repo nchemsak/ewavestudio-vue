@@ -92,6 +92,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { padHue } from '../lib/padColour';
 
 type NoteNameFn = (hz: number) => string;
 import WaveIcon from './WaveIcon.vue';
@@ -263,9 +264,9 @@ function emitOpenSettings(index: number, evt: MouseEvent) {
 }
 
 // visuals
+// The pads' colour for a pitch, blue→red; the spectrogram uses the same (src/lib/padColour.ts)
 function hueFor(hz: number, lo = props.minHz, hi = props.maxHz) {
-    const t = Math.min(1, Math.max(0, (hz - lo) / (hi - lo)));
-    return Math.round(220 * (1 - t));
+    return padHue(hz, lo, hi);
 }
 
 function padStyle(index: number) {

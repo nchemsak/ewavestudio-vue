@@ -22,6 +22,9 @@
                 </span>
             </div>
 
+            <!-- A hairline between the filter and its envelope -->
+            <div class="filter-divider" aria-hidden="true"></div>
+
             <!-- Filter envelope: how far the cutoff jumps at each note (octaves, either way), and
                  how fast it comes back -->
             <div class="position-relative text-center">
@@ -162,3 +165,12 @@ function onKnobEnd() {
     emit('knob-end');
 }
 </script>
+
+<style scoped>
+.filter-divider {
+    align-self: stretch;
+    width: 1px;
+    margin: 4px 0;
+    background: var(--pt-hairline);
+}
+</style>

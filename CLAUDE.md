@@ -11,8 +11,8 @@ envelope, noise, FM,
 unison and LFO; delay, overdrive and reverb; Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
 arpeggio in a key and scale; a new key or scale moves the pattern with it); an oscilloscope, spectrogram, tuner and envelope
-display; six built-in presets that set the sound (not the pattern), and a dice for a random
-sound; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
+display; six built-in sounds that set the sound (not the pattern) and six built-in patterns
+that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
 saved in IndexedDB with JSON import and export; undo/redo; and it installs as an app that
 works offline (a PWA).
 Earlier versions also had sample drum lanes (kick, snare, hihat and user-loaded samples).
@@ -50,6 +50,7 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   arithmetic, MIDI input (with a fake MIDI system), MIDI learn (and that every learnable knob
   is in the app), the undo history, project snapshots (save → load round trip, older
   projects, factory defaults), presets (exact values, knob ranges, pattern untouched),
+  patterns (from the key, sound untouched, the dice's rolls), pad colours,
   ratchet timing, knob notches, the Melody Maker's theory (moving a pattern to another key or
   scale), and the export helpers (loop folding, MIDI and zip files read
   back, names).
@@ -149,9 +150,10 @@ src/main.ts              createApp + Pinia, imports the global SCSS (Bootstrap +
 src/App.vue              Toolbar (ThemeToggle, #midi-toolbar-slot) + <DrumSequencer/> +
                          <PwaNotice/> (the "new version" notice)
 src/components/
-  DrumSequencer.vue      ~3400 lines; holds nearly all app state (as refs) and the screen
+  DrumSequencer.vue      ~3900 lines; holds nearly all app state (as refs) and the screen
                          views; groups the saved settings as `projectState` for saving and
-                         the live engine, and decides what a MIDI note plays
+                         the live engine, and decides what a MIDI note plays; its template's
+                         LAYOUT section lays out the panel (see "Layout" under Conventions)
   modules/*.vue          Synth and effect panels: Envelope, Filter, PitchEnv, Noise, FM,
                          Unison, LFOGroup, Delay, Drive, Reverb (UI only; mostly v-model)
   SynthStepGrid.vue      16 synth step pads with velocity and pitch sliders
@@ -160,10 +162,11 @@ src/components/
                          picked moves the pattern (see "Melody Maker")
   PatternTools.vue       Synth-lane tools: step fills (all, every 2/4, invert, random, clear),
                          velocity shapes ("Humanize") and octave shift
-  ProjectControls.vue    File menu: new, open, save, rename, delete, import/export JSON,
-                         Export audio…; Undo/Redo buttons
+  ProjectControls.vue    The top bar: the logo (its `brand` slot), File menu (new, open, save,
+                         rename, delete, import/export JSON, Export audio…), Undo/Redo buttons
   ExportDialog.vue       The Export audio dialog (see "Export audio")
-  PresetButtons.vue      The Presets buttons in the transport card (see "Presets")
+  PresetButtons.vue      A box of preset buttons and a dice, used twice in the transport card:
+                         Sounds and Patterns (see "Sounds and Patterns")
   MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list and Learn
                          (and the MIDI learn bar, at the bottom of the screen)
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
@@ -189,15 +192,20 @@ src/stores/projectStore.ts  Pinia store: current projectId, name, data snapshot
 src/lib/project/snapshot.ts  Settings ↔ project snapshot, and factory defaults (see "Saving")
 src/lib/project/history.ts   Undo/redo history of snapshots (pure; see "Undo / redo")
 src/lib/project/testState.ts  Settings for unit tests (not used by the app)
-src/lib/presets/         Built-in presets: library.ts (the sounds), presets.ts (applying one,
+src/lib/presets/         Built-in sounds: library.ts (the sounds), presets.ts (applying one,
                          and matching the sound to one), random.ts (the dice's random sound);
-                         see "Presets"
+                         see "Sounds and Patterns"
+src/lib/patterns/        Built-in patterns: library.ts (the patterns), patterns.ts (applying
+                         one from the key, and matching the pattern to one), random.ts (the
+                         dice's random pattern); see "Sounds and Patterns"
 src/lib/export/          Export helpers (pure, unit-tested): audio.ts (loop folding, tail
                          trimming, normalizing), midi.ts (MIDI file), zip.ts, names.ts
 src/lib/random.ts        Seeded random numbers (export stems; tests)
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
+src/lib/padColour.ts     The pads' colours, which the spectrogram uses too (see "Pad and
+                         spectrogram colours")
 src/lib/melody/theory.ts  Keys and scales; moving a pattern to another key or scale (pure)
 src/lib/knobDetents.ts   Knob notches: the drag's travel with a hold at each, and the Tempo and
                          Swing notches (pure; see "Knobs" under Conventions)
@@ -293,7 +301,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   so a long sound repeated doesn't pile up into a louder smear; the last hit rings out as
   usual. Saved per step as the synth lane's `ratchets` (1–4; projects saved before get 1s,
   other values are clamped by `clampRatchet()`); Reset Pads and File → New put them back to 1.
-  Ratchets are part of the pattern: presets and the dice leave them alone.
+  Ratchets are part of the pattern: sounds (presets) and their dice leave them alone; patterns
+  set them.
 - Filter envelope (`filterEnv.ts`; the Filter card's Env Amt and Decay knobs): each note's
   cutoff starts Env Amt octaves away (−5…+5; right of centre above, so the filter closes;
   left below, so it opens) and returns to Cutoff within Decay, as a decaying offset in cents
@@ -338,6 +347,18 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `FilterModule`, the Pulse tile's `WaveButton` and `SynthStepGrid`. Only components that read
   its fields redraw every frame; `DrumSequencer` itself must never read them in its template,
   or its whole template would re-render 60 times a second.
+
+### Pad and spectrogram colours
+- A lit pad's colour shows its note: blue for the lowest pad pitch (100 Hz) to red for the
+  highest (2 kHz), linear in Hz (`padHue()` in `src/lib/padColour.ts`); its fill height shows
+  its velocity. The screen's spectrogram (F2) draws each frequency in that same colour,
+  brighter when louder (`spectrumColour()`; darker when louder on the light theme's pale
+  screen), so a note shows in its pad's colour; above the pads' range, harmonics go on from
+  red toward magenta. Since PR 41 (the maintainer's call: the spectrogram in the pads'
+  colours, not the reverse). Before, the spectrogram coloured loudness in four colours per
+  theme (`--nac-spec-low/mid/high/peak` in `Screen.vue`, still defined); `SPEC_COLOURS` in
+  `startSpectrogram()` (`DrumSequencer.vue`) switches back to them in one line. A unit test
+  checks the colours; a browser test checks a played A3 is drawn in its pad's blue.
 
 ### MIDI
 - `src/composables/useMidiInput.ts` handles Web MIDI (`navigator.requestMIDIAccess`): access,
@@ -457,6 +478,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   typing or while a dropdown list is open. While Attack/Decay or Cutoff/Resonance is turned,
   the screen shows the envelope view (F4) or the filter view (no F-key), then goes back
   (`holdScreen`/`onScreenKnobEnd` in `DrumSequencer.vue`); a view picked meanwhile stays.
+- Under 1200 px, the Sound / Effects / Compose tabs are one Tab stop: Left/Right (Home/End)
+  move between them (`onTabKeydown` in `DrumSequencer.vue`).
 - Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers, and ends MIDI
   learn mode (where Enter arms the focused knob and Delete unlinks it).
 - Ctrl/Cmd+Z: undo; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: redo (same handler as Space). Ignored in
@@ -504,11 +527,31 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - `DelayEffect.vue` only shows the division and time; turning its knob emits both. It never
   sets the time or tone by itself, so loading a project doesn't change them.
 
-### Presets
-- Six buttons in the transport card (`PresetButtons.vue`): Kick, Snare, Metal / Pluck, Acid,
-  Bell. From 1280 px they sit between Swing and the logo, three across, without making the
-  card taller; narrower, they get a row of their own under the knobs (six across; three across
-  under Play on phones), and the screen beside grows with the card.
+### Sounds and Patterns
+- Two boxes side by side in the transport card (`PresetButtons.vue`, used twice), each six
+  buttons three across with a dice in its top-right corner: **Sounds** (Kick, Snare, Metal /
+  Pluck, Acid, Bell; the presets below) and **Patterns** (Pulse, Offbeat, Gallop / Rolls,
+  Bassline, Broken). From 1200 px they sit between Swing and Play without making the card
+  taller; narrower, they share a row of their own under the knobs; on phones one is under the
+  other. Sounds were called Presets until PR 41; the code still calls them presets.
+- A pattern sets the synth lane's pattern only: which steps are on, their velocities, pitches
+  and repeats (ratchets). Never the sound, the pads' waves, which steps get noise, the key,
+  tempo, swing, volume or Melody Maker. Its notes are semitones from the key's root in the
+  pads' octave (`currentDefaultHz`: A3 by default), folded by octaves into the pads' 100–2000
+  Hz (`applyPattern()` in `src/lib/patterns/patterns.ts`); off steps get the root, full
+  velocity and one hit. The built-in ones (`library.ts`, names and notes a first try, to be
+  changed once heard) use only the root, its fifth and octaves (0, 7, 12, −5), which are in
+  every scale the Melody Maker offers. A click is one undo step, and the button of the
+  pattern the lane matches is lit, the same way as a sound's (`patternKey()`). File → New
+  still starts with no steps on (the maintainer's call, for now).
+- The Patterns dice rolls a random pattern (`randomPattern()` in `src/lib/patterns/random.ts`):
+  step 1 always, then 3–8 more hits, likelier on the beats; beats accented, the rest softer;
+  mostly the root, some octaves and fifths; sometimes one or two rolls off the beat. One undo
+  step, nothing lit. Unit tests check 500 seeded rolls; a browser test checks the patterns, the
+  dice and undo.
+- Analytics: `pattern_select` with the pattern's id; `pattern_random` for a roll of the dice.
+
+### Presets (the Sounds box)
 - A preset sets the sound only: the synth and effect settings, the main wave and every pad's
   wave (as clicking a wave tile does). Never the pattern (steps, velocities, pitches, the noise
   mask), the key and octave, tempo, swing, volume or Melody Maker.
@@ -532,7 +575,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   Turning a sound knob unlights it; undo back to it lights it again; a tempo change doesn't
   unlight it. A preset not clicked on this page has no sound noted, so a project that happens
   to match it lights nothing.
-- The dice in the Presets box's top-right corner (`Random sound`, like the wave tiles' dice
+- The dice in the Sounds box's top-right corner (`Random sound`, like the wave tiles' dice
   badges) rolls a new sound: `randomPreset()` in `src/lib/presets/random.ts` builds a preset
   from random settings, applied like any other (from the factory sound up, one undo step, the
   pattern untouched, one wave on every pad). Nothing lights up after a roll. It's a recipe,
@@ -647,7 +690,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   ("Import failed"), and the console says which field was wrong.
 - If you add a parameter: add its ref to `projectState` in `DrumSequencer.vue` (and the
   `ProjectState` type), to `buildSnapshot`, `applySnapshot` and the factory defaults in
-  `snapshot.ts` (a sound setting in `resetSoundToFactoryDefaults`, see "Presets"; the default
+  `snapshot.ts` (a sound setting in `resetSoundToFactoryDefaults`, see "Presets (the Sounds box)"; the default
   must match the ref's starting value; a browser test compares File → New with a fresh page),
   and to `changeEverything()` in `testState.ts` (the round-trip test names any setting it
   doesn't cover). If it affects sound, also to
@@ -667,8 +710,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   names are hard to read; a chosen segment button's text, white on light, was fixed in PR 34). Theme colors are CSS variables set per theme in
   `_themes.scss`; use them rather than a fixed color that only suits the dark themes. For
   example `--pt-inset` is the background of an inset panel inside a card (Pattern Tools'
-  sections, the Presets box): dark, or a light tint in the light theme. A browser test checks
-  that those panels' captions are readable in all three themes.
+  sections, the Sounds and Patterns boxes; mixed lighter, the Sound and Compose sections):
+  dark, or a light tint in the light theme. A browser test checks that those panels' captions
+  are readable in all three themes.
 - Only the Bootstrap parts the app uses are built (`_bootstrap-custom.scss`): root variables and
   reboot, the grid's `.container`, `.row` and `.col-12`, `.visually-hidden`, and the utilities
   `.d-flex`, `.position-relative`, `.align-items-center`, `.gap-2` and `.text-center`. Any other
@@ -702,25 +746,38 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   its usual 54, 58, 62, 66 and 71 %; 33 % is a triplet and reads "33% (triplet)"); every
   bipolar knob's middle; a pad's Fine at 0; Noise Color's Pink, White and Blue. Knobs with
   hard stops (Delay Time, a synced LFO Rate) have none.
-- Layout: the module cards flow in CSS columns from 992 px (`.ds-modules`), so a module that
-  grows taller reshuffles the columns and can leave a gap. Envelope and Pitch are stacked on
-  the left of `.sound-grid` with Filter beside them as a 2×2 block (Cutoff, Resonance, Env Amt,
-  Decay); at 1280 px and on phones each card has room for two small knobs (40 px) across and a
-  five-letter title. The LFO is one compact row (on/off tile, Rate, Depth, Wave and Target
-  switches), 118 px tall, which made room for the Filter's second row. A browser test checks
-  the arrangement and one-line titles. The Waveforms panel shows its eight tiles as a 4×2 grid;
+- Layout (PR 41, "C1", picked from mockups): one piece of hardware that fills its frame, the
+  `LAYOUT` sections of `DrumSequencer.vue`'s template and styles (a CSS grid, `.ds-grid`).
+  The frame fills the window less a 16 px margin, up to 1320 px (`.app-frame` in `App.vue`),
+  instead of Bootstrap's container steps. The logo sits at the top bar's left end
+  (ProjectControls' `brand` slot; hidden under 576 px, where the project name needs the room).
+  From 1200 px: the transport and the Step Sequencer on the left two thirds, the screen beside
+  them as tall as both; under them two recessed sections, **Sound** (two thirds) and
+  **Compose** (Pattern Tools, Melody Maker), which end on one line (Sound's last row and Melody
+  Maker take up any difference). Sound is three rows, each filled edge to edge: Waveforms |
+  FM over Unison; Envelope | Pitch | Filter (their eight knobs on one line, Filter's four with a
+  hairline before its envelope's two); Noise over LFO | Effects. A card stretched taller than
+  its controls keeps them centred. FM and Unison are cards of their own; their tile is the
+  on/off switch and shows Off / On, as the LFO's does. Under 1200 px: the screen beside the
+  transport, the steps across, then tabs (Sound, Effects, Compose; not saved) under the steps,
+  showing one at a time (`data-tab` on the grid; the arrow keys move between tabs); under
+  720 px one column, the screen on top. Cards that change shape with their width use
+  container queries on their own width, not the window's: Pattern Tools (three sections side
+  by side, the same height, two buttons across; stacked under 340 px), Noise (mask buttons
+  beside the knobs, under them below 320 px), the LFO (Wave / Target captions hidden under
+  440 px, so it stays one row), FM (its ratio switch on a line of its own under 360 px), and
+  Melody Maker (keyboard and selects beside Generate from 640 px, as in a tablet's Compose tab).
+  A browser test checks the arrangement at 1600 and 1280 px (flush bottoms, one line of knobs,
+  rows filled, titles on one line, no sideways scroll) and the tabs at 1024 and 390 px. The
+  Waveforms panel shows its eight tiles as a 4×2 grid;
   Pulse Width is a mini knob in the Pulse tile's top-left corner (the dice badge is top-right),
   placed beside the tile's button, not inside it, so turning it doesn't pick the wave; the
-  tile's bar is drawn as wide as the pulse. (It first sat under Unison, which looked tied to
-  Unison and greyed out with it.) The LFO hides its Wave / Target captions when its card is
-  under 352 px (a container query), and tightens its gaps there, so it stays one row (a
-  browser test checks it at 1280 px and on a phone). When the LFO's target is Pulse and
+  tile's bar is drawn as wide as the pulse. When the LFO's target is Pulse and
   nothing plays Pulse (`pulseInUse`: the main wave, or any step that's on in an unmuted lane),
   the Pulse target button is dimmed with a title saying why, and the LFO's tile reads
-  "No Pulse".
-  The look is meant to be one piece of hardware
-  that fills its frame: check a layout change at several widths (1600, 1280, 1100, 900, 390)
-  against the build before it.
+  "No Pulse". Check a layout change at several widths (1600, 1280, 1024, 820, 390) against
+  the build before it: not every space needs filling, but empty space needs balance, and
+  columns end on one line, as on a piece of hardware.
 - Knobs: give every `<Knob>` a `label` (or an `aria-label`), and a `value-text` (what a
   screen reader says, such as "120 ms") when its number isn't the real value, for example a
   0..1 position. The text is usually the knob's tooltip. A new knob on the panel also gets a
@@ -766,17 +823,10 @@ Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the m
 changes it as ideas come up). Everything drum-related waits until the maintainer brings the
 drum lanes back.
 
-1. **Layout design project, mockups first** (two or three options at desktop, laptop and
-   tablet widths for the maintainer to pick from, before any code):
-   - Better use of space in Pitch & Harmonics, Filter and LFO: more uniform, not every gap
-     filled.
-   - The in-between widths, which look bad now (anything but desktop).
-   - Presets split into "Sounds" (today's six and the dice) and "Patterns" (built-in
-     patterns: steps, velocities, pitches relative to the key, ratchets). A new project then
-     needn't be silent: people press Play and hear nothing.
-   - The pads in the spectrogram's colors: its four theme colors by loudness (low, mid, high,
-     peak), so each pad's velocity picks its color.
-   - Then a new or more balanced logo, once the preset boxes have settled.
+1. **Layout design project: the logo.** The rest of the project (mockups in two rounds, then
+   the C1 layout, Sounds and Patterns, and the spectrogram in the pads' colours) was PR 41.
+   Left: a new or more balanced logo, now that the preset boxes have settled. It sits as a
+   badge at the left end of the top bar for now, hidden on phones.
 2. **Themes**: fix the light theme's rough spots and bring its button back, or design a better
    third theme. After 1, so the styling isn't done twice.
 3. **Phone mode**, designed for phones rather than shrunk (after 1; mockups first): landscape,
@@ -934,6 +984,7 @@ Done:
 | 38 | Knob notches: soft stops at common values (Tempo 90–174 BPM, Swing 8–42 % with the triplet at 33 %, the middle of two-way knobs, a pad's Fine at 0, Noise Color's named colors), each with a tick, where a drag holds for 8 px; a MIDI controller reaches them too (`src/lib/knobDetents.ts`). Plan: the maintainer's brainstorm sorted (Melody Maker, layout project, themes, phone mode, effect switches, patch cables); MIDI latency (measured) and user presets on hold; TV app, FL Studio plugin and Apple's store not now. |
 | 39 | Melody Maker rework: clicking a key moves the pattern there the shorter way round (the same melody) and plays the key; a new scale keeps each note on its degree (minor ↔ major) or goes to the nearest note; one Generate button with a Random / Arpeggio switch (saved), the card the same height in both. `src/lib/melody/theory.ts`. |
 | 40 | Knob stops, refined: the app starts at 120 BPM (most DAWs' default; was 80); Tempo's stops are 60, 90, 100, 120, 140, 160, 174 (128 dropped, 60 added); a drag holds 14 px at a stop (was 8; a MIDI controller keeps the lighter hold); stops show in a colour of their own (mint, green in the light theme): their ticks, and while a knob sits on one its tick and pointer light up, and the Tempo and Swing readouts too. |
+| 41 | Layout C1, picked from mockups (two rounds: three options, then three ways to balance C): the frame fills the window; the logo moves to the top bar; Sounds (the presets) and a new Patterns box side by side in the transport, six built-in patterns from the key's root and a dice (`src/lib/patterns/`); under the steps, Sound (three rows, each filled edge to edge) and Compose end on one line, like a piece of hardware; FM and Unison cards of their own (their tile shows Off / On); Envelope, Pitch and Filter knobs on one line; Pattern Tools' octave arrows up first; cards fit their own width (container queries); under 1200 px, Sound / Effects / Compose tabs under the steps. File → Export file now closes the menu. The spectrogram draws each note in its pad's colour (`src/lib/padColour.ts`; its own commit, easy to revert). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -2,6 +2,8 @@
 <template>
     <div class="pc-toolbar" role="region" aria-label="Project controls">
         <div class="pc-left">
+            <!-- The logo (DrumSequencer passes it), at the top bar's left end -->
+            <slot name="brand" />
             <div class="pc-file" ref="fileWrap">
                 <button class="pc-btn" @click="toggleFileMenu" :aria-expanded="showFile ? 'true' : 'false'"
                     aria-haspopup="menu">
@@ -421,6 +423,7 @@ function exportJson() {
     store.flushPending();
     const file = buildExportFile({ projectId: store.projectId, name: store.name, data: store.data });
     downloadJson(file, `${store.name || 'project'}.json`);
+    closeAllMenus(); // as every other File item does: the menu doesn't stay open over the page
 }
 function triggerImport() { fileInput.value?.click(); }
 async function onImport(e: Event) {

@@ -1,5 +1,5 @@
 <template>
-    <KnobGroup v-model="enabledLocal" title="Noise" :color="accent" :showToggle="showToggle">
+    <KnobGroup class="noise-group" v-model="enabledLocal" title="Noise" :color="accent" :showToggle="showToggle">
         <div class="noise-main">
             <div class="controls-row">
                 <!-- Burst -->
@@ -254,11 +254,19 @@ function maskBackbeat(): void {
 </script>
 
 <style scoped>
+/* The card's width decides the layout (the container query at the end) */
+.noise-group {
+    container: noise / inline-size;
+}
+
+/* The knobs on the left, the mask buttons filling the rest of the card */
 .noise-main {
     display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(204px, 204px);
-    gap: 12px;
-    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 14px;
+    row-gap: 10px;
+    align-items: center;
+    width: 100%;
     min-width: 0;
 }
 
@@ -267,7 +275,7 @@ function maskBackbeat(): void {
     grid-auto-flow: column;
     justify-content: start;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     min-width: 0;
 }
 
@@ -318,7 +326,6 @@ function maskBackbeat(): void {
 
 .mask-col {
     min-width: 0;
-    max-width: 340px;
 }
 
 .mask-stack {
@@ -328,24 +335,30 @@ function maskBackbeat(): void {
 }
 
 .pt-btn-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px !important;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px !important;
 }
 
 .pt-btn {
-    min-width: 64px;
+    min-width: 0;
     min-height: auto;
     line-height: 1;
     font-size: 0.65rem;
-    width: 56px;
-    padding: 4px;
+    width: 100%;
+    padding: 4px 2px;
+    white-space: nowrap;
     z-index: 2;
 }
 
-@media (max-width: 640px) {
+/* A narrow card: the mask buttons under the knobs */
+@container noise (max-width: 320px) {
     .noise-main {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .controls-row {
+        justify-content: space-evenly;
     }
 }
 </style>

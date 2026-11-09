@@ -1032,6 +1032,39 @@ defineExpose({ openAdvanced, getUi, setUi });
     width: 100%;
     max-width: none;
     flex: 1 1 0;
+    /* Its card's width decides the layout (the container query below) */
+    container: melody / inline-size;
+}
+
+/* A wide card (a tablet's Compose tab): the keyboard, scale and range on the left, Generate on
+   the right */
+@container melody (min-width: 640px) {
+    .melody-maker>.pt-section {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+        grid-template-areas: "kb group" "sel group" "hint group";
+        column-gap: 28px;
+        align-items: start;
+    }
+
+    .mm-kb-wrap {
+        grid-area: kb;
+    }
+
+    .mm-head-row2 {
+        grid-area: sel;
+    }
+
+    .mm-hint {
+        grid-area: hint;
+    }
+
+    .mm-group {
+        grid-area: group;
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+    }
 }
 
 .mm-field {

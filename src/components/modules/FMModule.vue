@@ -1,9 +1,9 @@
 <!-- components/modules/FMModule.vue -->
 <template>
-    <KnobGroup class="pitch-col" v-model="localEnabled" :showHeader="false">
+    <KnobGroup class="fm-group" v-model="localEnabled" :showHeader="false">
         <div class="pt-stack">
             <div class="fm-top">
-                <FmTowerButton v-model="localEnabled" label="FM" />
+                <FmTowerButton v-model="localEnabled" label="FM" showState />
             </div>
 
             <div class="pt-seg pt-seg-sm pt-seg-row" role="group" aria-label="FM Ratio Presets">
@@ -177,33 +177,80 @@ const activeKnob = ref<null | 'mf' | 'ix'>(null);
 </script>
 
 <style scoped>
-.pt-seg-row {
-    margin-top: 0.25rem;
-    margin-bottom: 0.5rem;
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    flex-wrap: wrap;
+/* The card's width decides the layout (container queries below) */
+.fm-group {
+    container: fm / inline-size;
+    padding: 0;
 }
 
+/* One line: the on/off tile, the ratio switch, the two knobs */
 .pt-stack {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     width: 100%;
+}
+
+.pt-seg-row {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    margin: 0;
+}
+
+.pt-seg-row .pt-seg-btn {
+    padding-left: 7px;
+    padding-right: 7px;
 }
 
 .pt-knob-row {
     display: flex;
     gap: 16px;
-    justify-content: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
+.pt-knob-row :deep(.knob-label) {
+    white-space: nowrap;
+}
+
+/* The tile: small, like the LFO's */
 .fm-top {
+    flex: none;
     display: flex;
+}
+
+.fm-top :deep(.wave-btn) {
+    --w: 58px;
+    height: 52px;
+    padding: 3px;
     justify-content: center;
-    align-items: center;
+    gap: 1px;
+}
+
+.fm-top :deep(.wave-svg) {
+    width: 30px;
+    height: 30px;
+}
+
+.fm-top :deep(.wave-label) {
+    font-size: .62rem;
+    text-transform: uppercase;
+}
+
+/* A narrow card (a phone): the ratio switch on a line of its own */
+@container fm (max-width: 360px) {
+    .pt-stack {
+        flex-wrap: wrap;
+        row-gap: 10px;
+    }
+
+    .pt-seg-row {
+        order: 3;
+        flex-basis: 100%;
+    }
 }
 
 .is-disabled :deep(.knob-label) {

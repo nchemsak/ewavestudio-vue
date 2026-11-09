@@ -1,9 +1,11 @@
 <!-- components/modules/UnisonEffect.vue -->
 <template>
-	<KnobGroup class="pitch-col" v-model="localEnabled" :showHeader="false">
+	<KnobGroup class="uni-group" v-model="localEnabled" :showHeader="false">
+		<!-- One line: the on/off tile, then the three knobs spread over the rest -->
+		<div class="uni-line">
 		<div class="uni-top">
 			<UnisonButton v-model="localEnabled" :voices="localVoices" :detune="localDetune" :spread="localSpread"
-				label="Unison" />
+				label="Unison" showState />
 		</div>
 
 		<div class="pt-knob-row" :class="{ 'is-unison-off': !localEnabled }">
@@ -30,6 +32,7 @@
 					{{ localSpread }}%
 				</span>
 			</div>
+		</div>
 		</div>
 	</KnobGroup>
 </template>
@@ -153,10 +156,45 @@ const maxVoices = computed(() => (isMobile.value ? 3 : 6));
 </script>
 
 <style scoped>
-.uni-top {
+.uni-group {
+	padding: 0;
+}
+
+.uni-line {
 	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+}
+
+.uni-line>.pt-knob-row {
+	flex: 1 1 auto;
+	justify-content: space-evenly;
+	flex-wrap: nowrap;
+}
+
+/* The tile: small, like the LFO's */
+.uni-top {
+	flex: none;
+	display: flex;
+}
+
+.uni-top :deep(.wave-btn) {
+	--w: 58px;
+	height: 52px;
+	padding: 3px;
 	justify-content: center;
-	margin: 0px 0 4px;
+	gap: 1px;
+}
+
+.uni-top :deep(.wave-svg) {
+	width: 30px;
+	height: 30px;
+}
+
+.uni-top :deep(.wave-label) {
+	font-size: .62rem;
+	text-transform: uppercase;
 }
 
 .is-unison-off :deep(.knob-label),
