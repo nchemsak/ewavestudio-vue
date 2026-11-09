@@ -31,9 +31,9 @@ describe('factory defaults (File → New)', () => {
 		expect(snap.fx).toEqual({
 			delay: {
 				enabled: false, sync: true, division: '1/8.', time: 0.375, feedback: 0.3, mix: 0.3,
-				toneEnabled: true, toneHz: 5000, toneType: 'lowpass',
+				toneEnabled: true, toneHz: 5000, toneType: 'lowpass', pingPong: false,
 			},
-			drive: { enabled: false, type: 'overdrive', amount: 0.4, tone: 5000, mix: 0.5 },
+			drive: { enabled: false, type: 'overdrive', amount: 0.4, tone: 5000, mix: 0.5, crush: false },
 			reverb: { enabled: false, mix: 0.18, decay: 1.4, tone: 0.6 },
 		});
 		expect(snap.melody).toEqual({
@@ -103,6 +103,16 @@ describe('saving and loading a project', () => {
 		// Sync off: the saved time is kept
 		applySnapshot(st, { fx: { delay: { sync: false, division: '1/4', time: 0.2 } } });
 		expect(st.fx.delay.time.value).toBe(0.2);
+	});
+
+	it('turns ping-pong and crush off for projects saved before them', () => {
+		const st = fresh();
+		changeEverything(st);
+		expect([st.fx.delay.pingPong.value, st.fx.drive.crush.value]).toEqual([true, true]);
+		applySnapshot(st, { fx: { delay: { enabled: true, mix: 0.3 }, drive: { enabled: true, amount: 0.4 } } });
+		expect([st.fx.delay.pingPong.value, st.fx.drive.crush.value]).toEqual([false, false]);
+		applySnapshot(st, { fx: { delay: { pingPong: true }, drive: { crush: true } } });
+		expect([st.fx.delay.pingPong.value, st.fx.drive.crush.value]).toEqual([true, true]);
 	});
 
 	it('works out the delay division of projects saved before it was saved', () => {

@@ -33,6 +33,9 @@
                         {{ Math.round(mappedToneHz) }} Hz
                     </span>
                 </div>
+
+                <PedalSwitch v-model="localPingPong" label="PING PONG" aria-label="Ping-pong delay"
+                    title="Ping-pong: echoes alternate left and right" :disabled="!localEnabled" />
             </div>
 
             <div class="panel-seam" aria-hidden="true"></div>
@@ -55,6 +58,7 @@
 import { ref, watch, computed, onMounted } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
+import PedalSwitch from './PedalSwitch.vue';
 import { DELAY_DIVISIONS, DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, syncedDelaySeconds } from '../../lib/delaySync';
 
 type ToneType = 'lowpass' | 'highpass';
@@ -70,6 +74,7 @@ const props = withDefaults(
         toneEnabled?: boolean;
         toneHz?: number;
         toneType?: ToneType;
+        pingPong?: boolean; // the PING PONG switch (src/audio/pingPong.ts)
         tempo?: number;
         color?: string;
         showToggle?: boolean;
@@ -83,6 +88,7 @@ const props = withDefaults(
         toneEnabled: true,
         toneHz: 5000,
         toneType: 'lowpass',
+        pingPong: false,
         tempo: 120,
         color: '#00BCD4',
         showToggle: false
@@ -97,7 +103,8 @@ const emit = defineEmits([
     'update:delayMix',
     'update:toneEnabled',
     'update:toneHz',
-    'update:toneType'
+    'update:toneType',
+    'update:pingPong'
 ]);
 
 // LP cutoff mapping
@@ -122,6 +129,7 @@ const mapHzToNormLP = (hz: number) => {
 const localEnabled = ref<boolean>(props.enabled);
 const localFeedback = ref<number>(props.delayFeedback ?? 0.35);
 const localMix = ref<number>(props.delayMix ?? 0.3);
+const localPingPong = ref<boolean>(!!props.pingPong);
 
 // cutoff normalized
 const localToneNorm = ref<number>(
@@ -157,6 +165,12 @@ const timeMs = computed(() => (props.delayTime ?? 0) * 1000);
 const currentDivLabel = computed(() => DIVS[divIndex.value]?.label ?? '—');
 
 watch(localEnabled, (v) => emit('update:enabled', v));
+watch(localPingPong, (v) => {
+    if (v !== props.pingPong) emit('update:pingPong', v);
+});
+watch(() => props.pingPong, (v) => {
+    localPingPong.value = !!v;
+});
 watch(localFeedback, (v) => emit('update:delayFeedback', v));
 watch(localMix, (v) => emit('update:delayMix', v));
 

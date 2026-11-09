@@ -105,8 +105,8 @@ export function randomPreset(rng: Rng = Math.random): SynthPreset {
 	}
 
 	if (chance(0.35)) fx.reverb = { enabled: true, mix: between(0.1, 0.35, 0.01), decay: between(0.6, 3, 0.05), tone: between(0.3, 0.8, 0.01) };
-	if (chance(0.25)) fx.delay = { enabled: true, division: pick(['1/16', '1/8', '1/8.', '1/4']), mix: between(0.15, 0.3, 0.01) };
-	if (chance(0.2)) fx.drive = { enabled: true, amount: between(0.1, 0.45, 0.01), tone: between(1500, 6000, 10), mix: between(0.15, 0.35, 0.01) };
+	if (chance(0.25)) fx.delay = { enabled: true, division: pick(['1/16', '1/8', '1/8.', '1/4']), mix: between(0.15, 0.3, 0.01), pingPong: chance(0.4) };
+	if (chance(0.2)) fx.drive = { enabled: true, amount: between(0.1, 0.45, 0.01), tone: between(1500, 6000, 10), mix: between(0.15, 0.35, 0.01), crush: chance(0.3) };
 
 	return { id: 'random', label: 'Random', description: 'A random sound', wave, synth, fx };
 }

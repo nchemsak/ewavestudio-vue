@@ -8,7 +8,7 @@ Audio API; there is no backend. Features: one 16-step synth lane with per-step p
 velocity, waveform (sine, triangle, saw, square, a pulse with adjustable width, and three
 harmonic shapes) and ratchet (2–4 quick hits within the step); amp envelope, pitch envelope (a drum-style sweep), filter with its own
 envelope, noise, FM,
-unison and LFO; delay, overdrive and reverb; Web MIDI note
+unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch) and reverb; Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
 arpeggio in a key and scale; a new key or scale moves the pattern with it); an oscilloscope, spectrogram, tuner and envelope
 display; six built-in sounds that set the sound (not the pattern) and six built-in patterns
@@ -51,7 +51,7 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   is in the app), the undo history, project snapshots (save → load round trip, older
   projects, factory defaults), presets (exact values, knob ranges, pattern untouched),
   patterns (from the key, sound untouched, the dice's rolls), pad colours,
-  ratchet timing, knob notches, the Melody Maker's theory (moving a pattern to another key or
+  ratchet timing, the bit crusher, knob notches, the Melody Maker's theory (moving a pattern to another key or
   scale), and the export helpers (loop folding, MIDI and zip files read
   back, names).
   `src/lib/project/testState.ts` builds the settings those tests use (`makeState`,
@@ -155,7 +155,8 @@ src/components/
                          the live engine, and decides what a MIDI note plays; its template's
                          LAYOUT section lays out the panel (see "Layout" under Conventions)
   modules/*.vue          Synth and effect panels: Envelope, Filter, PitchEnv, Noise, FM,
-                         Unison, LFOGroup, Delay, Drive, Reverb (UI only; mostly v-model)
+                         Unison, LFOGroup, Delay, Drive, Reverb (UI only; mostly v-model);
+                         PedalSwitch.vue, a pedal's mini toggle (CRUSH, PING PONG)
   SynthStepGrid.vue      16 synth step pads with velocity and pitch sliders
   PhoneLayout.vue        Phone mode's layout (see "Phone mode"): pads, Play, steppers, macros;
                          its Sound, FX and Key pages are DrumSequencer's slots
@@ -186,6 +187,9 @@ src/audio/
                          (the pulse network, the harmonic shapes)
   velocity.ts            Velocity routing: what a step's velocity does besides loudness
   ratchet.ts             Ratchets: when a step's 2–4 quick hits start and end
+  crusher.ts             The bit crusher (an AudioWorklet built from a Blob URL), see
+                         "Effect switches"
+  pingPong.ts            The ping-pong delay network, see "Effect switches"
   reverb/generateIr.ts   Algorithmic impulse response for the ConvolverNode
   export/scheduleStepSequencer.ts  Separate offline engine used for audio export
   export/exportFiles.ts  The Export audio dialog's files: renders, loops, stems, one-shot
@@ -249,8 +253,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `loadSample`, and for the LFO visualizer `lfoNow` and `soundingRecently`. A new sound setting is passed in here (see "If you add a parameter").
 - One `AudioContext` is created when `useLiveEngine` runs. It is resumed on the first Play
   click.
-- Graph: per-note synth voices → drive (dry + shaper → `driveSum`). From `driveSum` two paths
-  run in parallel: delay (dry + wet, with a feedback loop and tone filters) and a reverb send
+- Graph: per-note synth voices → drive (dry + shaper → tone → [bit crusher] → `driveSum`).
+  From `driveSum` two paths run in parallel: delay (dry + wet, with a feedback loop and tone
+  filters; the plain delay or the ping-pong one, each with its own send) and a reverb send
   (tone filter → convolver → wet gain). Both go to `masterGain` → destination. An
   `AnalyserNode` is tapped from `masterGain` for the scope, spectrogram and tuner. The noise
   layer (and the hidden sample lanes) go straight to `masterGain`, so they bypass drive, delay
@@ -326,6 +331,29 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   parameters, changed gain staging) must be mirrored there, or exports will sound different.
   (Until PR 34 it sent the noise layer through drive, delay and reverb, unfiltered; now it
   matches the live engine: 40 Hz–16 kHz, straight to the master.) See "Export audio".
+
+### Effect switches
+- Two pedals have a mini toggle (`PedalSwitch.vue`, `role="switch"`, in the corner right of
+  the TONE knob; greyed out while its pedal is off, like the knobs). Saved as
+  `fx.drive.crush` and `fx.delay.pingPong` (default off; a project saved before them gets off,
+  not the current value). Sound settings, so presets reset them (`resetSoundToFactoryDefaults`)
+  and the Sounds dice turns them on sometimes (ping-pong in 40 % of rolls with the delay, crush
+  in 30 % of rolls with the overdrive). Not MIDI-learnable (they're switches, not knobs).
+- **CRUSH** (`src/audio/crusher.ts`): the overdrive's driven path goes shaper → TONE → bit
+  crusher → makeup → MIX. It rounds to fewer bits (quiet tails fall to silence) and holds each
+  sample (a lower sample rate: aliasing). DRIVE sets how hard: 8 bits at 12 kHz to 4 bits at
+  3 kHz (`crushSettings()`). After TONE, not before it: a filter after the hard steps
+  overshoots them (peaks 1.26 instead of 0.83 at full DRIVE and MIX). Sample-and-hold needs an
+  AudioWorklet; its processor is built from `crushBlock()` (pure, unit-tested, so it must use
+  no outside names) and loaded from a Blob URL (`loadCrusher()`, once per context), so the build
+  has no extra file. Live, the crusher joins once loaded (a moment after the page opens) and the
+  switch crossfades it in; the export's `render()` loads it before scheduling.
+- **PING PONG** (`src/audio/pingPong.ts`): the sound, summed to mono, goes into a left delay;
+  its echo plays left, then crosses to a right delay (one pass of the feedback and its tone
+  filter), and back: left, right, left... Each echo is as loud and as dark as the plain
+  delay's same echo. The switch moves the send between the two delays, so echoes already
+  ringing in the other carry on. Browser tests check the echoes' sides live (per-channel
+  probes, `__channelPeaksOver`) and in the export, and that the crusher quantizes live.
 
 ### LFO visualizer
 - While the LFO moves something, its movement is drawn on the control it moves, in amber
@@ -922,16 +950,13 @@ Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the m
 changes it as ideas come up). Everything drum-related waits until the maintainer brings the
 drum lanes back.
 
-1. **Effects, as switches on the existing pedals**: a bit crusher on the overdrive pedal, and
-   ping-pong (left/right echoes) on the delay pedal. No ring modulator or chorus (the
-   maintainer's call), and no compressor: Chrome's adds about 6 ms of delay.
-2. **Patch cables**: animated cables from the LFO to what it moves (Cutoff, the Pulse tile,
+1. **Patch cables**: animated cables from the LFO to what it moves (Cutoff, the Pulse tile,
    the pads), swaying a little, never over a control, still with `prefers-reduced-motion`.
    They depend on where things sit, which the layout (PR 41) settled.
-3. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+2. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
    Checked after PR 37: ESLint 10.14 and typescript-eslint 8.72 still need `minimatch` 10, and
    `npm audit` reports 10 moderate advisories for them.
-4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+3. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1085,6 +1110,7 @@ Done:
 | 46 | Phone mode, after trying it: a Phone layout button in the corner of the full layout on a phone (the way back was only in the File menu); the ☰ menu is a full-height panel from the left, so the File menu fits without scrolling; Clear in the top bar starts a new pattern in one tap. |
 | 47 | Phone mode, round two: the "Turn your phone" screen covers the app (the pad numbers showed through and the page scrolled under it); its text and Desktop View / Phone view renamed; Octave ↓ / ↑ under the tempo; a tiny oscilloscope beside the tabs; a finger drawn across pads paints them; the playing pad stands out (outline, a bar along its top, brighter); the top bar fits down to 568 px. |
 | 48 | Phone mode, round three: Play / Stop in the top bar on every page; the Play tab renamed Pads, the tabs one segmented bar; Sound and Pattern steppers and Clear beside the pads; Reset… in the menu (asks first: pads, or pads and sound; Undo brings them back); a shorter Export audio on the phone (bars and ending, one normalized mix); the Phone view button in the accent and above the pad numbers. |
+| 49 | Effect switches on the pedals: CRUSH on the overdrive (a bit crusher, 8 bits at 12 kHz to 4 bits at 3 kHz as DRIVE goes up; an AudioWorklet, `src/audio/crusher.ts`) and PING PONG on the delay (echoes alternate left and right, `src/audio/pingPong.ts`); in the live and export engines, saved (older projects get them off), reset by presets, sometimes rolled by the Sounds dice. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

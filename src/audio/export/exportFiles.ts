@@ -11,6 +11,7 @@
 // one-shot on its own, to −1 dBFS. Rendering uses the offline engine (scheduleStepSequencer)
 // in an OfflineAudioContext, faster than real time.
 
+import { loadCrusher } from '../crusher';
 import { scheduleStepSequencer, type ExportPart, type StepSequencerState } from './scheduleStepSequencer';
 import { encodeWavFloat32 } from './encodeWav';
 import { applyGain, barFrames, foldLoop, normalizeGain, peakOf, trimTail, type Channels } from '../../lib/export/audio';
@@ -58,6 +59,7 @@ async function render(state: StepSequencerState, seconds: number): Promise<Chann
 	const sr = state.sampleRate;
 	const OfflineAC = window.OfflineAudioContext || (window as any).webkitOfflineAudioContext;
 	const ctx: OfflineAudioContext = new OfflineAC(2, Math.ceil(seconds * sr), sr);
+	if (state.fx.drive.enabled && state.fx.drive.crush) await loadCrusher(ctx);
 	scheduleStepSequencer(ctx, state, 0);
 	const buf = await ctx.startRendering();
 	return [buf.getChannelData(0), buf.getChannelData(1)];

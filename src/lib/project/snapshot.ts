@@ -123,8 +123,9 @@ export type ProjectState = {
 			toneEnabled: Ref<boolean>;
 			toneHz: Ref<number>;
 			toneType: Ref<'lowpass' | 'highpass'>;
+			pingPong: Ref<boolean>; // echoes alternate left and right
 		};
-		drive: { enabled: Ref<boolean>; type: Ref<string>; amount: Ref<number>; tone: Ref<number>; mix: Ref<number> };
+		drive: { enabled: Ref<boolean>; type: Ref<string>; amount: Ref<number>; tone: Ref<number>; mix: Ref<number>; crush: Ref<boolean> };
 		reverb: { enabled: Ref<boolean>; mix: Ref<number>; decay: Ref<number>; tone: Ref<number> };
 	};
 	instruments: Ref<Instrument[]>;
@@ -197,11 +198,13 @@ function byName(st: ProjectState) {
 		delayToneEnabled: fx.delay.toneEnabled,
 		delayToneHz: fx.delay.toneHz,
 		delayToneType: fx.delay.toneType,
+		delayPingPong: fx.delay.pingPong,
 		driveEnabled: fx.drive.enabled,
 		driveType: fx.drive.type,
 		driveAmount: fx.drive.amount,
 		driveTone: fx.drive.tone,
 		driveMix: fx.drive.mix,
+		driveCrush: fx.drive.crush,
 		reverbEnabled: fx.reverb.enabled,
 		reverbMix: fx.reverb.mix,
 		reverbDecay: fx.reverb.decay,
@@ -227,8 +230,8 @@ export function buildSnapshot(st: ProjectState) {
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
 		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
-		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
-		driveEnabled, driveType, driveAmount, driveTone, driveMix,
+		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
+		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone,
 		instruments, melodyUi, selectedWaveform,
 	} = byName(st);
@@ -322,6 +325,7 @@ export function buildSnapshot(st: ProjectState) {
 				toneEnabled: delayToneEnabled.value,
 				toneHz: delayToneHz.value,
 				toneType: delayToneType.value,
+				pingPong: delayPingPong.value,
 			},
 			drive: {
 				enabled: driveEnabled.value,
@@ -329,6 +333,7 @@ export function buildSnapshot(st: ProjectState) {
 				amount: driveAmount.value,
 				tone: driveTone.value,
 				mix: driveMix.value,
+				crush: driveCrush.value,
 			},
 			reverb: {
 				enabled: reverbEnabled.value,
@@ -388,8 +393,8 @@ export function applySnapshot(st: ProjectState, s: any) {
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
 		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
-		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
-		driveEnabled, driveType, driveAmount, driveTone, driveMix,
+		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
+		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone,
 		instruments, melodyUi, selectedWaveform,
 	} = byName(st);
@@ -537,6 +542,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		delayToneEnabled.value = !!s.fx.delay.toneEnabled;
 		if (typeof s.fx.delay.toneHz === 'number') delayToneHz.value = s.fx.delay.toneHz;
 		if (typeof s.fx.delay.toneType === 'string') delayToneType.value = s.fx.delay.toneType;
+		delayPingPong.value = s.fx.delay.pingPong === true; // older projects: off
 	}
 	if (s.fx?.drive) {
 		driveEnabled.value = !!s.fx.drive.enabled;
@@ -544,6 +550,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		if (typeof s.fx.drive.amount === 'number') driveAmount.value = s.fx.drive.amount;
 		if (typeof s.fx.drive.tone === 'number') driveTone.value = s.fx.drive.tone;
 		if (typeof s.fx.drive.mix === 'number') driveMix.value = s.fx.drive.mix;
+		driveCrush.value = s.fx.drive.crush === true; // older projects: off
 	}
 	if (s.fx?.reverb) {
 		reverbEnabled.value = !!s.fx.reverb.enabled;
@@ -691,8 +698,8 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
 		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
-		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType,
-		driveEnabled, driveType, driveAmount, driveTone, driveMix,
+		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
+		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone,
 	} = byName(st);
 
@@ -749,6 +756,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 	delayToneEnabled.value = true;
 	delayToneHz.value = 5000;
 	delayToneType.value = 'lowpass';
+	delayPingPong.value = false;
 
 	// FX: Drive
 	driveEnabled.value = false;
@@ -756,6 +764,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 	driveAmount.value = 0.4;
 	driveTone.value = 5000;
 	driveMix.value = 0.5;
+	driveCrush.value = false;
 
 	// FX: Reverb
 	reverbEnabled.value = false;
