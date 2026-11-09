@@ -768,7 +768,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   440 px, so it stays one row), FM (its ratio switch on a line of its own under 360 px), and
   Melody Maker (keyboard and selects beside Generate from 640 px, as in a tablet's Compose tab).
   A browser test checks the arrangement at 1600 and 1280 px (flush bottoms, one line of knobs,
-  rows filled, titles on one line, no sideways scroll) and the tabs at 1024 and 390 px. The
+  rows filled, titles on one line, no sideways scroll) and the tabs at 1024 and 390 px, and
+  another that every control can be clicked (none drawn over by another) at 1600, 1280, 1024
+  and 390 px, in every tab: a stretched card is a flex item, and a flex item with a `z-index`
+  is drawn over earlier positioned siblings, which hid the Noise switch (its ribbon) after
+  PR 41. The
   Waveforms panel shows its eight tiles as a 4×2 grid;
   Pulse Width is a mini knob in the Pulse tile's top-left corner (the dice badge is top-right),
   placed beside the tile's button, not inside it, so turning it doesn't pick the wave; the
@@ -985,6 +989,7 @@ Done:
 | 39 | Melody Maker rework: clicking a key moves the pattern there the shorter way round (the same melody) and plays the key; a new scale keeps each note on its degree (minor ↔ major) or goes to the nearest note; one Generate button with a Random / Arpeggio switch (saved), the card the same height in both. `src/lib/melody/theory.ts`. |
 | 40 | Knob stops, refined: the app starts at 120 BPM (most DAWs' default; was 80); Tempo's stops are 60, 90, 100, 120, 140, 160, 174 (128 dropped, 60 added); a drag holds 14 px at a stop (was 8; a MIDI controller keeps the lighter hold); stops show in a colour of their own (mint, green in the light theme): their ticks, and while a knob sits on one its tick and pointer light up, and the Tempo and Swing readouts too. |
 | 41 | Layout C1, picked from mockups (two rounds: three options, then three ways to balance C): the frame fills the window; the logo moves to the top bar; Sounds (the presets) and a new Patterns box side by side in the transport, six built-in patterns from the key's root and a dice (`src/lib/patterns/`); under the steps, Sound (three rows, each filled edge to edge) and Compose end on one line, like a piece of hardware; FM and Unison cards of their own (their tile shows Off / On); Envelope, Pitch and Filter knobs on one line; Pattern Tools' octave arrows up first; cards fit their own width (container queries); under 1200 px, Sound / Effects / Compose tabs under the steps. File → Export file now closes the menu. The spectrogram draws each note in its pad's colour (`src/lib/padColour.ts`; its own commit, easy to revert). |
+| 42 | Fix: the Noise switch (the NOISE ribbon on the Noise card's left edge) was hidden under its own card since PR 41, so noise couldn't be turned on or off: the stretched card had become a flex item, and an old `z-index` rule drew it over the ribbon (and over the card's TV static). Every control of the build before PR 41 was checked against PR 41's: all there and clickable but that one. A browser test now checks every control can be clicked at four widths and in every tab. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

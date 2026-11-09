@@ -3093,11 +3093,6 @@ function rollRandomPattern() {
 	flex: 1 1 auto;
 }
 
-/* Noise: its ribbon (the switch) stays above the stretched card */
-.module.noise .noise-tv-bg>.noise-ribbon {
-	z-index: 3;
-}
-
 /* Tablets: the tabs, and the panel they show */
 @media (max-width: 1199.98px) {
 	.ds-grid {
@@ -3834,7 +3829,10 @@ function rollRandomPattern() {
 	overflow: hidden;
 }
 
-.module.noise .noise-tv-bg>*:not(.noise-overlay) {
+/* The ribbon (the switch) above the TV static (z 0), which shows over the card. Only the
+   ribbon: the card has no z-index, or, as a flex item of the stretched panel, it would be
+   drawn over both (PR 41 hid the switch that way) */
+.module.noise .noise-tv-bg>.noise-ribbon {
 	z-index: 1;
 }
 
