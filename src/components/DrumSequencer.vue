@@ -1,21 +1,119 @@
 <template>
 	<div class="drum-sequencer" :class="currentTheme" :style="padSizeStyle">
-		<!-- Top bar: the logo, then Save/Open/Import/Export and Undo/Redo -->
-		<section class="pt-card ds-topbar">
-			<ProjectControls :exporting="isExporting" :can-undo="canUndo" :can-redo="canRedo"
-				@export-audio="openExportDialog" @undo="undo" @redo="redo">
-				<template #brand>
-					<img class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave">
-				</template>
-			</ProjectControls>
-		</section>
+		<!-- PHONE START
+			 Phone mode (usePhoneMode.ts): a phone held sideways gets its own layout instead of the
+			 one below. Its Sound, FX and Key pages show the same panels again. -->
+		<PhoneLayout v-if="phoneActive" :ctx="phoneCtx">
+			<template #sound>
+				<div class="pl-sound">
+					<div class="pl-sound-row">
+						<div class="module envelope">
+							<SectionWrap id="pl-envelope" title="Envelope" :modelValue="true">
+								<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
+									v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
+							</SectionWrap>
+						</div>
+						<div class="module pitch-env">
+							<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
+								v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
+						</div>
+						<div class="module filter">
+							<SectionWrap class="filter-card" id="pl-filter" title="Filter" :modelValue="true">
+								<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
+									v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
+									v-model:envAmount="filterEnvAmount" v-model:envDecayMs="filterEnvDecayMs" :lfoView="lfoView" />
+							</SectionWrap>
+						</div>
+					</div>
+					<div class="pl-sound-row">
+						<section class="pt-card pl-waves" aria-label="Wave">
+							<h2 class="pt-title">Wave</h2>
+							<div class="pl-wave-grid">
+								<button v-for="t in WAVE_TILES" :key="t.value" type="button" class="pt-btn"
+									:aria-pressed="selectedWaveform === t.value" @click="applyWaveToAll(t.value)">{{ t.label }}</button>
+							</div>
+						</section>
+						<section class="pt-card pl-gens" aria-label="Noise, FM and Unison">
+							<div class="pl-gen">
+								<button type="button" class="pt-btn" :aria-pressed="noiseEnabled" @click="noiseEnabled = !noiseEnabled">Noise</button>
+								<Knob v-model="noiseAmount" label="Amount" aria-label="Noise amount" :min="0" :max="1" :step="0.01" size="small"
+									:disabled="!noiseEnabled" :value-text="`${Math.round(noiseAmount * 100)}%`" />
+							</div>
+							<div class="pl-gen">
+								<button type="button" class="pt-btn" :aria-pressed="fmEnabled" @click="fmEnabled = !fmEnabled">FM</button>
+								<Knob v-model="fmIndex" label="Amount" aria-label="FM amount" :min="0" :max="50" :step="0.1" size="small"
+									:disabled="!fmEnabled" :value-text="fmIndex.toFixed(1)" />
+							</div>
+							<div class="pl-gen">
+								<button type="button" class="pt-btn" :aria-pressed="unisonEnabled" @click="unisonEnabled = !unisonEnabled">Unison</button>
+								<Knob v-model="unisonVoices" label="Voices" aria-label="Unison voices" :min="1" :max="unisonMaxVoices" :step="1" size="small"
+									:disabled="!unisonEnabled" :value-text="`${unisonVoices} voices`" />
+							</div>
+						</section>
+					</div>
+				</div>
+			</template>
+			<template #fx>
+				<div class="fx-pair pl-fx">
+					<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
+						:tempo="tempo" v-model:division="delayDivision" v-model:delayTime="delayTime"
+						v-model:delayFeedback="delayFeedback"
+						v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled"
+						v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" />
+					<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" :driveType="'overdrive'"
+						v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
+						v-model:driveMix="driveMix" />
+					<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
+						v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone" />
+				</div>
+			</template>
+			<template #key>
+				<div class="module melody pl-melody">
+					<SectionWrap id="pl-melody" title="Melody Maker" :modelValue="true">
+						<MelodyMaker :key="`pl-melody-${resetNonce}`" :frequencies="padFrequencies"
+							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
+							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
+							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
+							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
+							:initial-arp-tones="melodyUi.arpTones" :initial-mode="melodyUi.mode"
+							@update:frequencies="padFrequencies = $event"
+							@octave-shift="octaveShiftAllSkip($event)"
+							@key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
+							@mode-change="(v) => { melodyUi.mode = v }"
+							@key-root-change="(r) => { onKeyRootChange(r); melodyUi.keyRoot = r as any; }"
+							@key-scale-change="(s) => { melodyUi.keyScale = s as any }"
+							@range-preset-change="(p) => { melodyUi.rangePreset = p as any }"
+							@arp-pattern-change="(v) => { melodyUi.arpPattern = v as any }"
+							@arp-rate-change="(v) => { melodyUi.arpRate = v as any }"
+							@arp-octaves-change="(v) => { melodyUi.arpOctaves = v as any }"
+							@arp-tones-change="(v) => { melodyUi.arpTones = v as any }" />
+					</SectionWrap>
+				</div>
+			</template>
+		</PhoneLayout>
+		<!-- PHONE END -->
+
+		<!-- Top bar: the logo, then Save/Open/Import/Export and Undo/Redo. In phone mode the same
+			 bar moves into the phone layout's menu (PhoneLayout.vue). It comes after the phone layout,
+			 so the menu exists before the bar moves in, and its target changes with the mode, as a
+			 Teleport looks its target up again only then (not when `disabled` changes). -->
+		<Teleport defer :to="phoneActive ? '#phone-menu-slot' : 'body'" :disabled="!phoneActive">
+			<section class="pt-card ds-topbar">
+				<ProjectControls :exporting="isExporting" :can-undo="canUndo" :can-redo="canRedo"
+					@export-audio="openExportDialog" @undo="undo" @redo="redo">
+					<template #brand>
+						<img class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave">
+					</template>
+				</ProjectControls>
+			</section>
+		</Teleport>
 
 		<!-- LAYOUT START
 			 Laid out like one piece of hardware: the transport and the Step Sequencer, with the
 			 screen beside them; under them Sound (three rows, each filled edge to edge) and Compose,
 			 ending on one line. Under 1200 px, Sound, Effects and Compose are tabs under the steps
 			 (data-tab says which one shows). -->
-		<div class="ds-grid" :data-tab="activeTab">
+		<div v-show="!phoneActive" class="ds-grid" :data-tab="activeTab">
 
 			<!-- Visualizer Screen -->
 			<aside class="pt-card ds-visualizer">
@@ -496,6 +594,8 @@ import LFOGroup from './modules/LFOGroup.vue';
 import nacScreen from './Screen.vue';
 import { startFilterView } from './filterView';
 import PitchEnvModule from './modules/PitchEnvModule.vue';
+import PhoneLayout from './PhoneLayout.vue';
+import { usePhoneMode } from '../composables/usePhoneMode';
 import FMModule from './modules/FMModule.vue';
 import FilterModule from './modules/FilterModule.vue';
 import EnvelopeModule from './modules/EnvelopeModule.vue';
@@ -2795,6 +2895,56 @@ function rollRandomPattern() {
 }
 
 // PRESETS END
+
+// PHONE START
+// Phone mode (usePhoneMode.ts, PhoneLayout.vue): the phone layout reads and writes the same
+// settings as the desktop's, so a project sounds the same on both. Its four big knobs:
+// Decay (the amp envelope's), Tone (the filter's cutoff), Sweep (the pitch envelope's amount,
+// both ways, like the Pitch card's knob) and Space (the reverb's mix, which turns the reverb on
+// above 0 and off at 0, and the delay's mix at 0.6 times it while the delay is on).
+const { active: phoneActive, setFull: setPhoneFull } = usePhoneMode();
+const SCALE_LABELS: Record<string, string> = {
+	none: '(no scale)', major: 'major', naturalMinor: 'minor', pentMajor: 'pentatonic major',
+	pentMinor: 'pentatonic minor', dorian: 'dorian', lydian: 'lydian', mixolydian: 'mixolydian',
+};
+const phoneCtx = reactive({
+	inst: synthInstrument,
+	currentStep, isPlaying, tempo, canUndo,
+	presets: PRESETS, patterns: PATTERNS, activePresetId, activePatternId,
+	keyRoot: computed(() => melodyUi.keyRoot),
+	keyScale: computed(() => melodyUi.keyScale),
+	keyScaleLabel: computed(() => SCALE_LABELS[melodyUi.keyScale] ?? melodyUi.keyScale),
+	minHz: MIN_PAD_HZ, maxHz: MAX_PAD_HZ,
+	decayMs: ampEnvDecayMs,
+	cutoff: computed({
+		get: () => filterCutoff.value,
+		set: (v: number) => { filterCutoff.value = v; filterEnabled.value = true; },
+	}),
+	sweep: computed({
+		get: () => (pitchMode.value === 'down' ? -pitchEnvSemitones.value : pitchEnvSemitones.value),
+		set: (v: number) => {
+			const n = Math.max(-48, Math.min(48, Math.round(v)));
+			pitchEnvSemitones.value = Math.abs(n);
+			if (pitchMode.value !== 'random' && n !== 0) pitchMode.value = n < 0 ? 'down' : 'up';
+		},
+	}),
+	space: computed({
+		get: () => (reverbEnabled.value ? reverbMix.value : 0),
+		set: (v: number) => {
+			reverbMix.value = v;
+			reverbEnabled.value = v > 0;
+			if (delayEnabled.value) delayMix.value = Math.round(v * 0.6 * 100) / 100;
+		},
+	}),
+	togglePlay: onPlayClick,
+	undo,
+	choosePreset, randomSound: rollRandomSound, choosePattern, randomPattern: rollRandomPattern,
+	audition: auditionNote,
+	noteName: nearestNote,
+	hue: padHue,
+	fullLayout: () => setPhoneFull(true),
+});
+// PHONE END
 </script>
 
 <style scoped>
@@ -3256,6 +3406,84 @@ function rollRandomPattern() {
 }
 
 /* LAYOUT END */
+
+/* PHONE START: the phone layout's Sound, FX and Key pages (PhoneLayout.vue's slots) */
+.pl-sound {
+	display: grid;
+	gap: 8px;
+}
+
+.pl-sound-row {
+	display: flex;
+	gap: 8px;
+	align-items: stretch;
+}
+
+.pl-sound-row > * {
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+.pl-sound-row > .filter {
+	flex-grow: 1.6;
+}
+
+.pl-waves {
+	flex-grow: 1.6;
+	display: grid;
+	gap: 6px;
+	align-content: start;
+}
+
+.pl-wave-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 6px;
+}
+
+.pl-wave-grid .pt-btn {
+	min-height: 34px;
+	font-size: 12px;
+	padding: 4px;
+}
+
+.pl-gens {
+	display: flex;
+	justify-content: space-around;
+	align-items: center;
+	gap: 6px;
+}
+
+.pl-gen {
+	display: grid;
+	justify-items: center;
+	gap: 4px;
+}
+
+.pl-gen .pt-btn {
+	min-height: 32px;
+	padding: 4px 10px;
+	font-size: 12px;
+}
+
+.pl-waves .pt-btn[aria-pressed="true"],
+.pl-gen .pt-btn[aria-pressed="true"] {
+	box-shadow: 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .35), 0 0 12px var(--pt-btn-glow);
+	font-weight: 700;
+}
+
+.pl-fx {
+	display: flex;
+	justify-content: center;
+	gap: 12px;
+	height: 100%;
+	align-items: center;
+}
+
+.pl-melody {
+	height: 100%;
+}
+/* PHONE END */
 
 .gen-toolbar {
 	display: flex;

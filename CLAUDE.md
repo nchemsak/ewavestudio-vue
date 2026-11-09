@@ -13,8 +13,8 @@ input, and MIDI learn (a controller's knobs turn the app's); a melody maker (ran
 arpeggio in a key and scale; a new key or scale moves the pattern with it); an oscilloscope, spectrogram, tuner and envelope
 display; six built-in sounds that set the sound (not the pattern) and six built-in patterns
 that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
-saved in IndexedDB with JSON import and export; undo/redo; and it installs as an app that
-works offline (a PWA).
+saved in IndexedDB with JSON import and export; undo/redo; it installs as an app that
+works offline (a PWA); and a phone held sideways gets a layout of its own (phone mode).
 Earlier versions also had sample drum lanes (kick, snare, hihat and user-loaded samples).
 Their UI is commented out and they are no longer part of the app, but some of their code
 remains (see "Dead code").
@@ -157,6 +157,8 @@ src/components/
   modules/*.vue          Synth and effect panels: Envelope, Filter, PitchEnv, Noise, FM,
                          Unison, LFOGroup, Delay, Drive, Reverb (UI only; mostly v-model)
   SynthStepGrid.vue      16 synth step pads with velocity and pitch sliders
+  PhoneLayout.vue        Phone mode's layout (see "Phone mode"): pads, Play, steppers, macros;
+                         its Sound, FX and Key pages are DrumSequencer's slots
   LfoBendMark.vue        The LFO's pitch bend drawn on a lit pad (see "LFO visualizer")
   MelodyMaker.vue        Key, scale and range; one Generate (Random or Arpeggio); a key or scale
                          picked moves the pattern (see "Melody Maker")
@@ -219,6 +221,7 @@ src/composables/useTheme.ts      synthwave | dark | sand | analog | slate | ligh
 src/composables/useMidiInput.ts  Web MIDI note input (see "MIDI")
 src/composables/useMidiLearn.ts  MIDI learn mode and the controller's links (see "MIDI learn")
 src/composables/usePwa.ts  Installing the app, offline use and updates, the page's side
+src/composables/usePhoneMode.ts  When phone mode is on (a phone held sideways), the upright hint
 src/composables/useProjectSync.ts  Keeps the settings and the project store in step (see "Saving")
 src/composables/useUndoHistory.ts  When to record an undo step, and applying undo/redo
 src/composables/useLfoVisual.ts  The LFO visualizer's frame clock
@@ -470,6 +473,42 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   the advisory that keeps ESLint out (see "No linter yet").
 - Analytics: `pwa_install` (with `outcome`, from File → Install app…) and `pwa_launch` (the
   installed app opened).
+
+### Phone mode
+- Picked from mockups (PR 45, option B of three). On a touch phone held sideways
+  (`usePhoneMode.ts`: `pointer: coarse` and a short side of 500 px or less, so tablets keep the
+  normal layout), `DrumSequencer.vue` hides its layout (`v-show`, so the screen's canvases and
+  the desktop panels stay mounted) and shows `PhoneLayout.vue`, fixed over the whole page: one
+  screen, no scrolling.
+  - **Play** page: the 16 pads in two rows of 8 (a tap turns a step on or off; a hold, 400 ms,
+    opens its note: 16 notes of the Melody Maker's key and scale around the pad's own, every
+    semitone with no scale, within 100–2000 Hz, plus Off, velocity and repeats; picking a note
+    turns the step on and plays it), Play, the tempo (− / +), and four big knobs:
+    **Decay** (`ampEnvDecayMs`, 50–2000 ms, log), **Tone** (`filterCutoff`, 100 Hz–10 kHz, log;
+    turns the filter on), **Sweep** (the pitch envelope's amount, −48…+48, as the Pitch card's
+    knob) and **Space** (`reverbMix`, turning the reverb on above 0 and off at 0, and the delay's
+    mix at 0.6 times it while the delay is on). The top bar: the logo, tabs (Play, Sound, FX,
+    Key; a horizontal swipe of 70 px moves between them too, not from a knob or slider),
+    steppers for Sound and Pattern (◂ name ▸ steps through the six, a tap on the name lists
+    them, a dice beside each; the name reads Random after a roll), Undo and ☰.
+  - **Sound**, **FX** and **Key** pages are the desktop's own panels again (slots in
+    DrumSequencer's `PHONE` section: Envelope, Pitch and Filter cards, the eight waves, Noise,
+    FM and Unison as a switch and one knob each; the three pedals; the Melody Maker), so they
+    write the same settings. Their knobs don't take MIDI learn's links: `PhoneLayout` provides
+    `noMidiLearn`, which `Knob.vue` checks (a second registration would steal the desktop
+    knob's link). MIDI isn't offered in phone mode.
+  - ☰ opens a menu with the File bar itself (`ProjectControls`, moved there by a `Teleport`
+    whose `to` changes with the mode, since a Teleport looks its target up again only when `to`
+    changes), the theme buttons, and **Full layout**.
+- Full layout is remembered on that phone (`localStorage` `phone-layout` = `full`); File →
+  Phone layout (shown only on a phone, after that choice) brings phone mode back.
+- A phone held upright shows "Turn your phone" (`App.vue`), with "Use the full layout instead".
+  A page can't turn itself; Android's installed app could (the manifest's `orientation`, not
+  set yet: it would turn tablets too).
+- `App.vue` hides its toolbar (themes, MIDI) and the return link in phone mode.
+- Browser tests run on an emulated iPhone (844 × 390, touch) in landscape and portrait: the
+  layout, tap and hold, steppers, the knobs, swipes, the menu and its File menu, Full layout
+  and back, the upright hint.
 
 ### Keyboard shortcuts
 - Space: play/stop (`onGlobalKeydown` in `DrumSequencer.vue`, ignored while typing). It does
@@ -856,24 +895,16 @@ Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the m
 changes it as ideas come up). Everything drum-related waits until the maintainer brings the
 drum lanes back.
 
-1. **Phone mode**, designed for phones rather than shrunk (mockups first): landscape,
-   one screen without scrolling: 16 big pads (tap: on/off, hold: the note), Play, Sounds,
-   Patterns and the dice, and three or four big macro knobs (for example Decay, Tone, Sweep,
-   Space), other screens behind a swipe. A page can't force landscape; the installed app can
-   on Android (`"orientation"` in the manifest); iPhones get a "turn your phone" hint. Then
-   perhaps Google Play: the PWA wrapped as a Trusted Web Activity (PWABuilder or Bubblewrap;
-   Web MIDI still works), a $25 developer account, `/.well-known/assetlinks.json` on the main
-   site, and for a new personal account a closed test with 12 testers for 14 days first.
-2. **Effects, as switches on the existing pedals**: a bit crusher on the overdrive pedal, and
+1. **Effects, as switches on the existing pedals**: a bit crusher on the overdrive pedal, and
    ping-pong (left/right echoes) on the delay pedal. No ring modulator or chorus (the
    maintainer's call), and no compressor: Chrome's adds about 6 ms of delay.
-3. **Patch cables**: animated cables from the LFO to what it moves (Cutoff, the Pulse tile,
+2. **Patch cables**: animated cables from the LFO to what it moves (Cutoff, the Pulse tile,
    the pads), swaying a little, never over a control, still with `prefers-reduced-motion`.
    They depend on where things sit, which the layout (PR 41) settled.
-4. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+3. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
    Checked after PR 37: ESLint 10.14 and typescript-eslint 8.72 still need `minimatch` 10, and
    `npm audit` reports 10 moderate advisories for them.
-5. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -888,8 +919,8 @@ Not now (looked into after PR 37):
   already bring the sounds into FL Studio.
 - **Apple's App Store.** $99 a year, a Mac (or a paid cloud build) to build it, Apple turns
   down apps that are a wrapped website, iPhones have no Web MIDI (it would need native code),
-  and the silent switch mutes web audio unless handled. Google Play is the easier store (Next,
-  1).
+  and the silent switch mutes web audio unless handled. Google Play is the easier store (on
+  hold below).
 
 Dropped in PR 34 (the maintainer and Claude agreed): export stems by register (bass / top
 notes) or by wave, and "arrangement variations" (sparse, half-time, build, fill, wash, reverse
@@ -912,6 +943,10 @@ heard, and the presets peak well below clipping (0.2–0.5), but measurements se
 browser tests use `__swingOver` to ignore it.
 
 On hold (ask the maintainer before starting; put on hold after PR 33, "not now"):
+- **Google Play** (after phone mode, PR 45, works well; the maintainer's call): the PWA wrapped
+  as a Trusted Web Activity (PWABuilder or Bubblewrap; Web MIDI still works), a $25 developer
+  account, `/.well-known/assetlinks.json` on the main site, and for a new personal account a
+  closed test with 12 testers for 14 days first. The wrapped app could open in landscape.
 - **The logo** (skipped for now after PR 42, the maintainer's call; the last part of the
   layout project, whose mockups, C1 layout, Sounds and Patterns, and spectrogram in the pads'
   colours were PR 41): a new or more balanced logo, now that the preset boxes have settled. It
@@ -1019,6 +1054,7 @@ Done:
 | 42 | Fix: the Noise switch (the NOISE ribbon on the Noise card's left edge) was hidden under its own card since PR 41, so noise couldn't be turned on or off: the stretched card had become a flex item, and an old `z-index` rule drew it over the ribbon (and over the card's TV static). Every control of the build before PR 41 was checked against PR 41's: all there and clickable but that one. A browser test now checks every control can be clicked at four widths and in every tab. |
 | 43 | A new theme, **Sand**, with its own button next to Dark and Synthwave (the Light theme's white was harsh on the eyes): matte warm greys, dark knob caps, a teal-to-orange arc, an orange accent, a green-grey LCD with dark ink, softer pad colours, a taupe page; remembered like the others. The pink-to-violet wash, the NOISE switch's colour and the ⋯ menus' captions became theme variables, and light-on-light text fixed on light themes (⋯ menu captions, the NOISE switch when off, the RND pill). Plan: the logo on hold; the themes item done. |
 | 44 | Sand's pale spots fixed (the maintainer's screenshot): its wave, FM, Unison and LFO tiles are dark caps with light lettering, and the LFO's wave switch and the Vel → pill have dark ink. Two more themes with buttons, **Analog** (warm dark, amber, a wood-brown page) and **Slate** (mid-tone blue-grey, teal), to try out before deciding which themes to keep. |
+| 45 | Phone mode, picked from mockups (option B of three): on a touch phone held sideways a layout of its own, one screen without scrolling: 16 pads in two rows of 8 (tap: on/off; hold: the note from the key, velocity, repeats), Play and tempo, Sound and Pattern steppers with their dice, four big knobs (Decay, Tone, Sweep, Space); Sound, FX and Key pages a swipe away; ☰ with the File bar, themes and Full layout (remembered; File → Phone layout comes back). Upright, a hint to turn the phone. Plan: Google Play on hold. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

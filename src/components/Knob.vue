@@ -8,7 +8,7 @@
 		role="slider" :tabindex="props.disabled ? -1 : 0" :aria-label="label" :aria-valuemin="props.min"
 		:aria-valuemax="props.max" :aria-valuenow="props.modelValue" :aria-valuetext="props.valueText"
 		:aria-disabled="props.disabled" :aria-description="learnable ? (midiLabel ? `Follows ${midiLabel}` : 'Not linked') : undefined"
-		:data-midi-id="props.midiId || undefined"
+		:data-midi-id="(!noMidiLearn && props.midiId) || undefined"
 		@mousedown="onPress($event)" @touchstart.prevent="onPress($event, true)"
 		@keydown="onKeydown" @blur="endKeyboardTurn">
 		<div v-if="!props.hideLabel" class="knob-label">{{ label }}</div>
@@ -65,7 +65,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount } from 'vue';
+import { computed, inject, onMounted, onBeforeUnmount } from 'vue';
 import { useMidiLearn } from '../composables/useMidiLearn';
 import { detentTravel, CONTROLLER_DETENT_HOLD } from '../lib/knobDetents';
 
@@ -337,7 +337,9 @@ function endKeyboardTurn() {
 
 // MIDI learn (src/composables/useMidiLearn.ts)
 const midiLearn = useMidiLearn();
-const learnable = computed(() => !!props.midiId && midiLearn.state.learning);
+// A second copy of a panel (phone mode's pages, PhoneLayout.vue) leaves MIDI learn to the desktop's
+const noMidiLearn = inject('noMidiLearn', false);
+const learnable = computed(() => !!props.midiId && !noMidiLearn && midiLearn.state.learning);
 const armed = computed(() => learnable.value && midiLearn.state.armed === props.midiId);
 const midiLabel = computed(() => (props.midiId ? midiLearn.labelFor(props.midiId) : ''));
 
@@ -358,7 +360,7 @@ function setPosition(position) {
 
 let leaveMidiLearn = null;
 onMounted(() => {
-	if (props.midiId) leaveMidiLearn = midiLearn.register(props.midiId, { setPosition, disabled: () => props.disabled });
+	if (props.midiId && !noMidiLearn) leaveMidiLearn = midiLearn.register(props.midiId, { setPosition, disabled: () => props.disabled });
 });
 onBeforeUnmount(() => {
 	leaveMidiLearn?.();
