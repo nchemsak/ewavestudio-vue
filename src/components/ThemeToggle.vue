@@ -8,6 +8,10 @@
             @click="setTheme('synthwave')">Synthwave</button>
         <button class="pt-btn" :class="{ 'is-active': theme === 'sand' }" :aria-pressed="theme === 'sand'"
             @click="setTheme('sand')">Sand</button>
+        <button class="pt-btn" :class="{ 'is-active': theme === 'analog' }" :aria-pressed="theme === 'analog'"
+            @click="setTheme('analog')">Analog</button>
+        <button class="pt-btn" :class="{ 'is-active': theme === 'slate' }" :aria-pressed="theme === 'slate'"
+            @click="setTheme('slate')">Slate</button>
     </div>
 </template>
 

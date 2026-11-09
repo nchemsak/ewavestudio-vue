@@ -173,6 +173,36 @@ const fkeyDefs = computed(() => {
     --fkey-ico: #2d2a26;
 }
 
+/* Analog: an amber monochrome screen */
+.theme-analog .nac-screen {
+    --nac-bezel-bg: #0f0e0c;
+    --nac-bezel-rim: rgba(255, 220, 160, .06);
+    --nac-lcd-bg: #1a1208;
+    --nac-lcd-vignette: rgba(0, 0, 0, .5);
+    --nac-lcd-gloss: rgba(255, 200, 120, .07);
+    --nac-lcd-scanline: #ffb547;
+    --nac-spec-low: #c77a1e;
+    --nac-spec-mid: #e89a32;
+    --nac-spec-high: #ffb547;
+    --nac-spec-peak: #ffe2b0;
+    --nac-lcd-fg: #ffb547;
+    --nac-scope-trace: #ffb547;
+    --fkey-ico: #1b1916;
+}
+
+/* Slate: a deep blue-green screen */
+.theme-slate .nac-screen {
+    --nac-bezel-bg: #222731;
+    --nac-bezel-rim: rgba(255, 255, 255, .06);
+    --nac-lcd-bg: #16222a;
+    --nac-lcd-vignette: rgba(0, 0, 0, .35);
+    --nac-lcd-gloss: rgba(255, 255, 255, .08);
+    --nac-lcd-scanline: #8fe3d2;
+    --nac-lcd-fg: #d3eef2;
+    --nac-scope-trace: #8fe3d2;
+    --fkey-ico: #222731;
+}
+
 .theme-synthwave .nac-screen {
     --nac-bezel-bg: #160b2e;
     --nac-bezel-rim: rgba(255, 255, 255, .08);

@@ -328,6 +328,46 @@
 	--pad-tint: #dc6436;
 }
 
+/* Analog: black caps, an amber-to-orange arc, cyan LFO marks (the arcs are amber) */
+.theme-analog .drum-sequencer,
+.drum-sequencer.theme-analog {
+	--slider-thumb: #f2b04a;
+	--knob-arc-start: #f2b04a;
+	--knob-arc-end: #e8572a;
+	--knob-pointer: #f6efe2;
+	--knob-track: #3c3833;
+	--knob-track-disabled: #2e2b27;
+	--knob-arc-disabled: #4a463f;
+	--knob-face: #121110;
+	--knob-marker: rgba(242, 176, 74, 0.55);
+	--knob-marker-active: #ffe2b0;
+	--lfo-mod: #7fd3ff;
+	--knob-detent: rgba(150, 220, 170, 0.6);
+	--knob-detent-on: #9be3b4;
+	--pad-bg: #24211d;
+	--pad-tint: #f2b04a;
+}
+
+/* Slate: a teal-to-blue arc on blue-grey */
+.theme-slate .drum-sequencer,
+.drum-sequencer.theme-slate {
+	--slider-thumb: #6fd6c4;
+	--knob-arc-start: #6fd6c4;
+	--knob-arc-end: #7aa7ff;
+	--knob-pointer: #e3e8ef;
+	--knob-track: #4a5263;
+	--knob-track-disabled: #3b4250;
+	--knob-arc-disabled: #566073;
+	--knob-face: #222731;
+	--knob-marker: rgba(122, 167, 255, 0.55);
+	--knob-marker-active: #d6e4ff;
+	--lfo-mod: #ffc861;
+	--knob-detent: rgba(170, 230, 160, 0.65);
+	--knob-detent-on: #b6efa9;
+	--pad-bg: #2c323e;
+	--pad-tint: #6fd6c4;
+}
+
 /* ----------------------------------------------------------
    Pad Settings Popover
 ---------------------------------------------------------- */

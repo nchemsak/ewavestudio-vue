@@ -1769,7 +1769,7 @@ async function textContrast(page: Page, text: ReturnType<Page['locator']>) {
 test('the Pattern Tools, Sounds, Patterns and section captions are readable in every theme', async ({ page }) => {
 	// The Light theme has no button at the moment (ThemeToggle.vue), but a saved choice still
 	// applies it
-	for (const theme of ['synthwave', 'dark', 'sand', 'light']) {
+	for (const theme of ['synthwave', 'dark', 'sand', 'analog', 'slate', 'light']) {
 		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), theme);
 		await page.reload();
 		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${theme}`));
@@ -1790,7 +1790,7 @@ test('the Pattern Tools, Sounds, Patterns and section captions are readable in e
 
 test('the Sand theme: its button sits beside Dark and Synthwave, is remembered, and its text is readable', async ({ page }) => {
 	const themes = page.getByRole('group', { name: 'Theme' }).getByRole('button');
-	await expect(themes).toHaveText(['Dark', 'Synthwave', 'Sand']);
+	await expect(themes).toHaveText(['Dark', 'Synthwave', 'Sand', 'Analog', 'Slate']);
 	const sand = page.getByRole('button', { name: 'Sand', exact: true });
 	await expect(sand).toHaveAttribute('aria-pressed', 'false');
 	await sand.click();
@@ -1833,6 +1833,29 @@ test('the Sand theme: its button sits beside Dark and Synthwave, is remembered, 
 	await expect(page.locator('html')).toHaveClass(/theme-synthwave/);
 	await expect(page.locator('html')).not.toHaveClass(/theme-sand/);
 	expect(await page.evaluate(() => getComputedStyle(document.body).backgroundImage)).toContain('rgb(217, 160, 195)');
+});
+
+test('Sand: the tiles are dark caps with light lettering, and the LFO switch has dark ink', async ({ page }) => {
+	await page.getByRole('button', { name: 'Sand', exact: true }).click();
+	for (const tile of [page.getByRole('radio', { name: 'Sine' }).first(), page.getByRole('switch', { name: 'FM' }), page.locator('.lfo-power')]) {
+		await tile.scrollIntoViewIfNeeded();
+		const label = tile.locator('.wave-label, .lfo-status').first();
+		expect(await textContrast(page, label), await label.textContent() ?? '').toBeGreaterThanOrEqual(4.5);
+	}
+});
+
+test('Analog and Slate: their buttons apply their own colours, and are remembered', async ({ page }) => {
+	for (const [name, page1, screen] of [['Analog', 'rgb(107, 75, 52)', '#1a1208'], ['Slate', 'rgb(119, 132, 154)', '#16222a']]) {
+		const button = page.getByRole('button', { name, exact: true });
+		await button.click();
+		await expect(button).toHaveAttribute('aria-pressed', 'true');
+		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${name.toLowerCase()}`));
+		expect(await page.evaluate(() => getComputedStyle(document.body).backgroundImage)).toContain(page1);
+		expect(await page.locator('.nac-screen').evaluate((el) => getComputedStyle(el).getPropertyValue('--nac-lcd-bg').trim()))
+			.toBe(screen);
+		await page.reload();
+		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${name.toLowerCase()}`));
+	}
 });
 
 test('the dice rolls a new sound, keeps the pattern, lights no preset, and undo goes back', async ({ page }) => {
