@@ -33,7 +33,19 @@ $themes: (
         accent: 305,
         accent2: 190,
         accent3: 260,
-        chevron: #ffd6ff)
+        chevron: #ffd6ff),
+    /* Sand: a soft, matte light theme. Warm greys instead of white (the Light theme's white
+       was harsh on the eyes), dark knob caps as on a hardware panel, an orange accent */
+    sand: (bg: #c9c4ba,
+        panel: #e3dfd7,
+        text: #2d2a26,
+        muted: #57524b,
+        surface1: #e8e4dd,
+        surface2: #dbd6cd,
+        accent: 18,
+        accent2: 186,
+        accent3: 40,
+        chevron: #4a453e)
 );
 
 /* Mixin to emit CSS custom properties for a theme class */
@@ -75,6 +87,14 @@ $themes: (
             --pt-btn-border: hsl(var(--pt-accent) 72% 46%);
             --pt-btn-glow: hsl(var(--pt-accent) 90% 55% / 0.32);
         }
+
+        @if $name ==sand {
+            --pt-tile-1: #{color.mix(#000, map.get($t, surface1), 3%)};
+            --pt-tile-2: #{color.mix(#000, map.get($t, surface2), 4%)};
+            /* a muted ring: the full-strength accent glares on warm grey */
+            --pt-btn-border: hsl(var(--pt-accent) 58% 48%);
+            --pt-btn-glow: hsl(var(--pt-accent) 80% 50% / 0.22);
+        }
     }
 }
 
@@ -114,6 +134,17 @@ $base: map.get($themes, synthwave);
 
     --pt-tile-1: #{color.mix(#000, map.get($base, surface1), 12%)};
     --pt-tile-2: #{color.mix(#000, map.get($base, surface2), 16%)};
+
+    /* The app's colour wash: the Waveforms card and the Melody Maker's chosen key; and the
+       page behind the frame (--pt-page). Pink to violet, except in Sand */
+    --pt-wash: radial-gradient(circle at center, #d9a0c3 0%, #9b8cb4 75%, #736c92 100%);
+    --pt-page: var(--pt-wash);
+    /* The Noise card's switch (its NOISE ribbon) when on */
+    --pt-noise-on: #9C27B0;
+    /* Captions in the ⋯ menus (Advanced Options, Reset Pads, Melody, Arpeggio...) */
+    --pt-menu-caption: #c7cee0;
+    /* Text on the wash (the Melody Maker's chosen key) */
+    --pt-wash-ink: #fff;
 }
 
 
@@ -133,6 +164,33 @@ $base: map.get($themes, synthwave);
     --pt-text-strong: #1f2328;
     --pt-hairline: rgba(0, 0, 0, 0.12);
     --pt-inset: rgba(31, 35, 40, 0.07);
+    --pt-menu-caption: var(--pt-muted);
+    /* The Noise switch when off (its fallback is navy, for the dark themes) */
+    --pt-surface-3: #dfe3ea;
+}
+
+.theme-sand {
+    color-scheme: light;
+    --pt-header-fg: #2d2a26;
+    --pt-text-strong: #2d2a26;
+    --pt-hairline: rgba(45, 42, 38, 0.14);
+    --pt-inset: rgba(45, 42, 38, 0.07);
+    --pt-wash: radial-gradient(circle at center, #e9c3a4 0%, #d3a68e 70%, #b98f7e 100%);
+    --pt-page: radial-gradient(circle at center, #bdb7ac 0%, #a49e93 70%, #918b81 100%);
+    --pt-noise-on: hsl(18 62% 48%);
+    --pt-menu-caption: var(--pt-muted);
+    --pt-wash-ink: #2d2a26;
+    --pt-surface-3: #d6d0c6;
+}
+
+/* Text outside the cards (the MIDI toolbar's caption; body's own is light grey) and the link
+   under the frame, on Sand's warm grey page */
+.theme-sand body {
+    color: var(--pt-text);
+}
+
+.theme-sand a.return {
+    color: #3b1a0b;
 }
 
 @supports (color: color-mix(in oklab, #000, #fff)) {
@@ -653,10 +711,12 @@ $base: map.get($themes, synthwave);
     transform: translateY(-1px);
 }
 
-/* The light theme's segment buttons are light, so the chosen one keeps dark text (white text
+/* The light themes' segment buttons are light, so the chosen one keeps dark text (white text
    on it was unreadable: FM's Lock, the pad menu, the Export audio dialog) */
 .theme-light .pt-seg-btn.is-active,
-.theme-light .pt-seg-btn[aria-pressed="true"] {
+.theme-light .pt-seg-btn[aria-pressed="true"],
+.theme-sand .pt-seg-btn.is-active,
+.theme-sand .pt-seg-btn[aria-pressed="true"] {
     color: var(--pt-text-strong);
 }
 
@@ -854,7 +914,12 @@ $base: map.get($themes, synthwave);
 .theme-light .toggle-header:hover .group-title,
 .theme-light .toggle-header:focus-visible .group-title,
 .theme-light .toggle-header.is-active .group-title,
-.theme-light .toggle-header.is-active:hover .group-title {
+.theme-light .toggle-header.is-active:hover .group-title,
+.theme-sand .toggle-header .group-title,
+.theme-sand .toggle-header:hover .group-title,
+.theme-sand .toggle-header:focus-visible .group-title,
+.theme-sand .toggle-header.is-active .group-title,
+.theme-sand .toggle-header.is-active:hover .group-title {
     color: var(--pt-text-strong, #1f2328) !important;
 }
 
@@ -866,7 +931,9 @@ $base: map.get($themes, synthwave);
 }
 
 .theme-light .toggle-header .pt-title,
-.theme-light .toggle-header:hover .pt-title {
+.theme-light .toggle-header:hover .pt-title,
+.theme-sand .toggle-header .pt-title,
+.theme-sand .toggle-header:hover .pt-title {
     color: var(--pt-text-strong, #1f2328) !important;
 }
 
@@ -898,7 +965,8 @@ $base: map.get($themes, synthwave);
     color: var(--pt-text-strong);
 }
 
-.theme-light .pt-title {
+.theme-light .pt-title,
+.theme-sand .pt-title {
     color: var(--pt-text-strong, #1f2328) !important;
 }
 
@@ -961,6 +1029,19 @@ $base: map.get($themes, synthwave);
     --pad-wash-scale: .70;
     --pad-wash-sat: 88%;
     --pad-wash-lit: 52%;
+}
+
+/* Sand's pads: softer colours, still one per note */
+.theme-sand {
+    --pad-wash-base: .28;
+    --pad-wash-scale: .55;
+    --pad-wash-sat: 52%;
+    --pad-wash-lit: 58%;
+}
+
+/* Pads on a light theme: a light tile, the note's colour multiplied in */
+.theme-light,
+.theme-sand {
 
     .padTEST {
         background:

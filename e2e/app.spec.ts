@@ -1769,7 +1769,7 @@ async function textContrast(page: Page, text: ReturnType<Page['locator']>) {
 test('the Pattern Tools, Sounds, Patterns and section captions are readable in every theme', async ({ page }) => {
 	// The Light theme has no button at the moment (ThemeToggle.vue), but a saved choice still
 	// applies it
-	for (const theme of ['synthwave', 'dark', 'light']) {
+	for (const theme of ['synthwave', 'dark', 'sand', 'light']) {
 		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), theme);
 		await page.reload();
 		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${theme}`));
@@ -1786,6 +1786,53 @@ test('the Pattern Tools, Sounds, Patterns and section captions are readable in e
 			expect(await textContrast(page, caption), `${theme}: ${name}`).toBeGreaterThanOrEqual(4.5);
 		}
 	}
+});
+
+test('the Sand theme: its button sits beside Dark and Synthwave, is remembered, and its text is readable', async ({ page }) => {
+	const themes = page.getByRole('group', { name: 'Theme' }).getByRole('button');
+	await expect(themes).toHaveText(['Dark', 'Synthwave', 'Sand']);
+	const sand = page.getByRole('button', { name: 'Sand', exact: true });
+	await expect(sand).toHaveAttribute('aria-pressed', 'false');
+	await sand.click();
+	await expect(sand).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('html')).toHaveClass(/theme-sand/);
+	await expect(page.locator('html')).not.toHaveClass(/theme-synthwave/);
+	expect(await page.evaluate(() => localStorage.getItem('ewave-studio2:ui-theme'))).toBe('sand');
+	// Its own colours: a warm grey page, a light screen, the Waveforms card's wash
+	const bodyBg = await page.evaluate(() => getComputedStyle(document.body).backgroundImage);
+	expect(bodyBg).toContain('rgb(189, 183, 172)');
+	expect(await page.locator('.generators .pt-card').evaluate((el) => getComputedStyle(el).backgroundImage))
+		.toContain('rgb(233, 195, 164)');
+
+	// Kept after a reload
+	await page.reload();
+	await expect(page.locator('html')).toHaveClass(/theme-sand/);
+	await expect(page.getByRole('button', { name: 'Sand', exact: true })).toHaveAttribute('aria-pressed', 'true');
+
+	// Text that was drawn light-on-light: the MIDI toolbar's caption, the NOISE switch when off,
+	// the Melody Maker's chosen key, the ⋯ menu's captions, the link under the frame
+	const midi = page.locator('.midi-label');
+	const noise = page.locator('.noise-ribbon-label');
+	await expect(page.getByRole('button', { name: 'Toggle noise' })).toHaveAttribute('aria-pressed', 'false');
+	const key = page.locator('.kb-white.is-active .wlabel');
+	const link = page.getByRole('link', { name: 'Return to Ephemeral Wave' });
+	for (const [name, text] of [['MIDI Controller', midi], ['NOISE', noise], ['chosen key', key], ['link', link]] as const) {
+		await text.scrollIntoViewIfNeeded();
+		expect(await textContrast(page, text), name).toBeGreaterThanOrEqual(4.5);
+	}
+	await page.evaluate(() => window.scrollTo(0, 0));
+	await page.getByRole('button', { name: 'Advanced options' }).first().click();
+	for (const text of [page.locator('.mm-menu-title').first(), page.locator('.mm-reset').first()]) {
+		await expect(text).toBeVisible();
+		expect(await textContrast(page, text), (await text.textContent())!.trim()).toBeGreaterThanOrEqual(4.5);
+	}
+	await page.keyboard.press('Escape');
+
+	// Back to Synthwave: nothing of Sand is left
+	await page.getByRole('button', { name: 'Synthwave', exact: true }).click();
+	await expect(page.locator('html')).toHaveClass(/theme-synthwave/);
+	await expect(page.locator('html')).not.toHaveClass(/theme-sand/);
+	expect(await page.evaluate(() => getComputedStyle(document.body).backgroundImage)).toContain('rgb(217, 160, 195)');
 });
 
 test('the dice rolls a new sound, keeps the pattern, lights no preset, and undo goes back', async ({ page }) => {

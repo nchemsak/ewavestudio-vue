@@ -2,7 +2,10 @@
 import { ref, computed, watchEffect, onMounted } from 'vue';
 import { storageKey } from '../lib/storage/namespace';
 
-export type ThemeName = 'dark' | 'light' | 'synthwave';
+// 'light' has no button (only a choice saved before it was hidden applies it); 'sand' is the
+// light-coloured theme with a button
+export const THEMES = ['dark', 'light', 'synthwave', 'sand'] as const;
+export type ThemeName = (typeof THEMES)[number];
 
 const THEME_KEY = storageKey('ui-theme');
 
@@ -16,7 +19,7 @@ let initialized = false;
 function apply() {
 	if (typeof document === 'undefined') return;
 	const root = document.documentElement;
-	root.classList.remove('theme-dark', 'theme-light', 'theme-synthwave');
+	root.classList.remove(...THEMES.map((t) => `theme-${t}`));
 	root.classList.add(themeClass.value);
 }
 
@@ -31,10 +34,9 @@ function init() {
 		raw = null;
 	}
 
-	const initial: ThemeName =
-		raw === 'dark' || raw === 'light' || raw === 'synthwave'
-			? raw
-			: 'synthwave';
+	const initial: ThemeName = (THEMES as readonly string[]).includes(raw as string)
+		? (raw as ThemeName)
+		: 'synthwave';
 
 	theme.value = initial;
 

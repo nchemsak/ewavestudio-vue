@@ -1188,7 +1188,7 @@ defineExpose({ openAdvanced, getUi, setUi });
 
 .mm-menu-title {
     font-weight: 700;
-    color: #c7cee0;
+    color: var(--pt-menu-caption);
     opacity: 0.9;
     padding: 8px 8px 6px;
 }
@@ -1213,7 +1213,7 @@ defineExpose({ openAdvanced, getUi, setUi });
 
 .mm-reset {
     text-align: center;
-    color: #c7cee0;
+    color: var(--pt-menu-caption);
     opacity: 0.9;
     padding: 10px 8px 4px;
     cursor: pointer;
@@ -1302,7 +1302,7 @@ defineExpose({ openAdvanced, getUi, setUi });
     font-weight: 700;
     font-size: 0.85rem;
     letter-spacing: 0.02em;
-    color: #c7cee0;
+    color: var(--pt-menu-caption);
     opacity: 0.9;
     padding: 8px 8px 4px;
 }
@@ -1387,14 +1387,11 @@ defineExpose({ openAdvanced, getUi, setUi });
         inset 0 1px 0 rgb(255 255 255 / 0.05),
         0 2px 0 rgb(0 0 0 / 0.5),
         0 8px 18px rgb(0 0 0 / 0.28);
-    background: radial-gradient(circle at center,
-            #d9a0c3 0%,
-            #9b8cb4 75%,
-            #736c92 100%);
+    background: var(--pt-wash);
 }
 
 .kb-white.is-active .wlabel {
-    color: white;
+    color: var(--pt-wash-ink);
     font-size: 1rem;
 }
 
@@ -1443,14 +1440,11 @@ defineExpose({ openAdvanced, getUi, setUi });
         inset 0 1px 0 rgb(255 255 255 / 0.05),
         0 2px 0 rgb(0 0 0 / 0.8),
         0 8px 16px rgb(0 0 0 / 0.4);
-    background: radial-gradient(circle at center,
-            #d9a0c3 0%,
-            #9b8cb4 75%,
-            #736c92 100%);
+    background: var(--pt-wash);
 }
 
 .kb-black.is-active .blabel {
-    color: white;
+    color: var(--pt-wash-ink);
     font-size: 1rem;
 }
 

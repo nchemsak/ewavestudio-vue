@@ -155,6 +155,24 @@ const fkeyDefs = computed(() => {
     --fkey-ico: #1f2937;
 }
 
+/* Sand: a reflective green-grey LCD with dark ink, in a dark bezel */
+.theme-sand .nac-screen {
+    --nac-bezel-bg: #3a3733;
+    --nac-bezel-rim: rgba(255, 255, 255, .06);
+    --nac-lcd-bg: #a9b29a;
+    --nac-lcd-vignette: rgba(0, 0, 0, .16);
+    --nac-lcd-gloss: rgba(255, 255, 255, .16);
+    --nac-lcd-scanline: #3d4834;
+    --nac-spec-low: #2f6f8f;
+    --nac-spec-mid: #3d7a3a;
+    --nac-spec-high: #b8561f;
+    --nac-spec-peak: #1c2317;
+    --nac-lcd-fg: #1c2317;
+    --nac-scope-trace: #1c2317;
+    --nac-scope-width: 2.2;
+    --fkey-ico: #2d2a26;
+}
+
 .theme-synthwave .nac-screen {
     --nac-bezel-bg: #160b2e;
     --nac-bezel-rim: rgba(255, 255, 255, .08);

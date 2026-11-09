@@ -6,6 +6,8 @@
             @click="setTheme('light')">Light</button> -->
         <button class="pt-btn" :class="{ 'is-active': theme === 'synthwave' }" :aria-pressed="theme === 'synthwave'"
             @click="setTheme('synthwave')">Synthwave</button>
+        <button class="pt-btn" :class="{ 'is-active': theme === 'sand' }" :aria-pressed="theme === 'sand'"
+            @click="setTheme('sand')">Sand</button>
     </div>
 </template>
 
