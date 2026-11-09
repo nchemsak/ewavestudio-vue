@@ -582,7 +582,7 @@
 
 <script setup lang="ts">
 // IMPORTS START
-import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
+import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed, markRaw } from 'vue';
 import Knob from './Knob.vue';
 import DelayEffect from './modules/DelayEffect.vue';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, DEFAULT_TEMPO, followDelaySync } from '../lib/delaySync';
@@ -2943,6 +2943,10 @@ const phoneCtx = reactive({
 	noteName: nearestNote,
 	hue: padHue,
 	fullLayout: () => setPhoneFull(true),
+	// Every pad an octave up or down (Pattern Tools' octave arrows)
+	octave: (delta: number) => onPatternOctaveShift(delta),
+	// For the top bar's tiny oscilloscope (not made reactive: a Web Audio node)
+	analyser: markRaw(analyser),
 });
 // PHONE END
 </script>

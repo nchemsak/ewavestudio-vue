@@ -3,9 +3,10 @@
 		 16 pads in two rows of 8, Play and tempo, four big knobs; Sound and Pattern steppers in the
 		 top bar), and Sound, FX and Key a swipe or a tab away. DrumSequencer.vue passes the state
 		 in `ctx` and the desktop's own panels for the other pages as slots. -->
-	<div class="phone-layout">
+	<div class="phone-layout" @pointerdown="swipeStart" @pointerup="swipeEnd" @pointercancel="swipe = null">
 		<header class="pl-top">
-			<img class="pl-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave">
+			<!-- A tiny oscilloscope of what's playing, on every page -->
+			<canvas ref="scopeEl" class="pl-scope" aria-hidden="true"></canvas>
 			<div class="pl-tabs" role="tablist" aria-label="Pages">
 				<button v-for="p in PAGES" :key="p.id" type="button" role="tab" class="pl-tab"
 					:class="{ on: page === p.id }" :aria-selected="page === p.id" @click="page = p.id">{{ p.label }}</button>
@@ -13,18 +14,16 @@
 			<span class="pl-grow"></span>
 			<template v-if="page === 'play'">
 				<div class="pl-stepper" role="group" aria-label="Sound">
-					<span class="pl-cap">Sound</span>
 					<button type="button" class="pl-arr" aria-label="Previous sound" @click="stepSound(-1)">◂</button>
-					<button type="button" class="pl-val" aria-label="All sounds" @click="list = 'sound'">{{ soundName }}</button>
+					<button type="button" class="pl-val" aria-label="All sounds" @click="list = 'sound'"><span class="pl-cap" aria-hidden="true">Sound</span>{{ soundName }}</button>
 					<button type="button" class="pl-arr" aria-label="Next sound" @click="stepSound(1)">▸</button>
 				</div>
 				<button type="button" class="pl-icon pl-dice" aria-label="Random sound" title="Random sound" @click="rollSound">
 					<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3" /><circle cx="5" cy="5" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="11" cy="11" r="1.2" /></svg>
 				</button>
 				<div class="pl-stepper" role="group" aria-label="Pattern">
-					<span class="pl-cap">Pattern</span>
 					<button type="button" class="pl-arr" aria-label="Previous pattern" @click="stepPattern(-1)">◂</button>
-					<button type="button" class="pl-val" aria-label="All patterns" @click="list = 'pattern'">{{ patternName }}</button>
+					<button type="button" class="pl-val" aria-label="All patterns" @click="list = 'pattern'"><span class="pl-cap" aria-hidden="true">Pattern</span>{{ patternName }}</button>
 					<button type="button" class="pl-arr" aria-label="Next pattern" @click="stepPattern(1)">▸</button>
 				</div>
 				<button type="button" class="pl-icon pl-dice" aria-label="Random pattern" title="Random pattern" @click="rollPattern">
@@ -37,16 +36,16 @@
 			<button type="button" class="pl-icon" aria-label="Menu" title="Menu" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">☰</button>
 		</header>
 
-		<div class="pl-pages" @pointerdown="swipeStart" @pointerup="swipeEnd" @pointercancel="swipe = null">
+		<div class="pl-pages">
 			<!-- Play -->
 			<section v-show="page === 'play'" class="pl-frame pl-play" aria-label="Play">
-				<div class="pl-pads" role="group" aria-label="Steps">
+				<div class="pl-pads" role="group" aria-label="Steps" @pointermove="padMove">
 					<button v-for="(on, i) in (ctx.inst.steps as boolean[])" :key="i" type="button" class="pl-pad"
 						:class="{ on, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
-						:aria-pressed="!!on" :aria-label="padLabel(i)"
+						:aria-pressed="!!on" :aria-label="padLabel(i)" :data-i="i"
 						:style="on ? padStyle(i) : undefined"
-						@pointerdown="padDown(i, $event)" @pointermove="padMove($event)" @pointerup="padUp(i)"
-						@pointercancel="padCancel" @contextmenu.prevent @keydown.enter.prevent="toggleStep(i)">
+						@pointerdown="padDown(i, $event)" @click.prevent
+						@contextmenu.prevent @keydown.enter.prevent="toggleStep(i)">
 						<span class="pl-num">{{ i + 1 }}</span>
 						<span v-if="on && (ctx.inst.ratchets?.[i] ?? 1) > 1" class="pl-rat">×{{ ctx.inst.ratchets[i] }}</span>
 						<span v-if="on" class="pl-fill"></span>
@@ -60,10 +59,17 @@
 							<svg v-if="!ctx.isPlaying" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6v12l10-6-10-6z" /></svg>
 							<svg v-else viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5" /></svg>
 						</button>
-						<div class="pl-tempo" role="group" aria-label="Tempo">
-							<button type="button" aria-label="Tempo −1" @click="ctx.tempo = Math.max(20, ctx.tempo - 1)">−</button>
-							<b>{{ ctx.tempo }}</b><span>BPM</span>
-							<button type="button" aria-label="Tempo +1" @click="ctx.tempo = Math.min(300, ctx.tempo + 1)">+</button>
+						<div class="pl-steppers">
+							<div class="pl-mini" role="group" aria-label="Tempo">
+								<button type="button" aria-label="Tempo −1" @click="ctx.tempo = Math.max(20, ctx.tempo - 1)">−</button>
+								<span><b>{{ ctx.tempo }}</b> BPM</span>
+								<button type="button" aria-label="Tempo +1" @click="ctx.tempo = Math.min(300, ctx.tempo + 1)">+</button>
+							</div>
+							<div class="pl-mini" role="group" aria-label="Octave">
+								<button type="button" aria-label="Octave down" title="Every pad an octave down" @click="ctx.octave(-1)">↓</button>
+								<span>Octave</span>
+								<button type="button" aria-label="Octave up" title="Every pad an octave up" @click="ctx.octave(1)">↑</button>
+							</div>
 						</div>
 					</div>
 					<div class="pl-macros">
@@ -128,7 +134,7 @@
 		</div>
 
 		<!-- The menu, a panel from the left: the File bar (moved here by DrumSequencer), themes,
-			 back to the full layout -->
+			 the desktop view -->
 		<div v-show="menuOpen" class="pl-scrim" @click="menuOpen = false"></div>
 		<div v-show="menuOpen" class="pl-menu" role="dialog" aria-label="Menu">
 			<div id="phone-menu-slot"></div>
@@ -137,10 +143,7 @@
 				<ThemeToggle />
 			</div>
 			<div class="pl-row">
-				<button type="button" class="pt-btn" @click="menuOpen = false; ctx.fullLayout()">Full layout</button>
-				<span class="pl-cap pl-grow">The whole synth, as on a computer. Its Phone layout button comes back here.</span>
-			</div>
-			<div class="pl-row">
+				<button type="button" class="pt-btn" @click="menuOpen = false; ctx.fullLayout()">Desktop View</button>
 				<span class="pl-grow"></span>
 				<button type="button" class="pt-btn pl-small" @click="menuOpen = false">Close</button>
 			</div>
@@ -149,7 +152,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, provide, onBeforeUnmount } from 'vue';
+import { ref, computed, provide, onMounted, onBeforeUnmount } from 'vue';
 import Knob from './Knob.vue';
 import ThemeToggle from './ThemeToggle.vue';
 import { SCALES, NOTE_TO_SEMITONE, midiToFreq, freqToMidiExact } from '../lib/melody/theory';
@@ -175,7 +178,7 @@ const list = ref<null | 'sound' | 'pattern'>(null);
 let swipe: null | { x: number; y: number } = null;
 function swipeStart(e: PointerEvent) {
 	const t = e.target as HTMLElement;
-	swipe = t.closest('[role="slider"], input, .pl-sheet') ? null : { x: e.clientX, y: e.clientY };
+	swipe = t.closest('[role="slider"], input, .pl-sheet, .pl-menu, .pl-pads') ? null : { x: e.clientX, y: e.clientY };
 }
 function swipeEnd(e: PointerEvent) {
 	if (!swipe) return;
@@ -224,35 +227,92 @@ function stepPattern(d: number) {
 function rollSound() { soundRolled.value = true; ctx.randomSound(); }
 function rollPattern() { patternRolled.value = true; ctx.randomPattern(); }
 
-// Pads: a tap turns a step on or off; a hold (400 ms) opens its note
+// Pads: a tap turns a step on or off; a hold (400 ms) opens its note; a finger drawn across
+// pads paints them all the way the first one went (on, or off), as a drag does on the desktop.
+// A touch keeps sending its moves to the pad it began on, so that pad lets go of it.
 const HOLD_MS = 400;
 const held = ref<number | null>(null);
 let holdTimer: ReturnType<typeof setTimeout> | null = null;
-let press: null | { i: number; x: number; y: number; held: boolean } = null;
+let press: null | { i: number; x: number; y: number; held: boolean; paint: boolean | null; last: number } = null;
 function padDown(i: number, e: PointerEvent) {
-	press = { i, x: e.clientX, y: e.clientY, held: false };
+	(e.target as Element).releasePointerCapture?.(e.pointerId);
+	press = { i, x: e.clientX, y: e.clientY, held: false, paint: null, last: i };
 	holdTimer = setTimeout(() => {
-		if (!press) return;
+		if (!press || press.paint !== null) return;
 		press.held = true;
 		held.value = i;
 		navigator.vibrate?.(10);
 	}, HOLD_MS);
+	window.addEventListener('pointerup', padUp);
+	window.addEventListener('pointercancel', padCancel);
 }
 function padMove(e: PointerEvent) {
-	if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 12) padCancel();
+	if (!press || press.held) return;
+	if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > 12) stopHold();
+	const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pl-pad') as HTMLElement | null;
+	const i = el ? Number(el.dataset.i) : -1;
+	if (i < 0 || i === press.last) return;
+	if (press.paint === null) {
+		press.paint = !ctx.inst.steps[press.i];
+		setStepOn(press.i, press.paint);
+	}
+	press.last = i;
+	if (!!ctx.inst.steps[i] !== press.paint) setStepOn(i, press.paint);
 }
-function padUp(i: number) {
+function padUp() {
+	stopHold();
+	if (press && !press.held && press.paint === null) toggleStep(press.i);
+	padCancel();
+}
+function stopHold() {
 	if (holdTimer) clearTimeout(holdTimer);
 	holdTimer = null;
-	if (press && press.i === i && !press.held) toggleStep(i);
-	press = null;
 }
 function padCancel() {
-	if (holdTimer) clearTimeout(holdTimer);
-	holdTimer = null;
+	stopHold();
 	press = null;
+	window.removeEventListener('pointerup', padUp);
+	window.removeEventListener('pointercancel', padCancel);
 }
 onBeforeUnmount(padCancel);
+
+// The tiny oscilloscope: the output's waveform, started at a rising zero crossing so it stands
+// still on a steady note, in the theme's accent (the canvas's CSS colour)
+const scopeEl = ref<HTMLCanvasElement | null>(null);
+let scopeFrame = 0;
+let scopeData: Float32Array<ArrayBuffer> | null = null;
+let scopeColour = '';
+let scopeTick = 0;
+function drawScope() {
+	scopeFrame = requestAnimationFrame(drawScope);
+	const c = scopeEl.value;
+	const an = ctx.analyser as AnalyserNode | null;
+	if (!c || !an || !c.clientWidth) return;
+	const dpr = window.devicePixelRatio || 1;
+	const w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+	if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+	if (!scopeColour || ++scopeTick % 60 === 0) scopeColour = getComputedStyle(c).color;
+	if (!scopeData || scopeData.length !== an.fftSize) scopeData = new Float32Array(an.fftSize);
+	an.getFloatTimeDomainData(scopeData);
+	const d = scopeData;
+	let start = 0;
+	for (let i = 1; i < d.length / 2; i++) if (d[i - 1] < 0 && d[i] >= 0) { start = i; break; }
+	const n = Math.floor(d.length / 2);
+	const g = c.getContext('2d')!;
+	g.clearRect(0, 0, w, h);
+	g.strokeStyle = scopeColour;
+	g.lineWidth = 1.5 * dpr;
+	g.lineJoin = 'round';
+	g.beginPath();
+	for (let k = 0; k < n; k++) {
+		const v = Math.max(-1, Math.min(1, d[start + k] * 1.6));
+		const x = (k / (n - 1)) * w, y = h / 2 - v * (h / 2 - 2 * dpr);
+		if (k) g.lineTo(x, y); else g.moveTo(x, y);
+	}
+	g.stroke();
+}
+onMounted(() => { scopeFrame = requestAnimationFrame(drawScope); });
+onBeforeUnmount(() => cancelAnimationFrame(scopeFrame));
 
 const replace = (arr: any[], i: number, v: any) => arr.map((x, j) => (j === i ? v : x));
 // Clear: a new pattern from scratch, every step off (one undo step)
@@ -307,6 +367,7 @@ function hzText(hz: number) {
 .phone-layout {
 	--pp-sat: 82%;
 	--pp-lit: 58%;
+	--pl-now: #fff;
 	position: fixed;
 	inset: 0;
 	z-index: 50;
@@ -327,23 +388,83 @@ function hzText(hz: number) {
 .theme-light .phone-layout {
 	--pp-sat: 52%;
 	--pp-lit: 50%;
+	--pl-now: hsl(var(--pt-accent) 80% 45%);
 }
 
 /* top bar */
 .pl-top {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 5px;
 	height: 34px;
 	flex: none;
 }
 
-.pl-logo {
-	width: 30px;
+/* Small phones (an iPhone SE is 667 px wide sideways): everything in the top bar a little
+   narrower, so it fits on one line */
+@media (max-width: 720px) {
+	.pl-scope {
+		width: 48px;
+	}
+
+	.pl-tab {
+		padding: 8px 4px;
+		letter-spacing: .04em;
+	}
+
+	.pl-icon {
+		width: 28px;
+	}
+
+	.pl-clear {
+		padding: 0 6px;
+	}
+
+	.pl-val {
+		width: 58px;
+		font-size: 11px;
+	}
+}
+
+/* The smallest phones (640 px or less sideways): the steppers lose their arrows; a tap on the
+   name still lists all six */
+@media (max-width: 640px) {
+	.pl-arr {
+		display: none;
+	}
+
+	.pl-val {
+		padding: 0 6px;
+	}
+
+	.pl-top {
+		gap: 3px;
+	}
+
+	.pl-scope {
+		width: 40px;
+	}
+
+	.pl-tab {
+		padding: 8px 3px;
+	}
+}
+
+/* The mini scope: each theme's screen colours (Screen.vue's are its own) */
+.theme-sand .pl-scope { background: #a9b29a; color: #1c2317; }
+.theme-light .pl-scope { background: #cdd2d5; color: #1f2937; }
+.theme-analog .pl-scope { background: #1a1208; color: #ffb547; }
+.theme-slate .pl-scope { background: #16222a; color: #8fe3d2; }
+.theme-synthwave .pl-scope { background: #2a0f52; color: #f3c6ff; }
+
+.pl-scope {
+	width: 64px;
 	height: 30px;
-	border-radius: 8px;
-	object-fit: cover;
 	flex: none;
+	border-radius: 7px;
+	background: var(--nac-lcd-bg, #0f141b);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), inset 0 0 8px rgba(0, 0, 0, .5);
+	color: var(--nac-scope-trace, hsl(var(--pt-accent) 85% 68%));
 }
 
 .pl-tabs {
@@ -358,9 +479,9 @@ function hzText(hz: number) {
 	opacity: .7;
 	font: inherit;
 	font-size: 10px;
-	letter-spacing: .1em;
+	letter-spacing: .08em;
 	text-transform: uppercase;
-	padding: 8px 7px;
+	padding: 8px 5px;
 	border-radius: 8px;
 }
 
@@ -383,7 +504,6 @@ function hzText(hz: number) {
 	border-radius: 9px;
 	background: var(--pt-panel);
 	border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 55%);
-	padding-left: 7px;
 }
 
 .pl-cap {
@@ -404,16 +524,26 @@ function hzText(hz: number) {
 
 .pl-arr {
 	color: hsl(var(--pt-accent) 75% 62%);
-	padding: 0 7px;
+	padding: 0 6px;
 	font-size: 12px;
 }
 
+/* The name, its caption (Sound, Pattern) small above it */
 .pl-val {
+	display: grid;
+	align-content: center;
+	line-height: 1.1;
 	font-weight: 700;
 	font-size: 12px;
-	min-width: 62px;
+	width: 64px;
 	color: var(--pt-text);
 	padding: 0;
+	white-space: nowrap;
+}
+
+.pl-val .pl-cap {
+	font-size: 7px;
+	font-weight: 400;
 }
 
 .pl-icon {
@@ -512,10 +642,30 @@ function hzText(hz: number) {
 	z-index: 1;
 }
 
+/* The playing step: a thick bright outline, a glowing bar along its top, and its colour
+   brightened, so it shows on a full pad as well as on an empty one */
 .pl-pad.now {
-	outline: 2px solid hsl(var(--pt-accent) 90% 75%);
-	outline-offset: -2px;
-	box-shadow: 0 0 14px hsl(var(--pt-accent) 90% 65% / .8);
+	outline: 3px solid var(--pl-now);
+	outline-offset: -3px;
+	box-shadow: 0 0 16px var(--pl-now);
+	filter: brightness(1.3) saturate(1.1);
+}
+
+.pl-pad.now .pl-num,
+.pl-pad.now .pl-rat {
+	top: 8px;
+}
+
+.pl-pad.now::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	height: 6px;
+	z-index: 2;
+	background: var(--pl-now);
+	box-shadow: 0 0 10px var(--pl-now);
 }
 
 .pl-num {
@@ -597,40 +747,40 @@ function hzText(hz: number) {
 	fill: currentColor;
 }
 
-.pl-tempo {
+.pl-steppers {
 	display: grid;
-	grid-template-columns: 26px auto 26px;
-	grid-template-rows: auto auto;
+	gap: 4px;
+	flex: none;
+}
+
+.pl-mini {
+	display: grid;
+	grid-template-columns: 28px 1fr 28px;
 	align-items: center;
-	justify-items: center;
-	line-height: 1;
-}
-
-.pl-tempo b {
-	font-size: 18px;
-}
-
-.pl-tempo span {
-	grid-column: 2;
-	font-size: 8px;
-	letter-spacing: .14em;
-	color: var(--pt-muted);
-}
-
-.pl-tempo button {
-	grid-row: 1 / span 2;
-	width: 26px;
-	height: 40px;
-	border: 0;
+	gap: 2px;
+	height: 27px;
+	min-width: 112px;
 	border-radius: 8px;
 	background: var(--pt-inset);
-	color: var(--pt-text);
-	font-size: 16px;
-	padding: 0;
+	font-size: 10px;
+	text-align: center;
+	color: var(--pt-muted);
+	white-space: nowrap;
 }
 
-.pl-tempo button:last-of-type {
-	grid-column: 3;
+.pl-mini b {
+	font-size: 14px;
+	color: var(--pt-text);
+}
+
+.pl-mini button {
+	height: 27px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--pt-text);
+	font-size: 15px;
+	padding: 0;
 }
 
 .pl-macros {

@@ -75,7 +75,7 @@
                     <template v-if="phone.onPhone.value && phone.full.value">
                         <div class="pc-menu-divider"></div>
                         <button class="pc-menu-row" role="menuitem" @click="closeAllMenus(); phone.setFull(false)">
-                            Phone layout
+                            Phone view
                         </button>
                     </template>
 

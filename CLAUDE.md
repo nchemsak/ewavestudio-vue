@@ -480,17 +480,25 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   normal layout), `DrumSequencer.vue` hides its layout (`v-show`, so the screen's canvases and
   the desktop panels stay mounted) and shows `PhoneLayout.vue`, fixed over the whole page: one
   screen, no scrolling.
-  - **Play** page: the 16 pads in two rows of 8 (a tap turns a step on or off; a hold, 400 ms,
-    opens its note: 16 notes of the Melody Maker's key and scale around the pad's own, every
-    semitone with no scale, within 100–2000 Hz, plus Off, velocity and repeats; picking a note
-    turns the step on and plays it), Play, the tempo (− / +), and four big knobs:
+  - **Play** page: the 16 pads in two rows of 8 (a tap turns a step on or off; a finger drawn
+    across pads paints them all the way the first one went, on or off, as a drag does on the
+    desktop: the pad a touch began on lets go of its pointer capture, and the pads' container
+    finds the pad under the finger; a hold, 400 ms, opens its note: 16 notes of the Melody
+    Maker's key and scale around the pad's own, every semitone with no scale, within
+    100–2000 Hz, plus Off, velocity and repeats; picking a note turns the step on and plays
+    it; the playing step has a thick outline, a glowing bar along its top and a brighter
+    colour), Play, the tempo (− / +) over Octave (↓ / ↑: every pad, as Pattern Tools'
+    arrows), and four big knobs:
     **Decay** (`ampEnvDecayMs`, 50–2000 ms, log), **Tone** (`filterCutoff`, 100 Hz–10 kHz, log;
     turns the filter on), **Sweep** (the pitch envelope's amount, −48…+48, as the Pitch card's
     knob) and **Space** (`reverbMix`, turning the reverb on above 0 and off at 0, and the delay's
-    mix at 0.6 times it while the delay is on). The top bar: the logo, tabs (Play, Sound, FX,
-    Key; a horizontal swipe of 70 px moves between them too, not from a knob or slider),
-    steppers for Sound and Pattern (◂ name ▸ steps through the six, a tap on the name lists
-    them, a dice beside each; the name reads Random after a roll), Undo and ☰.
+    mix at 0.6 times it while the delay is on). The top bar: a tiny oscilloscope of the output
+    (on every page; the analyser's waveform from a rising zero crossing, in each theme's screen
+    colours), tabs (Play, Sound, FX, Key; a horizontal swipe of 70 px moves between them too,
+    not from a knob, slider or the pads), steppers for Sound and Pattern (◂ name ▸ steps
+    through the six, the caption small above the name, a tap on the name lists them, a dice
+    beside each; the name reads Random after a roll), Clear, Undo and ☰. It fits on one line
+    from 568 px (the first iPhone SE) up: tighter under 720 px, no stepper arrows under 640.
   - **Sound**, **FX** and **Key** pages are the desktop's own panels again (slots in
     DrumSequencer's `PHONE` section: Envelope, Pitch and Filter cards, the eight waves, Noise,
     FM and Unison as a switch and one knob each; the three pedals; the Melody Maker), so they
@@ -499,15 +507,19 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     knob's link). MIDI isn't offered in phone mode.
   - ☰ opens a menu with the File bar itself (`ProjectControls`, moved there by a `Teleport`
     whose `to` changes with the mode, since a Teleport looks its target up again only when `to`
-    changes), the theme buttons, and **Full layout**.
-- Full layout is remembered on that phone (`localStorage` `phone-layout` = `full`). A
-  "Phone layout" button in the bottom-right corner (`App.vue`, on a phone only, while it shows
-  the full layout) brings phone mode back, and so does File → Phone layout (PR 46: the
+    changes), the theme buttons, and **Desktop View**.
+- Desktop View is remembered on that phone (`localStorage` `phone-layout` = `full`). A
+  "Phone view" button in the bottom-right corner (`App.vue`, on a phone only, while it shows
+  the desktop view) brings phone mode back, and so does File → Phone view (PR 46: the
   maintainer didn't find the File item alone).
 - ☰'s menu is a panel from the left as tall as the screen, so the File menu opens in it
   without scrolling (tighter rows there; Open's list of projects beside the panel). The top
   bar's **Clear** (Play page) turns every step off: a new pattern in one tap, one undo step.
-- A phone held upright shows "Turn your phone" (`App.vue`), with "Use the full layout instead".
+- A phone held upright shows "Turn your phone" (`App.vue`), with "Use the desktop view
+  instead". The app is hidden under it (`v-show`) and the page can't scroll (`html.phone-mode`
+  in `_general.scss`, as in phone mode), and it sits above everything (the desktop's pad
+  numbers are at z-index 1000) and is `100lvh` tall, so nothing shows through and no gap opens
+  at the bottom while a phone's address bar slides away (PR 47).
   A page can't turn itself; Android's installed app could (the manifest's `orientation`, not
   set yet: it would turn tablets too).
 - `App.vue` hides its toolbar (themes, MIDI) and the return link in phone mode.
@@ -1061,6 +1073,7 @@ Done:
 | 44 | Sand's pale spots fixed (the maintainer's screenshot): its wave, FM, Unison and LFO tiles are dark caps with light lettering, and the LFO's wave switch and the Vel → pill have dark ink. Two more themes with buttons, **Analog** (warm dark, amber, a wood-brown page) and **Slate** (mid-tone blue-grey, teal), to try out before deciding which themes to keep. |
 | 45 | Phone mode, picked from mockups (option B of three): on a touch phone held sideways a layout of its own, one screen without scrolling: 16 pads in two rows of 8 (tap: on/off; hold: the note from the key, velocity, repeats), Play and tempo, Sound and Pattern steppers with their dice, four big knobs (Decay, Tone, Sweep, Space); Sound, FX and Key pages a swipe away; ☰ with the File bar, themes and Full layout (remembered; File → Phone layout comes back). Upright, a hint to turn the phone. Plan: Google Play on hold. |
 | 46 | Phone mode, after trying it: a Phone layout button in the corner of the full layout on a phone (the way back was only in the File menu); the ☰ menu is a full-height panel from the left, so the File menu fits without scrolling; Clear in the top bar starts a new pattern in one tap. |
+| 47 | Phone mode, round two: the "Turn your phone" screen covers the app (the pad numbers showed through and the page scrolled under it); its text and Desktop View / Phone view renamed; Octave ↓ / ↑ under the tempo; a tiny oscilloscope beside the tabs; a finger drawn across pads paints them; the playing pad stands out (outline, a bar along its top, brighter); the top bar fits down to 568 px. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

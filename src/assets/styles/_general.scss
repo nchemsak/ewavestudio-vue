@@ -111,3 +111,11 @@ input[type="range"] {
 hr {
     margin: 1rem 0rem 1.5rem 0rem;
 }
+/* Phone mode and the "Turn your phone" screen cover the page: it doesn't scroll under them
+   (App.vue sets the class) */
+html.phone-mode,
+html.phone-mode body {
+    overflow: hidden;
+    overscroll-behavior: none;
+    height: 100%;
+}

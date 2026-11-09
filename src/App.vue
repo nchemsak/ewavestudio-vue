@@ -1,5 +1,6 @@
 <template>
-	<div class="container app-frame">
+	<!-- Hidden behind the "Turn your phone" screen, so nothing of it shows or scrolls there -->
+	<div v-show="!phoneHint" class="container app-frame">
 		<div class="row">
 			<div class="col-12">
 				<!-- Top toolbar -->
@@ -19,20 +20,20 @@
 		</div>
 	</div>
 	<!-- In the installed app the main site opens in the browser, not in the app's window -->
-	<a v-show="!phoneActive" href="/" class="return" :target="pwa.state.standalone ? '_blank' : undefined"
+	<a v-show="!phoneActive && !phoneHint" href="/" class="return" :target="pwa.state.standalone ? '_blank' : undefined"
 		:rel="pwa.state.standalone ? 'noopener' : undefined">Return to Ephemeral Wave</a>
 	<PwaNotice />
-	<!-- On a phone showing the full layout: always a way back to the phone layout -->
+	<!-- On a phone showing the desktop view: always a way back to the phone view -->
 	<button v-if="phoneOnPhone && phoneFull" type="button" class="pt-btn phone-back" @click="setPhoneFull(false)">
-		Phone layout
+		Phone view
 	</button>
 	<!-- A phone held upright: the phone layout is made for landscape (usePhoneMode.ts) -->
 	<div v-if="phoneHint" class="phone-hint" role="dialog" aria-label="Turn your phone">
 		<div>
 			<div class="phone-hint-icon" aria-hidden="true"></div>
 			<h2>Turn your phone</h2>
-			<p>The synth is laid out sideways, like a piece of hardware. Turn your phone to landscape to play.</p>
-			<button type="button" class="pt-btn" @click="setPhoneFull(true)">Use the full layout instead</button>
+			<p>The synth is laid out sideways. Turn your phone to landscape to play.</p>
+			<button type="button" class="pt-btn" @click="setPhoneFull(true)">Use the desktop view instead</button>
 		</div>
 	</div>
 </template>
@@ -124,9 +125,16 @@ watchEffect(() => document.documentElement.classList.toggle('phone-mode', phoneA
 }
 
 .phone-hint {
+	/* Above everything (the desktop's pad numbers sit at z-index 1000), and as tall as the
+	   largest viewport, so no gap shows at the bottom while the address bar slides away */
 	position: fixed;
-	inset: 0;
-	z-index: 70;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 100lvh;
+	z-index: 3000;
+	touch-action: none;
+	overscroll-behavior: none;
 	display: grid;
 	place-items: center;
 	text-align: center;
