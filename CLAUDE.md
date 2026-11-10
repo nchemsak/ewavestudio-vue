@@ -729,10 +729,13 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   not every knob at random (that mostly gives noise or silence): always a short amp envelope
   and a filter; some of the time a pitch sweep, a filter envelope, noise, FM, unison, the LFO,
   velocity routing and each effect. Its limits keep rolls usable: resonance up to 10, drive
-  mix up to 0.35, and an opening filter envelope starts at 150 Hz or above and opens within
-  the note (one roll without that limit was nearly silent). Values sit on the knobs' steps.
-  Unit tests check 500 seeded rolls (ranges, steps, variety); a browser test exports rolls and
-  checks none is silent or clipping. 200 rolls of pads 1, 5, 9, 13 peaked between 0.10 and
+  mix up to 0.35, an opening filter envelope starts at 150 Hz or above and opens within
+  the note (one roll without that limit was nearly silent), and a pitch sweep that starts above
+  Cutoff (from A3) falls back within 30 % of Decay (PR 54: a slow 33-semitone drop onto a
+  435 Hz cutoff peaked at 0.04). Values sit on the knobs' steps.
+  Unit tests check 500 seeded rolls (ranges, steps, variety); a browser test exports eight
+  seeded rolls (the dice's `Math.random` seeded per click, so every run rolls the same sounds,
+  the quietest and loudest of 800 among them) and checks none is silent or clipping. 200 rolls of pads 1, 5, 9, 13 peaked between 0.10 and
   0.65 (median 0.26, the same as the factory sound).
 - Analytics: `preset_select` with the preset's id; `preset_random` for a roll of the dice.
 
@@ -1219,6 +1222,8 @@ Done:
 | 50 | Pad settings and repeats: the **Repeats brush** (×2 ×3 ×4 in the Step Sequencer header: click or drag across pads to give them that many hits, again for one; Esc to stop) and ⋯ → Clear Repeats; a pad's ⋮ closes its own settings; the settings stay inside the window for the last pads (they assumed 380 px, but are up to 420); a key or octave in them plays the note on the pad's wave (the phone's note picker uses the pad's wave too). Plan: patch cables on hold; the maintainer's review (presets and Melody Maker, Unison) added. |
 | 51 | Presets and Melody Maker: the boxes' captions read **Sound presets** and **Pattern presets**; the Pulse pattern (Pattern Tools' Every 4 again) became **Tresillo** (3-3-2 twice); the Patterns dice builds a beat: a one- or two-beat idea repeated across the bar (or 5 or 7 hits spread evenly), about half with a fill on the last beat, never more than four empty steps in a row; the Melody Maker's ⋯ menu opens inside the window at every width (it ran off the right edge and the bottom on a laptop), and its Undo last melody is gone (Ctrl+Z does it). |
 | 52 | Unison: Voices 2–4 (one voice sounded as off; six measured narrower than three; a project saved with 1 opens with unison off, 5–6 as 4), a notch at 12 cents on Detune, and Spread 100 % by default. The voices start at different points of their cycle, more with more Spread (`src/audio/unison.ts`; the shapes rebuilt from the spec's series in `waves.ts`), so a hit is wide from its first moment: its first 50 ms measured side/mid 0.35 → 0.87 at full Spread, for 0.9 dB of level; Spread 0 plays as before. |
+| 53 | The plan after the maintainer's brainstorm following PR 52: bar-quantized key and pattern changes, arpeggio fixes (Generate's Random to become Melody), velocity knobs instead of the Vel → pop-up, Save as…, LFO retrigger and targets, hardware buttons; ESLint, a second oscillator and a second pad lane on hold. |
+| 54 | Fix: the Sounds dice could roll a nearly silent sound (a big upward pitch sweep falling slowly onto a low Cutoff), which failed PR 53's browser checks (a peak of 0.039); such a sweep now falls back within 30 % of Decay (3 % of rolls change). The dice's browser test rolls the same seeded sounds every run. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
