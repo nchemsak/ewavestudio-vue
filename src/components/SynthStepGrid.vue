@@ -2,7 +2,7 @@
 <template>
     <div class="d-flex pad-row">
         <!-- One Tab stop for all pads: the arrow keys move between them, Enter turns one on or off -->
-        <div class="padTEST-grid" data-equal-cols role="group" aria-label="Steps">
+        <div class="padTEST-grid" :class="{ brushing: !!repeatBrush }" data-equal-cols role="group" aria-label="Steps">
             <div v-for="(active, index) in steps" :key="index" class="pad-col" @mouseleave="hovered = null">
                 <div class="pad-head">
                     <button class="pad-settings-dot" @mousedown.stop @click.stop="emitOpenSettings(index, $event)"
@@ -53,8 +53,11 @@
                         </div>
                     </div>
 
-                    <!-- A ratchet: the step plays this many quick hits -->
-                    <div v-if="ratchetFor(index) > 1" class="ratchet-badge" :class="{ 'is-off': !active }"
+                    <!-- A ratchet: the step plays this many quick hits; with the Repeats brush, the
+                         pad under the mouse shows what a click would give it -->
+                    <div v-if="brushPreview(index) !== null" class="ratchet-badge is-preview" aria-hidden="true">
+                        ×{{ brushPreview(index) }}</div>
+                    <div v-else-if="ratchetFor(index) > 1" class="ratchet-badge" :class="{ 'is-off': !active }"
                         aria-hidden="true">×{{ ratchetFor(index) }}</div>
 
                     <div class="wave-badge" :class="{ 'is-off': !active }" :data-wave="waveFor(index)"
@@ -69,7 +72,7 @@
                         {{ nearestNote(pitches[index]) }}
                     </div>
 
-                    <div v-if="active && hovered === index && props.showVelocity" class="hover-slider volume-slider">
+                    <div v-if="active && hovered === index && props.showVelocity && !repeatBrush" class="hover-slider volume-slider">
                         <input type="range" min="0" max="1" step="0.01" :value="velocities[index]"
                             @input="updateVelocity(index, $event)" @mousedown="activeVol = index"
                             @mouseup="activeVol = null" @touchstart="activeVol = index" @touchend="activeVol = null" />
@@ -78,7 +81,7 @@
                         </span>
                     </div>
 
-                    <div v-if="active && hovered === index && props.showPitch" class="hover-slider pitch-slider">
+                    <div v-if="active && hovered === index && props.showPitch && !repeatBrush" class="hover-slider pitch-slider">
                         <input :min="minHz" :max="maxHz" step="1" type="range" :value="pitches[index]"
                             @input="updatePitch(index, $event)" @mousedown="activePitch = index"
                             @mouseup="activePitch = null" @touchstart="activePitch = index"
@@ -122,6 +125,9 @@ const props = withDefaults(
 
         // Hits per step: 1, or 2–4 quick hits (a ratchet; src/audio/ratchet.ts)
         ratchets?: number[];
+        // The Repeats brush: while set (2–4), a click or drag gives pads that many hits
+        // instead of turning them on or off; a pad that already has it goes back to one hit
+        repeatBrush?: number | null;
 
         noiseMask?: boolean[];
         noiseTint?: string;
@@ -158,11 +164,14 @@ const emit = defineEmits<{
     (e: 'update:steps', v: boolean[]): void;
     (e: 'update:velocities', v: number[]): void;
     (e: 'update:pitches', v: number[]): void;
+    (e: 'update:ratchets', v: number[]): void;
     (e: 'open-pad-settings', payload: { name: string; index: number; anchorRect: DOMRect }): void;
 }>();
 
 const isMouseDown = ref(false);
-const dragMode = ref<'on' | 'off' | null>(null);
+// A drag paints every pad it crosses the way the first one went: on or off, or with the
+// Repeats brush, the brush's hits or back to one
+const dragMode = ref<'on' | 'off' | 'brush' | 'unbrush' | null>(null);
 const hovered = ref<number | null>(null);
 const activeVol = ref<number | null>(null);
 const activePitch = ref<number | null>(null);
@@ -179,6 +188,13 @@ function onMouseDown(evt: MouseEvent, index: number) {
     isMouseDown.value = true;
     focusIndex.value = index; // Tab comes back to the last pad used
 
+    if (props.repeatBrush) {
+        dragMode.value = ratchetFor(index) === props.repeatBrush ? 'unbrush' : 'brush';
+        paintRepeats(index);
+        window.addEventListener('mouseup', onMouseUp, { once: true });
+        return;
+    }
+
     const next = !props.steps[index];
     dragMode.value = next ? 'on' : 'off';
 
@@ -191,9 +207,38 @@ function onMouseDown(evt: MouseEvent, index: number) {
 
 function onMouseEnter(index: number) {
     if (!isMouseDown.value || !dragMode.value) return;
+    if (dragMode.value === 'brush' || dragMode.value === 'unbrush') {
+        paintRepeats(index);
+        return;
+    }
     const out = clone(props.steps);
     out[index] = dragMode.value === 'on';
     emit('update:steps', out);
+}
+
+// The Repeats brush on one pad: the brush's hits, turning the pad on (a repeat on a silent step
+// would do nothing), or back to one hit
+function paintRepeats(index: number) {
+    const brush = props.repeatBrush;
+    if (!brush || !props.ratchets) return;
+    const n = dragMode.value === 'unbrush' ? 1 : brush;
+    if (ratchetFor(index) !== n) {
+        const out = clone(props.ratchets);
+        out[index] = n;
+        emit('update:ratchets', out);
+    }
+    if (n > 1 && !props.steps[index]) {
+        const steps = clone(props.steps);
+        steps[index] = true;
+        emit('update:steps', steps);
+    }
+}
+
+// What a click with the Repeats brush would give the pad under the mouse (null: nothing to show)
+function brushPreview(index: number): number | null {
+    const brush = props.repeatBrush;
+    if (!brush || hovered.value !== index || isMouseDown.value) return null;
+    return ratchetFor(index) === brush ? 1 : brush;
 }
 
 function onMouseUp() {
@@ -214,6 +259,10 @@ function ratchetFor(i: number) {
 
 function padLabel(i: number, active: boolean) {
     const repeats = ratchetFor(i) > 1 ? `, ${ratchetFor(i)} hits` : '';
+    if (props.repeatBrush) {
+        const n = ratchetFor(i) === props.repeatBrush ? 1 : props.repeatBrush;
+        return `Step ${i + 1}${active ? `, ${props.nearestNote(props.pitches[i])}` : ''}${repeats}: give it ${n} ${n === 1 ? 'hit' : 'hits'}`;
+    }
     return active ? `Step ${i + 1}, ${props.nearestNote(props.pitches[i])}${repeats}` : `Step ${i + 1}`;
 }
 
@@ -224,7 +273,11 @@ function onPadKeydown(e: KeyboardEvent, index: number) {
     switch (e.key) {
         case 'Enter':
             e.preventDefault();
-            if (!e.repeat) {
+            if (!e.repeat && props.repeatBrush) {
+                dragMode.value = ratchetFor(index) === props.repeatBrush ? 'unbrush' : 'brush';
+                paintRepeats(index);
+                dragMode.value = null;
+            } else if (!e.repeat) {
                 const out = clone(props.steps);
                 out[index] = !out[index];
                 emit('update:steps', out);
@@ -417,6 +470,16 @@ const nearestNote = props.nearestNote;
 
 .ratchet-badge.is-off {
     opacity: .45;
+}
+
+/* The Repeats brush: what a click would give the pad under the mouse */
+.ratchet-badge.is-preview {
+    border: 1px dashed hsl(var(--pt-accent) 80% 70%);
+    background: hsl(var(--pt-accent) 60% 20% / .85);
+}
+
+.brushing .padTEST {
+    cursor: copy;
 }
 
 .note-chip {

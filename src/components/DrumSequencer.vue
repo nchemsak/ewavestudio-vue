@@ -230,6 +230,16 @@
 						<VelocityRouting v-if="velOpen" v-model:decay="velocityRouting.decay.value"
 							v-model:cutoff="velocityRouting.cutoff.value" v-model:pitchEnv="velocityRouting.pitchEnv.value"
 							v-model:noise="velocityRouting.noise.value" @close="velOpen = false" />
+
+						<!-- The Repeats brush: pick ×2–×4, then click or drag across pads to give them that
+						     many quick hits (a pad that has them already goes back to one) -->
+						<div class="repeat-brush" role="group" aria-label="Repeats brush"
+							title="Pick a number, then click or drag across pads to give them that many quick hits. Click a pad again for one hit; Esc or the lit button to stop.">
+							<span class="repeat-brush__label" aria-hidden="true">Repeats</span>
+							<button v-for="n in BRUSH_COUNTS" :key="n" type="button" class="vel-btn"
+								:class="{ on: repeatBrush === n }" :aria-pressed="repeatBrush === n"
+								:aria-label="`Repeats brush ×${n}`" @click="toggleRepeatBrush(n)">×{{ n }}</button>
+						</div>
 					</div>
 					<div v-if="velOpen" class="mm-overlay" @click="velOpen = false"></div>
 
@@ -244,6 +254,9 @@
 										class="kn"></span></button>
 							</div>
 							<div class="pt-rule" aria-hidden="true"></div>
+							<div class="mm-opt" role="menuitem" @click.stop="clearRepeats()">
+								<span>Clear Repeats</span>
+							</div>
 							<div class="mm-reset" role="menuitem" @click.stop="resetSynthPadsToDefaults()">
 								Reset Pads
 							</div>
@@ -257,7 +270,8 @@
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
 						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
-						:waveforms="(synthInstrument as any).waveforms" :ratchets="synthInstrument.ratchets"
+						:waveforms="(synthInstrument as any).waveforms" v-model:ratchets="synthInstrument.ratchets"
+						:repeatBrush="repeatBrush"
 						:defaultWave="selectedWaveform" :noiseMask="noiseMask"
 						:noiseTint="noiseHexFromMorph(noiseColor)" noise-mode="static" :noise-alpha="0.32"
 						:noise-fps="14" :noise-speed="40" :noise-enabled="noiseEnabled" :pepper-alpha="0.2"
@@ -576,7 +590,7 @@
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
 			v-model:noiseEnabled="padNoiseEnabled" v-model:ratchet="currentPadRatchet" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
-			:anchorRect="padPopover.anchorRect" :title="padPopover.title" />
+			:anchorRect="padPopover.anchorRect" :title="padPopover.title" @audition="hz => auditionNote(hz, currentPadWave)" />
 	</div>
 </template>
 
@@ -765,6 +779,8 @@ const fxAnchor = ref<HTMLElement | null>(null);
 
 function onFxEsc(e: KeyboardEvent) {
 	if (e.key === 'Escape') {
+		// Esc puts the Repeats brush down, unless it's closing a pad's settings first
+		if (repeatBrush.value && !padPopover.value.open) repeatBrush.value = null;
 		if (fxAdvanced.open) fxAdvanced.open = false;
 		if (stepsAdvanced.open) stepsAdvanced.open = false;
 		if (velOpen.value) velOpen.value = false;
@@ -799,6 +815,21 @@ function openStepsAdvanced(e: MouseEvent) {
 	stepsAdvanced.x = Math.round(r.right + 8);
 	stepsAdvanced.y = Math.round(r.bottom + 8);
 	stepsAdvanced.open = true;
+}
+
+// The Repeats brush (Step Sequencer header): while set, clicking or dragging across pads gives
+// them that many hits (SynthStepGrid). Not saved; File → New puts it down.
+const BRUSH_COUNTS = [2, 3, 4] as const;
+const repeatBrush = ref<number | null>(null);
+function toggleRepeatBrush(n: number) {
+	repeatBrush.value = repeatBrush.value === n ? null : n;
+}
+
+// Every pad back to one hit (the Step Sequencer's ⋯ menu); one undo step
+function clearRepeats() {
+	const inst = synthInstrument.value;
+	if (inst?.ratchets) inst.ratchets = inst.ratchets.map(() => 1);
+	stepsAdvanced.open = false;
 }
 
 function resetSynthPadsToDefaults() {
@@ -1471,6 +1502,11 @@ const padPopover = ref({
 });
 
 function openPadSettings(name: string, index: number, evt: MouseEvent) {
+	// The ⋮ of the pad whose settings are open closes them
+	if (padPopover.value.open && padSettings.name === name && padSettings.index === index) {
+		padPopover.value.open = false;
+		return;
+	}
 	padSettings.name = name;
 	padSettings.index = index;
 
@@ -1849,13 +1885,13 @@ function onScaleChosen({ from, to }: { from: MelodyUi['keyScale']; to: MelodyUi[
 
 // One note of the synth lane's sound, now, as a MIDI key would play it (not while the lane is
 // muted). The click that asks for it lets audio start.
-function auditionNote(hz: number) {
+function auditionNote(hz: number, wave?: string) {
 	const inst = synthInstrument.value;
 	if (!inst || inst.muted) return;
 	const play = () => {
 		startLfoIfNeeded();
 		playSynthNote(hz, Math.min(1, 0.8 * (inst.channelVolume ?? 1)), synthDecay.value, audioCtx.currentTime + 0.003,
-			selectedWaveform.value, { addNoise: true, vel: 0.8 });
+			wave ?? selectedWaveform.value, { addNoise: true, vel: 0.8 });
 	};
 	if (audioCtx.state === 'running') play();
 	else audioCtx.resume().then(play, () => { });
@@ -2797,9 +2833,10 @@ function resetUiToFactoryDefaults() {
 	showVelocity.value = false;
 	showPitch.value = false;
 
-	// Close any open menus/popovers
+	// Close any open menus/popovers, and put the Repeats brush down
 	fxAdvanced.open = false;
 	stepsAdvanced.open = false;
+	repeatBrush.value = null;
 	closeOverlays?.();
 
 	// The Export audio dialog starts from its defaults again (it keeps the last export's
@@ -3848,6 +3885,10 @@ const phoneCtx = reactive({
 /* Step Sequencer header: the Velocity routing button, and the panel opens under the header */
 .step-sequencer-subheader .channel-caption {
 	position: relative;
+	/* On a narrow screen the Repeats brush goes on a line of its own */
+	flex-wrap: wrap;
+	min-width: 0;
+	row-gap: 4px;
 }
 
 .vel-btn {
@@ -3863,6 +3904,19 @@ const phoneCtx = reactive({
 	opacity: 0.7;
 	cursor: pointer;
 	white-space: nowrap;
+}
+
+.repeat-brush {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+}
+
+.repeat-brush__label {
+	font-size: 10px;
+	letter-spacing: 0.06em;
+	opacity: 0.7;
+	margin-right: 2px;
 }
 
 .vel-btn.on {
