@@ -1009,10 +1009,42 @@ drum lanes back.
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
 
-1. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
-   Checked after PR 37: ESLint 10.14 and typescript-eslint 8.72 still need `minimatch` 10, and
-   `npm audit` reports 10 moderate advisories for them.
-2. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+Items 1–6 come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
+what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
+target, and for now a second oscillator and a second pad lane, on hold below).
+
+1. **Key and pattern changes wait for the bar.** While playing, a key clicked in the Melody
+   Maker (and a Pattern preset or its dice) blinks until the next bar's step 1, then lights
+   and the pattern moves, as hardware queues a pattern change; stopped, it changes at once.
+   Maybe Shift+click for at once while playing. The key's audition note would clash with the
+   old key still playing: play it on the downbeat, or not while playing. Done in the engine,
+   since the scheduler reads the pitches 100 ms ahead. One undo step, as now.
+2. **Arpeggio fixes** (`bakeArp()` in `MelodyMaker.vue`):
+   - Rate doesn't play at its rate: 1/4 gives four steps in a row one pitch, and every step
+     that's on still plays. Make it place the notes (a real 1/4 arpeggio), or rename it.
+   - Fit to the bar: a 1-octave chord is 3 notes, and 3 doesn't divide 16, so the cycle ends
+     mid-bar and jumps when the bar starts over. By default, fit it (add the octave root,
+     1-3-5-8, or start the cycle again each beat); keep today's behaviour as a "Free" option.
+   - The Pattern list's Random (it shuffles the chord's notes once; not the Random / Arpeggio
+     switch next to Generate): keep or drop, the maintainer to decide. No replacement pattern.
+   - Later, its own PR: arpeggiated repeats, a ×2–×4 step stepping through the chord within
+     the step (each repeat its own pitch, in both engines), as a choice in the pad's Repeats.
+3. **Velocity without the pop-up:** the "Vel →" panel's four amounts become mini "VEL" knobs on
+   the cards they change (Envelope's Decay, Pitch's Amount, Filter's Cutoff, Noise's mix), so
+   they sit beside what they change and MIDI learn can link them. Mockup first: Envelope,
+   Pitch and Filter's knob row is full. Fallback: one small Velocity card in Sound.
+4. **File → Save as…** (or Duplicate): a new project under a new name, the original left as it
+   was. Renaming stays a rename (a typo fixed shouldn't leave copies). Maybe, on Save after a
+   rename of a saved project, ask: rename it, or save as a new project?
+5. **LFO:** wire up Retrigger (`lfoRetrigger` is saved and in the export's state, but the live
+   engine never reads it): the LFO starts over on each note, which is what makes an LFO useful
+   on drums. And more targets: level (tremolo) and FM amount (not pan, the maintainer's call).
+   One LFO; a second waits for patch cables.
+6. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
+   dice) that presses in; a switch with an LED over the chosen option (Random | Arpeggio, the
+   rates); a toggle with an LED (FM, Unison, CRUSH). Mockups first (2–3), then one PR with
+   before/after screenshots in every theme.
+7. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1051,6 +1083,17 @@ heard, and the presets peak well below clipping (0.2–0.5), but measurements se
 browser tests use `__swingOver` to ignore it.
 
 On hold (ask the maintainer before starting; put on hold after PR 33, "not now"):
+- **ESLint** (put off after PR 52, the maintainer's call), once ESLint and typescript-eslint
+  move to `minimatch` 11 (see "No linter yet"). Checked after PR 37: ESLint 10.14 and
+  typescript-eslint 8.72 still need `minimatch` 10, and `npm audit` reports 10 moderate
+  advisories for them.
+- **A second oscillator (VCO 2)** (put off after PR 52): as on the DFAM and Edge, its own
+  interval (a fifth, an octave, detuned) and level, maybe hard sync or VCO 1 → 2 FM; a card,
+  both engines, presets, the dice, saving. It must sound unlike the FM card's modulator, which
+  is already a second oscillator.
+- **A second 16-pad lane** (put off after PR 52): bass, ambient or drums layered with the synth
+  lane. It makes the app a groovebox: sound settings per lane, the scheduler, the layout,
+  exports and phone mode. The hidden drum lanes' code is the natural start.
 - **Patch cables** (put off after PR 49: the maintainer wants to tweak the layout more first):
   animated cables from the LFO to what it moves (Cutoff, the Pulse tile, the pads), swaying a
   little, never over a control, still with `prefers-reduced-motion`. They depend on where
