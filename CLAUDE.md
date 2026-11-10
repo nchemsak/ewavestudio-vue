@@ -1025,8 +1025,10 @@ target, and for now a second oscillator and a second pad lane, on hold below).
    - Fit to the bar: a 1-octave chord is 3 notes, and 3 doesn't divide 16, so the cycle ends
      mid-bar and jumps when the bar starts over. By default, fit it (add the octave root,
      1-3-5-8, or start the cycle again each beat); keep today's behaviour as a "Free" option.
-   - The Pattern list's Random (it shuffles the chord's notes once; not the Random / Arpeggio
-     switch next to Generate): keep or drop, the maintainer to decide. No replacement pattern.
+   - The Pattern list's Random (it shuffles the chord's notes once) stays, under that name
+     (arpeggiators call it Random; "Shuffle" would read as swing). To end the two "Random"s,
+     the Generate switch's Random becomes **Melody** (Melody | Arpeggio); its saved value
+     stays `random`, so projects don't change.
    - Later, its own PR: arpeggiated repeats, a ×2–×4 step stepping through the chord within
      the step (each repeat its own pitch, in both engines), as a choice in the pad's Repeats.
 3. **Velocity without the pop-up:** the "Vel →" panel's four amounts become mini "VEL" knobs on
