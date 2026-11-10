@@ -78,7 +78,7 @@
 							:initial-arp-tones="melodyUi.arpTones" :initial-mode="melodyUi.mode"
 							@update:frequencies="padFrequencies = $event"
 							@octave-shift="octaveShiftAllSkip($event)"
-							@key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
+							:queued-key="queuedKey" @key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
 							@mode-change="(v) => { melodyUi.mode = v }"
 							@key-root-change="(r) => { onKeyRootChange(r); melodyUi.keyRoot = r as any; }"
 							@key-scale-change="(s) => { melodyUi.keyScale = s as any }"
@@ -174,7 +174,8 @@
 						<PresetButtons title="Sound presets" dice-label="Random sound" :presets="PRESETS" :active="activePresetId"
 							@choose="choosePreset" @random="rollRandomSound" />
 						<PresetButtons title="Pattern presets" dice-label="Random pattern" :presets="PATTERNS"
-							:active="activePatternId" @choose="choosePattern" @random="rollRandomPattern" />
+							:active="activePatternId" :queued="queuedPattern" @choose="choosePattern"
+							@random="rollRandomPattern" />
 					</div>
 
 					<!-- Play (+ the MIDI fallback) -->
@@ -463,7 +464,7 @@
 							:initial-arp-tones="melodyUi.arpTones" :initial-mode="melodyUi.mode"
 							@update:frequencies="padFrequencies = $event"
 							@octave-shift="octaveShiftAllSkip($event)"
-							@key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
+							:queued-key="queuedKey" @key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
 							@mode-change="(v) => { melodyUi.mode = v }"
 							@key-root-change="(r) => { onKeyRootChange(r); melodyUi.keyRoot = r as any; }"
 							@key-scale-change="(s) => { melodyUi.keyScale = s as any }"
@@ -596,7 +597,7 @@
 
 <script setup lang="ts">
 // IMPORTS START
-import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed, markRaw } from 'vue';
+import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed, markRaw, shallowRef } from 'vue';
 import Knob from './Knob.vue';
 import DelayEffect from './modules/DelayEffect.vue';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, DEFAULT_TEMPO, followDelaySync } from '../lib/delaySync';
@@ -1867,14 +1868,25 @@ function onKeyRootChange(root: typeof selectedKeyRoot.value) {
 }
 
 // Someone clicked a key on the Melody Maker's keyboard: the pattern moves to it, the shorter
-// way round (the same melody, src/lib/melody/theory.ts), and the key plays
-function onKeyChosen(root: typeof selectedKeyRoot.value) {
+// way round (the same melody, src/lib/melody/theory.ts). Stopped, at once, and the key plays;
+// while playing, at the next bar's step 1 (the key blinks until then; Shift+click: at once),
+// without the key's note, which would clash with the old key still playing (see BAR QUEUE)
+function onKeyChosen(root: typeof selectedKeyRoot.value, now = false) {
+	const audition = !isPlaying.value;
+	if (root === selectedKeyRoot.value && !now) {
+		cancelQueued('key'); // back to the key it's in: nothing to wait for, and it plays
+		moveToKey(root, true);
+		return;
+	}
+	atNextBar('key', root, () => moveToKey(root, audition), now);
+}
+function moveToKey(root: typeof selectedKeyRoot.value, audition: boolean) {
 	const inst = synthInstrument.value;
 	const semitones = shortestInterval(selectedKeyRoot.value, root);
 	if (inst && semitones) inst.pitches = transposePitches(inst.pitches, semitones, MIN_PAD_HZ, MAX_PAD_HZ);
 	selectedKeyRoot.value = root;
 	melodyUi.keyRoot = root;
-	if (inst) auditionNote(nearestRootHz(root, patternCenterHz(inst.pitches, inst.steps)));
+	if (inst && audition) auditionNote(nearestRootHz(root, patternCenterHz(inst.pitches, inst.steps)));
 }
 
 // Someone picked a scale: each pad keeps its place in the scale (or goes to the nearest note
@@ -2410,6 +2422,7 @@ const {
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
 	reverb: projectState.fx.reverb,
+	onBarStart: () => runQueued(),
 });
 
 // Oscilloscope samples (the scope view reads the analyser into this every frame)
@@ -2668,6 +2681,7 @@ function onPlayClick() {
 		steps: stepLength.value,
 	});
 
+	if (isPlaying.value) runQueued(); // stopping: what was waiting for the bar happens now
 	togglePlay();
 }
 // GOOGLE ANALYTICS END
@@ -2828,6 +2842,7 @@ function getPadStyle(instrument: any, index: number) {
 // File → New: every saved setting back to its factory default, plus the parts of the screen
 // that aren't saved
 function resetUiToFactoryDefaults() {
+	cancelQueued();
 	hardStopSequencer();
 
 	resetToFactoryDefaults(projectState);
@@ -2859,10 +2874,16 @@ const { project } = useProjectSync({
 
 // Undo/redo of settings changes (Ctrl/Cmd+Z and the buttons in ProjectControls); see
 // src/composables/useUndoHistory.ts
-const { canUndo, canRedo, undo, redo } = useUndoHistory({
+const history = useUndoHistory({
 	buildSnapshot: () => buildSnapshot(projectState),
 	applySnapshot: (s) => applySnapshot(projectState, s),
 });
+const { canUndo, canRedo } = history;
+// A change still waiting for the bar is thrown away: undo goes back from what's playing
+function undo() { cancelQueued(); history.undo(); }
+function redo() { cancelQueued(); history.redo(); }
+// Opening or importing a project: nothing from the last one waits for its bar
+watch(() => project.projectId, () => cancelQueued());
 
 // SAVING END
 
@@ -2921,12 +2942,18 @@ const activePatternId = computed<string | null>(() => {
 	return PATTERNS.find(p => patternKeys[p.id] === key)?.id ?? null;
 });
 
-async function choosePattern(id: string) {
+// While playing, a pattern waits for the next bar's step 1 (its button blinks; Shift+click:
+// at once), as a key does (see BAR QUEUE)
+function choosePattern(id: string, now = false) {
+	if (!PATTERNS.some(p => p.id === id)) return;
+	trackEvent('pattern_select', { pattern: id });
+	atNextBar('pattern', id, () => { applyChosenPattern(id); }, now);
+}
+async function applyChosenPattern(id: string) {
 	const pattern = PATTERNS.find(p => p.id === id);
 	if (!pattern) return;
 	applyPattern(projectState, pattern, { min: MIN_PAD_HZ, max: MAX_PAD_HZ });
 	choosingPattern.value = id;
-	trackEvent('pattern_select', { pattern: id });
 	await nextTick();
 	await nextTick();
 	project.flushPending();
@@ -2935,11 +2962,43 @@ async function choosePattern(id: string) {
 }
 
 // The Patterns dice: a new pattern from random choices (src/lib/patterns/random.ts), applied
-// like a built-in one. Nothing lights up; undo goes back to the pattern before.
-function rollRandomPattern() {
-	applyPattern(projectState, randomPattern(), { min: MIN_PAD_HZ, max: MAX_PAD_HZ });
+// like a built-in one, and waiting for the bar the same way. Nothing lights up; undo goes back
+// to the pattern before.
+function rollRandomPattern(now = false) {
+	const pattern = randomPattern();
 	trackEvent('pattern_random');
+	atNextBar('pattern', 'random', () => applyPattern(projectState, pattern, { min: MIN_PAD_HZ, max: MAX_PAD_HZ }), now);
 }
+
+// BAR QUEUE START
+// While playing, a key clicked in the Melody Maker and a pattern (a Pattern preset or its dice)
+// wait for the next bar's step 1, as a hardware sequencer queues a pattern change, so the bar
+// that's playing finishes as it was. The key or button blinks meanwhile (queuedKey,
+// queuedPattern). The engine calls runQueued() just before it builds step 1 (onBarStart), so
+// the bar starts with the new pitches. Stopped, or with Shift+click, a change happens at once.
+// One waiting change per kind: a new one replaces it. Stop applies what's waiting; undo, redo,
+// opening a project and File → New throw it away. Each change is one undo step, as before.
+type QueueKind = 'key' | 'pattern';
+const queued = shallowRef<{ kind: QueueKind; id: string; run: () => void }[]>([]);
+const queuedKey = computed(() => queued.value.find(q => q.kind === 'key')?.id ?? null);
+const queuedPattern = computed(() => queued.value.find(q => q.kind === 'pattern')?.id ?? null);
+
+function atNextBar(kind: QueueKind, id: string, run: () => void, now = false) {
+	cancelQueued(kind);
+	if (now || !isPlaying.value) run();
+	else queued.value = [...queued.value, { kind, id, run }];
+}
+function cancelQueued(kind?: QueueKind) {
+	queued.value = kind ? queued.value.filter(q => q.kind !== kind) : [];
+}
+// In the order they were asked for (a key, then a pattern from the new key)
+function runQueued() {
+	const due = queued.value;
+	if (!due.length) return;
+	queued.value = [];
+	for (const q of due) q.run();
+}
+// BAR QUEUE END
 
 // PRESETS END
 
@@ -2957,7 +3016,7 @@ const SCALE_LABELS: Record<string, string> = {
 const phoneCtx = reactive({
 	inst: synthInstrument,
 	currentStep, isPlaying, tempo, canUndo,
-	presets: PRESETS, patterns: PATTERNS, activePresetId, activePatternId,
+	presets: PRESETS, patterns: PATTERNS, activePresetId, activePatternId, queuedPattern,
 	keyRoot: computed(() => melodyUi.keyRoot),
 	keyScale: computed(() => melodyUi.keyScale),
 	keyScaleLabel: computed(() => SCALE_LABELS[melodyUi.keyScale] ?? melodyUi.keyScale),

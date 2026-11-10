@@ -91,6 +91,9 @@ export type LiveEngineSettings = {
 	};
 	drive: { enabled: R<boolean>; type: R<string>; amount: R<number>; tone: R<number>; mix: R<number>; crush: R<boolean> };
 	reverb: { enabled: R<boolean>; mix: R<number>; decay: R<number>; tone: R<number> };
+	// Called just before a bar's first step is built (about 100 ms before it sounds), so a
+	// change waiting for the bar (DrumSequencer's BAR QUEUE) is applied in time for it
+	onBarStart?: () => void;
 };
 
 export function useLiveEngine(s: LiveEngineSettings) {
@@ -874,6 +877,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		}
 
 		while (startTime < now + SCHEDULE_AHEAD_S) {
+			if (stepIndex === 0) s.onBarStart?.();
 			lanes.value.forEach(inst => {
 				if (!inst.muted && inst.steps[stepIndex]) {
 					const vel = inst.velocities[stepIndex] ?? 1;

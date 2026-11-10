@@ -2994,6 +2994,109 @@ test('Melody Maker: clicking a key moves the pattern there, the shorter way, pla
 	expect(await padNotes(page, on)).toEqual(['C4', 'C4', 'C4', 'C4']);
 });
 
+test('while playing, a key or pattern waits for the next bar (blinking), Shift+click is at once, Stop applies it, Undo drops it', async ({ page }) => {
+	// Pad 1 only: a note at each bar's start (120 BPM: a step is 0.125 s, a bar 2 s)
+	await turnOnPads(page, [0]);
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	// The first bar's step 1 (an oscillator started "now", at 0, isn't a note)
+	await expect.poll(() => page.evaluate(() => (window as any).__starts.some((s: any) => s.osc && s.when > 0))).toBe(true);
+	const t0 = await page.evaluate(() => (window as any).__starts.find((s: any) => s.osc && s.when > 0).when as number);
+	const BAR = 2, STEP = 0.125;
+	const ctxTime = () => page.evaluate(() => (window as any).__ctx.currentTime as number);
+	// Waits (in the page, every few ms) until pad 1's label or the lit pattern changes; the time then
+	const changeTime = () => page.evaluate(() => new Promise<number>((resolve) => {
+		const read = () => document.querySelector('.pad-row .padTEST')!.getAttribute('aria-label') + '|' +
+			[...document.querySelectorAll('.preset-grid .pt-btn[aria-pressed="true"]')].map((b) => b.textContent).join();
+		const was = read();
+		const id = setInterval(() => {
+			if (read() !== was) { clearInterval(id); resolve((window as any).__ctx.currentTime); }
+		}, 3);
+	}));
+	// The next bar's start after the context time t
+	const nextBar = (t: number) => t0 + Math.ceil((t - t0) / BAR + 1e-6) * BAR;
+	// Wait until a quarter of the way into a bar
+	const intoBar = async () => {
+		const t = await ctxTime();
+		const target = nextBar(t) + BAR / 4;
+		await page.waitForTimeout((target - t) * 1000);
+	};
+
+	// A key: it blinks, nothing moves and nothing sounds until the next bar's step 1
+	await intoBar();
+	const clickedAt = await ctxTime();
+	const notesBefore = await notesPlayed(page);
+	const changed = changeTime();
+	await keyButton(page, 'C').click();
+	await expect(keyButton(page, 'C')).toHaveClass(/is-queued/);
+	await expect(keyButton(page, 'A')).toHaveAttribute('aria-checked', 'true');
+	expect(await padNotes(page, [0])).toEqual(['A3']);
+	const at = await changed;
+	const bar = nextBar(clickedAt);
+	// Built just before the bar (the scheduler looks 100 ms ahead), not before the bar started
+	expect(at).toBeGreaterThan(bar - 0.25);
+	expect(at).toBeLessThan(bar + 0.05);
+	expect(await padNotes(page, [0])).toEqual(['C4']);
+	await expect(keyButton(page, 'C')).toHaveAttribute('aria-checked', 'true');
+	await expect(keyButton(page, 'C')).not.toHaveClass(/is-queued/);
+	// No audition note: the only notes since the click are the new bar's
+	const since = await page.evaluate((n) => (window as any).__starts.filter((s: any) => s.osc).slice(n).map((s: any) => s.when) as number[], notesBefore);
+	for (const when of since) expect(when).toBeGreaterThan(bar - 0.01);
+
+	// A pattern: its button blinks, the bar plays out as it was, the next one starts with it
+	await intoBar();
+	const patternAt = await ctxTime();
+	const startsFrom = await notesPlayed(page);
+	const patternChanged = changeTime();
+	const tresillo = patternsBox(page).getByRole('button', { name: 'Tresillo', exact: true });
+	await tresillo.click();
+	await expect(tresillo).toHaveClass(/is-queued/);
+	await expect(tresillo).toHaveAttribute('aria-pressed', 'false');
+	const pAt = await patternChanged;
+	const pBar = nextBar(patternAt);
+	expect(pAt).toBeGreaterThan(pBar - 0.25);
+	expect(pAt).toBeLessThan(pBar + 0.05);
+	await expect(tresillo).toHaveAttribute('aria-pressed', 'true');
+	await expect(tresillo).not.toHaveClass(/is-queued/);
+	await page.waitForTimeout(800);
+	const starts = await page.evaluate((n) => (window as any).__starts.filter((s: any) => s.osc).slice(n).map((s: any) => s.when) as number[], startsFrom);
+	// Before the bar, only step 1's note (none: it was before the click); then 3-3-2: step 4 too
+	expect(starts.filter((w) => w < pBar - 0.01)).toEqual([]);
+	expect(starts.some((w) => Math.abs(w - (pBar + 3 * STEP)) < 0.01)).toBe(true);
+
+	// The dice blinks too; Shift+click doesn't wait
+	await intoBar();
+	await patternsBox(page).getByRole('button', { name: 'Random pattern' }).click();
+	await expect(patternsBox(page).getByRole('button', { name: 'Random pattern' })).toHaveClass(/is-queued/);
+	await keyButton(page, 'E').click({ modifiers: ['Shift'] });
+	await expect(keyButton(page, 'E')).toHaveAttribute('aria-checked', 'true'); // at once
+	await expect(keyButton(page, 'E')).not.toHaveClass(/is-queued/);
+	await expect(patternsBox(page).getByRole('button', { name: 'Random pattern' })).not.toHaveClass(/is-queued/, { timeout: 3000 });
+
+	// Undo throws away what was waiting: the bar comes and nothing changes
+	await intoBar();
+	const offbeat = patternsBox(page).getByRole('button', { name: 'Offbeat', exact: true });
+	await offbeat.click();
+	await expect(offbeat).toHaveClass(/is-queued/);
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('Control+z');
+	await expect(offbeat).not.toHaveClass(/is-queued/);
+	await page.waitForTimeout(BAR * 1000);
+	await expect(offbeat).toHaveAttribute('aria-pressed', 'false');
+
+	// Stop: what was waiting happens at once
+	await offbeat.click();
+	await expect(offbeat).toHaveClass(/is-queued/);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await expect(offbeat).toHaveAttribute('aria-pressed', 'true');
+	await expect(offbeat).not.toHaveClass(/is-queued/);
+
+	// Stopped, a key moves at once and plays, as before
+	const quiet = await notesPlayed(page);
+	await keyButton(page, 'G').click();
+	await expect(keyButton(page, 'G')).toHaveAttribute('aria-checked', 'true');
+	await expect.poll(() => notesPlayed(page)).toBeGreaterThan(quiet);
+});
+
 test('Melody Maker: a new scale keeps each note on its degree; a project opening keeps its notes', async ({ page }) => {
 	const on = [0, 1, 2, 3, 4, 5, 6, 7];
 	await turnOnPads(page, on);
@@ -3192,6 +3295,19 @@ test.describe('Phone mode', () => {
 		await page.getByRole('button', { name: 'All patterns' }).click();
 		await page.getByRole('dialog', { name: 'Patterns' }).getByRole('button', { name: PATTERNS[3].label }).click();
 		await expect(page.getByRole('button', { name: 'All patterns' })).toContainText(PATTERNS[3].label);
+
+		// While playing, the next pattern waits for the bar: the stepper shows it, blinking, and
+		// steps on from it; then the pads follow
+		const before = await phonePads(page).evaluateAll((els) => els.map((e) => e.getAttribute('aria-pressed')).join());
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		await page.getByRole('button', { name: 'Next pattern' }).click();
+		await page.getByRole('button', { name: 'Next pattern' }).click();
+		const name = page.getByRole('button', { name: 'All patterns' });
+		await expect(name).toContainText(PATTERNS[5].label);
+		await expect(name).toHaveClass(/is-queued/);
+		expect(await phonePads(page).evaluateAll((els) => els.map((e) => e.getAttribute('aria-pressed')).join())).toBe(before);
+		await expect(name).not.toHaveClass(/is-queued/, { timeout: 3000 });
+		await expect(name).toContainText(PATTERNS[5].label);
 	});
 
 	test('the four knobs turn the desktop settings: Tone is Cutoff, Space turns the reverb on', async ({ page }) => {
