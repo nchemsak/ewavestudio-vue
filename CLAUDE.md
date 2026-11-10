@@ -268,6 +268,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   the next 100 ms (`SCHEDULE_AHEAD_S`), using `audioCtx.currentTime`. If the clock falls more
   than a step behind (computer asleep, page busy), it skips ahead instead of playing every
   missed step at once. Swing delays every second step (steps 2, 4, 6, ... counting from 1).
+  Just before it builds a bar's step 1 it calls `onBarStart` (see "Changes at the bar").
 - `playSynthNote()` builds a new set of nodes for every note (oscillator per unison voice,
   biquad filter, panner, FM modulator, noise buffer sources, envelope gain). Pitch envelope and
   FM come from `src/audio/pitchEnv.ts` and `src/audio/fm.ts`.
@@ -481,7 +482,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   when that fits, else that pad moves an octave. Then the key plays: its root in the octave
   nearest the pattern (`nearestRootHz()` of `patternCenterHz()`), with the synth lane's sound,
   not while the lane is muted (`auditionNote()` in `DrumSequencer.vue`; the click lets audio
-  start). People click the keyboard expecting a sound.
+  start). People click the keyboard expecting a sound. While playing, the key waits for the
+  next bar instead (see "Changes at the bar"), and doesn't play (it would clash with the old
+  key still playing); the key it's in already plays at once.
 - Picking a scale moves each pad to the same degree of the new scale when both have as many
   notes (minor → major: the 3rd, 6th and 7th go up a semitone), otherwise to the nearest note
   of the new scale, the lower when two are as near (`remapScale()`). From "None", every pad
@@ -504,6 +507,29 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   at every width (`openAdvanced()` measures it). Before PR 51 it was kept inside only under
   720 px and opened off the right edge and the bottom on a laptop. Its "Undo last melody" was
   removed in PR 51: Undo (Ctrl+Z) does it.
+
+### Changes at the bar
+- PR 55. While playing, a key clicked in the Melody Maker and a pattern (a Pattern preset, its
+  dice, the phone's Pattern stepper) wait for the next bar's step 1, as a hardware sequencer
+  queues a pattern change, so the bar that's playing finishes as it was. Stopped, they happen
+  at once, as before. Shift+click: at once while playing too.
+- The `BAR QUEUE` section of `DrumSequencer.vue`: `atNextBar(kind, id, run, now)` keeps one
+  waiting change per kind (`key`, `pattern`; a new one replaces it), and `runQueued()` applies
+  them in the order asked (a key, then a pattern built from the new key). The live engine calls
+  it through `onBarStart` just before it builds a bar's step 1 (`schedule()`, about 100 ms
+  before it sounds), so the bar starts with the new pitches. Each change is one undo step.
+- What's waiting blinks (`.is-queued` in `_general.scss`: an accent ring, on and off every
+  quarter second; a steady dashed ring with `prefers-reduced-motion`): the key
+  (`MelodyMaker`'s `queuedKey`), the pattern's button or the dice (`PresetButtons`' `queued`),
+  the phone's Pattern stepper, which shows the waiting pattern and steps on from it. The key
+  lights (`aria-checked`) once the pads have moved: `MelodyMaker` follows `melodyUi.keyRoot`
+  instead of lighting the key it emitted.
+- Stop applies what's waiting (`onPlayClick`). Undo, redo, opening a project and File → New
+  throw it away (`cancelQueued()`). Clicking the key the pattern is in drops a waiting key.
+- Not waiting for the bar (yet): a scale picked, Generate, Pattern Tools, the Sounds (a sound
+  changes at once, as turning a knob does).
+- A browser test plays a bar and checks a key and a pattern change just before the next bar's
+  step 1 (not during the bar, no audition note), Shift+click, the dice, Undo and Stop.
 
 ### Install as an app (PWA)
 - In Chrome and Edge, the address bar's install button or File → Install app… (shown while
@@ -617,6 +643,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (`holdScreen`/`onScreenKnobEnd` in `DrumSequencer.vue`); a view picked meanwhile stays.
 - Under 1200 px, the Sound / Effects / Compose tabs are one Tab stop: Left/Right (Home/End)
   move between them (`onTabKeydown` in `DrumSequencer.vue`).
+- Shift+click on a Melody Maker key, a Pattern preset or its dice: at once, without waiting
+  for the bar while playing (see "Changes at the bar").
 - Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers, and ends MIDI
   learn mode (where Enter arms the focused knob and Delete unlinks it).
 - Ctrl/Cmd+Z: undo; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: redo (same handler as Space). Ignored in
@@ -681,7 +709,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   velocity and one hit. The built-in ones (`library.ts`, names and notes a first try, to be
   changed once heard; **Tresillo**, 3-3-2 twice, replaced Pulse in PR 51: Pulse's hit on every
   beat was Pattern Tools' Every 4 again) use only the root, its fifth and octaves (0, 7, 12, −5), which are in
-  every scale the Melody Maker offers. A click is one undo step, and the button of the
+  every scale the Melody Maker offers. While playing, a pattern (and the dice's) waits for the
+  next bar, its button blinking (see "Changes at the bar"). A click is one undo step, and the button of the
   pattern the lane matches is lit, the same way as a sound's (`patternKey()`). File → New
   still starts with no steps on (the maintainer's call, for now).
 - The Patterns dice rolls a random pattern (`randomPattern()` in `src/lib/patterns/random.ts`),
@@ -1012,17 +1041,11 @@ drum lanes back.
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
 
-Items 1–6 come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
+Items 1–5 (and PR 55's bar queue) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-1. **Key and pattern changes wait for the bar.** While playing, a key clicked in the Melody
-   Maker (and a Pattern preset or its dice) blinks until the next bar's step 1, then lights
-   and the pattern moves, as hardware queues a pattern change; stopped, it changes at once.
-   Maybe Shift+click for at once while playing. The key's audition note would clash with the
-   old key still playing: play it on the downbeat, or not while playing. Done in the engine,
-   since the scheduler reads the pitches 100 ms ahead. One undo step, as now.
-2. **Arpeggio fixes** (`bakeArp()` in `MelodyMaker.vue`):
+1. **Arpeggio fixes** (`bakeArp()` in `MelodyMaker.vue`):
    - Rate doesn't play at its rate: 1/4 gives four steps in a row one pitch, and every step
      that's on still plays. Make it place the notes (a real 1/4 arpeggio), or rename it.
    - Fit to the bar: a 1-octave chord is 3 notes, and 3 doesn't divide 16, so the cycle ends
@@ -1034,22 +1057,22 @@ target, and for now a second oscillator and a second pad lane, on hold below).
      stays `random`, so projects don't change.
    - Later, its own PR: arpeggiated repeats, a ×2–×4 step stepping through the chord within
      the step (each repeat its own pitch, in both engines), as a choice in the pad's Repeats.
-3. **Velocity without the pop-up:** the "Vel →" panel's four amounts become mini "VEL" knobs on
+2. **Velocity without the pop-up:** the "Vel →" panel's four amounts become mini "VEL" knobs on
    the cards they change (Envelope's Decay, Pitch's Amount, Filter's Cutoff, Noise's mix), so
    they sit beside what they change and MIDI learn can link them. Mockup first: Envelope,
    Pitch and Filter's knob row is full. Fallback: one small Velocity card in Sound.
-4. **File → Save as…** (or Duplicate): a new project under a new name, the original left as it
+3. **File → Save as…** (or Duplicate): a new project under a new name, the original left as it
    was. Renaming stays a rename (a typo fixed shouldn't leave copies). Maybe, on Save after a
    rename of a saved project, ask: rename it, or save as a new project?
-5. **LFO:** wire up Retrigger (`lfoRetrigger` is saved and in the export's state, but the live
+4. **LFO:** wire up Retrigger (`lfoRetrigger` is saved and in the export's state, but the live
    engine never reads it): the LFO starts over on each note, which is what makes an LFO useful
    on drums. And more targets: level (tremolo) and FM amount (not pan, the maintainer's call).
    One LFO; a second waits for patch cables.
-6. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
+5. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
    dice) that presses in; a switch with an LED over the chosen option (Random | Arpeggio, the
    rates); a toggle with an LED (FM, Unison, CRUSH). Mockups first (2–3), then one PR with
    before/after screenshots in every theme.
-7. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+6. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1224,6 +1247,7 @@ Done:
 | 52 | Unison: Voices 2–4 (one voice sounded as off; six measured narrower than three; a project saved with 1 opens with unison off, 5–6 as 4), a notch at 12 cents on Detune, and Spread 100 % by default. The voices start at different points of their cycle, more with more Spread (`src/audio/unison.ts`; the shapes rebuilt from the spec's series in `waves.ts`), so a hit is wide from its first moment: its first 50 ms measured side/mid 0.35 → 0.87 at full Spread, for 0.9 dB of level; Spread 0 plays as before. |
 | 53 | The plan after the maintainer's brainstorm following PR 52: bar-quantized key and pattern changes, arpeggio fixes (Generate's Random to become Melody), velocity knobs instead of the Vel → pop-up, Save as…, LFO retrigger and targets, hardware buttons; ESLint, a second oscillator and a second pad lane on hold. |
 | 54 | Fix: the Sounds dice could roll a nearly silent sound (a big upward pitch sweep falling slowly onto a low Cutoff), which failed PR 53's browser checks (a peak of 0.039); such a sweep now falls back within 30 % of Decay (3 % of rolls change). The dice's browser test rolls the same seeded sounds every run. |
+| 55 | Key and pattern changes wait for the bar: while playing, a Melody Maker key, a Pattern preset, its dice or the phone's Pattern stepper blinks until the next bar's step 1, then the pattern moves (the engine's `onBarStart`, just before it builds the step); stopped, at once, as before; Shift+click, at once; Stop applies it, Undo drops it; no audition note while playing. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

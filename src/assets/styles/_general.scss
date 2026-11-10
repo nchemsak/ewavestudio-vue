@@ -119,3 +119,25 @@ html.phone-mode body {
     overscroll-behavior: none;
     height: 100%;
 }
+
+/* A change waiting for the next bar while playing (DrumSequencer's BAR QUEUE: a Melody Maker
+   key, a Pattern preset or its dice, the phone's Pattern stepper): it blinks until the bar
+   starts, as a hardware sequencer's queued pattern does. With reduced motion, a steady dashed
+   ring instead. */
+@keyframes queued-blink {
+    0%, 100% { outline-color: hsl(var(--pt-accent) 90% 62%); }
+    50% { outline-color: transparent; }
+}
+
+.is-queued {
+    outline: 2px solid hsl(var(--pt-accent) 90% 62%);
+    outline-offset: 2px;
+    animation: queued-blink .5s steps(1, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .is-queued {
+        animation: none;
+        outline-style: dashed;
+    }
+}

@@ -8,16 +8,17 @@
                     <div class="mm-kb" role="radiogroup" :aria-labelledby="'mm-key-label'">
                         <div v-for="k in NATURALS" :key="k.n" class="kb-cell" :class="{ 'has-sharp': k.hasSharp }">
                             <!-- White key -->
-                            <button type="button" class="kb-white" :class="{ 'is-active': keyRoot === k.n }"
-                                role="radio" :aria-checked="keyRoot === k.n ? 'true' : 'false'" @click="chooseKey(k.n)"
+                            <button type="button" class="kb-white"
+                                :class="{ 'is-active': keyRoot === k.n, 'is-queued': queuedKey === k.n }"
+                                role="radio" :aria-checked="keyRoot === k.n ? 'true' : 'false'" @click="chooseKey(k.n, $event)"
                                 :title="keyTitle(k.n)">
                                 <span class="wlabel">{{ k.n }}</span>
                             </button>
 
                             <!-- Black key -->
                             <button v-if="k.hasSharp && k.sharp" type="button" class="kb-black"
-                                :class="{ 'is-active': keyRoot === k.sharp }" role="radio"
-                                :aria-checked="keyRoot === k.sharp ? 'true' : 'false'" @click="chooseKey(k.sharp)"
+                                :class="{ 'is-active': keyRoot === k.sharp, 'is-queued': queuedKey === k.sharp }" role="radio"
+                                :aria-checked="keyRoot === k.sharp ? 'true' : 'false'" @click="chooseKey(k.sharp, $event)"
                                 :title="keyTitle(k.sharp)">
                                 <span class="blabel">{{ k.sharp }}</span>
                             </button>
@@ -165,6 +166,8 @@ const props = defineProps<{
     initialArpOctaves?: 1 | 2 | 3;
     initialArpTones?: 'chord' | 'scale';
     initialMode?: 'random' | 'arp';
+    // A key clicked while playing waits for the next bar (DrumSequencer's BAR QUEUE) and blinks
+    queuedKey?: string | null;
 }>();
 
 /*  Defaults  */
@@ -194,7 +197,7 @@ const emit = defineEmits<{
     (e: 'arp-tones-change', v: 'chord' | 'scale'): void;
     (e: 'mode-change', v: 'random' | 'arp'): void;
     // Someone picked a key or a scale (not a project loading): the pads follow it
-    (e: 'key-chosen', root: RootNote): void;
+    (e: 'key-chosen', root: RootNote, now: boolean): void; // now: Shift+click, don't wait for the bar
     (e: 'scale-chosen', change: { from: KeyScale; to: KeyScale }): void;
 }>();
 
@@ -390,11 +393,12 @@ watch(
 );
 
 // A key or scale picked here: the parent moves the pads (key-chosen, scale-chosen) and plays
-// the key; a project loading sets keyRoot and keyScale through the initial-* props instead
-function chooseKey(root: RootNote | undefined) {
+// the key; a project loading sets keyRoot and keyScale through the initial-* props instead.
+// The key lights once the parent has moved to it (initialKeyRoot): while playing, at the next
+// bar (it blinks until then, queuedKey), or at once with Shift+click
+function chooseKey(root: RootNote | undefined, e?: MouseEvent) {
     if (!root) return;
-    emit('key-chosen', root);
-    keyRoot.value = root;
+    emit('key-chosen', root, !!e?.shiftKey);
 }
 function chooseScale(v: string | number) {
     const to = v as KeyScale;
@@ -404,7 +408,9 @@ function chooseScale(v: string | number) {
 }
 const keyTitle = (root: string) => (root === keyRoot.value
     ? `${root}: the key now (click to hear it)`
-    : `Key of ${root}: moves the pattern to ${root}, and plays it`);
+    : root === props.queuedKey
+        ? `Key of ${root}: the pattern moves at the next bar (Shift+click: now)`
+        : `Key of ${root}: moves the pattern to ${root} (while playing, at the next bar; Shift+click: now)`);
 
 // What Generate makes, saved with the project like the arpeggio's settings
 const mode = ref<'random' | 'arp'>(props.initialMode ?? 'random');
