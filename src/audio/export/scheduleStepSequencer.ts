@@ -16,6 +16,8 @@ import { routeVelocity, routedCutoff, routedSemitones, routedNoise, type Velocit
 import { startFM } from "../fm";
 import { generateReverbIR } from "../reverb/generateIr";
 import { cutNoteEnd, ratchetHits, stepSpan } from "../ratchet";
+import { createCrusher } from "../crusher";
+import { createPingPong } from "../pingPong";
 
 export type StepSequencerState = {
 	bpm: number;
@@ -83,6 +85,7 @@ export type StepSequencerState = {
 			toneEnabled: boolean;
 			toneHz: number;
 			toneType: "lowpass" | "highpass" | "allpass";
+			pingPong?: boolean; // echoes alternate left and right (missing: off)
 		};
 		drive: {
 			enabled: boolean;
@@ -90,6 +93,7 @@ export type StepSequencerState = {
 			amount: number;   // 0..1
 			tone: number;     // Hz
 			mix: number;      // 0..1
+			crush?: boolean;  // bit crusher in the driven path (missing: off); load it first (loadCrusher)
 		};
 		reverb: {
 			enabled: boolean;
@@ -291,8 +295,12 @@ export function scheduleStepSequencer(
 	const driveMakeup = ctx.createGain();
 	const driveSum = ctx.createGain();
 
+	// CRUSH: shaper → tone → bit crusher → makeup (crusher.ts). The caller loads the crusher's
+	// worklet into ctx first (loadCrusher); without it the tone filter goes straight on.
 	driveShaper.connect(driveToneFilter);
-	driveToneFilter.connect(driveMakeup);
+	const crusher = driveEnabled && drive.crush ? createCrusher(ctx, clamp01(drive.amount)) : null;
+	if (crusher) driveToneFilter.connect(crusher).connect(driveMakeup);
+	else driveToneFilter.connect(driveMakeup);
 	driveMakeup.connect(driveWet);
 
 	driveDry.connect(driveSum);
@@ -356,9 +364,21 @@ export function scheduleStepSequencer(
 	fbTone.frequency.value = toneHz;
 	wetTone.frequency.value = toneHz;
 
-	// drive → delay
+	// drive → delay: the plain one, or the ping-pong (pingPong.ts)
 	driveSum.connect(delayDry);
-	driveSum.connect(delayNode);
+	if (delay.pingPong) {
+		const pp = createPingPong(ctx);
+		for (const d of pp.delays) d.delayTime.value = delayTime;
+		for (const g of pp.feedback) g.gain.value = feedbackGain.gain.value;
+		for (const f of pp.tones) {
+			f.type = delayToneType;
+			f.frequency.value = toneHz;
+		}
+		pp.output.connect(delayWet);
+		driveSum.connect(pp.input);
+	} else {
+		driveSum.connect(delayNode);
+	}
 
 	// -------------------------------------------------------------------------
 	// FX: Reverb

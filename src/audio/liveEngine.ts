@@ -3,9 +3,9 @@
 // voices and the step sequencer clock. DrumSequencer.vue owns the settings (as refs) and
 // passes them in; the engine only reads them, and follows changes with watchers.
 //
-// Graph: per-note synth voices → drive (dry + shaper → driveSum). From driveSum two paths run
-// in parallel: delay (dry + wet, feedback loop with tone filters) and a reverb send (tone
-// filter → convolver → wet gain). Both go to masterGain → destination. The analyser for the
+// Graph: per-note synth voices → drive (dry + shaper → tone, optionally through the bit
+// crusher, → driveSum). From driveSum two paths run in parallel: delay (dry + wet, feedback loop with
+// tone filters; plain or ping-pong) and a reverb send (tone filter → convolver → wet gain). Both go to masterGain → destination. The analyser for the
 // screen views is tapped from masterGain. The noise layer and the sample lanes go straight
 // to masterGain, so they bypass drive, delay and reverb.
 //
@@ -24,6 +24,8 @@ import { startFM } from './fm';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
 import { cutNoteEnd, ratchetHits, stepSpan } from './ratchet';
+import { createCrusher, loadCrusher, setCrusher } from './crusher';
+import { createPingPong } from './pingPong';
 import {
 	divisionToHz,
 	generateDriveCurve,
@@ -84,8 +86,9 @@ export type LiveEngineSettings = {
 		toneEnabled: R<boolean>;
 		toneHz: R<number>;
 		toneType: R<'lowpass' | 'highpass'>;
+		pingPong: R<boolean>; // echoes alternate left and right (pingPong.ts)
 	};
-	drive: { enabled: R<boolean>; type: R<string>; amount: R<number>; tone: R<number>; mix: R<number> };
+	drive: { enabled: R<boolean>; type: R<string>; amount: R<number>; tone: R<number>; mix: R<number>; crush: R<boolean> };
 	reverb: { enabled: R<boolean>; mix: R<number>; decay: R<number>; tone: R<number> };
 };
 
@@ -165,15 +168,39 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	delayNode.connect(wetTone);
 	wetTone.connect(delayWet);
 
+	// The PING PONG switch picks which delay the sound goes into (a send each); echoes already
+	// in the other one ring out
+	const delayMonoSend = audioCtx.createGain();
+	delayMonoSend.connect(delayNode);
+	const pingPong = createPingPong(audioCtx);
+	pingPong.output.connect(delayWet);
+	for (const d of pingPong.delays) d.delayTime.setValueAtTime(delayTime.value, audioCtx.currentTime);
+	for (const g of pingPong.feedback) g.gain.value = delayFeedback.value;
+
+	function applyPingPong(on: boolean, now = false) {
+		const t = audioCtx.currentTime;
+		if (now) {
+			delayMonoSend.gain.setValueAtTime(on ? 0 : 1, t);
+			pingPong.input.gain.setValueAtTime(on ? 1 : 0, t);
+		} else {
+			delayMonoSend.gain.setTargetAtTime(on ? 0 : 1, t, 0.005);
+			pingPong.input.gain.setTargetAtTime(on ? 1 : 0, t, 0.005);
+		}
+	}
+	applyPingPong(s.delay.pingPong.value, true);
+	watch(s.delay.pingPong, on => applyPingPong(on));
+
 	watch(delayTime, val => {
 		const t = audioCtx.currentTime;
-		const current = delayNode.delayTime.value;
-		delayNode.delayTime.cancelScheduledValues(t);
-		delayNode.delayTime.setValueAtTime(current, t);
-		delayNode.delayTime.linearRampToValueAtTime(val, t + 0.03);
+		for (const d of [delayNode, ...pingPong.delays]) {
+			const current = d.delayTime.value;
+			d.delayTime.cancelScheduledValues(t);
+			d.delayTime.setValueAtTime(current, t);
+			d.delayTime.linearRampToValueAtTime(val, t + 0.03);
+		}
 	});
 	watch(delayFeedback, val => {
-		feedbackGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
+		for (const g of [feedbackGain, ...pingPong.feedback]) g.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
 	});
 	watch(delayMix, val => {
 		const t = audioCtx.currentTime;
@@ -192,13 +219,12 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			? (s.delay.toneType.value === 'highpass' ? 'highpass' : 'lowpass')
 			: 'allpass'; // click-free bypass
 
-		fbTone.type = type;
-		wetTone.type = type;
-
 		const targetHz = s.delay.toneEnabled.value ? s.delay.toneHz.value : 20000;
 		const t = audioCtx.currentTime;
-		fbTone.frequency.setTargetAtTime(targetHz, t, 0.02);
-		wetTone.frequency.setTargetAtTime(targetHz, t, 0.02);
+		for (const f of [fbTone, wetTone, ...pingPong.tones]) {
+			f.type = type;
+			f.frequency.setTargetAtTime(targetHz, t, 0.02);
+		}
 	}
 
 	watch([s.delay.toneEnabled, s.delay.toneType, s.delay.toneHz], applyDelayToneState);
@@ -212,7 +238,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// Drive START
 
-	const { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix } = s.drive;
+	const { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix, crush: driveCrush } = s.drive;
 
 	// Drive node chain
 	const driveShaper = audioCtx.createWaveShaper();
@@ -227,9 +253,32 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	const driveMakeup = audioCtx.createGain();
 	driveMakeup.gain.value = 1.0;
 
-	// connections inside Drive
+	// connections inside Drive. The CRUSH switch fades between the tone filter straight on and
+	// through the bit crusher (crusher.ts), which joins once its worklet has loaded.
+	const crushBypass = audioCtx.createGain();
+	const crushWet = audioCtx.createGain();
+	crushWet.gain.value = 0;
 	driveShaper.connect(driveToneFilter);
-	driveToneFilter.connect(driveMakeup);
+	driveToneFilter.connect(crushBypass).connect(driveMakeup);
+	crushWet.connect(driveMakeup);
+	let crusher: AudioWorkletNode | null = null;
+	function applyCrush() {
+		const on = driveCrush.value && !!crusher;
+		const t = audioCtx.currentTime;
+		crushBypass.gain.setTargetAtTime(on ? 0 : 1, t, 0.005);
+		crushWet.gain.setTargetAtTime(on ? 1 : 0, t, 0.005);
+	}
+	loadCrusher(audioCtx).then(ok => {
+		if (!ok) return;
+		crusher = createCrusher(audioCtx, driveAmount.value);
+		if (!crusher) return;
+		driveToneFilter.connect(crusher).connect(crushWet);
+		applyCrush();
+	});
+	watch(driveCrush, applyCrush);
+	watch(driveAmount, amount => {
+		if (crusher) setCrusher(crusher, audioCtx, amount);
+	});
 	driveMakeup.connect(driveWet);
 
 	// gains set by mix
@@ -242,7 +291,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// Now feed delay chain **from the sum** (same for all cases)
 	driveSum.connect(delayDry);
-	driveSum.connect(delayNode);
+	driveSum.connect(delayMonoSend);
+	driveSum.connect(pingPong.input);
 
 	watch([driveType, driveAmount], ([type, amount]) => {
 		driveShaper.curve = generateDriveCurve(type, amount);

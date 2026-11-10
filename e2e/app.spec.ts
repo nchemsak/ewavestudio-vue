@@ -43,8 +43,18 @@ function instrument() {
 				keepAlive.offset.value = 1e-6; // zero would count as silent too
 				(origConnect as any).call(keepAlive, w.__probe);
 				(origStart as any).call(keepAlive);
+				// And each channel on its own (ping-pong)
+				w.__split = this.context.createChannelSplitter(2);
+				w.__probeLR = [0, 1].map((ch) => {
+					const a = this.context.createAnalyser();
+					a.fftSize = 1024;
+					(origConnect as any).call(w.__split, a, ch);
+					(origConnect as any).call(keepAlive, a);
+					return a;
+				});
 			}
 			(origConnect as any).call(this, w.__probe);
+			(origConnect as any).call(this, w.__split);
 		}
 		return (origConnect as any).call(this, dest, ...rest);
 	};
@@ -58,6 +68,20 @@ function instrument() {
 			for (const x of buf) peak = Math.max(peak, Math.abs(x));
 		}, 15);
 		setTimeout(() => { clearInterval(id); resolve(peak); }, ms);
+	});
+	// The left and right peaks at the speakers, every 15 ms for the next `ms` milliseconds
+	w.__channelPeaksOver = (ms: number) => new Promise<number[][]>((resolve) => {
+		const bufs = [new Float32Array(1024), new Float32Array(1024)];
+		const out: number[][] = [];
+		const id = setInterval(() => {
+			out.push(w.__probeLR.map((a: AnalyserNode, i: number) => {
+				a.getFloatTimeDomainData(bufs[i]);
+				let peak = 0;
+				for (const x of bufs[i]) peak = Math.max(peak, Math.abs(x));
+				return peak;
+			}));
+		}, 15);
+		setTimeout(() => { clearInterval(id); resolve(out); }, ms);
 	});
 	// Peak-to-peak swing at the speakers during the next `ms` milliseconds. Unlike __peakOver it
 	// ignores a steady offset: the output carries a small constant one (about 0.004) from the
@@ -774,6 +798,188 @@ test('delay, drive and reverb are in the signal path', async ({ page }) => {
 	const driven = await page.evaluate(() => (window as any).__swingOver(600) as Promise<number>);
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
 	expect(driven).toBeGreaterThan(0.01);
+});
+
+// Imports the current project with `change` applied to its data (a fresh project id)
+async function importChanged(page: Page, id: string, change: (data: any) => void) {
+	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	project.projectId = id;
+	if (project.meta) project.meta.name = id;
+	project.data.meta = { ...project.data.meta, name: id };
+	change(project.data);
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: `${id}.json`, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)),
+	});
+	await expect(page.getByRole('textbox', { name: 'Project name' })).toHaveValue(id);
+}
+
+test('the pedals’ CRUSH and PING PONG switches: greyed out while the pedal is off, saved, one undo step', async ({ page }) => {
+	const projectFx = async () =>
+		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.fx;
+	const pingPong = page.getByRole('switch', { name: 'Ping-pong delay' });
+	const crush = page.getByRole('switch', { name: 'Bit crusher' });
+	await expect(pingPong).toHaveAttribute('aria-checked', 'false');
+	await expect(crush).toHaveAttribute('aria-checked', 'false');
+	await expect(pingPong).toBeDisabled();
+	await expect(crush).toBeDisabled();
+	await page.waitForTimeout(SETTLED); // the opened project becomes the starting point
+
+	await page.locator('.fx .footswitch').nth(0).click(); // delay on
+	await page.locator('.fx .footswitch').nth(1).click(); // overdrive on
+	await expect(pingPong).toBeEnabled();
+	await page.waitForTimeout(SETTLED);
+	await pingPong.click();
+	await page.waitForTimeout(SETTLED);
+	await crush.click();
+	await page.waitForTimeout(SETTLED);
+	await expect(pingPong).toHaveAttribute('aria-checked', 'true');
+	await expect(crush).toHaveAttribute('aria-checked', 'true');
+	const fx = await projectFx();
+	expect(fx.delay.pingPong).toBe(true);
+	expect(fx.drive.crush).toBe(true);
+
+	// Each click was its own change: undo takes back the crush, then the ping-pong
+	const undo = page.getByRole('button', { name: 'Undo', exact: true });
+	await undo.click();
+	await expect(crush).toHaveAttribute('aria-checked', 'false');
+	await expect(pingPong).toHaveAttribute('aria-checked', 'true');
+	await undo.click();
+	await expect(pingPong).toHaveAttribute('aria-checked', 'false');
+
+	// File → New turns them off
+	await pingPong.click();
+	await crush.click();
+	await chooseFromFileMenu(page, 'New');
+	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
+	await expect(pingPong).toHaveAttribute('aria-checked', 'false');
+	await expect(crush).toHaveAttribute('aria-checked', 'false');
+});
+
+test('ping-pong echoes alternate left and right, live and in the export', async ({ page }) => {
+	await turnOnPads(page, [0]);
+	// A short note, so the echoes stand alone: the first at 375 ms (dotted 1/8 at 120 BPM)
+	const setup = (pingPong: boolean) => (d: any) => {
+		d.synth.envelope.decayMs = 60;
+		d.synth.unison.enabled = false;
+		Object.assign(d.fx.delay, { enabled: true, mix: 0.5, feedback: 0.5, pingPong });
+	};
+	const echoes = async (pingPong: boolean) => {
+		await importChanged(page, `pp-${pingPong}`, setup(pingPong));
+		const wav = await exportWav(page);
+		const left = wavSamples(wav, 0), right = wavSamples(wav, 1);
+		let onset = 0;
+		while (Math.abs(left.samples[onset]) < 1e-4 && Math.abs(right.samples[onset]) < 1e-4) onset++;
+		const rms = (s: Float32Array, fromS: number) => {
+			const a = onset + Math.round(fromS * left.rate), b = a + Math.round(0.1 * left.rate);
+			let sq = 0;
+			for (let i = a; i < b; i++) sq += s[i] * s[i];
+			return Math.sqrt(sq / (b - a));
+		};
+		return [0.375, 0.75, 1.125].map(t => [rms(left.samples, t), rms(right.samples, t)]);
+	};
+
+	const plain = await echoes(false);
+	for (const [l, r] of plain) {
+		expect(l).toBeGreaterThan(0.001);
+		expect(r / l).toBeGreaterThan(0.9);
+		expect(r / l).toBeLessThan(1.1);
+	}
+	const pp = await echoes(true);
+	const [[l1, r1], [l2, r2], [l3, r3]] = pp;
+	expect(l1).toBeGreaterThan(0.001);
+	expect(r1).toBeLessThan(l1 * 0.01);  // first echo: left
+	expect(r2).toBeGreaterThan(0.0005);
+	expect(l2).toBeLessThan(r2 * 0.01);  // second: right
+	expect(r3).toBeLessThan(l3 * 0.01);  // third: left again
+	// As loud as the plain delay's echoes (in the one channel they play in)
+	expect(l1 / plain[0][0]).toBeGreaterThan(0.9);
+	expect(l1 / plain[0][0]).toBeLessThan(1.1);
+	expect(r2 / plain[1][1]).toBeGreaterThan(0.9);
+	expect(r2 / plain[1][1]).toBeLessThan(1.1);
+
+	// Live, with the delay's MIX at full (only the echoes): one hit, then echoes on one side at
+	// a time, left first; with the switch off, both sides at once
+	const liveEchoes = async () => {
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		await page.waitForTimeout(100);
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+		const peaks = await page.evaluate(() => (window as any).__channelPeaksOver(1300) as Promise<number[][]>);
+		await page.waitForTimeout(2500); // the echoes die away
+		// Echoes peak around 0.05–0.25; the speakers carry a small offset (about 0.006, see
+		// __swingOver) even in silence
+		const loud = peaks.filter(([l, r]) => Math.max(l, r) > 0.04);
+		const quiet = (x: number) => x < 0.015;
+		return {
+			left: loud.filter(([, r]) => quiet(r)).length,
+			right: loud.filter(([l]) => quiet(l)).length,
+			both: loud.filter(([l, r]) => l > 0.04 && r > 0.04).length,
+			firstLeft: loud.length > 0 && quiet(loud[0][1]),
+		};
+	};
+	await importChanged(page, 'pp-live', (d) => {
+		setup(true)(d);
+		d.fx.delay.mix = 1;
+	});
+	const live = await liveEchoes();
+	expect(live.left).toBeGreaterThan(0);
+	expect(live.right).toBeGreaterThan(0);
+	expect(live.both).toBe(0);
+	expect(live.firstLeft).toBe(true);
+	await page.getByRole('switch', { name: 'Ping-pong delay' }).click();
+	const liveOff = await liveEchoes();
+	expect(liveOff.both).toBeGreaterThan(1);
+	expect(liveOff.left + liveOff.right).toBe(0);
+});
+
+test('the bit crusher changes the driven sound, live and in the export, without clipping', async ({ page }) => {
+	await turnOnPads(page, [0, 4, 8, 12]);
+	const setup = (crush: boolean) => (d: any) => {
+		Object.assign(d.fx.drive, { enabled: true, amount: 1, mix: 1, tone: 10000, crush });
+	};
+	const exportWith = async (crush: boolean) => {
+		await importChanged(page, `crush-${crush}`, setup(crush));
+		return wavSamples(await exportWav(page)).samples;
+	};
+	const plain = await exportWith(false);
+	const crushed = await exportWith(true);
+	let diff = 0, sq = 0, peak = 0;
+	for (let i = 0; i < Math.min(plain.length, crushed.length); i++) {
+		diff += (plain[i] - crushed[i]) ** 2;
+		sq += plain[i] ** 2;
+	}
+	for (const x of crushed) peak = Math.max(peak, Math.abs(x));
+	expect(Math.sqrt(diff / sq)).toBeGreaterThan(0.1); // a different sound
+	expect(peak).toBeGreaterThan(0.1);                 // not silent
+	expect(peak).toBeLessThan(1.05);                   // not clipping
+
+	// Live: the crusher's worklet loads and the notes go through it. With MIX at full, only the
+	// crushed sound reaches the speakers: at full DRIVE, 4 bits, so at most 17 levels (−8..8 of
+	// 1/8, times the drive's makeup and the volume). Without it, every sample is new.
+	const levelsLive = async () => {
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		const r = await page.evaluate(() => new Promise<{ swing: number; levels: number }>((resolve) => {
+			const probe: AnalyserNode = (window as any).__probe;
+			const buf = new Float32Array(probe.fftSize);
+			const seen = new Set<number>();
+			let lo = Infinity, hi = -Infinity;
+			const id = setInterval(() => {
+				probe.getFloatTimeDomainData(buf);
+				for (const x of buf) { seen.add(Math.round(x * 1e4)); lo = Math.min(lo, x); hi = Math.max(hi, x); }
+			}, 15);
+			setTimeout(() => { clearInterval(id); resolve({ swing: hi - lo, levels: seen.size }); }, 800);
+		}));
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+		await page.waitForTimeout(500);
+		return r;
+	};
+	await expect(page.getByRole('switch', { name: 'Bit crusher' })).toHaveAttribute('aria-checked', 'true');
+	const live = await levelsLive();
+	expect(live.swing).toBeGreaterThan(0.1);
+	expect(live.swing).toBeLessThan(2 * 1.05);
+	expect(live.levels).toBeLessThanOrEqual(17);
+	await page.getByRole('switch', { name: 'Bit crusher' }).click();
+	await expect(page.getByRole('switch', { name: 'Bit crusher' })).toHaveAttribute('aria-checked', 'false');
+	expect((await levelsLive()).levels).toBeGreaterThan(100);
 });
 
 test('File → New gives the same settings as a freshly opened page', async ({ page }) => {

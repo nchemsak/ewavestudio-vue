@@ -59,10 +59,10 @@
 						:tempo="tempo" v-model:division="delayDivision" v-model:delayTime="delayTime"
 						v-model:delayFeedback="delayFeedback"
 						v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled"
-						v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" />
+						v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" v-model:pingPong="delayPingPong" />
 					<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" :driveType="'overdrive'"
 						v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
-						v-model:driveMix="driveMix" />
+						v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 					<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 						v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone" />
 				</div>
@@ -411,10 +411,10 @@
 									:tempo="tempo" v-model:division="delayDivision" v-model:delayTime="delayTime"
 									v-model:delayFeedback="delayFeedback"
 									v-model:delayMix="delayMix" v-model:toneEnabled="delayToneEnabled"
-									v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" />
+									v-model:toneHz="delayToneHz" v-model:toneType="delayToneType" v-model:pingPong="delayPingPong" />
 								<DriveEffect :showToggle="false" v-model:enabled="driveEnabled" :driveType="'overdrive'"
 									v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
-									v-model:driveMix="driveMix" />
+									v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 								<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 									v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone" />
 							</div>
@@ -1984,6 +1984,7 @@ const delayMix = ref(0.3);
 const delayToneHz = ref(5000);
 const delayToneEnabled = ref(true);
 const delayToneType = ref<'lowpass' | 'highpass'>('lowpass');
+const delayPingPong = ref(false); // the PING PONG switch: echoes alternate left and right
 followDelaySync({ tempo, division: delayDivision, sync: delaySync, time: delayTime });
 
 //Delay END
@@ -1997,6 +1998,7 @@ const driveType = ref('overdrive');
 const driveAmount = ref(0.4);
 const driveTone = ref(5000);
 const driveMix = ref(0.5);
+const driveCrush = ref(false); // the CRUSH switch: a bit crusher in the driven path
 
 //Drive END
 
@@ -2208,6 +2210,7 @@ const exportState = computed<StepSequencerState>(() => {
 				toneEnabled: delayToneEnabled.value,
 				toneHz: delayToneHz.value,
 				toneType: delayToneType.value,
+				pingPong: delayPingPong.value,
 			},
 			drive: {
 				enabled: driveEnabled.value,
@@ -2215,6 +2218,7 @@ const exportState = computed<StepSequencerState>(() => {
 				amount: driveAmount.value,
 				tone: driveTone.value,
 				mix: driveMix.value,
+				crush: driveCrush.value,
 			},
 			reverb: {
 				enabled: reverbEnabled.value,
@@ -2322,8 +2326,9 @@ const projectState: ProjectState = {
 			toneEnabled: delayToneEnabled,
 			toneHz: delayToneHz,
 			toneType: delayToneType,
+			pingPong: delayPingPong,
 		},
-		drive: { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix },
+		drive: { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix, crush: driveCrush },
 		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone },
 	},
 	instruments,

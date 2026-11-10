@@ -72,8 +72,9 @@ export function makeState(maxVoices = 6): ProjectState {
 			delay: {
 				enabled: ref(true), sync: ref(false), division: ref('1/64'), time: ref(1), feedback: ref(0.9), mix: ref(0.9),
 				toneEnabled: ref(false), toneHz: ref(1), toneType: ref('highpass'),
+				pingPong: ref(true),
 			},
-			drive: { enabled: ref(true), type: ref('fuzz'), amount: ref(0.9), tone: ref(1), mix: ref(0.9) },
+			drive: { enabled: ref(true), type: ref('fuzz'), amount: ref(0.9), tone: ref(1), mix: ref(0.9), crush: ref(true) },
 			reverb: { enabled: ref(true), mix: ref(0.9), decay: ref(5), tone: ref(0.1) },
 		},
 		instruments,
@@ -123,7 +124,8 @@ export function changeEverything(st: ProjectState) {
 	s.tuning.selectedKeyRoot.value = 'Eb'; s.tuning.globalOctaveOffset.value = -1;
 	fx.delay.enabled.value = true; fx.delay.sync.value = false; fx.delay.division.value = '1/4'; fx.delay.time.value = 0.5; fx.delay.feedback.value = 0.6;
 	fx.delay.mix.value = 0.4; fx.delay.toneEnabled.value = false; fx.delay.toneHz.value = 2000; fx.delay.toneType.value = 'highpass';
-	fx.drive.enabled.value = true; fx.drive.type.value = 'fuzz'; fx.drive.amount.value = 0.8; fx.drive.tone.value = 3000; fx.drive.mix.value = 0.7;
+	fx.delay.pingPong.value = true;
+	fx.drive.enabled.value = true; fx.drive.type.value = 'fuzz'; fx.drive.amount.value = 0.8; fx.drive.tone.value = 3000; fx.drive.mix.value = 0.7; fx.drive.crush.value = true;
 	fx.reverb.enabled.value = true; fx.reverb.mix.value = 0.5; fx.reverb.decay.value = 3; fx.reverb.tone.value = 0.2;
 	Object.assign(st.melody, {
 		keyRoot: 'D', keyScale: 'dorian', rangePreset: 'high', arpPattern: 'updown', arpRate: '1/8', arpOctaves: 2, arpTones: 'scale',

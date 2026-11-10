@@ -28,6 +28,9 @@
                         {{ Math.round(localTone) }} Hz
                     </span>
                 </div>
+
+                <PedalSwitch v-model="localCrush" label="CRUSH" aria-label="Bit crusher"
+                    title="Bit crusher: fewer bits and a lower sample rate in the driven sound; DRIVE sets how hard" :disabled="!localEnabled" />
             </div>
 
             <div class="panel-seam" aria-hidden="true"></div>
@@ -46,6 +49,7 @@
 import { ref, watch, onMounted } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
+import PedalSwitch from './PedalSwitch.vue';
 
 type DriveType = 'overdrive' | string;
 
@@ -56,6 +60,7 @@ const props = withDefaults(
         driveAmount?: number;
         driveTone?: number;
         driveMix?: number;
+        crush?: boolean; // the CRUSH switch (src/audio/crusher.ts)
         color?: string;
         showToggle?: boolean;
     }>(),
@@ -64,6 +69,7 @@ const props = withDefaults(
         driveAmount: 0.4,
         driveTone: 5000,
         driveMix: 0.5,
+        crush: false,
         color: '#FF4081',
         showToggle: true
     }
@@ -75,6 +81,7 @@ const emit = defineEmits<{
     (e: 'update:driveAmount', v: number): void;
     (e: 'update:driveTone', v: number): void;
     (e: 'update:driveMix', v: number): void;
+    (e: 'update:crush', v: boolean): void;
 }>();
 
 const localEnabled = ref<boolean>(props.enabled);
@@ -82,6 +89,7 @@ const localEnabled = ref<boolean>(props.enabled);
 const localAmount = ref<number>(props.driveAmount ?? 0.4);
 const localTone = ref<number>(props.driveTone ?? 5000);
 const localMix = ref<number>(props.driveMix ?? 0.5);
+const localCrush = ref<boolean>(!!props.crush);
 
 const activeKnob = ref<null | 'amount' | 'tone' | 'mix'>(null);
 
@@ -103,6 +111,12 @@ watch(
 
 /* Emits */
 watch(localEnabled, (v) => emit('update:enabled', v));
+watch(localCrush, (v) => {
+    if (v !== props.crush) emit('update:crush', v);
+});
+watch(() => props.crush, (v) => {
+    localCrush.value = !!v;
+});
 watch(localAmount, (v) =>
     emit('update:driveAmount', Math.max(0, Math.min(1, v)))
 );
