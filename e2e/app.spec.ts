@@ -181,8 +181,8 @@ const lateNotes = (page: Page, from: number) =>
 const pads = (page: Page) => page.locator('.pad-row .padTEST');
 const screenView = (page: Page) => page.locator('.fkey[aria-pressed="true"]');
 // The two preset boxes in the transport card
-const soundsBox = (page: Page) => page.getByRole('group', { name: 'Sounds', exact: true });
-const patternsBox = (page: Page) => page.getByRole('group', { name: 'Patterns', exact: true });
+const soundsBox = (page: Page) => page.getByRole('group', { name: 'Sound presets', exact: true });
+const patternsBox = (page: Page) => page.getByRole('group', { name: 'Pattern presets', exact: true });
 
 let problems: string[] = [];
 
@@ -2152,11 +2152,11 @@ test('patterns set the pattern from the key, never the sound, light up, are one 
 	// In another key, a pattern starts on that key's root
 	await page.waitForTimeout(SETTLED);
 	await keyButton(page, 'C').click();
-	await patternsBox(page).getByRole('button', { name: 'Pulse', exact: true }).click();
+	await patternsBox(page).getByRole('button', { name: 'Tresillo', exact: true }).click();
 	await page.waitForTimeout(SETTLED);
 	const inC = lane(await projectData());
 	const pc = (hz: number) => ((Math.round(69 + 12 * Math.log2(hz / 440)) % 12) + 12) % 12;
-	expect(inC.pitches.filter((_: number, i: number) => inC.steps[i]).map(pc), 'C, the root').toEqual([0, 0, 0, 0]);
+	expect(inC.pitches.filter((_: number, i: number) => inC.steps[i]).map(pc), 'C, the root (and G, its fifth)').toEqual([0, 0, 0, 0, 0, 7]);
 
 	// The dice: a new pattern each roll, the sound untouched, nothing lit, one undo step each
 	const dice = page.getByRole('button', { name: 'Random pattern', exact: true });
@@ -2174,7 +2174,7 @@ test('patterns set the pattern from the key, never the sound, light up, are one 
 	expect(seen.size).toBe(4);
 	await page.locator('body').click({ position: { x: 5, y: 5 } });
 	for (let i = 0; i < 3; i++) await page.keyboard.press('Control+z');
-	await expect(lit).toHaveText(['Pulse']);
+	await expect(lit).toHaveText(['Tresillo']);
 });
 
 test('dice rolls are never silent or clipping', async ({ page }) => {
@@ -2852,6 +2852,28 @@ async function chooseOption(page: Page, select: string, option: string) {
 	await page.getByRole('button', { name: select }).click();
 	await page.getByRole('option', { name: option, exact: true }).click();
 }
+
+test("Melody Maker: its ⋯ menu opens inside the window at every width, without Undo last melody", async ({ page }) => {
+	for (const width of [1600, 1280, 1024, 820, 390]) {
+		await page.setViewportSize({ width, height: 900 });
+		if (width < 1200) await page.getByRole('tab', { name: 'Compose' }).click();
+		const button = page.locator('.module.melody .pt-info-icon').first();
+		await button.scrollIntoViewIfNeeded();
+		await button.click();
+		const menu = page.locator('.melody-maker .mm-menu');
+		await expect(menu).toBeVisible();
+		await expect(menu).toContainText('Advanced Options');
+		await expect(menu).not.toContainText('Undo last melody'); // Undo (Ctrl+Z) does it
+		const box = (await menu.boundingBox())!;
+		const view = await page.evaluate(() => ({ w: document.documentElement.clientWidth, h: window.innerHeight }));
+		expect(box.x, `left edge at ${width} px`).toBeGreaterThanOrEqual(0);
+		expect(box.x + box.width, `right edge at ${width} px`).toBeLessThanOrEqual(view.w);
+		expect(box.y, `top at ${width} px`).toBeGreaterThanOrEqual(0);
+		expect(box.y + box.height, `bottom at ${width} px`).toBeLessThanOrEqual(view.h);
+		await page.keyboard.press('Escape');
+		await expect(menu).toHaveCount(0);
+	}
+});
 
 test('Melody Maker: clicking a key moves the pattern there, the shorter way, plays it, and is one undo step', async ({ page }) => {
 	const on = [0, 4, 8, 12];

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { applyPattern, noteHz, patternKey, PAD_RANGE } from './patterns';
+import { applyPattern, noteHz, patternKey, PAD_RANGE, type StepPattern } from './patterns';
 import { PATTERNS } from './library';
-import { randomPattern, RANDOM_NOTES } from './random';
+import { euclid, longestGap, MAX_GAP, randomPattern, RANDOM_NOTES } from './random';
 import { buildSnapshot } from '../project/snapshot';
 import { soundKey } from '../presets/presets';
 import { STEPS, fresh, asSaved, changeEverything } from '../project/testState';
@@ -98,14 +98,15 @@ describe('applyPattern', () => {
 
 describe('the random pattern (the dice)', () => {
 	const rolls = Array.from({ length: 500 }, (_, i) => randomPattern(seededRandom(i + 1)));
+	const shape = (p: StepPattern) => p.steps.map(s => (s ? 'x' : '.')).join('');
 
-	it('always plays step 1, with 4–9 hits, in key, on the slider\'s steps, 1–4 repeats', () => {
+	it('always plays step 1, with 4–13 hits, in key, on the slider\'s steps, 1–4 repeats', () => {
 		for (const p of rolls) {
 			expect(p.steps.length).toBe(16);
 			expect(p.steps[0]).not.toBeNull();
 			const hits = p.steps.filter(Boolean);
 			expect(hits.length).toBeGreaterThanOrEqual(4);
-			expect(hits.length).toBeLessThanOrEqual(9);
+			expect(hits.length).toBeLessThanOrEqual(13);
 			for (const s of hits) {
 				expect((RANDOM_NOTES as readonly number[]).includes(s!.note)).toBe(true);
 				expect(s!.vel).toBeGreaterThanOrEqual(0.45);
@@ -113,17 +114,47 @@ describe('the random pattern (the dice)', () => {
 				expect(Math.round(s!.vel * 100) / 100).toBe(s!.vel);
 				expect([1, 2, 3, 4]).toContain(s!.repeats);
 			}
-			// Rolls only off the beat
-			p.steps.forEach((s, i) => { if (s && s.repeats > 1) expect(i % 4).not.toBe(0); });
+			// Rolls only off the beat, and only in the last beat's fill
+			p.steps.forEach((s, i) => {
+				if (s && s.repeats > 1) {
+					expect(i % 4).not.toBe(0);
+					expect(i).toBeGreaterThanOrEqual(12);
+				}
+			});
 		}
 	});
 
+	it('spreads its hits: never more than four empty steps in a row, round the bar too', () => {
+		for (const p of rolls) expect(longestGap(p.steps.map(Boolean)), shape(p)).toBeLessThanOrEqual(MAX_GAP);
+		expect(longestGap([true, false, false, false, false, false, false, true, true, ...Array(7).fill(false)])).toBe(7);
+		expect(longestGap([false, true, false, false])).toBe(3); // round from the end to step 1
+	});
+
+	it('repeats an idea of one or two beats, notes and accents too, until the last beat', () => {
+		const repeats = (p: StepPattern, len: number) => p.steps.slice(0, 12).every((s, i) =>
+			JSON.stringify(s) === JSON.stringify(p.steps[i % len]));
+		const phrased = rolls.filter(p => repeats(p, 4) || repeats(p, 8));
+		// The rest are whole-bar ideas: hits spread as evenly as possible
+		expect(phrased.length).toBeGreaterThan(rolls.length * 0.75);
+		expect(phrased.length).toBeLessThan(rolls.length);
+		// About half change the last beat into a fill
+		const filled = phrased.filter(p => !p.steps.every((s, i) => JSON.stringify(s) === JSON.stringify(p.steps[i % 4]))
+			&& !p.steps.every((s, i) => JSON.stringify(s) === JSON.stringify(p.steps[i % 8])));
+		expect(filled.length).toBeGreaterThan(phrased.length * 0.3);
+		expect(filled.length).toBeLessThan(phrased.length * 0.7);
+	});
+
+	it('spreads a whole-bar idea as evenly as possible', () => {
+		expect(euclid(5, 16).map(b => (b ? 'x' : '.')).join('')).toBe('...x..x..x..x..x'); // gaps of 3, 2, 2, 2 and 2
+		expect(euclid(5, 16).filter(Boolean)).toHaveLength(5);
+		expect(longestGap(euclid(7, 16))).toBeLessThanOrEqual(2);
+	});
+
 	it('varies: different hits, notes and rolls', () => {
-		const shapes = new Set(rolls.map(p => p.steps.map(s => (s ? 'x' : '.')).join('')));
-		expect(shapes.size).toBeGreaterThan(300);
+		expect(new Set(rolls.map(shape)).size).toBeGreaterThan(60);
 		expect(rolls.filter(p => p.steps.some(s => s && s.note !== 0)).length).toBeGreaterThan(200);
-		expect(rolls.filter(p => p.steps.some(s => s && s.repeats > 1)).length).toBeGreaterThan(100);
-		expect(rolls.filter(p => p.steps.every(s => !s || s.repeats === 1)).length).toBeGreaterThan(100);
+		expect(rolls.filter(p => p.steps.some(s => s && s.repeats > 1)).length).toBeGreaterThan(80);
+		expect(rolls.filter(p => p.steps.every(s => !s || s.repeats === 1)).length).toBeGreaterThan(200);
 		// Beats are hit more often than the sixteenths between them
 		const count = (i: number) => rolls.filter(p => p.steps[i]).length;
 		expect(count(4)).toBeGreaterThan(count(5));

@@ -480,8 +480,12 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   no scale, the key's note in the range's octaves, which the note under the switch says). The
   arpeggio's Pattern, Rate, Octaves and Tones show only for Arpeggio. Random's note and the
   arpeggio's settings sit in one grid cell, the other hidden (`visibility`), so the card is
-  as tall in both modes and the module columns around it never move. The Advanced menu (⋯) is
-  unchanged.
+  as tall in both modes and the module columns around it never move.
+- The ⋯ menu (Advanced Options; its button is in the card's header, in `DrumSequencer.vue`)
+  opens beside the button, to its right if it fits, else to its left, and inside the window
+  at every width (`openAdvanced()` measures it). Before PR 51 it was kept inside only under
+  720 px and opened off the right edge and the bottom on a laptop. Its "Undo last melody" was
+  removed in PR 51: Undo (Ctrl+Z) does it.
 
 ### Install as an app (PWA)
 - In Chrome and Edge, the address bar's install button or File → Install app… (shown while
@@ -645,9 +649,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### Sounds and Patterns
 - Two boxes side by side in the transport card (`PresetButtons.vue`, used twice), each six
-  buttons three across with a dice in its top-right corner: **Sounds** (Kick, Snare, Metal /
-  Pluck, Acid, Bell; the presets below) and **Patterns** (Pulse, Offbeat, Gallop / Rolls,
-  Bassline, Broken). From 1200 px they sit between Swing and Play without making the card
+  buttons three across with a dice in its top-right corner: **Sound presets** (Kick, Snare,
+  Metal / Pluck, Acid, Bell; the presets below) and **Pattern presets** (Tresillo, Offbeat,
+  Gallop / Rolls, Bassline, Broken). Their captions were "Sounds" and "Patterns" until PR 51,
+  which didn't say they were presets. From 1200 px they sit between Swing and Play without making the card
   taller; narrower, they share a row of their own under the knobs; on phones one is under the
   other. Sounds were called Presets until PR 41; the code still calls them presets.
 - A pattern sets the synth lane's pattern only: which steps are on, their velocities, pitches
@@ -656,15 +661,23 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   pads' octave (`currentDefaultHz`: A3 by default), folded by octaves into the pads' 100–2000
   Hz (`applyPattern()` in `src/lib/patterns/patterns.ts`); off steps get the root, full
   velocity and one hit. The built-in ones (`library.ts`, names and notes a first try, to be
-  changed once heard) use only the root, its fifth and octaves (0, 7, 12, −5), which are in
+  changed once heard; **Tresillo**, 3-3-2 twice, replaced Pulse in PR 51: Pulse's hit on every
+  beat was Pattern Tools' Every 4 again) use only the root, its fifth and octaves (0, 7, 12, −5), which are in
   every scale the Melody Maker offers. A click is one undo step, and the button of the
   pattern the lane matches is lit, the same way as a sound's (`patternKey()`). File → New
   still starts with no steps on (the maintainer's call, for now).
-- The Patterns dice rolls a random pattern (`randomPattern()` in `src/lib/patterns/random.ts`):
-  step 1 always, then 3–8 more hits, likelier on the beats; beats accented, the rest softer;
-  mostly the root, some octaves and fifths; sometimes one or two rolls off the beat. One undo
-  step, nothing lit. Unit tests check 500 seeded rolls; a browser test checks the patterns, the
-  dice and undo.
+- The Patterns dice rolls a random pattern (`randomPattern()` in `src/lib/patterns/random.ts`),
+  built like a beat (PR 51; before, each hit was placed on its own, which gave clumps and long
+  gaps): a one- or two-beat idea (`CELLS_4`, `CELLS_8`: off-beats, 3-3-2, syncopations; or
+  two one-beat ideas side by side), repeated across the bar with its notes and accents; now
+  and then (15 %) a whole-bar idea instead, 5 or 7 hits spread as evenly as possible
+  (`euclid()`), started on one of its hits. About half the rolls change the last beat into a
+  fill (`FILLS`), which may end an octave or a fifth up and may have a roll (2–4 repeats) off
+  the beat; rolls come only there. Step 1 always plays, as the root; the idea's other hits are
+  mostly the root, some octaves and fifths; beats accented, the rest softer. Never more than
+  four empty steps in a row, round the end of the bar too (`longestGap()`, `MAX_GAP`). One undo
+  step, nothing lit. Unit tests check 500 seeded rolls (the idea repeats, the gaps, the fills,
+  variety); a browser test checks the patterns, the dice and undo.
 - Analytics: `pattern_select` with the pattern's id; `pattern_random` for a roll of the dice.
 
 ### Presets (the Sounds box)
@@ -976,27 +989,18 @@ changes it as ideas come up). Everything drum-related waits until the maintainer
 drum lanes back.
 
 Agreed after PR 49 (the maintainer's review of the pad popup, presets, Melody Maker and
-Unison); the pad popup part was PR 50:
-1. **Presets and Melody Maker**: the boxes' captions "Sound presets" and "Pattern presets";
-   the Pulse pattern (the same steps as Pattern Tools' Every 4) replaced by **Tresillo**
-   (3-3-2: hits on steps 1, 4, 7, 9, 12, 15; other options if the maintainer doesn't like
-   it); a Patterns dice whose rolls sound like usable rhythms: a short idea (one or two beats)
-   repeated across the bar, the last beat sometimes changed into a fill, hits spread through
-   the bar rather than bunched (today each hit is placed on its own, so rolls like "step 1, six
-   empty steps, two hits" come out); the Melody Maker's ⋯ menu kept on screen at every width
-   (it opens to the right of its button and is only clamped under 720 px), and its "Undo last
-   melody" removed (Undo does it).
-2. **Unison**: Voices 2–4 (1 voice with unison on sounds as off, and 6 voices measured
+Unison); the pad popup part was PR 50, presets and Melody Maker PR 51:
+1. **Unison**: Voices 2–4 (1 voice with unison on sounds as off, and 6 voices measured
    narrower than 3); a saved project with 1 voice opens with unison off, 5–6 as 4; a notch at
    12 cents on Detune (already the default). Spread works but can't be heard on the attack:
    every voice starts at the same point of its cycle, so a hit's loud start is nearly mono
    (an exported hit at 100 % spread: side/mid 0.20 in its first 50 ms, 1.6 after 150 ms). Start
    each voice at a different point of its cycle (without the voices cancelling at low Detune;
    keep the loudness matched), keep the Spread knob, and pick its default (50 or 100 %) by ear.
-3. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+2. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
    Checked after PR 37: ESLint 10.14 and typescript-eslint 8.72 still need `minimatch` 10, and
    `npm audit` reports 10 moderate advisories for them.
-4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+3. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1156,6 +1160,7 @@ Done:
 | 48 | Phone mode, round three: Play / Stop in the top bar on every page; the Play tab renamed Pads, the tabs one segmented bar; Sound and Pattern steppers and Clear beside the pads; Reset… in the menu (asks first: pads, or pads and sound; Undo brings them back); a shorter Export audio on the phone (bars and ending, one normalized mix); the Phone view button in the accent and above the pad numbers. |
 | 49 | Effect switches on the pedals: CRUSH on the overdrive (a bit crusher, 8 bits at 12 kHz to 4 bits at 3 kHz as DRIVE goes up; an AudioWorklet, `src/audio/crusher.ts`) and PING PONG on the delay (echoes alternate left and right, `src/audio/pingPong.ts`); in the live and export engines, saved (older projects get them off), reset by presets, sometimes rolled by the Sounds dice. |
 | 50 | Pad settings and repeats: the **Repeats brush** (×2 ×3 ×4 in the Step Sequencer header: click or drag across pads to give them that many hits, again for one; Esc to stop) and ⋯ → Clear Repeats; a pad's ⋮ closes its own settings; the settings stay inside the window for the last pads (they assumed 380 px, but are up to 420); a key or octave in them plays the note on the pad's wave (the phone's note picker uses the pad's wave too). Plan: patch cables on hold; the maintainer's review (presets and Melody Maker, Unison) added. |
+| 51 | Presets and Melody Maker: the boxes' captions read **Sound presets** and **Pattern presets**; the Pulse pattern (Pattern Tools' Every 4 again) became **Tresillo** (3-3-2 twice); the Patterns dice builds a beat: a one- or two-beat idea repeated across the bar (or 5 or 7 hits spread evenly), about half with a fill on the last beat, never more than four empty steps in a row; the Melody Maker's ⋯ menu opens inside the window at every width (it ran off the right edge and the bottom on a laptop), and its Undo last melody is gone (Ctrl+Z does it). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

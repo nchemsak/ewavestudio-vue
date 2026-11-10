@@ -15,11 +15,17 @@ const n = (note = 0, vel = 1, repeats = 1): PatternStep => ({ note, vel, repeats
 
 export const PATTERNS: readonly StepPattern[] = [
 	{
-		// Four on the floor: a hit on every beat
-		id: 'pulse',
-		label: 'Pulse',
-		description: 'Pulse: a hit on every beat, four on the floor.',
-		steps: [n(), _, _, _, n(), _, _, _, n(), _, _, _, n(), _, _, _],
+		// 3-3-2 twice: the tresillo, the last hit up a fifth. It replaced "Pulse" (PR 51), a hit
+		// on every beat, which was Pattern Tools' Every 4 again
+		id: 'tresillo',
+		label: 'Tresillo',
+		description: 'Tresillo: three hits to every two beats, 3-3-2, the rhythm under a lot of dance and Latin music.',
+		steps: [
+			n(0, 1), _, _, n(0, 0.75),
+			_, _, n(0, 0.85), _,
+			n(0, 1), _, _, n(0, 0.75),
+			_, _, n(7, 0.85), _,
+		],
 	},
 	{
 		// Between the beats, with a soft pickup before the next bar
