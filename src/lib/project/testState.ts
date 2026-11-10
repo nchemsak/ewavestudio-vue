@@ -20,7 +20,7 @@ const lane = (name: string, type: Instrument['type'], extra: Partial<Instrument>
 
 // Settings like DrumSequencer's, filled with arbitrary values. fresh() resets them to the
 // factory defaults, as File → New does.
-export function makeState(maxVoices = 6): ProjectState {
+export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 on a phone
 	const stepLength = ref(STEPS);
 	const selectedKeyRoot = ref<KeyRoot>('C');
 	const globalOctaveOffset = ref(2);
@@ -94,7 +94,7 @@ export function makeState(maxVoices = 6): ProjectState {
 	};
 }
 
-export function fresh(maxVoices = 6) {
+export function fresh(maxVoices = 4) {
 	const st = makeState(maxVoices);
 	resetToFactoryDefaults(st);
 	return st;
@@ -113,7 +113,7 @@ export function changeEverything(st: ProjectState) {
 	s.noise.enabled.value = true; s.noise.color.value = 0.8; s.noise.amount.value = 0.6;
 	s.noise.mask.value = s.noise.mask.value.map((_, i) => i % 2 === 0);
 	s.noise.attackBurst.value = true; s.noise.burstMs.value = 40;
-	s.unison.enabled.value = true; s.unison.voices.value = 5; s.unison.detuneCents.value = 30; s.unison.stereoSpread.value = 80;
+	s.unison.enabled.value = true; s.unison.voices.value = 4; s.unison.detuneCents.value = 30; s.unison.stereoSpread.value = 80;
 	s.lfo.enabled.value = false; s.lfo.rate.value = 2; s.lfo.depth.value = 300; s.lfo.target.value = 'filter';
 	s.lfo.waveform.value = 'square'; s.lfo.sync.value = false; s.lfo.division.value = '1/16';
 	s.lfo.retrigger.value = true; s.lfo.bipolar.value = true;

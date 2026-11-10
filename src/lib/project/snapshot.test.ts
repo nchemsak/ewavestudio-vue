@@ -17,7 +17,7 @@ describe('factory defaults (File → New)', () => {
 				enabled: false, type: 'legacy', color: 0.5, amount: 0.25,
 				mask: Array(STEPS).fill(true), attackBurst: false, burstMs: 80,
 			},
-			unison: { enabled: false, voices: 3, detuneCents: 12, stereoSpread: 50 },
+			unison: { enabled: false, voices: 3, detuneCents: 12, stereoSpread: 100 },
 			lfo: {
 				enabled: true, rate: 5, depth: 0, target: 'pitch', waveform: 'sine',
 				sync: true, division: '1/8', retrigger: false, bipolar: false,
@@ -190,14 +190,30 @@ describe('saving and loading a project', () => {
 		expect(color({ color: 7 })).toBe(1); // kept within 0..1
 	});
 
+	it('opens unison with 2–4 voices: 1 voice (which sounded as off) as off, 5 or 6 as 4', () => {
+		const st = fresh(); // a computer: up to 4 voices
+		const unison = (u: object) => {
+			applySnapshot(st, { synth: { unison: u } });
+			return [st.synth.unison.enabled.value, st.synth.unison.voices.value];
+		};
+		expect(unison({ enabled: true, voices: 1 })).toEqual([false, 3]);
+		expect(unison({ enabled: false, voices: 1 })).toEqual([false, 3]);
+		expect(unison({ enabled: true, voices: 2 })).toEqual([true, 2]);
+		expect(unison({ enabled: true, voices: 4 })).toEqual([true, 4]);
+		expect(unison({ enabled: true, voices: 6 })).toEqual([true, 4]);
+		expect(unison({ enabled: true, voices: 5 })).toEqual([true, 4]);
+		expect(unison({ enabled: true, voices: 2.6 })).toEqual([true, 3]);
+	});
+
 	it('fits saved values to this device and this app', () => {
 		const st = fresh(3); // a phone: at most 3 unison voices
 		applySnapshot(st, { synth: { unison: { enabled: true, voices: 6 }, lfo: { enabled: true, target: 'gain' } } });
 		expect(st.synth.unison.voices.value).toBe(3);
 		expect(st.synth.lfo.target.value).toBe('pitch'); // an LFO target this version doesn't have
 
-		applySnapshot(st, { synth: { unison: { voices: 0 } } });
-		expect(st.synth.unison.voices.value).toBe(1);
+		applySnapshot(st, { synth: { unison: { enabled: true, voices: 0 } } });
+		expect(st.synth.unison.voices.value).toBe(3);
+		expect(st.synth.unison.enabled.value).toBe(false);
 
 		// A noise mask of another length is padded with "on" or cut to the step count
 		applySnapshot(st, { synth: { noise: { mask: [false, false] } } });
