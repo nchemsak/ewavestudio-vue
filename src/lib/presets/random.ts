@@ -24,6 +24,11 @@ export type Rng = () => number;
 // The lowest cutoff an opening filter envelope starts from
 export const OPEN_FROM_HZ = 150;
 
+// A sweep that starts above Cutoff (from the pads' default note, A3) falls back within this
+// share of the amp envelope's Decay, or most of the note is filtered away
+export const SWEEP_REF_HZ = 220;
+export const SWEEP_SHARE = 0.3;
+
 export function randomPreset(rng: Rng = Math.random): SynthPreset {
 	const chance = (p: number) => rng() < p;
 	const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rng() * xs.length)];
@@ -46,13 +51,17 @@ export function randomPreset(rng: Rng = Math.random): SynthPreset {
 
 	if (wave === 'pulse') synth.pulse = { width: between(10, 50) };
 
-	// A drum-style pitch sweep, mostly dropping into the note
+	// A drum-style pitch sweep, mostly dropping into the note. One that starts above Cutoff
+	// falls back quickly: a slow 33-semitone drop onto a 435 Hz cutoff spent most of the note
+	// above it and was nearly silent (it failed the browser test's check now and then)
 	if (chance(0.55)) {
-		synth.pitchEnv = {
-			semitones: between(3, 36),
-			decayMs: logBetween(15, 300),
-			mode: chance(0.8) ? 'up' : pick(['down', 'random'] as const),
-		};
+		const semitones = between(3, 36);
+		let sweepMs = logBetween(15, 300);
+		const mode = chance(0.8) ? 'up' : pick(['down', 'random'] as const);
+		if (mode !== 'down' && SWEEP_REF_HZ * 2 ** (semitones / 12) > cutoff) {
+			sweepMs = Math.max(15, Math.min(sweepMs, Math.floor(decayMs * SWEEP_SHARE)));
+		}
+		synth.pitchEnv = { semitones, decayMs: sweepMs, mode };
 	}
 
 	// The filter's envelope, mostly closing (a pluck). An opening one starts below Cutoff: it

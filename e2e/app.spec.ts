@@ -2255,12 +2255,29 @@ test('patterns set the pattern from the key, never the sound, light up, are one 
 test('dice rolls are never silent or clipping', async ({ page }) => {
 	await turnOnPads(page, [0, 4, 8, 12]);
 	const dice = page.getByRole('button', { name: 'Random sound', exact: true });
-	// 200 rolls measured while building it peaked between 0.10 and 0.65 (the presets: 0.2 to 0.5)
-	for (let i = 0; i < 8; i++) {
+	// The same rolls every run: the dice's Math.random is seeded (mulberry32) for each click, so
+	// a rare quiet roll can't fail an unrelated PR (an unseeded run once peaked at 0.039). Unit
+	// tests check the recipe over 500 rolls (presets.test.ts). Seeds 171 and 761 were the
+	// quietest of 800 rolls (171 peaked at 0.042 before its sweep was limited, 0.093 since;
+	// 761: 0.053), 739 the loudest (0.56); the others are the first few
+	for (const seed of [171, 761, 739, 1, 2, 3, 4, 5]) {
+		await page.evaluate((s) => {
+			const w = window as any;
+			w.__realRandom ??= Math.random;
+			let a = s >>> 0;
+			Math.random = () => {
+				a = (a + 0x6D2B79F5) >>> 0;
+				let t = a;
+				t = Math.imul(t ^ (t >>> 15), t | 1);
+				t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+				return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+			};
+		}, seed);
 		await dice.click();
+		await page.evaluate(() => { Math.random = (window as any).__realRandom; });
 		const peak = wavPeak(await exportWav(page));
-		expect(peak, `roll ${i + 1}`).toBeGreaterThan(0.04);
-		expect(peak, `roll ${i + 1}`).toBeLessThan(0.9);
+		expect(peak, `seed ${seed}`).toBeGreaterThan(0.04);
+		expect(peak, `seed ${seed}`).toBeLessThan(0.9);
 	}
 });
 

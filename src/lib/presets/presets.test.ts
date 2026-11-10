@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { applyPreset, soundKey } from './presets';
 import { PRESETS } from './library';
-import { randomPreset, OPEN_FROM_HZ } from './random';
+import { randomPreset, OPEN_FROM_HZ, SWEEP_REF_HZ, SWEEP_SHARE } from './random';
 import { buildSnapshot, resetSoundToFactoryDefaults } from '../project/snapshot';
 import { STEPS, fresh, asSaved, changeEverything, leaves } from '../project/testState';
 import { WAVE_IDS } from '../../audio/waves';
@@ -276,6 +276,19 @@ describe('the dice (a random sound)', () => {
 			expect(synth!.filter!.cutoff! / 2 ** -synth!.filter!.envAmount!).toBeGreaterThanOrEqual(OPEN_FROM_HZ);
 			expect(synth!.filter!.envDecayMs!).toBeLessThanOrEqual(synth!.envelope!.decayMs! * 0.6);
 		}
+	});
+
+	it('never leaves a note above Cutoff with a slow pitch sweep', () => {
+		// A sweep that starts above Cutoff falls back within 30 % of Decay: a slow 33-semitone
+		// drop onto a 435 Hz cutoff spent most of the note above it and was nearly silent
+		const above = ROLLS.filter(p => p.synth?.pitchEnv && p.synth.pitchEnv.mode !== 'down'
+			&& SWEEP_REF_HZ * 2 ** (p.synth.pitchEnv.semitones! / 12) > p.synth.filter!.cutoff!);
+		expect(above.length).toBeGreaterThan(20);
+		for (const { synth } of above) {
+			expect(synth!.pitchEnv!.decayMs!).toBeLessThanOrEqual(Math.max(15, synth!.envelope!.decayMs! * SWEEP_SHARE));
+		}
+		// Sweeps below Cutoff keep their whole range, up to 300 ms
+		expect(Math.max(...ROLLS.map(p => p.synth?.pitchEnv?.decayMs ?? 0))).toBeGreaterThan(250);
 	});
 
 	it('lands exactly, with every other sound setting at its default', () => {
