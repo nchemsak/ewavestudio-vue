@@ -935,6 +935,10 @@ back from git history.
 - Don't break existing saved projects: snapshot changes must stay backward compatible.
 - Before pushing, run `npm run typecheck`, `npm test` and `npm run test:e2e`, and confirm
   they pass.
+- Once the work is pushed, open the pull request yourself, without asking first (the
+  maintainer's standing request, after PR 49): into `main`, with a summary of what changes,
+  the manual test checklist and the checks' results. Then watch it (fix failing checks,
+  answer review comments) unless the maintainer says not to. Merging stays the maintainer's.
 - When fixing a bug, add a test that fails without the fix where practical. The browser tests
   can count scheduled notes and audio connections; see the helpers in `e2e/app.spec.ts`.
 
