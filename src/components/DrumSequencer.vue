@@ -171,9 +171,9 @@
 						 patterns (src/lib/patterns/), each with a dice. Between the knobs and Play from
 						 1200 px; a row of their own under them narrower. -->
 					<div class="transport-presets">
-						<PresetButtons title="Sounds" dice-label="Random sound" :presets="PRESETS" :active="activePresetId"
+						<PresetButtons title="Sound presets" dice-label="Random sound" :presets="PRESETS" :active="activePresetId"
 							@choose="choosePreset" @random="rollRandomSound" />
-						<PresetButtons title="Patterns" dice-label="Random pattern" :presets="PATTERNS"
+						<PresetButtons title="Pattern presets" dice-label="Random pattern" :presets="PATTERNS"
 							:active="activePatternId" @choose="choosePattern" @random="rollRandomPattern" />
 					</div>
 

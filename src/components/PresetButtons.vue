@@ -31,7 +31,7 @@
 import { ref } from 'vue';
 
 const props = defineProps<{
-	title: string; // the box's caption: Sounds or Patterns
+	title: string; // the box's caption: Sound presets or Pattern presets
 	diceLabel: string; // the dice's name: Random sound, Random pattern
 	presets: ReadonlyArray<{ id: string; label: string; description: string }>;
 	active: string | null; // the lit button's id

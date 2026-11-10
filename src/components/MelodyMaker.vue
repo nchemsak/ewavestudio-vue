@@ -83,7 +83,7 @@
             </div>
 
             <!-- Advanced menu -->
-            <div v-if="advancedOpen" class="mm-menu" @click.stop
+            <div v-if="advancedOpen" ref="menuEl" class="mm-menu" @click.stop
                 :style="{ left: (advPos?.x ?? 0) + 'px', top: (advPos?.y ?? 0) + 'px' }" role="menu">
                 <div class="mm-menu-title">Advanced Options</div>
                 <div class="mm-subtitle">Melody</div>
@@ -125,11 +125,6 @@
 
                 <div class="mm-subtitle">Utilities</div>
 
-                <div class="mm-opt" role="menuitem" :aria-disabled="!lastFrequencies"
-                    :class="{ 'is-disabled': !lastFrequencies }" @click.stop="lastFrequencies && undo()">
-                    Undo last melody
-                </div>
-
                 <div class="mm-reset" role="menuitem" @click.stop="resetAdvanced">
                     Reset settings to defaults
                 </div>
@@ -141,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, defineExpose } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, defineExpose, nextTick } from 'vue';
 import PtSelect from './PtSelect.vue';
 import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
 
@@ -509,7 +504,6 @@ function smartGenerate(): void {
             out[i] = Math.max(fMin, Math.min(fMax, hz));
         }
 
-        rememberBeforeWrite();
         emit('update:frequencies', out);
         return;
     }
@@ -562,7 +556,6 @@ function smartGenerate(): void {
         out[i] = midiToFreq(midi);
     }
 
-    rememberBeforeWrite();
     emit('update:frequencies', out);
 }
 
@@ -904,62 +897,46 @@ function bakeArp(): void {
         for (const stepIndex of g) out[stepIndex] = hz;
     }
 
-    rememberBeforeWrite();
     emit('update:frequencies', out);
 }
 
 const advancedOpen = ref(false);
 const advPos = ref<{ x: number; y: number } | null>(null);
 
+// The ⋯ menu opens beside its button (the button is in the card's header, in DrumSequencer),
+// to the right if it fits, else to the left, and always inside the window: before PR 51 it
+// was kept inside only under 720 px, so on a laptop it could open off the right edge. Its
+// position is relative to the Melody Maker (the menu is positioned inside it).
+const menuEl = ref<HTMLElement | null>(null);
 function openAdvanced(e?: MouseEvent) {
     const target = e?.currentTarget as HTMLElement | null;
     const parent =
         (target?.closest('.melody-maker') as HTMLElement | null) ||
         (document.querySelector('.melody-maker') as HTMLElement | null);
-
-    let x = 24;
-    let y = 24;
-
-    if (target && parent) {
-        const triggerRect = target.getBoundingClientRect();
-        const parentRect = parent.getBoundingClientRect();
-
-        // Desktop behavior: open to the right of the trigger
-        x = Math.round(triggerRect.right - parentRect.left + 8);
-        y = Math.round(triggerRect.top - parentRect.top);
-
-        // Mobile-only clamp so the menu stays inside the Melody Maker container
-        if (typeof window !== 'undefined' && window.innerWidth <= 720) {
-            const MENU_WIDTH = 280;
-            const PADDING = 8;
-
-            const maxX = Math.max(
-                PADDING,
-                parentRect.width - MENU_WIDTH - PADDING
-            );
-
-            if (x > maxX) x = maxX;
-            if (x < PADDING) x = PADDING;
-        }
-    }
-
-    advPos.value = { x, y };
+    advPos.value = { x: 24, y: 24 };
     advancedOpen.value = true;
+    if (!target || !parent) return;
+    nextTick(() => {
+        const t = target.getBoundingClientRect();
+        const p = parent.getBoundingClientRect();
+        const w = menuEl.value?.offsetWidth ?? 280;
+        const h = menuEl.value?.offsetHeight ?? 320;
+        const m = 8;
+        const viewW = document.documentElement.clientWidth || window.innerWidth;
+        const viewH = window.innerHeight;
+        let left = t.right + m;                            // to the right of the button
+        if (left + w > viewW - m) left = t.left - w - m;   // else to its left
+        left = Math.max(m, Math.min(left, viewW - w - m)); // inside the window either way
+        let top = t.top;
+        top = Math.max(m, Math.min(top, viewH - h - m));
+        advPos.value = { x: Math.round(left - p.left), y: Math.round(top - p.top) };
+    });
 }
 
 
 
 const applyScope = ref<'all' | 'active'>('active');
 
-// Undo buffer
-const lastFrequencies = ref<number[] | null>(null);
-function rememberBeforeWrite() {
-    if (props.frequencies) lastFrequencies.value = props.frequencies.slice();
-}
-function undo() {
-    if (lastFrequencies.value)
-        emit('update:frequencies', lastFrequencies.value.slice());
-}
 
 // Close menu on ESC
 function onKey(e: KeyboardEvent) {
