@@ -46,7 +46,7 @@
 							</div>
 							<div class="pl-gen">
 								<button type="button" class="pt-btn" :aria-pressed="unisonEnabled" @click="unisonEnabled = !unisonEnabled">Unison</button>
-								<Knob v-model="unisonVoices" label="Voices" aria-label="Unison voices" :min="1" :max="unisonMaxVoices" :step="1" size="small"
+								<Knob v-model="unisonVoices" label="Voices" aria-label="Unison voices" :min="UNISON_VOICES_MIN" :max="unisonMaxVoices" :step="1" size="small"
 									:disabled="!unisonEnabled" :value-text="`${unisonVoices} voices`" />
 							</div>
 						</section>
@@ -622,6 +622,7 @@ import WaveButton from './WaveButton.vue'
 import VelocityRouting from './VelocityRouting.vue';
 import { velocityRoutingActive } from '../audio/velocity';
 import { clampRatchet } from '../audio/ratchet';
+import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
 import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
 import MelodyMaker from './MelodyMaker.vue';
 import MidiToolbar from './MidiToolbar.vue';
@@ -705,7 +706,8 @@ onBeforeUnmount(() => {
 	}
 });
 
-const unisonMaxVoices = computed(() => (isMobile.value ? 3 : 6));
+// Unison voices: 2–4 (src/audio/unison.ts), 3 at most on a small screen
+const unisonMaxVoices = computed(() => (isMobile.value ? 3 : UNISON_VOICES_MAX));
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2055,14 +2057,14 @@ const reverbTone = ref(0.6);      // normalized tone control
 // Unison / Detune START
 
 const unisonEnabled = ref(false);
-const unisonVoices = ref(3);   // 1–6
-const detuneCents = ref(12);  // 0–100 cents per step
-const stereoSpread = ref(50);  // 0–100 %
+const unisonVoices = ref(UNISON_VOICES_DEFAULT);   // 2–4
+const detuneCents = ref(UNISON_DETUNE_DEFAULT);  // 0–100 cents per step
+const stereoSpread = ref(UNISON_SPREAD_DEFAULT);  // 0–100 %
 
 watch(unisonVoices, (v) => {
 	const cap = unisonMaxVoices.value;
 	let clamped = v;
-	if (v < 1) clamped = 1;
+	if (v < UNISON_VOICES_MIN) clamped = UNISON_VOICES_MIN;
 	if (v > cap) clamped = cap;
 	if (clamped !== v) unisonVoices.value = clamped;
 });
@@ -2145,7 +2147,7 @@ const exportState = computed<StepSequencerState>(() => {
 
 	// Clamp unison voices here (can't use const inside an object literal)
 	const cappedVoices = Math.max(
-		1,
+		UNISON_VOICES_MIN,
 		Math.min(unisonMaxVoices.value, unisonVoices.value)
 	);
 

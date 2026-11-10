@@ -6,6 +6,7 @@ import { PATTERNS } from '../src/lib/patterns/library';
 import { noteHz } from '../src/lib/patterns/patterns';
 import { padHue } from '../src/lib/padColour';
 import { DETENT_HOLD, SWING_DETENTS, TEMPO_DETENTS } from '../src/lib/knobDetents';
+import { waveSeries } from '../src/audio/waves';
 
 // Injected before the app loads. Keeps a handle on the app's AudioContext (__ctx), records
 // every note it schedules, tracks nodes that feed an audio parameter (the per-note LFO taps),
@@ -929,6 +930,80 @@ test('ping-pong echoes alternate left and right, live and in the export', async 
 	const liveOff = await liveEchoes();
 	expect(liveOff.both).toBeGreaterThan(1);
 	expect(liveOff.left + liveOff.right).toBe(0);
+});
+
+test("unison voices' waves, rebuilt from the spec's series, are the browser's own shapes", async ({ page }) => {
+	// waveSeries() rebuilds sine, triangle, saw and square from the Web Audio spec's series; at
+	// no shift they must sound exactly like the oscillator's own types
+	const series = Object.fromEntries((['sine', 'triangle', 'sawtooth', 'square'] as const)
+		.map((w) => [w, Array.from(waveSeries(w).imag)]));
+	const diffs = await page.evaluate(async (series: Record<string, number[]>) => {
+		const out: Record<string, number> = {};
+		for (const [type, imag] of Object.entries(series)) {
+			const render = async (custom: boolean) => {
+				const ctx = new OfflineAudioContext(1, 4800, 48000);
+				const osc = ctx.createOscillator();
+				osc.frequency.value = 220;
+				if (custom) osc.setPeriodicWave(ctx.createPeriodicWave(new Float32Array(imag.length), Float32Array.from(imag)));
+				else osc.type = type as OscillatorType;
+				osc.connect(ctx.destination);
+				osc.start();
+				return (await ctx.startRendering()).getChannelData(0);
+			};
+			const own = await render(false), rebuilt = await render(true);
+			let worst = 0;
+			for (let i = 0; i < own.length; i++) worst = Math.max(worst, Math.abs(own[i] - rebuilt[i]));
+			out[type] = worst;
+		}
+		return out;
+	}, series);
+	for (const [type, worst] of Object.entries(diffs)) expect(worst, type).toBeLessThan(1e-4);
+});
+
+test('unison: 2–4 voices, wide from the start of a hit, as loud; a 1-voice project opens with it off', async ({ page }) => {
+	await turnOnPads(page, [0]);
+	const voices = page.locator('.module.unison').getByRole('slider', { name: 'Voices' });
+	await expect(voices).toHaveAttribute('aria-valuemin', '2');
+	await expect(voices).toHaveAttribute('aria-valuemax', '4');
+
+	// An exported hit: how wide its first 50 ms are (side/mid), and how loud (both channels)
+	const hit = async (id: string, spread: number) => {
+		await importChanged(page, id, (d) => {
+			Object.assign(d.synth.unison, { enabled: true, voices: 3, detuneCents: 12, stereoSpread: spread });
+			d.selectedWaveform = 'sawtooth';
+			const lane = d.instruments.find((l: any) => l.name === 'synth-voice');
+			lane.waveforms = lane.steps.map(() => 'sawtooth');
+		});
+		const wav = await exportWav(page);
+		const left = wavSamples(wav, 0), right = wavSamples(wav, 1);
+		let on = 0;
+		while (Math.abs(left.samples[on]) < 1e-4 && Math.abs(right.samples[on]) < 1e-4) on++;
+		let mid = 0, side = 0, power = 0;
+		for (let i = on; i < on + Math.round(0.05 * left.rate); i++) {
+			mid += (left.samples[i] + right.samples[i]) ** 2;
+			side += (left.samples[i] - right.samples[i]) ** 2;
+			power += left.samples[i] ** 2 + right.samples[i] ** 2;
+		}
+		return { width: Math.sqrt(side / mid), level: Math.sqrt(power) };
+	};
+	const centred = await hit('uni-0', 0);
+	const wide = await hit('uni-100', 100);
+	expect(centred.width).toBeLessThan(0.01); // Spread 0: the voices in step and in the middle
+	// Before the voices started apart, full Spread measured 0.35 here
+	expect(wide.width).toBeGreaterThan(0.6);
+	// Spread itself costs some level (the pan law): 0.86 of the centred hit before; starting
+	// the voices apart may cost up to 1.5 dB more (0.78 measured, 0.9 dB)
+	expect(wide.level / centred.level).toBeGreaterThan(0.86 * 10 ** (-1.5 / 20));
+	expect(wide.level / centred.level).toBeLessThan(1);
+
+	// A project saved with one voice (which sounded as unison off) opens with it off
+	await importChanged(page, 'uni-1', (d) => Object.assign(d.synth.unison, { enabled: true, voices: 1 }));
+	await expect(page.getByRole('switch', { name: 'Unison' })).toHaveText('Off');
+	await expect(voices).toHaveAttribute('aria-valuenow', '3');
+	// and one with 6 as 4
+	await importChanged(page, 'uni-6', (d) => Object.assign(d.synth.unison, { enabled: true, voices: 6 }));
+	await expect(page.getByRole('switch', { name: 'Unison' })).toHaveText('On');
+	await expect(voices).toHaveAttribute('aria-valuenow', '4');
 });
 
 test('the bit crusher changes the driven sound, live and in the export, without clipping', async ({ page }) => {

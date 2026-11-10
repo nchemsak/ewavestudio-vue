@@ -13,6 +13,12 @@
 //   The LFO's "PW" target moves that source too (pulse-width modulation).
 // - organ, hollow, glass: fixed harmonic recipes (createPeriodicWave).
 //
+// A unison voice can start at another point of its cycle (`phase`, in cycles): its wave is the
+// same shape shifted in time (every harmonic turned by its own share), built with
+// createPeriodicWave from the Web Audio spec's own series for the built-in shapes, so at phase 0
+// it's the same wave. Without it every voice of a note starts in step, and a hit's loud start
+// is nearly mono whatever Spread is (see UNISON_PHASE_SPREAD in the engines' use).
+//
 // Each source exposes `osc`, the OscillatorNode whose frequency and detune the engines set
 // (pitch envelope, FM, unison detune, LFO pitch), and `output`, the node to connect onward.
 
@@ -135,6 +141,71 @@ function periodicWaveFor(ctx: BaseAudioContext, w: keyof typeof HARMONICS): Peri
 	return pw;
 }
 
+// Phase-shifted waves START
+
+// Harmonics for the built-in shapes as custom waves (Chrome's own sawtooth and this match to
+// within 1e-6; a browser test checks)
+const SERIES_LENGTH = 2048;
+
+// The sine (imag) coefficients of a wave, harmonic 1 at index 1, before any shift
+export function waveSeries(w: string): { real: Float32Array; imag: Float32Array } {
+	if (w === 'organ' || w === 'hollow' || w === 'glass') {
+		const h = HARMONICS[w];
+		const n = Math.max(...Object.keys(h).map(Number)) + 1;
+		const imag = new Float32Array(n);
+		for (const k in h) imag[Number(k)] = h[k];
+		return { real: new Float32Array(n), imag };
+	}
+	const imag = new Float32Array(SERIES_LENGTH);
+	for (let n = 1; n < SERIES_LENGTH; n++) {
+		switch (w) {
+			case 'square': imag[n] = n % 2 ? 4 / (n * Math.PI) : 0; break;
+			case 'sawtooth':
+			case 'pulse': imag[n] = (n % 2 ? 2 : -2) / (n * Math.PI); break; // the pulse is made from a saw
+			case 'triangle': imag[n] = (8 * Math.sin((n * Math.PI) / 2)) / (n * n * Math.PI * Math.PI); break;
+			default: imag[n] = n === 1 ? 1 : 0; // sine, and unknown names
+		}
+	}
+	return { real: new Float32Array(SERIES_LENGTH), imag };
+}
+
+// The same series started `phase` cycles later in its wave (x(t) becomes x(t + phase · period))
+export function shiftSeries(real: Float32Array, imag: Float32Array, phase: number) {
+	const r = new Float32Array(real.length), i = new Float32Array(imag.length);
+	for (let n = 0; n < real.length; n++) {
+		const a = 2 * Math.PI * n * phase;
+		const c = Math.cos(a), s = Math.sin(a);
+		r[n] = real[n] * c + imag[n] * s;
+		i[n] = imag[n] * c - real[n] * s;
+	}
+	return { real: r, imag: i };
+}
+
+const SHIFTED_CACHE = 64;
+const shiftedWaves = new WeakMap<BaseAudioContext, Map<string, PeriodicWave>>();
+function shiftedWaveFor(ctx: BaseAudioContext, w: string, phase: number): PeriodicWave {
+	let byKey = shiftedWaves.get(ctx);
+	if (!byKey) shiftedWaves.set(ctx, (byKey = new Map()));
+	const key = `${w}@${phase}`;
+	let pw = byKey.get(key);
+	if (!pw) {
+		const { real, imag } = waveSeries(w);
+		const shifted = shiftSeries(real, imag, phase);
+		pw = ctx.createPeriodicWave(shifted.real, shifted.imag); // peak-normalized, as the built-ins
+		// Kept for the next notes, the oldest let go past SHIFTED_CACHE (notes playing keep theirs)
+		if (byKey.size >= SHIFTED_CACHE) byKey.delete(byKey.keys().next().value!);
+		byKey.set(key, pw);
+	}
+	return pw;
+}
+
+// Builds (and keeps) the wave a voice starting at `phase` would use, before a note needs it
+export function prepareVoiceWave(ctx: BaseAudioContext, w: string, phase: number): void {
+	if (phase) shiftedWaveFor(ctx, isWave(w) ? w : 'sine', phase);
+}
+
+// Phase-shifted waves END
+
 export type VoiceSource = {
 	osc: OscillatorNode;      // set its frequency and detune; connect FM/LFO pitch to it
 	output: AudioNode;        // connect this onward (to the voice's filter)
@@ -143,11 +214,14 @@ export type VoiceSource = {
 	stop(t: number): void;
 };
 
-// The source for one voice of a note, for wave `w` (an unknown name plays a sine)
-export function createVoiceSource(ctx: BaseAudioContext, w: string, widthPct = PULSE_WIDTH_DEFAULT): VoiceSource {
+// The source for one voice of a note, for wave `w` (an unknown name plays a sine), starting
+// `phase` cycles into its wave (unison voices; 0 for one voice)
+export function createVoiceSource(ctx: BaseAudioContext, w: string, widthPct = PULSE_WIDTH_DEFAULT, phase = 0): VoiceSource {
 	const osc = ctx.createOscillator();
+	const known = isWave(w) ? w : 'sine';
 	if (w === 'pulse') {
-		osc.type = 'sawtooth';
+		if (phase) osc.setPeriodicWave(shiftedWaveFor(ctx, 'pulse', phase));
+		else osc.type = 'sawtooth';
 		const offset = ctx.createConstantSource();
 		offset.offset.value = pulseOffset(widthPct);
 		const sum = ctx.createGain();
@@ -167,7 +241,8 @@ export function createVoiceSource(ctx: BaseAudioContext, w: string, widthPct = P
 			stop(t) { osc.stop(t); offset.stop(t); },
 		};
 	}
-	if (w === 'organ' || w === 'hollow' || w === 'glass') osc.setPeriodicWave(periodicWaveFor(ctx, w));
+	if (phase) osc.setPeriodicWave(shiftedWaveFor(ctx, known, phase));
+	else if (w === 'organ' || w === 'hollow' || w === 'glass') osc.setPeriodicWave(periodicWaveFor(ctx, w));
 	else osc.type = (['sine', 'triangle', 'sawtooth', 'square'] as string[]).includes(w) ? (w as OscillatorType) : 'sine';
 	return {
 		osc, output: osc, width: null,

@@ -11,6 +11,7 @@
 // too), and, if it affects sound, into the live and export engines; see CLAUDE.md.
 
 import type { Ref } from 'vue';
+import { clampUnisonVoices, UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MIN } from '../../audio/unison';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_TEMPO, divisionForTime, isDelayDivision, syncedDelaySeconds } from '../delaySync';
 
 type R<T> = Readonly<Ref<T>>;
@@ -466,11 +467,16 @@ export function applySnapshot(st: ProjectState, s: any) {
 
 	if (syn.unison) {
 		unisonEnabled.value = !!syn.unison.enabled;
-		// if (typeof syn.unison.voices === 'number') unisonVoices.value = syn.unison.voices;
 		if (typeof syn.unison.voices === 'number') {
-			const cap = unisonMaxVoices.value;
-			const raw = syn.unison.voices;
-			unisonVoices.value = Math.max(1, Math.min(cap, raw));
+			// 2–4 voices (unison.ts), and no more than this device plays. One voice with unison
+			// on sounded the same as off (before PR 52 the knob went down to 1), so it opens off,
+			// with the default count for when it's turned on; 5 or 6 open as 4.
+			if (syn.unison.voices < UNISON_VOICES_MIN) {
+				unisonEnabled.value = false;
+				unisonVoices.value = Math.min(unisonMaxVoices.value, UNISON_VOICES_DEFAULT);
+			} else {
+				unisonVoices.value = Math.min(unisonMaxVoices.value, clampUnisonVoices(syn.unison.voices));
+			}
 		}
 		if (typeof syn.unison.detuneCents === 'number') detuneCents.value = syn.unison.detuneCents;
 		if (typeof syn.unison.stereoSpread === 'number') stereoSpread.value = syn.unison.stereoSpread;
@@ -720,9 +726,9 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 	noiseBurstMs.value = 80;
 
 	unisonEnabled.value = false;
-	unisonVoices.value = 3;
-	detuneCents.value = 12;
-	stereoSpread.value = 50;
+	unisonVoices.value = UNISON_VOICES_DEFAULT;
+	detuneCents.value = UNISON_DETUNE_DEFAULT;
+	stereoSpread.value = UNISON_SPREAD_DEFAULT;
 
 	lfoEnabled.value = true;
 	lfoRate.value = 5;

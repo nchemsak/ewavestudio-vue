@@ -18,6 +18,7 @@ import { generateReverbIR } from "../reverb/generateIr";
 import { cutNoteEnd, ratchetHits, stepSpan } from "../ratchet";
 import { createCrusher } from "../crusher";
 import { createPingPong } from "../pingPong";
+import { clampUnisonVoices, unisonPhase, unisonPosition } from "../unison";
 
 export type StepSequencerState = {
 	bpm: number;
@@ -614,15 +615,10 @@ function scheduleSynthNote(opts: {
 	}
 
 	// --- Unison / filter / LFO hookup (simplified parity) -------------------
-	const voices = unisonState.enabled
-		? Math.max(1, Math.min(6, unisonState.voices))
-		: 1;
+	const voices = unisonState.enabled ? clampUnisonVoices(unisonState.voices) : 1;
 
 	const detuneStep = voices > 1 ? unisonState.detuneCents : 0;
 	const spreadPct = voices > 1 ? unisonState.stereoSpread : 0;
-
-	const normIndex = (i: number, n: number) =>
-		n === 1 ? 0 : (i / (n - 1)) * 2 - 1;
 
 	// Pitch envelope: one starting offset for the whole note, as in the live engine
 	const pitchDecay = pitchEnv.decayMs / 1000;
@@ -635,7 +631,8 @@ function scheduleSynthNote(opts: {
 
 	for (let i = 0; i < voices; i++) {
 		// The voice's sound source, as in the live engine (the pulse network for 'pulse')
-		const source = createVoiceSource(ctx, wave, pulseWidth);
+		// (each unison voice starting at its own point of its cycle, unison.ts)
+		const source = createVoiceSource(ctx, wave, pulseWidth, unisonPhase(i, voices, spreadPct));
 		const osc = source.osc;
 
 		const voiceFilter = ctx.createBiquadFilter();
@@ -644,7 +641,7 @@ function scheduleSynthNote(opts: {
 		const voiceGain = ctx.createGain();
 		const panner = ctx.createStereoPanner();
 
-		const dNorm = normIndex(i, voices);
+		const dNorm = unisonPosition(i, voices);
 		const detuneC = dNorm * detuneStep;
 		// Frequency, and detune: the unison detune plus the pitch envelope's sweep
 		applyPitchEnv(osc, freq, time, pitchStartCents, pitchDecay, detuneC);

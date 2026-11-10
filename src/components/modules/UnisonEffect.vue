@@ -10,7 +10,7 @@
 
 		<div class="pt-knob-row" :class="{ 'is-unison-off': !localEnabled }">
 			<div class="position-relative text-center">
-				<Knob midi-id="unison.voices" v-model="localVoices" size="small" :min="1" :max="maxVoices" :step="1" label="Voices"
+				<Knob midi-id="unison.voices" v-model="localVoices" size="small" :min="UNISON_VOICES_MIN" :max="maxVoices" :step="1" label="Voices"
 					:color="color" @knobStart="activeKnob = 'voices'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'voices'" class="custom-tooltip">
 					{{ localVoices }}
@@ -18,7 +18,7 @@
 			</div>
 
 			<div class="position-relative text-center">
-				<Knob midi-id="unison.detune" :value-text="`${localDetune} cents`" v-model="localDetune" size="small" :min="0" :max="100" :step="1" label="Detune" :color="color"
+				<Knob midi-id="unison.detune" :value-text="`${localDetune} cents`" v-model="localDetune" size="small" :min="0" :max="100" :step="1" :detents="[UNISON_DETUNE_DEFAULT]" label="Detune" :color="color"
 					@knobStart="activeKnob = 'detune'" @knobEnd="activeKnob = null" />
 				<span v-if="activeKnob === 'detune'" class="custom-tooltip">
 					{{ localDetune }}¢
@@ -42,6 +42,7 @@ import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 import UnisonButton from '../UnisonButton.vue';
+import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../../audio/unison';
 
 const props = withDefaults(
 	defineProps<{
@@ -54,9 +55,9 @@ const props = withDefaults(
 	}>(),
 	{
 		enabled: false,
-		voices: 3,
-		detune: 10,
-		spread: 50,
+		voices: UNISON_VOICES_DEFAULT,
+		detune: UNISON_DETUNE_DEFAULT,
+		spread: UNISON_SPREAD_DEFAULT,
 		color: '#27fcff',
 		showToggle: true
 	}
@@ -81,7 +82,7 @@ watch(localEnabled, (v) => emit('update:enabled', v));
 
 watch(localVoices, (v) => {
 	const cap = maxVoices.value;
-	const clamped = Math.max(1, Math.min(cap, Math.round(v)));
+	const clamped = Math.max(UNISON_VOICES_MIN, Math.min(cap, Math.round(v)));
 	if (clamped !== v) localVoices.value = clamped;
 	emit('update:voices', clamped);
 });
@@ -105,7 +106,7 @@ watch(
 	() => props.voices,
 	(v) => {
 		const cap = maxVoices.value;
-		localVoices.value = Math.max(1, Math.min(cap, v));
+		localVoices.value = Math.max(UNISON_VOICES_MIN, Math.min(cap, v));
 	}
 );
 
@@ -151,7 +152,8 @@ onBeforeUnmount(() => {
 	}
 });
 
-const maxVoices = computed(() => (isMobile.value ? 3 : 6));
+// 2–4 voices (src/audio/unison.ts), 3 at most on a small screen
+const maxVoices = computed(() => (isMobile.value ? 3 : UNISON_VOICES_MAX));
 
 </script>
 

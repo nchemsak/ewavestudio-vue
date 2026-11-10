@@ -18,7 +18,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, type Ref } from 'vue';
 import { applyPitchEnv, pitchEnvStartCents } from './pitchEnv';
 import { applyFilterEnv } from './filterEnv';
-import { createVoiceSource, lfoPwmTapGain, waveGain, type Wave } from './waves';
+import { createVoiceSource, lfoPwmTapGain, prepareVoiceWave, waveGain, type Wave } from './waves';
 import { routeVelocity, routedCutoff, routedSemitones, routedNoise } from './velocity';
 import { startFM } from './fm';
 import { createTicker } from './ticker';
@@ -26,6 +26,7 @@ import { generateReverbIR } from './reverb/generateIr';
 import { cutNoteEnd, ratchetHits, stepSpan } from './ratchet';
 import { createCrusher, loadCrusher, setCrusher } from './crusher';
 import { createPingPong } from './pingPong';
+import { clampUnisonVoices, unisonPhase, unisonPosition } from './unison';
 import {
 	divisionToHz,
 	generateDriveCurve,
@@ -636,12 +637,11 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 		//  UNISON
 		const voices = s.unison.enabled.value
-			? Math.max(1, Math.min(s.unison.maxVoices.value, s.unison.voices.value))
+			? Math.min(s.unison.maxVoices.value, clampUnisonVoices(s.unison.voices.value))
 			: 1;
 
 		const detuneStep = (voices > 1) ? s.unison.detuneCents.value : 0;
 		const spreadPct = (voices > 1) ? s.unison.stereoSpread.value : 0;
-		const normIndex = (i: number, n: number) => (n === 1) ? 0 : ((i / (n - 1)) * 2 - 1);
 
 		const filterEnabled = s.filter.enabled.value;
 		const filterCutoff = routedCutoff(s.filter.cutoff.value, routed);
@@ -656,12 +656,13 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 		for (let i = 0; i < voices; i++) {
 			// The voice's sound source: the oscillator, plus the pulse network for 'pulse'
-			const source = createVoiceSource(audioCtx, waveType, s.pulse.width.value);
+			// (each unison voice starting at its own point of its cycle, unison.ts)
+			const source = createVoiceSource(audioCtx, waveType, s.pulse.width.value, unisonPhase(i, voices, spreadPct));
 			const osc = source.osc;
 			const voiceFilter = audioCtx.createBiquadFilter();
 			const voiceGain = audioCtx.createGain();
 			const panner = audioCtx.createStereoPanner();
-			const dNorm = normIndex(i, voices);
+			const dNorm = unisonPosition(i, voices);
 			const detuneC = dNorm * detuneStep;
 			// Frequency, and detune: the unison detune plus the pitch envelope's sweep
 			applyPitchEnv(osc, freq, startTime, pitchStartCents, pitchEnvDecay.value, detuneC);
@@ -805,6 +806,14 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	delayDry.connect(masterGain);
 	delayWet.connect(masterGain);
+
+	// Unison: build the waves its voices start with as soon as the setting changes, rather
+	// than on the first note (a few ms each, too long for a MIDI note played 3 ms ahead)
+	watch([s.unison.enabled, s.unison.voices, s.unison.stereoSpread, s.unison.maxVoices, selectedWaveform], () => {
+		if (!s.unison.enabled.value) return;
+		const n = Math.min(s.unison.maxVoices.value, clampUnisonVoices(s.unison.voices.value));
+		for (let i = 0; i < n; i++) prepareVoiceWave(audioCtx, selectedWaveform.value, unisonPhase(i, n, s.unison.stereoSpread.value));
+	}, { immediate: true });
 
 	// Synth voice END
 

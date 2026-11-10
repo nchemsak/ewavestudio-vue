@@ -190,6 +190,8 @@ src/audio/
   crusher.ts             The bit crusher (an AudioWorklet built from a Blob URL), see
                          "Effect switches"
   pingPong.ts            The ping-pong delay network, see "Effect switches"
+  unison.ts              Unison: 2–4 voices, where each sits and starts in its cycle (see
+                         "Audio engine (live)")
   reverb/generateIr.ts   Algorithmic impulse response for the ConvolverNode
   export/scheduleStepSequencer.ts  Separate offline engine used for audio export
   export/exportFiles.ts  The Export audio dialog's files: renders, loops, stems, one-shot
@@ -319,6 +321,22 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   lit button or File → New puts the brush down. A drag is one undo step.
   Ratchets are part of the pattern: sounds (presets) and their dice leave them alone; patterns
   set them.
+- Unison (`unison.ts`, both engines; the Unison card: its tile, Voices, Detune, Spread):
+  2–4 voices (3 at most on a small screen), spread from left (lowest) to right (highest) by
+  Detune (default 12 cents, a notch on the knob) and Spread (pan; default 100 % since PR 52,
+  was 50). Since PR 52 the voices also start at different points of their cycle, as far as
+  ±0.12 cycles at full Spread and less with less (`unisonPhase()`, in steps of 0.02), so a
+  hit is wide from its first moment: started in step, the voices drifted apart only as the
+  detune built up, and a short hit's loud start was nearly mono whatever Spread was (side/mid
+  of an exported hit's first 50 ms at 100 %: 0.35 before, 0.87 after, for 0.9 dB of level).
+  Further measured worse: at 0.2 two voices nearly cancel summed to mono. A shifted voice's
+  wave is the same shape moved in time: `waves.ts` rebuilds the oscillator's own shapes from
+  the Web Audio spec's series (`waveSeries()`; a browser test checks they match Chrome's
+  built-ins) and turns each harmonic (`shiftSeries()`), keeping up to 64 such waves per
+  context; the live engine builds them when the setting changes (`prepareVoiceWave()`), not
+  on the first note. Spread 0 plays exactly as before. One voice with unison on sounded the
+  same as off and six measured narrower than three, so a project saved with 1 voice opens with
+  unison off (and 3 voices for when it's turned on), with 5 or 6 as 4 (`applySnapshot()`).
 - Filter envelope (`filterEnv.ts`; the Filter card's Env Amt and Decay knobs): each note's
   cutoff starts Env Amt octaves away (−5…+5; right of centre above, so the filter closes;
   left below, so it opens) and returns to Cutoff within Decay, as a decaying offset in cents
@@ -988,19 +1006,13 @@ Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the m
 changes it as ideas come up). Everything drum-related waits until the maintainer brings the
 drum lanes back.
 
-Agreed after PR 49 (the maintainer's review of the pad popup, presets, Melody Maker and
-Unison); the pad popup part was PR 50, presets and Melody Maker PR 51:
-1. **Unison**: Voices 2–4 (1 voice with unison on sounds as off, and 6 voices measured
-   narrower than 3); a saved project with 1 voice opens with unison off, 5–6 as 4; a notch at
-   12 cents on Detune (already the default). Spread works but can't be heard on the attack:
-   every voice starts at the same point of its cycle, so a hit's loud start is nearly mono
-   (an exported hit at 100 % spread: side/mid 0.20 in its first 50 ms, 1.6 after 150 ms). Start
-   each voice at a different point of its cycle (without the voices cancelling at low Detune;
-   keep the loudness matched), keep the Spread knob, and pick its default (50 or 100 %) by ear.
-2. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
+done in PRs 50, 51 and 52.
+
+1. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
    Checked after PR 37: ESLint 10.14 and typescript-eslint 8.72 still need `minimatch` 10, and
    `npm audit` reports 10 moderate advisories for them.
-3. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+2. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1161,6 +1173,7 @@ Done:
 | 49 | Effect switches on the pedals: CRUSH on the overdrive (a bit crusher, 8 bits at 12 kHz to 4 bits at 3 kHz as DRIVE goes up; an AudioWorklet, `src/audio/crusher.ts`) and PING PONG on the delay (echoes alternate left and right, `src/audio/pingPong.ts`); in the live and export engines, saved (older projects get them off), reset by presets, sometimes rolled by the Sounds dice. |
 | 50 | Pad settings and repeats: the **Repeats brush** (×2 ×3 ×4 in the Step Sequencer header: click or drag across pads to give them that many hits, again for one; Esc to stop) and ⋯ → Clear Repeats; a pad's ⋮ closes its own settings; the settings stay inside the window for the last pads (they assumed 380 px, but are up to 420); a key or octave in them plays the note on the pad's wave (the phone's note picker uses the pad's wave too). Plan: patch cables on hold; the maintainer's review (presets and Melody Maker, Unison) added. |
 | 51 | Presets and Melody Maker: the boxes' captions read **Sound presets** and **Pattern presets**; the Pulse pattern (Pattern Tools' Every 4 again) became **Tresillo** (3-3-2 twice); the Patterns dice builds a beat: a one- or two-beat idea repeated across the bar (or 5 or 7 hits spread evenly), about half with a fill on the last beat, never more than four empty steps in a row; the Melody Maker's ⋯ menu opens inside the window at every width (it ran off the right edge and the bottom on a laptop), and its Undo last melody is gone (Ctrl+Z does it). |
+| 52 | Unison: Voices 2–4 (one voice sounded as off; six measured narrower than three; a project saved with 1 opens with unison off, 5–6 as 4), a notch at 12 cents on Detune, and Spread 100 % by default. The voices start at different points of their cycle, more with more Spread (`src/audio/unison.ts`; the shapes rebuilt from the spec's series in `waves.ts`), so a hit is wide from its first moment: its first 50 ms measured side/mid 0.35 → 0.87 at full Spread, for 0.9 dB of level; Spread 0 plays as before. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
