@@ -308,7 +308,15 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `cutNoteEnd()`, never before its attack is done), the way a single-voice synth retriggers,
   so a long sound repeated doesn't pile up into a louder smear; the last hit rings out as
   usual. Saved per step as the synth lane's `ratchets` (1–4; projects saved before get 1s,
-  other values are clamped by `clampRatchet()`); Reset Pads and File → New put them back to 1.
+  other values are clamped by `clampRatchet()`); Reset Pads, the ⋯ menu's Clear Repeats and
+  File → New put them back to 1.
+  The **Repeats brush** (PR 50; `×2 ×3 ×4` beside "Vel →" in the Step Sequencer header,
+  `repeatBrush` in `DrumSequencer.vue`, not saved): while one is lit, a click or a drag across
+  pads (`SynthStepGrid.vue`'s `paintRepeats()`, like painting steps) gives them that many hits
+  and turns them on; a pad that has the brush's count already goes back to one (the first pad
+  decides, as with steps). The pad under the mouse shows what a click would give (a dashed
+  badge), and its velocity and pitch sliders hide. Enter on a focused pad paints it; Esc, the
+  lit button or File → New puts the brush down. A drag is one undo step.
   Ratchets are part of the pattern: sounds (presets) and their dice leave them alone; patterns
   set them.
 - Filter envelope (`filterEnv.ts`; the Filter card's Env Amt and Decay knobs): each note's
@@ -331,6 +339,18 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   parameters, changed gain staging) must be mirrored there, or exports will sound different.
   (Until PR 34 it sent the noise layer through drive, delay and reverb, unfiltered; now it
   matches the live engine: 40 Hz–16 kHz, straight to the master.) See "Export audio".
+
+### Pad settings (the ⋮ popover)
+- `PadSettingsPopover.vue`, opened by a pad's ⋮ (`openPadSettings()` in `DrumSequencer.vue`):
+  the pad's wave, noise, Repeats, note (a keyboard and octaves), Fine and Hz. The same ⋮ again
+  closes it, another pad's moves it there (the popover ignores mouse-downs on a ⋮ and leaves
+  that to `openPadSettings()`), and a click elsewhere or Esc closes it.
+- It's placed beside its pad and kept inside the window by its real width
+  (`clamp(320px, 48vw, 420px)`, the window less its scrollbar); under 720 px it's centred.
+  Before PR 50 it assumed 380 px and ran off the right edge for the last pads.
+- A click on a key or an octave plays the pad's new note on the pad's own wave
+  (`audition` → `auditionNote(hz, wave)`, as the Melody Maker's keys and the phone's note
+  picker do); not while the synth lane is muted.
 
 ### Effect switches
 - Two pedals have a mini toggle (`PedalSwitch.vue`, `role="switch"`, in the corner right of
@@ -585,7 +605,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   does (value tooltip, envelope or filter view), and leaving the knob emits `knobEnd`.
 - Step pads (`SynthStepGrid.vue`): one Tab stop for the grid (only the last used pad has
   `tabindex="0"`). Left/Right move between pads, Home/End to the first/last, Enter turns
-  the focused pad on or off. Each pad is a toggle button named "Step 3", plus its note when on.
+  the focused pad on or off (with the Repeats brush, gives it the brush's hits; Esc puts the
+  brush down). Each pad is a toggle button named "Step 3", plus its note when on.
 - Focus rings show for keyboard focus only (`:focus-visible`), in the theme's accent color.
 
 ### Undo / redo
@@ -954,13 +975,28 @@ Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the m
 changes it as ideas come up). Everything drum-related waits until the maintainer brings the
 drum lanes back.
 
-1. **Patch cables**: animated cables from the LFO to what it moves (Cutoff, the Pulse tile,
-   the pads), swaying a little, never over a control, still with `prefers-reduced-motion`.
-   They depend on where things sit, which the layout (PR 41) settled.
-2. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
+Agreed after PR 49 (the maintainer's review of the pad popup, presets, Melody Maker and
+Unison); the pad popup part was PR 50:
+1. **Presets and Melody Maker**: the boxes' captions "Sound presets" and "Pattern presets";
+   the Pulse pattern (the same steps as Pattern Tools' Every 4) replaced by **Tresillo**
+   (3-3-2: hits on steps 1, 4, 7, 9, 12, 15; other options if the maintainer doesn't like
+   it); a Patterns dice whose rolls sound like usable rhythms: a short idea (one or two beats)
+   repeated across the bar, the last beat sometimes changed into a fill, hits spread through
+   the bar rather than bunched (today each hit is placed on its own, so rolls like "step 1, six
+   empty steps, two hits" come out); the Melody Maker's ⋯ menu kept on screen at every width
+   (it opens to the right of its button and is only clamped under 720 px), and its "Undo last
+   melody" removed (Undo does it).
+2. **Unison**: Voices 2–4 (1 voice with unison on sounds as off, and 6 voices measured
+   narrower than 3); a saved project with 1 voice opens with unison off, 5–6 as 4; a notch at
+   12 cents on Detune (already the default). Spread works but can't be heard on the attack:
+   every voice starts at the same point of its cycle, so a hit's loud start is nearly mono
+   (an exported hit at 100 % spread: side/mid 0.20 in its first 50 ms, 1.6 after 150 ms). Start
+   each voice at a different point of its cycle (without the voices cancelling at low Detune;
+   keep the loudness matched), keep the Spread knob, and pick its default (50 or 100 %) by ear.
+3. **ESLint**, once ESLint and typescript-eslint move to `minimatch` 11 (see "No linter yet").
    Checked after PR 37: ESLint 10.14 and typescript-eslint 8.72 still need `minimatch` 10, and
    `npm audit` reports 10 moderate advisories for them.
-3. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -999,6 +1035,10 @@ heard, and the presets peak well below clipping (0.2–0.5), but measurements se
 browser tests use `__swingOver` to ignore it.
 
 On hold (ask the maintainer before starting; put on hold after PR 33, "not now"):
+- **Patch cables** (put off after PR 49: the maintainer wants to tweak the layout more first):
+  animated cables from the LFO to what it moves (Cutoff, the Pulse tile, the pads), swaying a
+  little, never over a control, still with `prefers-reduced-motion`. They depend on where
+  things sit.
 - **Google Play** (after phone mode, PR 45, works well; the maintainer's call): the PWA wrapped
   as a Trusted Web Activity (PWABuilder or Bubblewrap; Web MIDI still works), a $25 developer
   account, `/.well-known/assetlinks.json` on the main site, and for a new personal account a
@@ -1115,6 +1155,7 @@ Done:
 | 47 | Phone mode, round two: the "Turn your phone" screen covers the app (the pad numbers showed through and the page scrolled under it); its text and Desktop View / Phone view renamed; Octave ↓ / ↑ under the tempo; a tiny oscilloscope beside the tabs; a finger drawn across pads paints them; the playing pad stands out (outline, a bar along its top, brighter); the top bar fits down to 568 px. |
 | 48 | Phone mode, round three: Play / Stop in the top bar on every page; the Play tab renamed Pads, the tabs one segmented bar; Sound and Pattern steppers and Clear beside the pads; Reset… in the menu (asks first: pads, or pads and sound; Undo brings them back); a shorter Export audio on the phone (bars and ending, one normalized mix); the Phone view button in the accent and above the pad numbers. |
 | 49 | Effect switches on the pedals: CRUSH on the overdrive (a bit crusher, 8 bits at 12 kHz to 4 bits at 3 kHz as DRIVE goes up; an AudioWorklet, `src/audio/crusher.ts`) and PING PONG on the delay (echoes alternate left and right, `src/audio/pingPong.ts`); in the live and export engines, saved (older projects get them off), reset by presets, sometimes rolled by the Sounds dice. |
+| 50 | Pad settings and repeats: the **Repeats brush** (×2 ×3 ×4 in the Step Sequencer header: click or drag across pads to give them that many hits, again for one; Esc to stop) and ⋯ → Clear Repeats; a pad's ⋮ closes its own settings; the settings stay inside the window for the last pads (they assumed 380 px, but are up to 420); a key or octave in them plays the note on the pad's wave (the phone's note picker uses the pad's wave too). Plan: patch cables on hold; the maintainer's review (presets and Melody Maker, Unison) added. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

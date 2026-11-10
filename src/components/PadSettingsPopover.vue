@@ -40,12 +40,12 @@
                 <div v-for="(key, i) in NATURALS" :key="key.n" class="kb-cell" :class="{ 'has-sharp': key.hasSharp }">
                     <button class="pt-seg-btn kb-white" :class="{ 'is-active': (baseMidi % 12) === key.idx }"
                         :disabled="isNoteDisabled(key.idx, octave)"
-                        @click="!isNoteDisabled(key.idx, octave) && setSemitone(key.idx)">{{ key.n }}</button>
+                        @click="!isNoteDisabled(key.idx, octave) && pickSemitone(key.idx)">{{ key.n }}</button>
 
                     <button v-if="key.hasSharp" class="pt-seg-btn kb-black"
                         :class="{ 'is-active': (baseMidi % 12) === key.sharpIdx }"
                         :disabled="isNoteDisabled(key.sharpIdx, octave)"
-                        @click="!isNoteDisabled(key.sharpIdx, octave) && setSemitone(key.sharpIdx)">{{ key.n
+                        @click="!isNoteDisabled(key.sharpIdx, octave) && pickSemitone(key.sharpIdx)">{{ key.n
                         }}#</button>
                 </div>
             </div>
@@ -54,7 +54,7 @@
                 <div class="pad-label">Octave</div>
                 <div class="pt-seg pt-seg-sm octave-seg" role="group" aria-label="Octave">
                     <button v-for="o in availableOctaves" :key="o" class="pt-seg-btn"
-                        :class="{ 'is-active': octave === o }" @click="setOctave(o)">{{ o }}</button>
+                        :class="{ 'is-active': octave === o }" @click="pickOctave(o)">{{ o }}</button>
                 </div>
             </div>
 
@@ -118,6 +118,7 @@ const emit = defineEmits<{
     (e: 'update:noiseEnabled', v: boolean): void;
     (e: 'update:ratchet', v: number): void;
     (e: 'close'): void;
+    (e: 'audition', hz: number): void; // a key or octave was clicked: play the pad's new note
 }>();
 
 // open/close 
@@ -129,6 +130,9 @@ function close(): void { openLocal.value = false; emit('close'); }
 const rootEl = ref<HTMLElement | null>(null);
 function onDocClick(e: MouseEvent): void {
     const t = e.target as Node | null;
+    // A pad's ⋮ decides for itself (DrumSequencer's openPadSettings): its own pad's closes the
+    // popover, another pad's moves it there. Closing here too would reopen it on the click.
+    if ((t as Element | null)?.closest?.('.pad-settings-dot')) return;
     if (rootEl.value && t && !rootEl.value.contains(t)) close();
 }
 function onKey(e: KeyboardEvent): void { if (e.key === 'Escape') close(); }
@@ -143,7 +147,8 @@ onBeforeUnmount(() => {
 });
 
 // positioning
-const POP_W = 380;
+// Its width, as its style sets it: clamp(320px, 48vw, 420px)
+const popWidth = () => Math.max(320, Math.min(420, window.innerWidth * 0.48));
 // About its real height (with the Repeats row, 450 px), so it opens above the pad when there
 // isn't room below, and stays on screen either way
 const EST_H = 460;
@@ -155,15 +160,17 @@ const pos = computed(() => {
 
     // Fallback: center in viewport, slightly to the right
     if (!r) {
-        let x = (window.innerWidth - POP_W) / 2 + OFFSET_X;
-        x = Math.min(window.innerWidth - POP_W - m, Math.max(m, x));
+        let x = (window.innerWidth - popWidth()) / 2 + OFFSET_X;
+        x = Math.min(window.innerWidth - popWidth() - m, Math.max(m, x));
 
         let y = Math.max(m, (window.innerHeight - EST_H) / 2);
         return { x, y };
     }
 
+    // document.documentElement.clientWidth: the window less its scrollbar
+    const viewW = document.documentElement.clientWidth || window.innerWidth;
     let x = r.left + OFFSET_X;
-    x = Math.min(window.innerWidth - POP_W - m, Math.max(m, x));
+    x = Math.min(viewW - popWidth() - m, Math.max(m, x));
 
     let y = r.bottom + m;
     if (y + EST_H > window.innerHeight) {
@@ -225,6 +232,15 @@ function setOctave(o: number): void {
     const s = baseMidi.value % 12;
     baseMidi.value = (o + 1) * 12 + s;
     detuneCentsLocal.value = 0;
+}
+// A click on the keyboard or an octave: set the note, then play it, as the Melody Maker's keys do
+function pickSemitone(i: number): void {
+    setSemitone(i);
+    emit('audition', currentHz.value);
+}
+function pickOctave(o: number): void {
+    setOctave(o);
+    emit('audition', currentHz.value);
 }
 function isNoteDisabled(semi: number, o: number): boolean { return !isNoteInRange(o, semi); }
 function nearestNote(hz: number): string { return midiToName(freqToMidi(hz)); }

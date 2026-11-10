@@ -350,7 +350,7 @@ function setRatchet(i: number, r: number) {
 function pickNote(i: number, hz: number) {
 	ctx.inst.pitches = replace(ctx.inst.pitches, i, hz);
 	if (!ctx.inst.steps[i]) setStepOn(i, true);
-	ctx.audition(hz);
+	ctx.audition(hz, ctx.inst.waveforms?.[i]); // with the pad's own wave
 }
 
 // The notes offered for a held pad: the Melody Maker's key and scale (every semitone with no

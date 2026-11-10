@@ -2194,7 +2194,7 @@ test('dice rolls are never silent or clipping', async ({ page }) => {
 test("a step's Repeats play quick hits within the step, live and in WAV exports", async ({ page }) => {
 	const setRepeats = async (step: number, label: string) => {
 		await page.locator('.pad-settings-dot').nth(step).click();
-		await page.getByRole('group', { name: 'Repeats' }).getByRole('button', { name: label, exact: true }).click();
+		await page.getByRole('group', { name: 'Repeats', exact: true }).getByRole('button', { name: label, exact: true }).click();
 		await page.keyboard.press('Escape');
 	};
 	await setTempo(page, 80); // the timings below are at 80 BPM
@@ -2235,6 +2235,103 @@ test("a step's Repeats play quick hits within the step, live and in WAV exports"
 	await page.locator('.step-menu-anchor .pt-info-icon').click();
 	await page.getByRole('menuitem', { name: 'Reset Pads' }).click();
 	await expect(page.locator('.ratchet-badge')).toHaveCount(0);
+});
+
+test('the Repeats brush gives every pad it crosses that many hits, and takes them off again', async ({ page }) => {
+	const ratchets = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data
+		.instruments.find((l: any) => l.name === 'synth-voice').ratchets as number[];
+	const onSteps = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data
+		.instruments.find((l: any) => l.name === 'synth-voice').steps as boolean[];
+	const badge = (i: number) => pads(page).nth(i).locator('..').locator('.ratchet-badge:not(.is-preview)');
+	await page.waitForTimeout(SETTLED); // the opened project becomes the starting point
+	await turnOnPads(page, [0]);
+	await page.waitForTimeout(SETTLED);
+
+	const x3 = page.getByRole('button', { name: 'Repeats brush ×3' });
+	await x3.click();
+	await expect(x3).toHaveAttribute('aria-pressed', 'true');
+
+	// A drag from pad 1 to pad 4: each gets three hits, and the ones that were off turn on
+	const box = async (i: number) => (await pads(page).nth(i).boundingBox())!;
+	const a = await box(0), b = await box(3);
+	await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 10 });
+	await page.mouse.up();
+	await page.mouse.move(5, 5); // off the pads: the one under the mouse shows the brush's preview
+	for (const i of [0, 1, 2, 3]) await expect(badge(i)).toHaveText('×3');
+	expect((await ratchets()).slice(0, 5)).toEqual([3, 3, 3, 3, 1]);
+	expect((await onSteps()).slice(0, 5)).toEqual([true, true, true, true, false]);
+
+	// The whole drag is one undo step
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	for (const i of [0, 1, 2, 3]) await expect(badge(i)).toHaveCount(0);
+	await expect(pads(page).nth(1)).toHaveAttribute('aria-pressed', 'false');
+	await expect(pads(page).nth(0)).toHaveAttribute('aria-pressed', 'true');
+	await page.getByRole('button', { name: 'Redo', exact: true }).click();
+	for (const i of [0, 1, 2, 3]) await expect(badge(i)).toHaveText('×3');
+
+	// A pad that has the brush's hits already goes back to one, and stays on
+	await pads(page).nth(1).click();
+	await page.mouse.move(5, 5);
+	await expect(badge(1)).toHaveCount(0);
+	expect((await ratchets()).slice(0, 4)).toEqual([3, 1, 3, 3]);
+	expect((await onSteps())[1]).toBe(true);
+
+	// Another count paints over; the keyboard's Enter paints the focused pad
+	await page.getByRole('button', { name: 'Repeats brush ×2' }).click();
+	await expect(x3).toHaveAttribute('aria-pressed', 'false');
+	await pads(page).nth(5).focus();
+	await page.keyboard.press('Enter');
+	await expect(badge(5)).toHaveText('×2');
+
+	// Esc puts the brush down: a click turns a pad on or off again
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('button', { name: 'Repeats brush ×2' })).toHaveAttribute('aria-pressed', 'false');
+	await pads(page).nth(5).click();
+	await expect(pads(page).nth(5)).toHaveAttribute('aria-pressed', 'false');
+	await expect(badge(5)).toHaveText('×2'); // its repeats stay for when it's back on
+
+	// ⋯ → Clear Repeats: every pad back to one hit
+	await page.locator('.step-menu-anchor .pt-info-icon').click();
+	await page.getByRole('menuitem', { name: 'Clear Repeats' }).click();
+	await expect(page.locator('.ratchet-badge')).toHaveCount(0);
+	expect((await ratchets()).every((n) => n === 1)).toBe(true);
+});
+
+test("a pad's settings: its ⋮ closes them, they stay on screen, and a key plays the note", async ({ page }) => {
+	const dot = (i: number) => page.locator('.pad-settings-dot').nth(i);
+	const popover = page.locator('.pad-popover');
+
+	// The same ⋮ again closes it; another pad's ⋮ moves it there
+	await dot(2).click();
+	await expect(popover).toContainText('Pad 3');
+	await dot(2).click();
+	await expect(popover).toHaveCount(0);
+	await dot(2).click();
+	await dot(5).click();
+	await expect(popover).toContainText('Pad 6');
+
+	// A key plays the pad's new note (and sets it), on the pad's own wave
+	await page.evaluate(() => { (window as any).__starts.length = 0; });
+	await popover.getByRole('button', { name: 'D', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => (window as any).__starts.filter((s: any) => s.osc).length)).toBeGreaterThan(0);
+	await page.keyboard.press('Escape');
+	await expect(popover).toHaveCount(0);
+
+	// The last pads' settings stay inside the window at any width
+	for (const width of [1600, 1280, 1024, 820]) {
+		await page.setViewportSize({ width, height: 900 });
+		await dot(15).scrollIntoViewIfNeeded();
+		await dot(15).click();
+		const box = (await popover.boundingBox())!;
+		const viewW = await page.evaluate(() => document.documentElement.clientWidth);
+		expect(box.x, `left edge at ${width} px`).toBeGreaterThanOrEqual(0);
+		expect(box.x + box.width, `right edge at ${width} px`).toBeLessThanOrEqual(viewW);
+		await page.keyboard.press('Escape');
+		await expect(popover).toHaveCount(0);
+	}
 });
 
 // --- Export audio ----------------------------------------------------------------------------
