@@ -10,6 +10,7 @@
 // factory defaults below (a sound setting into resetSoundToFactoryDefaults, which presets use
 // too), and, if it affects sound, into the live and export engines; see CLAUDE.md.
 
+import { isLfoTarget, type LfoTarget } from '../../audio/lfo';
 import type { Ref } from 'vue';
 import { clampUnisonVoices, UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MIN } from '../../audio/unison';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_TEMPO, divisionForTime, isDelayDivision, syncedDelaySeconds } from '../delaySync';
@@ -91,7 +92,7 @@ export type ProjectState = {
 			enabled: Ref<boolean>;
 			rate: Ref<number>;
 			depth: Ref<number>;
-			target: Ref<'pitch' | 'filter' | 'pwm'>;
+			target: Ref<LfoTarget>;
 			waveform: Ref<'sine' | 'square'>;
 			sync: Ref<boolean>;
 			division: Ref<string>;
@@ -489,9 +490,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		if (typeof syn.lfo.depth === 'number') lfoDepth.value = syn.lfo.depth;
 
 		if (syn.lfo.target) {
-			lfoTarget.value = (syn.lfo.target === 'filter' || syn.lfo.target === 'pitch' || syn.lfo.target === 'pwm')
-				? syn.lfo.target
-				: 'pitch';
+			lfoTarget.value = isLfoTarget(syn.lfo.target) ? syn.lfo.target : 'pitch';
 		}
 
 		if (syn.lfo.waveform) lfoWaveform.value = syn.lfo.waveform;

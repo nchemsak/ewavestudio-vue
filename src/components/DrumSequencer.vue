@@ -431,10 +431,13 @@
 						<div class="module mod">
 							<SectionWrap id="mod" title="LFO" v-model="collapsibleState['mod']">
 								<template #tools>
+									<!-- RETRIG: each note starts the LFO afresh (src/audio/lfo.ts) -->
+									<PillSwitch v-model="lfoRetrigger" label="RETRIG" name="LFO retrigger"
+										tip="Each note starts the LFO from the beginning" :disabled="!lfoEnabled" />
 									<button class="pt-info-icon" aria-label="Advanced options"
 										@click="lfoRef?.openAdvanced($event)">⋯</button>
 								</template>
-								<LFOGroup ref="lfoRef" :showToggle="false" :pulseInUse="pulseInUse" v-model="lfoEnabled" v-model:rate="lfoRate"
+								<LFOGroup ref="lfoRef" :showToggle="false" :pulseInUse="pulseInUse" :fmInUse="fmInUse" v-model="lfoEnabled" v-model:rate="lfoRate"
 									v-model:depth="lfoDepth" v-model:target="lfoTarget" v-model:waveform="lfoWaveform"
 									v-model:syncEnabled="lfoSync" v-model:division="lfoDivision"
 									v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
@@ -645,6 +648,8 @@ import SynthStepGrid from './SynthStepGrid.vue'
 import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
 import VelSwitch from './VelSwitch.vue';
+import PillSwitch from './PillSwitch.vue';
+import { LFO_DEPTH_MAX, type LfoTarget } from '../audio/lfo';
 import { VELOCITY_FAN, routeVelocity } from '../audio/velocity';
 import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
@@ -2410,7 +2415,7 @@ const exportState = computed<StepSequencerState>(() => {
 const lfoEnabled = ref(true);
 const lfoRate = ref(5);
 const lfoDepth = ref(0);
-const lfoTarget = ref<'pitch' | 'filter' | 'pwm'>('pitch');
+const lfoTarget = ref<LfoTarget>('pitch');
 
 // Does anything play the pulse wave? (the LFO's PW target only affects pulse notes): the main
 // wave (MIDI notes play it), or any step that's on, in an unmuted lane, set to Pulse
@@ -2425,16 +2430,11 @@ const lfoWaveform = ref<'sine' | 'square'>('sine');
 const lfoSync = ref(true);
 const lfoDivision = ref('1/8');
 
-// sensible depth caps per target
-const lfoDepthMax = computed(() => {
-	switch (lfoTarget.value) {
-		case 'pitch': return 1200;
+// Does anything use FM? (the LFO's FM target moves the FM card's Amount: nothing while FM is off)
+const fmInUse = computed(() => fmEnabled.value && fmIndex.value > 0);
 
-		case 'filter': return 5000;
-		case 'pwm': return 45; // % of width
-		default: return 100;
-	}
-});
+// The Depth knob's range for each target (src/audio/lfo.ts)
+const lfoDepthMax = computed(() => LFO_DEPTH_MAX[lfoTarget.value] ?? 100);
 
 // LFO END
 

@@ -2,13 +2,14 @@
 <template>
     <KnobGroup v-model="localEnabled" :color="color" :showToggle="showToggle" :showHeader="false">
         <div class="lfo-root lfo-container">
-            <!-- One compact row: power tile, Rate and Depth, then the Wave and Target switches -->
+            <!-- Option C (PR 61): the power tile, Rate and Depth, and the Wave switch on one line;
+                 the Target switch on a line of its own under them (five targets don't fit beside) -->
             <div class="lfo-row">
-                <button type="button" class="lfo-power" :class="{ on: localEnabled, idle: pwIdle }"
+                <button type="button" class="lfo-power" :class="{ on: localEnabled, idle: !!idleText }"
                     :aria-pressed="localEnabled" aria-label="LFO on"
-                    :title="pwIdle ? 'The LFO is set to PW, but no pads play Pulse' : 'Toggle LFO'"
+                    :title="idleTitle || 'Toggle LFO'"
                     @click="localEnabled = !localEnabled">
-                    <span class="lfo-status">{{ pwIdle ? 'No Pulse' : localEnabled ? 'On' : 'Off' }}</span>
+                    <span class="lfo-status">{{ idleText || (localEnabled ? 'On' : 'Off') }}</span>
                     <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
                         <path :d="wavePath(localWaveform || 'sine')" class="wv" />
                     </svg>
@@ -50,25 +51,17 @@
                             </button>
                         </div>
                     </div>
+                </div>
+            </div>
 
-                    <div class="lfo-switch">
-                        <span class="lfo-switch-label" aria-hidden="true">Target</span>
-                        <div class="lfo-seg" role="radiogroup" aria-label="LFO Target">
-                            <button type="button" class="lfo-seg-btn"
-                                :class="{ active: currentTarget === 'pitch' }" :disabled="!localEnabled" role="radio"
-                                :aria-checked="currentTarget === 'pitch' ? 'true' : 'false'"
-                                @click="updateTarget('pitch')" title="Modulate Pitch">Pitch</button>
-                            <button type="button" class="lfo-seg-btn"
-                                :class="{ active: currentTarget === 'filter' }" :disabled="!localEnabled" role="radio"
-                                :aria-checked="currentTarget === 'filter' ? 'true' : 'false'"
-                                @click="updateTarget('filter')" title="Modulate Filter">Filter</button>
-                            <button type="button" class="lfo-seg-btn"
-                                :class="{ active: currentTarget === 'pwm', 'no-pulse': !pulseInUse }" :disabled="!localEnabled" role="radio"
-                                :aria-checked="currentTarget === 'pwm' ? 'true' : 'false'" aria-label="Pulse width"
-                                @click="updateTarget('pwm')"
-                                :title="pulseInUse ? 'Modulate the pulse wave\'s width' : 'Only affects pads playing Pulse. None do right now.'">Pulse</button>
-                        </div>
-                    </div>
+            <div class="lfo-switch lfo-target">
+                <span class="lfo-switch-label" aria-hidden="true">Target</span>
+                <div class="lfo-seg" role="radiogroup" aria-label="LFO Target">
+                    <button v-for="t in TARGETS" :key="t.value" type="button" class="lfo-seg-btn"
+                        :class="{ active: currentTarget === t.value, 'no-pulse': t.idle?.() }" :disabled="!localEnabled"
+                        role="radio" :aria-checked="currentTarget === t.value ? 'true' : 'false'"
+                        :aria-label="t.aria || t.label" @click="updateTarget(t.value)"
+                        :title="t.idle?.() ? t.idleTitle : t.title">{{ t.label }}</button>
                 </div>
             </div>
 
@@ -98,8 +91,9 @@
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
+import type { LfoTarget } from '../../audio/lfo';
 
-type Target = 'pitch' | 'filter' | 'pwm';
+type Target = LfoTarget;
 type Wave = 'sine' | 'square';
 
 const props = withDefaults(
@@ -120,6 +114,8 @@ const props = withDefaults(
         bipolar?: boolean;
         // Does any pad (or the main wave) play Pulse? PW only affects those
         pulseInUse?: boolean;
+        // Is FM on (with some Amount)? The FM target moves its Amount, so nothing while it's off
+        fmInUse?: boolean;
     }>(),
     {
         modelValue: false,
@@ -136,7 +132,8 @@ const props = withDefaults(
         showToggle: false,
         retrigger: false,
         bipolar: false,
-        pulseInUse: true
+        pulseInUse: true,
+        fmInUse: true
     }
 );
 
@@ -242,8 +239,29 @@ watch(
 watch(localDepth, (v) => emit('update:depth', v));
 
 const currentTarget = computed<Target>(() => props.target);
-// Set to PW with nothing playing Pulse: the LFO changes nothing you can hear, so the tile says so
-const pwIdle = computed(() => localEnabled.value && currentTarget.value === 'pwm' && !props.pulseInUse);
+
+// The Target switch's buttons. Pulse and FM only do something while something plays Pulse /
+// while FM is on: otherwise their button is dimmed, with a title saying why
+const TARGETS: { value: Target; label: string; aria?: string; title: string; idle?: () => boolean; idleTitle?: string }[] = [
+    { value: 'pitch', label: 'Pitch', title: 'Modulate Pitch' },
+    { value: 'filter', label: 'Filter', title: 'Modulate Filter' },
+    { value: 'pwm', label: 'Pulse', aria: 'Pulse width', title: "Modulate the pulse wave's width",
+        idle: () => !props.pulseInUse, idleTitle: 'Only affects pads playing Pulse. None do right now.' },
+    { value: 'amp', label: 'Level', title: 'Modulate the level: tremolo' },
+    { value: 'fm', label: 'FM', aria: 'FM amount', title: "Modulate the FM card's Amount",
+        idle: () => !props.fmInUse, idleTitle: 'Only affects notes while FM is on. It is off now.' },
+];
+
+// Set to a target that does nothing right now (PW with no Pulse, FM with FM off): the LFO
+// changes nothing you can hear, so the tile says so
+const idleText = computed(() => {
+    if (!localEnabled.value) return '';
+    if (currentTarget.value === 'pwm' && !props.pulseInUse) return 'No Pulse';
+    if (currentTarget.value === 'fm' && !props.fmInUse) return 'FM off';
+    return '';
+});
+const idleTitle = computed(() => idleText.value === 'No Pulse' ? 'The LFO is set to Pulse, but no pads play Pulse'
+    : idleText.value === 'FM off' ? 'The LFO is set to FM, but FM is off' : '');
 const updateTarget = (t: Target): void => {
     emit('update:target', t);
     // Reset depth when changing target
@@ -307,6 +325,10 @@ const depthReadout = computed<string>(() => {
             return `${Math.round(v)} Hz`;
         case 'pwm':
             return `±${Math.round(v)}% width`;
+        case 'amp':
+            return `${Math.round(v)}% level`;
+        case 'fm':
+            return `±${Math.round(v)}% FM`;
     }
 });
 
@@ -481,7 +503,25 @@ svg {
     gap: 10px;
 }
 
-/* Wave and Target: two small segmented switches, stacked */
+/* The Target switch: a line of its own, its buttons sharing the card's width */
+.lfo-target {
+    margin-top: 10px;
+    width: 100%;
+}
+
+.lfo-target .lfo-seg {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+/* Its caption stays: there's room on its own line */
+.lfo-target .lfo-switch-label {
+    display: inline;
+    flex: none;
+}
+
+/* The Wave switch, at the first line's right end */
 .lfo-switches {
     flex: 1 1 auto;
     min-width: 0;

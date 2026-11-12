@@ -21,6 +21,7 @@ import { applyFilterEnv } from './filterEnv';
 import { createVoiceSource, lfoPwmTapGain, prepareVoiceWave, waveGain, type Wave } from './waves';
 import { routeVelocity, routedCutoff, routedSemitones, routedNoise } from './velocity';
 import { startFM } from './fm';
+import { startNoteLfo, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, lfoWaveAt, type LfoTarget } from './lfo';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
 import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from './ratchet';
@@ -71,10 +72,11 @@ export type LiveEngineSettings = {
 		enabled: R<boolean>;
 		rate: R<number>;
 		depth: R<number>;
-		target: R<'pitch' | 'filter' | 'pwm'>;
+		target: R<LfoTarget>;
 		waveform: R<'sine' | 'square'>;
 		sync: R<boolean>;
 		division: R<string>;
+		retrigger: R<boolean>; // each note starts the LFO afresh (lfo.ts)
 	};
 	fm: { enabled: R<boolean>; modFreq: R<number>; index: R<number>; ratio: R<number | null> };
 	pitchEnv: { enabled: R<boolean>; semitones: R<number>; decayMs: R<number>; mode: R<'up' | 'down' | 'random'> };
@@ -466,7 +468,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// LFO START
 
-	const { enabled: lfoEnabled, rate: lfoRate, depth: lfoDepth, target: lfoTarget, waveform: lfoWaveform, sync: lfoSync, division: lfoDivision } = s.lfo;
+	const { enabled: lfoEnabled, rate: lfoRate, depth: lfoDepth, target: lfoTarget, waveform: lfoWaveform, sync: lfoSync, division: lfoDivision, retrigger: lfoRetrigger } = s.lfo;
 
 	//  LFO source + core gain. One shared oscillator; each note taps lfoGain.
 	let lfoOsc: OscillatorNode | null = null;
@@ -487,8 +489,16 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	const lfoProbe = audioCtx.createAnalyser();
 	lfoProbe.fftSize = 32;
 	const lfoProbeBuf = new Float32Array(lfoProbe.fftSize);
+	// With Retrigger, each note runs its own LFO from its start: show where the latest note's is
+	const noteStarts: number[] = []; // audio times of the latest notes' starts (some ahead)
 	function lfoNow(): number | null {
 		if (!lfoOsc || audioCtx.state !== 'running') return null;
+		if (lfoRetrigger.value) {
+			const now = audioCtx.currentTime;
+			const started = noteStarts.filter((t) => t <= now);
+			if (!started.length) return null;
+			return lfoWaveAt(lfoWaveform.value, currentLfoHz(), now - Math.max(...started));
+		}
 		lfoProbe.getFloatTimeDomainData(lfoProbeBuf);
 		const v = lfoProbeBuf[lfoProbeBuf.length - 1];
 		return Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : null;
@@ -561,6 +571,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 				break;
 			case 'filter':
 			case 'pwm':
+			case 'amp':
+			case 'fm':
 				lfoGain.gain.setValueAtTime(lfoDepth.value, t);
 				break;
 
@@ -569,10 +581,11 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	watch([lfoDepth, lfoTarget], applyDepthScale);
 	applyDepthScale();
 
-	// Detach a note's LFO tap from the shared LFO once the note has finished. Without this,
-	// every note ever played stays connected to the LFO and the nodes pile up.
+	// Detach a note's LFO tap from the LFO once the note has finished. Without this, every
+	// note ever played stays connected to the shared LFO and the nodes pile up. (A note's own
+	// LFO, with Retrigger, goes when its oscillator stops.)
 	function releaseLfoTap(tap: AudioNode, ...rest: AudioNode[]) {
-		try { lfoGain.disconnect(tap); } catch { /* already disconnected */ }
+		try { lfoGain.disconnect(tap); } catch { /* not connected to the shared LFO */ }
 		tap.disconnect();
 		rest.forEach(n => n.disconnect());
 	}
@@ -596,6 +609,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	function playSynthNote(freq: number, velocity: number, decayTime: number, startTime: number, waveType: Wave | string, opts: { addNoise?: boolean; vel?: number; maxDuration?: number } = {}) {
 
 		lastNoteAt = performance.now();
+		noteStarts.push(startTime);
+		if (noteStarts.length > 8) noteStarts.shift();
 
 		// Velocity routing: what this note's velocity does to decay, cutoff, pitch env and noise
 		const routed = routeVelocity({
@@ -659,6 +674,28 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			decay: pitchEnvDecay.value,
 		});
 
+		// The LFO this note listens to: the shared one, or with Retrigger its own, starting now
+		const lfoOn = lfoEnabled.value && lfoDepth.value !== 0;
+		const lfoSrc: AudioNode = lfoOn && lfoRetrigger.value
+			? startNoteLfo(audioCtx, lfoWaveform.value, currentLfoHz(), lfoDepth.value, startTime, noteEnd)
+			: lfoGain;
+		const lfoTapFrom = (tap: AudioNode) => { lfoSrc.connect(tap); return tap; };
+
+		// Level (tremolo): the whole note, tone and noise, goes through a gain the LFO moves
+		const tremolo = (lfoOn && lfoTarget.value === 'amp') ? (() => {
+			const tap = audioCtx.createGain();
+			tap.gain.value = LFO_AMP_TAP;
+			lfoTapFrom(tap);
+			const make = () => {
+				const g = audioCtx.createGain();
+				g.gain.value = lfoAmpBase(lfoDepth.value);
+				tap.connect(g.gain);
+				return g;
+			};
+			return { tap, make };
+		})() : null;
+		let firstOsc: OscillatorNode | null = null;
+
 		for (let i = 0; i < voices; i++) {
 			// The voice's sound source: the oscillator, plus the pulse network for 'pulse'
 			// (each unison voice starting at its own point of its cycle, unison.ts)
@@ -693,11 +730,12 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			voiceGain.gain.setValueAtTime(1 / voices, startTime);
 			panner.pan.setValueAtTime((dNorm * spreadPct) / 100, startTime);
 
-			//  LFO routing per target
-			if (lfoEnabled.value) {
+			if (!firstOsc) firstOsc = osc;
+			//  LFO routing per target (Level is note-wide, above)
+			if (lfoOn) {
 				if (lfoTarget.value === 'pitch') {
 					const lfoTap = audioCtx.createGain(); lfoTap.gain.value = 1;
-					lfoGain.connect(lfoTap).connect(osc.detune);
+					lfoTapFrom(lfoTap).connect(osc.detune);
 					osc.addEventListener('ended', () => releaseLfoTap(lfoTap));
 
 				} else if (lfoTarget.value === 'filter') {
@@ -711,13 +749,19 @@ export function useLiveEngine(s: LiveEngineSettings) {
 					ctrlLP.type = 'lowpass';
 					ctrlLP.frequency.value = 120;
 
-					lfoGain.connect(lfoTap).connect(ctrlLP).connect(voiceFilter.frequency);
+					lfoTapFrom(lfoTap).connect(ctrlLP).connect(voiceFilter.frequency);
 					osc.addEventListener('ended', () => releaseLfoTap(lfoTap, ctrlLP));
 				} else if (lfoTarget.value === 'pwm' && source.width) {
 					// Pulse-width modulation: moves the pulse's threshold (pulse wave only)
 					const lfoTap = audioCtx.createGain();
 					lfoTap.gain.value = lfoPwmTapGain(s.pulse.width.value, lfoDepth.value);
-					lfoGain.connect(lfoTap).connect(source.width);
+					lfoTapFrom(lfoTap).connect(source.width);
+					osc.addEventListener('ended', () => releaseLfoTap(lfoTap));
+				} else if (lfoTarget.value === 'fm' && fmHandle) {
+					// FM: the FM card's Amount swings by ±depth %
+					const lfoTap = audioCtx.createGain();
+					lfoTap.gain.value = lfoFmTapGain(fmHandle.deviationHz);
+					lfoTapFrom(lfoTap).connect(fmHandle.deviation);
 					osc.addEventListener('ended', () => releaseLfoTap(lfoTap));
 				}
 			}
@@ -730,11 +774,17 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			if (fmHandle) fmHandle.stop(noteEnd);
 		}
 
+		// The tone's way out: through the tremolo when the LFO moves the level
+		const oscOut: AudioNode = tremolo ? oscEnvGain.connect(tremolo.make()) : oscEnvGain;
+		if (tremolo && firstOsc) {
+			const t = tremolo.tap;
+			firstOsc.addEventListener('ended', () => setTimeout(() => releaseLfoTap(t), 500)); // after the noise
+		}
 		if (driveEnabled.value) {
-			oscEnvGain.connect(driveDry);
-			oscEnvGain.connect(driveShaper);
+			oscOut.connect(driveDry);
+			oscOut.connect(driveShaper);
 		} else {
-			oscEnvGain.connect(driveSum);
+			oscOut.connect(driveSum);
 		}
 
 		//  Noise
@@ -804,7 +854,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 				noiseLP.frequency.setValueAtTime(16000, startTime); // tame ultra-high fizz
 
 				// Mono path to master
-				mix.connect(noiseHP).connect(noiseLP).connect(noiseEnvGain).connect(masterGain);
+				const noiseOut: AudioNode = tremolo ? noiseEnvGain.connect(tremolo.make()) : noiseEnvGain;
+				mix.connect(noiseHP).connect(noiseLP).connect(noiseEnvGain);
+				noiseOut.connect(masterGain);
 			}
 		}
 	}

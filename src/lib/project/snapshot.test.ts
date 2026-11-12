@@ -175,6 +175,10 @@ describe('saving and loading a project', () => {
 		expect(st.synth.pulse.width.value).toBe(5); // and kept to 5–50%
 		applySnapshot(st, { synth: { lfo: { target: 'pwm' } } });
 		expect(st.synth.lfo.target.value).toBe('pwm');
+		for (const target of ['amp', 'fm'] as const) { // PR 61's targets: Level and FM
+			applySnapshot(st, { synth: { lfo: { target } } });
+			expect(st.synth.lfo.target.value).toBe(target);
+		}
 		applySnapshot(st, { selectedWaveform: 'glass' });
 		expect(st.selectedWaveform.value).toBe('glass');
 	});

@@ -7,6 +7,7 @@ import { STEPS, fresh, asSaved, changeEverything, leaves } from '../project/test
 import { WAVE_IDS } from '../../audio/waves';
 import { isDelayDivision } from '../delaySync';
 import { VELOCITY_SWITCH_AMOUNT } from '../../audio/velocity';
+import { LFO_DEPTH_MAX } from '../../audio/lfo';
 
 // Each knob's range (the panels in src/components/modules/), by snapshot path
 const RANGES: Record<string, [number, number]> = {
@@ -40,7 +41,6 @@ const RANGES: Record<string, [number, number]> = {
 	'fx.reverb.decay': [0.2, 4],
 	'fx.reverb.tone': [0, 1],
 };
-const LFO_DEPTH_MAX = { pitch: 1200, filter: 5000, pwm: 45 };
 const LFO_DIVISIONS = ['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32'];
 
 // Knobs whose panel rounds what it's given to its step: a value off the step would be changed

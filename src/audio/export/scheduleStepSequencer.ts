@@ -14,6 +14,7 @@ import { applyFilterEnv } from "../filterEnv";
 import { createVoiceSource, lfoPwmTapGain, waveGain, PULSE_WIDTH_DEFAULT } from "../waves";
 import { routeVelocity, routedCutoff, routedSemitones, routedNoise, type VelocityRouting } from "../velocity";
 import { startFM } from "../fm";
+import { startNoteLfo, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, type LfoTarget } from "../lfo";
 import { generateReverbIR } from "../reverb/generateIr";
 import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from "../ratchet";
 import { createCrusher } from "../crusher";
@@ -55,12 +56,12 @@ export type StepSequencerState = {
 
 		lfo: {
 			enabled: boolean;
-			target: "pitch" | "filter" | "pwm";
+			target: LfoTarget;
 			waveform: "sine" | "square";
-			depth: number;       // detune cents for pitch, Hz for filter
+			depth: number;       // in the target's units (lfo.ts): cents, Hz, % width, % level, % FM
 			rateHz: number;      // resolved from sync/division in the UI
 			division: string;
-			retrigger: boolean;
+			retrigger: boolean; // each note starts the LFO afresh, as live (lfo.ts)
 			bipolar: boolean;
 		};
 
@@ -617,6 +618,26 @@ function scheduleSynthNote(opts: {
 		oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005);
 	}
 
+	// The LFO this note listens to: the shared one, or with Retrigger its own, starting with
+	// the note (as in the live engine)
+	const lfoSrc: AudioNode | null = !(lfoState.enabled && lfoGainNode) ? null
+		: lfoState.retrigger ? startNoteLfo(ctx, lfoState.waveform, lfoState.rateHz, lfoState.depth, time, noteEnd)
+		: lfoGainNode;
+	// Level (tremolo): the whole note, tone and noise, goes through gains the LFO moves
+	let tremoloTap: GainNode | null = null;
+	if (lfoSrc && lfoState.target === "amp") {
+		tremoloTap = ctx.createGain();
+		tremoloTap.gain.value = LFO_AMP_TAP;
+		lfoSrc.connect(tremoloTap);
+	}
+	const tremolo = (input: AudioNode): AudioNode => {
+		if (!tremoloTap) return input;
+		const g = ctx.createGain();
+		g.gain.value = lfoAmpBase(lfoState.depth);
+		tremoloTap.connect(g.gain);
+		return input.connect(g);
+	};
+
 	// --- Unison / filter / LFO hookup (simplified parity) -------------------
 	const voices = unisonState.enabled ? clampUnisonVoices(unisonState.voices) : 1;
 
@@ -670,8 +691,9 @@ function scheduleSynthNote(opts: {
 		voiceGain.gain.setValueAtTime(1 / voices, time);
 		panner.pan.setValueAtTime((dNorm * spreadPct) / 100, time);
 
-		// LFO modulation (basic parity)
-		if (lfoState.enabled && lfoGainNode) {
+		// LFO modulation, as in the live engine (Level is note-wide, above)
+		if (lfoSrc) {
+			const lfoGainNode = lfoSrc;
 			if (lfoState.target === "pitch") {
 				const tap = ctx.createGain();
 				tap.gain.value = 1;
@@ -690,6 +712,10 @@ function scheduleSynthNote(opts: {
 				const tap = ctx.createGain();
 				tap.gain.value = lfoPwmTapGain(pulseWidth, lfoState.depth);
 				lfoGainNode.connect(tap).connect(source.width);
+			} else if (lfoState.target === "fm" && fmHandle) {
+				const tap = ctx.createGain();
+				tap.gain.value = lfoFmTapGain(fmHandle.deviationHz);
+				lfoGainNode.connect(tap).connect(fmHandle.deviation);
 			}
 		}
 
@@ -700,12 +726,13 @@ function scheduleSynthNote(opts: {
 		if (fmHandle) fmHandle.stop(noteEnd);
 	}
 
-	// Tone path → drive / FX chain
+	// Tone path → drive / FX chain (through the tremolo when the LFO moves the level)
+	const oscOut = tremolo(oscEnvGain);
 	if (driveEnabled) {
-		oscEnvGain.connect(driveDry);
-		oscEnvGain.connect(driveShaper);
+		oscOut.connect(driveDry);
+		oscOut.connect(driveShaper);
 	} else {
-		oscEnvGain.connect(driveSum);
+		oscOut.connect(driveSum);
 	}
 
 	// --- Noise path (matches live DrumSequencer playSynthNote) --------------
@@ -776,7 +803,8 @@ function scheduleSynthNote(opts: {
 			noiseLP.type = "lowpass";
 			noiseLP.frequency.setValueAtTime(16000, time); // tame ultra-high fizz
 
-			mix.connect(noiseHP).connect(noiseLP).connect(noiseEnvGain).connect(noiseOut);
+			mix.connect(noiseHP).connect(noiseLP).connect(noiseEnvGain);
+			tremolo(noiseEnvGain).connect(noiseOut);
 
 		}
 	}

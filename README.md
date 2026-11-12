@@ -17,8 +17,9 @@ https://www.ephemeralwave.com/studio/ and is never changed.
   square, a pulse with adjustable width (and LFO pulse-width modulation), organ, hollow and glass;
   any step can repeat 2–4 times within its time (a ratchet: a roll or stutter)
 - Amp envelope, a drum-style pitch envelope, a filter with its own envelope, noise, FM, unison
-  and an LFO, whose movement shows on what it moves (the Cutoff knob, the Pulse tile or the
-  step pads)
+  and an LFO on pitch, filter, pulse width, level (tremolo) or FM, free-running or restarted
+  on every note (Retrigger), whose movement shows on what it moves (the Cutoff knob, the Pulse
+  tile or the step pads)
 - Velocity routing: a VEL switch on the Envelope, Pitch, Filter and Noise cards lets a step's
   velocity also shape its decay, brightness, pitch sweep and noise, so soft steps sound like
   softer hits
