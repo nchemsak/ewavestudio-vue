@@ -176,6 +176,7 @@ src/components/
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
   WaveButton.vue, WaveIcon.vue  A wave's big tile (Waveforms panel) and small line icon (pads)
   VelSwitch.vue          A card's VEL switch (Envelope, Pitch, Filter, Noise): velocity routing
+  PillSwitch.vue         The small on/off pill with an LED in a card's header (VEL, RETRIG)
   filterView.ts          The screen's filter view (drawing loop and its pure helpers)
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
 src/audio/
@@ -184,6 +185,8 @@ src/audio/
                          loudness, LFO division → Hz
   ticker.ts              Worker-driven timer for the sequencer clock
   pitchEnv.ts, filterEnv.ts, fm.ts  Per-note helpers shared by the live and offline engines
+  lfo.ts                 The LFO's targets and Depth ranges, a note's own LFO (Retrigger), Level
+                         and FM amounts (see "Audio engine (live)")
   waves.ts               The eight waves: names, loudness balance, and each voice's source
                          (the pulse network, the harmonic shapes)
   velocity.ts            Velocity routing: what a step's velocity does besides loudness
@@ -380,11 +383,31 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `:showToggle="false"`), but saved or imported projects can have the envelope off. A note
   then holds the level the envelope would peak at (waveform balance and noise mix included),
   in both the live and the export engine.
-- The LFO is one shared oscillator → `lfoGain`. Each note connects a tap from it to the voice's
-  `detune` or filter frequency, and `releaseLfoTap()` disconnects it when the note ends.
-  Anything else per-note that connects to a long-lived node needs the same cleanup.
-  The oscillator also feeds a tiny `AnalyserNode` (`lfoProbe`, not connected onward), which
-  `lfoNow()` reads: where the LFO is now, −1..1 (null while it isn't running).
+- The LFO is one shared oscillator → `lfoGain` (its wave times Depth, in the target's units).
+  Each note connects a tap from it to what it moves, and `releaseLfoTap()` disconnects it when
+  the note ends. Anything else per-note that connects to a long-lived node needs the same
+  cleanup. The oscillator also feeds a tiny `AnalyserNode` (`lfoProbe`, not connected onward),
+  which `lfoNow()` reads: where the LFO is now, −1..1 (null while it isn't running).
+  - **Targets** (PR 61; `src/audio/lfo.ts`, both engines; `LFO_DEPTH_MAX` per target): Pitch
+    (cents on `detune`), Filter (Hz), Pulse (`pwm`, % width), **Level** (`amp`: the note,
+    tone and noise, through a tremolo gain that swings between full and 100 − Depth %) and
+    **FM** (`fm`: the FM card's Amount, the modulator's deviation that `startFM()` returns,
+    ±Depth %; nothing while FM is off, so its button is dimmed and the LFO's tile reads
+    "FM off", as Pulse's reads "No Pulse"). Pan was turned down (the maintainer's call).
+  - **Retrigger** (PR 61; `synth.lfo.retrigger`, saved since long before but read by neither
+    engine until then; the **RETRIG** pill in the LFO card's header, `PillSwitch.vue`, greyed
+    out while the LFO is off; off by default): each note gets its own LFO, started with it
+    (`startNoteLfo()`), so every hit gets the same movement, which is what makes an LFO
+    useful on drums; off, each note hears whichever part of the free-running wave comes along.
+    The note's LFO sets its rate and depth as plain values, not events at its start: Chrome
+    applies an event for a start partway through a 128-sample block late, and the wave began
+    at 440 Hz (each hit's LFO started somewhere else; a browser test measures the exported
+    hits: under 3 % apart with Retrigger, over 30 % without). The LFO visualizer, with
+    Retrigger, shows where the latest note's LFO is (`lfoWaveAt()`), not the shared one.
+    `synth.lfo.bipolar` is saved but still unused.
+  - The card (option C of three mockups, PR 61): the power tile, Rate, Depth and the Wave
+    switch on one line, the Target switch's five buttons on a full-width line under them (its
+    caption shown); five didn't fit beside the knobs.
 - Audio export uses a **separate** offline engine (`scheduleStepSequencer.ts`), fed by the
   `exportState` computed. It renders only the synth lane. Changes to the live sound (new
   parameters, changed gain staging) must be mirrored there, or exports will sound different.
@@ -1106,19 +1129,15 @@ drum lanes back.
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
 
-Items 1–2 (and PRs 55–60) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
+Item 1 (and PRs 55–61) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-1. **LFO:** wire up Retrigger (`lfoRetrigger` is saved and in the export's state, but the live
-   engine never reads it): the LFO starts over on each note, which is what makes an LFO useful
-   on drums. And more targets: level (tremolo) and FM amount (not pan, the maintainer's call).
-   One LFO; a second waits for patch cables.
-2. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
+1. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
    dice) that presses in; a switch with an LED over the chosen option (Melody | Arpeggio, the
-   rates); a toggle with an LED (FM, Unison, CRUSH, the cards' VEL switches). Mockups first (2–3), then one PR with
+   rates); a toggle with an LED (FM, Unison, CRUSH, the cards' VEL switches, RETRIG). Mockups first (2–3), then one PR with
    before/after screenshots in every theme.
-3. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+2. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1299,6 +1318,7 @@ Done:
 | 58 | Repeat notes: a pad's ⋮ menu has Notes under Repeats (Same / Up ↑ / Down ↓): a ×2–×4 step's hits can step up or down the key's chord from the pad's note, an arpeggio within the step (×4 on the root: 1-3-5-8); in the live and export engines, the MIDI file and the pad's preview (`ratchetPitches()` in `ratchet.ts`, `chordPitchClasses()` in `theory.ts`); saved per step (older projects get Same); the badge shows ×3↑; the phone's hold sheet cycles Same → Up → Down. |
 | 59 | Velocity without the pop-up: the Step Sequencer's Vel → pop-up (four knobs) became a **VEL switch** with an LED on each card it changes (Envelope, Pitch, Filter, Noise), picked after three rounds of mockups (mini knobs beside or under their targets, or a Velocity strip, turned down). On sets a fixed +75 %, off 0; older projects' amounts play as saved. Turning one on shows the envelope or filter view with softer steps dashed, and, with every step at full velocity, says so and makes Humanize glow. Presets and the dice use +75 %. |
 | 60 | File → **Save as…** (Ctrl/Cmd+Shift+S): the settings as they are, unsaved changes included, saved as a new project under a new name ("Name copy" suggested), which becomes the open one; the original stays as last saved. Another project's name asks before replacing it. Undo history carries on. Renaming stays a rename. |
+| 61 | LFO: **Retrigger** works (a RETRIG pill in the LFO card's header; saved for long, read by neither engine): each note starts its own LFO, so every hit gets the same movement; and two new targets, **Level** (tremolo) and **FM** (the FM card's Amount), in both engines (`src/audio/lfo.ts`). The Target switch's five buttons have a line of their own (option C of three mockups). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

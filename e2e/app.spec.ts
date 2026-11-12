@@ -1580,6 +1580,94 @@ test('Pulse Width sits on the Pulse tile, and the LFO says when PW has no pulse 
 	await expect(status).toHaveText('No Pulse');
 });
 
+// A project with pads 1, 5, 9 and 13 on (a hit every 0.5 s at 120 BPM), no effects, and this LFO
+async function importLfoProject(page: Page, id: string, lfo: Record<string, unknown>, change?: (data: any) => void) {
+	await importChanged(page, id, (data) => {
+		const lane = data.instruments.find((i: any) => i.name === 'synth-voice');
+		lane.steps = lane.steps.map((_: boolean, i: number) => i % 4 === 0);
+		lane.velocities = lane.velocities.map(() => 1);
+		for (const fx of ['delay', 'drive', 'reverb']) if (data.fx[fx]) data.fx[fx].enabled = false;
+		data.synth.envelope = { ...data.synth.envelope, decayMs: 150 };
+		data.synth.lfo = { ...data.synth.lfo, enabled: true, sync: true, waveform: 'sine', ...lfo };
+		change?.(data);
+	});
+}
+// The loudest sample of each of the four hits in an exported bar
+const hitPeaks = (wav: Buffer) => [0, 1, 2, 3].map((k) => wavWindow(wav, k * 0.5, k * 0.5 + 0.3).peak);
+const spread = (xs: number[]) => (Math.max(...xs) - Math.min(...xs)) / Math.max(...xs);
+// Each hit's level with the LFO as a share of its level without it (the hits differ a little
+// by themselves: the drive's offset, where each note's waves start)
+const lfoShares = (wav: Buffer, plain: number[]) => hitPeaks(wav).map((p, k) => p / plain[k]);
+
+test('LFO Retrigger: every hit gets the same movement, live and in the export; RETRIG is saved', async ({ page }) => {
+	// Level (tremolo) at full depth, a dotted 1/8 apart from the hits' 1/4: free-running, each hit
+	// lands at another point of the wave, so the four hits come out at different levels
+	await importLfoProject(page, 'lfo-none', { target: 'amp', depth: 0, division: '1/8.', retrigger: false });
+	const plain = hitPeaks(await exportWav(page));
+	await importLfoProject(page, 'lfo-free', { target: 'amp', depth: 100, division: '1/8.', retrigger: false });
+	const sw = page.getByRole('switch', { name: 'LFO retrigger' });
+	await expect(sw).toHaveAttribute('aria-checked', 'false');
+	const free = lfoShares(await exportWav(page), plain);
+	expect(spread(free)).toBeGreaterThan(0.3);
+
+	// Retrigger: each hit starts the wave afresh, so all four come out the same
+	await sw.click();
+	await expect(sw).toHaveAttribute('aria-checked', 'true');
+	const retrig = lfoShares(await exportWav(page), plain);
+	expect(spread(retrig)).toBeLessThan(0.03); // against more than 0.3 free-running
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.lfo;
+	expect(saved.retrigger).toBe(true);
+	expect(saved.target).toBe('amp');
+
+	// Live: each note starts its own LFO oscillator (one more oscillator per note than without)
+	const oscStarts = async () => {
+		await page.evaluate(() => { (window as any).__starts.length = 0; });
+		const play = page.getByRole('button', { name: 'Play', exact: true });
+		await play.click();
+		await page.waitForTimeout(1200);
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+		return page.evaluate(() => (window as any).__starts.filter((s: any) => s.osc).length as number);
+	};
+	const withRetrig = await oscStarts();
+	await sw.click();
+	await expect(sw).toHaveAttribute('aria-checked', 'false');
+	await page.waitForTimeout(300);
+	const without = await oscStarts();
+	// One oscillator per note either way; Retrigger adds one LFO oscillator per note
+	expect(withRetrig).toBeGreaterThanOrEqual(without + 2);
+
+	// Greyed out while the LFO is off
+	await page.getByRole('button', { name: 'LFO on' }).click();
+	await expect(sw).toBeDisabled();
+});
+
+test('LFO targets Level and FM: on their own line, in the export, and FM says when FM is off', async ({ page }) => {
+	const target = page.getByRole('radiogroup', { name: 'LFO Target' });
+	await expect(target.getByRole('radio')).toHaveText(['Pitch', 'Filter', 'Pulse', 'Level', 'FM']);
+
+	// FM with the FM card off: its button is dimmed and the tile says so
+	await target.getByRole('radio', { name: 'FM amount' }).click();
+	await expect(target.getByRole('radio', { name: 'FM amount' })).toHaveAttribute('aria-checked', 'true');
+	await expect(page.getByRole('button', { name: 'LFO on' })).toContainText('FM off');
+	await expect(target.getByRole('radio', { name: 'FM amount' })).toHaveAttribute('title', /FM is on/);
+
+	// With FM on, the LFO moves its Amount: the export changes with the LFO's depth
+	const fmOn = (data: any) => { data.synth.fm = { ...data.synth.fm, enabled: true, index: 4, ratio: 2 }; };
+	await importLfoProject(page, 'lfo-fm-0', { target: 'fm', depth: 0, division: '1/16', retrigger: true }, fmOn);
+	await expect(page.getByRole('button', { name: 'LFO on' })).not.toContainText('FM off');
+	const still = wavSamples(await exportWav(page)).samples;
+	await importLfoProject(page, 'lfo-fm-100', { target: 'fm', depth: 100, division: '1/16', retrigger: true }, fmOn);
+	const moved = wavSamples(await exportWav(page)).samples;
+	let diff = 0;
+	for (let i = 0; i < Math.min(still.length, moved.length); i++) diff = Math.max(diff, Math.abs(still[i] - moved[i]));
+	expect(diff).toBeGreaterThan(0.05);
+
+	// Level: the Depth knob reads in % of the level
+	await importLfoProject(page, 'lfo-amp', { target: 'amp', depth: 40, division: '1/8' });
+	await expect(target.getByRole('radio', { name: 'Level' })).toHaveAttribute('aria-checked', 'true');
+	await expect(page.getByRole('slider', { name: 'Depth' })).toHaveAttribute('aria-valuetext', '40% level');
+});
+
 test('the LFO visualizer shows what the LFO moves, without turning the knob', async ({ page }) => {
 	const lfo = page.locator('.module.mod');
 	const depth = lfo.getByRole('slider', { name: 'Depth' });

@@ -33,6 +33,10 @@ export function startFM(
     modOsc.start(startTime)
 
     return {
+        // The modulator's depth (Hz of deviation) and its value as set: the LFO's FM target
+        // moves it (lfo.ts)
+        deviation: modGain.gain,
+        deviationHz: deviation,
         stop: (when: number) => {
             try { modOsc.stop(when) } catch { }
         }
