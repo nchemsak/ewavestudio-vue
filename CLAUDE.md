@@ -52,7 +52,7 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   projects, factory defaults), presets (exact values, knob ranges, pattern untouched),
   patterns (from the key, sound untouched, the dice's rolls), pad colours,
   ratchet timing, the bit crusher, knob notches, the Melody Maker's theory (moving a pattern to another key or
-  scale), and the export helpers (loop folding, MIDI and zip files read
+  scale) and arpeggio layout (Rate, fitting the bar), and the export helpers (loop folding, MIDI and zip files read
   back, names).
   `src/lib/project/testState.ts` builds the settings those tests use (`makeState`,
   `changeEverything`). `vitest.config.js` reuses `vite.config.js` and sets `BASE_URL`
@@ -161,7 +161,7 @@ src/components/
   PhoneLayout.vue        Phone mode's layout (see "Phone mode"): pads, Play, steppers, macros;
                          its Sound, FX and Key pages are DrumSequencer's slots
   LfoBendMark.vue        The LFO's pitch bend drawn on a lit pad (see "LFO visualizer")
-  MelodyMaker.vue        Key, scale and range; one Generate (Random or Arpeggio); a key or scale
+  MelodyMaker.vue        Key, scale and range; one Generate (Melody or Arpeggio); a key or scale
                          picked moves the pattern (see "Melody Maker")
   PatternTools.vue       Synth-lane tools: step fills (all, every 2/4, invert, random, clear),
                          velocity shapes ("Humanize") and octave shift
@@ -215,6 +215,8 @@ src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualize
 src/lib/padColour.ts     The pads' colours, which the spectrogram uses too (see "Pad and
                          spectrogram colours")
 src/lib/melody/theory.ts  Keys and scales; moving a pattern to another key or scale (pure)
+src/lib/melody/arp.ts    The arpeggio on the pads: where Rate puts notes, the cycle fitted to
+                         the bar (pure; see "Melody Maker")
 src/lib/knobDetents.ts   Knob notches: the drag's travel with a hold at each, and the Tempo and
                          Swing notches (pure; see "Knobs" under Conventions)
 src/lib/midiLearn.ts     MIDI learn's bookkeeping (pure): the learnable knobs (MIDI_KNOBS) and
@@ -500,12 +502,26 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   A project or an undo step brings its own pads and key together (`synth.tuning`). A key click
   is one undo step, pads and key together. (Before PR 39, a key change moved only the pads that
   were off and still on the old default note.)
-- One Generate button: a Random / Arpeggio switch (`mode`, saved). Random keeps its old
-  behaviour (random notes from the scale and range, the first pad that's on gets the key; with
-  no scale, the key's note in the range's octaves, which the note under the switch says). The
-  arpeggio's Pattern, Rate, Octaves and Tones show only for Arpeggio. Random's note and the
-  arpeggio's settings sit in one grid cell, the other hidden (`visibility`), so the card is
-  as tall in both modes and the module columns around it never move.
+- One Generate button: a Melody / Arpeggio switch (`mode`, saved as `random` or `arp`; the
+  Melody button read "Random" until PR 57, which clashed with the arpeggio's Random order).
+  Melody keeps its old behaviour (random notes from the scale and range on the pads that are
+  on, with "Active Pads Only", the first one gets the key; with no scale, the key's note in the
+  range's octaves, which the note under the switch says). The arpeggio's Pattern, Rate, Octaves
+  and Tones show only for Arpeggio. Melody's note and the arpeggio's settings sit in one grid
+  cell, the other hidden (`visibility`), so the card is as tall in both modes and the module
+  columns around it never move.
+- The arpeggio (PR 57; `bakeArp()` builds the notes, `src/lib/melody/arp.ts` lays them out,
+  unit-tested): **Rate places the notes**, as a hardware arpeggiator plays them: a note on
+  every step at 1/16, every other step at 1/8, every beat at 1/4 (`arpSlots()`), and the steps
+  between go off (it emits `update:steps` with the pitches, one undo step). Before, Rate only
+  grouped the pads that were on (1/4: four pads in a row one note), and every pad still played.
+  "Active Pads Only" is Melody's: an arpeggio sets its own rhythm. **Fitted to the bar** by
+  default: the cycle becomes a block of 2, 4, 8 or 16 notes, which divides the bar, carrying on
+  into the next octave when rising (a triad 1-3-5 → 1-3-5-8, a 7-note scale up to the octave),
+  the octave below when falling, round again otherwise (`arpSequence()`; notes kept in the pads'
+  range by octaves). Before, a triad's 3-note cycle ended mid-bar and jumped at the bar line;
+  the ⋯ menu's **Free cycle** (not saved, like its other toggles) keeps that. The Pattern list's
+  Random (the chord's notes shuffled once) stays.
 - The ⋯ menu (Advanced Options; its button is in the card's header, in `DrumSequencer.vue`)
   opens beside the button, to its right if it fits, else to its left, and inside the window
   at every width (`openAdvanced()` measures it). Before PR 51 it was kept inside only under
@@ -1047,22 +1063,13 @@ drum lanes back.
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
 
-Items 1–5 (and PR 55's bar queue) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
+Items 1–5 (and PRs 55–57) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-1. **Arpeggio fixes** (`bakeArp()` in `MelodyMaker.vue`):
-   - Rate doesn't play at its rate: 1/4 gives four steps in a row one pitch, and every step
-     that's on still plays. Make it place the notes (a real 1/4 arpeggio), or rename it.
-   - Fit to the bar: a 1-octave chord is 3 notes, and 3 doesn't divide 16, so the cycle ends
-     mid-bar and jumps when the bar starts over. By default, fit it (add the octave root,
-     1-3-5-8, or start the cycle again each beat); keep today's behaviour as a "Free" option.
-   - The Pattern list's Random (it shuffles the chord's notes once) stays, under that name
-     (arpeggiators call it Random; "Shuffle" would read as swing). To end the two "Random"s,
-     the Generate switch's Random becomes **Melody** (Melody | Arpeggio); its saved value
-     stays `random`, so projects don't change.
-   - Later, its own PR: arpeggiated repeats, a ×2–×4 step stepping through the chord within
-     the step (each repeat its own pitch, in both engines), as a choice in the pad's Repeats.
+1. **Arpeggiated repeats** (left from the arpeggio item, PR 57): a ×2–×4 step stepping through
+   the chord within the step (each repeat its own pitch, in both engines), as a choice in the
+   pad's Repeats.
 2. **Velocity without the pop-up:** the "Vel →" panel's four amounts become mini "VEL" knobs on
    the cards they change (Envelope's Decay, Pitch's Amount, Filter's Cutoff, Noise's mix), so
    they sit beside what they change and MIDI learn can link them. Mockup first: Envelope,
@@ -1075,7 +1082,7 @@ target, and for now a second oscillator and a second pad lane, on hold below).
    on drums. And more targets: level (tremolo) and FM amount (not pan, the maintainer's call).
    One LFO; a second waits for patch cables.
 5. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
-   dice) that presses in; a switch with an LED over the chosen option (Random | Arpeggio, the
+   dice) that presses in; a switch with an LED over the chosen option (Melody | Arpeggio, the
    rates); a toggle with an LED (FM, Unison, CRUSH). Mockups first (2–3), then one PR with
    before/after screenshots in every theme.
 6. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
@@ -1255,6 +1262,7 @@ Done:
 | 54 | Fix: the Sounds dice could roll a nearly silent sound (a big upward pitch sweep falling slowly onto a low Cutoff), which failed PR 53's browser checks (a peak of 0.039); such a sweep now falls back within 30 % of Decay (3 % of rolls change). The dice's browser test rolls the same seeded sounds every run. |
 | 55 | Key and pattern changes wait for the bar (patterns at once again since PR 56): while playing, a Melody Maker key, a Pattern preset, its dice or the phone's Pattern stepper blinks until the next bar's step 1, then the pattern moves (the engine's `onBarStart`, just before it builds the step); stopped, at once, as before; Shift+click, at once; Stop applies it, Undo drops it; no audition note while playing. |
 | 56 | After trying PR 55: a key waiting for the bar shows a pulsing ghost of the chosen colour and the caption "· D at the next bar (Shift+click: now)" (PR 55's ring was hidden by the keyboard's own CSS, so the key seemed not to respond); patterns change at once again, playing or not. A pad's settings: a key previews the pad as it plays (its noise switch, its repeats), only while stopped; Play / Stop no longer closes them. The phone's note picker previews the same way. |
+| 57 | Arpeggio fixes: Rate places the notes (every step at 1/16, every other at 1/8, every beat at 1/4; the steps between off), where before it only grouped the pads that were on; the cycle is fitted to the bar (a triad 1-3-5-8, a scale up to the octave), with Free cycle in the ⋯ menu for the old way; the Generate switch's Random is now Melody (`src/lib/melody/arp.ts`). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
