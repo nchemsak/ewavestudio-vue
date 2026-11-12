@@ -16,7 +16,9 @@
 			</section>
 
 			<!-- Humanize -->
-			<section class="pt-section" v-if="props.velocities">
+			<!-- `nudge`: a card's VEL switch was turned on while every step is at full velocity,
+				 so these buttons glow for a moment: they make the softer steps VEL needs -->
+			<section class="pt-section" :class="{ 'pt-nudged': nudged }" v-if="props.velocities">
 				<div class="pt-section-title">Humanize</div>
 				<div class="pt-btn-group pt-btn-grid-6" role="group" aria-label="Velocity shapes">
 					<button class="pt-btn" @click="shapePeaks">Peaks</button>
@@ -47,13 +49,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch, onBeforeUnmount } from 'vue';
 
 const props = defineProps<{
 	steps: boolean[];
 	velocities?: number[];
 	currentTheme?: string;
+	nudge?: number; // a new value makes Humanize glow for a moment
 }>();
+
+const nudged = ref(false);
+let nudgeTimer: ReturnType<typeof setTimeout> | null = null;
+watch(() => props.nudge, () => {
+	nudged.value = false;
+	if (nudgeTimer) clearTimeout(nudgeTimer);
+	// One frame off, so a second nudge restarts the glow
+	requestAnimationFrame(() => {
+		nudged.value = true;
+		nudgeTimer = setTimeout(() => { nudged.value = false; }, 2400);
+	});
+});
+onBeforeUnmount(() => { if (nudgeTimer) clearTimeout(nudgeTimer); });
 
 const emit = defineEmits<{
 	(e: 'update:steps', v: boolean[]): void;
@@ -154,6 +170,24 @@ function shapeReset(): void {
 </script>
 
 <style scoped>
+/* Humanize, nudged by a VEL switch: its buttons glow in the accent, twice */
+.pt-nudged .pt-btn {
+	animation: pt-nudge 1.2s ease-in-out 2;
+}
+
+@keyframes pt-nudge {
+	50% {
+		box-shadow: 0 0 0 2px hsl(var(--pt-accent) 80% 62% / 0.9), 0 0 14px hsl(var(--pt-accent) 80% 62% / 0.7);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pt-nudged .pt-btn {
+		animation: none;
+		box-shadow: 0 0 0 2px hsl(var(--pt-accent) 80% 62% / 0.9);
+	}
+}
+
 /* The card's width decides the layout (container queries), not the window's */
 .pattern-tools {
 	max-width: none;

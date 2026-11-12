@@ -6,6 +6,7 @@ import { buildSnapshot, resetSoundToFactoryDefaults } from '../project/snapshot'
 import { STEPS, fresh, asSaved, changeEverything, leaves } from '../project/testState';
 import { WAVE_IDS } from '../../audio/waves';
 import { isDelayDivision } from '../delaySync';
+import { VELOCITY_SWITCH_AMOUNT } from '../../audio/velocity';
 
 // Each knob's range (the panels in src/components/modules/), by snapshot path
 const RANGES: Record<string, [number, number]> = {
@@ -121,6 +122,12 @@ describe('the preset library', () => {
 
 	it('only sets settings that exist, within their knobs\' ranges and on their steps', () => {
 		for (const p of PRESETS) expectValid(p, p.id);
+	});
+
+	it('sets velocity amounts a VEL switch can turn off and on again', () => {
+		const amounts = PRESETS.flatMap(p => Object.values(p.synth?.velocity ?? {}));
+		expect(amounts.length).toBeGreaterThan(0);
+		for (const a of amounts) expect(a).toBe(VELOCITY_SWITCH_AMOUNT);
 	});
 });
 
@@ -258,6 +265,10 @@ describe('sound keys', () => {
 describe('the dice (a random sound)', () => {
 	it('stays within the knobs\' ranges and on their steps, roll after roll', () => {
 		ROLLS.forEach((p, i) => expectValid(p, `roll ${i + 1}`));
+	});
+
+	it('sets velocity amounts a VEL switch can turn off and on again', () => {
+		for (const p of ROLLS) for (const a of Object.values(p.synth?.velocity ?? {})) expect(a).toBe(VELOCITY_SWITCH_AMOUNT);
 	});
 
 	it('keeps the level in the presets\' range: resonance up to 10, drive mix up to 0.35', () => {

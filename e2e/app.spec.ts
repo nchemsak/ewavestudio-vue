@@ -1573,44 +1573,80 @@ test('the LFO visualizer shows what the LFO moves, without turning the knob', as
 	await stop.click();
 });
 
-test('velocity routing: a soft step rings shorter with Vel → Decay, and the setting is saved', async ({ page }) => {
-	// One step, at velocity 25%
+// Imports a project with only step 1 on, at velocity `vel`, and optional velocity amounts
+async function importOneStep(page: Page, vel: number, velocity?: Record<string, number>) {
 	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
 	const lane = project.data.instruments.find((i: any) => i.name === 'synth-voice');
 	lane.steps = lane.steps.map((_: boolean, i: number) => i === 0);
-	lane.velocities = lane.velocities.map(() => 0.25);
-	project.projectId = 'vel-routing';
+	lane.velocities = lane.velocities.map(() => vel);
+	if (velocity) project.data.synth.velocity = velocity;
+	project.projectId = `vel-${vel}`;
 	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
 		name: 'vel.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)),
 	});
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(1);
+}
+
+test('VEL switches: Decay\'s makes a soft step ring shorter, shows on the screen, and is saved', async ({ page }) => {
+	await importOneStep(page, 0.25);
 	const plain = wavSoundMs(await exportWav(page));
 
-	// Vel → Decay at +100%: a 25% step gets a quarter of the Decay
-	const button = page.getByRole('button', { name: 'Vel →' });
-	await expect(button).not.toHaveClass(/\bon\b/);
-	await button.click();
-	const panel = page.getByRole('dialog', { name: 'Velocity routing' });
-	const decay = panel.getByRole('slider', { name: 'Decay', exact: true });
-	await expect(decay).toHaveAttribute('aria-valuetext', 'off');
-	await decay.focus();
-	await page.keyboard.press('End');
-	await expect(decay).toHaveAttribute('aria-valuetext', '100 percent: softer steps shorter');
-	await expect(button).toHaveClass(/\bon\b/);
-	// Escape closes the panel (a click outside it does too)
-	await page.keyboard.press('Escape');
-	await expect(panel).toBeHidden();
+	// The Vel → pop-up is gone: each card has its switch
+	await expect(page.getByRole('button', { name: 'Vel →' })).toHaveCount(0);
+	for (const name of ['Decay', 'Cutoff', 'the pitch sweep', 'the noise']) {
+		await expect(page.getByRole('switch', { name: `Velocity shapes ${name}` })).toHaveAttribute('aria-checked', 'false');
+	}
+
+	// On: +75 %, so a 25 % step gets 1 − 0.75 × 0.75 ≈ 44 % of the Decay. The screen shows the
+	// envelope view for a moment (softer steps dashed), then goes back
+	const sw = page.getByRole('switch', { name: 'Velocity shapes Decay' });
+	await expect(sw).toHaveAttribute('title', 'Softer steps decay sooner');
+	await sw.click();
+	await expect(sw).toHaveAttribute('aria-checked', 'true');
+	await expect(screenView(page)).toHaveAttribute('title', 'Envelope');
+	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope', { timeout: 4000 });
+	// A soft step is on, so no note about full velocity
+	await expect(page.getByRole('status').filter({ hasText: 'full velocity' })).toHaveCount(0);
+
 	const routed = wavSoundMs(await exportWav(page));
-	expect(routed).toBeLessThan(plain * 0.5);
-	expect(routed).toBeGreaterThan(plain * 0.1);
+	expect(routed).toBeLessThan(plain * 0.6);
+	expect(routed).toBeGreaterThan(plain * 0.25);
+	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.velocity;
+	expect(await saved()).toEqual({ decay: 75, cutoff: 0, pitchEnv: 0, noise: 0 });
 
-	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.velocity;
-	expect(saved).toEqual({ decay: 100, cutoff: 0, pitchEnv: 0, noise: 0 });
+	// Off again, and Undo brings it back
+	await sw.click();
+	await expect(sw).toHaveAttribute('aria-checked', 'false');
+	expect(await saved()).toEqual({ decay: 0, cutoff: 0, pitchEnv: 0, noise: 0 });
+	await page.waitForTimeout(600);
+	await page.getByRole('button', { name: 'Undo' }).click();
+	await expect(sw).toHaveAttribute('aria-checked', 'true');
 
-	// Reset sets every amount back to 0
-	await button.click();
-	await panel.getByRole('button', { name: 'Reset' }).click();
-	await expect(button).not.toHaveClass(/\bon\b/);
+	// Cutoff's shows the filter view for a moment (no F-key of its own)
+	const filterCanvas = page.locator('.nac-screen__lcd canvas').nth(4);
+	await page.getByRole('switch', { name: 'Velocity shapes Cutoff' }).click();
+	await expect(filterCanvas).toBeVisible();
+	await expect(filterCanvas).toBeHidden({ timeout: 4000 });
+});
+
+test('VEL switches: with every step at full velocity, a note says so and Humanize glows', async ({ page }) => {
+	await importOneStep(page, 1, { decay: 0, cutoff: 0, pitchEnv: 40, noise: 0 });
+
+	// An amount saved by an older project lights its switch and plays as it was; a click turns it off
+	const pitch = page.getByRole('switch', { name: 'Velocity shapes the pitch sweep' });
+	await expect(pitch).toHaveAttribute('aria-checked', 'true');
+	await pitch.click();
+	await expect(pitch).toHaveAttribute('aria-checked', 'false');
+
+	// Nothing can change yet: say so, and point at Humanize
+	await pitch.click();
+	await expect(page.getByRole('status').filter({ hasText: 'Every step is at full velocity: try Humanize' })).toBeVisible();
+	await expect(page.locator('.pt-section.pt-nudged')).toHaveCount(1);
+	await expect(page.locator('.pt-section.pt-nudged')).toHaveCount(0, { timeout: 4000 });
+	await expect(page.getByRole('status').filter({ hasText: 'full velocity' })).toHaveCount(0, { timeout: 4000 });
+
+	// A switch whose card is off can't be pressed (Noise is off by default)
+	await expect(page.getByRole('switch', { name: 'Velocity shapes the noise' })).toBeDisabled();
 });
 
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {

@@ -287,7 +287,7 @@ html.theme-sand .lfo-seg-btn.active .wv {
     stroke: #fff;
 }
 
-/* The Step Sequencer's Vel → pill: a dark outline and more ink on light themes */
+/* The Step Sequencer's pills (the Repeats brush; class from the old Vel → pill): a dark outline and more ink on light themes */
 html.theme-sand .vel-btn,
 html.theme-light .vel-btn {
     border-color: color-mix(in oklab, var(--pt-text), transparent 72%);

@@ -9,16 +9,29 @@
 					<div class="pl-sound-row">
 						<div class="module envelope">
 							<SectionWrap id="pl-envelope" title="Envelope" :modelValue="true">
+								<template #tools>
+									<VelSwitch v-model="velocityRouting.decay.value" :name="VEL_SWITCHES.decay.label" :tip="VEL_SWITCHES.decay.tip"
+									:note="velNote.key === 'decay' ? velNote.text : ''" @switched-on="onVelSwitchedOn('decay')" />
+								</template>
 								<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 									v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
 							</SectionWrap>
 						</div>
 						<div class="module pitch-env">
 							<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
-								v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
+								v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode">
+								<template #vel>
+									<VelSwitch v-model="velocityRouting.pitchEnv.value" :name="VEL_SWITCHES.pitchEnv.label" :tip="VEL_SWITCHES.pitchEnv.tip" :disabled="!pitchEnvEnabled"
+									:note="velNote.key === 'pitchEnv' ? velNote.text : ''" @switched-on="onVelSwitchedOn('pitchEnv')" />
+								</template>
+							</PitchEnvModule>
 						</div>
 						<div class="module filter">
 							<SectionWrap class="filter-card" id="pl-filter" title="Filter" :modelValue="true">
+								<template #tools>
+									<VelSwitch v-model="velocityRouting.cutoff.value" :name="VEL_SWITCHES.cutoff.label" :tip="VEL_SWITCHES.cutoff.tip" :disabled="!filterEnabled"
+									:note="velNote.key === 'cutoff' ? velNote.text : ''" @switched-on="onVelSwitchedOn('cutoff')" />
+								</template>
 								<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 									v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
 									v-model:envAmount="filterEnvAmount" v-model:envDecayMs="filterEnvDecayMs" :lfoView="lfoView" />
@@ -224,14 +237,6 @@
 							{{ Math.round(synthInstrument.channelVolume * 100) }}%
 						</span>
 
-						<!-- Velocity routing: what a step's velocity does besides its loudness -->
-						<button type="button" class="vel-btn" :class="{ on: velRoutingOn }" :aria-expanded="velOpen"
-							:title="velRoutingOn ? 'Velocity routing is on' : 'Let velocity shape decay, cutoff, pitch and noise'"
-							@click.stop="velOpen = !velOpen">Vel →</button>
-						<VelocityRouting v-if="velOpen" v-model:decay="velocityRouting.decay.value"
-							v-model:cutoff="velocityRouting.cutoff.value" v-model:pitchEnv="velocityRouting.pitchEnv.value"
-							v-model:noise="velocityRouting.noise.value" @close="velOpen = false" />
-
 						<!-- The Repeats brush: pick ×2–×4, then click or drag across pads to give them that
 						     many quick hits (a pad that has them already goes back to one) -->
 						<div class="repeat-brush" role="group" aria-label="Repeats brush"
@@ -242,7 +247,6 @@
 								:aria-label="`Repeats brush ×${n}`" @click="toggleRepeatBrush(n)">×{{ n }}</button>
 						</div>
 					</div>
-					<div v-if="velOpen" class="mm-overlay" @click="velOpen = false"></div>
 
 					<div class="pt-header-tools step-menu-anchor">
 						<button class="pt-info-icon" aria-label="Advanced options"
@@ -352,6 +356,11 @@
 				<div class="sound-row sound-row-2">
 					<div class="module envelope">
 						<SectionWrap id="envelope" title="Envelope" v-model="collapsibleState['envelope']">
+							<!-- VEL: a step's velocity also shapes Decay -->
+							<template #tools>
+								<VelSwitch v-model="velocityRouting.decay.value" :name="VEL_SWITCHES.decay.label" :tip="VEL_SWITCHES.decay.tip"
+								:note="velNote.key === 'decay' ? velNote.text : ''" @switched-on="onVelSwitchedOn('decay')" />
+							</template>
 							<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 								v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
 								@attack-knob-start="onEnvKnobStart" @attack-knob-end="onScreenKnobEnd"
@@ -361,11 +370,20 @@
 
 					<div class="module pitch-env">
 						<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
-							v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
+							v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode">
+							<template #vel>
+								<VelSwitch v-model="velocityRouting.pitchEnv.value" :name="VEL_SWITCHES.pitchEnv.label" :tip="VEL_SWITCHES.pitchEnv.tip" :disabled="!pitchEnvEnabled"
+								:note="velNote.key === 'pitchEnv' ? velNote.text : ''" @switched-on="onVelSwitchedOn('pitchEnv')" />
+							</template>
+						</PitchEnvModule>
 					</div>
 
 					<div class="module filter">
 						<SectionWrap class="filter-card" id="filter" title="Filter" v-model="collapsibleState['filter']">
+							<template #tools>
+								<VelSwitch v-model="velocityRouting.cutoff.value" :name="VEL_SWITCHES.cutoff.label" :tip="VEL_SWITCHES.cutoff.tip" :disabled="!filterEnabled"
+								:note="velNote.key === 'cutoff' ? velNote.text : ''" @switched-on="onVelSwitchedOn('cutoff')" />
+							</template>
 							<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 								v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
 								v-model:envAmount="filterEnvAmount" v-model:envDecayMs="filterEnvDecayMs"
@@ -385,6 +403,12 @@
 									@click="noiseEnabled = !noiseEnabled">
 									<span class="noise-ribbon-label">NOISE</span>
 								</button>
+
+								<!-- VEL, in the card's top-right corner (the card has no header) -->
+								<div class="noise-vel">
+									<VelSwitch v-model="velocityRouting.noise.value" :name="VEL_SWITCHES.noise.label" :tip="VEL_SWITCHES.noise.tip" :disabled="!noiseEnabled"
+									:note="velNote.key === 'noise' ? velNote.text : ''" @switched-on="onVelSwitchedOn('noise')" />
+								</div>
 
 								<div v-if="noiseEnabled" class="noise-overlay mode-static" aria-hidden="true">
 									<div class="grain"></div>
@@ -444,7 +468,7 @@
 
 				<div class="module pattern-tools">
 					<SectionWrap id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
-						<PatternTools :steps="steps" :velocities="velocities" :currentTheme="currentTheme"
+						<PatternTools :steps="steps" :velocities="velocities" :currentTheme="currentTheme" :nudge="humanizeNudge"
 							@update:steps="steps = $event" @update:velocities="velocities = $event"
 							@octave-shift="onPatternOctaveShift" />
 					</SectionWrap>
@@ -620,8 +644,8 @@ import PatternTools from './PatternTools.vue';
 import SynthStepGrid from './SynthStepGrid.vue'
 import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
-import VelocityRouting from './VelocityRouting.vue';
-import { velocityRoutingActive } from '../audio/velocity';
+import VelSwitch from './VelSwitch.vue';
+import { VELOCITY_FAN, routeVelocity } from '../audio/velocity';
 import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
 import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
@@ -783,7 +807,6 @@ const lfoBipolar = ref(false)
 //Effects Panel Advanced Menu BEGIN
 
 const fxAdvanced = reactive({ open: false, x: 0, y: 0 });
-const velOpen = ref(false); // the Velocity routing panel (Step Sequencer header)
 const fxAnchor = ref<HTMLElement | null>(null);
 
 function onFxEsc(e: KeyboardEvent) {
@@ -792,7 +815,6 @@ function onFxEsc(e: KeyboardEvent) {
 		if (repeatBrush.value && !padPopover.value.open) repeatBrush.value = null;
 		if (fxAdvanced.open) fxAdvanced.open = false;
 		if (stepsAdvanced.open) stepsAdvanced.open = false;
-		if (velOpen.value) velOpen.value = false;
 	}
 }
 
@@ -1066,6 +1088,12 @@ function holdScreen(view: typeof lcdView.value, fkey: number) {
 	heldView = view;
 	activeFKey.value = fkey;
 	lcdView.value = view;
+}
+
+// Shows a view for a moment, as a knob turned and let go would (a VEL switch turned on)
+function flashScreen(view: typeof lcdView.value, fkey: number) {
+	holdScreen(view, fkey);
+	setTimeout(onScreenKnobEnd, VEL_FLASH_MS);
 }
 
 function onEnvKnobStart() {
@@ -1419,32 +1447,43 @@ function startEnvViz() {
 		ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L + plotW, T); ctx.stroke();
 		ctx.globalAlpha = 1;
 
-		const tau = D / Math.log(1000);
+		const ax = timeToX(A);
+		const STEP_MS = Math.max(0.25, AXIS_MAX_MS / (plotW * 4));
+		// One envelope: the attack, then the decay (Decay `dec` ms)
+		const strokeEnv = (dec: number) => {
+			const tau = dec / Math.log(1000);
+			ctx.beginPath();
+			ctx.moveTo(L, T + plotH);
+			ctx.lineTo(ax, T);
+			for (let ms = A; ms <= AXIS_MAX_MS; ms += STEP_MS) {
+				const amp = Math.exp(-(ms - A) / tau);
+				ctx.lineTo(timeToX(ms), T + (1 - Math.min(1, Math.max(0, amp))) * plotH);
+			}
+			ctx.stroke();
+		};
+
+		// Decay's VEL switch: softer steps' envelopes, dashed and fainter (as the engines route them)
+		const velDecay = velocityRouting.decay.value;
+		if (velDecay !== 0) {
+			ctx.strokeStyle = ink;
+			ctx.lineWidth = 1.5;
+			ctx.setLineDash([5, 4]);
+			VELOCITY_FAN.forEach((v, i) => {
+				ctx.globalAlpha = i === 0 ? 0.6 : 0.4;
+				strokeEnv(D * routeVelocity({ decay: velDecay }, v).decayFactor);
+			});
+			ctx.setLineDash([]);
+			ctx.globalAlpha = 1;
+		}
 
 		ctx.lineWidth = 2;
 		ctx.strokeStyle = ink;
-		ctx.beginPath();
-
-		// Attack
-		const ax = timeToX(A);
-		ctx.moveTo(L, T + plotH);
-		ctx.lineTo(ax, T);
-
-		// Decay
-		const STEP_MS = Math.max(0.25, AXIS_MAX_MS / (plotW * 4));
-		for (let ms = A; ms <= AXIS_MAX_MS; ms += STEP_MS) {
-			const t = ms - A;
-			const amp = Math.exp(-t / tau);
-			const x = timeToX(ms);
-			const y = T + (1 - Math.min(1, Math.max(0, amp))) * plotH;
-			ctx.lineTo(x, y);
-		}
-		ctx.stroke();
+		strokeEnv(D);
 
 		// Labels & tick
 		ctx.font = `700 11px Cousine, ui-monospace, monospace`;
 		ctx.fillStyle = ink; ctx.globalAlpha = 0.9; ctx.textAlign = 'left';
-		ctx.fillText('Amplitude Envelope (Attack → Decay)', L, 12);
+		ctx.fillText(velDecay !== 0 ? 'Amplitude Envelope (dashed: softer steps)' : 'Amplitude Envelope (Attack → Decay)', L, 12);
 
 		ctx.globalAlpha = 0.85; ctx.textAlign = 'center';
 		ctx.fillText(`${A} ms`, ax, H - 4);
@@ -1480,6 +1519,7 @@ onMounted(() => {
 			cutoff: () => filterCutoff.value,
 			resonance: () => filterResonance.value,
 			envAmount: () => filterEnvAmount.value,
+			velCutoff: () => velocityRouting.cutoff.value,
 			lfo: () => ({ enabled: lfoEnabled.value, target: lfoTarget.value, depth: lfoDepth.value }),
 		},
 	});
@@ -1991,10 +2031,40 @@ const velocityRouting = {
 	pitchEnv: ref(0),
 	noise: ref(0),
 };
-const velRoutingOn = computed(() => velocityRoutingActive({
-	decay: velocityRouting.decay.value, cutoff: velocityRouting.cutoff.value,
-	pitchEnv: velocityRouting.pitchEnv.value, noise: velocityRouting.noise.value,
-}));
+
+// VEL SWITCHES START
+// Each of the four cards has a VEL switch (VelSwitch.vue) for its amount above. Turning one on
+// shows what it does: the screen's envelope or filter view for a moment, where softer steps are
+// drawn dashed (VELOCITY_FAN), and, if every step that's on is at full velocity (so the switch
+// can't change anything yet), a note under it and a glow on Pattern Tools' Humanize.
+type VelKey = keyof typeof velocityRouting;
+const VEL_SWITCHES: Record<VelKey, { label: string; tip: string }> = {
+	decay: { label: 'Velocity shapes Decay', tip: 'Softer steps decay sooner' },
+	cutoff: { label: 'Velocity shapes Cutoff', tip: 'Softer steps are darker' },
+	pitchEnv: { label: 'Velocity shapes the pitch sweep', tip: 'Softer steps sweep less' },
+	noise: { label: 'Velocity shapes the noise', tip: 'Softer steps have less noise' },
+};
+const VEL_FLASH_MS = 1500;
+const VEL_NOTE_MS = 3500;
+const velNote = reactive<{ key: VelKey | null; text: string }>({ key: null, text: '' });
+const humanizeNudge = ref(0);
+let velNoteTimer: ReturnType<typeof setTimeout> | null = null;
+
+function onVelSwitchedOn(key: VelKey) {
+	if (key === 'decay') flashScreen('env', 4);
+	else if (key === 'cutoff') flashScreen('filter', 0);
+
+	const lit = steps.value.map((on, i) => (on ? velocities.value[i] ?? 1 : null)).filter((v) => v != null);
+	if (lit.length && lit.every((v) => v >= 1)) {
+		velNote.key = key;
+		velNote.text = 'Every step is at full velocity: try Humanize';
+		humanizeNudge.value++;
+		if (velNoteTimer) clearTimeout(velNoteTimer);
+		velNoteTimer = setTimeout(() => { velNote.key = null; velNote.text = ''; }, VEL_NOTE_MS);
+	}
+}
+onBeforeUnmount(() => { if (velNoteTimer) clearTimeout(velNoteTimer); });
+// VEL SWITCHES END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3738,6 +3808,14 @@ const phoneCtx = reactive({
 
 .module.noise .noise-tv-bg {
 	position: relative;
+}
+
+/* Noise's VEL switch, in the card's top-right corner, where the other cards have theirs */
+.noise-vel {
+	position: absolute;
+	top: 10px;
+	right: 12px;
+	z-index: 4;
 }
 
 .noise-ribbon {
