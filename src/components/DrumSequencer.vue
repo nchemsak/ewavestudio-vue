@@ -3000,7 +3000,7 @@ const { canUndo, canRedo } = history;
 function undo() { cancelQueued(); history.undo(); }
 function redo() { cancelQueued(); history.redo(); }
 // Opening or importing a project: nothing from the last one waits for its bar
-watch(() => project.projectId, () => cancelQueued());
+watch(() => project.projectId, () => { if (!project.isContinued) cancelQueued(); }); // Save as… keeps it
 
 // SAVING END
 

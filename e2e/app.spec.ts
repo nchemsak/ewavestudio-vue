@@ -493,6 +493,87 @@ test("saves a project, restores it after a reload, and keeps it in /studio2/'s o
 	await expect(page.getByRole('button', { name: 'Arp rate' })).toContainText('1/8');
 });
 
+test('File → Save as… saves a copy under a new name, leaves the original, and keeps undo', async ({ page }) => {
+	// Answers the browser's dialogs in turn; records what each asked
+	const answers: (string | boolean)[] = [];
+	const asked: string[] = [];
+	page.on('dialog', async (d) => {
+		asked.push(d.type() === 'prompt' ? `${d.message()} [${d.defaultValue()}]` : d.message());
+		const a = answers.shift();
+		if (a === false || a === undefined) await d.dismiss();
+		else await d.accept(typeof a === 'string' ? a : undefined);
+	});
+	const name = page.getByRole('textbox', { name: 'Project name' });
+	const saveBtn = page.locator('.pc-primary');
+	const selected = page.locator('.pad-row .padTEST.selected');
+	const openNames = async () => {
+		await page.getByRole('button', { name: 'File ▾' }).click();
+		await page.getByRole('button', { name: 'Open ▸' }).hover();
+		const items = page.locator('.pc-open-submenu .pc-title');
+		await expect(items.first()).toBeVisible();
+		const list = (await items.allTextContents()).map((t) => t.trim()).sort();
+		await page.keyboard.press('Escape');
+		await page.locator('body').click({ position: { x: 5, y: 5 } });
+		return list;
+	};
+	const open = async (n: string) => {
+		await page.getByRole('button', { name: 'File ▾' }).click();
+		await page.getByRole('button', { name: 'Open ▸' }).hover();
+		await page.locator('.pc-open-submenu .pc-menu-item', { hasText: n }).click();
+		await expect(name).toHaveValue(n);
+	};
+
+	// "Song A", saved with two steps
+	await turnOnPads(page, [0, 4]);
+	await page.waitForTimeout(SETTLED); // an undo step of its own
+	await name.fill('Song A');
+	await name.press('Enter');
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('Control+s');
+	await expect(saveBtn).toHaveText('Saved');
+
+	// A third step, not saved, then Save as… "Song B" (it suggests "Song A copy")
+	await turnOnPads(page, [8]);
+	await page.waitForTimeout(SETTLED);
+	await expect(saveBtn).toHaveText('Save');
+	await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
+	answers.push('Song B');
+	await chooseFromFileMenu(page, 'Save as…');
+	await expect(name).toHaveValue('Song B');
+	await expect(saveBtn).toHaveText('Saved');
+	expect(asked[0]).toBe('Save as a new project, named: [Song A copy]');
+	await expect(selected).toHaveCount(3);
+
+	// The same work under a new name: undo still steps back (to two steps)
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(selected).toHaveCount(2);
+	await page.getByRole('button', { name: 'Redo', exact: true }).click();
+	await expect(selected).toHaveCount(3);
+
+	// Both are saved; Song A as it was, Song B with the third step
+	expect(await openNames()).toEqual(['Song A', 'Song B']);
+	await open('Song A');
+	await expect(selected).toHaveCount(2);
+	await open('Song B');
+	await expect(selected).toHaveCount(3);
+
+	// Ctrl+Shift+S asks too; cancelled, nothing changes
+	answers.push(false);
+	await page.keyboard.press('Control+Shift+s');
+	await expect.poll(() => asked.length).toBe(2);
+	await expect(name).toHaveValue('Song B');
+
+	// Another project's name: asked first, then that project is replaced
+	answers.push('song a', true);
+	await chooseFromFileMenu(page, 'Save as…');
+	await expect.poll(() => asked[3]).toBe('“Song A” already exists. Replace it with this project?');
+	await expect(name).toHaveValue('song a');
+	expect(await openNames()).toEqual(['Song B', 'song a']);
+	await open('Song B');
+	await open('song a');
+	await expect(selected).toHaveCount(3);
+});
+
 test('exports a WAV file with sound in it, and a project file that imports again', async ({ page }) => {
 	await turnOnPads(page, [0, 3, 6, 10]);
 	const name = page.getByRole('textbox', { name: 'Project name' });

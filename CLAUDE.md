@@ -165,8 +165,9 @@ src/components/
                          picked moves the pattern (see "Melody Maker")
   PatternTools.vue       Synth-lane tools: step fills (all, every 2/4, invert, random, clear),
                          velocity shapes ("Humanize") and octave shift
-  ProjectControls.vue    The top bar: the logo (its `brand` slot), File menu (new, open, save,
-                         rename, delete, import/export JSON, Export audio…), Undo/Redo buttons
+  ProjectControls.vue    The top bar: the logo (its `brand` slot), File menu (new, open, Save as…,
+                         delete, import/export JSON, Export audio…), the name box (rename),
+                         Save, Undo/Redo buttons
   ExportDialog.vue       The Export audio dialog (see "Export audio")
   PresetButtons.vue      A box of preset buttons and a dice, used twice in the transport card:
                          Sounds and Patterns (see "Sounds and Patterns")
@@ -696,7 +697,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   move between them (`onTabKeydown` in `DrumSequencer.vue`).
 - Shift+click on a Melody Maker key: at once, without waiting for the bar while playing (see
   "Changes at the bar"; the caption says so while a key waits).
-- Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers, and ends MIDI
+- Ctrl/Cmd+S: save; Ctrl/Cmd+Shift+S: Save as… (`ProjectControls.vue`). Escape closes menus and popovers, and ends MIDI
   learn mode (where Enter arms the focused knob and Delete unlinks it).
 - Ctrl/Cmd+Z: undo; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: redo (same handler as Space). Ignored in
   a text box, which keeps its own undo (the project name).
@@ -723,7 +724,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   counts), so it always goes back past the latest change. The page's (or a newly opened
   project's) first 400 ms are its starting point.
 - Opening, importing or creating a project (a new `projectId`) starts a fresh history; File →
-  New and Open can't be undone.
+  New and Open can't be undone. File → Save as… doesn't: it's the same work under a new name.
 - While an undo/redo is applied (two ticks), changes that follow by themselves (a panel
   reacting to its props, or the synced delay time following the tempo) are folded into that
   entry, so they don't count as a new change that throws away the redo side. A browser test
@@ -896,6 +897,18 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (`projects` store) only on an explicit Save in `ProjectControls` (the Save menu item or
   Ctrl/Cmd+S); creating a project also writes an initial record. A status dot shows unsaved
   changes.
+- **File → Save as…** (PR 60; Ctrl/Cmd+Shift+S; `SAVE AS` section of `ProjectControls.vue`,
+  `saveAs()` in the project store): asks for a name (suggesting "Name copy"), saves the
+  settings as they are now, unsaved changes included, as a new project, and makes it the open
+  one; the project open before stays as it was last saved. Renaming (the name box) stays a
+  rename: a typo fixed shouldn't leave copies. The plan's "maybe ask, on Save after a rename,
+  rename or save as new" wasn't built: a question on every such Save would interrupt, and
+  Save as… is there. A name another saved project has asks "already exists. Replace it?" and
+  saves over that one (its id); the project's own name is a plain Save. It's the same work
+  under a new name, so the undo history carries on (the store's `continuedId` /
+  `isContinued`, which `useUndoHistory` and the bar queue check; opening or creating a
+  project clears it), and a key waiting for the bar still comes. File → New with Shift held
+  (an older, hidden way to copy) still makes an unnamed copy.
 - A saved project that fails the project check (damaged, or unreadable by this version) is
   never opened: `loadProject()` throws a `BrokenProjectError` (with the project's name). At
   startup, `useProjectSync.ts` then starts a new project and says so in an alert; from
@@ -1093,22 +1106,19 @@ drum lanes back.
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
 
-Items 1–3 (and PRs 55–59) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
+Items 1–2 (and PRs 55–60) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-1. **File → Save as…** (or Duplicate): a new project under a new name, the original left as it
-   was. Renaming stays a rename (a typo fixed shouldn't leave copies). Maybe, on Save after a
-   rename of a saved project, ask: rename it, or save as a new project?
-2. **LFO:** wire up Retrigger (`lfoRetrigger` is saved and in the export's state, but the live
+1. **LFO:** wire up Retrigger (`lfoRetrigger` is saved and in the export's state, but the live
    engine never reads it): the LFO starts over on each note, which is what makes an LFO useful
    on drums. And more targets: level (tremolo) and FM amount (not pan, the maintainer's call).
    One LFO; a second waits for patch cables.
-3. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
+2. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
    dice) that presses in; a switch with an LED over the chosen option (Melody | Arpeggio, the
    rates); a toggle with an LED (FM, Unison, CRUSH, the cards' VEL switches). Mockups first (2–3), then one PR with
    before/after screenshots in every theme.
-4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+3. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1288,6 +1298,7 @@ Done:
 | 57 | Arpeggio fixes: Rate places the notes (every step at 1/16, every other at 1/8, every beat at 1/4; the steps between off), where before it only grouped the pads that were on; the cycle is fitted to the bar (a triad 1-3-5-8, a scale up to the octave), with Free cycle in the ⋯ menu for the old way; the Generate switch's Random is now Melody (`src/lib/melody/arp.ts`). |
 | 58 | Repeat notes: a pad's ⋮ menu has Notes under Repeats (Same / Up ↑ / Down ↓): a ×2–×4 step's hits can step up or down the key's chord from the pad's note, an arpeggio within the step (×4 on the root: 1-3-5-8); in the live and export engines, the MIDI file and the pad's preview (`ratchetPitches()` in `ratchet.ts`, `chordPitchClasses()` in `theory.ts`); saved per step (older projects get Same); the badge shows ×3↑; the phone's hold sheet cycles Same → Up → Down. |
 | 59 | Velocity without the pop-up: the Step Sequencer's Vel → pop-up (four knobs) became a **VEL switch** with an LED on each card it changes (Envelope, Pitch, Filter, Noise), picked after three rounds of mockups (mini knobs beside or under their targets, or a Velocity strip, turned down). On sets a fixed +75 %, off 0; older projects' amounts play as saved. Turning one on shows the envelope or filter view with softer steps dashed, and, with every step at full velocity, says so and makes Humanize glow. Presets and the dice use +75 %. |
+| 60 | File → **Save as…** (Ctrl/Cmd+Shift+S): the settings as they are, unsaved changes included, saved as a new project under a new name ("Name copy" suggested), which becomes the open one; the original stays as last saved. Another project's name asks before replacing it. Undo history carries on. Renaming stays a rename. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
