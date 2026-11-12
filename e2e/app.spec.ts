@@ -3183,12 +3183,12 @@ test('Melody Maker: a new scale keeps each note on its degree; a project opening
 	expect((await padNotes(page, on)).map(noteMidi)).toEqual(minor);
 });
 
-test('Melody Maker: one Generate button, Random or Arpeggio, the card keeps its height, the choice is saved', async ({ page }) => {
+test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its height, the choice is saved', async ({ page }) => {
 	const generate = page.getByRole('button', { name: /^Generate/ });
 	await expect(generate).toHaveCount(1);
 	await expect(generate).toHaveText('Generate');
 	const mode = page.getByRole('group', { name: 'Generate' });
-	const random = mode.getByRole('button', { name: 'Random', exact: true });
+	const random = mode.getByRole('button', { name: 'Melody', exact: true }); // "Random" until PR 57
 	const arp = mode.getByRole('button', { name: 'Arpeggio', exact: true });
 	await expect(random).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.getByRole('button', { name: 'Arp pattern' })).toBeHidden();
@@ -3207,6 +3207,37 @@ test('Melody Maker: one Generate button, Random or Arpeggio, the card keeps its 
 	await generate.click();
 	const notes = (await padNotes(page, on)).map(noteMidi);
 	expect(notes.map((m) => (m - notes[0] + 120) % 12)).toEqual([0, 4, 7, 0]);
+	expect(notes[3] - notes[0]).toBe(12); // fitted to the bar: 1-3-5-8, the octave on top
+
+	// Rate places the notes: every step at 1/16 (and the cycle of four repeats), every other
+	// step at 1/8, every beat at 1/4; the steps between go off
+	const lit = () => pads(page).evaluateAll((els) => els.map((e, i) => (e.getAttribute('aria-pressed') === 'true' ? i : -1)).filter((i) => i >= 0));
+	expect(await lit()).toEqual([...Array(16).keys()]);
+	const all = (await padNotes(page, [...Array(16).keys()])).map(noteMidi);
+	for (let i = 0; i < 16; i++) expect(all[i]).toBe(all[i % 4]);
+	await chooseOption(page, 'Arp rate', '1/8');
+	await generate.click();
+	expect(await lit()).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
+	await page.waitForTimeout(600); // its own undo step (changes 400 ms apart are one)
+	await chooseOption(page, 'Arp rate', '1/4');
+	await generate.click();
+	expect(await lit()).toEqual([0, 4, 8, 12]);
+	expect((await padNotes(page, [0, 4, 8, 12])).map(noteMidi).map((m) => m - notes[0])).toEqual([0, 4, 7, 12]);
+	// One undo step: the 1/8 arpeggio's steps and notes come back together
+	await page.waitForTimeout(600);
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('Control+z');
+	await expect.poll(lit).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
+
+	// Free cycle (the ⋯ menu): the old way, the chord round and round, ending mid-bar
+	await chooseOption(page, 'Arp rate', '1/16');
+	await page.locator('.module.melody').getByRole('button', { name: 'Advanced options' }).click();
+	await page.getByRole('menuitem', { name: /Free cycle/ }).click();
+	await expect(page.getByRole('menuitem', { name: /Free cycle/ }).locator('.mm-switch')).toHaveClass(/on/);
+	await page.keyboard.press('Escape');
+	await generate.click();
+	const free = (await padNotes(page, [...Array(16).keys()])).map(noteMidi);
+	for (let i = 0; i < 16; i++) expect(free[i]).toBe(free[i % 3]);
 
 	// Saved with the project; File → New goes back to Random
 	expect(JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.melody.mode).toBe('arp');

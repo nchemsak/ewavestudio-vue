@@ -49,7 +49,7 @@
             <div class="mm-group">
                 <div class="pt-seg pt-seg-sm mm-mode" role="group" aria-label="Generate">
                     <button type="button" class="pt-seg-btn" :class="{ 'is-active': mode === 'random' }"
-                        :aria-pressed="mode === 'random'" @click="mode = 'random'">Random</button>
+                        :aria-pressed="mode === 'random'" @click="mode = 'random'">Melody</button>
                     <button type="button" class="pt-seg-btn" :class="{ 'is-active': mode === 'arp' }"
                         :aria-pressed="mode === 'arp'" @click="mode = 'arp'">Arpeggio</button>
                 </div>
@@ -109,6 +109,14 @@
                     </button>
                 </div>
 
+                <div class="mm-opt" role="menuitem" @click.stop="arpFree = !arpFree"
+                    title="Off: the cycle is fitted to the bar (a chord goes 1-3-5-8) and repeats evenly. On: it runs on across the bar, so it can end mid-cycle">
+                    <span>Free cycle (don't fit the bar)</span>
+                    <button class="mm-switch" :class="{ on: arpFree }">
+                        <span class="kn"></span>
+                    </button>
+                </div>
+
                 <div class="mm-opt" role="menuitem" @click.stop="arpStride = (arpStride === 1 ? 2 : 1)">
                     <span>Skip every other tone</span>
                     <button class="mm-switch" :class="{ on: arpStride === 2 }">
@@ -141,6 +149,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, defineExpose, nextTick } from 'vue';
 import PtSelect from './PtSelect.vue';
 import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
+import { arpSlots, arpSequence } from '../lib/melody/arp';
 
 const props = defineProps<{
     frequencies?: number[];
@@ -188,6 +197,7 @@ const DEFAULTS_ARP = {
 
 const emit = defineEmits<{
     (e: 'update:frequencies', v: number[]): void;
+    (e: 'update:steps', v: boolean[]): void; // an arpeggio sets which steps play (its Rate)
     (e: 'octave-shift', delta: number): void;
     (e: 'key-root-change', root: typeof ROOTS[number]): void;
     (e: 'key-scale-change', scale: KeyScale): void;
@@ -607,6 +617,9 @@ watch(() => props.initialArpOctaves, (v) => { if (v) arpOctaves.value = clampArp
 watch(() => props.initialArpTones, (v) => { if (v) arpTones.value = v; });
 
 const arpSeventhOnDownbeat = ref(false);
+// "Free cycle": the arpeggio's cycle runs on across the bar, as before PR 57, instead of being
+// fitted to it (src/lib/melody/arp.ts). Not saved, like the menu's other toggles.
+const arpFree = ref(false);
 const arpStride = ref<1 | 2>(1);
 const arpHop = ref(false);
 
@@ -685,20 +698,11 @@ function pickBaseTonicByRange(tonicGroup: number[], centerMidi: number): number 
 function bakeArp(): void {
     if (!props.frequencies || !props.frequencies.length) return;
 
+    // Rate places the notes (src/lib/melody/arp.ts): a note on every step at 1/16, every other
+    // at 1/8, every beat at 1/4; the steps between go off. "Active Pads Only" is the Melody
+    // mode's: an arpeggio sets its own rhythm.
     const out = props.frequencies.slice();
-
-    const scopeMask =
-        applyScope.value === 'active' &&
-            props.steps &&
-            props.steps.length === out.length
-            ? props.steps
-            : out.map(() => true);
-
-    const activeIdx = out.map((_, i) => i).filter((i) => scopeMask[i]);
-    if (!activeIdx.length) {
-        emit('update:frequencies', out);
-        return;
-    }
+    const slots = arpSlots(out.length, arpRate.value);
 
     const fMin = props.minFreq ?? 100;
     const fMax = props.maxFreq ?? 2000;
@@ -836,19 +840,6 @@ function bakeArp(): void {
     const order = orderIdx.map((i) => ladder[i]);
     if (!order.length) return;
 
-    // Grouping by rate
-    const RATE_TO_GROUP: Record<string, number> = {
-        '1/4': 4,
-        '1/8': 2,
-        '1/16': 1
-    };
-    const groupSize = RATE_TO_GROUP[arpRate.value] ?? 1;
-
-    const groupsOfIdx: number[][] = [];
-    for (let k = 0; k < activeIdx.length; k += groupSize) {
-        groupsOfIdx.push(activeIdx.slice(k, k + groupSize));
-    }
-
     const seventhSemi =
         stepsArr.length >= 7 ? (rootSemi + stepsArr[6]) % 12 : null;
     const seventhCandidates =
@@ -878,32 +869,29 @@ function bakeArp(): void {
         return midi;
     }
 
-    let p = 0;
+    // One note per slot: the cycle fitted to the bar (or free, from the ⋯ menu)
+    const midiOf = (hz: number) => 69 + 12 * Math.log2(hz / 440);
+    const seq = arpSequence(order, slots.length, {
+        fit: !arpFree.value,
+        direction: arpPattern.value,
+        lo: Math.ceil(midiOf(fMin)),
+        hi: Math.floor(midiOf(fMax)),
+    });
 
-    for (const g of groupsOfIdx) {
-        if (!g.length) continue;
-
-        const firstStep = g[0];
-        let midi: number | undefined;
-
-        if (
-            arpSeventhOnDownbeat.value &&
-            seventhCandidates.length &&
-            firstStep % 4 === 0
-        ) {
+    const stepsOut = out.map(() => false);
+    slots.forEach((stepIndex, k) => {
+        let midi = seq[k];
+        if (arpSeventhOnDownbeat.value && seventhCandidates.length && stepIndex % 4 === 0) {
             const i = nearestIndexIn(seventhCandidates, center);
             if (i != null) midi = seventhCandidates[i];
-        }
-
-        if (midi === undefined) {
-            midi = order[p++ % order.length];
+        } else {
             midi = maybeHop(midi);
         }
+        out[stepIndex] = 440 * Math.pow(2, (midi - 69) / 12);
+        stepsOut[stepIndex] = true;
+    });
 
-        const hz = 440 * Math.pow(2, (midi - 69) / 12);
-        for (const stepIndex of g) out[stepIndex] = hz;
-    }
-
+    emit('update:steps', stepsOut);
     emit('update:frequencies', out);
 }
 
@@ -969,6 +957,7 @@ function resetAdvanced() {
     arpSeventhOnDownbeat.value = DEFAULTS_ARP.seventhOnDownbeat;
     arpStride.value = DEFAULTS_ARP.stride;
     arpHop.value = DEFAULTS_ARP.hop;
+    arpFree.value = false;
 }
 
 type UiSnapshot = {
@@ -1135,7 +1124,7 @@ defineExpose({ openAdvanced, getUi, setUi });
     flex: 1 1 0;
 }
 
-/* Random's note and the arpeggio's settings share one place: as tall as the taller, the one
+/* Melody's note and the arpeggio's settings share one place: as tall as the taller, the one
    not chosen hidden (and out of the Tab order and screen readers) */
 .mm-mode-body {
     display: grid;
