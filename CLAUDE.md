@@ -178,6 +178,7 @@ src/components/
   VelSwitch.vue          A card's VEL switch (Envelope, Pitch, Filter, Noise): velocity routing
   PillSwitch.vue         The small on/off pill with an LED in a card's header (VEL, RETRIG)
   filterView.ts          The screen's filter view (drawing loop and its pure helpers)
+  LfoModKnob.vue         A Knob that draws the LFO visualizer's dot and arc itself (the Vol knob)
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
 src/audio/
   liveEngine.ts          The live sound engine (`useLiveEngine`), see "Audio engine (live)"
@@ -466,6 +467,14 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     The Pulse Width mini knob doesn't get a dot (too small to read).
   - Pitch: on each lit step pad, an amber bar slides up (sharper) and down (flatter) along a
     faint track for the whole bend; an octave fills the track (`LfoBendMark.vue`).
+  - FM (PR 62): a dot and an arc on the FM card's Amount knob, as on Cutoff (`FMModule`'s
+    `lfoView`); only while FM is on (with it off, the LFO moves nothing).
+  - Level (PR 62): a dot and an arc on the Step Sequencer's Vol knob, from full down to
+    (100 − Depth) % of it. Not on the pads (the maintainer agreed): a lit pad's fill height is
+    its velocity, so a level shown there would look like the velocities moving. The Vol knob
+    is in DrumSequencer's own template, so it's an `LfoModKnob` (a `Knob` that reads the view
+    itself; DrumSequencer must never read `lfoView`'s fields, see below). No meter on the LFO
+    tile (the maintainer's call).
 - The ranges (arc, ghost, track) show whenever the LFO is on with depth above 0 on that
   target; the moving parts only while something sounds (`soundingRecently()`: playing, or a
   note in the last 1.5 s, for MIDI). With `prefers-reduced-motion` only the ranges show.
@@ -474,7 +483,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   while the LFO is off or at depth 0. `src/lib/lfoVisual.ts` turns the position into what each
   indicator shows, with the engines' own limits (unit-tested against them).
 - `DrumSequencer.vue` passes one reactive object, `lfoView` (type `LfoView`), down to
-  `FilterModule`, the Pulse tile's `WaveButton` and `SynthStepGrid`. Only components that read
+  `FilterModule`, `FMModule`, the Pulse tile's `WaveButton`, the Vol knob's `LfoModKnob` and
+  `SynthStepGrid`. Only components that read
   its fields redraw every frame; `DrumSequencer` itself must never read them in its template,
   or its whole template would re-render 60 times a second.
 
@@ -1319,6 +1329,7 @@ Done:
 | 59 | Velocity without the pop-up: the Step Sequencer's Vel → pop-up (four knobs) became a **VEL switch** with an LED on each card it changes (Envelope, Pitch, Filter, Noise), picked after three rounds of mockups (mini knobs beside or under their targets, or a Velocity strip, turned down). On sets a fixed +75 %, off 0; older projects' amounts play as saved. Turning one on shows the envelope or filter view with softer steps dashed, and, with every step at full velocity, says so and makes Humanize glow. Presets and the dice use +75 %. |
 | 60 | File → **Save as…** (Ctrl/Cmd+Shift+S): the settings as they are, unsaved changes included, saved as a new project under a new name ("Name copy" suggested), which becomes the open one; the original stays as last saved. Another project's name asks before replacing it. Undo history carries on. Renaming stays a rename. |
 | 61 | LFO: **Retrigger** works (a RETRIG pill in the LFO card's header; saved for long, read by neither engine): each note starts its own LFO, so every hit gets the same movement; and two new targets, **Level** (tremolo) and **FM** (the FM card's Amount), in both engines (`src/audio/lfo.ts`). The Target switch's five buttons have a line of their own (option C of three mockups). |
+| 62 | LFO visualizer for the new targets: FM shows as a dot and an arc on the FM card's Amount knob (while FM is on), Level on the Step Sequencer's Vol knob (from full down to 100 − Depth %), like Cutoff's; not on the pads, whose fill height is velocity. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

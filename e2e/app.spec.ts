@@ -1731,6 +1731,36 @@ test('the LFO visualizer shows what the LFO moves, without turning the knob', as
 	await expect(page.getByRole('slider', { name: 'Pulse Width', exact: true })).toHaveAttribute('aria-valuenow', '50');
 	await stop.click();
 
+	// Level: on the Step Sequencer's Vol knob, an arc from full down to the quietest, and a dot
+	// that moves with the LFO while it plays; Vol stays where it was set
+	const vol = page.getByRole('slider', { name: 'Synth volume' });
+	const volNow = await vol.getAttribute('aria-valuenow');
+	await target('Level').click();
+	await setDepth();
+	await expect(pulse.locator('.lfo-ghost')).toHaveCount(0);
+	await expect(vol.locator('.dial-mod-range')).toHaveCount(1);
+	await play.click();
+	await expect(vol.locator('.dial-mod-dot')).toHaveCount(1);
+	expect(await distinct(() => vol.locator('.dial-mod-dot').getAttribute('cx'))).toBeGreaterThan(3);
+	await expect(vol).toHaveAttribute('aria-valuenow', volNow!);
+	await stop.click();
+
+	// FM: on the FM card's Amount knob, only while FM is on (with FM off the LFO moves nothing)
+	const fmCard = page.locator('.ds-sound .module.fm');
+	const amount = fmCard.getByRole('slider', { name: 'Amount', exact: true });
+	await target('FM amount').click();
+	await setDepth();
+	await expect(vol.locator('.dial-mod-range')).toHaveCount(0);
+	await expect(amount.locator('.dial-mod-range')).toHaveCount(0);
+	await fmCard.getByRole('switch', { name: 'FM' }).click();
+	await expect(amount.locator('.dial-mod-range')).toHaveCount(1);
+	const amountNow = await amount.getAttribute('aria-valuenow');
+	await play.click();
+	await expect(amount.locator('.dial-mod-dot')).toHaveCount(1);
+	expect(await distinct(() => amount.locator('.dial-mod-dot').getAttribute('cx'))).toBeGreaterThan(3);
+	await expect(amount).toHaveAttribute('aria-valuenow', amountNow!);
+	await stop.click();
+
 	// prefers-reduced-motion: only the ranges, nothing moves
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await target('Filter').click();

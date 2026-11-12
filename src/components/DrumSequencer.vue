@@ -229,7 +229,9 @@
 							:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
 						<h2 class="pt-title">Step Sequencer</h2>
 
-						<Knob midi-id="synth.volume" v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
+						<!-- The LFO's Level target shows on it (a dot and an arc; LfoModKnob reads the view) -->
+						<LfoModKnob :lfoView="lfoView" valueKey="level" rangeKey="levelRange"
+							midi-id="synth.volume" v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
 							label="Vol" aria-label="Synth volume"
 							:value-text="`${Math.round(synthInstrument.channelVolume * 100)}%`" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
 							@knobEnd="activeKnob = null" />
@@ -337,7 +339,7 @@
 						<!-- FM: its tile switches it on and off -->
 						<div class="module fm">
 							<SectionWrap id="fm" title="FM" v-model="collapsibleState['fm']">
-								<FMModule :color="'#3F51B5'" :showToggle="false" v-model:enabled="fmEnabled"
+								<FMModule :color="'#3F51B5'" :showToggle="false" :lfoView="lfoView" v-model:enabled="fmEnabled"
 									v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
 							</SectionWrap>
 						</div>
@@ -649,6 +651,7 @@ import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
 import VelSwitch from './VelSwitch.vue';
 import PillSwitch from './PillSwitch.vue';
+import LfoModKnob from './LfoModKnob.vue';
 import { LFO_DEPTH_MAX, type LfoTarget } from '../audio/lfo';
 import { VELOCITY_FAN, routeVelocity } from '../audio/velocity';
 import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
@@ -699,7 +702,8 @@ import { applyPattern, patternKey } from '../lib/patterns/patterns';
 import { padHue, spectrumColour, spectrumHue } from '../lib/padColour';
 import { randomPattern } from '../lib/patterns/random';
 import {
-	lfoCutoffAt, lfoCutoffSwing, lfoPulseWidthAt, lfoPulseWidthRange, lfoBendAt, lfoBendRange, type LfoView,
+	lfoCutoffAt, lfoCutoffSwing, lfoPulseWidthAt, lfoPulseWidthRange, lfoBendAt, lfoBendRange,
+	lfoFmAmountAt, lfoFmAmountRange, lfoLevelAt, lfoLevelRange, type LfoView,
 } from '../lib/lfoVisual';
 import { divisionToHz, NOISE_STOPS, type NoiseKey } from '../audio/synthHelpers';
 
@@ -2570,6 +2574,12 @@ const lfoView: LfoView = reactive({
 	pulseRange: computed(() => (lfoAt('pwm') && pulseInUse.value ? lfoPulseWidthRange(pulseWidth.value, lfoDepth.value) : null)),
 	bend: computed(() => (lfoAt('pitch') && lfoPos.value != null ? lfoBendAt(lfoDepth.value, lfoPos.value) : null)),
 	bendRange: computed(() => (lfoAt('pitch') ? lfoBendRange(lfoDepth.value) : null)),
+	fmAmount: computed(() => (lfoAt('fm') && fmInUse.value && lfoPos.value != null
+		? lfoFmAmountAt(fmIndex.value, lfoDepth.value, lfoPos.value) : null)),
+	fmAmountRange: computed(() => (lfoAt('fm') && fmInUse.value ? lfoFmAmountRange(fmIndex.value, lfoDepth.value) : null)),
+	level: computed(() => (lfoAt('amp') && lfoPos.value != null
+		? lfoLevelAt(synthInstrument.value?.channelVolume ?? 1, lfoDepth.value, lfoPos.value) : null)),
+	levelRange: computed(() => (lfoAt('amp') ? lfoLevelRange(synthInstrument.value?.channelVolume ?? 1, lfoDepth.value) : null)),
 });
 
 // LFO visualizer END

@@ -113,11 +113,11 @@ describe('MIDI learn', () => {
 });
 
 describe('the learnable knobs', () => {
-	it('are each on exactly one <Knob midi-id> in the components', () => {
+	it('are each on exactly one <Knob midi-id> (or <LfoModKnob midi-id>, which is a Knob) in the components', () => {
 		const sources = import.meta.glob('../components/**/*.vue', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 		const ids: string[] = [];
 		for (const src of Object.values(sources)) {
-			for (const m of src.matchAll(/<Knob\b[^>]*?\bmidi-id="([^"]+)"/g)) ids.push(m[1]);
+			for (const m of src.matchAll(/<(?:Knob|LfoModKnob)\b[^>]*?\bmidi-id="([^"]+)"/g)) ids.push(m[1]);
 		}
 		expect([...ids].sort()).toEqual(Object.keys(MIDI_KNOBS).sort());
 	});
