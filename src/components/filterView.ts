@@ -12,6 +12,7 @@
 // filterView.test.ts.
 
 import { lfoFilterTapGain } from '../audio/synthHelpers';
+import { VELOCITY_FAN, routeVelocity, routedCutoff } from '../audio/velocity';
 
 // Axes START
 
@@ -81,6 +82,7 @@ type Settings = {
 	cutoff: () => number;
 	resonance: () => number;
 	envAmount: () => number; // filter envelope, octaves
+	velCutoff: () => number; // Cutoff's VEL amount, % (0: off)
 	lfo: () => { enabled: boolean; target: string; depth: number };
 };
 
@@ -193,6 +195,19 @@ export function startFilterView(opts: {
 			ctx!.setLineDash([]);
 		}
 
+		// Cutoff's VEL switch: softer steps' curves, dashed (as the engines route them)
+		const velCutoff = on ? settings.velCutoff() : 0;
+		if (velCutoff !== 0) {
+			ctx!.strokeStyle = ink;
+			ctx!.lineWidth = 1.5;
+			ctx!.setLineDash([5, 4]);
+			VELOCITY_FAN.forEach((v, i) => {
+				ctx!.globalAlpha = i === 0 ? 0.6 : 0.4;
+				stroke(response(routedCutoff(frequency, routeVelocity({ cutoff: velCutoff }, v)), Q));
+			});
+			ctx!.setLineDash([]);
+		}
+
 		// The filter envelope: where each note starts (lighter), and an arrow back to the cutoff
 		const envStart = filterEnvStartHz(on, frequency, settings.envAmount());
 		if (envStart) {
@@ -231,7 +246,7 @@ export function startFilterView(opts: {
 		ctx!.fillStyle = ink;
 		ctx!.globalAlpha = 0.9;
 		ctx!.textAlign = 'left';
-		ctx!.fillText(on ? 'Low-pass Filter' : 'Low-pass Filter: off', L, 12);
+		ctx!.fillText(!on ? 'Low-pass Filter: off' : velCutoff !== 0 ? 'Low-pass Filter (dashed: softer steps)' : 'Low-pass Filter', L, 12);
 		ctx!.textAlign = 'right';
 		if (on) ctx!.fillText(`Q ${settings.resonance().toFixed(1)}`, L + plotW, 12);
 

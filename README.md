@@ -19,8 +19,9 @@ https://www.ephemeralwave.com/studio/ and is never changed.
 - Amp envelope, a drum-style pitch envelope, a filter with its own envelope, noise, FM, unison
   and an LFO, whose movement shows on what it moves (the Cutoff knob, the Pulse tile or the
   step pads)
-- Velocity routing: a step's velocity can also shape its decay, brightness, pitch sweep and
-  noise, so soft steps sound like softer hits
+- Velocity routing: a VEL switch on the Envelope, Pitch, Filter and Noise cards lets a step's
+  velocity also shape its decay, brightness, pitch sweep and noise, so soft steps sound like
+  softer hits
 - Delay (synced to the tempo, with a ping-pong switch), overdrive (with a bit-crusher switch) and reverb
 - Six built-in sounds (Kick, Snare, Metal, Pluck, Acid, Bell) that set the sound without
   touching your pattern, and six built-in patterns (Pulse, Offbeat, Gallop, Rolls, Bassline,

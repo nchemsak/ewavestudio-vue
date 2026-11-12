@@ -17,6 +17,11 @@ export type VelocityRouting = { decay: number; cutoff: number; pitchEnv: number;
 export const VELOCITY_DESTINATIONS = ['decay', 'cutoff', 'pitchEnv', 'noise'] as const;
 export const VELOCITY_ROUTING_DEFAULT: VelocityRouting = { decay: 0, cutoff: 0, pitchEnv: 0, noise: 0 };
 export const VELOCITY_AMOUNT_MAX = 100; // %
+// What a card's VEL switch sets (on) for its destination; off is 0. Older projects and the
+// presets may hold other amounts, which play as before (the switch is lit while it isn't 0).
+export const VELOCITY_SWITCH_AMOUNT = 75;
+// The softer velocities the screen draws (dashed) while Decay's or Cutoff's VEL is on
+export const VELOCITY_FAN = [0.7, 0.4] as const;
 // How far Cutoff moves for a silent step at full amount
 export const CUTOFF_RANGE_OCT = 2;
 
@@ -59,6 +64,6 @@ export function routedNoise(mix: number, n: RoutedNote): number {
 	return clamp(mix * n.noiseFactor, 0, 1);
 }
 
-// Is any destination in use? (the Step Sequencer's "Vel →" button lights up)
+// Is any destination in use?
 export const velocityRoutingActive = (r: Partial<VelocityRouting> | null | undefined) =>
 	VELOCITY_DESTINATIONS.some((k) => (r?.[k] ?? 0) !== 0);

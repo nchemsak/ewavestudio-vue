@@ -16,7 +16,7 @@
 
 import type { PresetFx, PresetSynth, SynthPreset } from './presets';
 import { WAVE_IDS } from '../../audio/waves';
-import { VELOCITY_DESTINATIONS } from '../../audio/velocity';
+import { VELOCITY_DESTINATIONS, VELOCITY_SWITCH_AMOUNT } from '../../audio/velocity';
 
 // 0 ≤ x < 1, like Math.random (the tests pass a seeded one)
 export type Rng = () => number;
@@ -106,11 +106,12 @@ export function randomPreset(rng: Rng = Math.random): SynthPreset {
 		};
 	}
 
-	// Velocity shapes one or two things (most audible with Humanize's shapes)
+	// Velocity shapes one or two things (most audible with Humanize's shapes), by the amount
+	// a card's VEL switch sets, so the switches show it and turn it off and on again
 	if (chance(0.4)) {
 		const first = pick(VELOCITY_DESTINATIONS);
 		const second = chance(0.5) ? pick(VELOCITY_DESTINATIONS) : first;
-		synth.velocity = { [first]: between(30, 80), [second]: between(30, 80) };
+		synth.velocity = { [first]: VELOCITY_SWITCH_AMOUNT, [second]: VELOCITY_SWITCH_AMOUNT };
 	}
 
 	if (chance(0.35)) fx.reverb = { enabled: true, mix: between(0.1, 0.35, 0.01), decay: between(0.6, 3, 0.05), tone: between(0.3, 0.8, 0.01) };

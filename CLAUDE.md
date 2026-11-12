@@ -174,7 +174,7 @@ src/components/
                          (and the MIDI learn bar, at the bottom of the screen)
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
   WaveButton.vue, WaveIcon.vue  A wave's big tile (Waveforms panel) and small line icon (pads)
-  VelocityRouting.vue    The "Vel →" panel (Step Sequencer header): four velocity amounts
+  VelSwitch.vue          A card's VEL switch (Envelope, Pitch, Filter, Noise): velocity routing
   filterView.ts          The screen's filter view (drawing loop and its pure helpers)
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
 src/audio/
@@ -298,14 +298,30 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   target, `pwm` (labelled "Pulse" in the LFO's Target switch; "PW" meant little to a
   newcomer; depth in % width), moves the pulse's threshold, kept within 5–95 %
   (past 50 % the sound comes back the way it went).
-- Velocity routing (`velocity.ts`, both engines; panel `VelocityRouting.vue`, opened by the
-  Step Sequencer's "Vel →" button, lit while any amount isn't 0): a step's velocity (its pad
-  slider; a MIDI note's velocity) also shapes Decay, Cutoff (up to 2 octaves), the pitch
-  envelope's Amount and the noise mix, each by a bipolar amount (−100…+100 %, 0 = off, the
-  default). A full-velocity step plays the panel's settings exactly; right of centre softer
-  steps get less, left more (`routeVelocity()`). `playSynthNote()` takes the step's own
-  velocity as `opts.vel` (its `velocity` argument is the loudness, with the lane volume).
-  Saved as `synth.velocity` { decay, cutoff, pitchEnv, noise }; older projects get none.
+- Velocity routing (`velocity.ts`, both engines): a step's velocity (its pad slider; a MIDI
+  note's velocity) also shapes Decay, Cutoff (up to 2 octaves), the pitch envelope's Amount
+  and the noise mix, each by an amount (−100…+100 %, 0 = off, the default). A full-velocity
+  step plays the card's settings exactly; above 0 softer steps get less, below 0 more
+  (`routeVelocity()`). `playSynthNote()` takes the step's own velocity as `opts.vel` (its
+  `velocity` argument is the loudness, with the lane volume). Saved as `synth.velocity`
+  { decay, cutoff, pitchEnv, noise }; older projects get none.
+  **VEL switches** (PR 59, replacing PR 28's "Vel →" pop-up of four knobs, which people didn't
+  find and whose effect was hard to hear): a pill with an LED in the top-right corner of the
+  Envelope, Pitch (before RND) and Filter cards' headers and of the Noise card
+  (`VelSwitch.vue`, `role="switch"`; greyed out while its card is off). On sets one fixed
+  amount, `VELOCITY_SWITCH_AMOUNT` (+75 %: a half-velocity step gets about 60 % of the
+  Decay, sweep or noise, and its cutoff ¾ octave lower), off 0. Mini knobs beside the targets
+  were mocked up first and turned down (the maintainer's call: they pushed the knob rows
+  apart and overflowed Noise's buttons). So the reverse direction and in-between amounts are
+  gone from the panel; a project that has one plays it as saved, its switch lit, until
+  switched off. Presets and the Sounds dice use the switch's amount. Not MIDI-learnable
+  (switches). The tooltip is one line ("Softer steps decay sooner"). Turning one on shows
+  what it does (`VEL SWITCHES` section of `DrumSequencer.vue`): Decay's and Cutoff's show the
+  envelope or filter view for 1.5 s (`flashScreen()`), where softer steps (70 % and 40 %,
+  `VELOCITY_FAN`) are drawn dashed whenever the switch is on; and if every step that's on is
+  at full velocity (so it can't change anything yet), a note under the switch says "Every
+  step is at full velocity: try Humanize" and Pattern Tools' Humanize buttons glow
+  (`PatternTools`' `nudge`). The phone's Sound page has the three cards' switches too.
 - Ratchets (`ratchet.ts`, both engines; "Repeats" ×1–×4 in each pad's ⋮ menu, a "×3" badge
   at the top of the pad): the step plays that many quick hits, evenly spaced from its start
   to the next step's start (`stepSpan()`: swing makes an on-beat step longer and a swung one
@@ -316,7 +332,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   usual. Saved per step as the synth lane's `ratchets` (1–4; projects saved before get 1s,
   other values are clamped by `clampRatchet()`); Reset Pads, the ⋯ menu's Clear Repeats and
   File → New put them back to 1.
-  The **Repeats brush** (PR 50; `×2 ×3 ×4` beside "Vel →" in the Step Sequencer header,
+  The **Repeats brush** (PR 50; `×2 ×3 ×4` beside Vol in the Step Sequencer header,
   `repeatBrush` in `DrumSequencer.vue`, not saved): while one is lit, a click or a drag across
   pads (`SynthStepGrid.vue`'s `paintRepeats()`, like painting steps) gives them that many hits
   and turns them on; a pad that has the brush's count already goes back to one (the first pad
@@ -488,8 +504,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (`localStorage` `midi-map`, `{ "1:21": "filter.cutoff" }`, channel 1–16 : controller), not
   in projects, and File → New doesn't clear them.
 - Learnable knobs: each `<Knob midi-id="...">` whose id is in `MIDI_KNOBS` (with the name the
-  bar uses). The ids are saved, so never rename one. The pop-up knobs (the "Vel →" panel, a
-  pad's Fine) aren't learnable: they'd only follow while open. A unit test checks every id is
+  bar uses). The ids are saved, so never rename one. The pop-up knobs (a pad's Fine) aren't
+  learnable: they'd only follow while open. A unit test checks every id is
   on exactly one knob.
 
 ### Melody Maker
@@ -792,7 +808,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   pattern untouched, one wave on every pad). Nothing lights up after a roll. It's a recipe,
   not every knob at random (that mostly gives noise or silence): always a short amp envelope
   and a filter; some of the time a pitch sweep, a filter envelope, noise, FM, unison, the LFO,
-  velocity routing and each effect. Its limits keep rolls usable: resonance up to 10, drive
+  velocity routing (at the VEL switches' amount) and each effect. Its limits keep rolls usable: resonance up to 10, drive
   mix up to 0.35, an opening filter envelope starts at 150 Hz or above and opens within
   the note (one roll without that limit was nearly silent), and a pitch sweep that starts above
   Cutoff (from A3) falls back within 30 % of Decay (PR 54: a slow 33-semitone drop onto a
@@ -929,7 +945,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     dark bezel, softer pad colours (still one per note), a taupe page and an apricot wash.
     Its tiles (the waves, FM, Unison, the LFO's switch) are dark caps with light lettering
     (PR 44: their pastel icons, made for dark tiles, vanished on light ones), and the LFO's
-    wave switch and the Vel → pill have dark ink.
+    wave switch and the Step Sequencer's pills have dark ink.
   - **Analog** (PR 44): a warm dark panel, charcoal with cream lettering and amber accents,
     an amber-to-orange knob arc (so the LFO's marks are cyan there), an amber monochrome
     screen, a wood-brown page and a copper wash.
@@ -1077,26 +1093,22 @@ drum lanes back.
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
 
-Items 1–4 (and PRs 55–58) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
+Items 1–3 (and PRs 55–59) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-1. **Velocity without the pop-up:** the "Vel →" panel's four amounts become mini "VEL" knobs on
-   the cards they change (Envelope's Decay, Pitch's Amount, Filter's Cutoff, Noise's mix), so
-   they sit beside what they change and MIDI learn can link them. Mockup first: Envelope,
-   Pitch and Filter's knob row is full. Fallback: one small Velocity card in Sound.
-2. **File → Save as…** (or Duplicate): a new project under a new name, the original left as it
+1. **File → Save as…** (or Duplicate): a new project under a new name, the original left as it
    was. Renaming stays a rename (a typo fixed shouldn't leave copies). Maybe, on Save after a
    rename of a saved project, ask: rename it, or save as a new project?
-3. **LFO:** wire up Retrigger (`lfoRetrigger` is saved and in the export's state, but the live
+2. **LFO:** wire up Retrigger (`lfoRetrigger` is saved and in the export's state, but the live
    engine never reads it): the LFO starts over on each note, which is what makes an LFO useful
    on drums. And more targets: level (tremolo) and FM amount (not pan, the maintainer's call).
    One LFO; a second waits for patch cables.
-4. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
+3. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
    dice) that presses in; a switch with an LED over the chosen option (Melody | Arpeggio, the
-   rates); a toggle with an LED (FM, Unison, CRUSH). Mockups first (2–3), then one PR with
+   rates); a toggle with an LED (FM, Unison, CRUSH, the cards' VEL switches). Mockups first (2–3), then one PR with
    before/after screenshots in every theme.
-5. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1275,6 +1287,7 @@ Done:
 | 56 | After trying PR 55: a key waiting for the bar shows a pulsing ghost of the chosen colour and the caption "· D at the next bar (Shift+click: now)" (PR 55's ring was hidden by the keyboard's own CSS, so the key seemed not to respond); patterns change at once again, playing or not. A pad's settings: a key previews the pad as it plays (its noise switch, its repeats), only while stopped; Play / Stop no longer closes them. The phone's note picker previews the same way. |
 | 57 | Arpeggio fixes: Rate places the notes (every step at 1/16, every other at 1/8, every beat at 1/4; the steps between off), where before it only grouped the pads that were on; the cycle is fitted to the bar (a triad 1-3-5-8, a scale up to the octave), with Free cycle in the ⋯ menu for the old way; the Generate switch's Random is now Melody (`src/lib/melody/arp.ts`). |
 | 58 | Repeat notes: a pad's ⋮ menu has Notes under Repeats (Same / Up ↑ / Down ↓): a ×2–×4 step's hits can step up or down the key's chord from the pad's note, an arpeggio within the step (×4 on the root: 1-3-5-8); in the live and export engines, the MIDI file and the pad's preview (`ratchetPitches()` in `ratchet.ts`, `chordPitchClasses()` in `theory.ts`); saved per step (older projects get Same); the badge shows ×3↑; the phone's hold sheet cycles Same → Up → Down. |
+| 59 | Velocity without the pop-up: the Step Sequencer's Vel → pop-up (four knobs) became a **VEL switch** with an LED on each card it changes (Envelope, Pitch, Filter, Noise), picked after three rounds of mockups (mini knobs beside or under their targets, or a Velocity strip, turned down). On sets a fixed +75 %, off 0; older projects' amounts play as saved. Turning one on shows the envelope or filter view with softer steps dashed, and, with every step at full velocity, says so and makes Humanize glow. Presets and the dice use +75 %. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
