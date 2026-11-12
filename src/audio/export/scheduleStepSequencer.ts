@@ -15,7 +15,7 @@ import { createVoiceSource, lfoPwmTapGain, waveGain, PULSE_WIDTH_DEFAULT } from 
 import { routeVelocity, routedCutoff, routedSemitones, routedNoise, type VelocityRouting } from "../velocity";
 import { startFM } from "../fm";
 import { generateReverbIR } from "../reverb/generateIr";
-import { cutNoteEnd, ratchetHits, stepSpan } from "../ratchet";
+import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from "../ratchet";
 import { createCrusher } from "../crusher";
 import { createPingPong } from "../pingPong";
 import { clampUnisonVoices, unisonPhase, unisonPosition } from "../unison";
@@ -33,6 +33,8 @@ export type StepSequencerState = {
 		pitches: number[];           // Hz
 		waveforms: string[]; // per-step wave (waves.ts)
 		ratchets?: number[]; // per step: 1 hit, or 2–4 quick hits (ratchet.ts)
+		repeatNotes?: string[]; // per step: what the hits play, 'same' | 'up' | 'down' (ratchet.ts)
+		repeatChord?: number[]; // the key's chord, pitch classes, which Up/Down step through
 	};
 
 	synth: {
@@ -491,11 +493,12 @@ export function scheduleStepSequencer(
 
 		// One note, or a ratchet's 2–4 quick hits within the step, as in the live engine
 		const span = stepSpan(stepIndex, state.stepsCount, stepDuration, clamp01(state.swing));
-		for (const hit of ratchetHits(t, span, state.pattern.ratchets?.[stepIndex])) scheduleSynthNote({
+		const hitHz = ratchetPitches(freq, state.pattern.ratchets?.[stepIndex], state.pattern.repeatNotes?.[stepIndex], state.pattern.repeatChord ?? []);
+		ratchetHits(t, span, state.pattern.ratchets?.[stepIndex]).forEach((hit, k) => scheduleSynthNote({
 			ctx,
 			time: hit.time,
 			maxDuration: hit.maxDuration,
-			freq,
+			freq: hitHz[k] ?? freq,
 			baseVelocity: baseVel,
 			channelVolume: chanVol,
 			wave,
@@ -517,7 +520,7 @@ export function scheduleStepSequencer(
 			noiseOut,
 			noiseBuffers,
 			random,
-		});
+		}));
 	}
 }
 

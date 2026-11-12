@@ -23,7 +23,7 @@ import { routeVelocity, routedCutoff, routedSemitones, routedNoise } from './vel
 import { startFM } from './fm';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
-import { cutNoteEnd, ratchetHits, stepSpan } from './ratchet';
+import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from './ratchet';
 import { createCrusher, loadCrusher, setCrusher } from './crusher';
 import { createPingPong } from './pingPong';
 import { clampUnisonVoices, unisonPhase, unisonPosition } from './unison';
@@ -50,6 +50,7 @@ export type LiveLane = {
 	pitches?: number[];
 	waveforms?: string[];
 	ratchets?: number[]; // per step: 1 hit, or 2–4 quick hits (ratchet.ts)
+	repeatNotes?: string[]; // per step: what the hits play, 'same' | 'up' | 'down' (ratchet.ts)
 	buffer?: AudioBuffer | null;
 };
 
@@ -60,6 +61,7 @@ export type LiveEngineSettings = {
 		stepLength: R<number>;
 		selectedWaveform: R<Wave>;
 		noiseMask: R<boolean[]>; // per step: may this step add noise?
+		repeatChord: R<number[]>; // the key's chord, pitch classes: what Up/Down repeats step through
 	};
 	envelope: { enabled: R<boolean>; attackMs: R<number>; decayMs: R<number> };
 	filter: { enabled: R<boolean>; cutoff: R<number>; resonance: R<number>; envAmount: R<number>; envDecayMs: R<number> };
@@ -899,9 +901,11 @@ export function useLiveEngine(s: LiveEngineSettings) {
 						// One note, or a ratchet's 2–4 quick hits within the step (ratchet.ts).
 						// The noise mask makes noise per step.
 						const span = stepSpan(stepIndex, stepLength.value, stepDuration, swing.value);
-						for (const hit of ratchetHits(t, span, inst.ratchets?.[stepIndex])) {
-							playSynthNote(pitch, amp, safeDecay, hit.time, wf, { addNoise: padNoiseOn, vel, maxDuration: hit.maxDuration });
-						}
+						// Up or Down repeats step through the key's chord (ratchetPitches)
+						const hitHz = ratchetPitches(pitch, inst.ratchets?.[stepIndex], inst.repeatNotes?.[stepIndex], s.pattern.repeatChord.value);
+						ratchetHits(t, span, inst.ratchets?.[stepIndex]).forEach((hit, k) => {
+							playSynthNote(hitHz[k] ?? pitch, amp, safeDecay, hit.time, wf, { addNoise: padNoiseOn, vel, maxDuration: hit.maxDuration });
+						});
 
 					} else if (inst.buffer) {
 						playBuffer(inst.buffer, t, amp);

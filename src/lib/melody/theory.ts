@@ -105,3 +105,12 @@ export function patternCenterHz(pitches: number[], on: boolean[]): number {
 	if (!list.length) return 220;
 	return midiToFreq(list[Math.floor((list.length - 1) / 2)]);
 }
+
+// The key's chord as pitch classes (0–11): the scale's 1st, 3rd and 5th degrees, as the Melody
+// Maker's arpeggio uses with Tones "Chord" (no scale: major). For a pad's repeats stepping
+// through the chord (src/audio/ratchet.ts, ratchetPitches)
+export function chordPitchClasses(root: string, scale: KeyScale): number[] {
+	const steps: readonly number[] = scale !== 'none' && SCALES[scale] ? SCALES[scale] : SCALES.major;
+	const r = NOTE_TO_SEMITONE[root] ?? 9;
+	return [...new Set([0, 2, 4].filter((i) => i < steps.length).map((i) => mod12(r + steps[i])))];
+}

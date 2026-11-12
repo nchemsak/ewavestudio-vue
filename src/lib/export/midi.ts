@@ -6,7 +6,7 @@
 // step, less one tick, so repeated notes don't overlap. The file has the tempo and 4/4, and
 // lasts exactly the bars exported.
 
-import { clampRatchet, stepSpan } from '../../audio/ratchet';
+import { clampRatchet, ratchetPitches, stepSpan } from '../../audio/ratchet';
 
 export const PPQ = 480;              // ticks per quarter note
 export const STEP_TICKS = PPQ / 4;   // a 16th, one step
@@ -20,6 +20,8 @@ export type MidiPattern = {
 	velocities: number[]; // 0..1
 	pitches: number[];    // Hz
 	ratchets?: number[];  // hits per step, 1–4
+	repeatNotes?: string[]; // per step: what the hits play (ratchet.ts, ratchetPitches)
+	repeatChord?: number[]; // the key's chord, pitch classes
 	name?: string;        // the track's name
 };
 
@@ -70,13 +72,14 @@ export function patternToMidi(p: MidiPattern): Uint8Array {
 			if (!p.active[step]) continue;
 			const vel = Math.max(0, Math.min(1, p.velocities[step] ?? 1));
 			if (vel <= 0) continue;
-			const note = midiNoteOf(p.pitches[step] || 220);
+			const hitHz = ratchetPitches(p.pitches[step] || 220, p.ratchets?.[step] ?? 1, p.repeatNotes?.[step], p.repeatChord ?? []);
 			const velocity = Math.max(1, Math.min(127, Math.round(vel * 127)));
 
 			const start = (bar * p.stepsCount + step) * STEP_TICKS + (step % 2 === 1 ? swing * STEP_TICKS : 0);
 			const span = stepSpan(step, p.stepsCount, STEP_TICKS, swing);
 			const hits = clampRatchet(p.ratchets?.[step] ?? 1);
 			for (let k = 0; k < hits; k++) {
+				const note = midiNoteOf(hitHz[k]);
 				const on = Math.round(start + (k * span) / hits);
 				const off = Math.max(on + 1, Math.round(start + ((k + 1) * span) / hits) - 1);
 				// Note-offs sort before note-ons at the same tick

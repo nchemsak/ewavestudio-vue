@@ -28,7 +28,7 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 		lane('kick', 'sample', { buffer: { fake: 'decoded kick' } as any }),
 		lane('snare', 'sample'),
 		lane('hihat', 'sample'),
-		lane('synth-voice', 'synth', { pitches: Array(STEPS).fill(1), waveforms: Array(STEPS).fill('square'), ratchets: Array(STEPS).fill(2) }),
+		lane('synth-voice', 'synth', { pitches: Array(STEPS).fill(1), waveforms: Array(STEPS).fill('square'), ratchets: Array(STEPS).fill(2), repeatNotes: Array(STEPS).fill('same') }),
 		lane('custom-1', 'sample', { isCustom: true }),
 	]);
 	const noiseMask = ref<boolean[]>(Array(STEPS).fill(false));
@@ -139,6 +139,7 @@ export function changeEverything(st: ProjectState) {
 	synth.pitches = synth.pitches!.map((_, i) => 300 + i);
 	synth.waveforms = synth.waveforms!.map((_, i) => (i % 2 ? 'triangle' : 'square'));
 	synth.ratchets = synth.ratchets!.map((_, i) => (i % 4) + 1);
+	synth.repeatNotes = synth.repeatNotes!.map((_, i) => ['same', 'up', 'down'][i % 3]);
 }
 
 // Leaf values of an object, by path ("synth.lfo.rate", "instruments.3.steps", ...)

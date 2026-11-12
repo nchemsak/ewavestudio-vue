@@ -53,6 +53,8 @@ export function applyPattern(st: ProjectState, pattern: StepPattern, range = PAD
 	lane.velocities = idx.map(i => at(i)?.vel ?? 1);
 	lane.pitches = idx.map(i => noteHz(rootHz, at(i)?.note ?? 0, range));
 	lane.ratchets = idx.map(i => clampRatchet(at(i)?.repeats ?? 1));
+	// Its repeats play the pad's note (a pad's "Notes" Up or Down is part of the pattern too)
+	if (lane.repeatNotes) lane.repeatNotes = idx.map(() => 'same');
 }
 
 // Apply END
@@ -71,6 +73,8 @@ export function patternKey(s: any): string {
 		vel: (lane.velocities ?? []).map((v: unknown) => r(v, 100)),
 		hz: (lane.pitches ?? []).map((v: unknown) => r(v, 100)),
 		rep: lane.ratchets ?? null,
+		// Older snapshots have none: the same as every step 'same'
+		notes: (lane.repeatNotes ?? []).some((n: unknown) => n === 'up' || n === 'down') ? lane.repeatNotes : null,
 	});
 }
 

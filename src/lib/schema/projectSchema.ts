@@ -61,6 +61,7 @@ const LANE_FIELDS: Record<string, Check> = {
     pitches: optionalOrNull(arrayOf(isNumber)),
     waveforms: optionalOrNull(arrayOf(anything)),
     ratchets: optionalOrNull(arrayOf(isNumber)), // hits per step (synth lane; since PR 33)
+    repeatNotes: optionalOrNull(arrayOf(isString)), // what the repeats play (synth lane; since PR 58)
 };
 
 function invalid(where: string): never {

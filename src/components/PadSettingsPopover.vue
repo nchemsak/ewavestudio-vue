@@ -35,6 +35,17 @@
                         @click="emit('update:ratchet', n)">×{{ n }}</button>
                 </div>
             </div>
+            <!-- What the repeats play: the pad's note each hit, or up or down the key's chord
+                 (src/audio/ratchet.ts, ratchetPitches). Only with 2 or more hits. -->
+            <div v-if="showRatchetRow && repeatNotes" class="pad-row">
+                <div class="pad-label">Notes</div>
+                <div class="pt-seg pt-seg-sm" role="group" aria-label="Repeat notes"
+                    :title="(ratchet ?? 1) > 1 ? 'What the repeats play: the pad\'s note each time, or up or down the key\'s chord' : 'Pick ×2–×4 above: then the repeats can step up or down the key\'s chord'">
+                    <button v-for="m in NOTE_CHOICES" :key="m.id" class="pt-seg-btn"
+                        :class="{ 'is-active': repeatNotes === m.id }" :aria-pressed="repeatNotes === m.id"
+                        :disabled="(ratchet ?? 1) < 2" @click="emit('update:repeatNotes', m.id)">{{ m.label }}</button>
+                </div>
+            </div>
 
             <div class="kb" role="group" aria-label="Note selector">
                 <div v-for="(key, i) in NATURALS" :key="key.n" class="kb-cell" :class="{ 'has-sharp': key.hasSharp }">
@@ -84,7 +95,11 @@ import Knob from './Knob.vue';
 
 type AnchorRect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
 import { WAVE_IDS, WAVE_LABELS, type Wave } from '../audio/waves';
-import { RATCHET_COUNTS } from '../audio/ratchet';
+import { RATCHET_COUNTS, type RepeatNotes } from '../audio/ratchet';
+
+const NOTE_CHOICES: { id: RepeatNotes; label: string }[] = [
+    { id: 'same', label: 'Same' }, { id: 'up', label: 'Up ↑' }, { id: 'down', label: 'Down ↓' },
+];
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 const NATURALS = [
@@ -109,6 +124,7 @@ const props = withDefaults(defineProps<{
     wave?: Wave;
     noiseEnabled?: boolean;
     ratchet?: number; // hits per step, 1–4; no Repeats row when not given
+    repeatNotes?: RepeatNotes; // what the repeats play; no Notes row when not given
 }>(), { title: 'Pad' });
 
 const emit = defineEmits<{
@@ -117,6 +133,7 @@ const emit = defineEmits<{
     (e: 'update:wave', v: Wave): void;
     (e: 'update:noiseEnabled', v: boolean): void;
     (e: 'update:ratchet', v: number): void;
+    (e: 'update:repeatNotes', v: RepeatNotes): void;
     (e: 'close'): void;
     (e: 'audition', hz: number): void; // a key or octave was clicked: play the pad's new note
 }>();

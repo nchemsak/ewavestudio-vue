@@ -34,7 +34,7 @@
 						@pointerdown="padDown(i, $event)" @click.prevent
 						@contextmenu.prevent @keydown.enter.prevent="toggleStep(i)">
 						<span class="pl-num">{{ i + 1 }}</span>
-						<span v-if="on && (ctx.inst.ratchets?.[i] ?? 1) > 1" class="pl-rat">×{{ ctx.inst.ratchets[i] }}</span>
+						<span v-if="on && (ctx.inst.ratchets?.[i] ?? 1) > 1" class="pl-rat">×{{ ctx.inst.ratchets[i] }}{{ ctx.inst.repeatNotes?.[i] === 'up' ? '↑' : ctx.inst.repeatNotes?.[i] === 'down' ? '↓' : '' }}</span>
 						<span v-if="on" class="pl-fill"></span>
 						<span v-if="on" class="pl-note">{{ ctx.noteName(ctx.inst.pitches[i]) }}</span>
 					</button>
@@ -133,6 +133,11 @@
 				<span class="pl-cap">Repeats</span>
 				<button v-for="r in [1, 2, 3, 4]" :key="r" type="button" class="pt-btn pl-small"
 					:aria-pressed="(ctx.inst.ratchets?.[held] ?? 1) === r" @click="setRatchet(held, r)">×{{ r }}</button>
+				<!-- What the repeats play: a tap goes Same → Up → Down (the key's chord) -->
+				<button v-if="ctx.inst.repeatNotes" type="button" class="pt-btn pl-small"
+					:aria-label="`Repeat notes: ${notesName(held)}`" :disabled="(ctx.inst.ratchets?.[held] ?? 1) < 2"
+					title="What the repeats play: the pad's note, or up or down the key's chord"
+					@click="cycleNotes(held)">{{ notesName(held) }}</button>
 			</div>
 		</div>
 
@@ -346,6 +351,13 @@ function setVelocity(i: number, v: number) { ctx.inst.velocities = replace(ctx.i
 function setRatchet(i: number, r: number) {
 	const cur = ctx.inst.ratchets ?? Array(ctx.inst.steps.length).fill(1);
 	ctx.inst.ratchets = replace(cur, i, r);
+}
+const NOTES_CYCLE = ['same', 'up', 'down'] as const;
+const NOTES_NAME: Record<string, string> = { same: 'Same', up: 'Up ↑', down: 'Down ↓' };
+function notesName(i: number) { return NOTES_NAME[ctx.inst.repeatNotes?.[i]] ?? 'Same'; }
+function cycleNotes(i: number) {
+	const cur = NOTES_CYCLE.indexOf(ctx.inst.repeatNotes?.[i] ?? 'same');
+	ctx.inst.repeatNotes = replace(ctx.inst.repeatNotes, i, NOTES_CYCLE[(Math.max(0, cur) + 1) % 3]);
 }
 function pickNote(i: number, hz: number) {
 	ctx.inst.pitches = replace(ctx.inst.pitches, i, hz);

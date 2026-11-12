@@ -58,7 +58,7 @@
                     <div v-if="brushPreview(index) !== null" class="ratchet-badge is-preview" aria-hidden="true">
                         ×{{ brushPreview(index) }}</div>
                     <div v-else-if="ratchetFor(index) > 1" class="ratchet-badge" :class="{ 'is-off': !active }"
-                        aria-hidden="true">×{{ ratchetFor(index) }}</div>
+                        aria-hidden="true">×{{ ratchetFor(index) }}{{ notesArrow(index) }}</div>
 
                     <div class="wave-badge" :class="{ 'is-off': !active }" :data-wave="waveFor(index)"
                         :title="waveFor(index)">
@@ -125,6 +125,8 @@ const props = withDefaults(
 
         // Hits per step: 1, or 2–4 quick hits (a ratchet; src/audio/ratchet.ts)
         ratchets?: number[];
+        // What the hits play: 'same', or 'up' / 'down' the key's chord (shown as ↑ / ↓ on the badge)
+        repeatNotes?: string[];
         // The Repeats brush: while set (2–4), a click or drag gives pads that many hits
         // instead of turning them on or off; a pad that already has it goes back to one hit
         repeatBrush?: number | null;
@@ -257,8 +259,15 @@ function ratchetFor(i: number) {
     return props.ratchets?.[i] ?? 1;
 }
 
+function notesArrow(i: number) {
+    const m = props.repeatNotes?.[i];
+    return m === 'up' ? '↑' : m === 'down' ? '↓' : '';
+}
+
 function padLabel(i: number, active: boolean) {
-    const repeats = ratchetFor(i) > 1 ? `, ${ratchetFor(i)} hits` : '';
+    const m = props.repeatNotes?.[i];
+    const way = m === 'up' ? ' up the chord' : m === 'down' ? ' down the chord' : '';
+    const repeats = ratchetFor(i) > 1 ? `, ${ratchetFor(i)} hits${way}` : '';
     if (props.repeatBrush) {
         const n = ratchetFor(i) === props.repeatBrush ? 1 : props.repeatBrush;
         return `Step ${i + 1}${active ? `, ${props.nearestNote(props.pitches[i])}` : ''}${repeats}: give it ${n} ${n === 1 ? 'hit' : 'hits'}`;

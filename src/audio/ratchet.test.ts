@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { clampRatchet, cutNoteEnd, ratchetHits, stepSpan, RATCHET_COUNTS } from './ratchet';
+import { clampRatchet, cutNoteEnd, ratchetHits, stepSpan, RATCHET_COUNTS, ratchetPitches, clampRepeatNotes } from './ratchet';
+import { chordPitchClasses } from '../lib/melody/theory';
 
 describe('ratchets', () => {
 	it('count 1 to 4 hits; anything else is one hit', () => {
@@ -39,5 +40,53 @@ describe('ratchets', () => {
 		expect(cutNoteEnd(1.05, 1, 0.002, 0.06)).toBeCloseTo(1.05); // already shorter
 		expect(cutNoteEnd(1.4, 1, 0.04, 0.03)).toBeCloseTo(1.045); // a slow attack finishes first
 		expect(cutNoteEnd(1.4, 1, 0.001, 0.01)).toBeCloseTo(1.02); // at least 20 ms
+	});
+});
+
+describe('repeats stepping through the chord', () => {
+	const midi = (hz: number) => Math.round(69 + 12 * Math.log2(hz / 440));
+	const A_MINOR = chordPitchClasses('A', 'naturalMinor'); // A C E
+	const A3 = 220;
+
+	it('the key\'s chord: the scale\'s 1st, 3rd and 5th (major with no scale)', () => {
+		expect(A_MINOR.sort((a, b) => a - b)).toEqual([0, 4, 9]);
+		expect(chordPitchClasses('C', 'none').sort((a, b) => a - b)).toEqual([0, 4, 7]);
+		expect(chordPitchClasses('D', 'pentMinor').sort((a, b) => a - b)).toEqual([0, 2, 7]); // D, G, C: the scale's 1st, 3rd and 5th notes, as the arpeggio's Chord
+	});
+
+	it('Same plays the pad\'s note every hit, as before', () => {
+		expect(ratchetPitches(A3, 3, 'same', A_MINOR)).toEqual([A3, A3, A3]);
+		expect(ratchetPitches(A3, 4, undefined, A_MINOR)).toEqual([A3, A3, A3, A3]);
+		expect(ratchetPitches(A3, 1, 'up', A_MINOR)).toEqual([A3]);
+	});
+
+	it('Up goes 1-3-5-8 from the root, Down 8-5-3-1 from the octave', () => {
+		expect(ratchetPitches(A3, 4, 'up', A_MINOR).map(midi)).toEqual([57, 60, 64, 69]);
+		expect(ratchetPitches(440, 4, 'down', A_MINOR).map(midi)).toEqual([69, 64, 60, 57]);
+	});
+
+	it('starts from the pad\'s own note, even off the chord, and keeps its fine tuning', () => {
+		// B3 (not in A minor's chord): then C4, E4
+		expect(ratchetPitches(246.94, 3, 'up', A_MINOR).map(midi)).toEqual([59, 60, 64]);
+		const sharp = A3 * Math.pow(2, 20 / 1200); // 20 cents sharp
+		const out = ratchetPitches(sharp, 2, 'up', A_MINOR);
+		expect(1200 * Math.log2(out[1] / 261.6256)).toBeCloseTo(20, 1);
+	});
+
+	it('stays inside the pads\' range', () => {
+		for (const hz of [1800, 1950, 110, 101]) {
+			for (const dir of ['up', 'down']) {
+				for (const f of ratchetPitches(hz, 4, dir, A_MINOR)) {
+					expect(f).toBeGreaterThanOrEqual(100);
+					expect(f).toBeLessThanOrEqual(2000);
+				}
+			}
+		}
+	});
+
+	it('a saved value it doesn\'t know is Same', () => {
+		expect(clampRepeatNotes('up')).toBe('up');
+		expect(clampRepeatNotes('sideways')).toBe('same');
+		expect(clampRepeatNotes(undefined)).toBe('same');
 	});
 });

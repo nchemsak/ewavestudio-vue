@@ -272,7 +272,7 @@
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
 						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
 						:waveforms="(synthInstrument as any).waveforms" v-model:ratchets="synthInstrument.ratchets"
-						:repeatBrush="repeatBrush"
+						:repeatNotes="synthInstrument.repeatNotes" :repeatBrush="repeatBrush"
 						:defaultWave="selectedWaveform" :noiseMask="noiseMask"
 						:noiseTint="noiseHexFromMorph(noiseColor)" noise-mode="static" :noise-alpha="0.32"
 						:noise-fps="14" :noise-speed="40" :noise-enabled="noiseEnabled" :pepper-alpha="0.2"
@@ -590,7 +590,7 @@
 			@export="runExport" @close="exportOpen = false" />
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
-			v-model:noiseEnabled="padNoiseEnabled" v-model:ratchet="currentPadRatchet" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
+			v-model:noiseEnabled="padNoiseEnabled" v-model:ratchet="currentPadRatchet" v-model:repeatNotes="currentPadRepeatNotes" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
 			:anchorRect="padPopover.anchorRect" :title="padPopover.title" @audition="hz => auditionPad(padSettings.index, hz)" />
 	</div>
 </template>
@@ -602,7 +602,7 @@ import Knob from './Knob.vue';
 import DelayEffect from './modules/DelayEffect.vue';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, DEFAULT_TEMPO, followDelaySync } from '../lib/delaySync';
 import { TEMPO_DETENTS, SWING_DETENTS, TRIPLET_SWING } from '../lib/knobDetents';
-import { shortestInterval, transposePitches, remapScale, nearestRootHz, patternCenterHz } from '../lib/melody/theory';
+import { shortestInterval, transposePitches, remapScale, nearestRootHz, patternCenterHz, chordPitchClasses } from '../lib/melody/theory';
 import DriveEffect from './modules/DriveEffect.vue';
 import UnisonEffect from './modules/UnisonEffect.vue';
 import LFOGroup from './modules/LFOGroup.vue';
@@ -622,7 +622,7 @@ import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
 import VelocityRouting from './VelocityRouting.vue';
 import { velocityRoutingActive } from '../audio/velocity';
-import { clampRatchet, ratchetHits } from '../audio/ratchet';
+import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
 import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
 import MelodyMaker from './MelodyMaker.vue';
@@ -736,6 +736,11 @@ const melodyUi = reactive<MelodyUi>({
 	mode: 'random',
 });
 
+// The key's chord (pitch classes), which a pad's Up or Down repeats step through
+// (src/audio/ratchet.ts, ratchetPitches): the Melody Maker's key and scale, as its arpeggio's
+// Chord tones
+const repeatChord = computed(() => chordPitchClasses(melodyUi.keyRoot, melodyUi.keyScale));
+
 function setStepLength() {
 	const target = STEP_COUNT;
 
@@ -754,6 +759,7 @@ function setStepLength() {
 		if ((inst as any).waveforms)
 			(inst as any).waveforms = resize((inst as any).waveforms, selectedWaveform.value as any);
 		if (inst.ratchets) inst.ratchets = resize(inst.ratchets, 1);
+		if (inst.repeatNotes) inst.repeatNotes = resize(inst.repeatNotes, 'same');
 	});
 
 	noiseMask.value = resize(noiseMask.value, true);
@@ -832,6 +838,7 @@ function toggleRepeatBrush(n: number) {
 function clearRepeats() {
 	const inst = synthInstrument.value;
 	if (inst?.ratchets) inst.ratchets = inst.ratchets.map(() => 1);
+	if (inst?.repeatNotes) inst.repeatNotes = inst.repeatNotes.map(() => 'same');
 	stepsAdvanced.open = false;
 }
 
@@ -851,6 +858,7 @@ function resetSynthPadsToDefaults() {
 	inst.pitches = Array(len).fill(baseHz);
 	inst.waveforms = Array(len).fill('sine' as OscillatorType);
 	inst.ratchets = Array(len).fill(1);
+	inst.repeatNotes = Array(len).fill('same');
 
 	// Keep the global waveform selector consistent with pad defaults
 	selectedWaveform.value = 'sine';
@@ -1689,6 +1697,7 @@ const instruments = ref<Instrument[]>([
 		pitches: Array(stepLength.value).fill(currentDefaultHz.value),
 		waveforms: Array(stepLength.value).fill('sine' as OscillatorType),
 		ratchets: Array(stepLength.value).fill(1), // hits per step (src/audio/ratchet.ts)
+		repeatNotes: Array(stepLength.value).fill('same'), // what the hits play (ratchet.ts)
 	},
 ]);
 
@@ -1730,6 +1739,23 @@ const currentPadWave = computed<Wave>({
 			inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as Wave);
 		}
 		inst.waveforms[padSettings.index] = w;
+	}
+});
+
+// Per-pad repeat notes (what the hits play: Same, Up or Down the key's chord) for the pad
+// settings popover; undefined (no row) for a lane without them
+const currentPadRepeatNotes = computed<RepeatNotes | undefined>({
+	get() {
+		const inst = instruments.value.find(i => i.name === padSettings.name);
+		if (!inst?.repeatNotes) return undefined;
+		return clampRepeatNotes(inst.repeatNotes[padSettings.index]);
+	},
+	set(m) {
+		const inst = instruments.value.find(i => i.name === padSettings.name);
+		if (!inst?.repeatNotes || padSettings.index < 0) return;
+		const next = [...inst.repeatNotes];
+		next[padSettings.index] = clampRepeatNotes(m);
+		inst.repeatNotes = next;
 	}
 });
 
@@ -1901,16 +1927,17 @@ function onScaleChosen({ from, to }: { from: MelodyUi['keyScale']; to: MelodyUi[
 // muted). The click that asks for it lets audio start. opts: with the noise or not (a pad's
 // noise switch), and as a pad's repeats (2–4 quick hits within a step at the tempo, as the
 // sequencer plays them, ratchet.ts)
-function auditionNote(hz: number, wave?: string, opts: { noise?: boolean; repeats?: number } = {}) {
+function auditionNote(hz: number, wave?: string, opts: { noise?: boolean; repeats?: number; repeatNotes?: string } = {}) {
 	const inst = synthInstrument.value;
 	if (!inst || inst.muted) return;
 	const play = () => {
 		startLfoIfNeeded();
 		const step = 60 / tempo.value / 4;
-		for (const hit of ratchetHits(audioCtx.currentTime + 0.003, step, opts.repeats ?? 1)) {
-			playSynthNote(hz, Math.min(1, 0.8 * (inst.channelVolume ?? 1)), synthDecay.value, hit.time,
+		const hitHz = ratchetPitches(hz, opts.repeats ?? 1, opts.repeatNotes, repeatChord.value);
+		ratchetHits(audioCtx.currentTime + 0.003, step, opts.repeats ?? 1).forEach((hit, k) => {
+			playSynthNote(hitHz[k] ?? hz, Math.min(1, 0.8 * (inst.channelVolume ?? 1)), synthDecay.value, hit.time,
 				wave ?? selectedWaveform.value, { addNoise: opts.noise ?? true, vel: 0.8, maxDuration: hit.maxDuration });
-		}
+		});
 	};
 	if (audioCtx.state === 'running') play();
 	else audioCtx.resume().then(play, () => { });
@@ -1925,6 +1952,7 @@ function auditionPad(index: number, hz: number) {
 	auditionNote(hz, inst.waveforms?.[index] ?? selectedWaveform.value, {
 		noise: noiseMask.value?.[index] ?? true,
 		repeats: inst.ratchets?.[index] ?? 1,
+		repeatNotes: inst.repeatNotes?.[index],
 	});
 }
 
@@ -2195,6 +2223,8 @@ const exportState = computed<StepSequencerState>(() => {
 			],
 			waveforms: Array.from({ length: stepsCount }, (_, i) => wf(i)),
 			ratchets: Array.from({ length: stepsCount }, (_, i) => inst.ratchets?.[i] ?? 1),
+			repeatNotes: Array.from({ length: stepsCount }, (_, i) => inst.repeatNotes?.[i] ?? 'same'),
+			repeatChord: repeatChord.value,
 		},
 
 		synth: {
@@ -2426,7 +2456,7 @@ const {
 	soundingRecently,
 } = useLiveEngine({
 	transport: projectState.transport,
-	pattern: { lanes: instruments, stepLength, selectedWaveform, noiseMask },
+	pattern: { lanes: instruments, stepLength, selectedWaveform, noiseMask, repeatChord },
 	envelope: projectState.synth.envelope,
 	filter: projectState.synth.filter,
 	noise: projectState.synth.noise,
