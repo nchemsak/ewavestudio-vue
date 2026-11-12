@@ -156,6 +156,19 @@ describe('the MIDI file', () => {
 		expect(m.notes.map(n => n.off)).toEqual([59, 119, 179, 239]);
 	});
 
+	it("writes repeats that step up or down the key's chord as their own notes", () => {
+		const ratchets = [...base.ratchets];
+		ratchets[0] = 4; ratchets[4] = 3;
+		const repeatNotes = Array(16).fill('same');
+		repeatNotes[0] = 'up'; repeatNotes[4] = 'down';
+		const m = readMidi(patternToMidi({
+			...base, active: steps([0, 4]), ratchets, repeatNotes,
+			repeatChord: [9, 0, 4], // A minor: A C E
+		}));
+		// A3 up: A3 C4 E4 A4; A3 down: A3 E3 C3
+		expect(m.notes.map(n => n.note)).toEqual([57, 60, 64, 69, 57, 52, 48]);
+	});
+
 	it('skips silent steps, and keeps pitches within MIDI', () => {
 		const velocities = [...base.velocities];
 		velocities[2] = 0;

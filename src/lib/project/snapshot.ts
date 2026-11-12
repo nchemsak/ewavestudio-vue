@@ -23,7 +23,7 @@ export type KeyRoot = 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 
 import type { Wave } from '../../audio/waves';
 import { PULSE_WIDTH_DEFAULT, foldPulseWidth } from '../../audio/waves';
 import { VELOCITY_DESTINATIONS } from '../../audio/velocity';
-import { clampRatchet } from '../../audio/ratchet';
+import { clampRatchet, clampRepeatNotes } from '../../audio/ratchet';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -41,6 +41,7 @@ export type Instrument = {
 	pitches?: number[];
 	waveforms?: string[];
 	ratchets?: number[]; // per step: 1 hit, or 2–4 quick hits (src/audio/ratchet.ts); synth lane only
+	repeatNotes?: string[]; // per step: what the repeats play, 'same' | 'up' | 'down' (ratchet.ts); synth lane only
 	inputRef?: HTMLInputElement | null;
 };
 
@@ -356,6 +357,7 @@ export function buildSnapshot(st: ProjectState) {
 			pitches: i.pitches ? [...i.pitches] : null,
 			waveforms: (i as any).waveforms ? [...(i as any).waveforms] : null,
 			ratchets: i.ratchets ? [...i.ratchets] : null,
+			repeatNotes: i.repeatNotes ? [...i.repeatNotes] : null,
 		})),
 
 		// melodyUi mirrors the Melody Maker panel, which reports every change through events
@@ -602,6 +604,12 @@ export function applySnapshot(st: ProjectState, s: any) {
 					? from.ratchets.map(clampRatchet)
 					: Array(inst.ratchets.length).fill(1);
 			}
+			// What the repeats play (PR 58): projects saved before it play the pad's note each hit
+			if (inst.repeatNotes) {
+				inst.repeatNotes = Array.isArray(from.repeatNotes)
+					? from.repeatNotes.map(clampRepeatNotes)
+					: Array(inst.repeatNotes.length).fill('same');
+			}
 		});
 
 		// If there are saved *custom* instruments that don't exist yet, append them
@@ -681,6 +689,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 		if (i.pitches) i.pitches = Array(stepLength.value).fill(currentDefaultHz.value);
 		if (i.waveforms) i.waveforms = Array(stepLength.value).fill('sine');
 		if (i.ratchets) i.ratchets = Array(stepLength.value).fill(1);
+		if (i.repeatNotes) i.repeatNotes = Array(stepLength.value).fill('same');
 	});
 	// remove custom channels
 	for (let idx = instruments.value.length - 1; idx >= 0; idx--) {

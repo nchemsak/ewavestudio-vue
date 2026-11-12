@@ -112,7 +112,8 @@ export async function buildExportFiles(
 			data: patternToMidi({
 				bpm: state.bpm, swing: state.swing, stepsCount: state.stepsCount, bars: o.bars,
 				active: state.pattern.active, velocities: state.pattern.velocities,
-				pitches: state.pattern.pitches, ratchets: state.pattern.ratchets, name: meta.project,
+				pitches: state.pattern.pitches, ratchets: state.pattern.ratchets,
+				repeatNotes: state.pattern.repeatNotes, repeatChord: state.pattern.repeatChord, name: meta.project,
 			}),
 		});
 	}

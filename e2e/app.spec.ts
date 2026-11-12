@@ -2480,6 +2480,77 @@ test("a pad's settings: a key previews the pad as it plays (its noise, its repea
 	await expect(popover).toHaveCount(0);
 });
 
+test("a pad's repeats can step up or down the key's chord, live, saved and in the MIDI file", async ({ page }) => {
+	await turnOnPads(page, [0]);
+	const popover = page.locator('.pad-popover');
+	await page.locator('.pad-settings-dot').first().click();
+	const notes = popover.getByRole('group', { name: 'Repeat notes' });
+	// Only with two or more hits
+	await expect(notes.getByRole('button', { name: 'Up ↑' })).toBeDisabled();
+	await popover.getByRole('button', { name: '×4', exact: true }).click();
+	await notes.getByRole('button', { name: 'Up ↑' }).click();
+	await expect(notes.getByRole('button', { name: 'Up ↑' })).toHaveAttribute('aria-pressed', 'true');
+	await page.keyboard.press('Escape');
+	await expect(page.locator('.pad-row .ratchet-badge').first()).toHaveText('×4↑');
+	await expect(pads(page).first()).toHaveAccessibleName('Step 1, A3, 4 hits up the chord');
+
+	// Live: each hit's oscillator starts on the next note of the chord (key A, no scale: major,
+	// A C# E), from the pad's A3
+	await page.evaluate(() => {
+		const w = window as any;
+		w.__oscFreqs = [];
+		// The engine schedules the frequency (setValueAtTime, pitchEnv.ts): note what each
+		// parameter was set to, and read it when its oscillator starts
+		const set = new WeakMap<AudioParam, number>();
+		const origSet = AudioParam.prototype.setValueAtTime;
+		AudioParam.prototype.setValueAtTime = function (this: AudioParam, v: number, t: number) {
+			set.set(this, v);
+			return origSet.call(this, v, t);
+		};
+		const orig = OscillatorNode.prototype.start;
+		OscillatorNode.prototype.start = function (this: OscillatorNode, when = 0, ...rest: any[]) {
+			// Notes only: the LFO's oscillator runs below 20 Hz
+			const hz = set.get(this.frequency) ?? this.frequency.value;
+			if (hz >= 90) w.__oscFreqs.push({ when, hz });
+			return (orig as any).call(this, when, ...rest);
+		};
+	});
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => (window as any).__oscFreqs.length)).toBeGreaterThanOrEqual(4);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	const hits = await page.evaluate(() => ((window as any).__oscFreqs as { when: number; hz: number }[])
+		.sort((a, b) => a.when - b.when).slice(0, 4).map((h) => Math.round(69 + 12 * Math.log2(h.hz / 440))));
+	expect(hits).toEqual([57, 61, 64, 69]);
+
+	// The WAV export's engine plays them too (its oscillators start in an offline context)
+	await page.evaluate(() => { (window as any).__oscFreqs = []; });
+	await exportWav(page);
+	const exported = await page.evaluate(() => ((window as any).__oscFreqs as { when: number; hz: number }[])
+		.sort((a, b) => a.when - b.when).slice(0, 4).map((h) => Math.round(69 + 12 * Math.log2(h.hz / 440))));
+	expect(exported).toEqual([57, 61, 64, 69]);
+
+	// Saved with the project
+	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(project.instruments.find((i: any) => i.name === 'synth-voice').repeatNotes[0]).toBe('up');
+
+	// The MIDI file has the four notes
+	const midi = (await exportAudio(page, { mix: false, stems: false, midi: true, oneShot: false })).bytes;
+	const ons: number[] = [];
+	let at = 22;
+	const vlq = () => { let n = 0, b; do { b = midi[at++]; n = (n << 7) | (b & 0x7f); } while (b & 0x80); return n; };
+	while (at < midi.length) {
+		vlq();
+		const status = midi[at++];
+		if (status === 0xff) { at++; const len = vlq(); at += len; }
+		else { if ((status & 0xf0) === 0x90) ons.push(midi[at]); at += 2; }
+	}
+	expect(ons).toEqual([57, 61, 64, 69]);
+
+	// A pattern sets its own repeats, playing the pad's note
+	await patternsBox(page).getByRole('button', { name: 'Rolls', exact: true }).click();
+	await expect(page.locator('.ratchet-badge', { hasText: /[↑↓]/ })).toHaveCount(0);
+});
+
 // --- Export audio ----------------------------------------------------------------------------
 
 test('Export audio: a loop is exactly N bars, with the echoes from its end folded onto its start', async ({ page }) => {
@@ -3353,12 +3424,18 @@ test.describe('Phone mode', () => {
 		expect(notes).toHaveLength(16);
 		for (const n of notes) expect(['A', 'B', 'C', 'D', 'E', 'F', 'G']).toContain(n.replace(/\d/g, ''));
 		await picker.getByRole('button', { name: 'C4', exact: true }).click();
+		const notesButton = picker.getByRole('button', { name: /^Repeat notes/ });
+		await expect(notesButton).toBeDisabled(); // one hit: nothing to step through
 		await picker.getByRole('button', { name: '×3' }).click();
+		// What the repeats play: a tap goes Same → Up → Down
+		await expect(notesButton).toHaveText('Same');
+		await notesButton.click();
+		await expect(notesButton).toHaveText('Up ↑');
 		await picker.getByRole('button', { name: 'Done' }).click();
 		// Picking a note turns the step on
 		await expect(phonePads(page).nth(2)).toHaveAttribute('aria-pressed', 'true');
 		await expect(phonePads(page).nth(2)).toHaveAccessibleName('Step 3, C4');
-		await expect(phonePads(page).nth(2).locator('.pl-rat')).toHaveText('×3');
+		await expect(phonePads(page).nth(2).locator('.pl-rat')).toHaveText('×3↑');
 	});
 
 	test('the steppers choose sounds and patterns; the dice roll them', async ({ page }) => {

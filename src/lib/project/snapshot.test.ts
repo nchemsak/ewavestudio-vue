@@ -58,6 +58,7 @@ describe('factory defaults (File → New)', () => {
 		expect(synth.pitches).toEqual(Array(STEPS).fill(220));
 		expect(synth.waveforms).toEqual(Array(STEPS).fill('sine'));
 		expect(synth.ratchets).toEqual(Array(STEPS).fill(1)); // one hit per step
+		expect(synth.repeatNotes).toEqual(Array(STEPS).fill('same')); // repeats play the pad's note
 		expect(st.instruments.value[0].ratchets).toBeUndefined(); // sample lanes have none
 		expect(st.instruments.value[0].pitches).toBeUndefined(); // sample lanes have no pitches
 		expect(st.instruments.value[0].buffer).toEqual({ fake: 'decoded kick' }); // keeps its sample
@@ -139,6 +140,18 @@ describe('saving and loading a project', () => {
 
 		applySnapshot(st, { instruments: [{ name: 'synth-voice', ratchets: [0, 7, 2.6, -1, ...Array(STEPS - 4).fill(2)] }] });
 		expect(synth().ratchets).toEqual([1, 4, 3, 1, ...Array(STEPS - 4).fill(2)]);
+	});
+
+	it('gives projects saved before repeat notes the pad\'s note on every hit; an unknown value is Same', () => {
+		const st = fresh();
+		changeEverything(st); // same, up, down, same, ...
+		const synth = () => st.instruments.value.find(i => i.name === 'synth-voice')!;
+		const older = asSaved(st).instruments.map(({ repeatNotes, ...lane }: any) => lane);
+		applySnapshot(st, { instruments: older });
+		expect(synth().repeatNotes).toEqual(Array(STEPS).fill('same'));
+
+		applySnapshot(st, { instruments: [{ name: 'synth-voice', repeatNotes: ['up', 'down', 'sideways', 7, ...Array(STEPS - 4).fill('up')] }] });
+		expect(synth().repeatNotes).toEqual(['up', 'down', 'same', 'same', ...Array(STEPS - 4).fill('up')]);
 	});
 
 	it('gives projects saved before velocity routing none', () => {

@@ -46,6 +46,10 @@ describe('applyPattern', () => {
 		expect(l.steps).toEqual(bass.steps.map(s => s !== null));
 		expect(l.velocities).toEqual(bass.steps.map(s => s?.vel ?? 1));
 		expect(l.ratchets).toEqual(bass.steps.map(s => s?.repeats ?? 1));
+		// Its repeats play the pad's note: a pad's Up or Down is part of the old pattern
+		l.repeatNotes = l.repeatNotes!.map(() => 'up');
+		applyPattern(st, bass);
+		expect(l.repeatNotes).toEqual(Array(l.steps.length).fill('same'));
 		// root A3, octave A4, fifth E4, fifth below E3; off steps on the root
 		expect(l.pitches![0]).toBeCloseTo(220, 6);
 		expect(l.pitches![2]).toBeCloseTo(440, 6);
@@ -79,7 +83,7 @@ describe('applyPattern', () => {
 		const strip = (s: any) => {
 			const out = JSON.parse(JSON.stringify(s));
 			const l = out.instruments.find((i: any) => i.name === 'synth-voice');
-			delete l.steps; delete l.velocities; delete l.pitches; delete l.ratchets;
+			delete l.steps; delete l.velocities; delete l.pitches; delete l.ratchets; delete l.repeatNotes;
 			return out;
 		};
 		expect(strip(after)).toEqual(strip(before));

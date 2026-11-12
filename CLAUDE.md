@@ -186,7 +186,8 @@ src/audio/
   waves.ts               The eight waves: names, loudness balance, and each voice's source
                          (the pulse network, the harmonic shapes)
   velocity.ts            Velocity routing: what a step's velocity does besides loudness
-  ratchet.ts             Ratchets: when a step's 2–4 quick hits start and end
+  ratchet.ts             Ratchets: when a step's 2–4 quick hits start and end, and what they
+                         play (the pad's note, or up or down the key's chord)
   crusher.ts             The bit crusher (an AudioWorklet built from a Blob URL), see
                          "Effect switches"
   pingPong.ts            The ping-pong delay network, see "Effect switches"
@@ -324,6 +325,18 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   lit button or File → New puts the brush down. A drag is one undo step.
   Ratchets are part of the pattern: sounds (presets) and their dice leave them alone; patterns
   set them.
+  **Repeat notes** (PR 58; the pad's ⋮ menu, "Notes" under Repeats: Same / Up ↑ / Down ↓,
+  only with ×2–×4): the hits play the pad's note each time (Same, the default and how every
+  step played before), or step up or down the key's chord from the pad's own note, an arpeggio
+  within the step (a ×4 on the root: 1-3-5-8). The chord is the Melody Maker's key and scale's
+  1st, 3rd and 5th (`chordPitchClasses()` in `theory.ts`, as the arpeggio's "Chord" tones; no
+  scale: major), passed to both engines as `repeatChord`; `ratchetPitches()` in `ratchet.ts`
+  works out each hit's pitch (keeping the pad's fine tuning, inside the pads' range), for the
+  live engine, the export engine, the MIDI file and the pad's preview. Saved per step as the
+  synth lane's `repeatNotes` (projects saved before get Same; unknown values are Same,
+  `clampRepeatNotes()`); a pattern, Reset Pads, Clear Repeats and File → New put them back to
+  Same. The pad's badge shows ×3↑ or ×3↓; the phone's hold sheet has a button that goes
+  Same → Up → Down.
 - Unison (`unison.ts`, both engines; the Unison card: its tile, Voices, Detune, Spread):
   2–4 voices (3 at most on a small screen), spread from left (lowest) to right (highest) by
   Detune (default 12 cents, a notch on the knob) and Spread (pan; default 100 % since PR 52,
@@ -372,7 +385,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - A click on a key or an octave sets the pad's note at once, playing or not, and previews it
   as the pad plays it (`auditionPad(index, hz)` → `auditionNote()`): its own wave, its noise
   switch (before PR 56 the preview always had noise) and its repeats (2–4 hits within a step
-  at the tempo). Only while stopped: while playing, the pattern plays it, and a preview on top
+  at the tempo, Up or Down stepping through the chord). Only while stopped: while playing, the pattern plays it, and a preview on top
   clashed (PR 56). Not while the synth lane is muted. The phone's note picker does the same.
 - Play / Stop (`data-keeps-pad-settings`) can be pressed without closing it, to hear the pad
   in the pattern; any other click outside closes it (PR 56).
@@ -886,7 +899,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - The JSON import/export format is `{ version, projectId, meta, data }`, validated by
   `validateAndMigrate()`, which also checks every project loaded from IndexedDB. It only
   checks the types of `data.meta.name`, `data.selectedWaveform` and each lane's fields
-  (`LANE_FIELDS`, including the synth lane's `ratchets`, a list of numbers); other sections are free-form, and unknown fields are kept, so a new
+  (`LANE_FIELDS`, including the synth lane's `ratchets`, a list of numbers, and `repeatNotes`, a
+  list of strings); other sections are free-form, and unknown fields are kept, so a new
   parameter needs no change there. A file that fails the check is refused as a whole
   ("Import failed"), and the console says which field was wrong.
 - If you add a parameter: add its ref to `projectState` in `DrumSequencer.vue` (and the
@@ -1063,29 +1077,26 @@ drum lanes back.
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
 
-Items 1–5 (and PRs 55–57) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
+Items 1–4 (and PRs 55–58) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-1. **Arpeggiated repeats** (left from the arpeggio item, PR 57): a ×2–×4 step stepping through
-   the chord within the step (each repeat its own pitch, in both engines), as a choice in the
-   pad's Repeats.
-2. **Velocity without the pop-up:** the "Vel →" panel's four amounts become mini "VEL" knobs on
+1. **Velocity without the pop-up:** the "Vel →" panel's four amounts become mini "VEL" knobs on
    the cards they change (Envelope's Decay, Pitch's Amount, Filter's Cutoff, Noise's mix), so
    they sit beside what they change and MIDI learn can link them. Mockup first: Envelope,
    Pitch and Filter's knob row is full. Fallback: one small Velocity card in Sound.
-3. **File → Save as…** (or Duplicate): a new project under a new name, the original left as it
+2. **File → Save as…** (or Duplicate): a new project under a new name, the original left as it
    was. Renaming stays a rename (a typo fixed shouldn't leave copies). Maybe, on Save after a
    rename of a saved project, ask: rename it, or save as a new project?
-4. **LFO:** wire up Retrigger (`lfoRetrigger` is saved and in the export's state, but the live
+3. **LFO:** wire up Retrigger (`lfoRetrigger` is saved and in the export's state, but the live
    engine never reads it): the LFO starts over on each note, which is what makes an LFO useful
    on drums. And more targets: level (tremolo) and FM amount (not pan, the maintainer's call).
    One LFO; a second waits for patch cables.
-5. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
+4. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
    dice) that presses in; a switch with an LED over the chosen option (Melody | Arpeggio, the
    rates); a toggle with an LED (FM, Unison, CRUSH). Mockups first (2–3), then one PR with
    before/after screenshots in every theme.
-6. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+5. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1263,6 +1274,7 @@ Done:
 | 55 | Key and pattern changes wait for the bar (patterns at once again since PR 56): while playing, a Melody Maker key, a Pattern preset, its dice or the phone's Pattern stepper blinks until the next bar's step 1, then the pattern moves (the engine's `onBarStart`, just before it builds the step); stopped, at once, as before; Shift+click, at once; Stop applies it, Undo drops it; no audition note while playing. |
 | 56 | After trying PR 55: a key waiting for the bar shows a pulsing ghost of the chosen colour and the caption "· D at the next bar (Shift+click: now)" (PR 55's ring was hidden by the keyboard's own CSS, so the key seemed not to respond); patterns change at once again, playing or not. A pad's settings: a key previews the pad as it plays (its noise switch, its repeats), only while stopped; Play / Stop no longer closes them. The phone's note picker previews the same way. |
 | 57 | Arpeggio fixes: Rate places the notes (every step at 1/16, every other at 1/8, every beat at 1/4; the steps between off), where before it only grouped the pads that were on; the cycle is fitted to the bar (a triad 1-3-5-8, a scale up to the octave), with Free cycle in the ⋯ menu for the old way; the Generate switch's Random is now Melody (`src/lib/melody/arp.ts`). |
+| 58 | Repeat notes: a pad's ⋮ menu has Notes under Repeats (Same / Up ↑ / Down ↓): a ×2–×4 step's hits can step up or down the key's chord from the pad's note, an arpeggio within the step (×4 on the root: 1-3-5-8); in the live and export engines, the MIDI file and the pad's preview (`ratchetPitches()` in `ratchet.ts`, `chordPitchClasses()` in `theory.ts`); saved per step (older projects get Same); the badge shows ×3↑; the phone's hold sheet cycles Same → Up → Down. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
