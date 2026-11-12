@@ -2374,6 +2374,105 @@ test('Analog and Slate: their buttons apply their own colours, and are remembere
 	}
 });
 
+// Hardware buttons (src/assets/styles/_hardware.scss): how far a cap sits down (its transform), its
+// LED's colour (the ::before, or the tile caption's), and its size, which must never change
+async function capState(cap: Locator, led = '') {
+	return cap.evaluate((el, ledSel) => {
+		const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+		const ledEl = ledSel ? el.querySelector(ledSel)! : el;
+		return {
+			down: m.m42,
+			led: getComputedStyle(ledEl, '::before').backgroundColor,
+			size: [(el as HTMLElement).offsetWidth, (el as HTMLElement).offsetHeight].join('x'),
+		};
+	}, led);
+}
+
+test('hardware buttons: a push button sinks and springs back; a chosen option and a toggle stay down, LED lit; no cap changes size', async ({ page }) => {
+	const settle = () => page.waitForTimeout(200); // the caps' 50 ms travel
+	const lit = await page.evaluate(() => {
+		const probe = document.createElement('i');
+		probe.style.color = 'var(--hw-led)';
+		document.body.append(probe);
+		const c = getComputedStyle(probe).color;
+		probe.remove();
+		return c;
+	});
+
+	// A push button: down only while the mouse holds it
+	const push = page.locator('.pattern-tools').getByRole('button', { name: 'Every 2' });
+	await push.scrollIntoViewIfNeeded();
+	const up = await capState(push);
+	expect(up.down).toBe(0);
+	const box = (await push.boundingBox())!;
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await settle();
+	const held = await capState(push);
+	expect(held.down).toBe(2);
+	expect(held.size).toBe(up.size);
+	await page.mouse.up();
+	await settle();
+	expect((await capState(push)).down).toBe(0);
+
+	// A switch: the chosen option is down with its LED lit, the other up and dark
+	const melody = page.getByRole('button', { name: 'Melody', exact: true });
+	const arp = page.getByRole('button', { name: 'Arpeggio', exact: true });
+	const before = { melody: await capState(melody), arp: await capState(arp) };
+	expect(before.melody).toMatchObject({ down: 2, led: lit });
+	expect(before.arp.down).toBe(0);
+	expect(before.arp.led).not.toBe(lit);
+	await arp.click();
+	await page.mouse.move(0, 0);
+	await settle();
+	expect(await capState(arp)).toMatchObject({ down: 2, led: lit, size: before.arp.size });
+	expect(await capState(melody)).toMatchObject({ down: 0, led: before.arp.led, size: before.melody.size });
+
+	// A toggle (a card's VEL switch, a small cap): down and lit while on
+	const vel = page.getByRole('switch', { name: 'Velocity shapes Decay' });
+	const velOff = await capState(vel);
+	expect(velOff.down).toBe(0);
+	await vel.click();
+	await page.mouse.move(0, 0);
+	await settle();
+	expect(await capState(vel)).toMatchObject({ down: 1, led: lit, size: velOff.size });
+	await vel.click();
+	await page.mouse.move(0, 0);
+	await settle();
+	expect(await capState(vel)).toMatchObject({ down: 0, led: velOff.led });
+
+	// A tile (FM): a cap too, its LED beside its caption, and it keeps its icon
+	const fm = page.getByRole('switch', { name: 'FM' });
+	const fmOff = await capState(fm, '.wave-label');
+	expect(fmOff.down).toBe(0);
+	await fm.click();
+	await page.mouse.move(0, 0);
+	await settle();
+	expect(await capState(fm, '.wave-label')).toMatchObject({ down: 2, led: lit, size: fmOff.size });
+	await expect(fm.locator('svg.wave-svg')).toBeVisible();
+	await expect(fm.locator('.wave-label')).toHaveText('On');
+
+	// The chosen wave is down; its dice is still there. Play stays down while playing.
+	const saw = page.getByRole('radio', { name: 'Saw' }).first();
+	await saw.click();
+	await page.mouse.move(0, 0);
+	await settle();
+	expect((await capState(saw)).down).toBe(2);
+	expect((await capState(page.getByRole('radio', { name: 'Sine' }).first())).down).toBe(0);
+	await expect(saw.locator('.dice-badge')).toBeVisible();
+	const play = page.locator('.ds-transport .btn3d');
+	expect((await capState(play)).down).toBe(0);
+	await play.click();
+	await page.mouse.move(0, 0);
+	await settle();
+	expect((await capState(play)).down).toBe(4);
+	await play.click();
+
+	// The pedals' CRUSH and PING PONG switches are not caps (they stay as they were)
+	await expect(page.locator('.pedal-switch')).toHaveCount(2);
+	await expect(page.locator('.pedal-switch.hw-cap')).toHaveCount(0);
+});
+
 test('the dice rolls a new sound, keeps the pattern, lights no preset, and undo goes back', async ({ page }) => {
 	const projectData = async () =>
 		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;

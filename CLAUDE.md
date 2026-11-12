@@ -240,7 +240,8 @@ src/composables/useProjectSync.ts  Keeps the settings and the project store in s
 src/composables/useUndoHistory.ts  When to record an undo step, and applying undo/redo
 src/composables/useLfoVisual.ts  The LFO visualizer's frame clock
 src/assets/styles/       _bootstrap-custom.scss (the Bootstrap parts in use, then main.scss),
-                         and all global SCSS (themes are in _themes.scss). _sequencer.scss and
+                         and all global SCSS (themes are in _themes.scss, the buttons' look in
+                         _hardware.scss: see "Buttons" under Conventions). _sequencer.scss and
                          _keyboard.scss are not built (main.scss doesn't load them)
 public/audio/            kick.mp3, snare.mp3, hihat.mp3: still fetched at startup, but only
                          used by the hidden drum lanes
@@ -990,8 +991,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     teal-to-orange knob arc, an orange accent, a green-grey reflective LCD with dark ink in a
     dark bezel, softer pad colours (still one per note), a taupe page and an apricot wash.
     Its tiles (the waves, FM, Unison, the LFO's switch) are dark caps with light lettering
-    (PR 44: their pastel icons, made for dark tiles, vanished on light ones), and the LFO's
-    wave switch and the Step Sequencer's pills have dark ink.
+    (PR 44: their pastel icons, made for dark tiles, vanished on light ones), and since PR 63
+    so are all its buttons (see "Buttons").
   - **Analog** (PR 44): a warm dark panel, charcoal with cream lettering and amber accents,
     an amber-to-orange knob arc (so the LFO's marks are cyan there), an amber monochrome
     screen, a wood-brown page and a copper wash.
@@ -1018,6 +1019,40 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   - Browser tests check that those panels' captions are readable in every theme, that
     Sand's own trouble spots are (the MIDI caption, NOISE switch, chosen key, ⋯ menu, link,
     its tiles' lettering), and that each button applies and remembers its theme.
+- Buttons (PR 63, "soft caps", option A of three mockups): every button is one of three
+  hardware kinds, and their look is in one place, `src/assets/styles/_hardware.scss`.
+  - A **push button** is a raised cap that sinks while pressed and springs back: every
+    `.pt-btn` and `.pt-seg-btn`, and anything with the class `hw-cap` (File, Undo, Redo, Save,
+    the tempo's − and +, the preset boxes' dice, Generate, Play). `hw-cap-sm` is a small cap
+    (1 px of travel instead of 2). Generate, Save and Play are caps in the accent's colours
+    (they set `--cap-hi`, `--cap-lo`, `--cap-edge`, `--cap-ink`); Play stays down while playing.
+  - A **switch** is a row of caps; the chosen one stays down with its LED lit. `hw-led-top`
+    puts the LED over the label (Melody | Arpeggio, FM's ratios, the LFO's Wave and Target, the
+    pad settings, the Export dialog); `hw-led-mini` is a slim LED bar at the cap's top edge
+    where the label leaves no room (the presets, the theme buttons, MIDI Learn).
+  - A **toggle** is a cap with an LED beside its label (`hw-led-left`), down and lit while on:
+    the cards' VEL switches and RETRIG (`PillSwitch.vue`), Pitch's RND, the Repeats brush. The
+    tiles (the eight waves, FM, Unison, the LFO's power tile) are caps too, with the LED beside
+    their caption; they keep their icons, animations, dice and the Pulse Width knob (which
+    goes down with its tile), and the chosen one has a thin ring in the accent.
+  - A cap counts as down when it has `is-active`, `on`, `active`, `hw-down`,
+    `aria-pressed="true"` or `aria-checked="true"`, whichever its component already used.
+  - **A cap never changes the layout:** the edge under it is a `box-shadow` and a press is a
+    `transform`, so every cap is the size it was before PR 63 (checked against the build
+    before, every card and button at 1600, 1280, 1024, 820 and 390 px: only the pills that
+    gained an LED are a few px wider). A component gives its cap a size and nothing else: no
+    background, border colour, box-shadow or transform of its own. Padding for an LED comes
+    out of the cap's own padding.
+  - The caps' colours are per theme (`--cap-hi`, `--cap-lo`, `--cap-edge`, `--cap-ink`; the
+    LED's `--hw-led`, `--hw-led-off`): dark caps in every theme with a button, Sand included.
+    Clear and Reset have red lettering (`pt-danger`).
+  - Not caps, on purpose (the maintainer's call): the pedals' CRUSH and PING PONG switches and
+    footswitches. Also left as they were: the screen's F-keys, the piano keys, the NOISE
+    ribbon, the ⋯ menus and their sliding switches, the Sound / Effects / Compose tabs, the
+    wave tiles' dice badges, and phone mode's own top bar, steppers and pads (the desktop
+    panels it shows on its Sound, FX and Key pages have the caps).
+  - A browser test checks a push button sinks and springs back, a chosen option, a toggle and
+    a tile stay down with the LED lit, and that no cap changes size.
 - Only the Bootstrap parts the app uses are built (`_bootstrap-custom.scss`): root variables and
   reboot, the grid's `.container`, `.row` and `.col-12`, `.visually-hidden`, and the utilities
   `.d-flex`, `.position-relative`, `.align-items-center`, `.gap-2` and `.text-center`. Any other
@@ -1139,15 +1174,11 @@ drum lanes back.
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
 
-Item 1 (and PRs 55–61) come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
+PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommendations, minus
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-1. **Hardware buttons:** three kinds, used everywhere: a push button (Generate, Clear, the
-   dice) that presses in; a switch with an LED over the chosen option (Melody | Arpeggio, the
-   rates); a toggle with an LED (FM, Unison, CRUSH, the cards' VEL switches, RETRIG). Mockups first (2–3), then one PR with
-   before/after screenshots in every theme.
-2. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+1. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1330,6 +1361,7 @@ Done:
 | 60 | File → **Save as…** (Ctrl/Cmd+Shift+S): the settings as they are, unsaved changes included, saved as a new project under a new name ("Name copy" suggested), which becomes the open one; the original stays as last saved. Another project's name asks before replacing it. Undo history carries on. Renaming stays a rename. |
 | 61 | LFO: **Retrigger** works (a RETRIG pill in the LFO card's header; saved for long, read by neither engine): each note starts its own LFO, so every hit gets the same movement; and two new targets, **Level** (tremolo) and **FM** (the FM card's Amount), in both engines (`src/audio/lfo.ts`). The Target switch's five buttons have a line of their own (option C of three mockups). |
 | 62 | LFO visualizer for the new targets: FM shows as a dot and an arc on the FM card's Amount knob (while FM is on), Level on the Step Sequencer's Vol knob (from full down to 100 − Depth %), like Cutoff's; not on the pads, whose fill height is velocity. |
+| 63 | Hardware buttons ("soft caps", option A of three mockups): every button is a raised cap that sinks when pressed; a switch's chosen option and a toggle that's on stay down with an LED lit (Melody | Arpeggio, FM's ratios, the LFO's Wave and Target, VEL, RETRIG, RND, the Repeats brush, the presets, the theme buttons); the wave, FM, Unison and LFO tiles are caps that keep their icons, animations, dice and knob; Play, Save, Generate and Enable MIDI too. The pedals' CRUSH and PING PONG stay as they were. No card or button changed size (`src/assets/styles/_hardware.scss`). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -1,0 +1,255 @@
+/* _hardware.scss
+   Hardware buttons ("soft caps", option A of three mockups). Three kinds, used everywhere:
+   - a push button: a raised cap that sinks while it's pressed and springs back
+     (.hw-cap; every .pt-btn and .pt-seg-btn is one);
+   - a switch: a row of caps, the chosen one down with its LED lit (.hw-led-top: the LED over
+     the label; .hw-led-mini where there's no room, a slim LED bar at the cap's top edge);
+   - a toggle: a cap with an LED, down and lit while on (.hw-led-left: the LED beside the label;
+     the tiles have theirs beside their caption).
+   A cap keeps the size its component gives it: the edge under it is a shadow and a press moves
+   it with a transform, so nothing around it moves or grows. Components keep only their sizes;
+   don't give a cap its own background, border colour, box-shadow or transform.
+   The pedals' CRUSH and PING PONG switches and their footswitches are not caps (the
+   maintainer's call: they're fine as they are). */
+
+/* The caps' colours. Dark caps in every theme with a button, Sand included (as its knobs and
+   tiles); the hidden Light theme has light ones. */
+:root {
+    --cap-hi: #43207a;
+    --cap-lo: #2a0f52;
+    --cap-edge: #0b021c;
+    --cap-ink: #fdfdff;
+    --hw-led: #5effb0;
+    --hw-led-off: rgb(255 255 255 / 0.2);
+}
+
+.theme-dark {
+    --cap-hi: #353b4c;
+    --cap-lo: #232733;
+    --cap-edge: #07080b;
+    --cap-ink: #e9e9ef;
+}
+
+.theme-sand {
+    --cap-hi: #524c45;
+    --cap-lo: #38342f;
+    --cap-edge: #1b1917;
+    --cap-ink: #f2eee6;
+    --hw-led: #63e596;
+}
+
+.theme-analog {
+    --cap-hi: #3b3731;
+    --cap-lo: #2a2723;
+    --cap-edge: #0c0b0a;
+    --cap-ink: #efe6d4;
+    --hw-led: #9be3b4;
+}
+
+.theme-slate {
+    --cap-hi: #4b5466;
+    --cap-lo: #39404e;
+    --cap-edge: #171b22;
+    --cap-ink: #e3e8ef;
+    --hw-led: #b6efa9;
+}
+
+.theme-light {
+    --cap-hi: #ffffff;
+    --cap-lo: #e4e8ef;
+    --cap-edge: #9aa1b0;
+    --cap-ink: #121419;
+    --hw-led: #00a865;
+    --hw-led-off: rgb(0 0 0 / 0.2);
+}
+
+/* A cap that is down: chosen, or on. Each component marks it its own way. */
+$down: ".is-active", ".on", ".active", ".hw-down", "[aria-pressed='true']", "[aria-checked='true']";
+
+@mixin when-down {
+    @each $s in $down {
+        &#{$s} {
+            @content;
+        }
+    }
+}
+
+.hw-cap,
+.pt-btn,
+.pt-seg-btn {
+    /* How far it sinks, which is also how much edge shows under it */
+    --cap-travel: 2px;
+    border-color: transparent;
+    color: var(--cap-ink);
+    background: linear-gradient(var(--cap-hi), var(--cap-lo));
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.16),
+        0 var(--cap-travel) 0 var(--cap-edge),
+        0 calc(var(--cap-travel) + 2px) 6px rgb(0 0 0 / 0.35);
+    transition: transform 0.05s ease, box-shadow 0.05s ease, filter 0.15s ease;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+
+    &:hover:not(:disabled) {
+        filter: brightness(1.12);
+    }
+
+    &:focus-visible {
+        outline: 2px solid hsl(var(--pt-accent) 80% 62%);
+        outline-offset: 2px;
+    }
+
+    &:disabled {
+        cursor: not-allowed;
+    }
+
+    &:active:not(:disabled) {
+        transform: translateY(var(--cap-travel));
+        box-shadow: inset 0 2px 5px rgb(0 0 0 / 0.5);
+    }
+
+    @include when-down {
+        transform: translateY(var(--cap-travel));
+        box-shadow: inset 0 2px 5px rgb(0 0 0 / 0.5);
+        background: linear-gradient(var(--cap-lo), var(--cap-hi));
+    }
+}
+
+/* A small cap (the pills in a card's header, the tempo's − and +, the dice): less travel */
+.hw-cap-sm {
+    --cap-travel: 1px;
+}
+
+/* Clear and Reset: red lettering (they had a red outline) */
+.pt-danger {
+    color: color-mix(in oklab, var(--cap-ink), hsl(7 95% 62%) 55%);
+}
+
+/* THE LED */
+@mixin led {
+    content: "";
+    flex: none;
+    width: var(--hw-led-size, 5px);
+    height: var(--hw-led-size, 5px);
+    border-radius: 50%;
+    background: var(--hw-led-off);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
+}
+
+@mixin led-lit {
+    background: var(--hw-led);
+    box-shadow: 0 0 6px var(--hw-led), 0 0 1px var(--hw-led);
+}
+
+.hw-led-top,
+.hw-led-left {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    &::before {
+        @include led;
+    }
+
+    @include when-down {
+        &::before {
+            @include led-lit;
+        }
+    }
+}
+
+/* Over the label: a switch's options */
+.hw-led-top {
+    flex-direction: column;
+    gap: 3px;
+}
+
+/* Less padding, so the LED fits without the cap growing */
+.pt-seg-btn.hw-led-top,
+.pt-seg.pt-seg-sm .pt-seg-btn.hw-led-top {
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+/* Beside the label: a toggle */
+.hw-led-left {
+    gap: 4px;
+}
+
+/* At the cap's top edge, where the label leaves no room over or beside it (the presets, the
+   theme buttons) */
+.hw-led-mini {
+    position: relative;
+
+    &::before {
+        @include led;
+        position: absolute;
+        top: 1px;
+        left: 50%;
+        width: 10px;
+        height: 2px;
+        margin-left: -5px;
+        border-radius: 1px;
+    }
+
+    @include when-down {
+        &::before {
+            @include led-lit;
+        }
+    }
+}
+
+/* THE TILES (the waves, FM, Unison: WaveButton, FmTowerButton, UnisonButton): caps in the
+   tiles' own colours, their icon, dice and knob as before; the LED sits beside the caption */
+.wave-btn.hw-cap {
+    --cap-hi: color-mix(in oklab, var(--tile-1), white 7%);
+    --cap-lo: var(--tile-2);
+    color: var(--pt-text);
+}
+
+/* The chosen wave, or a tile that's on: down, with a thin ring in the accent, so it shows on
+   the Waveforms card's bright wash too */
+.wave-btn.hw-cap.is-active {
+    box-shadow:
+        inset 0 2px 5px rgb(0 0 0 / 0.5),
+        0 0 0 1px hsl(var(--pt-accent) 80% 62% / 0.6);
+}
+
+.wave-btn .wave-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+
+    &::before {
+        @include led;
+        --hw-led-size: 4px;
+    }
+}
+
+.wave-btn.is-active .wave-label::before {
+    @include led-lit;
+}
+
+.wave-btn.is-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .hw-cap,
+    .pt-btn,
+    .pt-seg-btn {
+        transition: none;
+    }
+}
+
+@media (forced-colors: active) {
+    .hw-cap {
+        background: ButtonFace;
+        color: ButtonText;
+        border: 1px solid ButtonText;
+        box-shadow: none;
+    }
+}

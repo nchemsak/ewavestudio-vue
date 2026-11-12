@@ -16,7 +16,7 @@
                     {{ m.name }}
                 </option>
             </select>
-            <button type="button" class="pt-btn pt-btn-sm midi-learn-btn" :class="{ 'is-active': learn.state.learning }"
+            <button type="button" class="pt-btn pt-btn-sm midi-learn-btn hw-led-mini" :class="{ 'is-active': learn.state.learning }"
                 :aria-pressed="learn.state.learning" :disabled="!midi.selectedId && !learn.state.learning"
                 :title="midi.selectedId ? 'MIDI learn: link your controller\'s knobs to the knobs here' : 'Choose your controller in the list first'"
                 @click="toggleLearn">Learn</button>

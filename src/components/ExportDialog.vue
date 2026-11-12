@@ -16,7 +16,7 @@
 				<div class="export-row">
 					<div class="export-label">Bars</div>
 					<div class="pt-seg pt-seg-sm" role="group" aria-label="Bars">
-						<button v-for="b in EXPORT_BARS" :key="b" type="button" class="pt-seg-btn"
+						<button v-for="b in EXPORT_BARS" :key="b" type="button" class="pt-seg-btn hw-led-top"
 							:class="{ 'is-active': o.bars === b }" :aria-pressed="o.bars === b" @click="o.bars = b">{{ b }}</button>
 					</div>
 					<span class="export-hint">{{ lengthText }}</span>
@@ -25,9 +25,9 @@
 				<div class="export-row">
 					<div class="export-label">Ending</div>
 					<div class="pt-seg pt-seg-sm" role="group" aria-label="Ending">
-						<button type="button" class="pt-seg-btn" :class="{ 'is-active': o.ending === 'loop' }"
+						<button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': o.ending === 'loop' }"
 							:aria-pressed="o.ending === 'loop'" @click="o.ending = 'loop'">Loop</button>
-						<button type="button" class="pt-seg-btn" :class="{ 'is-active': o.ending === 'tail' }"
+						<button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': o.ending === 'tail' }"
 							:aria-pressed="o.ending === 'tail'" @click="o.ending = 'tail'">With tail</button>
 					</div>
 				</div>

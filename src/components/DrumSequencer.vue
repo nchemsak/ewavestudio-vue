@@ -155,14 +155,14 @@
 								:detents="TEMPO_DETENTS"
 								:useThemeArc="true" @knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
 							<div class="tempo-stepper" role="group" aria-label="Tempo">
-								<button class="stepper-btn" type="button" title="Tempo −1"
+								<button class="stepper-btn hw-cap hw-cap-sm" type="button" title="Tempo −1"
 									@mousedown.prevent="startTempoRepeat(-1)" @touchstart.prevent="startTempoRepeat(-1)"
 									@mouseup.prevent="stopTempoRepeat" @mouseleave="stopTempoRepeat">−</button>
 
 								<div class="stepper-value" :class="{ 'on-stop': TEMPO_DETENTS.includes(tempo) }" aria-live="polite"
 									:title="`${tempo} BPM`">{{ tempo }}</div>
 
-								<button class="stepper-btn" type="button" title="Tempo +1"
+								<button class="stepper-btn hw-cap hw-cap-sm" type="button" title="Tempo +1"
 									@mousedown.prevent="startTempoRepeat(1)" @touchstart.prevent="startTempoRepeat(1)"
 									@mouseup.prevent="stopTempoRepeat" @mouseleave="stopTempoRepeat">+</button>
 							</div>
@@ -244,7 +244,7 @@
 						<div class="repeat-brush" role="group" aria-label="Repeats brush"
 							title="Pick a number, then click or drag across pads to give them that many quick hits. Click a pad again for one hit; Esc or the lit button to stop.">
 							<span class="repeat-brush__label" aria-hidden="true">Repeats</span>
-							<button v-for="n in BRUSH_COUNTS" :key="n" type="button" class="vel-btn"
+							<button v-for="n in BRUSH_COUNTS" :key="n" type="button" class="vel-btn hw-cap hw-cap-sm hw-led-left"
 								:class="{ on: repeatBrush === n }" :aria-pressed="repeatBrush === n"
 								:aria-label="`Repeats brush ×${n}`" @click="toggleRepeatBrush(n)">×{{ n }}</button>
 						</div>
@@ -3943,6 +3943,13 @@ const phoneCtx = reactive({
 	z-index: 3;
 }
 
+/* The Pulse tile is a cap that sits 2 px lower while it's chosen or pressed (_hardware.scss):
+   its knob goes down with it */
+.wave-cell :deep(.wave-btn.is-active)+.pulse-width-knob,
+.wave-cell :deep(.wave-btn:active)+.pulse-width-knob {
+	transform: translateY(2px);
+}
+
 .pulse-width-knob .custom-tooltip {
 	white-space: nowrap;
 	/* open to the right: the knob sits at the panel's left edge */
@@ -4082,25 +4089,22 @@ const phoneCtx = reactive({
 	row-gap: 4px;
 }
 
+/* The Repeats brush's buttons: toggles, small caps with an LED (_hardware.scss) */
 .vel-btn {
-	padding: 2px 8px;
-	border-radius: 999px;
-	border: 1px solid rgba(255, 255, 255, 0.16);
-	background: transparent;
-	color: inherit;
+	padding: 2px 7px 2px 6px;
+	border-radius: 5px;
+	border: 1px solid transparent;
 	font: inherit;
 	font-size: 10px;
 	line-height: 1.4;
 	letter-spacing: 0.06em;
-	opacity: 0.7;
-	cursor: pointer;
 	white-space: nowrap;
 }
 
 .repeat-brush {
 	display: inline-flex;
 	align-items: center;
-	gap: 3px;
+	gap: 5px;
 }
 
 .repeat-brush__label {
@@ -4108,17 +4112,6 @@ const phoneCtx = reactive({
 	letter-spacing: 0.06em;
 	opacity: 0.7;
 	margin-right: 2px;
-}
-
-.vel-btn.on {
-	opacity: 1;
-	border-color: hsl(var(--pt-accent) 80% 62% / 0.9);
-	background: hsl(var(--pt-accent) 80% 60% / 0.18);
-}
-
-.vel-btn:focus-visible {
-	outline: 2px solid hsl(var(--pt-accent) 80% 62%);
-	outline-offset: 2px;
 }
 
 @media (max-width: 768px) {
@@ -4156,7 +4149,17 @@ const phoneCtx = reactive({
 
 /* PLAY BUTTON BEGIN */
 
+/* A big cap in the accent's colours (_hardware.scss has the cap itself): it sinks when
+   pressed, and stays down while playing */
 .pt-btn.btn3d {
+	--cap-travel: 4px;
+	--btn3d-h: var(--pt-accent, 210);
+	--btn3d-h2: var(--pt-accent-2, var(--btn3d-h));
+	--btn3d-top: hsl(var(--btn3d-h) 78% 66%);
+	--btn3d-mid: hsl(var(--btn3d-h2) 82% 58%);
+	--btn3d-bot: hsl(var(--btn3d-h2) 90% 46%);
+	--cap-edge: color-mix(in oklab, var(--btn3d-bot), black 62%);
+
 	position: relative;
 	display: inline-flex;
 	align-items: center;
@@ -4166,46 +4169,12 @@ const phoneCtx = reactive({
 	padding: 0;
 	border: 0;
 	border-radius: 12px;
-
-	--btn3d-h: var(--pt-accent, 210);
-	--btn3d-h2: var(--pt-accent-2, var(--btn3d-h));
-	--btn3d-top: hsl(var(--btn3d-h) 78% 66%);
-	--btn3d-mid: hsl(var(--btn3d-h2) 82% 58%);
-	--btn3d-bot: hsl(var(--btn3d-h2) 90% 46%);
-
+	color: #fff;
 	background: radial-gradient(circle at 30% 20%,
 			color-mix(in oklab, var(--btn3d-top), white 16%) 0,
 			var(--btn3d-top) 38%,
 			var(--btn3d-mid) 80%,
 			var(--btn3d-bot) 100%);
-	color: #fff;
-	box-shadow:
-		0 10px 24px rgba(0, 0, 0, 0.55),
-		0 0 0 1px rgba(0, 0, 0, 0.75),
-		inset 0 1px 0 rgba(255, 255, 255, 0.28);
-
-	cursor: pointer;
-	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.85), inset 0 2px 6px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.35);
-	transition:
-		transform 120ms ease,
-		filter 140ms ease,
-		background 160ms ease;
-}
-
-.pt-btn.btn3d::before {
-	content: "";
-	position: absolute;
-	inset: 3px;
-	border-radius: inherit;
-	background:
-		radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.55), transparent 55%),
-		linear-gradient(180deg,
-			color-mix(in oklab, #ffffff, rgba(0, 0, 0, 0.35) 38%),
-			color-mix(in oklab, #b9c0d5, rgba(0, 0, 0, 0.6) 80%));
-	mix-blend-mode: screen;
-	opacity: 0.26;
-	pointer-events: none;
-	transition: opacity 160ms ease;
 }
 
 .pt-btn.btn3d .btn-face {
@@ -4224,36 +4193,18 @@ const phoneCtx = reactive({
 	fill: currentColor;
 }
 
-.pt-btn.btn3d:active {
-	transform: translateY(1px);
-	box-shadow:
-		0 8px 18px rgba(0, 0, 0, 0.6),
-		0 0 0 1px rgba(0, 0, 0, 0.85),
-		inset 0 2px 4px rgba(0, 0, 0, 0.45);
-	filter: brightness(0.98);
-}
-
-.pt-btn.btn3d:focus {
-	outline: none;
-}
-
 .pt-btn.btn3d:focus-visible {
 	outline: 2px solid #fff;
 	outline-offset: 3px;
 }
 
+/* Playing: down, a little darker */
 .pt-btn.btn3d[aria-pressed="true"] {
-	box-shadow:
-		0 10px 24px rgba(0, 0, 0, 0.6),
-		0 0 0 1px rgba(0, 0, 0, 0.85),
-		inset 0 2px 6px rgba(0, 0, 0, 0.6),
-		inset 0 1px 0 rgba(255, 255, 255, 0.35);
-	filter: saturate(1.1) brightness(1.02);
-}
-
-.pt-btn.btn3d[aria-pressed="true"] .btn-face {
-	background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.18), transparent 60%);
-	border-radius: inherit;
+	background: radial-gradient(circle at 30% 20%,
+			var(--btn3d-top) 0,
+			var(--btn3d-mid) 60%,
+			var(--btn3d-bot) 100%);
+	box-shadow: inset 0 3px 8px rgb(0 0 0 / 0.55);
 }
 
 /* PLAY BUTTON END */
@@ -4274,13 +4225,10 @@ const phoneCtx = reactive({
 
 .stepper-btn {
 	min-width: 26px;
-	border-radius: 8px;
-	border: 1px solid var(--pt-hairline, #2a2f3a);
-	background: var(--pt-surface-2, #1c202b);
-	color: var(--pt-text, #e9e9ef);
+	border-radius: 6px;
+	border: 1px solid transparent;
 	line-height: 1;
 	font-weight: 700;
-	cursor: pointer;
 }
 
 .stepper-value {

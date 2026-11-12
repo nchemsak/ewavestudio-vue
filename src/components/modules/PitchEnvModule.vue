@@ -9,7 +9,7 @@
         <template #tools>
             <!-- The card's VEL switch (DrumSequencer passes it in) -->
             <slot name="vel" />
-            <button type="button" class="pe-rnd" :class="{ on: isRandom }" :aria-pressed="isRandom"
+            <button type="button" class="pe-rnd hw-cap hw-cap-sm hw-led-left" :class="{ on: isRandom }" :aria-pressed="isRandom"
                 :disabled="!enabled" aria-label="Random sweep"
                 title="Random: each note starts at its own offset within ±Amount"
                 @click="toggleRandom">RND</button>
@@ -118,51 +118,21 @@ const amountText = computed(() => {
     gap: 6px;
 }
 
+/* A toggle like the VEL switch beside it (PillSwitch.vue): a small cap with an LED */
 .pe-rnd {
+    --hw-led-size: 5px;
     flex: none;
-    padding: 1px 4px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    background: transparent;
-    color: inherit;
+    padding: 1px 5px 1px 4px;
+    border-radius: 5px;
+    border: 1px solid transparent;
     font: inherit;
     font-size: 9px;
     line-height: 1.4;
     letter-spacing: 0.06em;
-    opacity: 0.65;
-    cursor: pointer;
-}
-
-.pe-rnd.on {
-    border-color: hsl(var(--pt-accent) 80% 62% / 0.9);
-    background: hsl(var(--pt-accent) 80% 60% / 0.18);
-    opacity: 1;
 }
 
 .pe-rnd:disabled {
     cursor: default;
     opacity: 0.35;
-}
-
-/* On a light theme the pill needs a dark outline, and a little more ink (unless it's off) */
-.theme-light .pe-rnd,
-.theme-sand .pe-rnd {
-    border-color: color-mix(in oklab, var(--pt-text), transparent 72%);
-}
-
-.theme-light .pe-rnd:not(:disabled),
-.theme-sand .pe-rnd:not(:disabled) {
-    opacity: 0.8;
-}
-
-.theme-light .pe-rnd.on,
-.theme-sand .pe-rnd.on {
-    border-color: hsl(var(--pt-accent) 60% 48%);
-    opacity: 1;
-}
-
-.pe-rnd:focus-visible {
-    outline: 2px solid hsl(var(--pt-accent) 80% 62%);
-    outline-offset: 2px;
 }
 </style>

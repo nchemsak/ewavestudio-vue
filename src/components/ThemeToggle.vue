@@ -1,16 +1,16 @@
 <template>
     <div class="pt-btn-group" role="group" aria-label="Theme">
-        <button class="pt-btn" :class="{ 'is-active': theme === 'dark' }" :aria-pressed="theme === 'dark'"
+        <button class="pt-btn hw-led-mini" :class="{ 'is-active': theme === 'dark' }" :aria-pressed="theme === 'dark'"
             @click="setTheme('dark')">Dark</button>
-        <!-- <button class="pt-btn" :class="{ 'is-active': theme === 'light' }" :aria-pressed="theme === 'light'"
+        <!-- <button class="pt-btn hw-led-mini" :class="{ 'is-active': theme === 'light' }" :aria-pressed="theme === 'light'"
             @click="setTheme('light')">Light</button> -->
-        <button class="pt-btn" :class="{ 'is-active': theme === 'synthwave' }" :aria-pressed="theme === 'synthwave'"
+        <button class="pt-btn hw-led-mini" :class="{ 'is-active': theme === 'synthwave' }" :aria-pressed="theme === 'synthwave'"
             @click="setTheme('synthwave')">Synthwave</button>
-        <button class="pt-btn" :class="{ 'is-active': theme === 'sand' }" :aria-pressed="theme === 'sand'"
+        <button class="pt-btn hw-led-mini" :class="{ 'is-active': theme === 'sand' }" :aria-pressed="theme === 'sand'"
             @click="setTheme('sand')">Sand</button>
-        <button class="pt-btn" :class="{ 'is-active': theme === 'analog' }" :aria-pressed="theme === 'analog'"
+        <button class="pt-btn hw-led-mini" :class="{ 'is-active': theme === 'analog' }" :aria-pressed="theme === 'analog'"
             @click="setTheme('analog')">Analog</button>
-        <button class="pt-btn" :class="{ 'is-active': theme === 'slate' }" :aria-pressed="theme === 'slate'"
+        <button class="pt-btn hw-led-mini" :class="{ 'is-active': theme === 'slate' }" :aria-pressed="theme === 'slate'"
             @click="setTheme('slate')">Slate</button>
     </div>
 </template>
@@ -21,7 +21,10 @@ const { theme, setTheme } = useTheme();
 </script>
 
 <style scoped>
-.pt-btn.is-active {
-    box-shadow: 0 0 0 2px hsl(var(--pt-accent) 80% 60% / 0.35), 0 0 12px var(--pt-btn-glow);
+/* The chosen theme's button stays down, its LED lit (_hardware.scss); the label sits a
+   little lower, under the LED */
+.pt-btn {
+    padding-top: 10px;
+    padding-bottom: 6px;
 }
 </style>

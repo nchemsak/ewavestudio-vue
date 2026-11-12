@@ -9,7 +9,7 @@
 	<div class="preset-bar">
 		<div class="preset-box" role="group" :aria-labelledby="titleId">
 			<div :id="titleId" class="pt-section-title">{{ title }}</div>
-			<button type="button" class="preset-dice" :class="{ rolling }" :aria-label="diceLabel"
+			<button type="button" class="preset-dice hw-cap hw-cap-sm" :class="{ rolling }" :aria-label="diceLabel"
 				:title="`${diceLabel} (Ctrl+Z goes back)`" @click="roll" @animationend="rolling = false">
 				<svg viewBox="0 0 24 24" aria-hidden="true">
 					<rect x="3.5" y="3.5" width="17" height="17" rx="4" />
@@ -19,7 +19,7 @@
 				</svg>
 			</button>
 			<div class="pt-btn-group preset-grid">
-				<button v-for="p in presets" :key="p.id" type="button" class="pt-btn"
+				<button v-for="p in presets" :key="p.id" type="button" class="pt-btn hw-led-mini"
 					:class="{ 'is-active': p.id === active }" :aria-pressed="p.id === active" :title="p.description"
 					@click="emit('choose', p.id)">{{ p.label }}</button>
 			</div>
@@ -86,7 +86,8 @@ function roll() {
 	line-height: 1;
 	font-size: 0.65rem;
 	width: 100%;
-	padding: 4px 2px;
+	/* 1 px lower than centred, for the LED at the cap's top edge */
+	padding: 5px 2px 3px;
 	white-space: nowrap;
 }
 
@@ -102,24 +103,7 @@ function roll() {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	cursor: pointer;
-	background: hsl(var(--pt-accent) 80% 60% / .15);
-	border: 1px solid hsl(var(--pt-accent) 80% 60% / .55);
-	box-shadow: 0 2px 8px rgb(0 0 0 / .25);
-	transition: box-shadow .2s ease, transform .12s ease;
-}
-
-.preset-dice:hover {
-	box-shadow: 0 0 10px var(--pt-btn-glow);
-}
-
-.preset-dice:active {
-	transform: scale(.92);
-}
-
-.preset-dice:focus-visible {
-	outline: 2px solid hsl(var(--pt-accent) 80% 60%);
-	outline-offset: 2px;
+	border: 1px solid transparent;
 }
 
 .preset-dice svg {
@@ -129,12 +113,12 @@ function roll() {
 
 .preset-dice svg rect {
 	fill: none;
-	stroke: color-mix(in oklab, var(--pt-text) 90%, transparent);
+	stroke: color-mix(in oklab, var(--cap-ink) 90%, transparent);
 	stroke-width: 1.6px;
 }
 
 .preset-dice svg circle {
-	fill: color-mix(in oklab, var(--pt-text) 92%, transparent);
+	fill: color-mix(in oklab, var(--cap-ink) 92%, transparent);
 }
 
 .preset-dice.rolling svg {
@@ -157,16 +141,7 @@ function roll() {
 	}
 }
 
-/* Lit: the preset the sound matches, filled with the button's own color */
-.preset-grid .pt-btn.is-active {
-	color: #fff;
-	background: linear-gradient(145deg,
-			hsl(var(--btn-hue) 84% 58% / .95),
-			hsl(calc(var(--btn-hue) + 10) 84% 58% / .95));
-	box-shadow:
-		0 0 0 3px hsl(var(--btn-hue) 90% 60% / .18),
-		0 0 14px hsl(var(--btn-hue) 90% 60% / .35);
-}
+/* The preset the sound matches stays down, its LED lit (_hardware.scss) */
 
 /* Narrower than 1200 px the two boxes share a row of their own under the knobs, each filling
    its half */
