@@ -3433,11 +3433,15 @@ test.describe('Phone mode', () => {
 			return n;
 		});
 		expect(inked).toBeGreaterThan(20);
-		// The playing pad: a bar along its top and a thick outline
-		const now = page.locator('.pl-pad.now');
-		await expect(now).toHaveCount(1);
-		expect(await now.evaluate((el) => getComputedStyle(el, '::before').height)).toBe('6px');
-		expect(await now.evaluate((el) => getComputedStyle(el).outlineWidth)).toBe('3px');
+		// The playing pad: a bar along its top and a thick outline. Found and measured in one
+		// call: the playing step moves on every 125 ms, so a second round trip could read a pad
+		// it has just left (it failed that way once on GitHub, reading "auto")
+		await expect(page.locator('.pl-pad.now')).toHaveCount(1);
+		const look = await page.evaluate(() => {
+			const el = document.querySelector('.pl-pad.now')!;
+			return { bar: getComputedStyle(el, '::before').height, outline: getComputedStyle(el).outlineWidth };
+		});
+		expect(look).toEqual({ bar: '6px', outline: '3px' });
 		await page.getByRole('button', { name: 'Stop', exact: true }).click();
 	});
 
