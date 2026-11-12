@@ -133,6 +133,8 @@ function onDocClick(e: MouseEvent): void {
     // A pad's ⋮ decides for itself (DrumSequencer's openPadSettings): its own pad's closes the
     // popover, another pad's moves it there. Closing here too would reopen it on the click.
     if ((t as Element | null)?.closest?.('.pad-settings-dot')) return;
+    // Play / Stop (data-keeps-pad-settings) works without closing it: hear the pad in the pattern
+    if ((t as Element | null)?.closest?.('[data-keeps-pad-settings]')) return;
     if (rootEl.value && t && !rootEl.value.contains(t)) close();
 }
 function onKey(e: KeyboardEvent): void { if (e.key === 'Escape') close(); }

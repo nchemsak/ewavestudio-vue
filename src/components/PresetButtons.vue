@@ -4,15 +4,13 @@
 	 src/lib/patterns/). DrumSequencer applies the choice; this only shows the buttons and which
 	 one is lit (the one the sound or pattern matches). Styled like Pattern Tools' buttons, three
 	 across. The dice in the top-right corner (like the wave tiles' dice badges) asks for a
-	 random one. While playing, a pattern waits for the next bar (DrumSequencer's BAR QUEUE):
-	 its button, or the dice, blinks until then (queued); Shift+click asks for it at once. -->
+	 random one. -->
 <template>
 	<div class="preset-bar">
 		<div class="preset-box" role="group" :aria-labelledby="titleId">
 			<div :id="titleId" class="pt-section-title">{{ title }}</div>
-			<button type="button" class="preset-dice" :class="{ rolling, 'is-queued': queued === 'random' }"
-				:aria-label="diceLabel" :title="`${diceLabel} (Ctrl+Z goes back)`" @click="roll"
-				@animationend="rolling = false">
+			<button type="button" class="preset-dice" :class="{ rolling }" :aria-label="diceLabel"
+				:title="`${diceLabel} (Ctrl+Z goes back)`" @click="roll" @animationend="rolling = false">
 				<svg viewBox="0 0 24 24" aria-hidden="true">
 					<rect x="3.5" y="3.5" width="17" height="17" rx="4" />
 					<circle cx="8" cy="8" r="1.6" />
@@ -22,9 +20,8 @@
 			</button>
 			<div class="pt-btn-group preset-grid">
 				<button v-for="p in presets" :key="p.id" type="button" class="pt-btn"
-					:class="{ 'is-active': p.id === active, 'is-queued': p.id === queued }" :aria-pressed="p.id === active"
-					:title="p.id === queued ? `${p.label}: starts at the next bar (Shift+click: now)` : p.description"
-					@click="emit('choose', p.id, $event.shiftKey)">{{ p.label }}</button>
+					:class="{ 'is-active': p.id === active }" :aria-pressed="p.id === active" :title="p.description"
+					@click="emit('choose', p.id)">{{ p.label }}</button>
 			</div>
 		</div>
 	</div>
@@ -38,22 +35,21 @@ const props = defineProps<{
 	diceLabel: string; // the dice's name: Random sound, Random pattern
 	presets: ReadonlyArray<{ id: string; label: string; description: string }>;
 	active: string | null; // the lit button's id
-	queued?: string | null; // the one waiting for the next bar ('random' for the dice), which blinks
 }>();
 
 const titleId = `preset-box-${props.title.toLowerCase().replace(/\W+/g, '-')}`;
 
 const emit = defineEmits<{
-	(e: 'choose', id: string, now: boolean): void; // now: Shift+click, don't wait for the bar
-	(e: 'random', now: boolean): void;
+	(e: 'choose', id: string): void;
+	(e: 'random'): void;
 }>();
 
 // A quick spin of the dice on each roll (nothing lights up after one)
 const rolling = ref(false);
-function roll(e: MouseEvent) {
+function roll() {
 	rolling.value = false;
 	requestAnimationFrame(() => { rolling.value = true; });
-	emit('random', e.shiftKey);
+	emit('random');
 }
 </script>
 

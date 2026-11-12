@@ -174,13 +174,13 @@
 						<PresetButtons title="Sound presets" dice-label="Random sound" :presets="PRESETS" :active="activePresetId"
 							@choose="choosePreset" @random="rollRandomSound" />
 						<PresetButtons title="Pattern presets" dice-label="Random pattern" :presets="PATTERNS"
-							:active="activePatternId" :queued="queuedPattern" @choose="choosePattern"
+							:active="activePatternId" @choose="choosePattern"
 							@random="rollRandomPattern" />
 					</div>
 
 					<!-- Play (+ the MIDI fallback) -->
 					<div class="transport-right">
-						<button type="button" class="pt-btn btn-lg btn3d" @click="onPlayClick"
+						<button type="button" class="pt-btn btn-lg btn3d" data-keeps-pad-settings @click="onPlayClick"
 							:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
 							:aria-pressed="isPlaying">
 							<span class="btn-face">
@@ -591,7 +591,7 @@
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
 			v-model:noiseEnabled="padNoiseEnabled" v-model:ratchet="currentPadRatchet" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
-			:anchorRect="padPopover.anchorRect" :title="padPopover.title" @audition="hz => auditionNote(hz, currentPadWave)" />
+			:anchorRect="padPopover.anchorRect" :title="padPopover.title" @audition="hz => auditionPad(padSettings.index, hz)" />
 	</div>
 </template>
 
@@ -622,7 +622,7 @@ import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
 import VelocityRouting from './VelocityRouting.vue';
 import { velocityRoutingActive } from '../audio/velocity';
-import { clampRatchet } from '../audio/ratchet';
+import { clampRatchet, ratchetHits } from '../audio/ratchet';
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
 import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
 import MelodyMaker from './MelodyMaker.vue';
@@ -1898,17 +1898,34 @@ function onScaleChosen({ from, to }: { from: MelodyUi['keyScale']; to: MelodyUi[
 }
 
 // One note of the synth lane's sound, now, as a MIDI key would play it (not while the lane is
-// muted). The click that asks for it lets audio start.
-function auditionNote(hz: number, wave?: string) {
+// muted). The click that asks for it lets audio start. opts: with the noise or not (a pad's
+// noise switch), and as a pad's repeats (2–4 quick hits within a step at the tempo, as the
+// sequencer plays them, ratchet.ts)
+function auditionNote(hz: number, wave?: string, opts: { noise?: boolean; repeats?: number } = {}) {
 	const inst = synthInstrument.value;
 	if (!inst || inst.muted) return;
 	const play = () => {
 		startLfoIfNeeded();
-		playSynthNote(hz, Math.min(1, 0.8 * (inst.channelVolume ?? 1)), synthDecay.value, audioCtx.currentTime + 0.003,
-			wave ?? selectedWaveform.value, { addNoise: true, vel: 0.8 });
+		const step = 60 / tempo.value / 4;
+		for (const hit of ratchetHits(audioCtx.currentTime + 0.003, step, opts.repeats ?? 1)) {
+			playSynthNote(hz, Math.min(1, 0.8 * (inst.channelVolume ?? 1)), synthDecay.value, hit.time,
+				wave ?? selectedWaveform.value, { addNoise: opts.noise ?? true, vel: 0.8, maxDuration: hit.maxDuration });
+		}
 	};
 	if (audioCtx.state === 'running') play();
 	else audioCtx.resume().then(play, () => { });
+}
+
+// A pad's note picked (its ⋮ settings, the phone's note picker): it plays as that pad does,
+// on its wave, with its noise switch and its repeats, but only while stopped; while playing,
+// the pattern plays it (a second note on top would clash)
+function auditionPad(index: number, hz: number) {
+	const inst = synthInstrument.value;
+	if (!inst || index < 0 || isPlaying.value) return;
+	auditionNote(hz, inst.waveforms?.[index] ?? selectedWaveform.value, {
+		noise: noiseMask.value?.[index] ?? true,
+		repeats: inst.ratchets?.[index] ?? 1,
+	});
 }
 
 // Pad pitch and volume sliders
@@ -2942,16 +2959,12 @@ const activePatternId = computed<string | null>(() => {
 	return PATTERNS.find(p => patternKeys[p.id] === key)?.id ?? null;
 });
 
-// While playing, a pattern waits for the next bar's step 1 (its button blinks; Shift+click:
-// at once), as a key does (see BAR QUEUE)
-function choosePattern(id: string, now = false) {
-	if (!PATTERNS.some(p => p.id === id)) return;
-	trackEvent('pattern_select', { pattern: id });
-	atNextBar('pattern', id, () => { applyChosenPattern(id); }, now);
-}
-async function applyChosenPattern(id: string) {
+// A pattern changes at once, playing or not (the maintainer's call after PR 55: a key waits
+// for the bar, a pattern doesn't)
+async function choosePattern(id: string) {
 	const pattern = PATTERNS.find(p => p.id === id);
 	if (!pattern) return;
+	trackEvent('pattern_select', { pattern: id });
 	applyPattern(projectState, pattern, { min: MIN_PAD_HZ, max: MAX_PAD_HZ });
 	choosingPattern.value = id;
 	await nextTick();
@@ -2962,26 +2975,24 @@ async function applyChosenPattern(id: string) {
 }
 
 // The Patterns dice: a new pattern from random choices (src/lib/patterns/random.ts), applied
-// like a built-in one, and waiting for the bar the same way. Nothing lights up; undo goes back
-// to the pattern before.
-function rollRandomPattern(now = false) {
-	const pattern = randomPattern();
+// like a built-in one. Nothing lights up; undo goes back to the pattern before.
+function rollRandomPattern() {
+	applyPattern(projectState, randomPattern(), { min: MIN_PAD_HZ, max: MAX_PAD_HZ });
 	trackEvent('pattern_random');
-	atNextBar('pattern', 'random', () => applyPattern(projectState, pattern, { min: MIN_PAD_HZ, max: MAX_PAD_HZ }), now);
 }
 
 // BAR QUEUE START
-// While playing, a key clicked in the Melody Maker and a pattern (a Pattern preset or its dice)
-// wait for the next bar's step 1, as a hardware sequencer queues a pattern change, so the bar
-// that's playing finishes as it was. The key or button blinks meanwhile (queuedKey,
-// queuedPattern). The engine calls runQueued() just before it builds step 1 (onBarStart), so
-// the bar starts with the new pitches. Stopped, or with Shift+click, a change happens at once.
-// One waiting change per kind: a new one replaces it. Stop applies what's waiting; undo, redo,
-// opening a project and File → New throw it away. Each change is one undo step, as before.
-type QueueKind = 'key' | 'pattern';
+// While playing, a key clicked in the Melody Maker waits for the next bar's step 1, as a
+// hardware sequencer queues a change, so the bar that's playing finishes as it was. The key
+// shows a pulsing ghost meanwhile, and the Melody Maker says so (queuedKey). The engine calls
+// runQueued() just before it builds step 1 (onBarStart), so the bar starts with the new
+// pitches. Stopped, or with Shift+click, it happens at once. One waiting change per kind: a
+// new one replaces it. Stop applies what's waiting; undo, redo, opening a project and File →
+// New throw it away. Each change is one undo step, as before. (Patterns waited too in PR 55;
+// they change at once since, the maintainer's call: only 'key' is queued now.)
+type QueueKind = 'key';
 const queued = shallowRef<{ kind: QueueKind; id: string; run: () => void }[]>([]);
 const queuedKey = computed(() => queued.value.find(q => q.kind === 'key')?.id ?? null);
-const queuedPattern = computed(() => queued.value.find(q => q.kind === 'pattern')?.id ?? null);
 
 function atNextBar(kind: QueueKind, id: string, run: () => void, now = false) {
 	cancelQueued(kind);
@@ -2991,7 +3002,7 @@ function atNextBar(kind: QueueKind, id: string, run: () => void, now = false) {
 function cancelQueued(kind?: QueueKind) {
 	queued.value = kind ? queued.value.filter(q => q.kind !== kind) : [];
 }
-// In the order they were asked for (a key, then a pattern from the new key)
+// In the order they were asked for
 function runQueued() {
 	const due = queued.value;
 	if (!due.length) return;
@@ -3016,7 +3027,7 @@ const SCALE_LABELS: Record<string, string> = {
 const phoneCtx = reactive({
 	inst: synthInstrument,
 	currentStep, isPlaying, tempo, canUndo,
-	presets: PRESETS, patterns: PATTERNS, activePresetId, activePatternId, queuedPattern,
+	presets: PRESETS, patterns: PATTERNS, activePresetId, activePatternId,
 	keyRoot: computed(() => melodyUi.keyRoot),
 	keyScale: computed(() => melodyUi.keyScale),
 	keyScaleLabel: computed(() => SCALE_LABELS[melodyUi.keyScale] ?? melodyUi.keyScale),
@@ -3046,6 +3057,7 @@ const phoneCtx = reactive({
 	undo,
 	choosePreset, randomSound: rollRandomSound, choosePattern, randomPattern: rollRandomPattern,
 	audition: auditionNote,
+	auditionPad,
 	noteName: nearestNote,
 	hue: padHue,
 	fullLayout: () => setPhoneFull(true),
