@@ -6,7 +6,8 @@
 //   which panels are open are not undone.
 // - A change is recorded once the settings have stayed the same for SETTLE_MS and no pointer
 //   is held down, so a knob drag, a slider drag or a burst of arrow keys is one undo step.
-// - Opening, importing or creating a project (a new projectId) starts a fresh history, so
+// - Opening, importing or creating a project (a new projectId) starts a fresh history (not
+//   File → Save as…, the same work under a new name: store.isContinued), so
 //   File → New and Open can't be undone; their own project is the starting point.
 // - After an undo or redo, settings may adjust by themselves (a panel reacting to its props,
 //   or a watcher such as the synced delay time). Those follow-ups are folded into the entry,
@@ -81,6 +82,8 @@ export function useUndoHistory(opts: {
 		if (!applying) scheduleRecord();
 	});
 	watch(() => project.projectId, () => {
+		// File → Save as… gives the same work a new id: its history carries on
+		if (project.isContinued) return;
 		startFresh = true;
 		scheduleRecord();
 	});

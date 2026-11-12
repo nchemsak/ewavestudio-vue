@@ -37,7 +37,7 @@ https://www.ephemeralwave.com/studio/ and is never changed.
   delay, reverb, noise) that add up to the mix, a MIDI file of the pattern, and a one-shot of
   the sound at any note, as one .zip
 - Keyboard shortcuts: Space plays and stops, 1–4 switch the screen view, Ctrl/Cmd+S saves,
-  Ctrl/Cmd+Z undoes
+  Ctrl/Cmd+Shift+S saves as a new project (File → Save as…), Ctrl/Cmd+Z undoes
 - Knobs with soft stops at common values, lit up when a knob sits on one: Tempo (60, 90, 100,
   120, 140, 160, 174 BPM; it starts at 120), Swing (including a triplet feel), the middle of
   two-way knobs

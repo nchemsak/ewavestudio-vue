@@ -57,6 +57,13 @@
                         </div>
                     </div>
 
+                    <!-- A copy under a new name, which becomes the open project; the original stays as
+                         it was last saved. (Renaming in the name box renames this project.) -->
+                    <button class="pc-menu-row" role="menuitem" @click="saveAs" :disabled="!store.loaded"
+                        :title="saveAsTitle">
+                        Save as…
+                    </button>
+
                     <button class="pc-menu-row" role="menuitem" @click="exportJson" :disabled="!store.loaded">
                         Export file
                     </button>
@@ -357,6 +364,8 @@ const hotkeyTitle = computed(() => {
     const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
     return isMac ? 'Save (⌘S)' : 'Save (Ctrl+S)';
 });
+const saveAsTitle = computed(() => (/Mac|iPod|iPhone|iPad/.test(navigator.platform)
+    ? 'A copy under a new name (⇧⌘S)' : 'A copy under a new name (Ctrl+Shift+S)'));
 const undoTitle = computed(() => (/Mac|iPod|iPhone|iPad/.test(navigator.platform) ? 'Undo (⌘Z)' : 'Undo (Ctrl+Z)'));
 const redoTitle = computed(() => (/Mac|iPod|iPhone|iPad/.test(navigator.platform) ? 'Redo (⇧⌘Z)' : 'Redo (Ctrl+Y)'));
 function hashOf(obj: unknown): string { try { return JSON.stringify(obj); } catch { return ''; } }
@@ -410,6 +419,52 @@ async function saveNow() {
         status.value = 'saved';
     }
 }
+
+// SAVE AS START
+// File → Save as… (Ctrl/Cmd+Shift+S): the settings as they are now, unsaved changes included,
+// saved as a new project under a new name, which becomes the open one (store.saveAs()). The
+// project open before stays as it was last saved. A name another saved project has replaces
+// that one, once confirmed; this project's own name is a plain Save.
+const sameName = (a?: string, b?: string) => (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+
+async function saveAs() {
+    if (!store.loaded || status.value === 'saving') return;
+    closeAllMenus();
+    store.flushPending();
+
+    const current = (store.name || '').trim();
+    const entered = prompt('Save as a new project, named:', current ? `${current} copy` : '');
+    if (entered === null) return;
+    const name = entered.trim();
+    if (!name) return;
+
+    // Its own name, on a project that is saved under it: nothing to copy, so it's a Save
+    if (!isNewUnsaved.value && sameName(name, lastSavedName.value) && sameName(name, current)) {
+        await saveNow();
+        return;
+    }
+    const all = await repoList();
+    const clash = (Array.isArray(all) ? all : [])
+        .find((p: any) => p.projectId !== store.projectId && sameName(p.meta?.name, name));
+    if (clash && !confirm(`“${clash.meta.name}” already exists. Replace it with this project?`)) return;
+
+    try {
+        status.value = 'saving';
+        await store.saveAs(name, clash?.projectId);
+        nameDraft.value = name;
+        lastSavedHash.value = currentHash.value;
+        lastSavedName.value = name;
+        isNewUnsaved.value = false;
+        status.value = 'saved';
+        pwa.keepProjects();
+        trackEvent('project_save_as', { replaced: !!clash });
+    } catch (err) {
+        console.error('Save as failed:', err);
+        alert('Save failed. See console for details.');
+        status.value = 'saved';
+    }
+}
+// SAVE AS END
 
 onMounted(() => {
     if (store.loaded) {
@@ -468,7 +523,7 @@ async function onImport(e: Event) {
 function onKeydown(e: KeyboardEvent) {
     const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
     const isSave = (isMac && e.metaKey && e.key.toLowerCase() === 's') || (!isMac && e.ctrlKey && e.key.toLowerCase() === 's');
-    if (isSave) { e.preventDefault(); saveNow(); }
+    if (isSave) { e.preventDefault(); e.shiftKey ? saveAs() : saveNow(); }
 }
 onMounted(() => { window.addEventListener('keydown', onKeydown); });
 onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
