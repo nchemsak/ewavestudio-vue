@@ -42,6 +42,7 @@
 
                 <div class="position-relative text-center" :class="{ 'is-fm-off': !localEnabled }">
                     <Knob midi-id="fm.amount" :value-text="localIndex.toFixed(1)" v-model="localIndex" label="Amount" size="small" :min="0" :max="50" :step="0.1" :color="color"
+                        :modValue="lfoView?.fmAmount ?? null" :modRange="lfoView?.fmAmountRange ?? null"
                         @knobStart="activeKnob = 'ix'" @knobEnd="activeKnob = null" />
                     <span v-if="activeKnob === 'ix'" class="custom-tooltip">
                         {{ localIndex.toFixed(1) }}
@@ -57,6 +58,7 @@ import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 import FmTowerButton from '../FmTowerButton.vue';
+import type { LfoView } from '../../lib/lfoVisual';
 
 type Ratio = number | null;
 
@@ -69,6 +71,8 @@ const props = withDefaults(
         title?: string;
         color?: string;
         showToggle?: boolean;
+        // The LFO visualizer: where the LFO's FM target has the Amount now (src/lib/lfoVisual.ts)
+        lfoView?: LfoView | null;
     }>(),
     {
         title: 'FM',

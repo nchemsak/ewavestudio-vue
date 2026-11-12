@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
 	lfoCutoffAt, lfoCutoffSwing, lfoPulseWidthAt, lfoPulseWidthRange, lfoBendAt, lfoBendRange,
+	lfoFmAmountAt, lfoFmAmountRange, lfoLevelAt, lfoLevelRange,
 } from './lfoVisual';
+import { lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain } from '../audio/lfo';
 import { lfoFilterTapGain } from '../audio/synthHelpers';
 import { pulseOffset, lfoPwmTapGain, foldPulseWidth } from '../audio/waves';
 
@@ -68,5 +70,30 @@ describe('LFO visualizer', () => {
 		expect(lfoBendRange(600)).toBe(0.5);
 		expect(lfoBendRange(1200)).toBe(1);
 		expect(lfoBendRange(0)).toBeNull();
+	});
+
+	it('FM: the Amount swings ±Depth %, as the engine moves the modulator', () => {
+		// The engine adds the LFO (wave × depth) times lfoFmTapGain(deviation) to the deviation,
+		// and the deviation is the Amount times the modulator's frequency
+		const amount = 4, fMod = 440;
+		for (const depth of [0, 25, 100]) for (const n of norms) {
+			const deviation = amount * fMod + n * depth * lfoFmTapGain(amount * fMod);
+			expect(lfoFmAmountAt(amount, depth, n)).toBeCloseTo(Math.max(0, deviation / fMod), 9);
+		}
+		expect(lfoFmAmountRange(4, 100)).toEqual([0, 8]);
+		expect(lfoFmAmountRange(4, 25)).toEqual([3, 5]);
+		expect(lfoFmAmountRange(0, 50)).toBeNull(); // nothing to move
+		expect(lfoFmAmountRange(4, 0)).toBeNull();
+	});
+
+	it('Level: the volume swings from full down to (100 − Depth) %, as the engine\'s tremolo', () => {
+		for (const depth of [0, 40, 100]) for (const n of norms) {
+			expect(lfoLevelAt(0.75, depth, n)).toBeCloseTo(0.75 * (lfoAmpBase(depth) + LFO_AMP_TAP * n * depth), 9);
+		}
+		const [lo, hi] = lfoLevelRange(0.75, 40)!;
+		expect(lo).toBeCloseTo(0.45);
+		expect(hi).toBeCloseTo(0.75);
+		expect(lfoLevelRange(0.75, 0)).toBeNull();
+		expect(lfoLevelRange(0, 40)).toBeNull();
 	});
 });
