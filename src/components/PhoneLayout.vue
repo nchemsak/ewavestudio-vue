@@ -54,7 +54,7 @@
 					<div class="pl-pick">
 						<div class="pl-stepper" role="group" aria-label="Pattern">
 							<button type="button" class="pl-arr" aria-label="Previous pattern" @click="stepPattern(-1)">◂</button>
-							<button type="button" class="pl-val" :class="{ 'is-queued': ctx.queuedPattern }" aria-label="All patterns" @click="list = 'pattern'"><span class="pl-cap" aria-hidden="true">Pattern</span>{{ patternName }}</button>
+							<button type="button" class="pl-val" aria-label="All patterns" @click="list = 'pattern'"><span class="pl-cap" aria-hidden="true">Pattern</span>{{ patternName }}</button>
 							<button type="button" class="pl-arr" aria-label="Next pattern" @click="stepPattern(1)">▸</button>
 						</div>
 						<button type="button" class="pl-icon pl-dice" aria-label="Random pattern" title="Random pattern" @click="rollPattern">
@@ -110,7 +110,6 @@
 		<div v-if="list" class="pl-sheet pl-list" role="dialog" :aria-label="list === 'sound' ? 'Sounds' : 'Patterns'">
 			<button v-for="p in (list === 'sound' ? ctx.presets : ctx.patterns)" :key="p.id" type="button" class="pt-btn"
 				:aria-pressed="(list === 'sound' ? ctx.activePresetId : ctx.activePatternId) === p.id"
-				:class="{ 'is-queued': list === 'pattern' && ctx.queuedPattern === p.id }"
 				@click="list === 'sound' ? chooseSound(p.id) : choosePattern(p.id); list = null">{{ p.label }}</button>
 		</div>
 
@@ -222,12 +221,9 @@ const soundName = computed(() => {
 	const p = ctx.presets.find((x: any) => x.id === ctx.activePresetId);
 	return p ? p.label : soundRolled.value ? 'Random' : 'Sound';
 });
-// While playing, a pattern waits for the next bar (DrumSequencer's BAR QUEUE): the stepper
-// shows it, blinking, until then, and steps on from it
-const patternShown = computed(() => ctx.queuedPattern ?? ctx.activePatternId);
 const patternName = computed(() => {
-	const p = ctx.patterns.find((x: any) => x.id === patternShown.value);
-	return p ? p.label : patternRolled.value || patternShown.value === 'random' ? 'Random' : 'Pattern';
+	const p = ctx.patterns.find((x: any) => x.id === ctx.activePatternId);
+	return p ? p.label : patternRolled.value ? 'Random' : 'Pattern';
 });
 function chooseSound(id: string) {
 	soundRolled.value = false;
@@ -246,7 +242,7 @@ function stepSound(d: number) {
 	chooseSound(ctx.presets[((from < 0 ? (d > 0 ? -1 : 0) : from) + d + n) % n].id);
 }
 function stepPattern(d: number) {
-	const cur = ctx.patterns.findIndex((p: any) => p.id === patternShown.value);
+	const cur = ctx.patterns.findIndex((p: any) => p.id === ctx.activePatternId);
 	const from = cur >= 0 ? cur : lastPattern.value;
 	const n = ctx.patterns.length;
 	choosePattern(ctx.patterns[((from < 0 ? (d > 0 ? -1 : 0) : from) + d + n) % n].id);
@@ -354,7 +350,7 @@ function setRatchet(i: number, r: number) {
 function pickNote(i: number, hz: number) {
 	ctx.inst.pitches = replace(ctx.inst.pitches, i, hz);
 	if (!ctx.inst.steps[i]) setStepOn(i, true);
-	ctx.audition(hz, ctx.inst.waveforms?.[i]); // with the pad's own wave
+	ctx.auditionPad(i, hz); // as the pad plays it (its wave, noise, repeats), only while stopped
 }
 
 // The notes offered for a held pad: the Melody Maker's key and scale (every semitone with no

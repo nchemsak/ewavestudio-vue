@@ -3,7 +3,8 @@
         <section class="pt-section">
             <div class="mm-kb-wrap">
                 <div class="mm-field">
-                    <div class="mm-label" id="mm-key-label">Key</div>
+                    <div class="mm-label" id="mm-key-label">Key<span v-if="queuedKey" class="mm-queued-note"
+                            role="status"> · {{ queuedKey }} at the next bar (Shift+click: now)</span></div>
 
                     <div class="mm-kb" role="radiogroup" :aria-labelledby="'mm-key-label'">
                         <div v-for="k in NATURALS" :key="k.n" class="kb-cell" :class="{ 'has-sharp': k.hasSharp }">
@@ -1437,6 +1438,51 @@ defineExpose({ openAdvanced, getUi, setUi });
 
 .mm-kb :where(button) {
     outline: none;
+}
+
+/* A key clicked while playing, waiting for the next bar (DrumSequencer's BAR QUEUE): a ghost of
+   the chosen key's colour, pulsing, until the pattern moves there and it lights. (An outline
+   wouldn't show: the keys turn theirs off.) */
+.kb-white.is-queued::after,
+.kb-black.is-queued::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--pt-wash);
+    box-shadow: inset 0 0 0 2px hsl(var(--pt-accent) 90% 60% / 0.9);
+    pointer-events: none;
+    animation: mm-ghost 0.9s ease-in-out infinite;
+}
+
+.kb-white.is-queued {
+    position: relative;
+}
+
+@keyframes mm-ghost {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 0.6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kb-white.is-queued::after,
+    .kb-black.is-queued::after {
+        animation: none;
+        opacity: 0.45;
+    }
+}
+
+/* What's waiting, beside the "Key" caption, and how not to wait */
+.mm-queued-note {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+    color: hsl(var(--pt-accent) 85% 65%);
+}
+
+.theme-light .mm-queued-note,
+.theme-sand .mm-queued-note {
+    color: hsl(var(--pt-accent) 80% 32%);
 }
 
 /* @media (max-width: 560px) {

@@ -367,9 +367,13 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - It's placed beside its pad and kept inside the window by its real width
   (`clamp(320px, 48vw, 420px)`, the window less its scrollbar); under 720 px it's centred.
   Before PR 50 it assumed 380 px and ran off the right edge for the last pads.
-- A click on a key or an octave plays the pad's new note on the pad's own wave
-  (`audition` → `auditionNote(hz, wave)`, as the Melody Maker's keys and the phone's note
-  picker do); not while the synth lane is muted.
+- A click on a key or an octave sets the pad's note at once, playing or not, and previews it
+  as the pad plays it (`auditionPad(index, hz)` → `auditionNote()`): its own wave, its noise
+  switch (before PR 56 the preview always had noise) and its repeats (2–4 hits within a step
+  at the tempo). Only while stopped: while playing, the pattern plays it, and a preview on top
+  clashed (PR 56). Not while the synth lane is muted. The phone's note picker does the same.
+- Play / Stop (`data-keeps-pad-settings`) can be pressed without closing it, to hear the pad
+  in the pattern; any other click outside closes it (PR 56).
 
 ### Effect switches
 - Two pedals have a mini toggle (`PedalSwitch.vue`, `role="switch"`, in the corner right of
@@ -509,27 +513,29 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   removed in PR 51: Undo (Ctrl+Z) does it.
 
 ### Changes at the bar
-- PR 55. While playing, a key clicked in the Melody Maker and a pattern (a Pattern preset, its
-  dice, the phone's Pattern stepper) wait for the next bar's step 1, as a hardware sequencer
-  queues a pattern change, so the bar that's playing finishes as it was. Stopped, they happen
-  at once, as before. Shift+click: at once while playing too.
+- PR 55, changed in PR 56. While playing, a key clicked in the Melody Maker waits for the next
+  bar's step 1, as a hardware sequencer queues a change, so the bar that's playing finishes as
+  it was. Stopped, it happens at once, as before. Shift+click: at once while playing too.
+  Patterns (a Pattern preset, its dice, the phone's stepper) waited too in PR 55; since PR 56
+  they change at once, playing or not (the maintainer's call).
 - The `BAR QUEUE` section of `DrumSequencer.vue`: `atNextBar(kind, id, run, now)` keeps one
-  waiting change per kind (`key`, `pattern`; a new one replaces it), and `runQueued()` applies
-  them in the order asked (a key, then a pattern built from the new key). The live engine calls
-  it through `onBarStart` just before it builds a bar's step 1 (`schedule()`, about 100 ms
-  before it sounds), so the bar starts with the new pitches. Each change is one undo step.
-- What's waiting blinks (`.is-queued` in `_general.scss`: an accent ring, on and off every
-  quarter second; a steady dashed ring with `prefers-reduced-motion`): the key
-  (`MelodyMaker`'s `queuedKey`), the pattern's button or the dice (`PresetButtons`' `queued`),
-  the phone's Pattern stepper, which shows the waiting pattern and steps on from it. The key
+  waiting change per kind (only `key` now; a new one replaces it), and `runQueued()` applies
+  it. The live engine calls it through `onBarStart` just before it builds a bar's step 1
+  (`schedule()`, about 100 ms before it sounds), so the bar starts with the new pitches. Each
+  change is one undo step.
+- While it waits, the key shows a ghost of the chosen key's colour, pulsing (`.is-queued::after`
+  in `MelodyMaker.vue`; steady with `prefers-reduced-motion`), and the "Key" caption says
+  "· D at the next bar (Shift+click: now)" (`.mm-queued-note`), which is also how anyone finds
+  Shift+click. In PR 55 it was an outline ring, which never showed: the keyboard's
+  `.mm-kb :where(button) { outline: none }` hid it, so the key seemed not to respond. The key
   lights (`aria-checked`) once the pads have moved: `MelodyMaker` follows `melodyUi.keyRoot`
   instead of lighting the key it emitted.
 - Stop applies what's waiting (`onPlayClick`). Undo, redo, opening a project and File → New
   throw it away (`cancelQueued()`). Clicking the key the pattern is in drops a waiting key.
-- Not waiting for the bar (yet): a scale picked, Generate, Pattern Tools, the Sounds (a sound
-  changes at once, as turning a knob does).
-- A browser test plays a bar and checks a key and a pattern change just before the next bar's
-  step 1 (not during the bar, no audition note), Shift+click, the dice, Undo and Stop.
+- Not waiting for the bar: a scale picked, Generate, Pattern Tools, patterns, sounds.
+- A browser test plays bars and checks the key changes just before the next bar's step 1 (not
+  during the bar, no audition note), its ghost and caption, Shift+click, Undo and Stop, and
+  that a pattern changes at once while playing.
 
 ### Install as an app (PWA)
 - In Chrome and Edge, the address bar's install button or File → Install app… (shown while
@@ -643,8 +649,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (`holdScreen`/`onScreenKnobEnd` in `DrumSequencer.vue`); a view picked meanwhile stays.
 - Under 1200 px, the Sound / Effects / Compose tabs are one Tab stop: Left/Right (Home/End)
   move between them (`onTabKeydown` in `DrumSequencer.vue`).
-- Shift+click on a Melody Maker key, a Pattern preset or its dice: at once, without waiting
-  for the bar while playing (see "Changes at the bar").
+- Shift+click on a Melody Maker key: at once, without waiting for the bar while playing (see
+  "Changes at the bar"; the caption says so while a key waits).
 - Ctrl/Cmd+S: save (`ProjectControls.vue`). Escape closes menus and popovers, and ends MIDI
   learn mode (where Enter arms the focused knob and Delete unlinks it).
 - Ctrl/Cmd+Z: undo; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: redo (same handler as Space). Ignored in
@@ -709,8 +715,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   velocity and one hit. The built-in ones (`library.ts`, names and notes a first try, to be
   changed once heard; **Tresillo**, 3-3-2 twice, replaced Pulse in PR 51: Pulse's hit on every
   beat was Pattern Tools' Every 4 again) use only the root, its fifth and octaves (0, 7, 12, −5), which are in
-  every scale the Melody Maker offers. While playing, a pattern (and the dice's) waits for the
-  next bar, its button blinking (see "Changes at the bar"). A click is one undo step, and the button of the
+  every scale the Melody Maker offers. A pattern changes at once, also while playing (it
+  waited for the bar in PR 55 only). A click is one undo step, and the button of the
   pattern the lane matches is lit, the same way as a sound's (`patternKey()`). File → New
   still starts with no steps on (the maintainer's call, for now).
 - The Patterns dice rolls a random pattern (`randomPattern()` in `src/lib/patterns/random.ts`),
@@ -1247,7 +1253,8 @@ Done:
 | 52 | Unison: Voices 2–4 (one voice sounded as off; six measured narrower than three; a project saved with 1 opens with unison off, 5–6 as 4), a notch at 12 cents on Detune, and Spread 100 % by default. The voices start at different points of their cycle, more with more Spread (`src/audio/unison.ts`; the shapes rebuilt from the spec's series in `waves.ts`), so a hit is wide from its first moment: its first 50 ms measured side/mid 0.35 → 0.87 at full Spread, for 0.9 dB of level; Spread 0 plays as before. |
 | 53 | The plan after the maintainer's brainstorm following PR 52: bar-quantized key and pattern changes, arpeggio fixes (Generate's Random to become Melody), velocity knobs instead of the Vel → pop-up, Save as…, LFO retrigger and targets, hardware buttons; ESLint, a second oscillator and a second pad lane on hold. |
 | 54 | Fix: the Sounds dice could roll a nearly silent sound (a big upward pitch sweep falling slowly onto a low Cutoff), which failed PR 53's browser checks (a peak of 0.039); such a sweep now falls back within 30 % of Decay (3 % of rolls change). The dice's browser test rolls the same seeded sounds every run. |
-| 55 | Key and pattern changes wait for the bar: while playing, a Melody Maker key, a Pattern preset, its dice or the phone's Pattern stepper blinks until the next bar's step 1, then the pattern moves (the engine's `onBarStart`, just before it builds the step); stopped, at once, as before; Shift+click, at once; Stop applies it, Undo drops it; no audition note while playing. |
+| 55 | Key and pattern changes wait for the bar (patterns at once again since PR 56): while playing, a Melody Maker key, a Pattern preset, its dice or the phone's Pattern stepper blinks until the next bar's step 1, then the pattern moves (the engine's `onBarStart`, just before it builds the step); stopped, at once, as before; Shift+click, at once; Stop applies it, Undo drops it; no audition note while playing. |
+| 56 | After trying PR 55: a key waiting for the bar shows a pulsing ghost of the chosen colour and the caption "· D at the next bar (Shift+click: now)" (PR 55's ring was hidden by the keyboard's own CSS, so the key seemed not to respond); patterns change at once again, playing or not. A pad's settings: a key previews the pad as it plays (its noise switch, its repeats), only while stopped; Play / Stop no longer closes them. The phone's note picker previews the same way. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
