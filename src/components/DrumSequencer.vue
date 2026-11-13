@@ -308,7 +308,7 @@
 							<div class="gen-panel osc-panel">
 								<div class="wave-row" role="radiogroup" aria-label="Waveforms">
 									<div v-for="t in WAVE_TILES" :key="t.value" class="wave-cell">
-										<WaveButton :modelValue="selectedWaveform" :value="t.value" :label="t.label"
+										<WaveButton :modelValue="litWave" :value="t.value" :label="t.label"
 											:palette="t.palette" :pulseWidth="pulseWidth"
 											:lfoView="t.value === 'pulse' ? lfoView : null"
 											:randomIncluded="randomPool[t.value]" @toggle-random="onToggleRandom"
@@ -326,8 +326,10 @@
 									</div>
 								</div>
 								<div class="pt-btn-group wave-random">
-									<button class="pt-btn pt-btn-sm" :disabled="!randomPoolArray.length"
-										:title="randomTooltip" @click="applyRandomWaves()">
+									<button class="pt-btn pt-btn-sm hw-led-mini" :disabled="!randomPoolArray.length"
+										:aria-pressed="wavesMixed ? 'true' : 'false'"
+										:title="wavesMixed ? `The pads play a mix of waves. ${randomTooltip}` : randomTooltip"
+										@click="applyRandomWaves()">
 										Random
 									</button>
 								</div>
@@ -619,7 +621,7 @@
 			@export="runExport" @close="exportOpen = false" />
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
-			v-model:noiseEnabled="padNoiseEnabled" v-model:ratchet="currentPadRatchet" v-model:repeatNotes="currentPadRepeatNotes" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
+			v-model:noiseEnabled="padNoiseEnabled" :noiseCardOff="!noiseEnabled" v-model:ratchet="currentPadRatchet" v-model:repeatNotes="currentPadRepeatNotes" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
 			:anchorRect="padPopover.anchorRect" :title="padPopover.title" @audition="hz => auditionPad(padSettings.index, hz)" />
 	</div>
 </template>
@@ -1666,6 +1668,25 @@ function applyWaveToAll(w: Wave) {
 	inst.waveforms = Array(stepLength.value).fill(w);
 }
 
+// The wave every pad plays, or null while they play a mix (after Random, or a pad's wave
+// changed in its ⋮ menu). Only that wave's tile is lit; with a mix, Random is. The main wave
+// (selectedWaveform) stays as it was: MIDI notes and the one-shot export play it.
+const litWave = computed<Wave | null>(() => {
+	const inst = synthInstrument.value as any;
+	const fallback = selectedWaveform.value as Wave;
+	if (!inst) return fallback;
+	const waves = inst.waveforms as Wave[] | undefined;
+	if (!Array.isArray(waves)) return fallback;
+	let first: Wave | null = null;
+	for (let i = 0; i < stepLength.value; i++) {
+		const w = (waves[i] ?? fallback) as Wave;
+		if (first === null) first = w;
+		else if (w !== first) return null;
+	}
+	return first ?? fallback;
+});
+const wavesMixed = computed(() => litWave.value === null);
+
 function applyRandomWaves() {
 	const inst = synthInstrument.value as any;
 	if (!inst) return;
@@ -1825,10 +1846,14 @@ const currentPadRatchet = computed<number | undefined>({
 	}
 });
 
-// Per-pad Noise toggle for the pad settings popover
+// Per-pad Noise switch for the pad settings popover. It shows what's heard: Off while the
+// Noise card is off, whatever the pad's own mask says. Turned on while the card is off, it
+// turns the card on with only this pad's noise on (the mask before couldn't be heard, and
+// the pads that had it would otherwise start hissing too); one undo step, as any change.
 const padNoiseEnabled = computed<boolean>({
 	get() {
 		const i = padSettings.index;
+		if (!noiseEnabled.value) return false;
 		// default "true" (noise allowed) if out of range or not set yet
 		return (i >= 0 && i < noiseMask.value.length)
 			? (noiseMask.value[i] ?? true)
@@ -1837,6 +1862,12 @@ const padNoiseEnabled = computed<boolean>({
 	set(v: boolean) {
 		const i = padSettings.index;
 		if (i < 0) return;
+		if (v && !noiseEnabled.value) {
+			noiseMask.value = Array.from({ length: stepLength.value }, (_, j) => j === i);
+			if (!(noiseAmount.value > 0)) noiseAmount.value = 0.25;
+			noiseEnabled.value = true;
+			return;
+		}
 		if (!Array.isArray(noiseMask.value) || noiseMask.value.length !== stepLength.value) {
 			noiseMask.value = Array(stepLength.value).fill(true);
 		}
