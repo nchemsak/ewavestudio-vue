@@ -121,6 +121,14 @@ describe('saving and loading a project', () => {
 		expect([st.fx.delay.pingPong.value, st.fx.drive.crush.value]).toEqual([true, true]);
 	});
 
+	it('plays an arpeggio saved at 1/4 (dropped) at 1/8', () => {
+		const st = fresh();
+		applySnapshot(st, { melody: { arpRate: '1/4' } });
+		expect(st.melody.arpRate).toBe('1/8');
+		applySnapshot(st, { melody: { arpRate: '1/16' } });
+		expect(st.melody.arpRate).toBe('1/16');
+	});
+
 	it('works out the delay division of projects saved before it was saved', () => {
 		const delay = (tempo: number, time: number) => {
 			const st = fresh();

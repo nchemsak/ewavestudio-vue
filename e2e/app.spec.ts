@@ -3951,7 +3951,7 @@ test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its 
 	expect(notes[3] - notes[0]).toBe(12); // fitted to the bar: 1-3-5-8, the octave on top
 
 	// Rate places the notes: every step at 1/16 (and the cycle of four repeats), every other
-	// step at 1/8, every beat at 1/4; the steps between go off
+	// step at 1/8; the steps between go off. 1/4 is gone (it sounded like a slow bassline)
 	const lit = () => pads(page).evaluateAll((els) => els.map((e, i) => (e.getAttribute('aria-pressed') === 'true' ? i : -1)).filter((i) => i >= 0));
 	expect(await lit()).toEqual([...Array(16).keys()]);
 	const all = (await padNotes(page, [...Array(16).keys()])).map(noteMidi);
@@ -3959,11 +3959,14 @@ test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its 
 	await chooseOption(page, 'Arp rate', '1/8');
 	await generate.click();
 	expect(await lit()).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
+	expect((await padNotes(page, [0, 2, 4, 6])).map(noteMidi).map((m) => m - notes[0])).toEqual([0, 4, 7, 12]);
+	await page.getByRole('button', { name: 'Arp rate' }).click();
+	await expect(page.getByRole('option')).toHaveText(['1/8', '1/16']);
+	await page.getByRole('option', { name: '1/8', exact: true }).click();
 	await page.waitForTimeout(600); // its own undo step (changes 400 ms apart are one)
-	await chooseOption(page, 'Arp rate', '1/4');
+	await chooseOption(page, 'Arp rate', '1/16');
 	await generate.click();
-	expect(await lit()).toEqual([0, 4, 8, 12]);
-	expect((await padNotes(page, [0, 4, 8, 12])).map(noteMidi).map((m) => m - notes[0])).toEqual([0, 4, 7, 12]);
+	expect(await lit()).toEqual([...Array(16).keys()]);
 	// One undo step: the 1/8 arpeggio's steps and notes come back together
 	await page.waitForTimeout(600);
 	await page.locator('body').click({ position: { x: 5, y: 5 } });

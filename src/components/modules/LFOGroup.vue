@@ -252,7 +252,9 @@ const divisionIndex = computed<number>({
 function wavePath(w: Wave | string): string {
     switch (w) {
         case 'square':
-            return 'M0 16 L25 16 L25 0 L75 0 L75 32 L100 32';
+            // Two even cycles at the sine's height (4..28), starting and ending on the middle
+            // line as the sine does (it was a quarter low, a half high, a quarter low: lopsided)
+            return 'M1 16 V4 H25 V28 H50 V4 H75 V28 H99 V16';
         case 'sine':
         default:
             return 'M0 16 C12 0 12 0 25 16 C37 32 37 32 50 16 C62 0 62 0 75 16 C87 32 87 32 100 16';

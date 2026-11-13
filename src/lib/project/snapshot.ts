@@ -25,6 +25,7 @@ import type { Wave } from '../../audio/waves';
 import { PULSE_WIDTH_DEFAULT, foldPulseWidth } from '../../audio/waves';
 import { VELOCITY_DESTINATIONS, VELOCITY_SWITCHED } from '../../audio/velocity';
 import { clampRatchet, clampRepeatNotes } from '../../audio/ratchet';
+import { arpRateFrom, type ArpRate } from '../melody/arp';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -52,7 +53,7 @@ export type MelodyUi = {
 	keyScale: 'none' | 'major' | 'naturalMinor' | 'pentMajor' | 'pentMinor' | 'dorian' | 'lydian' | 'mixolydian';
 	rangePreset: 'low' | 'mid' | 'high' | 'wide';
 	arpPattern: 'up' | 'down' | 'updown' | 'random';
-	arpRate: '1/4' | '1/8' | '1/16';
+	arpRate: ArpRate;
 	arpOctaves: 1 | 2 | 3;
 	arpTones: 'chord' | 'seventh' | 'scale';
 	arpSkip: boolean;    // the arpeggio's Skip (every other tone), on the card since PR 68
@@ -590,7 +591,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 
 		// Also keep arp aligned if present
 		if (s.melody.arpPattern) melodyUi.arpPattern = s.melody.arpPattern;
-		if (s.melody.arpRate) melodyUi.arpRate = s.melody.arpRate;
+		{ const r = arpRateFrom(s.melody.arpRate); if (r) melodyUi.arpRate = r; }
 		if (s.melody.arpOctaves) melodyUi.arpOctaves = s.melody.arpOctaves;
 		if (['chord', 'seventh', 'scale'].includes(s.melody.arpTones)) melodyUi.arpTones = s.melody.arpTones;
 		// Saved since PR 68 (the ⋯ menu's toggles weren't): a project from before gets the defaults

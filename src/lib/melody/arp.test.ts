@@ -1,15 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { arpSlots, arpSequence, blockSize, foldInto } from './arp';
+import { arpSlots, arpSequence, arpRateFrom, blockSize, foldInto } from './arp';
 
 // A minor triad from A3 (MIDI 57): A C E
 const TRIAD = [57, 60, 64];
 const RANGE = { lo: 44, hi: 95 }; // about 100–2000 Hz, the pads' range
 
 describe('the arpeggio on the pads', () => {
-	it('places a note every step, every other step, or every beat', () => {
+	it('places a note every step or every other step', () => {
 		expect(arpSlots(16, '1/16')).toEqual([...Array(16).keys()]);
 		expect(arpSlots(16, '1/8')).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
-		expect(arpSlots(16, '1/4')).toEqual([0, 4, 8, 12]);
+	});
+
+	it('plays a saved 1/4 (dropped) or unknown rate as 1/8', () => {
+		expect(arpRateFrom('1/16')).toBe('1/16');
+		expect(arpRateFrom('1/8')).toBe('1/8');
+		expect(arpRateFrom('1/4')).toBe('1/8');
+		expect(arpRateFrom('1/2')).toBe('1/8');
+		expect(arpRateFrom(undefined)).toBeNull();
 	});
 
 	it('fits a rising triad to the bar: 1-3-5-8, four times', () => {
