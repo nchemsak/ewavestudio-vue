@@ -4,7 +4,7 @@
             <div class="mm-kb-wrap">
                 <div class="mm-field">
                     <div class="mm-label" id="mm-key-label">Key<span v-if="queuedKey" class="mm-queued-note"
-                            role="status"> · {{ queuedKey }} at the next bar (Shift+click: now)</span></div>
+                            role="status"> · {{ queuedKey }} at the next bar<span class="mm-shift-hint"> (Shift+click: now)</span></span></div>
 
                     <div class="mm-kb" role="radiogroup" :aria-labelledby="'mm-key-label'">
                         <div v-for="k in NATURALS" :key="k.n" class="kb-cell" :class="{ 'has-sharp': k.hasSharp }">
@@ -1251,6 +1251,13 @@ defineExpose({ getUi, setUi });
 .theme-light .mm-queued-note,
 .theme-sand .mm-queued-note {
     color: hsl(var(--pt-accent) 80% 32%);
+}
+
+/* A touch screen (a phone, a tablet) has no Shift key: the key just waits for the bar */
+@media (pointer: coarse) {
+    .mm-shift-hint {
+        display: none;
+    }
 }
 
 /* @media (max-width: 560px) {

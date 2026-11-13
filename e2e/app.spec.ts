@@ -4028,14 +4028,22 @@ test.describe('Phone mode', () => {
 		await phonePads(page).nth(0).click();
 		await expect(phonePads(page).nth(0)).toHaveAttribute('aria-pressed', 'false');
 
-		// Clear: a new pattern in one tap, and Undo brings the steps back
-		for (const i of [0, 4, 8]) await phonePads(page).nth(i).click();
+		// No Clear since PR 72 (☰ → Reset… clears): the Pattern row is laid out as the Sound row
+		await expect(page.getByRole('button', { name: 'Clear', exact: true })).toHaveCount(0);
+		const rowBox = (name: string) => page.getByRole('group', { name, exact: true }).boundingBox();
+		const [soundRow, patternRow] = [(await rowBox('Sound'))!, (await rowBox('Pattern'))!];
+		expect(patternRow.x).toBe(soundRow.x);
+		expect(patternRow.width).toBe(soundRow.width);
+
+		// Undo brings a change back, and Redo (beside it in the top bar since PR 72) redoes it
+		await page.waitForTimeout(700); // the page's first settled state is the history's start
+		await phonePads(page).nth(8).click();
 		await page.waitForTimeout(700); // the undo history records a step once things are still
-		await page.getByRole('button', { name: 'Clear', exact: true }).click();
-		expect(await phonePads(page).evaluateAll((els) => els.some((e) => e.getAttribute('aria-pressed') === 'true'))).toBe(false);
-		await page.waitForTimeout(700);
 		await page.getByRole('button', { name: 'Undo', exact: true }).click();
+		await expect(phonePads(page).nth(8)).toHaveAttribute('aria-pressed', 'false');
+		await page.getByRole('button', { name: 'Redo', exact: true }).click();
 		await expect(phonePads(page).nth(8)).toHaveAttribute('aria-pressed', 'true');
+		await page.waitForTimeout(700);
 
 		// Play starts the sequencer, and Play / Stop is in the top bar on every page
 		await page.getByRole('button', { name: 'Play', exact: true }).click();
@@ -4046,6 +4054,60 @@ test.describe('Phone mode', () => {
 		}
 		await page.getByRole('button', { name: 'Stop', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+	});
+
+	test('PR 72: pedals near their desktop shape, the menu laid out, no Shift+click on a touch screen', async ({ page }) => {
+		// FX: three pedals at most 150 px wide (they were stretched to 262), centred
+		await page.getByRole('tab', { name: 'FX' }).click();
+		const pedals = await page.locator('.pl-fx > *').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+		expect(pedals).toHaveLength(3);
+		for (const p of pedals) {
+			expect(p.width).toBeLessThanOrEqual(150);
+			expect(p.height).toBeGreaterThan(p.width * 1.4);
+		}
+		const frame = (await page.locator('.pl-fx').boundingBox())!;
+		const left = pedals[0].x - frame.x, right = frame.x + frame.width - (pedals[2].x + pedals[2].width);
+		expect(Math.abs(left - right)).toBeLessThan(2);
+
+		// The menu: a header with ✕ (no Close button), File · name · Save without Undo and Redo
+		// (in the top bar) over the name, and Desktop View and Reset… the same size at the bottom
+		await page.getByRole('button', { name: 'Menu' }).click();
+		const menu = page.getByRole('dialog', { name: 'Menu' });
+		await expect(menu.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0);
+		await expect(menu.getByRole('button', { name: 'Undo' })).toBeHidden();
+		await expect(menu.getByRole('button', { name: 'Redo' })).toBeHidden();
+		const [file, name, save] = await Promise.all([
+			menu.getByRole('button', { name: 'File ▾' }).boundingBox(),
+			menu.getByRole('textbox', { name: 'Project name' }).boundingBox(),
+			menu.locator('.pc-primary').boundingBox(),
+		]);
+		expect(file!.x + file!.width).toBeLessThanOrEqual(name!.x);
+		expect(name!.x + name!.width).toBeLessThanOrEqual(save!.x);
+		const desk = (await menu.getByRole('button', { name: 'Desktop View' }).boundingBox())!;
+		const reset = (await menu.getByRole('button', { name: 'Reset…' }).boundingBox())!;
+		expect(Math.abs(desk.width - reset.width)).toBeLessThan(1);
+		expect(desk.y).toBe(reset.y);
+		const box = (await menu.boundingBox())!;
+		expect(box.y + box.height - (desk.y + desk.height)).toBeLessThan(24); // at the bottom
+		// A question left open is gone when the menu opens again
+		await menu.getByRole('button', { name: 'Reset…' }).click();
+		await expect(menu.getByRole('button', { name: 'Reset pads' })).toBeVisible();
+		await menu.getByRole('button', { name: 'Close menu' }).click();
+		await expect(menu).toBeHidden();
+		await page.getByRole('button', { name: 'Menu' }).click();
+		await expect(menu.getByRole('button', { name: 'Reset…' })).toBeVisible();
+		await menu.getByRole('button', { name: 'Close menu' }).click();
+
+		// While playing, a key waits for the bar; the caption says so without Shift+click
+		await page.getByRole('tab', { name: 'Pads' }).click();
+		await phonePads(page).nth(0).click();
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		await page.getByRole('tab', { name: 'Key' }).click();
+		await page.locator('.pl-melody .mm-kb').getByRole('radio', { name: 'D', exact: true }).click();
+		const note = page.locator('.pl-melody .mm-queued-note');
+		await expect(note).toBeVisible();
+		expect(await note.evaluate((el) => (el as HTMLElement).innerText.trim())).toBe('· D at the next bar');
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
 	});
 
 	test('Reset in the menu asks first, then resets the pads (and the sound, if asked); Undo brings them back', async ({ page }) => {
