@@ -39,17 +39,22 @@
             <div v-if="hasMask" class="mask-col">
                 <div class="pt-section-title">Apply to Pads</div>
 
+                <!-- Which pads get noise. A click also turns the card on (PR 74): before, the
+                     buttons worked while it was off, with nothing to hear. -->
                 <div class="mask-stack">
                     <div class="pt-btn-group" role="group" aria-label="Noise mask group 1">
-                        <button class="pt-btn" @click="maskEvery2">Every 2</button>
-                        <button class="pt-btn" @click="maskEvery4">Every 4</button>
-                        <button class="pt-btn" title="Noise on the pattern's loudest hits" @click="maskAccents">Accents</button>
+                        <button class="pt-btn" title="Noise on every other pad: 1, 3, 5…" @click="maskEvery2">Every 2</button>
+                        <button class="pt-btn" title="Noise on beats 2 and 4 (pads 5 and 13), where a snare sits" @click="maskBackbeat">Backbeat</button>
+                        <button class="pt-btn" title="Noise between the beats (pads 3, 7, 11 and 15), where an open hi-hat sits" @click="maskOffbeats">Offbeats</button>
                     </div>
                     <div class="pt-btn-group" role="group" aria-label="Noise mask group 2">
-                        <button class="pt-btn" @click="maskRandom">Random</button>
-                        <button class="pt-btn" @click="maskInvert">Invert</button>
-                        <button class="pt-btn" @click="maskAll">All</button>
+                        <button class="pt-btn" title="Noise on the pattern's loudest hits" @click="maskAccents">Accents</button>
+                        <button class="pt-btn" title="Swap the pads that have noise and those that don't" @click="maskInvert">Invert</button>
+                        <button class="pt-btn" title="Noise on every pad" @click="maskAll">All</button>
                     </div>
+                    <!-- Noise is only heard on steps that are on: say so when a button's pads
+                         are all off, over the buttons, so the card doesn't change size -->
+                    <span v-if="gapNote" class="mask-note" role="status">{{ gapNote }}</span>
                 </div>
             </div>
         </div>
@@ -57,10 +62,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onBeforeUnmount } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 import { accentMask } from '../../lib/noise/accents';
+import { backbeatMask, offbeatMask, noiseGap } from '../../lib/noise/masks';
 
 const props = withDefaults(
     defineProps<{
@@ -220,8 +226,22 @@ const swatchHex = computed(() => {
 // Per-Pad Noise mask
 const hasMask = computed(() => Array.isArray(props.mask) && props.mask.length > 0);
 
+// A pad button sets the mask and turns the card on, in one go (one undo step). Noise is only
+// heard on steps that are on, so when none of the mask's pads is, a note says so for a moment.
+const gapNote = ref('');
+let gapTimer: ReturnType<typeof setTimeout> | undefined;
+const GAP_NOTE_MS = 3500;
+onBeforeUnmount(() => clearTimeout(gapTimer));
+
 const emitMask = (out: boolean[]) => {
     emit('update:mask', out);
+    enabledLocal.value = true;
+
+    const gap = noiseGap(out, props.steps ?? []);
+    clearTimeout(gapTimer);
+    gapNote.value = gap === 'none' ? 'No pad has noise now'
+        : gap === 'silent' ? 'Those steps are off' : '';
+    if (gapNote.value) gapTimer = setTimeout(() => { gapNote.value = ''; }, GAP_NOTE_MS);
 };
 
 function updateMask(make: (i: number, len: number) => boolean): void {
@@ -237,18 +257,20 @@ function maskAll(): void {
 function maskEvery2(): void {
     updateMask((i) => i % 2 === 0);
 }
-function maskEvery4(): void {
-    updateMask((i) => i % 4 === 0);
+// Beats 2 and 4, and the steps between the beats (src/lib/noise/masks.ts). They replaced
+// Every 4 and Random in PR 74. Backbeat was here before PR 69, when it seemed to do nothing
+// for a pattern with no hit on its steps; now the note says why.
+function maskBackbeat(): void {
+    emitMask(backbeatMask(props.mask?.length ?? 0));
+}
+function maskOffbeats(): void {
+    emitMask(offbeatMask(props.mask?.length ?? 0));
 }
 function maskInvert(): void {
     if (!props.mask) return;
     emitMask(props.mask.map((v) => !v));
 }
-function maskRandom(): void {
-    updateMask(() => Math.random() < 0.5);
-}
-// The pattern's loudest hits (src/lib/noise/accents.ts). It replaced Backbeat in PR 69, whose
-// steps 5 and 13 often had no hit, so the button seemed to do nothing.
+// The pattern's loudest hits (src/lib/noise/accents.ts)
 function maskAccents(): void {
     const len = props.mask?.length ?? 0;
     if (len <= 0) return;
@@ -333,22 +355,45 @@ function maskAccents(): void {
 }
 
 .mask-stack {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
+/* Over the buttons, like a knob's value bubble: it never moves the card's contents */
+.mask-note {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 4px);
+    transform: translateX(-50%);
+    padding: 2px 8px;
+    font-size: 11px;
+    line-height: 1.3;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    border-radius: 4px;
+    width: max-content;
+    max-width: 100%;
+    text-align: center;
+    pointer-events: none;
+    user-select: none;
+    z-index: 3;
+}
+
 .pt-btn-group {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px !important;
+    /* 5 px apart and 0.6rem letters (8 px and 0.65rem until PR 74), so the eight letters of
+       Backbeat and Offbeats keep the room Every 4 and Accents had; the card is the same size */
+    gap: 5px !important;
 }
 
 .pt-btn {
     min-width: 0;
     min-height: auto;
     line-height: 1;
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     width: 100%;
     padding: 4px 2px;
     white-space: nowrap;

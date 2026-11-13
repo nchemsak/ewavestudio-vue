@@ -1,6 +1,6 @@
 <!-- components/PillSwitch.vue -->
 <!-- A small on/off pill with an LED, for a card's header corner: the cards' VEL switches
-     (VelSwitch.vue) and the LFO's RETRIG. Sized like Pitch's RND pill. -->
+     (VelSwitch.vue) and the LFO's RETRIG. Sized like Pitch's Random toggle. -->
 <template>
     <span class="pill-switch-wrap">
         <button type="button" role="switch" class="pill-switch hw-cap hw-cap-sm hw-led-left" :class="{ on: modelValue }"
