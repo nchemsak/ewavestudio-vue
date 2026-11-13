@@ -38,7 +38,7 @@ describe('factory defaults (File → New)', () => {
 			reverb: { enabled: false, mix: 0.18, decay: 1.4, tone: 0.6 },
 		});
 		expect(snap.melody).toEqual({
-			keyRoot: 'A', keyScale: 'none', rangePreset: 'wide', arpPattern: 'up', arpRate: '1/16', arpOctaves: 1, arpTones: 'chord',
+			keyRoot: 'A', keyScale: 'none', rangePreset: 'wide', arpPattern: 'up', arpRate: '1/16', arpOctaves: 1, arpTones: 'chord', arpSkip: false, activeOnly: true,
 			mode: 'random',
 		});
 		expect(snap.selectedWaveform).toBe('sine');

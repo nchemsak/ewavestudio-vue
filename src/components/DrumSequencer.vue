@@ -79,7 +79,8 @@
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
-							:initial-arp-tones="melodyUi.arpTones" :initial-mode="melodyUi.mode"
+							:initial-arp-tones="melodyUi.arpTones" :initial-arp-skip="melodyUi.arpSkip"
+							:initial-active-only="melodyUi.activeOnly" :initial-mode="melodyUi.mode"
 							@update:frequencies="padFrequencies = $event" @update:steps="steps = $event"
 							@octave-shift="octaveShiftAllSkip($event)"
 							:queued-key="queuedKey" @key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
@@ -90,7 +91,9 @@
 							@arp-pattern-change="(v) => { melodyUi.arpPattern = v as any }"
 							@arp-rate-change="(v) => { melodyUi.arpRate = v as any }"
 							@arp-octaves-change="(v) => { melodyUi.arpOctaves = v as any }"
-							@arp-tones-change="(v) => { melodyUi.arpTones = v as any }" />
+							@arp-tones-change="(v) => { melodyUi.arpTones = v as any }"
+							@arp-skip-change="(v) => { melodyUi.arpSkip = v }"
+							@active-only-change="(v) => { melodyUi.activeOnly = v }" />
 					</SectionWrap>
 				</div>
 			</template>
@@ -455,17 +458,15 @@
 				</div>
 
 				<div class="module melody">
+					<!-- Its options are on the card since PR 68 (no ⋯ menu) -->
 					<SectionWrap id="melody" title="Melody Maker" v-model="collapsibleState['melody']">
-						<template #tools>
-							<button class="pt-info-icon" aria-label="Advanced options"
-								@click="melodyRef?.openAdvanced($event)">⋯</button>
-						</template>
 						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
-							:initial-arp-tones="melodyUi.arpTones" :initial-mode="melodyUi.mode"
+							:initial-arp-tones="melodyUi.arpTones" :initial-arp-skip="melodyUi.arpSkip"
+							:initial-active-only="melodyUi.activeOnly" :initial-mode="melodyUi.mode"
 							@update:frequencies="padFrequencies = $event" @update:steps="steps = $event"
 							@octave-shift="octaveShiftAllSkip($event)"
 							:queued-key="queuedKey" @key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
@@ -476,7 +477,9 @@
 							@arp-pattern-change="(v) => { melodyUi.arpPattern = v as any }"
 							@arp-rate-change="(v) => { melodyUi.arpRate = v as any }"
 							@arp-octaves-change="(v) => { melodyUi.arpOctaves = v as any }"
-							@arp-tones-change="(v) => { melodyUi.arpTones = v as any }" />
+							@arp-tones-change="(v) => { melodyUi.arpTones = v as any }"
+							@arp-skip-change="(v) => { melodyUi.arpSkip = v }"
+							@active-only-change="(v) => { melodyUi.activeOnly = v }" />
 					</SectionWrap>
 				</div>
 			</section>
@@ -741,6 +744,8 @@ const melodyUi = reactive<MelodyUi>({
 	arpRate: '1/16',
 	arpOctaves: 1,
 	arpTones: 'chord',
+	arpSkip: false,
+	activeOnly: true,
 	mode: 'random',
 });
 

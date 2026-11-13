@@ -624,14 +624,18 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   default: the cycle becomes a block of 2, 4, 8 or 16 notes, which divides the bar, carrying on
   into the next octave when rising (a triad 1-3-5 → 1-3-5-8, a 7-note scale up to the octave),
   the octave below when falling, round again otherwise (`arpSequence()`; notes kept in the pads'
-  range by octaves). Before, a triad's 3-note cycle ended mid-bar and jumped at the bar line;
-  the ⋯ menu's **Free cycle** (not saved, like its other toggles) keeps that. The Pattern list's
-  Random (the chord's notes shuffled once) stays.
-- The ⋯ menu (Advanced Options; its button is in the card's header, in `DrumSequencer.vue`)
-  opens beside the button, to its right if it fits, else to its left, and inside the window
-  at every width (`openAdvanced()` measures it). Before PR 51 it was kept inside only under
-  720 px and opened off the right edge and the bottom on a laptop. Its "Undo last melody" was
-  removed in PR 51: Undo (Ctrl+Z) does it.
+  range by octaves). Before, a triad's 3-note cycle ended mid-bar and jumped at the bar line.
+  The Pattern list's Random (the chord's notes shuffled once) stays.
+- **Options on the card, no ⋯ menu** (PR 68; the menu was "Advanced Options", in the card's
+  header): each mode's panel ends with its toggle (a cap with an LED, `.mm-toggle`), in the
+  space that was empty at the card's bottom, so the card is as tall as before and the same in
+  both modes. Melody: **Active Pads Only** (`applyScope`; on by default: Generate fills the
+  pads that are on, off: every pad). Arpeggio: **Skip** (every other tone of the ladder,
+  1-5-3-7). Both saved now (`melody.activeOnly`, `melody.arpSkip`; older projects get on and
+  off). Tones has a third choice, **7th** (`'seventh'`: the 7th chord, 1-3-5-7; "7th chord"
+  wrapped in the narrow box), which replaced the menu's "7th on downbeats" (the 7th on every
+  beat sounded repetitive). Dropped: Free cycle (the cycle is always fitted to the bar),
+  Occasional octave hops (random, so chaotic) and the menu's Reset.
 
 ### Changes at the bar
 - PR 55, changed in PR 56. While playing, a key clicked in the Melody Maker waits for the next
@@ -1004,9 +1008,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - `instruments[]` still contains the hidden kick, snare and hihat lanes (normally with no
   steps on). Keep them so saved projects stay compatible.
 - Melody Maker settings (key, scale, range, what Generate makes (`mode`: `random` or `arp`;
-  older projects keep the current one), and arp pattern, rate, octaves and tones) live in
+  older projects keep the current one), arp pattern, rate, octaves, tones and Skip, and
+  Melody's Active Pads Only) live in
   `melodyUi`. `MelodyMaker.vue` reports each change with an event, and follows `melodyUi`
-  through its `initial-*` props when a project loads. Its Advanced-menu toggles are not saved.
+  through its `initial-*` props when a project loads. Since PR 68 that includes its two toggles
+  (`arpSkip`, `activeOnly`), which were the ⋯ menu's and weren't saved.
 - The JSON import/export format is `{ version, projectId, meta, data }`, validated by
   `validateAndMigrate()`, which also checks every project loaded from IndexedDB. It only
   checks the types of `data.meta.name`, `data.selectedWaveform` and each lane's fields
@@ -1232,24 +1238,20 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Items 1–4 come from the maintainer's brainstorm after PR 63 (its first items were PRs 64–67) (Claude's recommendations, which
+Items 1–3 come from the maintainer's brainstorm after PR 63 (its first items were PRs 64–68) (Claude's recommendations, which
 the maintainer accepted; no one else uses the app yet, so older projects need no special care
 in them: a removed setting can simply stop applying).
 
-1. **Melody Maker's options on the card**, its ⋯ menu removed: Free cycle dropped (always
-   fitted to the bar); "7th on downbeats" becomes a third Tones choice, **7th chord**
-   (1-3-5-7); Skip every other tone a **Skip** toggle; Occasional octave hops dropped; Melody's
-   Active Pads Only a toggle shown for Melody only. Into the empty space at the card's bottom.
-2. **Presets:** the Noise card's Backbeat (steps 5 and 13, often empty) becomes **Accents**
+1. **Presets:** the Noise card's Backbeat (steps 5 and 13, often empty) becomes **Accents**
    (noise on the pattern's loudest hits); the patterns Offbeat and Broken become **Half-time**
    and **Breakbeat** (the root as the kick, the octave as the snare), to audition.
-3. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
+2. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
    pads' colours, peak-hold, note marks), F3 Spectrogram, F4 Tuner; the Envelope view only
    while its knobs (and the Pitch card's, with the sweep drawn) are turned, as Filter's.
-4. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
-   then scale the frame down to fit short windows (with a floor). Last, since 1 changes
-   the height; measure at the maintainer's screen and common laptop sizes.
-5. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+3. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
+   then scale the frame down to fit short windows (with a floor). Last, so the height is
+   settled; measure at the maintainer's screen and common laptop sizes.
+4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1437,6 +1439,7 @@ Done:
 | 65 | LFO: each target remembers its depth (saved with the project); a target picked for the first time starts at a little (Pitch 25 cents, Filter 1500 Hz, Pulse 15 %, Level 40 %, FM 40 %) instead of 0, so changing target no longer sounds like the LFO turning off. |
 | 66 | LFO rates locked to the bar: Rate goes from 4 bars and 2 bars down to 1/64, always at the tempo; the free rate in Hz and the LFO card's ⋯ menu are gone. While playing, the LFO starts its cycle with bar 1 (and on each bar line where a cycle begins), so a slow sweep moves with the pattern. The Export dialog fits a loop to the LFO's cycle (starts at 4 bars for a 4-bar LFO, and says so with a Use 4 bars button for a shorter loop). |
 | 67 | Simplify: the VEL switch is left on Filter only (Envelope's, Pitch's and Noise's removed: hard to hear, and Noise's overlapped its Amount); their amounts load as 0, and the presets that used them (Kick, Snare, Metal, Bell) dropped them. Pattern Tools' Active Pads Only is a toggle cap with an LED instead of a checkbox. |
+| 68 | Melody Maker's options on the card, its ⋯ menu gone: Melody's **Active Pads Only** and the arpeggio's **Skip** are toggles under their settings (now saved); Tones has **7th** (the 7th chord, 1-3-5-7) in place of "7th on downbeats"; Free cycle and Occasional octave hops dropped. The card is as tall as before. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

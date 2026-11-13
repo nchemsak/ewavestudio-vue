@@ -55,8 +55,19 @@
                 </div>
 
                 <div class="mm-mode-body">
-                <p class="mm-mode-note" :class="{ 'is-hidden': mode !== 'random' }">{{ randomNote }}</p>
-                <div class="mm-grid" :class="{ 'is-hidden': mode !== 'arp' }">
+                <!-- Melody: what it makes, and which pads it fills -->
+                <div class="mm-mode-panel" :class="{ 'is-hidden': mode !== 'random' }">
+                <p class="mm-mode-note">{{ randomNote }}</p>
+                <div class="mm-opts">
+                    <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
+                        :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
+                        title="On: Generate gives notes to the pads that are on. Off: to every pad"
+                        @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button>
+                </div>
+                </div>
+                <!-- Arpeggio: its settings, and Skip (PR 68: on the card, where the ⋯ menu had them) -->
+                <div class="mm-mode-panel" :class="{ 'is-hidden': mode !== 'arp' }">
+                <div class="mm-grid">
                     <label class="mm-field">
                         <span class="mm-label">Pattern</span>
                         <PtSelect v-model="arpPattern" :options="arpPatternOptions" aria-label="Arp pattern" />
@@ -77,6 +88,13 @@
                         <PtSelect v-model="arpTones" :options="arpToneOptions" aria-label="Arp tones" />
                     </label>
                 </div>
+                <div class="mm-opts">
+                    <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: arpSkip }"
+                        :aria-pressed="arpSkip ? 'true' : 'false'"
+                        title="Skip every other tone: 1-5-3-7 instead of 1-3-5-7, wider leaps"
+                        @click="arpSkip = !arpSkip">Skip</button>
+                </div>
+                </div>
                 </div>
 
                 <div class="mm-primary">
@@ -84,72 +102,19 @@
                 </div>
             </div>
 
-            <!-- Advanced menu -->
-            <div v-if="advancedOpen" ref="menuEl" class="mm-menu" @click.stop
-                :style="{ left: (advPos?.x ?? 0) + 'px', top: (advPos?.y ?? 0) + 'px' }" role="menu">
-                <div class="mm-menu-title">Advanced Options</div>
-                <div class="mm-subtitle">Melody</div>
-
-                <div class="mm-opt" role="menuitem" @click="applyScope = (applyScope === 'active' ? 'all' : 'active')">
-                    <span>Active Pads Only</span>
-                    <button class="mm-switch" :class="{ on: applyScope === 'active' }">
-                        <span class="kn"></span>
-                    </button>
-                </div>
-
-                <div class="mm-sep"></div>
-
-                <!-- Arpeggio -->
-                <div class="mm-subtitle">Arpeggio</div>
-
-                <div class="mm-opt" role="menuitem" @click="arpSeventhOnDownbeat = !arpSeventhOnDownbeat">
-                    <span>7th on downbeats</span>
-                    <button class="mm-switch" :class="{ on: arpSeventhOnDownbeat }">
-                        <span class="kn"></span>
-                    </button>
-                </div>
-
-                <div class="mm-opt" role="menuitem" @click.stop="arpFree = !arpFree"
-                    title="Off: the cycle is fitted to the bar (a chord goes 1-3-5-8) and repeats evenly. On: it runs on across the bar, so it can end mid-cycle">
-                    <span>Free cycle (don't fit the bar)</span>
-                    <button class="mm-switch" :class="{ on: arpFree }">
-                        <span class="kn"></span>
-                    </button>
-                </div>
-
-                <div class="mm-opt" role="menuitem" @click.stop="arpStride = (arpStride === 1 ? 2 : 1)">
-                    <span>Skip every other tone</span>
-                    <button class="mm-switch" :class="{ on: arpStride === 2 }">
-                        <span class="kn"></span>
-                    </button>
-                </div>
-
-                <div class="mm-opt" role="menuitem" @click.stop="arpHop = !arpHop">
-                    <span>Occasional octave hops</span>
-                    <button class="mm-switch" :class="{ on: arpHop }">
-                        <span class="kn"></span>
-                    </button>
-                </div>
-
-                <div class="mm-sep"></div>
-
-                <div class="mm-subtitle">Utilities</div>
-
-                <div class="mm-reset" role="menuitem" @click.stop="resetAdvanced">
-                    Reset settings to defaults
-                </div>
-            </div>
-
-            <div v-if="advancedOpen" class="mm-overlay" @click="advancedOpen = false"></div>
         </section>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, defineExpose, nextTick } from 'vue';
+import { ref, computed, watch, defineExpose } from 'vue';
 import PtSelect from './PtSelect.vue';
 import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
 import { arpSlots, arpSequence } from '../lib/melody/arp';
+
+// The arpeggio's tones: Chord (1-3-5), 7th chord (1-3-5-7; PR 68, in place of the ⋯ menu's
+// "7th on downbeats", which put the 7th on every beat and sounded repetitive) or the whole scale
+type ArpTones = 'chord' | 'seventh' | 'scale';
 
 const props = defineProps<{
     frequencies?: number[];
@@ -174,26 +139,15 @@ const props = defineProps<{
     initialArpPattern?: 'up' | 'down' | 'updown' | 'random';
     initialArpRate?: '1/4' | '1/8' | '1/16';
     initialArpOctaves?: 1 | 2 | 3;
-    initialArpTones?: 'chord' | 'scale';
+    initialArpTones?: ArpTones;
+    initialArpSkip?: boolean;
+    initialActiveOnly?: boolean;
     initialMode?: 'random' | 'arp';
     // A key clicked while playing waits for the next bar (DrumSequencer's BAR QUEUE) and blinks
     queuedKey?: string | null;
 }>();
 
 /*  Defaults  */
-const DEFAULTS_MELODY = {
-    applyScope: 'active' as 'active' | 'all'
-};
-
-const DEFAULTS_ARP = {
-    pattern: 'up' as 'up' | 'down' | 'updown' | 'random',
-    rate: '1/16' as '1/4' | '1/8' | '1/16',
-    octaves: 1 as 1 | 2 | 3,
-    tones: 'chord' as 'chord' | 'scale',
-    seventhOnDownbeat: false,
-    stride: 1 as 1 | 2,
-    hop: false
-};
 
 const emit = defineEmits<{
     (e: 'update:frequencies', v: number[]): void;
@@ -205,7 +159,9 @@ const emit = defineEmits<{
     (e: 'arp-pattern-change', v: 'up' | 'down' | 'updown' | 'random'): void;
     (e: 'arp-rate-change', v: '1/4' | '1/8' | '1/16'): void;
     (e: 'arp-octaves-change', v: 1 | 2 | 3): void;
-    (e: 'arp-tones-change', v: 'chord' | 'scale'): void;
+    (e: 'arp-tones-change', v: ArpTones): void;
+    (e: 'arp-skip-change', v: boolean): void;
+    (e: 'active-only-change', v: boolean): void;
     (e: 'mode-change', v: 'random' | 'arp'): void;
     // Someone picked a key or a scale (not a project loading): the pads follow it
     (e: 'key-chosen', root: RootNote, now: boolean): void; // now: Shift+click, don't wait for the bar
@@ -600,9 +556,12 @@ const arpRate = ref<'1/4' | '1/8' | '1/16'>(
 const arpOctaves = ref<1 | 2 | 3>(
     clampArpOctaves(props.initialArpOctaves)
 );
-const arpTones = ref<'chord' | 'scale'>(
+const arpTones = ref<ArpTones>(
     props.initialArpTones ?? 'chord'
 );
+// Skip every other tone of the ladder (1-5-3-7…): a toggle on the card since PR 68, saved
+const arpSkip = ref<boolean>(props.initialArpSkip ?? false);
+const arpStride = computed<1 | 2>(() => (arpSkip.value ? 2 : 1));
 
 // Report arp settings to the parent so they're saved with the project, and follow the
 // parent's values when a project is loaded (the same pattern as key, scale and range).
@@ -615,13 +574,8 @@ watch(() => props.initialArpPattern, (v) => { if (v) arpPattern.value = v; });
 watch(() => props.initialArpRate, (v) => { if (v) arpRate.value = v; });
 watch(() => props.initialArpOctaves, (v) => { if (v) arpOctaves.value = clampArpOctaves(v); });
 watch(() => props.initialArpTones, (v) => { if (v) arpTones.value = v; });
-
-const arpSeventhOnDownbeat = ref(false);
-// "Free cycle": the arpeggio's cycle runs on across the bar, as before PR 57, instead of being
-// fitted to it (src/lib/melody/arp.ts). Not saved, like the menu's other toggles.
-const arpFree = ref(false);
-const arpStride = ref<1 | 2>(1);
-const arpHop = ref(false);
+watch(arpSkip, (v) => emit('arp-skip-change', v));
+watch(() => props.initialArpSkip, (v) => { if (typeof v === 'boolean') arpSkip.value = v; });
 
 const arpPatternOptions = [
     { label: 'Up', value: 'up' },
@@ -641,6 +595,7 @@ const arpOctaveOptions = [
 ] as const;
 const arpToneOptions = [
     { label: 'Chord', value: 'chord' },
+    { label: '7th', value: 'seventh' }, // the 7th chord, 1-3-5-7 ("7th chord" wrapped in the narrow box)
     { label: 'Scale', value: 'scale' }
 ] as const;
 
@@ -721,12 +676,12 @@ function bakeArp(): void {
     const rootSemi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
     const center = pool[Math.floor(pool.length / 2)];
 
-    const toneSemitones = (mode: 'chord' | 'scale'): number[] => {
+    const toneSemitones = (mode: ArpTones): number[] => {
         if (mode === 'scale')
             return Array.from(
                 new Set(stepsArr.map((s) => (rootSemi + s) % 12))
             );
-        const chordIdx = [0, 2, 4]; // 1,3,5
+        const chordIdx = mode === 'seventh' ? [0, 2, 4, 6] : [0, 2, 4]; // 1-3-5(-7)
         const semis = chordIdx
             .filter((i) => i < stepsArr.length)
             .map((i) => (rootSemi + stepsArr[i]) % 12);
@@ -840,39 +795,10 @@ function bakeArp(): void {
     const order = orderIdx.map((i) => ladder[i]);
     if (!order.length) return;
 
-    const seventhSemi =
-        stepsArr.length >= 7 ? (rootSemi + stepsArr[6]) % 12 : null;
-    const seventhCandidates =
-        seventhSemi != null
-            ? pool.filter(
-                (m) => (((m % 12) + 12) % 12) === seventhSemi
-            )
-            : [];
-
-    const rgen = freshRng();
-
-    function maybeHop(midi: number): number {
-        if (!arpHop.value) return midi;
-        if (rgen() < 0.2) {
-            const s = (((midi % 12) + 12) % 12);
-            const g = groupsBySemi[s] || [];
-            if (!g.length) return midi;
-            const dirUp = rgen() < 0.5;
-            if (dirUp) {
-                const higher = g.find((x) => x > midi);
-                if (higher != null) return higher;
-            } else {
-                const lower = [...g].reverse().find((x) => x < midi);
-                if (lower != null) return lower;
-            }
-        }
-        return midi;
-    }
-
-    // One note per slot: the cycle fitted to the bar (or free, from the ⋯ menu)
+    // One note per slot: the cycle fitted to the bar (the ⋯ menu's Free cycle went in PR 68)
     const midiOf = (hz: number) => 69 + 12 * Math.log2(hz / 440);
     const seq = arpSequence(order, slots.length, {
-        fit: !arpFree.value,
+        fit: true,
         direction: arpPattern.value,
         lo: Math.ceil(midiOf(fMin)),
         hi: Math.floor(midiOf(fMax)),
@@ -880,13 +806,7 @@ function bakeArp(): void {
 
     const stepsOut = out.map(() => false);
     slots.forEach((stepIndex, k) => {
-        let midi = seq[k];
-        if (arpSeventhOnDownbeat.value && seventhCandidates.length && stepIndex % 4 === 0) {
-            const i = nearestIndexIn(seventhCandidates, center);
-            if (i != null) midi = seventhCandidates[i];
-        } else {
-            midi = maybeHop(midi);
-        }
+        const midi = seq[k];
         out[stepIndex] = 440 * Math.pow(2, (midi - 69) / 12);
         stepsOut[stepIndex] = true;
     });
@@ -895,70 +815,12 @@ function bakeArp(): void {
     emit('update:frequencies', out);
 }
 
-const advancedOpen = ref(false);
-const advPos = ref<{ x: number; y: number } | null>(null);
+// Melody's Active Pads Only (a toggle on the card since PR 68; saved): Generate fills only the
+// pads that are on, or every pad
+const applyScope = ref<'all' | 'active'>(props.initialActiveOnly === false ? 'all' : 'active');
+watch(applyScope, (v) => emit('active-only-change', v === 'active'));
+watch(() => props.initialActiveOnly, (v) => { if (typeof v === 'boolean') applyScope.value = v ? 'active' : 'all'; });
 
-// The ⋯ menu opens beside its button (the button is in the card's header, in DrumSequencer),
-// to the right if it fits, else to the left, and always inside the window: before PR 51 it
-// was kept inside only under 720 px, so on a laptop it could open off the right edge. Its
-// position is relative to the Melody Maker (the menu is positioned inside it).
-const menuEl = ref<HTMLElement | null>(null);
-function openAdvanced(e?: MouseEvent) {
-    const target = e?.currentTarget as HTMLElement | null;
-    const parent =
-        (target?.closest('.melody-maker') as HTMLElement | null) ||
-        (document.querySelector('.melody-maker') as HTMLElement | null);
-    advPos.value = { x: 24, y: 24 };
-    advancedOpen.value = true;
-    if (!target || !parent) return;
-    nextTick(() => {
-        const t = target.getBoundingClientRect();
-        const p = parent.getBoundingClientRect();
-        const w = menuEl.value?.offsetWidth ?? 280;
-        const h = menuEl.value?.offsetHeight ?? 320;
-        const m = 8;
-        const viewW = document.documentElement.clientWidth || window.innerWidth;
-        const viewH = window.innerHeight;
-        let left = t.right + m;                            // to the right of the button
-        if (left + w > viewW - m) left = t.left - w - m;   // else to its left
-        left = Math.max(m, Math.min(left, viewW - w - m)); // inside the window either way
-        let top = t.top;
-        top = Math.max(m, Math.min(top, viewH - h - m));
-        advPos.value = { x: Math.round(left - p.left), y: Math.round(top - p.top) };
-    });
-}
-
-
-
-const applyScope = ref<'all' | 'active'>('active');
-
-
-// Close menu on ESC
-function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') advancedOpen.value = false;
-}
-
-onMounted(() => {
-    window.addEventListener('keydown', onKey, { capture: true });
-});
-
-onUnmounted(() => {
-    window.removeEventListener('keydown', onKey, { capture: true });
-});
-
-function resetAdvanced() {
-    applyScope.value = DEFAULTS_MELODY.applyScope;
-
-    arpPattern.value = DEFAULTS_ARP.pattern;
-    arpRate.value = DEFAULTS_ARP.rate;
-    arpOctaves.value = DEFAULTS_ARP.octaves;
-    arpTones.value = DEFAULTS_ARP.tones;
-
-    arpSeventhOnDownbeat.value = DEFAULTS_ARP.seventhOnDownbeat;
-    arpStride.value = DEFAULTS_ARP.stride;
-    arpHop.value = DEFAULTS_ARP.hop;
-    arpFree.value = false;
-}
 
 type UiSnapshot = {
     keyRoot: RootNote;
@@ -967,7 +829,7 @@ type UiSnapshot = {
     arpPattern: 'up' | 'down' | 'updown' | 'random';
     arpRate: '1/4' | '1/8' | '1/16';
     arpOctaves: 1 | 2 | 3;
-    arpTones: 'chord' | 'scale';
+    arpTones: ArpTones;
     mode: 'random' | 'arp';
 };
 
@@ -996,7 +858,7 @@ function setUi(u: Partial<UiSnapshot>) {
     if (u.mode) mode.value = u.mode;
 }
 
-defineExpose({ openAdvanced, getUi, setUi });
+defineExpose({ getUi, setUi });
 </script>
 
 <style scoped>
@@ -1129,6 +991,31 @@ defineExpose({ openAdvanced, getUi, setUi });
     grid-area: 1 / 1;
 }
 
+/* Each mode's panel: its note or settings, then its toggle */
+.mm-mode-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+}
+
+.mm-opts {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* A toggle (a cap with an LED, _hardware.scss), sized like the cards' header pills */
+.mm-toggle {
+    --hw-led-size: 5px;
+    padding: 2px 8px 2px 6px;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    font: inherit;
+    font-size: 0.7rem;
+    line-height: 1.4;
+}
+
 .mm-mode-body > .is-hidden {
     visibility: hidden;
 }
@@ -1140,91 +1027,6 @@ defineExpose({ openAdvanced, getUi, setUi });
     font-size: 13px;
     line-height: 1.4;
     text-align: center;
-}
-
-.mm-menu {
-    position: absolute;
-    min-width: 280px;
-    border-radius: 12px;
-    box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
-    padding: 10px;
-    z-index: 1000;
-    background: var(--pt-panel);
-    color: var(--pt-text);
-    border: 1px solid var(--pt-hairline);
-}
-
-.mm-menu-title {
-    font-weight: 700;
-    color: var(--pt-menu-caption);
-    opacity: 0.9;
-    padding: 8px 8px 6px;
-}
-
-.mm-opt {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px;
-    border-radius: 8px;
-}
-
-.mm-opt:hover {
-    background: rgba(255, 255, 255, 0.04);
-    cursor: pointer;
-}
-
-.mm-opt.is-disabled {
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-.mm-reset {
-    text-align: center;
-    color: var(--pt-menu-caption);
-    opacity: 0.9;
-    padding: 10px 8px 4px;
-    cursor: pointer;
-}
-
-.mm-switch {
-    --sw: 38px;
-    --kn: 18px;
-    width: var(--sw);
-    height: 22px;
-    border-radius: 999px;
-    position: relative;
-    cursor: pointer;
-    background: var(--pt-surface-2);
-    border: 1px solid var(--pt-hairline);
-}
-
-.mm-switch .kn {
-    position: absolute;
-    top: 50%;
-    left: 2px;
-    transform: translateY(-50%);
-    width: var(--kn);
-    height: var(--kn);
-    border-radius: 999px;
-    background: #fff;
-    box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
-}
-
-.mm-switch.on {
-    background: linear-gradient(180deg,
-            hsl(var(--pt-accent) 80% 60%),
-            hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
-}
-
-.mm-switch.on .kn {
-    left: calc(100% - var(--kn) - 2px);
-}
-
-.mm-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 999;
 }
 
 :deep(.pt-selectbtn),
@@ -1264,23 +1066,6 @@ defineExpose({ openAdvanced, getUi, setUi });
 
 .melody-btn {
     color: var(--pt-text-strong);
-}
-
-.mm-subtitle {
-    font-weight: 700;
-    font-size: 0.85rem;
-    letter-spacing: 0.02em;
-    color: var(--pt-menu-caption);
-    opacity: 0.9;
-    padding: 8px 8px 4px;
-}
-
-.mm-sep {
-    height: 1px;
-    background: var(--pt-hairline);
-    opacity: 0.6;
-    margin: 8px 6px;
-    border-radius: 1px;
 }
 
 .mm-kb-wrap {
