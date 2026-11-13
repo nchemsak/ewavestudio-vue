@@ -216,6 +216,7 @@ src/lib/patterns/        Built-in patterns: library.ts (the patterns), patterns.
 src/lib/export/          Export helpers (pure, unit-tested): audio.ts (loop folding, tail
                          trimming, normalizing), midi.ts (MIDI file), zip.ts, names.ts
 src/lib/random.ts        Seeded random numbers (export stems; tests)
+src/lib/noise/accents.ts  The Noise card's Accents: noise on the pattern's loudest hits (pure)
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
@@ -472,6 +473,15 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   switch.
 - Play / Stop (`data-keeps-pad-settings`) can be pressed without closing it, to hear the pad
   in the pattern; any other click outside closes it (PR 56).
+
+### The Noise card's pad buttons
+- Every 2, Every 4, **Accents**, Random, Invert, All (`NoiseModule.vue`) set which pads get
+  noise (the noise mask). **Accents** (PR 69, replacing Backbeat, whose steps 5 and 13 often
+  had no hit, so the button seemed to do nothing) puts noise on the pattern's loudest hits:
+  the steps that are on within 10 % of the loudest one's velocity; when every hit is as loud
+  (more than four), only those on a beat; with nothing on, the beats (`accentMask()` in
+  `src/lib/noise/accents.ts`, unit-tested). `DrumSequencer` passes the pattern's steps and
+  velocities to `NoiseModule` for it.
 
 ### Effect switches
 - Two pedals have a mini toggle (`PedalSwitch.vue`, `role="switch"`, in the corner right of
@@ -827,8 +837,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 ### Sounds and Patterns
 - Two boxes side by side in the transport card (`PresetButtons.vue`, used twice), each six
   buttons three across with a dice in its top-right corner: **Sound presets** (Kick, Snare,
-  Metal / Pluck, Acid, Bell; the presets below) and **Pattern presets** (Tresillo, Offbeat,
-  Gallop / Rolls, Bassline, Broken). Their captions were "Sounds" and "Patterns" until PR 51,
+  Metal / Pluck, Acid, Bell; the presets below) and **Pattern presets** (Tresillo, Halftime,
+  Gallop / Rolls, Bassline, Breaks). Their captions were "Sounds" and "Patterns" until PR 51,
   which didn't say they were presets. From 1200 px they sit between Swing and Play without making the card
   taller; narrower, they share a row of their own under the knobs; on phones one is under the
   other. Sounds were called Presets until PR 41; the code still calls them presets.
@@ -839,7 +849,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   Hz (`applyPattern()` in `src/lib/patterns/patterns.ts`); off steps get the root, full
   velocity and one hit. The built-in ones (`library.ts`, names and notes a first try, to be
   changed once heard; **Tresillo**, 3-3-2 twice, replaced Pulse in PR 51: Pulse's hit on every
-  beat was Pattern Tools' Every 4 again) use only the root, its fifth and octaves (0, 7, 12, −5), which are in
+  beat was Pattern Tools' Every 4 again; **Halftime** and **Breaks** replaced Offbeat, which had
+  no downbeat and seemed to float, and Broken, which had no clear groove, in PR 69: the root as
+  the kick and the octave up as the snare, on beat 3 for Halftime, on 2 and 4 for Breaks, with
+  ghost notes; the labels are 8 characters at most, so "Half-time" and "Breakbeat" became
+  these) use only the root, its fifth and octaves (0, 7, 12, −5), which are in
   every scale the Melody Maker offers. A pattern changes at once, also while playing (it
   waited for the bar in PR 55 only). A click is one undo step, and the button of the
   pattern the lane matches is lit, the same way as a sound's (`patternKey()`). File → New
@@ -1238,20 +1252,17 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Items 1–3 come from the maintainer's brainstorm after PR 63 (its first items were PRs 64–68) (Claude's recommendations, which
+Items 1–2 come from the maintainer's brainstorm after PR 63 (its first items were PRs 64–69) (Claude's recommendations, which
 the maintainer accepted; no one else uses the app yet, so older projects need no special care
 in them: a removed setting can simply stop applying).
 
-1. **Presets:** the Noise card's Backbeat (steps 5 and 13, often empty) becomes **Accents**
-   (noise on the pattern's loudest hits); the patterns Offbeat and Broken become **Half-time**
-   and **Breakbeat** (the root as the kick, the octave as the snare), to audition.
-2. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
+1. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
    pads' colours, peak-hold, note marks), F3 Spectrogram, F4 Tuner; the Envelope view only
    while its knobs (and the Pitch card's, with the sweep drawn) are turned, as Filter's.
-3. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
+2. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+3. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1440,6 +1451,7 @@ Done:
 | 66 | LFO rates locked to the bar: Rate goes from 4 bars and 2 bars down to 1/64, always at the tempo; the free rate in Hz and the LFO card's ⋯ menu are gone. While playing, the LFO starts its cycle with bar 1 (and on each bar line where a cycle begins), so a slow sweep moves with the pattern. The Export dialog fits a loop to the LFO's cycle (starts at 4 bars for a 4-bar LFO, and says so with a Use 4 bars button for a shorter loop). |
 | 67 | Simplify: the VEL switch is left on Filter only (Envelope's, Pitch's and Noise's removed: hard to hear, and Noise's overlapped its Amount); their amounts load as 0, and the presets that used them (Kick, Snare, Metal, Bell) dropped them. Pattern Tools' Active Pads Only is a toggle cap with an LED instead of a checkbox. |
 | 68 | Melody Maker's options on the card, its ⋯ menu gone: Melody's **Active Pads Only** and the arpeggio's **Skip** are toggles under their settings (now saved); Tones has **7th** (the 7th chord, 1-3-5-7) in place of "7th on downbeats"; Free cycle and Occasional octave hops dropped. The card is as tall as before. |
+| 69 | Presets: the Noise card's Backbeat became **Accents** (noise on the pattern's loudest hits, `src/lib/noise/accents.ts`); the patterns Offbeat and Broken became **Halftime** (the snare an octave up on beat 3) and **Breaks** (snares on 2 and 4, a breakbeat), to audition. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
