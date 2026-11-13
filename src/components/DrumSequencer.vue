@@ -38,12 +38,8 @@
 									:aria-pressed="selectedWaveform === t.value" @click="applyWaveToAll(t.value)">{{ t.label }}</button>
 							</div>
 						</section>
-						<section class="pt-card pl-gens" aria-label="Noise, FM and Unison">
-							<div class="pl-gen">
-								<button type="button" class="pt-btn" :aria-pressed="noiseEnabled" @click="noiseEnabled = !noiseEnabled">Noise</button>
-								<Knob v-model="noiseAmount" label="Amount" aria-label="Noise amount" :min="0" :max="1" :step="0.01" size="small"
-									:disabled="!noiseEnabled" :value-text="`${Math.round(noiseAmount * 100)}%`" />
-							</div>
+						<!-- Noise is on the Mod page since PR 73, as its whole card -->
+						<section class="pt-card pl-gens" aria-label="FM and Unison">
 							<div class="pl-gen">
 								<button type="button" class="pt-btn" :aria-pressed="fmEnabled" @click="fmEnabled = !fmEnabled">FM</button>
 								<Knob v-model="fmIndex" label="Amount" aria-label="FM amount" :min="0" :max="50" :step="0.1" size="small"
@@ -55,6 +51,36 @@
 									:disabled="!unisonEnabled" :value-text="`${unisonVoices} voices`" />
 							</div>
 						</section>
+					</div>
+				</div>
+			</template>
+			<!-- Mod (PR 73): the LFO and the Noise card, which didn't fit on Sound (one screen, no
+				 scrolling, from 568 × 320) -->
+			<template #mod>
+				<div class="pl-mod">
+					<div class="module mod">
+						<SectionWrap id="pl-lfo" title="LFO" :modelValue="true">
+							<template #tools>
+								<PillSwitch v-model="lfoRetrigger" label="RETRIG" name="LFO retrigger"
+									tip="Each note starts the LFO from the beginning" :disabled="!lfoEnabled" />
+							</template>
+							<LFOGroup :showToggle="false" :pulseInUse="pulseInUse" :fmInUse="fmInUse" v-model="lfoEnabled"
+								v-model:depth="lfoDepth" :target="lfoTarget" @update:target="chooseLfoTarget" v-model:waveform="lfoWaveform"
+								v-model:division="lfoDivision"
+								v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
+								color="#00BCD4" />
+						</SectionWrap>
+					</div>
+					<div class="module noise">
+						<SectionWrap id="pl-noise" title="Noise" :modelValue="true">
+							<template #tools>
+								<PillSwitch v-model="noiseEnabled" label="ON" name="Noise" tip="Noise on the pads it's applied to" />
+							</template>
+							<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
+								v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
+								v-model:mask="noiseMask" :steps="steps" :velocities="velocities" v-model:attackBurst="noiseAttackBurst"
+								v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
+						</SectionWrap>
 					</div>
 				</div>
 			</template>
@@ -3211,7 +3237,7 @@ const SCALE_LABELS: Record<string, string> = {
 };
 const phoneCtx = reactive({
 	inst: synthInstrument,
-	currentStep, isPlaying, tempo, canUndo, canRedo,
+	currentStep, isPlaying, tempo, swing, canUndo, canRedo,
 	presets: PRESETS, patterns: PATTERNS, activePresetId, activePatternId,
 	keyRoot: computed(() => melodyUi.keyRoot),
 	keyScale: computed(() => melodyUi.keyScale),
@@ -3784,6 +3810,26 @@ const phoneCtx = reactive({
 .pl-gen .pt-btn[aria-pressed="true"] {
 	box-shadow: 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .35), 0 0 12px var(--pt-btn-glow);
 	font-weight: 700;
+}
+
+/* Mod: the LFO and Noise cards side by side, or one over the other on a narrow phone */
+.pl-mod {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+	align-items: stretch;
+	align-content: center;
+	height: 100%;
+}
+
+/* The Target switch's five buttons get the card's whole width (its caption hidden) */
+.pl-mod :deep(.lfo-switch-label) {
+	display: none;
+}
+
+/* The card's own title says Noise already */
+.pl-mod :deep(.knob-group-header) {
+	display: none;
 }
 
 /* The pedals near their desktop proportions (118 × 239 there), centred: stretched across the

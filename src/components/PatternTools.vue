@@ -52,6 +52,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount } from 'vue';
+import { velocityShape, type VelocityShapeId } from '../lib/patterns/velocityShapes';
 
 const props = defineProps<{
 	steps: boolean[];
@@ -116,59 +117,17 @@ function fillRandom(arg?: unknown): void {
 	emit('update:steps', out);
 }
 
-function applyVelocityPattern(fn: (i: number, len: number) => number): void {
+// Velocity shapes (Humanize), shared with the phone (src/lib/patterns/velocityShapes.ts)
+function applyShape(id: VelocityShapeId): void {
 	if (!props.velocities) return;
-	const len = props.velocities.length;
-	const out = Array.from({ length: len }, (_, i) => clamp01(fn(i, len)));
-	emit('update:velocities', out);
+	emit('update:velocities', velocityShape(id, props.velocities.length));
 }
-
-function applyCycle(cycle: number[]): void {
-	applyVelocityPattern((i, len) => {
-		if (len <= 1) return cycle[0] ?? 1;
-		const t = i / (len - 1); // 0..1
-		const idx = Math.round(t * (cycle.length - 1));
-		return cycle[idx];
-	});
-}
-
-// Velocity Shapes
-function shapePeaks(): void {
-	const cycle = [1.0, 0.55, 0.25, 0.55];
-	applyVelocityPattern(i => cycle[i % 4]);
-}
-function shapeStairs4(): void {
-	const cycle = [1.0, 0.75, 0.5, 0.25];
-	applyVelocityPattern(i => cycle[i % 4]);
-}
-function shapeRamp(): void {
-	const minV = 0.2;
-	applyVelocityPattern((i, len) => {
-		if (len <= 1) return 1;
-		const t = i / (len - 1);
-		const dist = Math.abs(t - 0.5) * 2;
-		return minV + (1 - minV) * dist;
-	});
-}
-
-function shapeDnb(): void {
-	const dnb16 = [
-		0.60, 0.32, 0.50, 0.32,
-		0.50, 0.50, 0.90, 0.22,
-		0.50, 0.32, 0.60, 0.40,
-		0.40, 0.30, 0.60, 0.40
-	];
-	applyCycle(dnb16);
-}
-
-function shapeRandom(): void {
-	const minV = 0.15, maxV = 1.0;
-	applyVelocityPattern(() => minV + Math.random() * (maxV - minV));
-}
-function shapeReset(): void {
-	if (!props.velocities) return;
-	emit('update:velocities', props.velocities.map(() => 1));
-}
+const shapePeaks = () => applyShape('peaks');
+const shapeStairs4 = () => applyShape('stairs');
+const shapeRamp = () => applyShape('ramp');
+const shapeDnb = () => applyShape('dnb');
+const shapeRandom = () => applyShape('random');
+const shapeReset = () => applyShape('reset');
 </script>
 
 <style scoped>

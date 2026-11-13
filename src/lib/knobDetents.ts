@@ -22,6 +22,17 @@ export const TEMPO_DETENTS = [60, 90, 100, 120, 140, 160, 174];
 export const SWING_DETENTS = [0.08, 0.16, 0.24, 0.33, 0.42];
 export const TRIPLET_SWING = 0.33;
 
+// The phone's Swing − / + (PR 73): from none to half a step, by the notches
+export const SWING_STOPS = [0, ...SWING_DETENTS, 0.5];
+
+// The next stop up (dir 1) or down (dir −1) from a value, which needn't be on a stop itself
+// (a knob turned on the desktop); at either end it stays
+export function nextStop(value: number, stops: readonly number[], dir: 1 | -1): number {
+	const eps = 1e-9;
+	if (dir > 0) return stops.find((s) => s > value + eps) ?? stops[stops.length - 1];
+	return [...stops].reverse().find((s) => s < value - eps) ?? stops[0];
+}
+
 export type DetentPoint = { pos: number; value: number };
 
 export type DetentTravel = {

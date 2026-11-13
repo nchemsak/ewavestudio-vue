@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detentTravel, DETENT_HOLD, CONTROLLER_DETENT_HOLD, SWING_DETENTS, TEMPO_DETENTS, TRIPLET_SWING } from './knobDetents';
+import { detentTravel, DETENT_HOLD, CONTROLLER_DETENT_HOLD, SWING_DETENTS, TEMPO_DETENTS, TRIPLET_SWING, SWING_STOPS, nextStop } from './knobDetents';
 
 // A 20–300 BPM knob, as the Tempo knob
 const tempoPos = (bpm: number) => (bpm - 20) / 280;
@@ -78,5 +78,21 @@ describe('soft notches on a knob', () => {
 		expect(SWING_DETENTS).toContain(TRIPLET_SWING);
 		expect(SWING_DETENTS.every((v) => v > 0 && v < 0.5)).toBe(true);
 		expect(TEMPO_DETENTS.every((v) => Number.isInteger(v) && v > 20 && v < 300)).toBe(true);
+	});
+});
+
+describe("the phone's Swing stops", () => {
+	it('go from none to half a step by the notches', () => {
+		expect(SWING_STOPS).toEqual([0, 0.08, 0.16, 0.24, 0.33, 0.42, 0.5]);
+	});
+
+	it('step to the next stop either way, from a stop or from between two', () => {
+		expect(nextStop(0, SWING_STOPS, 1)).toBe(0.08);
+		expect(nextStop(0.33, SWING_STOPS, 1)).toBe(0.42);
+		expect(nextStop(0.33, SWING_STOPS, -1)).toBe(0.24);
+		expect(nextStop(0.2, SWING_STOPS, 1)).toBe(0.24);
+		expect(nextStop(0.2, SWING_STOPS, -1)).toBe(0.16);
+		expect(nextStop(0.5, SWING_STOPS, 1)).toBe(0.5);
+		expect(nextStop(0, SWING_STOPS, -1)).toBe(0);
 	});
 });

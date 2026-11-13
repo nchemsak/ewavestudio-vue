@@ -218,6 +218,7 @@ src/lib/export/          Export helpers (pure, unit-tested): audio.ts (loop fold
                          trimming, normalizing), midi.ts (MIDI file), zip.ts, names.ts
 src/lib/random.ts        Seeded random numbers (export stems; tests)
 src/lib/noise/accents.ts  The Noise card's Accents: noise on the pattern's loudest hits (pure)
+src/lib/patterns/velocityShapes.ts  Humanize's velocity shapes (Pattern Tools, the phone; pure)
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
@@ -755,23 +756,34 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     colour); beside them the Sound and Pattern steppers (◂ name ▸ steps through the six, the
     caption small above the name, a tap on the name lists them, a dice beside each; the name
     reads Random after a roll; the two rows alike since PR 72, which removed Pattern's Clear:
-    ☰ → Reset… clears the pads), the tempo
-    (− / +) and Octave (↓ / ↑: every pad, as Pattern Tools' arrows), and four knobs (small, so
-    they fit under the rest on a 320 px tall screen):
+    ☰ → Reset… clears the pads), the tempo (− / +) beside **Swing** (PR 73: − / + by the Swing
+    knob's notches, 0, 8, 16, 24, 33, 42, 50 %, `SWING_STOPS` and `nextStop()` in
+    `knobDetents.ts`), Octave (↓ / ↑: every pad, as Pattern Tools' arrows) beside **Humanize**
+    (PR 73: a list of Pattern Tools' velocity shapes, Peaks … Reset, from
+    `src/lib/patterns/velocityShapes.ts`, which Pattern Tools uses too; one undo step), and four
+    knobs on one line (small, so they fit under the rest on a 320 px tall screen):
     **Decay** (`ampEnvDecayMs`, 50–2000 ms, log), **Tone** (`filterCutoff`, 100 Hz–10 kHz, log;
     turns the filter on), **Sweep** (the pitch envelope's amount, −48…+48, as the Pitch card's
     knob) and **Space** (`reverbMix`, turning the reverb on above 0 and off at 0, and the delay's
     mix at 0.6 times it while the delay is on). The top bar: a tiny oscilloscope of the output
     (on every page; the analyser's waveform from a rising zero crossing, in each theme's screen
-    colours), the tabs as one segmented bar (Pads, Sound, FX, Key; the chosen one filled and
+    colours), **tiny pads** beside it (PR 73: the 16 pads in two rows of 8 on the same screen,
+    only to look at: the steps that are on in their notes' colours, each beat's first step a
+    little brighter, the playing step outlined; on every page), the tabs as one segmented bar
+    (Pads, Sound, Mod, FX, Key; the chosen one filled and
     outlined in the accent; a horizontal swipe of 70 px moves between them too, not from a
     knob, slider or the pads), **Play / Stop** (on every page, PR 48), Undo, Redo (PR 72) and
     ☰. It fits on one line from 568 px (the first iPhone SE) up (Play's word hidden under
-    600 px).
-  - **Sound**, **FX** and **Key** pages are the desktop's own panels again (slots in
-    DrumSequencer's `PHONE` section: Envelope, Pitch and Filter cards, the eight waves, Noise,
-    FM and Unison as a switch and one knob each; the three pedals; the Melody Maker), so they
-    write the same settings. The FX page's pedals are at most 150 px wide, centred (PR 72: the
+    600 px; under 720 px the scope is 48 px wide and the tabs tighter: those rules came before
+    the ones they change until PR 73, so they never applied).
+  - **Sound**, **Mod**, **FX** and **Key** pages are the desktop's own panels again (slots in
+    DrumSequencer's `PHONE` section: Envelope, Pitch and Filter cards, the eight waves, FM and
+    Unison as a switch and one knob each; on Mod (PR 73) the LFO card, with RETRIG and its five
+    targets (their caption hidden), and the Noise card, with its pad buttons (Accents, Every 2,
+    All ...) and an ON pill, side by side; the three pedals; the Melody Maker), so they write the
+    same settings. Noise was a switch and a knob on Sound until PR 73; the LFO wasn't on the
+    phone at all, and the Sound page had no room for either from 568 × 320. The Key page
+    scrolls at 568 × 320 (the Melody Maker is taller), as before. The FX page's pedals are at most 150 px wide, centred (PR 72: the
     grid stretched them to 262 px, fat beside the desktop's 118 × 239). Their knobs don't take MIDI learn's links: `PhoneLayout` provides
     `noMidiLearn`, which `Knob.vue` checks (a second registration would steal the desktop
     knob's link). MIDI isn't offered in phone mode.
@@ -806,7 +818,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - `App.vue` hides its toolbar (themes, MIDI) and the return link in phone mode.
 - Browser tests run on an emulated iPhone (844 × 390, touch) in landscape and portrait: the
   layout, tap and hold, steppers, the knobs, swipes, the menu and its File menu, Full layout
-  and back, the upright hint.
+  and back, the upright hint, the tiny pads, Swing, Humanize and the Mod page (and the top
+  bar and every page but Key fitting at 568 × 320).
 
 ### Keyboard shortcuts
 - Space: play/stop (`onGlobalKeydown` in `DrumSequencer.vue`, ignored while typing). It does
@@ -1287,23 +1300,15 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Item 1 comes from the maintainer's brainstorm after PR 70 (its first items were PRs 71 and
-72). Item 2 comes from the one after PR 63 (PRs 64–70); no one else uses the app yet, so older
-projects need no special care: a removed setting can simply stop applying.
+Item 1 comes from the maintainer's brainstorm after PR 63 (PRs 64–70; the one after PR 70 was
+PRs 71–73); no one else uses the app yet, so older projects need no special care: a removed
+setting can simply stop applying.
 
-1. **Phone mode additions**: a tiny display-only row of the 16 pads in the top bar (lit in
-   their colours, the playing step outlined, beats marked; on every page, as the scope is;
-   measured to fit from 568 px, where PR 72's Redo left about 70 px free); and what the desktop gained since phone mode: the **LFO**
-   card on the Sound page (it has none, so an LFO can't be seen or changed there),
-   **Swing** beside Tempo, the Noise card's **pad buttons** (Accents, Every 2, All) and
-   **Humanize** (the Filter's VEL switch needs velocities that differ). Each only if it fits
-   and is useful on a phone. Not brought over: the screen views, MIDI, the Repeats brush,
-   the rest of Pattern Tools.
-2. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
+1. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
    changes to come may change the height), centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-3. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+2. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1496,6 +1501,7 @@ Done:
 | 70 | Screen views: F1 Scope, F2 **Spectrum** (new: the live frequency curve on a log axis, in the pads' colours, with a falling peak-hold line, the strongest note named with its cents, and the C notes ticked; `src/components/spectrumView.ts`), F3 Spectrogram, F4 Tuner; the Envelope view has no F-key and shows while its knobs, or the Pitch card's, are turned, the pitch sweep drawn on it. |
 | 71 | The LFO card's square-wave icon redrawn (two even cycles at the sine's height; it was lopsided), and the arpeggio's 1/4 rate dropped (1/8 and 1/16 left; a project saved at 1/4 plays at 1/8). Plan: the maintainer's brainstorm after PR 70 (phone fixes and additions); fitting the window put off. |
 | 72 | Phone mode fixes: the ☰ menu laid out (a header with ✕; Project: File, name, Save, without the Undo and Redo that landed on the name; Theme; Desktop View and Reset… side by side at the bottom), Redo beside Undo in the top bar, the Pattern row without Clear (like the Sound row; Reset… clears), the FX page's pedals at most 150 px wide and centred (they were stretched to 262), and on a touch screen the waiting key's caption without "Shift+click". |
+| 73 | Phone mode additions: tiny pads in the top bar (two rows of 8 in their colours, the playing step outlined, on every page); a **Mod** page with the LFO card (it wasn't on the phone) and the Noise card with its pad buttons (Noise left the Sound page); **Swing** beside Tempo (− / + by its notches) and **Humanize** beside Octave (the velocity shapes, now `src/lib/patterns/velocityShapes.ts`, shared with Pattern Tools), the four knobs on one line; the small-phone rules (a narrower scope and tabs under 720 px), which never applied, fixed. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

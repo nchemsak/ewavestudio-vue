@@ -4110,6 +4110,80 @@ test.describe('Phone mode', () => {
 		await page.getByRole('button', { name: 'Stop', exact: true }).click();
 	});
 
+	test('PR 73: tiny pads in the top bar, Swing and Humanize on Pads, the LFO and Noise cards on Mod', async ({ page }) => {
+		const saved = async () => {
+			await page.getByRole('button', { name: 'Menu' }).click();
+			const menu = page.getByRole('dialog', { name: 'Menu' });
+			await menu.getByRole('button', { name: 'File ▾' }).click();
+			const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: 'Export file' }).click()]);
+			if (await menu.isVisible()) await menu.getByRole('button', { name: 'Close menu' }).click();
+			return JSON.parse(readFileSync((await download.path())!).toString('utf8')).data;
+		};
+
+		// The tiny pads: 16, lit where the pads are, in their colours; the playing one outlined
+		for (const i of [0, 4, 8, 13]) await phonePads(page).nth(i).click();
+		const mini = page.locator('.pl-minipads .pl-mp');
+		await expect(mini).toHaveCount(16);
+		expect(await mini.evaluateAll((els) => els.map((e, i) => (e.classList.contains('on') ? i : -1)).filter((i) => i >= 0))).toEqual([0, 4, 8, 13]);
+		const [padColour, miniColour] = await Promise.all([
+			phonePads(page).nth(0).evaluate((el) => getComputedStyle(el).getPropertyValue('--h').trim()),
+			mini.nth(0).evaluate((el) => getComputedStyle(el).getPropertyValue('--h').trim()),
+		]);
+		expect(miniColour).toBe(padColour);
+		await page.getByRole('tab', { name: 'Key' }).click();
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		await expect(page.locator('.pl-minipads .pl-mp.now')).toHaveCount(1);
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+		await expect(page.locator('.pl-minipads .pl-mp.now')).toHaveCount(0);
+		await page.getByRole('tab', { name: 'Pads' }).click();
+
+		// Swing: − / + by the knob's notches, the desktop's own setting
+		const swing = page.getByRole('group', { name: 'Swing' });
+		await expect(swing).toContainText('0% Swing');
+		for (let k = 0; k < 4; k++) await swing.getByRole('button', { name: 'More swing' }).click();
+		await expect(swing).toContainText('33% Swing');
+		await swing.getByRole('button', { name: 'Less swing' }).click();
+		await expect(swing).toContainText('24% Swing');
+
+		// Humanize: the velocity shapes in a list; Peaks makes the 2nd step of each beat softer
+		await page.getByRole('button', { name: 'Humanize' }).click();
+		const shapes = page.getByRole('dialog', { name: 'Humanize' });
+		await expect(shapes.getByRole('button')).toHaveText(['Peaks', 'Stairs', 'Ramp', 'dNb', 'Random', 'Reset']);
+		await shapes.getByRole('button', { name: 'Peaks' }).click();
+		await expect(shapes).toBeHidden();
+
+		// Mod: the LFO card (Rate, Depth, the five targets, RETRIG) and the Noise card (its pad
+		// buttons, Accents among them), the desktop's own settings; Noise left the Sound page
+		await page.getByRole('tab', { name: 'Sound' }).click();
+		await expect(page.locator('.pl-gens').getByRole('button', { name: 'Noise' })).toHaveCount(0);
+		await page.getByRole('tab', { name: 'Mod' }).click();
+		const mod = page.locator('section[aria-label="Mod"]');
+		expect(await mod.evaluate((el) => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+		await expect(mod.getByRole('radio')).toHaveCount(5 + 2); // the targets, the waves
+		await mod.getByRole('switch', { name: 'Noise' }).click();
+		await mod.getByRole('button', { name: 'Accents' }).click();
+		await page.waitForTimeout(700);
+		const data = await saved();
+		expect(data.transport.swing).toBe(0.24);
+		expect(data.instruments.find((l: any) => l.name === 'synth-voice').velocities.slice(0, 4)).toEqual([1, 0.55, 0.25, 0.55]);
+		expect(data.synth.noise.enabled).toBe(true);
+		const marked = (data.synth.noise.mask as boolean[]).map((m, i) => (m ? i : -1)).filter((i) => i >= 0);
+		expect(marked).toEqual([0, 4, 8]); // the loudest hits: 0, 4 and 8 at full velocity, 13 at 0.55
+
+		// The top bar fits on the first iPhone SE (568 × 320), five tabs, the scope and the pads
+		await page.setViewportSize({ width: 568, height: 320 });
+		const bar = page.locator('.pl-top');
+		expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+		const last = (await bar.getByRole('button', { name: 'Menu' }).boundingBox())!;
+		expect(last.x + last.width).toBeLessThanOrEqual(568);
+		// (The Melody Maker's Key page scrolls there, as it did before PR 73)
+		for (const tab of ['Pads', 'Sound', 'Mod', 'FX']) {
+			await page.getByRole('tab', { name: tab }).click();
+			const page_ = page.locator(`section[aria-label="${tab === 'Pads' ? 'Play' : tab}"]`);
+			expect(await page_.evaluate((el) => el.scrollHeight <= el.clientHeight + 1), tab).toBe(true);
+		}
+	});
+
 	test('Reset in the menu asks first, then resets the pads (and the sound, if asked); Undo brings them back', async ({ page }) => {
 		await page.getByRole('button', { name: 'Next sound' }).click();
 		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText(PRESETS[0].label);
