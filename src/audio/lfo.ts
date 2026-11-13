@@ -23,7 +23,29 @@ export const LFO_DEPTH_MAX: Record<LfoTarget, number> = {
 	fm: 100,      // % of the FM card's Amount
 };
 
+// Depth for a target the first time it's picked (each target then remembers its own:
+// chooseLfoTarget in DrumSequencer.vue): a little of each, so a new target sounds like the LFO is on, never 0
+export const LFO_DEFAULT_DEPTH: Record<LfoTarget, number> = {
+	pitch: 25,    // cents: a gentle vibrato
+	filter: 1500, // Hz
+	pwm: 15,      // % width
+	amp: 40,      // % level
+	fm: 40,       // % FM
+};
+
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
+
+// Each target's remembered depth, from a saved project's `depths` (anything missing or out
+// of range: the default; values are clamped to the target's Depth range)
+export function lfoDepthsFrom(saved: unknown): Record<LfoTarget, number> {
+	const out = { ...LFO_DEFAULT_DEPTH };
+	if (!saved || typeof saved !== 'object') return out;
+	for (const t of LFO_TARGETS) {
+		const v = (saved as Record<string, unknown>)[t];
+		if (typeof v === 'number' && Number.isFinite(v)) out[t] = clamp(v, 0, LFO_DEPTH_MAX[t]);
+	}
+	return out;
+}
 
 // Retrigger: a note's own LFO, starting at the note's start, so every note gets the same
 // movement (the shared LFO runs freely, so each note hears whichever part of it comes along).

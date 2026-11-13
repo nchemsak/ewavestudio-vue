@@ -1674,7 +1674,7 @@ test('the LFO visualizer shows what the LFO moves, without turning the knob', as
 	const target = (name: string) => lfo.getByRole('radio', { name, exact: true });
 	const play = page.getByRole('button', { name: 'Play', exact: true });
 	const stop = page.getByRole('button', { name: 'Stop', exact: true });
-	// Most of the depth (picking a target sets it back to 0)
+	// Most of the depth (a target picked the first time has a little, its default)
 	async function setDepth() {
 		await depth.focus();
 		await page.keyboard.press('End');
@@ -1696,8 +1696,9 @@ test('the LFO visualizer shows what the LFO moves, without turning the knob', as
 	// that moves with the LFO while it plays; the knob itself stays where it was set
 	const cutoff = page.getByRole('slider', { name: 'Cutoff', exact: true });
 	const dot = cutoff.locator('.dial-mod-dot');
+	await expect(cutoff.locator('.dial-mod-range')).toHaveCount(0); // the LFO on Pitch at depth 0
 	await target('Filter').click();
-	await expect(cutoff.locator('.dial-mod-range')).toHaveCount(0); // depth 0: nothing moves
+	await expect(cutoff.locator('.dial-mod-range')).toHaveCount(1); // Filter's default depth
 	await setDepth();
 	await expect(cutoff.locator('.dial-mod-range')).toHaveCount(1);
 	await expect(dot).toHaveCount(0); // nothing plays yet
@@ -1770,6 +1771,62 @@ test('the LFO visualizer shows what the LFO moves, without turning the knob', as
 	await expect(cutoff.locator('.dial-mod-range')).toHaveCount(1);
 	await expect(dot).toHaveCount(0);
 	await stop.click();
+});
+
+test('each LFO target remembers its depth: a new one starts at a little, an old one comes back', async ({ page }) => {
+	const lfo = page.locator('.module.mod');
+	const depth = lfo.getByRole('slider', { name: 'Depth' });
+	const target = (name: string) => lfo.getByRole('radio', { name, exact: true });
+	const undo = page.getByRole('button', { name: 'Undo', exact: true });
+	await expect(depth).toHaveAttribute('aria-valuenow', '0'); // Pitch, off by default
+	await page.waitForTimeout(600); // past the undo history's starting point
+
+	// The first time, each target gets its own little depth, not 0
+	await target('Filter').click();
+	await expect(depth).toHaveAttribute('aria-valuetext', '1500 Hz');
+	await target('Level').click();
+	await expect(depth).toHaveAttribute('aria-valuetext', '40% level');
+	await target('FM amount').click();
+	await expect(depth).toHaveAttribute('aria-valuetext', '±40% FM');
+
+	// Set Pitch's depth, go to Filter and change it, then back: each kept its own
+	await target('Pitch').click();
+	await expect(depth).toHaveAttribute('aria-valuetext', '0 cents');
+	await depth.focus();
+	for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowUp'); // about 1 % of the range each
+	const pitchDepth = Number(await depth.getAttribute('aria-valuenow'));
+	expect(pitchDepth).toBeGreaterThan(0);
+	const pitchText = `${pitchDepth} cents`;
+	await target('Filter').click();
+	await expect(depth).toHaveAttribute('aria-valuetext', '1500 Hz');
+	await depth.focus();
+	await page.keyboard.press('Home');
+	await expect(depth).toHaveAttribute('aria-valuenow', '0');
+	await target('Pitch').click();
+	await expect(depth).toHaveAttribute('aria-valuetext', pitchText);
+	await page.waitForTimeout(600); // one undo step each
+	await target('Filter').click();
+	await expect(depth).toHaveAttribute('aria-valuenow', '0');
+
+	// Undo puts the target and its depth back together
+	await page.waitForTimeout(600);
+	await undo.click();
+	await expect(target('Pitch')).toHaveAttribute('aria-checked', 'true');
+	await expect(depth).toHaveAttribute('aria-valuetext', pitchText);
+
+	// Saved with the project: exported (every target's depth) and imported with Level's changed
+	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	expect(project.data.synth.lfo.depths).toEqual({ pitch: pitchDepth, filter: 0, pwm: 15, amp: 40, fm: 40 });
+	project.data.synth.lfo.depths.amp = 70;
+	project.projectId = 'lfo-depths';
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'lfo.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)),
+	});
+	await expect(depth).toHaveAttribute('aria-valuetext', pitchText);
+	await target('Level').click();
+	await expect(depth).toHaveAttribute('aria-valuetext', '70% level');
+	await target('Filter').click();
+	await expect(depth).toHaveAttribute('aria-valuenow', '0');
 });
 
 // Imports a project with only step 1 on, at velocity `vel`, and optional velocity amounts

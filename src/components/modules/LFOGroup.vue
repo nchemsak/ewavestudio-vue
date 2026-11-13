@@ -263,10 +263,8 @@ const idleText = computed(() => {
 const idleTitle = computed(() => idleText.value === 'No Pulse' ? 'The LFO is set to Pulse, but no pads play Pulse'
     : idleText.value === 'FM off' ? 'The LFO is set to FM, but FM is off' : '');
 const updateTarget = (t: Target): void => {
+    // The parent recalls the new target's own depth (chooseLfoTarget in DrumSequencer.vue)
     emit('update:target', t);
-    // Reset depth when changing target
-    localDepth.value = 0;
-    emit('update:depth', 0);
 };
 
 const localWaveform = ref<Wave | undefined>(props.waveform);

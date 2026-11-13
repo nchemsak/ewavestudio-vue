@@ -99,8 +99,14 @@ function seeded(seed: number) {
 }
 const ROLLS = Array.from({ length: 500 }, (_, i) => randomPreset(seeded(i + 1)));
 
-// The preset's own settings, by snapshot path
-const presetLeaves = (p: (typeof PRESETS)[number]) => leaves({ synth: p.synth ?? {}, fx: p.fx ?? {} });
+// The preset's own settings, by snapshot path. Its LFO depth is also its target's remembered
+// depth (synth.lfo.depths), which the snapshot always shows as the knob's own.
+const presetLeaves = (p: (typeof PRESETS)[number]) => {
+	const own = leaves({ synth: p.synth ?? {}, fx: p.fx ?? {} });
+	const lfo = (p.synth as any)?.lfo;
+	if (typeof lfo?.depth === 'number') own[`synth.lfo.depths.${lfo.target ?? 'pitch'}`] = JSON.stringify(lfo.depth);
+	return own;
+};
 
 // Every sound setting of a snapshot (what soundKey compares), by path
 const soundLeaves = (snap: any) => {

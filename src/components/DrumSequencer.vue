@@ -442,7 +442,7 @@
 										@click="lfoRef?.openAdvanced($event)">⋯</button>
 								</template>
 								<LFOGroup ref="lfoRef" :showToggle="false" :pulseInUse="pulseInUse" :fmInUse="fmInUse" v-model="lfoEnabled" v-model:rate="lfoRate"
-									v-model:depth="lfoDepth" v-model:target="lfoTarget" v-model:waveform="lfoWaveform"
+									v-model:depth="lfoDepth" :target="lfoTarget" @update:target="chooseLfoTarget" v-model:waveform="lfoWaveform"
 									v-model:syncEnabled="lfoSync" v-model:division="lfoDivision"
 									v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
 									color="#00BCD4" :divisions="['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32']" />
@@ -654,7 +654,7 @@ import WaveButton from './WaveButton.vue'
 import VelSwitch from './VelSwitch.vue';
 import PillSwitch from './PillSwitch.vue';
 import LfoModKnob from './LfoModKnob.vue';
-import { LFO_DEPTH_MAX, type LfoTarget } from '../audio/lfo';
+import { LFO_DEPTH_MAX, LFO_DEFAULT_DEPTH, type LfoTarget } from '../audio/lfo';
 import { VELOCITY_FAN, routeVelocity } from '../audio/velocity';
 import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
@@ -2451,6 +2451,19 @@ const lfoEnabled = ref(true);
 const lfoRate = ref(5);
 const lfoDepth = ref(0);
 const lfoTarget = ref<LfoTarget>('pitch');
+// Each target's depth as last set (the current target's is lfoDepth), saved with the project
+const lfoDepths = ref<Record<LfoTarget, number>>({ ...LFO_DEFAULT_DEPTH });
+
+// A new target picked: the depth set for the old one is kept, and the new one's comes back
+// (the first time, LFO_DEFAULT_DEPTH: a little, so the LFO doesn't seem to turn off). Before
+// PR 65 the depth went to 0 on every change. One undo step, target and depth together.
+function chooseLfoTarget(t: LfoTarget) {
+	const from = lfoTarget.value;
+	if (t === from) return;
+	lfoDepths.value = { ...lfoDepths.value, [from]: lfoDepth.value };
+	lfoTarget.value = t;
+	lfoDepth.value = lfoDepths.value[t] ?? LFO_DEFAULT_DEPTH[t];
+}
 
 // Does anything play the pulse wave? (the LFO's PW target only affects pulse notes): the main
 // wave (MIDI notes play it), or any step that's on, in an unmuted lane, set to Pulse
@@ -2504,6 +2517,7 @@ const projectState: ProjectState = {
 			enabled: lfoEnabled,
 			rate: lfoRate,
 			depth: lfoDepth,
+			depths: lfoDepths,
 			target: lfoTarget,
 			waveform: lfoWaveform,
 			sync: lfoSync,
