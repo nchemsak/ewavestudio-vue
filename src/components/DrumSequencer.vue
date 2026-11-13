@@ -438,14 +438,12 @@
 									<!-- RETRIG: each note starts the LFO afresh (src/audio/lfo.ts) -->
 									<PillSwitch v-model="lfoRetrigger" label="RETRIG" name="LFO retrigger"
 										tip="Each note starts the LFO from the beginning" :disabled="!lfoEnabled" />
-									<button class="pt-info-icon" aria-label="Advanced options"
-										@click="lfoRef?.openAdvanced($event)">⋯</button>
 								</template>
-								<LFOGroup ref="lfoRef" :showToggle="false" :pulseInUse="pulseInUse" :fmInUse="fmInUse" v-model="lfoEnabled" v-model:rate="lfoRate"
+								<LFOGroup :showToggle="false" :pulseInUse="pulseInUse" :fmInUse="fmInUse" v-model="lfoEnabled"
 									v-model:depth="lfoDepth" :target="lfoTarget" @update:target="chooseLfoTarget" v-model:waveform="lfoWaveform"
-									v-model:syncEnabled="lfoSync" v-model:division="lfoDivision"
+									v-model:division="lfoDivision"
 									v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
-									color="#00BCD4" :divisions="['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32']" />
+									color="#00BCD4" />
 							</SectionWrap>
 						</div>
 					</div>
@@ -617,7 +615,7 @@
 		</div>
 		<!-- File → Export audio… (src/audio/export/exportFiles.ts makes the files) -->
 		<ExportDialog :open="exportOpen" :options="exportOptions" :notes="oneShotNotes" :bpm="tempo"
-			:effectsOn="exportEffectsOn" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
+			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
 			@export="runExport" @close="exportOpen = false" />
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
@@ -707,7 +705,7 @@ import {
 	lfoCutoffAt, lfoCutoffSwing, lfoPulseWidthAt, lfoPulseWidthRange, lfoBendAt, lfoBendRange,
 	lfoFmAmountAt, lfoFmAmountRange, lfoLevelAt, lfoLevelRange, type LfoView,
 } from '../lib/lfoVisual';
-import { divisionToHz, NOISE_STOPS, type NoiseKey } from '../audio/synthHelpers';
+import { divisionToHz, lfoAlignBars, NOISE_STOPS, type NoiseKey } from '../audio/synthHelpers';
 
 // IMPORTS END
 
@@ -809,7 +807,6 @@ const padSizeStyle = computed(() => ({ '--padTEST-size': '41px' }));
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const lfoRef = ref<InstanceType<typeof LFOGroup> | null>(null);
 const lfoRetrigger = ref(false)
 const lfoBipolar = ref(false)
 
@@ -2307,10 +2304,8 @@ const exportState = computed<StepSequencerState>(() => {
 	const wf = (idx: number) =>
 		(inst as any).waveforms?.[idx] ?? selectedWaveform.value;
 
-	// Derive LFO rate in Hz if synced
-	const rateHz = lfoSync.value
-		? divisionToHz(lfoDivision.value, tempo.value)
-		: lfoRate.value;
+	// The LFO's rate: its division at the tempo, as live (no free rate since PR 66)
+	const rateHz = divisionToHz(lfoDivision.value, tempo.value);
 
 	// Clamp unison voices here (can't use const inside an object literal)
 	const cappedVoices = Math.max(
@@ -2874,6 +2869,11 @@ const oneShotNotes = computed(() => notesInRange(MIN_PAD_HZ, MAX_PAD_HZ).map((n)
 }));
 
 // Which effects stems would have sound in them
+// After how many bars the LFO's cycle starts again on a bar line, for the Export dialog's loop
+// lengths; 0 while it moves nothing, or with RETRIG (each note starts its own, so any loop fits)
+const exportLfoBars = computed(() => (lfoEnabled.value && lfoDepth.value > 0 && !lfoRetrigger.value)
+	? lfoAlignBars(lfoDivision.value) : 0);
+
 const exportEffectsOn = computed(() => ({
 	delay: delayEnabled.value && delayMix.value > 0,
 	reverb: reverbEnabled.value && reverbMix.value > 0,

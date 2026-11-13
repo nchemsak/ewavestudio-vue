@@ -10,7 +10,7 @@
 // factory defaults below (a sound setting into resetSoundToFactoryDefaults, which presets use
 // too), and, if it affects sound, into the live and export engines; see CLAUDE.md.
 
-import { isLfoTarget, lfoDepthsFrom, LFO_DEFAULT_DEPTH, type LfoTarget } from '../../audio/lfo';
+import { isLfoTarget, isLfoDivision, lfoDepthsFrom, LFO_DEFAULT_DEPTH, type LfoTarget } from '../../audio/lfo';
 import type { Ref } from 'vue';
 import { clampUnisonVoices, UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MIN } from '../../audio/unison';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_TEMPO, divisionForTime, isDelayDivision, syncedDelaySeconds } from '../delaySync';
@@ -504,7 +504,8 @@ export function applySnapshot(st: ProjectState, s: any) {
 
 		if (syn.lfo.waveform) lfoWaveform.value = syn.lfo.waveform;
 		if (typeof syn.lfo.sync === 'boolean') lfoSync.value = syn.lfo.sync;
-		if (syn.lfo.division) lfoDivision.value = syn.lfo.division;
+		// Only a division the Rate knob has (an unknown one would play, but the knob couldn't show it)
+		if (isLfoDivision(syn.lfo.division)) lfoDivision.value = syn.lfo.division;
 		if (typeof syn.lfo.retrigger === 'boolean') lfoRetrigger.value = syn.lfo.retrigger;
 		if (typeof syn.lfo.bipolar === 'boolean') lfoBipolar.value = syn.lfo.bipolar;
 	}

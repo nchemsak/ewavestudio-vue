@@ -14,6 +14,19 @@ export const isLfoTarget = (v: unknown): v is LfoTarget => LFO_TARGETS.includes(
 
 export type LfoWave = 'sine' | 'square';
 
+// The Rate knob's divisions, slowest to fastest, always locked to the tempo (the free rate in
+// Hz went in PR 66): 4 and 2 bars, a bar, then note values down to a 64th
+export const LFO_DIVISIONS: readonly string[] = ['4/1', '2/1', '1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32', '1/64'];
+export const isLfoDivision = (v: unknown): v is string => LFO_DIVISIONS.includes(v as string);
+
+// What the Rate knob shows: "4 bars", "2 bars", "1 bar", else the division ("1/8T")
+export function lfoDivisionLabel(div: string): string {
+	if (div === '4/1') return '4 bars';
+	if (div === '2/1') return '2 bars';
+	if (div === '1/1') return '1 bar';
+	return div;
+}
+
 // Depth knob range per target (the knob's max; 0 is off)
 export const LFO_DEPTH_MAX: Record<LfoTarget, number> = {
 	pitch: 1200,  // cents

@@ -30,6 +30,7 @@ import { createPingPong } from './pingPong';
 import { clampUnisonVoices, unisonPhase, unisonPosition } from './unison';
 import {
 	divisionToHz,
+	lfoAlignBars,
 	generateDriveCurve,
 	linearPassthroughCurve,
 	generateNoiseBuffers,
@@ -468,7 +469,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// LFO START
 
-	const { enabled: lfoEnabled, rate: lfoRate, depth: lfoDepth, target: lfoTarget, waveform: lfoWaveform, sync: lfoSync, division: lfoDivision, retrigger: lfoRetrigger } = s.lfo;
+	// The LFO's rate is always its division at the tempo (lfo.rate and lfo.sync are saved, but
+	// the free rate in Hz went in PR 66)
+	const { enabled: lfoEnabled, depth: lfoDepth, target: lfoTarget, waveform: lfoWaveform, division: lfoDivision, retrigger: lfoRetrigger } = s.lfo;
 
 	//  LFO source + core gain. One shared oscillator; each note taps lfoGain.
 	let lfoOsc: OscillatorNode | null = null;
@@ -476,7 +479,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	lfoGain.gain.value = 0;
 
 	function currentLfoHz() {
-		return lfoSync.value ? divisionToHz(lfoDivision.value, tempo.value) : lfoRate.value;
+		return divisionToHz(lfoDivision.value, tempo.value);
 	}
 
 	function stopLfo() {
@@ -521,6 +524,26 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		lfoOsc.start();
 	}
 
+	// Start the LFO's cycle afresh at `when` (a bar's step 1, see schedule()): a new oscillator
+	// takes over from the old one at that moment, so the wave begins at its start in step with
+	// the pattern, as a hardware LFO synced to the clock does. With the tempo unchanged the
+	// old one is just finishing a cycle there, so nothing jumps.
+	function restartLfoAt(when: number) {
+		if (!lfoEnabled.value) return;
+		const old = lfoOsc;
+		const osc = audioCtx.createOscillator();
+		osc.type = lfoWaveform.value;
+		osc.frequency.value = currentLfoHz();
+		osc.connect(lfoGain);
+		osc.connect(lfoProbe);
+		osc.start(when);
+		lfoOsc = osc;
+		if (old) {
+			try { old.stop(when); } catch { }
+			old.onended = () => old.disconnect();
+		}
+	}
+
 	function startLfoIfNeeded(): void {
 		if (!lfoEnabled.value) return;
 		if (lfoOsc) return;
@@ -543,7 +566,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		else stopLfo();
 	});
 
-	watch([lfoWaveform, lfoSync, lfoDivision, tempo], () => {
+	watch([lfoWaveform, lfoDivision, tempo], () => {
 		if (!lfoEnabled.value) return;
 
 		if (!lfoOsc) {
@@ -555,13 +578,6 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		lfoOsc.frequency.setValueAtTime(currentLfoHz(), audioCtx.currentTime);
 	});
 
-	watch(lfoRate, (r) => {
-		if (!lfoEnabled.value) return;
-		if (!lfoSync.value) {
-			if (!lfoOsc) startLfoIfNeeded();
-			if (lfoOsc) lfoOsc.frequency.setValueAtTime(r, audioCtx.currentTime);
-		}
-	});
 
 	function applyDepthScale() {
 		const t = audioCtx.currentTime;
@@ -908,6 +924,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	let startTime = 0;
 	let stepIndex = 0;
+	let barCount = 0; // bars started since Play, for the LFO's restarts
 
 	function hardStopSequencer() {
 		sequencerTicker.stop();
@@ -927,11 +944,19 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		if (startTime < now - stepDuration) {
 			const missed = Math.ceil((now - startTime) / stepDuration);
 			startTime += missed * stepDuration;
+			barCount += Math.floor((stepIndex + missed) / stepLength.value);
 			stepIndex = (stepIndex + missed) % stepLength.value;
 		}
 
 		while (startTime < now + SCHEDULE_AHEAD_S) {
-			if (stepIndex === 0) s.onBarStart?.();
+			if (stepIndex === 0) {
+				s.onBarStart?.();
+				// The LFO starts its cycle on bar 1 and again on each bar line where a cycle
+				// begins (every 4 bars for a 4-bar rate, every bar for 1/8), so it moves with
+				// the pattern (and comes back into step after a tempo change)
+				if (barCount % lfoAlignBars(lfoDivision.value) === 0) restartLfoAt(startTime);
+				barCount++;
+			}
 			lanes.value.forEach(inst => {
 				if (!inst.muted && inst.steps[stepIndex]) {
 					const vel = inst.velocities[stepIndex] ?? 1;
@@ -984,6 +1009,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			startLfoIfNeeded();
 			startTime = audioCtx.currentTime;
 			stepIndex = 0;
+			barCount = 0;
 			isPlaying.value = true;
 			schedule();
 			sequencerTicker.start();
