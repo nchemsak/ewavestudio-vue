@@ -37,11 +37,13 @@
 					<button class="pt-btn octave-btn" aria-label="Octave up" @click="shiftOctave(+1)">↑</button>
 					<button class="pt-btn octave-btn" aria-label="Octave down" @click="shiftOctave(-1)">↓</button>
 				</div>
+				<!-- A toggle (a cap with an LED, _hardware.scss), not a web checkbox (PR 67): the
+					 octave arrows move only the pads that are on while it's lit -->
 				<div class="pt-inline">
-					<label class="pt-inline-check">
-						<input type="checkbox" v-model="applyActiveOnly" />
-						Active Pads Only
-					</label>
+					<button type="button" class="pt-inline-check hw-cap hw-cap-sm hw-led-left"
+						:class="{ on: applyActiveOnly }" :aria-pressed="applyActiveOnly ? 'true' : 'false'"
+						title="The octave arrows move only the pads that are on"
+						@click="applyActiveOnly = !applyActiveOnly">Active Pads Only</button>
 				</div>
 			</section>
 		</div>
@@ -256,10 +258,15 @@ function shapeReset(): void {
 	white-space: nowrap;
 }
 
+/* Sized like the cards' header pills (PillSwitch): a small cap, the LED beside its label */
 .pt-inline-check {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
+	--hw-led-size: 5px;
+	padding: 2px 6px 2px 5px;
+	border-radius: 5px;
+	border: 1px solid transparent;
+	font: inherit;
+	font-size: inherit;
+	line-height: 1.4;
 }
 
 /* A narrow card (phones): the sections one under another, three buttons across */

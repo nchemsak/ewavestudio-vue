@@ -164,7 +164,8 @@ src/components/
   MelodyMaker.vue        Key, scale and range; one Generate (Melody or Arpeggio); a key or scale
                          picked moves the pattern (see "Melody Maker")
   PatternTools.vue       Synth-lane tools: step fills (all, every 2/4, invert, random, clear),
-                         velocity shapes ("Humanize") and octave shift
+                         velocity shapes ("Humanize") and octave shift (with the Active Pads
+                         Only toggle)
   ProjectControls.vue    The top bar: the logo (its `brand` slot), File menu (new, open, Save as…,
                          delete, import/export JSON, Export audio…), the name box (rename),
                          Save, Undo/Redo buttons
@@ -175,7 +176,7 @@ src/components/
                          (and the MIDI learn bar, at the bottom of the screen)
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
   WaveButton.vue, WaveIcon.vue  A wave's big tile (Waveforms panel) and small line icon (pads)
-  VelSwitch.vue          A card's VEL switch (Envelope, Pitch, Filter, Noise): velocity routing
+  VelSwitch.vue          The Filter card's VEL switch: velocity routing (the only one since PR 67)
   PillSwitch.vue         The small on/off pill with an LED in a card's header (VEL, RETRIG)
   filterView.ts          The screen's filter view (drawing loop and its pure helpers)
   LfoModKnob.vue         A Knob that draws the LFO visualizer's dot and arc itself (the Vol knob)
@@ -328,6 +329,16 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   at full velocity (so it can't change anything yet), a note under the switch says "Every
   step is at full velocity: try Humanize" and Pattern Tools' Humanize buttons glow
   (`PatternTools`' `nudge`). The phone's Sound page has the three cards' switches too.
+  **Only Filter's is left** (PR 67, the maintainer's call): Decay's and the pitch sweep's were
+  hard to hear, and Noise's seemed to do what its Amount knob does (it lowers the noise mix on
+  softer steps, which are already quieter). Velocity still shapes the cutoff, from the Filter
+  card's switch (and on the phone's Sound page). The engines still route all four
+  (`velocity.ts`), but `applySnapshot()` sets the other three to 0 on every load
+  (`VELOCITY_SWITCHED`), so no amount plays that no switch shows: an older project's or a
+  preset's amount for them is dropped. Presets Kick, Snare, Metal and Bell lost theirs; the
+  Sounds dice still draws two destinations, as before (so the rest of a seeded roll stays the
+  same), and turns Cutoff's on when either is the cutoff. The Pitch card's `vel` slot went
+  with its switch.
 - Ratchets (`ratchet.ts`, both engines; "Repeats" ×1–×4 in each pad's ⋮ menu, a "×3" badge
   at the top of the pad): the step plays that many quick hits, evenly spaced from its start
   to the next step's start (`stepSpan()`: swing makes an on-beat step longer and a swung one
@@ -1068,7 +1079,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     pad settings, the Export dialog); `hw-led-mini` is a slim LED bar at the cap's top edge
     where the label leaves no room (the presets, the theme buttons, MIDI Learn).
   - A **toggle** is a cap with an LED beside its label (`hw-led-left`), down and lit while on:
-    the cards' VEL switches and RETRIG (`PillSwitch.vue`), Pitch's RND, the Repeats brush. The
+    Filter's VEL switch and RETRIG (`PillSwitch.vue`), Pitch's RND, the Repeats brush, Pattern
+    Tools' Active Pads Only (PR 67: it was a web checkbox; the octave arrows move only the pads
+    that are on while it's lit, as before). The
     tiles (the eight waves, FM, Unison, the LFO's power tile) are caps too, with the LED beside
     their caption; they keep their icons, animations, dice and the Pulse Width knob (which
     goes down with its tile), and the chosen one has a thin ring in the accent.
@@ -1219,27 +1232,24 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Items 1–5 come from the maintainer's brainstorm after PR 63 (its first items were PRs 64–66) (Claude's recommendations, which
+Items 1–4 come from the maintainer's brainstorm after PR 63 (its first items were PRs 64–67) (Claude's recommendations, which
 the maintainer accepted; no one else uses the app yet, so older projects need no special care
 in them: a removed setting can simply stop applying).
 
-1. **Simplify:** VEL switches only on Filter (Envelope's, Pitch's and Noise's removed: hard to
-   hear); Pattern Tools' "Active Pads Only" a hardware toggle (a cap with an LED) instead of a
-   checkbox.
-2. **Melody Maker's options on the card**, its ⋯ menu removed: Free cycle dropped (always
+1. **Melody Maker's options on the card**, its ⋯ menu removed: Free cycle dropped (always
    fitted to the bar); "7th on downbeats" becomes a third Tones choice, **7th chord**
    (1-3-5-7); Skip every other tone a **Skip** toggle; Occasional octave hops dropped; Melody's
    Active Pads Only a toggle shown for Melody only. Into the empty space at the card's bottom.
-3. **Presets:** the Noise card's Backbeat (steps 5 and 13, often empty) becomes **Accents**
+2. **Presets:** the Noise card's Backbeat (steps 5 and 13, often empty) becomes **Accents**
    (noise on the pattern's loudest hits); the patterns Offbeat and Broken become **Half-time**
    and **Breakbeat** (the root as the kick, the octave as the snare), to audition.
-4. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
+3. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
    pads' colours, peak-hold, note marks), F3 Spectrogram, F4 Tuner; the Envelope view only
    while its knobs (and the Pitch card's, with the sweep drawn) are turned, as Filter's.
-5. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
-   then scale the frame down to fit short windows (with a floor). Last, since 1 and 2 change
+4. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
+   then scale the frame down to fit short windows (with a floor). Last, since 1 changes
    the height; measure at the maintainer's screen and common laptop sizes.
-6. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+5. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1426,6 +1436,7 @@ Done:
 | 64 | Fixes from the maintainer's brainstorm after PR 63 (whose plan it also adds): the wave tiles light only the wave every pad plays, and Random while the pads play a mix (the old tile stayed lit after Random); a pad's ⋮ Noise reads Off while the Noise card is off ("Noise card is off"), and turning it on then turns the card on for that pad only. |
 | 65 | LFO: each target remembers its depth (saved with the project); a target picked for the first time starts at a little (Pitch 25 cents, Filter 1500 Hz, Pulse 15 %, Level 40 %, FM 40 %) instead of 0, so changing target no longer sounds like the LFO turning off. |
 | 66 | LFO rates locked to the bar: Rate goes from 4 bars and 2 bars down to 1/64, always at the tempo; the free rate in Hz and the LFO card's ⋯ menu are gone. While playing, the LFO starts its cycle with bar 1 (and on each bar line where a cycle begins), so a slow sweep moves with the pattern. The Export dialog fits a loop to the LFO's cycle (starts at 4 bars for a 4-bar LFO, and says so with a Use 4 bars button for a shorter loop). |
+| 67 | Simplify: the VEL switch is left on Filter only (Envelope's, Pitch's and Noise's removed: hard to hear, and Noise's overlapped its Amount); their amounts load as 0, and the presets that used them (Kick, Snare, Metal, Bell) dropped them. Pattern Tools' Active Pads Only is a toggle cap with an LED instead of a checkbox. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

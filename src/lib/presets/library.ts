@@ -10,8 +10,9 @@
 // Knob ranges the values must stay within (a test checks them): Attack 1–100 ms, Decay
 // 50–2000 ms, Cutoff 100–10000 Hz, Resonance 0.1–20, filter Env Amt ±5 octaves, Pitch Amount
 // 0–48 semitones, envelope decays 5–2000 ms, noise Burst 5–250 ms, FM Amount 0–50 with ratio
-// 1 (Lock), 1.5 (Metal), 2 (Bell) or null (Free), Pulse Width 5–50 %, velocity routing
-// VELOCITY_SWITCH_AMOUNT (what a card's VEL switch sets, so the switch turns it off and on again), Reverb decay 0.2–4 s, Drive tone 100–10000 Hz, mixes and amounts 0–1. The delay's
+// 1 (Lock), 1.5 (Metal), 2 (Bell) or null (Free), Pulse Width 5–50 %, velocity routing only
+// on the cutoff, at VELOCITY_SWITCH_AMOUNT (what the Filter card's VEL switch sets, so the
+// switch turns it off and on again; the other destinations have no switch since PR 67), Reverb decay 0.2–4 s, Drive tone 100–10000 Hz, mixes and amounts 0–1. The delay's
 // feedback has no knob (it stays at 0.3), so presets leave it alone.
 
 import type { SynthPreset } from './presets';
@@ -20,7 +21,7 @@ import { VELOCITY_SWITCH_AMOUNT } from '../../audio/velocity';
 export const PRESETS: readonly SynthPreset[] = [
 	{
 		// A sine that drops two octaves fast: a kick on low pads (Octave ↓), a tom or a zap
-		// higher up. Drive thickens it; softer steps sweep less.
+		// higher up. Drive thickens it.
 		id: 'kick',
 		label: 'Kick',
 		description: 'Kick: a sine that drops two octaves in a flash, with a little drive. Deepest on low pads.',
@@ -28,7 +29,6 @@ export const PRESETS: readonly SynthPreset[] = [
 		synth: {
 			envelope: { attackMs: 1, decayMs: 320 },
 			pitchEnv: { semitones: 24, decayMs: 45, mode: 'up' },
-			velocity: { pitchEnv: VELOCITY_SWITCH_AMOUNT },
 		},
 		fx: {
 			drive: { enabled: true, amount: 0.25, tone: 2500, mix: 0.3 },
@@ -36,8 +36,7 @@ export const PRESETS: readonly SynthPreset[] = [
 	},
 	{
 		// A short triangle body with a quick pitch drop, and a burst of noise for the snares.
-		// The noise skips the effects, so the reverb is on the body only. Softer steps get less
-		// noise (ghost notes).
+		// The noise skips the effects, so the reverb is on the body only.
 		id: 'snare',
 		label: 'Snare',
 		description: 'Snare: a short triangle body with a snap of noise and a small room.',
@@ -47,7 +46,6 @@ export const PRESETS: readonly SynthPreset[] = [
 			filter: { cutoff: 7000 },
 			pitchEnv: { semitones: 12, decayMs: 30, mode: 'up' },
 			noise: { enabled: true, amount: 0.55, color: 0.6, attackBurst: true, burstMs: 140 },
-			velocity: { noise: VELOCITY_SWITCH_AMOUNT },
 		},
 		fx: {
 			reverb: { enabled: true, mix: 0.15, decay: 0.8, tone: 0.6 },
@@ -55,7 +53,7 @@ export const PRESETS: readonly SynthPreset[] = [
 	},
 	{
 		// A thin pulse frequency-modulated at 3:2 ("Metal") through a ringing filter: cowbell,
-		// clank and metal-bar sounds. Softer steps ring shorter.
+		// clank and metal-bar sounds.
 		id: 'metal',
 		label: 'Metal',
 		description: 'Metal: a thin pulse with metallic FM through a ringing filter, like a cowbell or a struck bar.',
@@ -65,7 +63,6 @@ export const PRESETS: readonly SynthPreset[] = [
 			filter: { cutoff: 6000, resonance: 4 },
 			fm: { enabled: true, ratio: 1.5, index: 5 },
 			pulse: { width: 30 },
-			velocity: { decay: VELOCITY_SWITCH_AMOUNT },
 		},
 		fx: {
 			reverb: { enabled: true, mix: 0.2, decay: 1.2, tone: 0.7 },
@@ -108,7 +105,7 @@ export const PRESETS: readonly SynthPreset[] = [
 	},
 	{
 		// The Glass wave frequency-modulated an octave up ("Bell"), with a long decay and a big
-		// reverb. Softer steps ring shorter.
+		// reverb.
 		id: 'bell',
 		label: 'Bell',
 		description: 'Bell: glassy FM tones with a long ring and a big reverb.',
@@ -117,7 +114,6 @@ export const PRESETS: readonly SynthPreset[] = [
 			envelope: { attackMs: 2, decayMs: 1400 },
 			filter: { cutoff: 8000 },
 			fm: { enabled: true, ratio: 2, index: 2.5 },
-			velocity: { decay: VELOCITY_SWITCH_AMOUNT },
 		},
 		fx: {
 			reverb: { enabled: true, mix: 0.3, decay: 2.4, tone: 0.5 },

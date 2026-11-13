@@ -15,6 +15,10 @@
 export type VelocityRouting = { decay: number; cutoff: number; pitchEnv: number; noise: number };
 
 export const VELOCITY_DESTINATIONS = ['decay', 'cutoff', 'pitchEnv', 'noise'] as const;
+// The destinations with a VEL switch on the panel: only Filter's since PR 67 (Envelope's,
+// Pitch's and Noise's were hard to hear). The others stay at 0 (applySnapshot sets them so);
+// the engines still route all four.
+export const VELOCITY_SWITCHED: readonly (typeof VELOCITY_DESTINATIONS)[number][] = ['cutoff'];
 export const VELOCITY_ROUTING_DEFAULT: VelocityRouting = { decay: 0, cutoff: 0, pitchEnv: 0, noise: 0 };
 export const VELOCITY_AMOUNT_MAX = 100; // %
 // What a card's VEL switch sets (on) for its destination; off is 0. Older projects and the
