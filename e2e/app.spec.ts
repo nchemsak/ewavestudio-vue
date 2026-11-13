@@ -2011,6 +2011,32 @@ test("Pattern Tools' Active Pads Only is a toggle cap with an LED, and the octav
 	expect(after[1]).toBeCloseTo(before[1] / 2, 3);
 });
 
+test("the Noise card's Accents puts noise on the pattern's loudest hits; Halftime and Breaks are patterns", async ({ page }) => {
+	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	const marked = (mask: boolean[]) => mask.map((m, i) => (m ? i : -1)).filter((i) => i >= 0);
+	const noise = page.getByRole('button', { name: 'Toggle noise' });
+	await noise.click();
+	const card = page.locator('.module.noise');
+	await expect(card.getByRole('button', { name: 'Backbeat' })).toHaveCount(0);
+
+	// Tresillo's accents are its first and fifth hits (steps 1 and 9), where Backbeat's 5 and 13
+	// had no hit at all
+	await patternsBox(page).getByRole('button', { name: 'Tresillo', exact: true }).click();
+	await card.getByRole('button', { name: 'Accents' }).click();
+	expect(marked((await saved()).synth.noise.mask)).toEqual([0, 8]);
+
+	// The new patterns: Breaks' snares (an octave up) on beats 2 and 4, Halftime's on beat 3;
+	// Accents follows them
+	for (const [name, accents] of [['Breaks', [0, 4, 12]], ['Halftime', [0, 8]]] as const) {
+		await patternsBox(page).getByRole('button', { name, exact: true }).click();
+		await expect(patternsBox(page).getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await card.getByRole('button', { name: 'Accents' }).click();
+		expect(marked((await saved()).synth.noise.mask), name).toEqual(accents);
+	}
+	await expect(patternsBox(page).getByRole('button', { name: 'Offbeat' })).toHaveCount(0);
+	await expect(patternsBox(page).getByRole('button', { name: 'Broken' })).toHaveCount(0);
+});
+
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {
 	const listeners = () => page.evaluate(() => (window as any).__keydown.length as number);
 	const start = await listeners();
@@ -2717,7 +2743,7 @@ test('patterns set the pattern from the key, never the sound, light up, are one 
 	await page.waitForTimeout(SETTLED);
 	await page.locator('body').click({ position: { x: 5, y: 5 } });
 	await page.keyboard.press('Control+z');
-	await expect(lit).toHaveText(['Broken']);
+	await expect(lit).toHaveText(['Breaks']);
 	await page.keyboard.press('Control+z');
 	await expect(lit).toHaveText(['Bassline']);
 

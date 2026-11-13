@@ -43,7 +43,7 @@
                     <div class="pt-btn-group" role="group" aria-label="Noise mask group 1">
                         <button class="pt-btn" @click="maskEvery2">Every 2</button>
                         <button class="pt-btn" @click="maskEvery4">Every 4</button>
-                        <button class="pt-btn" @click="maskBackbeat">Backbeat</button>
+                        <button class="pt-btn" title="Noise on the pattern's loudest hits" @click="maskAccents">Accents</button>
                     </div>
                     <div class="pt-btn-group" role="group" aria-label="Noise mask group 2">
                         <button class="pt-btn" @click="maskRandom">Random</button>
@@ -60,6 +60,7 @@
 import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
+import { accentMask } from '../../lib/noise/accents';
 
 const props = withDefaults(
     defineProps<{
@@ -67,6 +68,9 @@ const props = withDefaults(
         amount: number;
         colorMorph: number;
         mask?: boolean[];
+        // The pattern, for Accents (its loudest hits)
+        steps?: boolean[];
+        velocities?: number[];
         attackBurst?: boolean;
         burstMs?: number;
         color?: string;
@@ -243,13 +247,13 @@ function maskInvert(): void {
 function maskRandom(): void {
     updateMask(() => Math.random() < 0.5);
 }
-function maskBackbeat(): void {
-    updateMask((i, len) => {
-        const perBeat = Math.max(1, Math.round(len / 4));
-        const isDownbeatStep = i % perBeat === 0;
-        const beatIdx = Math.floor(i / perBeat) + 1; // 1..4
-        return isDownbeatStep && (beatIdx === 2 || beatIdx === 4);
-    });
+// The pattern's loudest hits (src/lib/noise/accents.ts). It replaced Backbeat in PR 69, whose
+// steps 5 and 13 often had no hit, so the button seemed to do nothing.
+function maskAccents(): void {
+    const len = props.mask?.length ?? 0;
+    if (len <= 0) return;
+    const m = accentMask(props.steps ?? [], props.velocities ?? []);
+    updateMask((i) => !!m[i]);
 }
 </script>
 

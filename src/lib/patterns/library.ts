@@ -28,11 +28,18 @@ export const PATTERNS: readonly StepPattern[] = [
 		],
 	},
 	{
-		// Between the beats, with a soft pickup before the next bar
-		id: 'offbeat',
-		label: 'Offbeat',
-		description: 'Offbeat: a hit between each beat, and a soft pickup at the end.',
-		steps: [_, _, n(), _, _, _, n(), _, _, _, n(), _, _, _, n(), n(0, 0.45)],
+		// Half-time (PR 69, replacing Offbeat, which had no downbeat and seemed to float): the
+		// root as the kick on beat 1, the octave up as the snare on beat 3, so the bar feels
+		// twice as slow; a kick on the "a" of 2 and the "and" of 4, soft ghost notes between
+		id: 'halftime',
+		label: 'Halftime',
+		description: 'Halftime: a heavy, slow groove, the snare (an octave up) on beat 3 only, with ghost notes.',
+		steps: [
+			n(0, 1), _, _, n(0, 0.45),
+			_, _, n(0, 0.8), _,
+			n(12, 1), _, _, n(0, 0.45),
+			_, _, n(0, 0.85), n(12, 0.4),
+		],
 	},
 	{
 		// Da-da-dum on every beat, the first hit of each accented, an octave up at the end
@@ -71,15 +78,17 @@ export const PATTERNS: readonly StepPattern[] = [
 		],
 	},
 	{
-		// Off the grid: hits that dodge the beats, with one double hit
-		id: 'broken',
-		label: 'Broken',
-		description: 'Broken: a syncopated beat that dodges the grid, with a double hit.',
+		// A breakbeat (PR 69, replacing Broken, which had no clear groove): the root as the kick
+		// on 1, the "and" of 1 and around beat 3, the octave up as the snare on beats 2 and 4,
+		// with ghost snares and a quick double kick
+		id: 'breaks',
+		label: 'Breaks',
+		description: 'Breaks: a funky breakbeat, kicks on the root and snares an octave up on 2 and 4.',
 		steps: [
-			n(0, 1), _, _, n(0, 0.8),
-			_, _, n(7, 0.9), _,
-			_, n(0, 0.85), n(0, 0.6, 2), _,
-			_, n(12, 0.9), _, n(0, 0.5),
+			n(0, 1), _, n(0, 0.8), _,
+			n(12, 1), _, _, n(12, 0.45),
+			_, n(0, 0.85), n(0, 0.75), _,
+			n(12, 1), _, _, n(12, 0.5),
 		],
 	},
 ];

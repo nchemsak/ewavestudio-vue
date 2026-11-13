@@ -401,7 +401,7 @@
 										<div class="noise-inline">
 											<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
 												v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
-												v-model:mask="noiseMask" v-model:attackBurst="noiseAttackBurst"
+												v-model:mask="noiseMask" :steps="steps" :velocities="velocities" v-model:attackBurst="noiseAttackBurst"
 												v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
 										</div>
 									</div>
