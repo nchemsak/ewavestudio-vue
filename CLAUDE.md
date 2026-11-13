@@ -10,8 +10,8 @@ harmonic shapes) and ratchet (2–4 quick hits within the step); amp envelope, p
 envelope, noise, FM,
 unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch) and reverb; Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
-arpeggio in a key and scale; a new key or scale moves the pattern with it); an oscilloscope, spectrogram, tuner and envelope
-display; six built-in sounds that set the sound (not the pattern) and six built-in patterns
+arpeggio in a key and scale; a new key or scale moves the pattern with it); a screen with an oscilloscope, spectrum,
+spectrogram and tuner, and envelope and filter views while their knobs are turned; six built-in sounds that set the sound (not the pattern) and six built-in patterns
 that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
 saved in IndexedDB with JSON import and export; undo/redo; it installs as an app that
 works offline (a PWA); and a phone held sideways gets a layout of its own (phone mode).
@@ -179,6 +179,7 @@ src/components/
   VelSwitch.vue          The Filter card's VEL switch: velocity routing (the only one since PR 67)
   PillSwitch.vue         The small on/off pill with an LED in a card's header (VEL, RETRIG)
   filterView.ts          The screen's filter view (drawing loop and its pure helpers)
+  spectrumView.ts        The screen's Spectrum view, F2 (drawing loop and its pure helpers)
   LfoModKnob.vue         A Knob that draws the LFO visualizer's dot and arc itself (the Vol knob)
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
 src/audio/
@@ -540,10 +541,32 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   its fields redraw every frame; `DrumSequencer` itself must never read them in its template,
   or its whole template would re-render 60 times a second.
 
+### The screen's views
+- PR 70: **F1 Scope, F2 Spectrum, F3 Spectrogram, F4 Tuner** (`Screen.vue`'s F-keys, 1–4 on the
+  keyboard, `handleFKey()`); the Envelope view lost F4 and, like the filter view, shows only
+  while its knobs are turned. Its canvases keep their order (`.nac-screen__lcd canvas`: scope,
+  spectrogram, tuner, envelope, filter, then the spectrum, added last so the others' places
+  stay).
+- **Spectrum** (`src/components/spectrumView.ts`; pure helpers unit-tested): the output's live
+  frequency curve on the filter view's log axis (20 Hz–20 kHz), filled column by column in each
+  frequency's pad colour (`spectrumColour()`, as the spectrogram), an outline, a peak-hold line
+  that falls about 14 dB a second (`holdPeaks()`), the strongest note marked with a dashed line
+  and named top right with its cents and Hz ("A3 −4¢ · 219 Hz"; `strongestNoteHz()`, refined
+  between the analyser's ~23 Hz bins by a parabola; only between 50 Hz and 4 kHz and loud
+  enough, held 0.6 s; sharps or flats as the key, `noteOf()`), and every C ticked along the
+  bottom. The bottom three bins are skipped (the drive's DC offset).
+- **Envelope view** (`startEnvViz()` in `DrumSequencer.vue`): the amp envelope, and the pitch
+  sweep (the Pitch card: how far from the note it starts, as a share of Amount, falling with
+  time constant Decay / 4 as the engines' `setTargetAtTime`) in the screen's second colour
+  (`--nac-spec-high`). Attack/Decay show it with the amp envelope first (the sweep dashed,
+  "┄ pitch sweep"); the Pitch card's Amount and Decay (`PitchEnvModule`'s `knob-start` /
+  `knob-end`, `onPitchKnobStart()`) with the sweep first and its numbers in the title
+  ("Pitch sweep +24 st → note in 300 ms"). The "1 ms" axis label steps aside for Attack's own.
+
 ### Pad and spectrogram colours
 - A lit pad's colour shows its note: blue for the lowest pad pitch (100 Hz) to red for the
   highest (2 kHz), linear in Hz (`padHue()` in `src/lib/padColour.ts`); its fill height shows
-  its velocity. The screen's spectrogram (F2) draws each frequency in that same colour,
+  its velocity. The screen's spectrogram (F3) draws each frequency in that same colour,
   brighter when louder (`spectrumColour()`; darker when louder on a light theme's pale
   screen), so a note shows in its pad's colour; above the pads' range, harmonics go on from
   red toward magenta. Since PR 41 (the maintainer's call: the spectrogram in the pads'
@@ -778,10 +801,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Space: play/stop (`onGlobalKeydown` in `DrumSequencer.vue`, ignored while typing). It does
   this everywhere, even on a focused button, knob or pad, on purpose: that's how music apps
   work. Enter presses a focused button.
-- 1–4: screen view (Oscilloscope, Spectrogram, Tuner, Envelope), same handler; ignored while
-  typing or while a dropdown list is open. While Attack/Decay or Cutoff/Resonance is turned,
-  the screen shows the envelope view (F4) or the filter view (no F-key), then goes back
-  (`holdScreen`/`onScreenKnobEnd` in `DrumSequencer.vue`); a view picked meanwhile stays.
+- 1–4: screen view (Oscilloscope, Spectrum, Spectrogram, Tuner), same handler; ignored while
+  typing or while a dropdown list is open. While Attack/Decay, the Pitch card's Amount/Decay
+  or Cutoff/Resonance is turned, the screen shows the envelope view or the filter view (neither
+  has an F-key), then goes back (`holdScreen`/`onScreenKnobEnd` in `DrumSequencer.vue`); a view
+  picked meanwhile stays.
 - Under 1200 px, the Sound / Effects / Compose tabs are one Tab stop: Left/Right (Home/End)
   move between them (`onTabKeydown` in `DrumSequencer.vue`).
 - Shift+click on a Melody Maker key: at once, without waiting for the bar while playing (see
@@ -1252,17 +1276,14 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Items 1–2 come from the maintainer's brainstorm after PR 63 (its first items were PRs 64–69) (Claude's recommendations, which
+Item 1 comes from the maintainer's brainstorm after PR 63 (its first items were PRs 64–70) (Claude's recommendations, which
 the maintainer accepted; no one else uses the app yet, so older projects need no special care
 in them: a removed setting can simply stop applying).
 
-1. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
-   pads' colours, peak-hold, note marks), F3 Spectrogram, F4 Tuner; the Envelope view only
-   while its knobs (and the Pitch card's, with the sweep drawn) are turned, as Filter's.
-2. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
+1. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-3. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+2. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1452,6 +1473,7 @@ Done:
 | 67 | Simplify: the VEL switch is left on Filter only (Envelope's, Pitch's and Noise's removed: hard to hear, and Noise's overlapped its Amount); their amounts load as 0, and the presets that used them (Kick, Snare, Metal, Bell) dropped them. Pattern Tools' Active Pads Only is a toggle cap with an LED instead of a checkbox. |
 | 68 | Melody Maker's options on the card, its ⋯ menu gone: Melody's **Active Pads Only** and the arpeggio's **Skip** are toggles under their settings (now saved); Tones has **7th** (the 7th chord, 1-3-5-7) in place of "7th on downbeats"; Free cycle and Occasional octave hops dropped. The card is as tall as before. |
 | 69 | Presets: the Noise card's Backbeat became **Accents** (noise on the pattern's loudest hits, `src/lib/noise/accents.ts`); the patterns Offbeat and Broken became **Halftime** (the snare an octave up on beat 3) and **Breaks** (snares on 2 and 4, a breakbeat), to audition. |
+| 70 | Screen views: F1 Scope, F2 **Spectrum** (new: the live frequency curve on a log axis, in the pads' colours, with a falling peak-hold line, the strongest note named with its cents, and the C notes ticked; `src/components/spectrumView.ts`), F3 Spectrogram, F4 Tuner; the Envelope view has no F-key and shows while its knobs, or the Pitch card's, are turned, the pitch sweep drawn on it. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
