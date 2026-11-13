@@ -7,6 +7,13 @@
 		<header class="pl-top">
 			<!-- A tiny oscilloscope of what's playing, on every page -->
 			<canvas ref="scopeEl" class="pl-scope" aria-hidden="true"></canvas>
+			<!-- A tiny copy of the 16 pads, on every page (PR 73): the steps that are on, in their
+				 notes' colours, the beats marked and the playing step outlined. Only to look at -->
+			<div class="pl-minipads" aria-hidden="true">
+				<span v-for="(on, i) in (ctx.inst.steps as boolean[])" :key="i" class="pl-mp"
+					:class="{ on, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
+					:style="on ? { '--h': ctx.hue(ctx.inst.pitches[i]) } : undefined"></span>
+			</div>
 			<div class="pl-tabs" role="tablist" aria-label="Pages">
 				<button v-for="p in PAGES" :key="p.id" type="button" role="tab" class="pl-tab"
 					:class="{ on: page === p.id }" :aria-selected="page === p.id" @click="page = p.id">{{ p.label }}</button>
@@ -68,11 +75,23 @@
 							<span><b>{{ ctx.tempo }}</b> BPM</span>
 							<button type="button" aria-label="Tempo +1" @click="ctx.tempo = Math.min(300, ctx.tempo + 1)">+</button>
 						</div>
+						<!-- Swing (PR 73): − / + by the Swing knob's notches, 0 to 50 % -->
+						<div class="pl-mini" role="group" aria-label="Swing">
+							<button type="button" aria-label="Less swing" @click="ctx.swing = nextStop(ctx.swing, SWING_STOPS, -1)">−</button>
+							<span :title="ctx.swing === TRIPLET_SWING ? 'Triplet swing' : undefined"><b>{{ Math.round(ctx.swing * 100) }}%</b> Swing</span>
+							<button type="button" aria-label="More swing" @click="ctx.swing = nextStop(ctx.swing, SWING_STOPS, 1)">+</button>
+						</div>
+					</div>
+					<div class="pl-pick">
 						<div class="pl-mini" role="group" aria-label="Octave">
 							<button type="button" aria-label="Octave down" title="Every pad an octave down" @click="ctx.octave(-1)">↓</button>
 							<span>Oct</span>
 							<button type="button" aria-label="Octave up" title="Every pad an octave up" @click="ctx.octave(1)">↑</button>
 						</div>
+						<!-- Humanize (PR 73): Pattern Tools' velocity shapes, in a list like the steppers' -->
+						<button type="button" class="pl-mini pl-hum" aria-haspopup="dialog"
+							title="Shape the steps' velocities (the Filter's VEL switch needs softer steps)"
+							@click="list = 'humanize'">Humanize</button>
 					</div>
 					<div class="pl-macros">
 						<div class="pl-macro">
@@ -100,13 +119,18 @@
 			</section>
 
 			<section v-show="page === 'sound'" class="pl-frame pl-page" aria-label="Sound"><slot name="sound" /></section>
+			<section v-show="page === 'mod'" class="pl-frame pl-page" aria-label="Mod"><slot name="mod" /></section>
 			<section v-show="page === 'fx'" class="pl-frame pl-page" aria-label="FX"><slot name="fx" /></section>
 			<section v-show="page === 'key'" class="pl-frame pl-page" aria-label="Key"><slot name="key" /></section>
 		</div>
 
-		<!-- All six sounds or patterns (a tap on the stepper's name) -->
+		<!-- All six sounds or patterns (a tap on the stepper's name), or Humanize's shapes -->
 		<div v-if="list" class="pl-scrim" @click="list = null"></div>
-		<div v-if="list" class="pl-sheet pl-list" role="dialog" :aria-label="list === 'sound' ? 'Sounds' : 'Patterns'">
+		<div v-if="list === 'humanize'" class="pl-sheet pl-list" role="dialog" aria-label="Humanize">
+			<button v-for="v in VELOCITY_SHAPES" :key="v.id" type="button" class="pt-btn" :class="{ 'pt-danger': v.id === 'reset' }"
+				@click="humanize(v.id); list = null">{{ v.label }}</button>
+		</div>
+		<div v-else-if="list" class="pl-sheet pl-list" role="dialog" :aria-label="list === 'sound' ? 'Sounds' : 'Patterns'">
 			<button v-for="p in (list === 'sound' ? ctx.presets : ctx.patterns)" :key="p.id" type="button" class="pt-btn"
 				:aria-pressed="(list === 'sound' ? ctx.activePresetId : ctx.activePatternId) === p.id"
 				@click="list === 'sound' ? chooseSound(p.id) : choosePattern(p.id); list = null">{{ p.label }}</button>
@@ -180,6 +204,8 @@ import { ref, computed, provide, watch, onMounted, onBeforeUnmount } from 'vue';
 import Knob from './Knob.vue';
 import ThemeToggle from './ThemeToggle.vue';
 import { SCALES, NOTE_TO_SEMITONE, midiToFreq, freqToMidiExact } from '../lib/melody/theory';
+import { VELOCITY_SHAPES, velocityShape, type VelocityShapeId } from '../lib/patterns/velocityShapes';
+import { SWING_STOPS, TRIPLET_SWING, nextStop } from '../lib/knobDetents';
 
 const props = defineProps<{ ctx: any }>();
 const ctx = props.ctx;
@@ -190,6 +216,7 @@ provide('noMidiLearn', true);
 const PAGES = [
 	{ id: 'play', label: 'Pads' },
 	{ id: 'sound', label: 'Sound' },
+	{ id: 'mod', label: 'Mod' },
 	{ id: 'fx', label: 'FX' },
 	{ id: 'key', label: 'Key' },
 ] as const;
@@ -205,7 +232,9 @@ function doReset(sound: boolean) {
 	resetAsk.value = false;
 	menuOpen.value = false;
 }
-const list = ref<null | 'sound' | 'pattern'>(null);
+const list = ref<null | 'sound' | 'pattern' | 'humanize'>(null);
+// Humanize: a velocity shape for all 16 steps, one undo step
+function humanize(id: VelocityShapeId) { ctx.inst.velocities = velocityShape(id, ctx.inst.velocities.length); }
 
 // Swipe left or right between pages (not from a knob, a slider or an open sheet)
 let swipe: null | { x: number; y: number } = null;
@@ -438,33 +467,69 @@ function hzText(hz: number) {
 	flex: none;
 }
 
-/* Small phones (an iPhone SE is 667 px wide sideways; the first one 568) */
-@media (max-width: 720px) {
-	.pl-scope {
-		width: 48px;
-	}
-
-	.pl-tab {
-		padding: 7px 8px;
-		min-width: 0;
-	}
+/* The tiny pads: two rows of eight, as on the Pads page, on the scope's screen */
+.pl-minipads {
+	flex: none;
+	display: grid;
+	grid-template-columns: repeat(8, 6px);
+	grid-template-rows: repeat(2, 1fr);
+	gap: 2px;
+	height: 30px;
+	padding: 3px 4px;
+	border-radius: 7px;
+	background: var(--nac-lcd-bg, #0f141b);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), inset 0 0 8px rgba(0, 0, 0, .5);
+	pointer-events: none;
 }
 
-@media (max-width: 600px) {
-	.pl-go span {
-		display: none;
-	}
-
-	.pl-arr {
-		display: none;
-	}
+.pl-mp {
+	border-radius: 2px;
+	background: rgba(255, 255, 255, .1);
 }
 
-/* The mini scope: each theme's screen colours (Screen.vue's are its own) */
+/* Each beat's first step a little brighter, as the Pads page marks them */
+.pl-mp.beat {
+	background: rgba(255, 255, 255, .22);
+}
+
+.pl-mp.on {
+	background: hsl(var(--h) var(--pp-sat, 85%) var(--pp-lit, 60%));
+}
+
+.pl-mp.now {
+	box-shadow: 0 0 0 1.5px #fff;
+}
+
+.theme-sand .pl-mp,
+.theme-light .pl-mp {
+	background: rgba(0, 0, 0, .14);
+}
+
+.theme-sand .pl-mp.beat,
+.theme-light .pl-mp.beat {
+	background: rgba(0, 0, 0, .28);
+}
+
+.theme-sand .pl-mp.on,
+.theme-light .pl-mp.on {
+	background: hsl(var(--h) var(--pp-sat, 70%) var(--pp-lit, 45%));
+}
+
+.theme-sand .pl-mp.now,
+.theme-light .pl-mp.now {
+	box-shadow: 0 0 0 1.5px #1c2317;
+}
+
+/* The mini scope and pads: each theme's screen colours (Screen.vue's are its own) */
+.theme-sand .pl-minipads { background: #a9b29a; }
 .theme-sand .pl-scope { background: #a9b29a; color: #1c2317; }
+.theme-light .pl-minipads { background: #cdd2d5; }
 .theme-light .pl-scope { background: #cdd2d5; color: #1f2937; }
+.theme-analog .pl-minipads { background: #1a1208; }
 .theme-analog .pl-scope { background: #1a1208; color: #ffb547; }
+.theme-slate .pl-minipads { background: #16222a; }
 .theme-slate .pl-scope { background: #16222a; color: #8fe3d2; }
+.theme-synthwave .pl-minipads { background: #2a0f52; }
 .theme-synthwave .pl-scope { background: #2a0f52; color: #f3c6ff; }
 
 .pl-scope {
@@ -761,7 +826,7 @@ function hzText(hz: number) {
 
 .pl-side {
 	display: grid;
-	grid-template-rows: auto auto auto minmax(0, 1fr);
+	grid-template-rows: auto auto auto auto minmax(0, 1fr);
 	gap: 6px;
 	min-height: 0;
 }
@@ -804,6 +869,17 @@ function hzText(hz: number) {
 	color: var(--pt-text);
 }
 
+/* Humanize: a button as tall as the steppers beside it */
+.pl-mini.pl-hum {
+	display: block;
+	border: 0;
+	padding: 0 6px;
+	font: inherit;
+	font-size: 11px;
+	letter-spacing: .06em;
+	color: var(--pt-text);
+}
+
 .pl-mini button {
 	height: 27px;
 	border: 0;
@@ -816,7 +892,8 @@ function hzText(hz: number) {
 
 .pl-macros {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	/* One line of four since PR 73, which added a row of steppers above */
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 	place-items: center;
 	background: var(--pt-inset);
 	border-radius: 10px;
@@ -1032,5 +1109,29 @@ function hzText(hz: number) {
 	max-height: calc(100vh - 16px);
 	overflow-y: auto;
 	z-index: 70;
+}
+
+/* Small phones (an iPhone SE is 667 px wide sideways; the first one 568). Last in the file, so
+   they win over the rules they change (until PR 73 they came first, and the 720 px ones never
+   applied) */
+@media (max-width: 720px) {
+	.pl-scope {
+		width: 48px;
+	}
+
+	.pl-tab {
+		padding: 7px 8px;
+		min-width: 0;
+	}
+}
+
+@media (max-width: 600px) {
+	.pl-go span {
+		display: none;
+	}
+
+	.pl-arr {
+		display: none;
+	}
 }
 </style>
