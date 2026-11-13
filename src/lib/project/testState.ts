@@ -122,7 +122,8 @@ export function changeEverything(st: ProjectState) {
 	s.fm.enabled.value = true; s.fm.modFreq.value = 440; s.fm.index.value = 9; s.fm.ratio.value = 2;
 	s.pitchEnv.enabled.value = false; s.pitchEnv.semitones.value = 12; s.pitchEnv.decayMs.value = 50; s.pitchEnv.mode.value = 'random';
 	s.pulse.width.value = 25;
-	s.velocity.decay.value = 60; s.velocity.cutoff.value = -40; s.velocity.pitchEnv.value = 100; s.velocity.noise.value = 25;
+	// Only the cutoff has a VEL switch (PR 67): the others load as 0 whatever is saved
+	s.velocity.cutoff.value = -40;
 	s.tuning.selectedKeyRoot.value = 'Eb'; s.tuning.globalOctaveOffset.value = -1;
 	fx.delay.enabled.value = true; fx.delay.sync.value = false; fx.delay.division.value = '1/4'; fx.delay.time.value = 0.5; fx.delay.feedback.value = 0.6;
 	fx.delay.mix.value = 0.4; fx.delay.toneEnabled.value = false; fx.delay.toneHz.value = 2000; fx.delay.toneType.value = 'highpass';

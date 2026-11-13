@@ -1,14 +1,12 @@
 <!-- components/modules/PitchEnvModule.vue -->
 <!-- Pitch envelope card ("Pitch"), in the Envelope / Filter row: three narrow cards, so the
-     title is short and the controls are two knobs and small VEL and RND pills. Amount is one bipolar knob: right of
+     title is short and the controls are two knobs and a small RND pill (its VEL switch went in PR 67). Amount is one bipolar knob: right of
      centre the note starts above its pitch and drops into it (mode 'up'), left of centre it
      starts below and rises (mode 'down'). RND (mode 'random') gives each note its own offset
      within ±Amount. The saved settings stay `semitones` (0–48) and `mode`. -->
 <template>
     <SectionWrap id="pitch-env" title="Pitch" aria-label="Pitch envelope">
         <template #tools>
-            <!-- The card's VEL switch (DrumSequencer passes it in) -->
-            <slot name="vel" />
             <button type="button" class="pe-rnd hw-cap hw-cap-sm hw-led-left" :class="{ on: isRandom }" :aria-pressed="isRandom"
                 :disabled="!enabled" aria-label="Random sweep"
                 title="Random: each note starts at its own offset within ±Amount"

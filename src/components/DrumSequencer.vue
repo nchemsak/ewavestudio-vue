@@ -9,22 +9,13 @@
 					<div class="pl-sound-row">
 						<div class="module envelope">
 							<SectionWrap id="pl-envelope" title="Envelope" :modelValue="true">
-								<template #tools>
-									<VelSwitch v-model="velocityRouting.decay.value" :name="VEL_SWITCHES.decay.label" :tip="VEL_SWITCHES.decay.tip"
-									:note="velNote.key === 'decay' ? velNote.text : ''" @switched-on="onVelSwitchedOn('decay')" />
-								</template>
 								<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 									v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
 							</SectionWrap>
 						</div>
 						<div class="module pitch-env">
 							<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
-								v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode">
-								<template #vel>
-									<VelSwitch v-model="velocityRouting.pitchEnv.value" :name="VEL_SWITCHES.pitchEnv.label" :tip="VEL_SWITCHES.pitchEnv.tip" :disabled="!pitchEnvEnabled"
-									:note="velNote.key === 'pitchEnv' ? velNote.text : ''" @switched-on="onVelSwitchedOn('pitchEnv')" />
-								</template>
-							</PitchEnvModule>
+								v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
 						</div>
 						<div class="module filter">
 							<SectionWrap class="filter-card" id="pl-filter" title="Filter" :modelValue="true">
@@ -360,11 +351,6 @@
 				<div class="sound-row sound-row-2">
 					<div class="module envelope">
 						<SectionWrap id="envelope" title="Envelope" v-model="collapsibleState['envelope']">
-							<!-- VEL: a step's velocity also shapes Decay -->
-							<template #tools>
-								<VelSwitch v-model="velocityRouting.decay.value" :name="VEL_SWITCHES.decay.label" :tip="VEL_SWITCHES.decay.tip"
-								:note="velNote.key === 'decay' ? velNote.text : ''" @switched-on="onVelSwitchedOn('decay')" />
-							</template>
 							<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 								v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
 								@attack-knob-start="onEnvKnobStart" @attack-knob-end="onScreenKnobEnd"
@@ -374,12 +360,7 @@
 
 					<div class="module pitch-env">
 						<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
-							v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode">
-							<template #vel>
-								<VelSwitch v-model="velocityRouting.pitchEnv.value" :name="VEL_SWITCHES.pitchEnv.label" :tip="VEL_SWITCHES.pitchEnv.tip" :disabled="!pitchEnvEnabled"
-								:note="velNote.key === 'pitchEnv' ? velNote.text : ''" @switched-on="onVelSwitchedOn('pitchEnv')" />
-							</template>
-						</PitchEnvModule>
+							v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
 					</div>
 
 					<div class="module filter">
@@ -407,12 +388,6 @@
 									@click="noiseEnabled = !noiseEnabled">
 									<span class="noise-ribbon-label">NOISE</span>
 								</button>
-
-								<!-- VEL, in the card's top-right corner (the card has no header) -->
-								<div class="noise-vel">
-									<VelSwitch v-model="velocityRouting.noise.value" :name="VEL_SWITCHES.noise.label" :tip="VEL_SWITCHES.noise.tip" :disabled="!noiseEnabled"
-									:note="velNote.key === 'noise' ? velNote.text : ''" @switched-on="onVelSwitchedOn('noise')" />
-								</div>
 
 								<div v-if="noiseEnabled" class="noise-overlay mode-static" aria-hidden="true">
 									<div class="grain"></div>
@@ -2070,16 +2045,14 @@ const velocityRouting = {
 };
 
 // VEL SWITCHES START
-// Each of the four cards has a VEL switch (VelSwitch.vue) for its amount above. Turning one on
-// shows what it does: the screen's envelope or filter view for a moment, where softer steps are
-// drawn dashed (VELOCITY_FAN), and, if every step that's on is at full velocity (so the switch
-// can't change anything yet), a note under it and a glow on Pattern Tools' Humanize.
-type VelKey = keyof typeof velocityRouting;
+// The Filter card has a VEL switch (VelSwitch.vue) for the cutoff's amount above (Envelope's,
+// Pitch's and Noise's went in PR 67: hard to hear; their amounts stay at 0). Turning it on shows
+// what it does: the screen's filter view for a moment, where softer steps are drawn dashed
+// (VELOCITY_FAN), and, if every step that's on is at full velocity (so the switch can't change
+// anything yet), a note under it and a glow on Pattern Tools' Humanize.
+type VelKey = 'cutoff';
 const VEL_SWITCHES: Record<VelKey, { label: string; tip: string }> = {
-	decay: { label: 'Velocity shapes Decay', tip: 'Softer steps decay sooner' },
 	cutoff: { label: 'Velocity shapes Cutoff', tip: 'Softer steps are darker' },
-	pitchEnv: { label: 'Velocity shapes the pitch sweep', tip: 'Softer steps sweep less' },
-	noise: { label: 'Velocity shapes the noise', tip: 'Softer steps have less noise' },
 };
 const VEL_FLASH_MS = 1500;
 const VEL_NOTE_MS = 3500;
@@ -2088,8 +2061,7 @@ const humanizeNudge = ref(0);
 let velNoteTimer: ReturnType<typeof setTimeout> | null = null;
 
 function onVelSwitchedOn(key: VelKey) {
-	if (key === 'decay') flashScreen('env', 4);
-	else if (key === 'cutoff') flashScreen('filter', 0);
+	if (key === 'cutoff') flashScreen('filter', 0);
 
 	const lit = steps.value.map((on, i) => (on ? velocities.value[i] ?? 1 : null)).filter((v) => v != null);
 	if (lit.length && lit.every((v) => v >= 1)) {
@@ -3863,14 +3835,6 @@ const phoneCtx = reactive({
 
 .module.noise .noise-tv-bg {
 	position: relative;
-}
-
-/* Noise's VEL switch, in the card's top-right corner, where the other cards have theirs */
-.noise-vel {
-	position: absolute;
-	top: 10px;
-	right: 12px;
-	z-index: 4;
 }
 
 .noise-ribbon {

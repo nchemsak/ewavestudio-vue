@@ -77,7 +77,11 @@ describe('saving and loading a project', () => {
 		const unchanged = Object.entries(leaves(saved))
 			.filter(([path, v]) => /^(transport|synth|fx|melody|selectedWaveform)/.test(path) && defaults[path] === v)
 			.map(([path]) => path);
-		expect(unchanged).toEqual(['synth.noise.type']); // always 'legacy'
+		expect(unchanged).toEqual([
+			'synth.noise.type', // always 'legacy'
+			// No VEL switch since PR 67: always 0 once loaded
+			'synth.velocity.decay', 'synth.velocity.pitchEnv', 'synth.velocity.noise',
+		]);
 
 		const loaded = fresh();
 		applySnapshot(loaded, saved);
@@ -160,9 +164,11 @@ describe('saving and loading a project', () => {
 		changeEverything(st);
 		applySnapshot(st, { synth: { envelope: { enabled: true, attackMs: 20, decayMs: 400 } } });
 		expect([st.synth.velocity.decay.value, st.synth.velocity.cutoff.value, st.synth.velocity.pitchEnv.value, st.synth.velocity.noise.value]).toEqual([0, 0, 0, 0]);
-		applySnapshot(st, { synth: { velocity: { decay: 250, noise: -30 } } });
-		expect(st.synth.velocity.decay.value).toBe(100); // kept to ±100 %
-		expect(st.synth.velocity.noise.value).toBe(-30);
+		applySnapshot(st, { synth: { velocity: { cutoff: 250, decay: 75, noise: -30 } } });
+		expect(st.synth.velocity.cutoff.value).toBe(100); // kept to ±100 %
+		// Only the cutoff has a VEL switch (PR 67): the others, which nothing could show or undo, go
+		expect(st.synth.velocity.decay.value).toBe(0);
+		expect(st.synth.velocity.noise.value).toBe(0);
 	});
 
 	it('gives projects saved before the pulse wave the default width, and keeps the new waves', () => {

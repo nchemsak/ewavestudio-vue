@@ -106,12 +106,14 @@ export function randomPreset(rng: Rng = Math.random): SynthPreset {
 		};
 	}
 
-	// Velocity shapes one or two things (most audible with Humanize's shapes), by the amount
-	// a card's VEL switch sets, so the switches show it and turn it off and on again
+	// Velocity shapes the cutoff (most audible with Humanize's shapes), by the amount the Filter
+	// card's VEL switch sets, so the switch shows it and turns it off and on again. Only the
+	// cutoff has a switch since PR 67; the dice still draws two destinations as it did before,
+	// so the rest of every seeded roll stays the same, and uses the cutoff when either is it.
 	if (chance(0.4)) {
 		const first = pick(VELOCITY_DESTINATIONS);
 		const second = chance(0.5) ? pick(VELOCITY_DESTINATIONS) : first;
-		synth.velocity = { [first]: VELOCITY_SWITCH_AMOUNT, [second]: VELOCITY_SWITCH_AMOUNT };
+		if (first === 'cutoff' || second === 'cutoff') synth.velocity = { cutoff: VELOCITY_SWITCH_AMOUNT };
 	}
 
 	if (chance(0.35)) fx.reverb = { enabled: true, mix: between(0.1, 0.35, 0.01), decay: between(0.6, 3, 0.05), tone: between(0.3, 0.8, 0.01) };

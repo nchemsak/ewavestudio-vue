@@ -23,7 +23,7 @@ export type KeyRoot = 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 
 // harmonic shapes. Saved projects may hold any name; an unknown one plays as a sine.
 import type { Wave } from '../../audio/waves';
 import { PULSE_WIDTH_DEFAULT, foldPulseWidth } from '../../audio/waves';
-import { VELOCITY_DESTINATIONS } from '../../audio/velocity';
+import { VELOCITY_DESTINATIONS, VELOCITY_SWITCHED } from '../../audio/velocity';
 import { clampRatchet, clampRepeatNotes } from '../../audio/ratchet';
 export type { Wave };
 
@@ -533,6 +533,9 @@ export function applySnapshot(st: ProjectState, s: any) {
 			const v = syn.velocity[k];
 			if (typeof v === 'number') velocityRouting[k].value = Math.max(-100, Math.min(100, v));
 		}
+		// Only Filter has a VEL switch since PR 67: an amount for Decay, the pitch sweep or the
+		// noise (an older project's, a preset's) would play with no switch to show or undo it
+		for (const k of VELOCITY_DESTINATIONS) if (!VELOCITY_SWITCHED.includes(k)) velocityRouting[k].value = 0;
 	} else if (syn.envelope) {
 		// A whole project saved before velocity routing: none
 		for (const k of VELOCITY_DESTINATIONS) velocityRouting[k].value = 0;
