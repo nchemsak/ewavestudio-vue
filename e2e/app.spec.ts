@@ -3641,26 +3641,45 @@ async function chooseOption(page: Page, select: string, option: string) {
 	await page.getByRole('option', { name: option, exact: true }).click();
 }
 
-test("Melody Maker: its ⋯ menu opens inside the window at every width, without Undo last melody", async ({ page }) => {
-	for (const width of [1600, 1280, 1024, 820, 390]) {
-		await page.setViewportSize({ width, height: 900 });
-		if (width < 1200) await page.getByRole('tab', { name: 'Compose' }).click();
-		const button = page.locator('.module.melody .pt-info-icon').first();
-		await button.scrollIntoViewIfNeeded();
-		await button.click();
-		const menu = page.locator('.melody-maker .mm-menu');
-		await expect(menu).toBeVisible();
-		await expect(menu).toContainText('Advanced Options');
-		await expect(menu).not.toContainText('Undo last melody'); // Undo (Ctrl+Z) does it
-		const box = (await menu.boundingBox())!;
-		const view = await page.evaluate(() => ({ w: document.documentElement.clientWidth, h: window.innerHeight }));
-		expect(box.x, `left edge at ${width} px`).toBeGreaterThanOrEqual(0);
-		expect(box.x + box.width, `right edge at ${width} px`).toBeLessThanOrEqual(view.w);
-		expect(box.y, `top at ${width} px`).toBeGreaterThanOrEqual(0);
-		expect(box.y + box.height, `bottom at ${width} px`).toBeLessThanOrEqual(view.h);
-		await page.keyboard.press('Escape');
-		await expect(menu).toHaveCount(0);
-	}
+test("Melody Maker: no ⋯ menu; Active Pads Only (Melody) and Skip (Arpeggio) are toggles on the card, saved", async ({ page }) => {
+	const card = page.locator('.module.melody');
+	await expect(card.getByRole('button', { name: 'Advanced options' })).toHaveCount(0);
+	const active = card.getByRole('button', { name: 'Active Pads Only' });
+	const skip = card.getByRole('button', { name: 'Skip', exact: true });
+	const height = (await card.boundingBox())!.height;
+
+	// Melody shows its toggle (on by default), Arpeggio its own; the card keeps its height
+	await expect(active).toBeVisible();
+	await expect(active).toHaveAttribute('aria-pressed', 'true');
+	await expect(skip).toBeHidden();
+	await card.getByRole('button', { name: 'Arpeggio' }).click();
+	await expect(skip).toBeVisible();
+	await expect(skip).toHaveAttribute('aria-pressed', 'false');
+	await expect(active).toBeHidden();
+	expect((await card.boundingBox())!.height).toBe(height);
+
+	// Both are saved with the project, and File → New puts them back
+	await skip.click();
+	await card.getByRole('button', { name: 'Melody' }).click();
+	await active.click();
+	await expect(active).toHaveAttribute('aria-pressed', 'false');
+	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.melody;
+	expect(await saved()).toMatchObject({ arpSkip: true, activeOnly: false });
+	await chooseFromFileMenu(page, 'New');
+	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
+	await expect(active).toHaveAttribute('aria-pressed', 'true');
+	expect(await saved()).toMatchObject({ arpSkip: false, activeOnly: true });
+
+	// Active Pads Only off: Generate fills every pad, not only the ones that are on
+	await chooseOption(page, 'Scale', 'Major');
+	await turnOnPads(page, [0]);
+	await active.click();
+	const pitches = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'))
+		.data.instruments.find((i: any) => i.name === 'synth-voice').pitches as number[];
+	const before = await pitches();
+	for (let k = 0; k < 4; k++) await card.getByRole('button', { name: 'Generate', exact: true }).click();
+	const after = await pitches();
+	expect(after.slice(1).some((hz, i) => Math.abs(hz - before[i + 1]) > 0.01)).toBe(true);
 });
 
 test('Melody Maker: clicking a key moves the pattern there, the shorter way, plays it, and is one undo step', async ({ page }) => {
@@ -3871,15 +3890,19 @@ test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its 
 	await page.keyboard.press('Control+z');
 	await expect.poll(lit).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
 
-	// Free cycle (the ⋯ menu): the old way, the chord round and round, ending mid-bar
+	// Tones → 7th: the 7th chord, 1-3-5-7 (in place of the ⋯ menu's "7th on downbeats", PR 68),
+	// four notes, so the cycle of four repeats across the bar
 	await chooseOption(page, 'Arp rate', '1/16');
-	await page.locator('.module.melody').getByRole('button', { name: 'Advanced options' }).click();
-	await page.getByRole('menuitem', { name: /Free cycle/ }).click();
-	await expect(page.getByRole('menuitem', { name: /Free cycle/ }).locator('.mm-switch')).toHaveClass(/on/);
-	await page.keyboard.press('Escape');
+	await chooseOption(page, 'Arp tones', '7th');
 	await generate.click();
-	const free = (await padNotes(page, [...Array(16).keys()])).map(noteMidi);
-	for (let i = 0; i < 16; i++) expect(free[i]).toBe(free[i % 3]);
+	const seventh = (await padNotes(page, [...Array(16).keys()])).map(noteMidi);
+	expect(seventh.slice(0, 4).map((m) => m - seventh[0])).toEqual([0, 4, 7, 11]);
+	for (let i = 0; i < 16; i++) expect(seventh[i]).toBe(seventh[i % 4]);
+	// Skip: every other tone, 1-5-3-7
+	await page.locator('.module.melody').getByRole('button', { name: 'Skip', exact: true }).click();
+	await generate.click();
+	const skipped = (await padNotes(page, [0, 1, 2, 3])).map(noteMidi);
+	expect(skipped.map((m) => m - skipped[0])).toEqual([0, 7, 4, 11]);
 
 	// Saved with the project; File → New goes back to Random
 	expect(JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.melody.mode).toBe('arp');

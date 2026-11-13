@@ -81,7 +81,7 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 		instruments,
 		melody: reactive({
 			keyRoot: 'C', keyScale: 'major', rangePreset: 'low', arpPattern: 'down', arpRate: '1/4',
-			arpOctaves: 3, arpTones: 'scale', mode: 'random',
+			arpOctaves: 3, arpTones: 'scale', arpSkip: false, activeOnly: true, mode: 'random',
 		}),
 		selectedWaveform: ref<Wave>('square'),
 		setStepLength: () => {
@@ -131,8 +131,8 @@ export function changeEverything(st: ProjectState) {
 	fx.drive.enabled.value = true; fx.drive.type.value = 'fuzz'; fx.drive.amount.value = 0.8; fx.drive.tone.value = 3000; fx.drive.mix.value = 0.7; fx.drive.crush.value = true;
 	fx.reverb.enabled.value = true; fx.reverb.mix.value = 0.5; fx.reverb.decay.value = 3; fx.reverb.tone.value = 0.2;
 	Object.assign(st.melody, {
-		keyRoot: 'D', keyScale: 'dorian', rangePreset: 'high', arpPattern: 'updown', arpRate: '1/8', arpOctaves: 2, arpTones: 'scale',
-		mode: 'arp',
+		keyRoot: 'D', keyScale: 'dorian', rangePreset: 'high', arpPattern: 'updown', arpRate: '1/8', arpOctaves: 2, arpTones: 'seventh',
+		arpSkip: true, activeOnly: false, mode: 'arp',
 	});
 	st.selectedWaveform.value = 'sawtooth';
 	const synth = st.instruments.value.find(i => i.name === 'synth-voice')!;
