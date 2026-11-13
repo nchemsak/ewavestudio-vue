@@ -407,6 +407,16 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     hits: under 3 % apart with Retrigger, over 30 % without). The LFO visualizer, with
     Retrigger, shows where the latest note's LFO is (`lfoWaveAt()`), not the shared one.
     `synth.lfo.bipolar` is saved but still unused.
+  - **Each target remembers its depth** (PR 65): `lfoDepth` is the current target's (what the
+    engines read), and `lfoDepths` (saved as `synth.lfo.depths`, one per target) keeps the
+    others. Picking a target (`chooseLfoTarget()` in `DrumSequencer.vue`; `LFOGroup` only
+    emits the target) stores the old one's depth and recalls the new one's; a target picked
+    for the first time gets `LFO_DEFAULT_DEPTH` (Pitch 25 cents, Filter 1500 Hz, Pulse 15 %,
+    Level 40 %, FM 40 %), so the LFO doesn't seem to switch off (until PR 65 every change set
+    Depth to 0). The snapshot's `depths` always shows the knob's own depth for the current
+    target; a project without them gets the defaults (`lfoDepthsFrom()` in `lfo.ts`, which
+    clamps each to its range). Presets and File → New put them back to the defaults. One undo
+    step puts the target and its depth back together.
   - The card (option C of three mockups, PR 61): the power tile, Rate, Depth and the Wave
     switch on one line, the Target switch's five buttons on a full-width line under them (its
     caption shown); five didn't fit beside the knobs.
@@ -1188,35 +1198,32 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Items 1–7 come from the maintainer's brainstorm after PR 63 (its first item, the fixes, was PR 64) (Claude's recommendations, which
+Items 1–6 come from the maintainer's brainstorm after PR 63 (its first items were PRs 64 and 65) (Claude's recommendations, which
 the maintainer accepted; no one else uses the app yet, so older projects need no special care
 in them: a removed setting can simply stop applying).
 
-1. **LFO: each target remembers its depth.** Changing target set Depth to 0, as if the LFO
-   went off. Each target keeps its own depth (saved), starting at a musical default the first
-   time (about Pitch 25 cents, Filter 1500 Hz, Pulse 15 %, Level 40 %, FM 40 %).
-2. **LFO: rates locked to the bar.** Rates 4 bars, 2 bars, 1/1 … 1/32 and 1/64; Free rate
+1. **LFO: rates locked to the bar.** Rates 4 bars, 2 bars, 1/1 … 1/32 and 1/64; Free rate
    and the LFO's ⋯ menu removed. The shared LFO restarts in step with bar 1 on Play (it runs
    free from its first start today, so a long rate would start anywhere in its cycle); the
    export starts it the same way, and the Export dialog defaults to (or warns about) at least
    the LFO's length for a loop.
-3. **Simplify:** VEL switches only on Filter (Envelope's, Pitch's and Noise's removed: hard to
+2. **Simplify:** VEL switches only on Filter (Envelope's, Pitch's and Noise's removed: hard to
    hear); Pattern Tools' "Active Pads Only" a hardware toggle (a cap with an LED) instead of a
    checkbox.
-4. **Melody Maker's options on the card**, its ⋯ menu removed: Free cycle dropped (always
+3. **Melody Maker's options on the card**, its ⋯ menu removed: Free cycle dropped (always
    fitted to the bar); "7th on downbeats" becomes a third Tones choice, **7th chord**
    (1-3-5-7); Skip every other tone a **Skip** toggle; Occasional octave hops dropped; Melody's
    Active Pads Only a toggle shown for Melody only. Into the empty space at the card's bottom.
-5. **Presets:** the Noise card's Backbeat (steps 5 and 13, often empty) becomes **Accents**
+4. **Presets:** the Noise card's Backbeat (steps 5 and 13, often empty) becomes **Accents**
    (noise on the pattern's loudest hits); the patterns Offbeat and Broken become **Half-time**
    and **Breakbeat** (the root as the kick, the octave as the snare), to audition.
-6. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
+5. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
    pads' colours, peak-hold, note marks), F3 Spectrogram, F4 Tuner; the Envelope view only
    while its knobs (and the Pitch card's, with the sweep drawn) are turned, as Filter's.
-7. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
-   then scale the frame down to fit short windows (with a floor). Last, since 3 and 4 change
+6. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
+   then scale the frame down to fit short windows (with a floor). Last, since 2 and 3 change
    the height; measure at the maintainer's screen and common laptop sizes.
-8. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+7. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1401,6 +1408,7 @@ Done:
 | 62 | LFO visualizer for the new targets: FM shows as a dot and an arc on the FM card's Amount knob (while FM is on), Level on the Step Sequencer's Vol knob (from full down to 100 − Depth %), like Cutoff's; not on the pads, whose fill height is velocity. |
 | 63 | Hardware buttons ("soft caps", option A of three mockups): every button is a raised cap that sinks when pressed; a switch's chosen option and a toggle that's on stay down with an LED lit (Melody | Arpeggio, FM's ratios, the LFO's Wave and Target, VEL, RETRIG, RND, the Repeats brush, the presets, the theme buttons); the wave, FM, Unison and LFO tiles are caps that keep their icons, animations, dice and knob; Play, Save, Generate and Enable MIDI too. The pedals' CRUSH and PING PONG stay as they were. No card or button changed size (`src/assets/styles/_hardware.scss`). |
 | 64 | Fixes from the maintainer's brainstorm after PR 63 (whose plan it also adds): the wave tiles light only the wave every pad plays, and Random while the pads play a mix (the old tile stayed lit after Random); a pad's ⋮ Noise reads Off while the Noise card is off ("Noise card is off"), and turning it on then turns the card on for that pad only. |
+| 65 | LFO: each target remembers its depth (saved with the project); a target picked for the first time starts at a little (Pitch 25 cents, Filter 1500 Hz, Pulse 15 %, Level 40 %, FM 40 %) instead of 0, so changing target no longer sounds like the LFO turning off. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

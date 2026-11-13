@@ -54,7 +54,8 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 				maxVoices: computed(() => maxVoices),
 			},
 			lfo: {
-				enabled: ref(false), rate: ref(1), depth: ref(1), target: ref('filter'), waveform: ref('square'),
+				enabled: ref(false), rate: ref(1), depth: ref(1), depths: ref({ pitch: 1, filter: 1, pwm: 1, amp: 1, fm: 1 }),
+				target: ref('filter'), waveform: ref('square'),
 				sync: ref(false), division: ref('1/4'), retrigger: ref(true), bipolar: ref(true),
 			},
 			fm: { enabled: ref(true), modFreq: ref(1), index: ref(1), ratio: ref(null) },
@@ -115,6 +116,7 @@ export function changeEverything(st: ProjectState) {
 	s.noise.attackBurst.value = true; s.noise.burstMs.value = 40;
 	s.unison.enabled.value = true; s.unison.voices.value = 4; s.unison.detuneCents.value = 30; s.unison.stereoSpread.value = 80;
 	s.lfo.enabled.value = false; s.lfo.rate.value = 2; s.lfo.depth.value = 300; s.lfo.target.value = 'filter';
+	s.lfo.depths.value = { pitch: 60, filter: 300, pwm: 30, amp: 70, fm: 20 };
 	s.lfo.waveform.value = 'square'; s.lfo.sync.value = false; s.lfo.division.value = '1/16';
 	s.lfo.retrigger.value = true; s.lfo.bipolar.value = true;
 	s.fm.enabled.value = true; s.fm.modFreq.value = 440; s.fm.index.value = 9; s.fm.ratio.value = 2;

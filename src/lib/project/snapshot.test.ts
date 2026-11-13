@@ -20,6 +20,7 @@ describe('factory defaults (File → New)', () => {
 			unison: { enabled: false, voices: 3, detuneCents: 12, stereoSpread: 100 },
 			lfo: {
 				enabled: true, rate: 5, depth: 0, target: 'pitch', waveform: 'sine',
+				depths: { pitch: 0, filter: 1500, pwm: 15, amp: 40, fm: 40 },
 				sync: true, division: '1/8', retrigger: false, bipolar: false,
 			},
 			fm: { enabled: false, modFreq: 200, index: 4, ratio: 1 },

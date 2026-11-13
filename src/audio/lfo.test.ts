@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LFO_TARGETS, LFO_DEPTH_MAX, isLfoTarget, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, lfoWaveAt } from './lfo';
+import { LFO_TARGETS, LFO_DEPTH_MAX, LFO_DEFAULT_DEPTH, lfoDepthsFrom, isLfoTarget, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, lfoWaveAt } from './lfo';
 
 describe('the LFO', () => {
 	it('has five targets, each with a Depth range', () => {
@@ -35,5 +35,21 @@ describe('the LFO', () => {
 		expect(lfoWaveAt('square', 2, 0.1)).toBe(1);   // high for the first half
 		expect(lfoWaveAt('square', 2, 0.3)).toBe(-1);
 		expect(lfoWaveAt('square', 2, 0.55)).toBe(1);  // next cycle
+	});
+});
+
+describe("each target's remembered depth", () => {
+	it('starts every target at a little depth, within its range', () => {
+		for (const t of LFO_TARGETS) {
+			expect(LFO_DEFAULT_DEPTH[t], t).toBeGreaterThan(0);
+			expect(LFO_DEFAULT_DEPTH[t], t).toBeLessThanOrEqual(LFO_DEPTH_MAX[t] / 2);
+		}
+	});
+
+	it("reads a project's depths: missing or broken ones get the default, the rest are clamped", () => {
+		expect(lfoDepthsFrom(undefined)).toEqual(LFO_DEFAULT_DEPTH);
+		expect(lfoDepthsFrom({ pitch: 300, filter: 'x', pwm: 99, amp: -5, fm: NaN, pan: 3 })).toEqual({
+			...LFO_DEFAULT_DEPTH, pitch: 300, pwm: LFO_DEPTH_MAX.pwm, amp: 0,
+		});
 	});
 });

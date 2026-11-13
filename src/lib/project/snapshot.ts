@@ -10,7 +10,7 @@
 // factory defaults below (a sound setting into resetSoundToFactoryDefaults, which presets use
 // too), and, if it affects sound, into the live and export engines; see CLAUDE.md.
 
-import { isLfoTarget, type LfoTarget } from '../../audio/lfo';
+import { isLfoTarget, lfoDepthsFrom, LFO_DEFAULT_DEPTH, type LfoTarget } from '../../audio/lfo';
 import type { Ref } from 'vue';
 import { clampUnisonVoices, UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MIN } from '../../audio/unison';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_TEMPO, divisionForTime, isDelayDivision, syncedDelaySeconds } from '../delaySync';
@@ -91,7 +91,10 @@ export type ProjectState = {
 		lfo: {
 			enabled: Ref<boolean>;
 			rate: Ref<number>;
-			depth: Ref<number>;
+			depth: Ref<number>; // the current target's
+			// Each target's depth as last set (the current target's is `depth`): switching
+			// target recalls it (chooseLfoTarget in DrumSequencer.vue)
+			depths: Ref<Record<LfoTarget, number>>;
 			target: Ref<LfoTarget>;
 			waveform: Ref<'sine' | 'square'>;
 			sync: Ref<boolean>;
@@ -173,6 +176,7 @@ function byName(st: ProjectState) {
 		lfoEnabled: sy.lfo.enabled,
 		lfoRate: sy.lfo.rate,
 		lfoDepth: sy.lfo.depth,
+		lfoDepths: sy.lfo.depths,
 		lfoTarget: sy.lfo.target,
 		lfoWaveform: sy.lfo.waveform,
 		lfoSync: sy.lfo.sync,
@@ -229,7 +233,7 @@ export function buildSnapshot(st: ProjectState) {
 		filterEnabled, filterCutoff, filterResonance, filterEnvAmount, filterEnvDecayMs,
 		noiseEnabled, noiseColor, noiseAmount, noiseMask, noiseAttackBurst, noiseBurstMs,
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
-		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
+		lfoEnabled, lfoRate, lfoDepth, lfoDepths, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
 		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
@@ -286,6 +290,8 @@ export function buildSnapshot(st: ProjectState) {
 				enabled: lfoEnabled.value,
 				rate: lfoRate.value,
 				depth: lfoDepth.value,
+				// The current target's entry is always the knob's own depth
+				depths: { ...lfoDepths.value, [lfoTarget.value]: lfoDepth.value },
 				target: lfoTarget.value,
 				waveform: lfoWaveform.value,
 				sync: lfoSync.value,
@@ -393,7 +399,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		filterEnabled, filterCutoff, filterResonance, filterEnvAmount, filterEnvDecayMs,
 		noiseEnabled, noiseColor, noiseAmount, noiseMask, noiseAttackBurst, noiseBurstMs,
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
-		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
+		lfoEnabled, lfoRate, lfoDepth, lfoDepths, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
 		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
@@ -492,6 +498,9 @@ export function applySnapshot(st: ProjectState, s: any) {
 		if (syn.lfo.target) {
 			lfoTarget.value = isLfoTarget(syn.lfo.target) ? syn.lfo.target : 'pitch';
 		}
+
+		// Saved since PR 65; a project from before gets the defaults for the other targets
+		lfoDepths.value = lfoDepthsFrom(syn.lfo.depths);
 
 		if (syn.lfo.waveform) lfoWaveform.value = syn.lfo.waveform;
 		if (typeof syn.lfo.sync === 'boolean') lfoSync.value = syn.lfo.sync;
@@ -709,7 +718,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 		filterEnabled, filterCutoff, filterResonance, filterEnvAmount, filterEnvDecayMs,
 		noiseEnabled, noiseColor, noiseAmount, noiseAttackBurst, noiseBurstMs,
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread,
-		lfoEnabled, lfoRate, lfoDepth, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
+		lfoEnabled, lfoRate, lfoDepth, lfoDepths, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
 		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
@@ -741,6 +750,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 	lfoEnabled.value = true;
 	lfoRate.value = 5;
 	lfoDepth.value = 0;
+	lfoDepths.value = { ...LFO_DEFAULT_DEPTH };
 	lfoTarget.value = 'pitch';
 	lfoWaveform.value = 'sine';
 	lfoSync.value = true;
