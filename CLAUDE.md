@@ -183,7 +183,7 @@ src/components/
 src/audio/
   liveEngine.ts          The live sound engine (`useLiveEngine`), see "Audio engine (live)"
   synthHelpers.ts        Pure helpers: noise colors and buffers, drive curves, waveform
-                         loudness, LFO division → Hz
+                         loudness, LFO division → bars, Hz and where it restarts
   ticker.ts              Worker-driven timer for the sequencer clock
   pitchEnv.ts, filterEnv.ts, fm.ts  Per-note helpers shared by the live and offline engines
   lfo.ts                 The LFO's targets and Depth ranges, a note's own LFO (Retrigger), Level
@@ -417,6 +417,20 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     target; a project without them gets the defaults (`lfoDepthsFrom()` in `lfo.ts`, which
     clamps each to its range). Presets and File → New put them back to the defaults. One undo
     step puts the target and its depth back together.
+  - **Rates locked to the bar** (PR 66): the Rate knob steps through `LFO_DIVISIONS` (`lfo.ts`):
+    4 bars, 2 bars, 1 bar, 1/2 … 1/32, 1/64 (saved as `'4/1'`, `'2/1'`, `'1/1'`…; the knob
+    reads "4 bars"…, `lfoDivisionLabel()`), always the division at the tempo
+    (`divisionToHz()`, which reads `p/q` with a dot or T as a fraction of a bar,
+    `divisionBars()`). The free rate in Hz and the LFO card's ⋯ menu (its only option) are
+    gone; `synth.lfo.rate` and `sync` are still saved, but nothing reads them, and a project's
+    division that the knob doesn't have is ignored. While playing, the shared LFO starts its
+    cycle with bar 1 and again on each bar line where a cycle begins (`lfoAlignBars()`: every
+    bar for a division of the bar, every 2 or 4 bars for the long rates, every 3 for a dotted
+    1/8): `restartLfoAt()` in `liveEngine.ts`, from `schedule()` as it builds step 1, starts a
+    new oscillator there and stops the old one, so the wave moves with the pattern and comes
+    back into step after a tempo change. Before PR 66 it ran free from whenever it first
+    started. The export's LFO starts with its first bar, as before. With RETRIG each note's own
+    LFO is unchanged (a 4-bar rate barely moves within a hit).
   - The card (option C of three mockups, PR 61): the power tile, Rate, Depth and the Wave
     switch on one line, the Target switch's five buttons on a full-width line under them (its
     caption shown); five didn't fit beside the knobs.
@@ -904,6 +918,13 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   when the Melody Maker has a scale; `4bars-tail` with the tail), `..._dry.wav` and so on,
   `Project_120bpm_Amin_4bars.mid`, `Project_120bpm_Amin_4bars.zip`, `Project_oneshot_A3.wav`.
   The note names are the app's (A3 = 220 Hz, which Ableton and Logic call A2).
+- **The LFO and loops** (PR 66): a loop repeats smoothly only if it holds whole LFO cycles.
+  While the LFO moves something without RETRIG, `DrumSequencer` passes `lfoBars`
+  (`lfoAlignBars()` of its division) to the dialog: a loop shorter than that, or not a
+  multiple of it, gets a note ("The LFO's cycle takes 4 bars, so a 1-bar loop won't repeat
+  smoothly.") and a **Use 4 bars** button; and on opening, a remembered loop length that
+  doesn't fit is raised to the shortest one that does (none fits a dotted 1/8's 3 bars: the
+  note suggests With tail or RETRIG).
 - Files are 32-bit float WAV at the AudioContext's sample rate, as before.
 - Analytics: `export_audio_click` (the menu item) and `export_audio` (the choices).
 - Browser tests drive the dialog with `exportAudio(page, choices)`; `exportWav(page)` asks for
@@ -1101,7 +1122,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   knob's 0–50 % moves every second step up to half a step, a drum machine's 75 %, so these are
   its usual 54, 58, 62, 66 and 71 %; 33 % is a triplet and reads "33% (triplet)"); every
   bipolar knob's middle; a pad's Fine at 0; Noise Color's Pink, White and Blue. Knobs with
-  hard stops (Delay Time, a synced LFO Rate) have none.
+  hard stops (Delay Time, the LFO's Rate) have none.
 - Layout (PR 41, "C1", picked from mockups): one piece of hardware that fills its frame, the
   `LAYOUT` sections of `DrumSequencer.vue`'s template and styles (a CSS grid, `.ds-grid`).
   The frame fills the window less a 16 px margin, up to 1320 px (`.app-frame` in `App.vue`),
@@ -1198,32 +1219,27 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Items 1–6 come from the maintainer's brainstorm after PR 63 (its first items were PRs 64 and 65) (Claude's recommendations, which
+Items 1–5 come from the maintainer's brainstorm after PR 63 (its first items were PRs 64–66) (Claude's recommendations, which
 the maintainer accepted; no one else uses the app yet, so older projects need no special care
 in them: a removed setting can simply stop applying).
 
-1. **LFO: rates locked to the bar.** Rates 4 bars, 2 bars, 1/1 … 1/32 and 1/64; Free rate
-   and the LFO's ⋯ menu removed. The shared LFO restarts in step with bar 1 on Play (it runs
-   free from its first start today, so a long rate would start anywhere in its cycle); the
-   export starts it the same way, and the Export dialog defaults to (or warns about) at least
-   the LFO's length for a loop.
-2. **Simplify:** VEL switches only on Filter (Envelope's, Pitch's and Noise's removed: hard to
+1. **Simplify:** VEL switches only on Filter (Envelope's, Pitch's and Noise's removed: hard to
    hear); Pattern Tools' "Active Pads Only" a hardware toggle (a cap with an LED) instead of a
    checkbox.
-3. **Melody Maker's options on the card**, its ⋯ menu removed: Free cycle dropped (always
+2. **Melody Maker's options on the card**, its ⋯ menu removed: Free cycle dropped (always
    fitted to the bar); "7th on downbeats" becomes a third Tones choice, **7th chord**
    (1-3-5-7); Skip every other tone a **Skip** toggle; Occasional octave hops dropped; Melody's
    Active Pads Only a toggle shown for Melody only. Into the empty space at the card's bottom.
-4. **Presets:** the Noise card's Backbeat (steps 5 and 13, often empty) becomes **Accents**
+3. **Presets:** the Noise card's Backbeat (steps 5 and 13, often empty) becomes **Accents**
    (noise on the pattern's loudest hits); the patterns Offbeat and Broken become **Half-time**
    and **Breakbeat** (the root as the kick, the octave as the snare), to audition.
-5. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
+4. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
    pads' colours, peak-hold, note marks), F3 Spectrogram, F4 Tuner; the Envelope view only
    while its knobs (and the Pitch card's, with the sweep drawn) are turned, as Filter's.
-6. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
-   then scale the frame down to fit short windows (with a floor). Last, since 2 and 3 change
+5. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
+   then scale the frame down to fit short windows (with a floor). Last, since 1 and 2 change
    the height; measure at the maintainer's screen and common laptop sizes.
-7. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+6. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1409,6 +1425,7 @@ Done:
 | 63 | Hardware buttons ("soft caps", option A of three mockups): every button is a raised cap that sinks when pressed; a switch's chosen option and a toggle that's on stay down with an LED lit (Melody | Arpeggio, FM's ratios, the LFO's Wave and Target, VEL, RETRIG, RND, the Repeats brush, the presets, the theme buttons); the wave, FM, Unison and LFO tiles are caps that keep their icons, animations, dice and knob; Play, Save, Generate and Enable MIDI too. The pedals' CRUSH and PING PONG stay as they were. No card or button changed size (`src/assets/styles/_hardware.scss`). |
 | 64 | Fixes from the maintainer's brainstorm after PR 63 (whose plan it also adds): the wave tiles light only the wave every pad plays, and Random while the pads play a mix (the old tile stayed lit after Random); a pad's ⋮ Noise reads Off while the Noise card is off ("Noise card is off"), and turning it on then turns the card on for that pad only. |
 | 65 | LFO: each target remembers its depth (saved with the project); a target picked for the first time starts at a little (Pitch 25 cents, Filter 1500 Hz, Pulse 15 %, Level 40 %, FM 40 %) instead of 0, so changing target no longer sounds like the LFO turning off. |
+| 66 | LFO rates locked to the bar: Rate goes from 4 bars and 2 bars down to 1/64, always at the tempo; the free rate in Hz and the LFO card's ⋯ menu are gone. While playing, the LFO starts its cycle with bar 1 (and on each bar line where a cycle begins), so a slow sweep moves with the pattern. The Export dialog fits a loop to the LFO's cycle (starts at 4 bars for a 4-bar LFO, and says so with a Use 4 bars button for a shorter loop). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

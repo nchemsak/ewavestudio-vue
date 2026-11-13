@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { LFO_TARGETS, LFO_DEPTH_MAX, LFO_DEFAULT_DEPTH, lfoDepthsFrom, isLfoTarget, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, lfoWaveAt } from './lfo';
+import { divisionToHz } from './synthHelpers';
+import { LFO_DIVISIONS, lfoDivisionLabel, isLfoDivision, LFO_TARGETS, LFO_DEPTH_MAX, LFO_DEFAULT_DEPTH, lfoDepthsFrom, isLfoTarget, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, lfoWaveAt } from './lfo';
 
 describe('the LFO', () => {
 	it('has five targets, each with a Depth range', () => {
@@ -51,5 +52,21 @@ describe("each target's remembered depth", () => {
 		expect(lfoDepthsFrom({ pitch: 300, filter: 'x', pwm: 99, amp: -5, fm: NaN, pan: 3 })).toEqual({
 			...LFO_DEFAULT_DEPTH, pitch: 300, pwm: LFO_DEPTH_MAX.pwm, amp: 0,
 		});
+	});
+});
+
+describe("the Rate knob's divisions", () => {
+	it('go from 4 bars to a 64th, slowest first, all locked to the tempo', () => {
+		expect(LFO_DIVISIONS[0]).toBe('4/1');
+		expect(LFO_DIVISIONS.at(-1)).toBe('1/64');
+		const hz = LFO_DIVISIONS.map((d) => divisionToHz(d, 120));
+		for (let i = 1; i < hz.length; i++) expect(hz[i], LFO_DIVISIONS[i]).toBeGreaterThan(hz[i - 1]);
+	});
+
+	it('read as bars, then note values', () => {
+		expect(LFO_DIVISIONS.map(lfoDivisionLabel)).toEqual(
+			['4 bars', '2 bars', '1 bar', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32', '1/64']);
+		expect(isLfoDivision('1/8')).toBe(true);
+		expect(isLfoDivision('1/3')).toBe(false);
 	});
 });

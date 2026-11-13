@@ -27,21 +27,33 @@ export function lfoFilterTapGain(cutoffHz: number, depthHz: number, sampleRate: 
 
 // LFO timing START
 
-// Tempo-synced LFO rate: a note division such as "1/8", "1/8." (dotted) or "1/8T" (triplet)
-// at `bpm`, as Hz
+// A note division such as "1/8", "1/8." (dotted), "1/8T" (triplet), or "2/1" and "4/1" (two
+// and four whole notes: 2 and 4 bars of 4/4), as a fraction of a bar: [p, q] = p/q bars, in
+// lowest terms. Anything unreadable is a quarter note.
+export function divisionBars(div: string): [number, number] {
+	const m = /^(\d+)\/(\d+)([.T])?$/.exec(String(div).replace(/\s+/g, ''));
+	let p = m ? Math.max(1, parseInt(m[1], 10)) : 1;
+	let q = m ? Math.max(1, parseInt(m[2], 10)) : 4;
+	if (m?.[3] === '.') { p *= 3; q *= 2; }
+	if (m?.[3] === 'T') { p *= 2; q *= 3; }
+	const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+	const g = gcd(p, q);
+	return [p / g, q / g];
+}
+
+// Tempo-synced LFO rate: a division (above) at `bpm`, as Hz
 export function divisionToHz(div: string, bpm: number): number {
-	const parts = div.replace(/\s+/g, '');
-	const dotted = parts.endsWith('.');
-	const trip = parts.endsWith('T');
-	const base = parts.replace(/[\.T]$/, ''); // e.g., "1/8"
-
-	const denom = parseInt(base.split('/')[1] || '4', 10);
-	let beats = 4 / denom; // whole note = 4 beats
-	if (dotted) beats *= 1.5;
-	if (trip) beats *= 2 / 3;
-
-	const seconds = (60 / bpm) * beats;
+	const [p, q] = divisionBars(div);
+	const seconds = (60 / bpm) * 4 * (p / q); // a bar of 4/4 is four beats
 	return Math.max(0.01, 1 / seconds);
+}
+
+// After how many bars an LFO at `div` is back at the start of its cycle on a bar line: 1 for
+// any division that divides the bar (1/8, 1/8T), 2 or 4 for the 2- and 4-bar rates, 3 for a
+// dotted 1/8 (8 cycles in 3 bars). The live LFO restarts there while playing, so it stays in
+// step with the pattern; an exported loop repeats smoothly only if its bars are a multiple.
+export function lfoAlignBars(div: string): number {
+	return divisionBars(div)[0];
 }
 
 // LFO timing END

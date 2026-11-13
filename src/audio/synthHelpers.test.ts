@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
 	waveformGain,
 	divisionToHz,
+	divisionBars,
+	lfoAlignBars,
 	generateDriveCurve,
 	linearPassthroughCurve,
 	generateNoiseBuffers,
@@ -43,6 +45,35 @@ describe('divisionToHz', () => {
 
 	it('never goes below 0.01 Hz', () => {
 		expect(divisionToHz('1/1', 0.01)).toBe(0.01);
+	});
+
+	it('reads 2 and 4 bars (2/1, 4/1) and a 64th', () => {
+		expect(divisionToHz('1/1', 120)).toBeCloseTo(0.5);  // a bar = 2 s
+		expect(divisionToHz('2/1', 120)).toBeCloseTo(0.25);
+		expect(divisionToHz('4/1', 120)).toBeCloseTo(0.125);
+		expect(divisionToHz('1/64', 120)).toBeCloseTo(32);
+	});
+});
+
+describe('a division in bars, and where the LFO restarts', () => {
+	it('is a fraction of a bar in lowest terms', () => {
+		expect(divisionBars('4/1')).toEqual([4, 1]);
+		expect(divisionBars('1/4')).toEqual([1, 4]);
+		expect(divisionBars('1/8.')).toEqual([3, 16]);
+		expect(divisionBars('1/8T')).toEqual([1, 12]);
+		expect(divisionBars('nonsense')).toEqual([1, 4]);
+	});
+
+	it('restarts every bar for divisions of the bar, every 2 or 4 bars for the long ones, every 3 for a dotted 1/8', () => {
+		for (const d of ['1/1', '1/2', '1/4', '1/8', '1/8T', '1/16', '1/32', '1/64']) expect(lfoAlignBars(d), d).toBe(1);
+		expect(lfoAlignBars('2/1')).toBe(2);
+		expect(lfoAlignBars('4/1')).toBe(4);
+		expect(lfoAlignBars('1/8.')).toBe(3);
+		// A whole number of cycles fits in that many bars
+		for (const d of ['4/1', '2/1', '1/8.', '1/8T', '1/64']) {
+			const cycles = lfoAlignBars(d) * 2 * divisionToHz(d, 120); // bars of 2 s at 120 BPM
+			expect(Math.abs(cycles - Math.round(cycles)), d).toBeLessThan(1e-9);
+		}
 	});
 });
 

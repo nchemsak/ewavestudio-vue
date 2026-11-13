@@ -1829,6 +1829,72 @@ test('each LFO target remembers its depth: a new one starts at a little, an old 
 	await expect(depth).toHaveAttribute('aria-valuenow', '0');
 });
 
+test('LFO rates are locked to the bar: 4 bars to 1/64, the cycle starts on bar 1, and the export dialog fits the loop to it', async ({ page }) => {
+	const lfo = page.locator('.module.mod');
+	const rate = lfo.getByRole('slider', { name: 'Rate' });
+	const target = (name: string) => lfo.getByRole('radio', { name, exact: true });
+	// No free rate, so no ⋯ menu on the LFO card any more
+	await expect(lfo.getByRole('button', { name: 'Advanced options' })).toHaveCount(0);
+	await expect(rate).toHaveAttribute('aria-valuetext', '1/8');
+	await rate.focus();
+	await page.keyboard.press('End');
+	await expect(rate).toHaveAttribute('aria-valuetext', '1/64');
+	await page.keyboard.press('Home');
+	await expect(rate).toHaveAttribute('aria-valuetext', '4 bars');
+	await page.keyboard.press('ArrowUp');
+	await expect(rate).toHaveAttribute('aria-valuetext', '2 bars');
+
+	// Playing at 300 BPM (a bar is 0.8 s): a 2-bar LFO (0.625 Hz) starts its cycle with bar 1
+	// and again every 2 bars, on the bar line
+	await page.evaluate(() => {
+		const w = window as any;
+		w.__lfoStarts = [];
+		const orig = OscillatorNode.prototype.start;
+		OscillatorNode.prototype.start = function (this: OscillatorNode, when = 0, ...rest: any[]) {
+			if (this.frequency.value < 20) w.__lfoStarts.push({ when, hz: this.frequency.value, now: this.context.currentTime });
+			return (orig as any).call(this, when, ...rest);
+		};
+	});
+	await setTempo(page, 300);
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => (window as any).__lfoStarts.length), { timeout: 5000 }).toBeGreaterThanOrEqual(3);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	const starts = (await page.evaluate(() => (window as any).__lfoStarts)) as { when: number; hz: number; now: number }[];
+	// The first is the LFO starting up as Play is pressed; then one per 2 bars, from bar 1
+	const synced = starts.filter((s) => s.when > 0);
+	expect(synced.length).toBeGreaterThanOrEqual(2);
+	for (const s of synced) expect(s.hz).toBeCloseTo(0.625, 6);
+	for (let i = 1; i < synced.length; i++) expect(synced[i].when - synced[i - 1].when).toBeCloseTo(1.6, 3);
+
+	// The export dialog: with the LFO moving the filter over 4 bars, a loop starts at 4 bars,
+	// and a shorter one says it won't repeat smoothly, with a button to fix it
+	await rate.focus();
+	await page.keyboard.press('Home');
+	await target('Filter').click();
+	await chooseFromFileMenu(page, 'Export audio…');
+	const dialog = page.getByRole('dialog', { name: 'Export audio' });
+	const bars = dialog.getByRole('group', { name: 'Bars' });
+	await expect(bars.getByRole('button', { name: '4', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await expect(dialog).not.toContainText("won't repeat smoothly");
+	await bars.getByRole('button', { name: '1', exact: true }).click();
+	await expect(dialog).toContainText("The LFO's cycle takes 4 bars, so a 1-bar loop won't repeat smoothly.");
+	await dialog.getByRole('button', { name: 'Use 4 bars' }).click();
+	await expect(bars.getByRole('button', { name: '4', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await expect(dialog).not.toContainText("won't repeat smoothly");
+	// With the tail there's no loop to repeat
+	await bars.getByRole('button', { name: '2', exact: true }).click();
+	await dialog.getByRole('button', { name: 'With tail' }).click();
+	await expect(dialog).not.toContainText("won't repeat smoothly");
+	await page.keyboard.press('Escape');
+
+	// With RETRIG each note starts its own LFO, so any loop repeats smoothly
+	await page.getByRole('switch', { name: 'LFO retrigger' }).click();
+	await chooseFromFileMenu(page, 'Export audio…');
+	await dialog.getByRole('button', { name: 'Loop' }).click();
+	await bars.getByRole('button', { name: '1', exact: true }).click();
+	await expect(dialog).not.toContainText("won't repeat smoothly");
+});
+
 // Imports a project with only step 1 on, at velocity `vel`, and optional velocity amounts
 async function importOneStep(page: Page, vel: number, velocity?: Record<string, number>) {
 	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));

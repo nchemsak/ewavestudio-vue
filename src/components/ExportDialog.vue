@@ -32,6 +32,12 @@
 					</div>
 				</div>
 				<p class="export-note">{{ endingText }}</p>
+				<!-- The LFO's cycle is longer than the loop, or doesn't fit it: the loop would jump
+					 back to another point of the LFO's sweep -->
+				<p v-if="lfoUneven" class="export-note export-lfo-note">
+					The LFO's cycle takes {{ lfoBars }} bars, so a {{ o.bars }}-bar loop won't repeat smoothly{{ lfoFit ? '.' : ': With tail, or the LFO\'s RETRIG, avoids that.' }}
+					<button v-if="lfoFit" type="button" class="pt-btn pt-btn-sm" @click="o.bars = lfoFit">Use {{ lfoFit }} bars</button>
+				</p>
 
 				<!-- On a phone (phone mode): just the mix, normalized; the rest is for a computer -->
 				<p v-if="simple" class="export-note">One WAV file of the mix, as loud as it can go without clipping.
@@ -96,6 +102,9 @@ const props = defineProps<{
 	busy: boolean;
 	progress: string;                           // "2 of 5" while rendering
 	simple?: boolean;                           // phone mode: Bars and Ending only, the mix normalized
+	// Bars after which the LFO's cycle starts again on a bar line (lfoAlignBars); 0 while it
+	// moves nothing or restarts with each note (RETRIG), when any loop length repeats smoothly
+	lfoBars?: number;
 }>();
 
 const emit = defineEmits<{
@@ -110,6 +119,8 @@ const panel = ref<HTMLElement | null>(null);
 watch(() => props.open, async (isOpen) => {
 	if (!isOpen) return;
 	Object.assign(o, props.options);
+	// A loop starts out at least as long as the LFO's cycle, when one of the lengths fits it
+	if (lfoUneven.value && lfoFit.value && lfoFit.value > o.bars) o.bars = lfoFit.value;
 	await nextTick();
 	panel.value?.focus();
 }, { immediate: true });
@@ -126,6 +137,12 @@ const lengthText = computed(() => {
 const endingText = computed(() => o.ending === 'loop'
 	? `Exactly ${o.bars} bar${o.bars === 1 ? '' : 's'}. The reverb and echoes ringing at the end are added onto the start, so it repeats seamlessly in a DAW.`
 	: 'Starts clean, and the reverb and echoes ring out after the last bar: for a part\'s first entrance, or the end of a song.');
+
+// A loop whose length isn't a whole number of the LFO's cycles (a 1-bar loop of a 4-bar LFO)
+const lfoBars = computed(() => props.lfoBars ?? 0);
+const lfoUneven = computed(() => o.ending === 'loop' && lfoBars.value > 1 && o.bars % lfoBars.value !== 0);
+// The shortest length that holds whole cycles (none for a dotted 1/8, whose cycle is 3 bars)
+const lfoFit = computed(() => EXPORT_BARS.find((b) => b % lfoBars.value === 0) ?? null);
 
 const stems = computed(() => ['dry', ...(['delay', 'reverb', 'noise'] as const).filter((p) => props.effectsOn[p])]);
 // "a, b and c"
@@ -220,6 +237,14 @@ const statusText = computed(() => {
 	color: var(--pt-muted);
 	font-size: 0.75rem;
 	line-height: 1.35;
+}
+
+.export-lfo-note {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 10px;
+	color: var(--pt-text);
 }
 
 .export-files {

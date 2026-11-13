@@ -17,14 +17,13 @@
 
                 <div class="pt-knob-row lfo-knobs">
                     <div class="position-relative text-center">
-                        <Knob midi-id="lfo.rate" :value-text="localSync ? String(localDivision) : `${Number(localRate).toFixed(1)} Hz`" v-model="rateKnobModel" size="small" :min="rateMin" :max="rateMax" :step="rateStep"
-                            label="Rate" :color="color" :disabled="!localEnabled" :showMarkers="localSync"
-                            :markers="rateMarkers" :markersOnly="localSync" :markersOffsetDeg="-90"
+                        <!-- Always locked to the tempo: 4 bars (slowest) to 1/64 (PR 66 dropped the
+                             free rate in Hz and the card's ⋯ menu, where it was switched on) -->
+                        <Knob midi-id="lfo.rate" :value-text="rateLabel" v-model="divisionIndex" size="small" :min="0" :max="divisions.length - 1" :step="1"
+                            label="Rate" :color="color" :disabled="!localEnabled" :showMarkers="true"
+                            :markers="rateMarkers" :markersOnly="true" :markersOffsetDeg="-90"
                             @knobStart="activeKnob = 'rate'" @knobEnd="activeKnob = null" />
-                        <span v-if="activeKnob === 'rate'" class="custom-tooltip">
-                            <template v-if="localSync">{{ localDivision }}</template>
-                            <template v-else>{{ Number(localRate).toFixed(1) }} Hz</template>
-                        </span>
+                        <span v-if="activeKnob === 'rate'" class="custom-tooltip">{{ rateLabel }}</span>
                     </div>
 
                     <div class="position-relative text-center">
@@ -65,33 +64,15 @@
                 </div>
             </div>
 
-            <div v-if="advancedOpen" class="mm-menu" role="menu" @click.stop :style="{
-                left: (advPos?.x ?? 0) + 'px',
-                top: (advPos?.y ?? 0) + 'px'
-            }">
-                <div class="mm-menu-title">Advanced Options</div>
-
-                <div class="mm-opt" role="menuitem" @click="setSync(!localSync)">
-                    <span>Free rate (Hz)</span>
-                    <button class="mm-switch" :class="{ on: !localSync }">
-                        <span class="kn"></span>
-                    </button>
-                </div>
-                <div class="mm-reset" role="menuitem" @click.stop="resetAdvanced">
-                    Reset Settings to defaults
-                </div>
-            </div>
-
-            <div v-if="advancedOpen" class="mm-overlay" @click="advancedOpen = false"></div>
         </div>
     </KnobGroup>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
+import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
-import type { LfoTarget } from '../../audio/lfo';
+import { LFO_DIVISIONS, lfoDivisionLabel, type LfoTarget } from '../../audio/lfo';
 
 type Target = LfoTarget;
 type Wave = 'sine' | 'square';
@@ -99,11 +80,9 @@ type Wave = 'sine' | 'square';
 const props = withDefaults(
     defineProps<{
         modelValue: boolean;
-        rate: number;
         depth: number;
         target: Target;
         waveform?: Wave;
-        syncEnabled?: boolean;
         division?: string;
         depthMax?: number;
         color?: string;
@@ -119,16 +98,14 @@ const props = withDefaults(
     }>(),
     {
         modelValue: false,
-        rate: 2,
         depth: 0,
         target: 'pitch',
         waveform: 'sine',
-        syncEnabled: true,
         division: '1/8',
         depthMax: 100,
         color: '#00BCD4',
         waves: () => ['sine', 'square'],
-        divisions: () => ['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32'],
+        divisions: () => [...LFO_DIVISIONS],
         showToggle: false,
         retrigger: false,
         bipolar: false,
@@ -139,11 +116,9 @@ const props = withDefaults(
 
 const emit = defineEmits<{
     (e: 'update:modelValue', v: boolean): void;
-    (e: 'update:rate', v: number): void;
     (e: 'update:depth', v: number): void;
     (e: 'update:target', v: Target): void;
     (e: 'update:waveform', v: Wave): void;
-    (e: 'update:syncEnabled', v: boolean): void;
     (e: 'update:division', v: string): void;
     (e: 'update:retrigger', v: boolean): void;
     (e: 'update:bipolar', v: boolean): void;
@@ -156,61 +131,6 @@ function waveLong(w: Wave | string): string {
     return waveLabel(w);
 }
 
-const advancedOpen = ref(false);
-const advPos = ref<{ x: number; y: number } | null>(null);
-
-function openAdvanced(e?: MouseEvent): void {
-    const target = e?.currentTarget as HTMLElement | null;
-    // Prefer the LFO container that actually owns the trigger
-    const parent =
-        (target?.closest('.lfo-container') as HTMLElement | null) ||
-        (document.querySelector('.lfo-container') as HTMLElement | null);
-
-    // Fallback defaults
-    let x = 24;
-    let y = 24;
-
-    if (target && parent) {
-        const triggerRect = target.getBoundingClientRect();
-        const parentRect = parent.getBoundingClientRect();
-
-        // Initial "open to the right of trigger" position (desktop behavior)
-        x = Math.round(triggerRect.right - parentRect.left + 8);
-        y = Math.round(triggerRect.top - parentRect.top);
-
-        // On small screens only, clamp inside the LFO container
-        if (typeof window !== 'undefined' && window.innerWidth <= 720) {
-            const MENU_WIDTH = 280;
-            const PADDING = 8;
-
-            const maxX = Math.max(PADDING, parentRect.width - MENU_WIDTH - PADDING);
-            if (x > maxX) x = maxX;
-            if (x < PADDING) x = PADDING;
-        }
-    }
-
-    advPos.value = { x, y };
-    advancedOpen.value = true;
-}
-
-function onKey(e: KeyboardEvent): void {
-    if (e.key === 'Escape') advancedOpen.value = false;
-}
-
-onMounted(() => {
-    if (typeof window !== 'undefined') {
-        window.addEventListener('keydown', onKey, { capture: true });
-    }
-});
-
-onUnmounted(() => {
-    if (typeof window !== 'undefined') {
-        window.removeEventListener('keydown', onKey, { capture: true });
-    }
-});
-
-defineExpose({ openAdvanced });
-
 const localEnabled = ref<boolean>(props.modelValue);
 watch(
     () => props.modelValue,
@@ -219,15 +139,6 @@ watch(
     }
 );
 watch(localEnabled, (v) => emit('update:modelValue', v));
-
-const localRate = ref<number>(props.rate);
-watch(
-    () => props.rate,
-    (v) => {
-        localRate.value = v;
-    }
-);
-watch(localRate, (v) => emit('update:rate', v));
 
 const localDepth = ref<number>(props.depth);
 watch(
@@ -278,18 +189,6 @@ function setWave(w: Wave): void {
     emit('update:waveform', w);
 }
 
-const localSync = ref<boolean>(props.syncEnabled);
-watch(
-    () => props.syncEnabled,
-    (v) => {
-        localSync.value = v;
-    }
-);
-function setSync(v: boolean): void {
-    localSync.value = v;
-    emit('update:syncEnabled', v);
-}
-
 const localDivision = ref<string | undefined>(props.division);
 watch(
     () => props.division,
@@ -330,12 +229,9 @@ const depthReadout = computed<string>(() => {
     }
 });
 
-const rateMin = computed<number>(() => (localSync.value ? 0 : 0.1));
-const rateMax = computed<number>(() => (localSync.value ? props.divisions.length - 1 : 20));
-const rateStep = computed<number>(() => (localSync.value ? 1 : 0.1));
+const rateLabel = computed<string>(() => lfoDivisionLabel(localDivision.value || '1/8'));
 
 const rateMarkers = computed<number[]>(() => {
-    if (!localSync.value) return [];
     const n = props.divisions.length;
     return n <= 1 ? [0.5] : props.divisions.map((_, i) => i / (n - 1));
 });
@@ -352,34 +248,6 @@ const divisionIndex = computed<number>({
         setDivision(d);
     }
 });
-
-const rateKnobModel = computed<number>({
-    get() {
-        return localSync.value ? divisionIndex.value : localRate.value;
-    },
-    set(v: number) {
-        if (localSync.value) {
-            divisionIndex.value = v;
-        } else {
-            localRate.value = v;
-        }
-    }
-});
-
-function resetAdvanced(): void {
-    // Reset core motion parameters
-    localRate.value = 2;
-    localDepth.value = 0;
-    localSync.value = true;
-    localDivision.value = '1/8';
-
-    emit('update:rate', 2);
-    emit('update:depth', 0);
-    emit('update:syncEnabled', true);
-    emit('update:division', '1/8');
-
-    advancedOpen.value = false;
-}
 
 function wavePath(w: Wave | string): string {
     switch (w) {
@@ -579,86 +447,6 @@ svg {
 .lfo-seg-btn:disabled {
     cursor: default;
     opacity: 0.4;
-}
-
-.mm-menu {
-    position: absolute;
-    min-width: 280px;
-    border-radius: 12px;
-    box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
-    padding: 10px;
-    z-index: 1000;
-    background: var(--pt-panel);
-    color: var(--pt-text);
-    border: 1px solid var(--pt-hairline);
-}
-
-.mm-menu-title {
-    font-weight: 700;
-    color: var(--pt-menu-caption);
-    opacity: 0.9;
-    padding: 8px 8px 6px;
-}
-
-.mm-opt {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px;
-    border-radius: 8px;
-}
-
-.mm-opt:hover {
-    background: rgba(255, 255, 255, 0.04);
-    cursor: pointer;
-}
-
-.mm-reset {
-    text-align: center;
-    color: var(--pt-menu-caption);
-    opacity: 0.9;
-    padding: 10px 8px 4px;
-    cursor: pointer;
-}
-
-.mm-switch {
-    --sw: 38px;
-    --kn: 18px;
-    width: var(--sw);
-    height: 22px;
-    border-radius: 999px;
-    background: var(--pt-surface-2);
-    border: 1px solid var(--pt-hairline);
-    position: relative;
-    cursor: pointer;
-}
-
-.mm-switch .kn {
-    position: absolute;
-    top: 50%;
-    left: 2px;
-    transform: translateY(-50%);
-    width: var(--kn);
-    height: var(--kn);
-    border-radius: 999px;
-    background: #fff;
-    box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
-}
-
-.mm-switch.on {
-    background: linear-gradient(180deg,
-            hsl(var(--pt-accent) 80% 60%),
-            hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
-}
-
-.mm-switch.on .kn {
-    left: calc(100% - var(--kn) - 2px);
-}
-
-.mm-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 999;
 }
 
 </style>
