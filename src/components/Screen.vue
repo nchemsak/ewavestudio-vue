@@ -11,11 +11,14 @@
                 <!-- Tuner canvas -->
                 <canvas v-show="view === 'tuner'" ref="lcdTuner" aria-hidden="true"></canvas>
 
-                <!-- Envelope canvas -->
+                <!-- Envelope canvas (no F-key since PR 70: shown while an envelope or pitch knob is turned) -->
                 <canvas v-show="view === 'env'" ref="lcdEnv" aria-hidden="true"></canvas>
 
                 <!-- Filter response canvas (no F-key: shown while a filter knob is turned) -->
                 <canvas v-show="view === 'filter'" ref="lcdFilter" aria-hidden="true"></canvas>
+
+                <!-- Spectrum canvas (F2, PR 70; last, so the others keep their places) -->
+                <canvas v-show="view === 'spectrum'" ref="lcdSpectrum" aria-hidden="true"></canvas>
             </div>
         </div>
 
@@ -49,13 +52,15 @@ const lcdSpec = ref(null);
 const lcdTuner = ref(null);
 const lcdEnv = ref(null);
 const lcdFilter = ref(null);
+const lcdSpectrum = ref(null);
 
 defineExpose({
     scopeCanvas: lcdScope,
     specCanvas: lcdSpec,
     tunerCanvas: lcdTuner,
     envCanvas: lcdEnv,
-    filterCanvas: lcdFilter
+    filterCanvas: lcdFilter,
+    spectrumCanvas: lcdSpectrum
 });
 
 const ICONS = {
@@ -79,17 +84,26 @@ const ICONS = {
             <circle cx="12" cy="20.5" r="1" fill="currentColor"/>
           </svg>`,
 
+    // The Spectrum: a frequency curve over a floor
+    spectrum: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M3 19h18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M3 17C5 16 6 8 8 8s2 7 4 7 2-11 4-11 3 9 5 11"
+                fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`,
+
     env: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path d="M3 18V6h6l4 6h8v6H3z"
                 fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
         </svg>`,
 };
 
+// F1 Scope, F2 Spectrum, F3 Spectrogram, F4 Tuner (PR 70: the Envelope view lost its F-key and
+// shows only while its knobs are turned, as the filter view does)
 const defaultDefs = [
     { id: 1, title: 'Oscilloscope', svg: ICONS.scope },
-    { id: 2, title: 'Spectrogram', svg: ICONS.spec },
-    { id: 3, title: 'Tuner', svg: ICONS.tuner },
-    { id: 4, title: 'Envelope', svg: ICONS.env },
+    { id: 2, title: 'Spectrum', svg: ICONS.spectrum },
+    { id: 3, title: 'Spectrogram', svg: ICONS.spec },
+    { id: 4, title: 'Tuner', svg: ICONS.tuner },
 ];
 
 const fkeyDefs = computed(() => {

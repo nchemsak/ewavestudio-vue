@@ -15,7 +15,8 @@
 						</div>
 						<div class="module pitch-env">
 							<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
-								v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
+								v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode"
+							@knob-start="onPitchKnobStart" @knob-end="onScreenKnobEnd" />
 						</div>
 						<div class="module filter">
 							<SectionWrap class="filter-card" id="pl-filter" title="Filter" :modelValue="true">
@@ -363,7 +364,8 @@
 
 					<div class="module pitch-env">
 						<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
-							v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode" />
+							v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode"
+							@knob-start="onPitchKnobStart" @knob-end="onScreenKnobEnd" />
 					</div>
 
 					<div class="module filter">
@@ -615,6 +617,7 @@ import UnisonEffect from './modules/UnisonEffect.vue';
 import LFOGroup from './modules/LFOGroup.vue';
 import nacScreen from './Screen.vue';
 import { startFilterView } from './filterView';
+import { startSpectrumView } from './spectrumView';
 import PitchEnvModule from './modules/PitchEnvModule.vue';
 import PhoneLayout from './PhoneLayout.vue';
 import { usePhoneMode } from '../composables/usePhoneMode';
@@ -631,7 +634,6 @@ import VelSwitch from './VelSwitch.vue';
 import PillSwitch from './PillSwitch.vue';
 import LfoModKnob from './LfoModKnob.vue';
 import { LFO_DEPTH_MAX, LFO_DEFAULT_DEPTH, type LfoTarget } from '../audio/lfo';
-import { VELOCITY_FAN, routeVelocity } from '../audio/velocity';
 import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
 import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
@@ -1058,11 +1060,15 @@ function midiToNamePref(m: number, mode: AccidentalMode = accidentalMode.value) 
 
 const lcdText = ref('HARP  2');
 const activeFKey = ref<number>(1);
-const lcdView = ref<'text' | 'scope' | 'spec' | 'tuner' | 'env' | 'filter'>('scope');
+const lcdView = ref<'text' | 'scope' | 'spectrum' | 'spec' | 'tuner' | 'env' | 'filter'>('scope');
+// What the envelope view puts first: the amp envelope (Attack, Decay) or the pitch sweep (the
+// Pitch card's knobs), whichever was turned to show it
+const envFocus = ref<'amp' | 'pitch'>('amp');
 const screen = ref<InstanceType<typeof nacScreen> | null>(null);
 
-// While a knob is turned, the screen shows what it changes (Attack/Decay: the envelope view,
-// F4; Cutoff/Resonance: the filter view, no F-key), then goes back to the view it was on.
+// While a knob is turned, the screen shows what it changes (Attack/Decay and the Pitch card's
+// Amount/Decay: the envelope view; Cutoff/Resonance: the filter view; neither has an F-key
+// since PR 70), then goes back to the view it was on.
 // If the user picks another view while turning, that view stays.
 const prevScreen = ref<{ view: typeof lcdView.value; fkey: number } | null>(null);
 let screenHoldCount = 0;
@@ -1085,7 +1091,14 @@ function flashScreen(view: typeof lcdView.value, fkey: number) {
 }
 
 function onEnvKnobStart() {
-	holdScreen('env', 4);
+	envFocus.value = 'amp';
+	holdScreen('env', 0); // 0: no F-key lit (F4 was the envelope until PR 70)
+}
+
+// The Pitch card's Amount or Decay: the envelope view, the pitch sweep drawn on top
+function onPitchKnobStart() {
+	envFocus.value = 'pitch';
+	holdScreen('env', 0);
 }
 
 function onFilterKnobStart() {
@@ -1138,12 +1151,14 @@ function fitCanvasToBox(canvas, ctx) {
 }
 
 // Toggle by F-keys
+// F1 Scope, F2 Spectrum, F3 Spectrogram, F4 Tuner (PR 70: the Spectrum is new, and the
+// Envelope view lost F4; it shows while its knobs are turned)
 function handleFKey(n: number) {
 	activeFKey.value = n;
 	if (n === 1) lcdView.value = 'scope';
-	else if (n === 2) lcdView.value = 'spec';
-	else if (n === 3) lcdView.value = 'tuner';
-	else if (n === 4) lcdView.value = 'env';
+	else if (n === 2) lcdView.value = 'spectrum';
+	else if (n === 3) lcdView.value = 'spec';
+	else if (n === 4) lcdView.value = 'tuner';
 	else lcdView.value = 'text';
 }
 
@@ -1450,37 +1465,66 @@ function startEnvViz() {
 			ctx.stroke();
 		};
 
-		// Decay's VEL switch: softer steps' envelopes, dashed and fainter (as the engines route them)
-		const velDecay = velocityRouting.decay.value;
-		if (velDecay !== 0) {
-			ctx.strokeStyle = ink;
-			ctx.lineWidth = 1.5;
-			ctx.setLineDash([5, 4]);
-			VELOCITY_FAN.forEach((v, i) => {
-				ctx.globalAlpha = i === 0 ? 0.6 : 0.4;
-				strokeEnv(D * routeVelocity({ decay: velDecay }, v).decayFactor);
-			});
-			ctx.setLineDash([]);
-			ctx.globalAlpha = 1;
-		}
+		// The pitch sweep (the Pitch card, PR 70): how far the note starts from its pitch, falling
+		// to it as the engines' setTargetAtTime does (time constant Decay / 4), as a share of
+		// Amount; drawn in the screen's second colour, and first when a Pitch knob is turned
+		const semis = pitchEnvEnabled.value ? Math.round(pitchEnvSemitones.value) : 0;
+		const sweepMs = Math.max(5, Math.round(pitchEnvDecayMs.value));
+		const sweepInk = (css.getPropertyValue('--nac-spec-high') || '#ffc400').trim();
+		const pitchFirst = envFocus.value === 'pitch';
+		const strokeSweep = () => {
+			const tau = sweepMs / 4;
+			ctx.beginPath();
+			ctx.moveTo(L, T);
+			for (let ms = AXIS_MIN_MS; ms <= AXIS_MAX_MS; ms += STEP_MS) {
+				ctx.lineTo(timeToX(ms), T + (1 - Math.exp(-ms / tau)) * plotH);
+			}
+			ctx.stroke();
+		};
 
-		ctx.lineWidth = 2;
+		ctx.lineWidth = pitchFirst ? 1.5 : 2;
 		ctx.strokeStyle = ink;
+		ctx.globalAlpha = pitchFirst ? 0.45 : 1;
 		strokeEnv(D);
+		if (semis > 0) {
+			ctx.lineWidth = pitchFirst ? 2 : 1.5;
+			ctx.strokeStyle = sweepInk;
+			ctx.globalAlpha = pitchFirst ? 1 : 0.6;
+			if (!pitchFirst) ctx.setLineDash([5, 4]);
+			strokeSweep();
+			ctx.setLineDash([]);
+		}
+		ctx.globalAlpha = 1;
+		ctx.strokeStyle = ink;
+		ctx.lineWidth = 1;
 
 		// Labels & tick
 		ctx.font = `700 11px Cousine, ui-monospace, monospace`;
-		ctx.fillStyle = ink; ctx.globalAlpha = 0.9; ctx.textAlign = 'left';
-		ctx.fillText(velDecay !== 0 ? 'Amplitude Envelope (dashed: softer steps)' : 'Amplitude Envelope (Attack → Decay)', L, 12);
+		ctx.fillStyle = pitchFirst ? sweepInk : ink; ctx.globalAlpha = 0.9; ctx.textAlign = 'left';
+		const dir = pitchMode.value === 'random' ? '±' : pitchMode.value === 'down' ? '−' : '+';
+		ctx.fillText(pitchFirst
+			? (semis > 0 ? `Pitch sweep ${dir}${semis} st → note in ${sweepMs} ms` : 'Pitch sweep: off (Amount 0)')
+			: 'Amp Envelope', L, 12);
+		// The other curve's name, on the right in its own colour
+		ctx.textAlign = 'right';
+		if (!pitchFirst && semis > 0) { ctx.fillStyle = sweepInk; ctx.fillText('┄ pitch sweep', L + plotW, 12); }
+		if (pitchFirst) { ctx.fillStyle = ink; ctx.globalAlpha = 0.6; ctx.fillText('amp envelope', L + plotW, T + 14); }
+		ctx.fillStyle = ink;
 
-		ctx.globalAlpha = 0.85; ctx.textAlign = 'center';
-		ctx.fillText(`${A} ms`, ax, H - 4);
-		ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(ax, T); ctx.lineTo(ax, T + plotH); ctx.stroke();
-		ctx.globalAlpha = 1;
+		// Attack's time under its tick (the amp envelope's knobs only)
+		const atkLabel = `${A} ms`;
+		const atkClear = !pitchFirst && ax - L > ctx.measureText('1 ms').width + ctx.measureText(atkLabel).width / 2 + 6;
+		if (!pitchFirst) {
+			ctx.globalAlpha = 0.85; ctx.textAlign = 'center';
+			ctx.fillText(atkLabel, Math.max(ax, L + ctx.measureText(atkLabel).width / 2), H - 4);
+			ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(ax, T); ctx.lineTo(ax, T + plotH); ctx.stroke();
+		}
+		ctx.globalAlpha = 0.85;
 
-		// time scale labels
-		ctx.textAlign = 'left'; ctx.fillText('1 ms', L, H - 4);
+		// time scale labels (the left one only where Attack's label leaves room for it)
+		if (pitchFirst || atkClear) { ctx.textAlign = 'left'; ctx.fillText('1 ms', L, H - 4); }
 		ctx.textAlign = 'right'; ctx.fillText('2000 ms', L + plotW, H - 4);
+		ctx.globalAlpha = 1;
 	}
 	draw();
 }
@@ -1495,6 +1539,15 @@ onMounted(() => {
 	startSpectrogram();
 	startTuner();
 	startEnvViz();
+	const spectrumCanvas = screen.value?.spectrumCanvas as unknown as HTMLCanvasElement | null;
+	if (spectrumCanvas) startSpectrumView({
+		canvas: spectrumCanvas,
+		audioCtx,
+		analyser,
+		isActive: () => lcdView.value === 'spectrum',
+		fit: fitCanvasToBox,
+		flats: () => accidentalMode.value === 'flat',
+	});
 	const filterCanvas = screen.value?.filterCanvas as unknown as HTMLCanvasElement | null;
 	if (filterCanvas) startFilterView({
 		canvas: filterCanvas,

@@ -18,14 +18,14 @@
                 <div class="position-relative text-center">
                     <Knob midi-id="pitchEnv.amount" v-model="signedAmount" bipolar label="Amount" size="small" :min="-AMOUNT_MAX" :max="AMOUNT_MAX"
                         :step="1" :value-text="amountText" :disabled="!enabled" :color="color"
-                        @knobStart="activeKnob = 'amt'" @knobEnd="activeKnob = null" />
+                        @knobStart="knobStart('amt')" @knobEnd="knobEnd" />
                     <span v-if="activeKnob === 'amt'" class="custom-tooltip">{{ amountTip }}</span>
                 </div>
 
                 <div class="position-relative text-center">
                     <Knob midi-id="pitchEnv.decay" v-model="decay" label="Decay" size="small" :min="5" :max="2000" :step="1" taper="log"
                         :value-text="`${Math.round(decay)} ms`" :disabled="!enabled" :color="color"
-                        @knobStart="activeKnob = 'decay'" @knobEnd="activeKnob = null" />
+                        @knobStart="knobStart('decay')" @knobEnd="knobEnd" />
                     <span v-if="activeKnob === 'decay'" class="custom-tooltip">{{ Math.round(decay) }} ms</span>
                 </div>
             </div>
@@ -56,9 +56,20 @@ const emit = defineEmits<{
     (e: 'update:semitones', v: number): void
     (e: 'update:decayMs', v: number): void
     (e: 'update:mode', v: Mode): void
+    // A knob turned and let go: DrumSequencer shows the envelope view, the sweep on top (PR 70)
+    (e: 'knob-start'): void
+    (e: 'knob-end'): void
 }>()
 
 const activeKnob = ref<null | 'amt' | 'decay'>(null)
+function knobStart(k: 'amt' | 'decay') {
+    activeKnob.value = k
+    emit('knob-start')
+}
+function knobEnd() {
+    activeKnob.value = null
+    emit('knob-end')
+}
 const isRandom = computed(() => props.mode === 'random')
 
 // The knob's signed position. In random mode the sign has no meaning, so the knob keeps

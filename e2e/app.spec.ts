@@ -280,7 +280,8 @@ test('the built page has the Google Analytics tag (stubbed out here)', async ({ 
 
 test('number keys 1–4 switch the screen view, except while typing', async ({ page }) => {
 	await page.locator('body').click({ position: { x: 5, y: 5 } });
-	for (const [key, title] of [['2', 'Spectrogram'], ['3', 'Tuner'], ['4', 'Envelope'], ['1', 'Oscilloscope']]) {
+	// F1 Scope, F2 Spectrum, F3 Spectrogram, F4 Tuner (PR 70: the Envelope view has no key)
+	for (const [key, title] of [['2', 'Spectrum'], ['3', 'Spectrogram'], ['4', 'Tuner'], ['1', 'Oscilloscope']]) {
 		await page.keyboard.press(key);
 		await expect(screenView(page)).toHaveAttribute('title', title);
 	}
@@ -296,7 +297,7 @@ test('the spectrogram draws a note in its pad\'s colour', async ({ page }) => {
 	const padHueNow = await pads(page).nth(0).evaluate((el) => Number(getComputedStyle(el).getPropertyValue('--heat-h')));
 	expect(padHueNow).toBe(padHue(220));
 	await page.locator('body').click({ position: { x: 5, y: 5 } });
-	await page.keyboard.press('2');
+	await page.keyboard.press('3');
 	await expect(screenView(page)).toHaveAttribute('title', 'Spectrogram');
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
 	await page.waitForTimeout(2500);
@@ -335,6 +336,57 @@ test('the spectrogram draws a note in its pad\'s colour', async ({ page }) => {
 	expect(near / hues.length).toBeGreaterThan(0.6);
 });
 
+test('the Spectrum (F2) draws a played note at its frequency, in its pad\'s colour; the Pitch card\'s knobs show the envelope view', async ({ page }) => {
+	await turnOnPads(page, [0, 4, 8, 12]); // A3, 220 Hz, the default sine
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('2');
+	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
+	const spectrum = page.locator('.nac-screen__lcd canvas').nth(5);
+	await expect(spectrum).toBeVisible();
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await page.waitForTimeout(800);
+	// The column of the plot at 220 Hz (the same log axis as the filter view: 20 Hz–20 kHz,
+	// the plot 14 px in from the left and 10 from the right), read while it plays
+	const reading = await spectrum.evaluate((c: HTMLCanvasElement) => {
+		const ctx = c.getContext('2d')!;
+		const dpr = c.width / c.clientWidth;
+		const plotW = c.clientWidth - 14 - 10;
+		const x = Math.round((14 + (Math.log(220 / 20) / Math.log(1000)) * plotW) * dpr);
+		const { data } = ctx.getImageData(x, 0, 1, c.height);
+		// The screen's background (a corner): it and what's drawn faintly over it (the grid, the
+		// dashed note mark) aren't the note
+		const bg = ctx.getImageData(1, Math.round(c.height / 2), 1, 1).data;
+		const hues: number[] = [];
+		for (let i = 0; i < data.length; i += 4) {
+			const [r, g, b] = [data[i] / 255, data[i + 1] / 255, data[i + 2] / 255];
+			const max = Math.max(r, g, b), min = Math.min(r, g, b);
+			if (max - min < 0.25) continue; // greys: the outline, text
+			if (Math.abs(data[i] - bg[0]) + Math.abs(data[i + 1] - bg[1]) + Math.abs(data[i + 2] - bg[2]) < 90) continue;
+			const d = max - min;
+			let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+			h = Math.round(h * 60);
+			hues.push(h < 0 ? h + 360 : h);
+		}
+		return hues;
+	});
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	expect(reading.length, 'the note is drawn there').toBeGreaterThan(10);
+	const near = reading.filter((h) => Math.abs(h - padHue(220)) <= 14).length;
+	expect(near / reading.length).toBeGreaterThan(0.6);
+
+	// The Pitch card's Amount shows the envelope view (the sweep drawn on it), no F-key lit,
+	// then back to the Spectrum when the knob is let go
+	const envCanvas = page.locator('.nac-screen__lcd canvas').nth(3);
+	const amount = page.locator('.sound-row-2 .module.pitch-env').getByRole('slider', { name: 'Amount' });
+	await amount.focus();
+	await page.keyboard.press('ArrowRight');
+	await expect(envCanvas).toBeVisible();
+	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
+	await page.keyboard.press('Tab');
+	await expect(envCanvas).toBeHidden();
+	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
+});
+
 test('knobs work from the keyboard, and turning Attack shows the envelope until focus moves on', async ({ page }) => {
 	// One step per arrow on a knob with few steps (tempo: 1 BPM)
 	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
@@ -360,13 +412,15 @@ test('knobs work from the keyboard, and turning Attack shows the envelope until 
 	await page.keyboard.press('ArrowDown');
 	await expect(cutoff).toHaveAttribute('aria-valuetext', '4901 Hz');
 
-	// Turning an envelope knob shows the envelope view, as dragging it does, until the knob
-	// loses focus (moving on from Cutoff ends its filter view first)
+	// Turning an envelope knob shows the envelope view (no F-key of its own since PR 70), as
+	// dragging it does, until the knob loses focus (moving on from Cutoff ends its filter view first)
 	const attack = page.getByRole('slider', { name: 'Attack' });
+	const envCanvas = page.locator('.nac-screen__lcd canvas').nth(3);
 	await attack.focus();
 	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope'); // focus alone changes nothing
 	await page.keyboard.press('ArrowUp');
-	await expect(screenView(page)).toHaveAttribute('title', 'Envelope');
+	await expect(envCanvas).toBeVisible();
+	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
 	await expect(attack).toHaveAttribute('aria-valuetext', /^\d+ ms$/);
 	await page.keyboard.press('Tab');
 	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
@@ -406,7 +460,7 @@ test('turning Cutoff or Resonance shows the filter curve until the knob is let g
 	await cutoff.focus();
 	await page.keyboard.press('ArrowUp');
 	await expect(filterCanvas).toBeVisible();
-	await page.keyboard.press('2');
+	await page.keyboard.press('3');
 	await expect(screenView(page)).toHaveAttribute('title', 'Spectrogram');
 	await page.keyboard.press('Tab');
 	await expect(screenView(page)).toHaveAttribute('title', 'Spectrogram');
