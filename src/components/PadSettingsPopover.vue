@@ -10,7 +10,7 @@
             <div v-if="showWaveRow" class="pad-row">
                 <div class="pad-label">Wave</div>
                 <div class="pt-seg pt-seg-sm wave-seg" role="group" aria-label="Waveform">
-                    <button v-for="w in WAVE_IDS" :key="w" class="pt-seg-btn" :class="{ 'is-active': waveLocal === w }"
+                    <button v-for="w in WAVE_IDS" :key="w" class="pt-seg-btn hw-led-top" :class="{ 'is-active': waveLocal === w }"
                         :aria-pressed="waveLocal === w" @click="setWave(w)">
                         {{ WAVE_LABELS[w] }}
                     </button>
@@ -30,7 +30,7 @@
                 <div class="pad-label">Repeats</div>
                 <div class="pt-seg pt-seg-sm" role="group" aria-label="Repeats"
                     title="Quick hits within the step: a roll or stutter (a ratchet)">
-                    <button v-for="n in RATCHET_COUNTS" :key="n" class="pt-seg-btn"
+                    <button v-for="n in RATCHET_COUNTS" :key="n" class="pt-seg-btn hw-led-top"
                         :class="{ 'is-active': ratchet === n }" :aria-pressed="ratchet === n"
                         @click="emit('update:ratchet', n)">×{{ n }}</button>
                 </div>
@@ -41,7 +41,7 @@
                 <div class="pad-label">Notes</div>
                 <div class="pt-seg pt-seg-sm" role="group" aria-label="Repeat notes"
                     :title="(ratchet ?? 1) > 1 ? 'What the repeats play: the pad\'s note each time, or up or down the key\'s chord' : 'Pick ×2–×4 above: then the repeats can step up or down the key\'s chord'">
-                    <button v-for="m in NOTE_CHOICES" :key="m.id" class="pt-seg-btn"
+                    <button v-for="m in NOTE_CHOICES" :key="m.id" class="pt-seg-btn hw-led-top"
                         :class="{ 'is-active': repeatNotes === m.id }" :aria-pressed="repeatNotes === m.id"
                         :disabled="(ratchet ?? 1) < 2" @click="emit('update:repeatNotes', m.id)">{{ m.label }}</button>
                 </div>
@@ -49,11 +49,11 @@
 
             <div class="kb" role="group" aria-label="Note selector">
                 <div v-for="(key, i) in NATURALS" :key="key.n" class="kb-cell" :class="{ 'has-sharp': key.hasSharp }">
-                    <button class="pt-seg-btn kb-white" :class="{ 'is-active': (baseMidi % 12) === key.idx }"
+                    <button class="kb-white" :class="{ 'is-active': (baseMidi % 12) === key.idx }"
                         :disabled="isNoteDisabled(key.idx, octave)"
                         @click="!isNoteDisabled(key.idx, octave) && pickSemitone(key.idx)">{{ key.n }}</button>
 
-                    <button v-if="key.hasSharp" class="pt-seg-btn kb-black"
+                    <button v-if="key.hasSharp" class="kb-black"
                         :class="{ 'is-active': (baseMidi % 12) === key.sharpIdx }"
                         :disabled="isNoteDisabled(key.sharpIdx, octave)"
                         @click="!isNoteDisabled(key.sharpIdx, octave) && pickSemitone(key.sharpIdx)">{{ key.n
@@ -64,7 +64,7 @@
             <div class="pad-row">
                 <div class="pad-label">Octave</div>
                 <div class="pt-seg pt-seg-sm octave-seg" role="group" aria-label="Octave">
-                    <button v-for="o in availableOctaves" :key="o" class="pt-seg-btn"
+                    <button v-for="o in availableOctaves" :key="o" class="pt-seg-btn hw-led-top"
                         :class="{ 'is-active': octave === o }" @click="pickOctave(o)">{{ o }}</button>
                 </div>
             </div>
@@ -433,7 +433,7 @@ watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
     height: var(--whiteH);
 }
 
-.kb :where(.pt-seg-btn) {
+.kb :where(button) {
     all: unset;
     line-height: 1;
     box-sizing: border-box;

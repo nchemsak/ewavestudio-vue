@@ -48,9 +48,9 @@
                  and the columns around it don't move. -->
             <div class="mm-group">
                 <div class="pt-seg pt-seg-sm mm-mode" role="group" aria-label="Generate">
-                    <button type="button" class="pt-seg-btn" :class="{ 'is-active': mode === 'random' }"
+                    <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'random' }"
                         :aria-pressed="mode === 'random'" @click="mode = 'random'">Melody</button>
-                    <button type="button" class="pt-seg-btn" :class="{ 'is-active': mode === 'arp' }"
+                    <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'arp' }"
                         :aria-pressed="mode === 'arp'" @click="mode = 'arp'">Arpeggio</button>
                 </div>
 
@@ -80,7 +80,7 @@
                 </div>
 
                 <div class="mm-primary">
-                    <button class="mm-btn mm-primary-btn melody-btn" @click="generate()">Generate</button>
+                    <button class="mm-btn mm-primary-btn melody-btn hw-cap" @click="generate()">Generate</button>
                 </div>
             </div>
 
@@ -1078,21 +1078,16 @@ defineExpose({ openAdvanced, getUi, setUi });
     padding: 0 14px;
     border-radius: 12px;
     border: 0;
-    cursor: pointer;
     font-weight: 700;
-    transition: filter 0.2s ease, box-shadow 0.2s ease, transform 0.08s ease;
 }
 
-.mm-btn:active {
-    transform: translateY(1px) scale(0.98);
-}
-
+/* Generate: a big cap in the accent's colours (_hardware.scss has the cap itself) */
 .mm-primary-btn {
-    color: var(--pt-text);
-    background: linear-gradient(180deg,
-            hsl(var(--pt-accent) 80% 60%),
-            hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%));
-    box-shadow: 0 6px 22px hsl(var(--pt-accent) 90% 60% / 0.25);
+    --cap-travel: 3px;
+    --cap-hi: hsl(var(--pt-accent) 80% 60%);
+    --cap-lo: hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%);
+    --cap-edge: color-mix(in oklab, var(--cap-lo), black 60%);
+    --cap-ink: var(--pt-text);
     width: 100%;
     margin: 5px 0px;
 }

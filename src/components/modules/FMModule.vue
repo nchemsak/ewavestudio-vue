@@ -7,22 +7,22 @@
             </div>
 
             <div class="pt-seg pt-seg-sm pt-seg-row" role="group" aria-label="FM Ratio Presets">
-                <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 1, 'is-fm-off': !localEnabled }"
+                <button class="pt-seg-btn hw-led-top" :class="{ 'is-active': localRatio === 1, 'is-fm-off': !localEnabled }"
                     :aria-pressed="localRatio === 1" :aria-disabled="!localEnabled" @click="setRatio(1)">
                     Lock <span class="selector-tooltip">1:1 Sync</span>
                 </button>
 
-                <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 1.5, 'is-fm-off': !localEnabled }"
+                <button class="pt-seg-btn hw-led-top" :class="{ 'is-active': localRatio === 1.5, 'is-fm-off': !localEnabled }"
                     :aria-pressed="localRatio === 1.5" :aria-disabled="!localEnabled" @click="setRatio(1.5)">
                     Metal <span class="selector-tooltip">3:2 Fifth</span>
                 </button>
 
-                <button class="pt-seg-btn" :class="{ 'is-active': localRatio === 2, 'is-fm-off': !localEnabled }"
+                <button class="pt-seg-btn hw-led-top" :class="{ 'is-active': localRatio === 2, 'is-fm-off': !localEnabled }"
                     :aria-pressed="localRatio === 2" :aria-disabled="!localEnabled" @click="setRatio(2)">
                     Bell <span class="selector-tooltip">2:1 Octave</span>
                 </button>
 
-                <button class="pt-seg-btn" :class="{ 'is-active': localRatio === null, 'is-fm-off': !localEnabled }"
+                <button class="pt-seg-btn hw-led-top" :class="{ 'is-active': localRatio === null, 'is-fm-off': !localEnabled }"
                     :aria-pressed="localRatio === null" :aria-disabled="!localEnabled" @click="setRatio(null)">
                     Free <span class="selector-tooltip">Hz</span>
                 </button>

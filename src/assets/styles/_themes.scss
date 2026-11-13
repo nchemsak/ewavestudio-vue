@@ -263,43 +263,6 @@ html.theme-sand .wave-btn {
     color: #efe9df;
 }
 
-html.theme-sand .lfo-power {
-    --pt-surface-2: #34312d;
-    color: #efe9df;
-    opacity: 0.9;
-}
-
-html.theme-sand .lfo-power.on {
-    opacity: 1;
-}
-
-/* The LFO's wave switch: darker ink on the light pill, white on the chosen one */
-html.theme-sand .lfo-seg-btn .wv {
-    stroke: hsl(var(--pt-accent) 65% 36%);
-}
-
-html.theme-sand .lfo-seg-btn.active {
-    background: hsl(var(--pt-accent) 60% 42%);
-    color: #fff;
-}
-
-html.theme-sand .lfo-seg-btn.active .wv {
-    stroke: #fff;
-}
-
-/* The Step Sequencer's pills (the Repeats brush; class from the old Vel → pill): a dark outline and more ink on light themes */
-html.theme-sand .vel-btn,
-html.theme-light .vel-btn {
-    border-color: color-mix(in oklab, var(--pt-text), transparent 72%);
-    opacity: 0.9;
-}
-
-html.theme-sand .vel-btn.on,
-html.theme-light .vel-btn.on {
-    border-color: hsl(var(--pt-accent) 60% 48%);
-    opacity: 1;
-}
-
 .theme-analog a.return {
     color: #f2b04a;
 }
@@ -382,42 +345,13 @@ html.theme-light .vel-btn.on {
     padding: 0;
 }
 
+/* A push button. Its look (a cap that presses in) is in _hardware.scss; its size is here */
 .pt-btn {
     border: 1px solid transparent;
     border-radius: var(--pt-radius-sm);
-    color: var(--pt-text);
-    cursor: pointer;
     min-height: 38px;
     line-height: 1.15;
     padding: 8px 5px;
-    transition:
-        transform 0.12s ease,
-        filter 0.25s ease,
-        box-shadow 0.25s ease;
-    background:
-        linear-gradient(145deg, var(--pt-surface-1), var(--pt-surface-2)) padding-box,
-        linear-gradient(90deg,
-            hsl(var(--btn-hue, var(--pt-accent)) 84% 64% / 0.95),
-            hsl(calc(var(--btn-hue, var(--pt-accent)) + 10) 84% 64% / 0.95)) border-box;
-    box-shadow:
-        inset 0 0 0 1px rgb(255 255 255 / 0.03),
-        0 2px 14px rgb(0 0 0 / 0.25);
-}
-
-.pt-btn:hover {
-    box-shadow:
-        inset 0 0 0 1px rgb(255 255 255 / 0.06),
-        0 4px 16px var(--pt-btn-glow);
-    filter: saturate(1.08);
-}
-
-.pt-btn:active {
-    transform: translateY(1px) scale(0.98);
-}
-
-.pt-btn:focus-visible {
-    outline: 2px solid hsl(var(--btn-hue, var(--pt-accent)) 80% 60%);
-    outline-offset: 2px;
 }
 
 .pt-btn-group .pt-btn {
@@ -462,18 +396,6 @@ html.theme-light .vel-btn.on {
 
 .pt-glow {
     box-shadow: 0 0 12px var(--pt-btn-glow);
-}
-
-.pt-btn.is-active {
-    background:
-        linear-gradient(145deg, var(--pt-surface-2), var(--pt-surface-1)) padding-box,
-        linear-gradient(90deg,
-            hsl(var(--btn-hue, var(--pt-accent)) 84% 64% / 1),
-            hsl(calc(var(--btn-hue, var(--pt-accent)) + 10) 84% 64% / 1)) border-box;
-    box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-        0 0 12px var(--pt-btn-glow);
-    filter: saturate(1.05);
 }
 
 .pt-chips {
@@ -776,63 +698,21 @@ html.theme-light .vel-btn.on {
     min-height: 28px;
 }
 
+/* A switch's option. Its look (a cap, down with its LED lit when chosen) is in _hardware.scss;
+   its size is here */
 .pt-seg-btn {
     flex: 0 0 auto;
     position: relative;
     border: 1px solid transparent;
-    border-radius: 999px;
+    border-radius: 7px;
     padding: 6px 12px;
     line-height: 1;
     min-height: 30px;
-    cursor: pointer;
-    color: var(--pt-text);
-    transition:
-        transform 0.12s ease,
-        filter 0.2s ease,
-        box-shadow 0.25s ease,
-        background 0.25s ease;
-    background:
-        linear-gradient(145deg, var(--pt-surface-1), var(--pt-surface-2)) padding-box,
-        linear-gradient(90deg, hsl(var(--pt-accent) 40% 60% / 0.45), hsl(calc(var(--pt-accent) + 10) 40% 60% / 0.45)) border-box;
     overflow: visible;
-}
-
-.pt-seg-btn:hover:not(:disabled) {
-    filter: saturate(1.05);
-}
-
-.pt-seg-btn:focus-visible {
-    outline: 2px solid hsl(var(--pt-accent) 80% 60%);
-    outline-offset: 2px;
 }
 
 .pt-seg-btn:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
-    filter: none;
-}
-
-.pt-seg-btn.is-active,
-.pt-seg-btn[aria-pressed="true"] {
-    --seg-hue: var(--pt-accent);
-    color: #fff;
-    background:
-        linear-gradient(145deg, color-mix(in oklab, var(--pt-surface-1) 75%, black 10%), var(--pt-surface-2)) padding-box,
-        linear-gradient(90deg, hsl(var(--seg-hue) 84% 64% / 1), hsl(calc(var(--seg-hue) + 12) 84% 64% / 1)) border-box;
-    box-shadow:
-        inset 0 0 0 1px rgb(255 255 255 / 0.06),
-        0 0 0 3px hsl(var(--seg-hue) 90% 60% / 0.18),
-        0 6px 22px hsl(var(--seg-hue) 90% 60% / 0.25);
-    transform: translateY(-1px);
-}
-
-/* The light themes' segment buttons are light, so the chosen one keeps dark text (white text
-   on it was unreadable: FM's Lock, the pad menu, the Export audio dialog) */
-.theme-light .pt-seg-btn.is-active,
-.theme-light .pt-seg-btn[aria-pressed="true"],
-.theme-sand .pt-seg-btn.is-active,
-.theme-sand .pt-seg-btn[aria-pressed="true"] {
-    color: var(--pt-text-strong);
 }
 
 .pt-seg-btn[disabled].is-active {

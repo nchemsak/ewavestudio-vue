@@ -5,7 +5,7 @@
             <!-- The logo (DrumSequencer passes it), at the top bar's left end -->
             <slot name="brand" />
             <div class="pc-file" ref="fileWrap">
-                <button class="pc-btn" @click="toggleFileMenu" :aria-expanded="showFile ? 'true' : 'false'"
+                <button class="pc-btn hw-cap" @click="toggleFileMenu" :aria-expanded="showFile ? 'true' : 'false'"
                     aria-haspopup="menu">
                     File ▾
                 </button>
@@ -98,14 +98,14 @@
             </div>
 
             <div class="pc-history">
-                <button class="pc-btn pc-icon-btn" :disabled="!props.canUndo" @click="emit('undo')"
+                <button class="pc-btn pc-icon-btn hw-cap" :disabled="!props.canUndo" @click="emit('undo')"
                     aria-label="Undo" :title="undoTitle">
                     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
                         <path d="M9 14 4 9l5-5" />
                         <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
                     </svg>
                 </button>
-                <button class="pc-btn pc-icon-btn" :disabled="!props.canRedo" @click="emit('redo')"
+                <button class="pc-btn pc-icon-btn hw-cap" :disabled="!props.canRedo" @click="emit('redo')"
                     aria-label="Redo" :title="redoTitle">
                     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
                         <path d="m15 14 5-5-5-5" />
@@ -124,7 +124,7 @@
 
         <div class="pc-right">
             <div class="pc-actions">
-                <button class="pc-btn pc-primary" :disabled="!store.loaded || !dirty || status === 'saving'"
+                <button class="pc-btn pc-primary hw-cap" :disabled="!store.loaded || !dirty || status === 'saving'"
                     @click="saveNow" :title="hotkeyTitle">
                     <span v-if="status === 'saving'">Saving…</span>
                     <span v-else-if="dirty">Save</span>
@@ -575,35 +575,29 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     color: var(--pc-text);
 }
 
+/* File, Undo, Redo and Save are caps (_hardware.scss) */
 .pc-btn {
     padding: .35rem .65rem;
     border-radius: .5rem;
-    border: 1px solid var(--pc-surface-1);
-    background: var(--pc-surface-2);
-    color: var(--pc-text);
-    cursor: pointer;
+    border: 1px solid transparent;
     min-width: 82px;
-}
-
-.pc-btn:hover {
-    filter: brightness(1.08);
 }
 
 .pc-btn:disabled {
     opacity: .6;
-    cursor: not-allowed;
 }
 
+/* Save: a cap in the accent's colour while there's something to save */
 .pc-btn.pc-primary {
-    border-color: color-mix(in oklch, var(--pc-surface-1), white 12%);
-    background: linear-gradient(180deg, var(--pc-accent-1), var(--pc-accent-2));
-    color: #fff;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .08);
+    --cap-hi: var(--pc-accent-1);
+    --cap-lo: var(--pc-accent-2);
+    --cap-edge: color-mix(in oklab, var(--pc-accent-2), black 60%);
+    --cap-ink: #fff;
 }
 
 .pc-btn.pc-primary:disabled {
-    background: color-mix(in oklch, var(--pc-accent-2), black 20%);
-    opacity: .6;
+    --cap-hi: color-mix(in oklch, var(--pc-accent-2), black 20%);
+    --cap-lo: color-mix(in oklch, var(--pc-accent-2), black 20%);
 }
 
 .pc-file {

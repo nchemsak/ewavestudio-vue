@@ -5,7 +5,7 @@
             <!-- Option C (PR 61): the power tile, Rate and Depth, and the Wave switch on one line;
                  the Target switch on a line of its own under them (five targets don't fit beside) -->
             <div class="lfo-row">
-                <button type="button" class="lfo-power" :class="{ on: localEnabled, idle: !!idleText }"
+                <button type="button" class="lfo-power hw-cap" :class="{ on: localEnabled, idle: !!idleText }"
                     :aria-pressed="localEnabled" aria-label="LFO on"
                     :title="idleTitle || 'Toggle LFO'"
                     @click="localEnabled = !localEnabled">
@@ -41,7 +41,7 @@
                     <div class="lfo-switch">
                         <span class="lfo-switch-label" aria-hidden="true">Wave</span>
                         <div class="lfo-seg" role="radiogroup" aria-label="LFO Waveform">
-                            <button v-for="w in waves" :key="w" type="button" class="lfo-seg-btn"
+                            <button v-for="w in waves" :key="w" type="button" class="lfo-seg-btn hw-cap hw-led-top"
                                 :class="{ active: localWaveform === w }" role="radio"
                                 :aria-checked="localWaveform === w ? 'true' : 'false'" :aria-label="waveLong(w)"
                                 :disabled="!localEnabled" @click="setWave(w)" :title="waveLong(w)">
@@ -57,7 +57,7 @@
             <div class="lfo-switch lfo-target">
                 <span class="lfo-switch-label" aria-hidden="true">Target</span>
                 <div class="lfo-seg" role="radiogroup" aria-label="LFO Target">
-                    <button v-for="t in TARGETS" :key="t.value" type="button" class="lfo-seg-btn"
+                    <button v-for="t in TARGETS" :key="t.value" type="button" class="lfo-seg-btn hw-cap hw-led-top"
                         :class="{ active: currentTarget === t.value, 'no-pulse': t.idle?.() }" :disabled="!localEnabled"
                         role="radio" :aria-checked="currentTarget === t.value ? 'true' : 'false'"
                         :aria-label="t.aria || t.label" @click="updateTarget(t.value)"
@@ -429,34 +429,46 @@ function wavePath(w: Wave | string): string {
     }
 }
 
-/* Power: a small tile with the LFO's wave, lit when on */
+/* Power: a small tile with the LFO's wave, a cap that stays down while on (_hardware.scss),
+   its LED beside On / Off */
 .lfo-power {
     flex: none;
     width: 62px;
     height: 58px;
     border-radius: 12px;
-    border: 1px solid var(--pt-hairline);
-    background: var(--pt-surface-2);
-    color: inherit;
+    border: 1px solid transparent;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 4px;
     padding: 6px;
-    cursor: pointer;
-    opacity: 0.75;
 }
 
-.lfo-power.on {
-    opacity: 1;
-    border-color: hsl(var(--pt-accent) 80% 62% / 0.8);
-    background: radial-gradient(circle at 0% 0%, hsl(var(--pt-accent) 70% 30% / 0.42), transparent),
-        var(--pt-surface-2);
+.lfo-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
-.lfo-power.idle {
-    border-color: rgb(255 193 7 / 0.8);
+.lfo-status::before {
+    content: "";
+    flex: none;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--hw-led-off);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
+}
+
+.lfo-power.on .lfo-status::before {
+    background: var(--hw-led);
+    box-shadow: 0 0 6px var(--hw-led);
+}
+
+/* On with nothing to move ("No Pulse", "FM off"): the amber words say so, no LED */
+.lfo-power.idle .lfo-status::before {
+    display: none;
 }
 
 .lfo-power.idle .lfo-status {
@@ -468,10 +480,6 @@ function wavePath(w: Wave | string): string {
 /* PW with no pulse pads: still clickable, but looks dimmer (its title says why) */
 .lfo-seg-btn.no-pulse:not(.active) {
     opacity: 0.45;
-}
-
-.lfo-power:active {
-    transform: translateY(1px);
 }
 
 .lfo-status {
@@ -544,57 +552,35 @@ svg {
     opacity: 0.7;
 }
 
+/* A switch: a row of caps, the chosen one down with its LED lit (_hardware.scss) */
 .lfo-seg {
     display: inline-flex;
-    border: 1px solid var(--pt-hairline);
-    border-radius: 999px;
-    overflow: hidden;
-    background: var(--pt-surface-2);
+    gap: 4px;
+    /* The room its outline took, so the card stays as tall as it was */
+    padding: 1px 0;
 }
 
 .lfo-seg-btn {
+    --hw-led-size: 4px;
     border: 0;
-    background: transparent;
-    color: inherit;
+    border-radius: 6px;
     font: inherit;
     font-size: 11px;
     line-height: 1;
     min-width: 34px;
     height: 24px;
     padding: 0 8px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    opacity: 0.75;
-}
-
-.lfo-seg-btn + .lfo-seg-btn {
-    border-left: 1px solid var(--pt-hairline);
+    gap: 2px;
 }
 
 .lfo-seg-btn svg {
     width: 22px;
-    height: 12px;
-}
-
-.lfo-seg-btn.active {
-    opacity: 1;
-    background: linear-gradient(135deg,
-            hsl(var(--pt-accent) 70% 26% / 0.55),
-            hsl(var(--pt-accent) 70% 10% / 0.15));
-    box-shadow: inset 0 0 0 1px hsl(var(--pt-accent) 75% 62% / 0.8);
+    height: 11px;
 }
 
 .lfo-seg-btn:disabled {
     cursor: default;
     opacity: 0.4;
-}
-
-.lfo-seg-btn:focus-visible,
-.lfo-power:focus-visible {
-    outline: 2px solid hsl(var(--pt-accent) 80% 62%);
-    outline-offset: 2px;
 }
 
 .mm-menu {
