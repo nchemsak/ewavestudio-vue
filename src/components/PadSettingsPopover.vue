@@ -21,8 +21,11 @@
                 <div class="pad-label">Noise</div>
                 <div class="noise-toggle-wrap">
                     <button class="pt-dot" :class="{ 'is-on': noiseLocal }" :aria-pressed="noiseLocal"
-                        :title="noiseLocal ? 'Noise: On' : 'Noise: Off'" @click="noiseLocal = !noiseLocal" />
+                        :aria-label="noiseCardOff ? 'Noise (the Noise card is off)' : 'Noise'"
+                        :title="noiseCardOff ? 'Noise: Off (the Noise card is off; turning it on turns the card on for this pad)' : (noiseLocal ? 'Noise: On' : 'Noise: Off')"
+                        @click="toggleNoise" />
                     <span class="noise-state">{{ noiseLocal ? 'On' : 'Off' }}</span>
+                    <span v-if="noiseCardOff" class="noise-card-off">Noise card is off</span>
                 </div>
             </div>
             <!-- Ratchet: the step plays 1–4 quick hits within its time (src/audio/ratchet.ts) -->
@@ -123,6 +126,8 @@ const props = withDefaults(defineProps<{
     title?: string;
     wave?: Wave;
     noiseEnabled?: boolean;
+    // The Noise card is off: no pad has noise, so the switch reads Off and says why
+    noiseCardOff?: boolean;
     ratchet?: number; // hits per step, 1–4; no Repeats row when not given
     repeatNotes?: RepeatNotes; // what the repeats play; no Notes row when not given
 }>(), { title: 'Pad' });
@@ -283,11 +288,12 @@ function setWave(w: Wave): void { waveLocal.value = w; }
 
 const showNoiseRow = computed(() => typeof props.noiseEnabled === 'boolean');
 const showRatchetRow = computed(() => typeof props.ratchet === 'number');
-const noiseLocal = ref<boolean>(props.noiseEnabled ?? false);
-watch(() => props.noiseEnabled, (v) => {
-    if (typeof v === 'boolean') noiseLocal.value = v;
-});
-watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
+// Shown from the prop, emitted only on a click: an echo from a watcher would write the pad's
+// mask whenever the Noise card is switched while this is open
+const noiseLocal = computed<boolean>(() => !!props.noiseEnabled);
+function toggleNoise(): void {
+    emit('update:noiseEnabled', !noiseLocal.value);
+}
 </script>
 
 <style scoped>
@@ -369,6 +375,12 @@ watch(noiseLocal, (v) => emit('update:noiseEnabled', !!v));
     display: inline-flex;
     align-items: center;
     gap: 10px;
+}
+
+.noise-card-off {
+    font-size: 0.78rem;
+    color: var(--pt-text);
+    opacity: 0.6;
 }
 
 .noise-state {

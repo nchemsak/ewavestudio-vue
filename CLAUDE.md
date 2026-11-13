@@ -429,6 +429,12 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   switch (before PR 56 the preview always had noise) and its repeats (2–4 hits within a step
   at the tempo, Up or Down stepping through the chord). Only while stopped: while playing, the pattern plays it, and a preview on top
   clashed (PR 56). Not while the synth lane is muted. The phone's note picker does the same.
+- Its Noise switch shows what's heard (PR 64): Off while the Noise card is off, whatever the
+  pad's own mask says, with "Noise card is off" beside it. Turned on then, it turns the card on
+  with only that pad's noise on (`padNoiseEnabled` in `DrumSequencer.vue`; the mask before
+  couldn't be heard); one undo step. It emits only on a click, never from a watcher, so the
+  card switching while it's open can't write the mask. The phone's hold sheet has no noise
+  switch.
 - Play / Stop (`data-keeps-pad-settings`) can be pressed without closing it, to hear the pad
   in the pattern; any other click outside closes it (PR 56).
 
@@ -1114,6 +1120,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   is drawn over earlier positioned siblings, which hid the Noise switch (its ribbon) after
   PR 41. The
   Waveforms panel shows its eight tiles as a 4×2 grid;
+  A tile is lit only while every pad plays its wave (`litWave` in `DrumSequencer.vue`, PR 64);
+  after Random, or a pad's wave changed in its ⋮ menu, the pads play a mix: no tile is lit and
+  Random is (down, its LED lit). The main wave (`selectedWaveform`, for MIDI notes and the
+  one-shot) stays the last tile clicked.
   Pulse Width is a mini knob in the Pulse tile's top-left corner (the dice badge is top-right),
   placed beside the tile's button, not inside it, so turning it doesn't pick the wave; the
   tile's bar is drawn as wide as the pulse. When the LFO's target is Pulse and
@@ -1178,7 +1188,35 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-1. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+Items 1–7 come from the maintainer's brainstorm after PR 63 (its first item, the fixes, was PR 64) (Claude's recommendations, which
+the maintainer accepted; no one else uses the app yet, so older projects need no special care
+in them: a removed setting can simply stop applying).
+
+1. **LFO: each target remembers its depth.** Changing target set Depth to 0, as if the LFO
+   went off. Each target keeps its own depth (saved), starting at a musical default the first
+   time (about Pitch 25 cents, Filter 1500 Hz, Pulse 15 %, Level 40 %, FM 40 %).
+2. **LFO: rates locked to the bar.** Rates 4 bars, 2 bars, 1/1 … 1/32 and 1/64; Free rate
+   and the LFO's ⋯ menu removed. The shared LFO restarts in step with bar 1 on Play (it runs
+   free from its first start today, so a long rate would start anywhere in its cycle); the
+   export starts it the same way, and the Export dialog defaults to (or warns about) at least
+   the LFO's length for a loop.
+3. **Simplify:** VEL switches only on Filter (Envelope's, Pitch's and Noise's removed: hard to
+   hear); Pattern Tools' "Active Pads Only" a hardware toggle (a cap with an LED) instead of a
+   checkbox.
+4. **Melody Maker's options on the card**, its ⋯ menu removed: Free cycle dropped (always
+   fitted to the bar); "7th on downbeats" becomes a third Tones choice, **7th chord**
+   (1-3-5-7); Skip every other tone a **Skip** toggle; Occasional octave hops dropped; Melody's
+   Active Pads Only a toggle shown for Melody only. Into the empty space at the card's bottom.
+5. **Presets:** the Noise card's Backbeat (steps 5 and 13, often empty) becomes **Accents**
+   (noise on the pattern's loudest hits); the patterns Offbeat and Broken become **Half-time**
+   and **Breakbeat** (the root as the kick, the octave as the snare), to audition.
+6. **Screen views:** F1 Scope, F2 **Spectrum** (new: the live frequency curve, log axis, the
+   pads' colours, peak-hold, note marks), F3 Spectrogram, F4 Tuner; the Envelope view only
+   while its knobs (and the Pitch card's, with the sweep drawn) are turned, as Filter's.
+7. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
+   then scale the frame down to fit short windows (with a floor). Last, since 3 and 4 change
+   the height; measure at the maintainer's screen and common laptop sizes.
+8. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1362,6 +1400,7 @@ Done:
 | 61 | LFO: **Retrigger** works (a RETRIG pill in the LFO card's header; saved for long, read by neither engine): each note starts its own LFO, so every hit gets the same movement; and two new targets, **Level** (tremolo) and **FM** (the FM card's Amount), in both engines (`src/audio/lfo.ts`). The Target switch's five buttons have a line of their own (option C of three mockups). |
 | 62 | LFO visualizer for the new targets: FM shows as a dot and an arc on the FM card's Amount knob (while FM is on), Level on the Step Sequencer's Vol knob (from full down to 100 − Depth %), like Cutoff's; not on the pads, whose fill height is velocity. |
 | 63 | Hardware buttons ("soft caps", option A of three mockups): every button is a raised cap that sinks when pressed; a switch's chosen option and a toggle that's on stay down with an LED lit (Melody | Arpeggio, FM's ratios, the LFO's Wave and Target, VEL, RETRIG, RND, the Repeats brush, the presets, the theme buttons); the wave, FM, Unison and LFO tiles are caps that keep their icons, animations, dice and knob; Play, Save, Generate and Enable MIDI too. The pedals' CRUSH and PING PONG stay as they were. No card or button changed size (`src/assets/styles/_hardware.scss`). |
+| 64 | Fixes from the maintainer's brainstorm after PR 63 (whose plan it also adds): the wave tiles light only the wave every pad plays, and Random while the pads play a mix (the old tile stayed lit after Random); a pad's ⋮ Noise reads Off while the Noise card is off ("Noise card is off"), and turning it on then turns the card on for that pad only. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

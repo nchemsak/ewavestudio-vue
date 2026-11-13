@@ -2760,6 +2760,80 @@ test("a pad's settings: its ⋮ closes them, they stay on screen, and a key play
 	}
 });
 
+test('the wave tiles light the wave every pad plays, and Random while the pads play a mix', async ({ page }) => {
+	const tile = (name: string) => page.getByRole('radio', { name, exact: true });
+	const random = page.locator('.wave-random button');
+	const lit = page.locator('.wave-row [role="radio"][aria-checked="true"]');
+	await expect(tile('SINE')).toHaveAttribute('aria-checked', 'true');
+	await expect(random).toHaveAttribute('aria-pressed', 'false');
+
+	// Saw, then Random: no tile stays lit (the pads play a mix), Random is
+	await tile('SAW').click();
+	await expect(tile('SAW')).toHaveAttribute('aria-checked', 'true');
+	// Random from all eight waves (a seeded roll, so it is surely a mix)
+	await page.evaluate(() => { let x = 7; Math.random = () => ((x = (x * 16807) % 2147483647) / 2147483647); });
+	await random.click();
+	await expect(lit).toHaveCount(0);
+	await expect(random).toHaveAttribute('aria-pressed', 'true');
+
+	// A tile again: every pad plays it, it lights and Random doesn't
+	await tile('SQUARE').click();
+	await expect(lit).toHaveCount(1);
+	await expect(tile('SQUARE')).toHaveAttribute('aria-checked', 'true');
+	await expect(random).toHaveAttribute('aria-pressed', 'false');
+
+	// One pad's wave changed in its ⋮ menu: a mix too
+	await page.locator('.pad-settings-dot').nth(3).click();
+	await page.locator('.pad-popover').getByRole('button', { name: 'Glass', exact: true }).click();
+	await page.keyboard.press('Escape');
+	await expect(lit).toHaveCount(0);
+	await expect(random).toHaveAttribute('aria-pressed', 'true');
+});
+
+test("a pad's noise reads Off while the Noise card is off; turning it on turns the card on for that pad only", async ({ page }) => {
+	const dot = (i: number) => page.locator('.pad-settings-dot').nth(i);
+	const popover = page.locator('.pad-popover');
+	const padNoise = popover.locator('.noise-toggle-wrap .pt-dot');
+	const card = page.getByRole('button', { name: 'Toggle noise' });
+	const undo = page.getByRole('button', { name: 'Undo', exact: true });
+	await expect(card).toHaveAttribute('aria-pressed', 'false');
+	await page.waitForTimeout(600); // past the page's first moments, the undo history's start
+
+	// The card is off: the pad says Off, and why
+	await dot(2).click();
+	await expect(padNoise).toHaveAttribute('aria-pressed', 'false');
+	await expect(popover).toContainText('Noise card is off');
+
+	// On from the pad: the card goes on, with this pad's noise only
+	await padNoise.click();
+	await expect(card).toHaveAttribute('aria-pressed', 'true');
+	await expect(padNoise).toHaveAttribute('aria-pressed', 'true');
+	await expect(popover).not.toContainText('Noise card is off');
+	await page.keyboard.press('Escape');
+	await dot(0).click();
+	await expect(padNoise).toHaveAttribute('aria-pressed', 'false');
+	await page.keyboard.press('Escape');
+
+	// One undo step back: the card off, every pad's own switch as before
+	await page.waitForTimeout(600);
+	await undo.click();
+	await expect(card).toHaveAttribute('aria-pressed', 'false');
+	await card.click();
+	await dot(0).click();
+	await expect(padNoise).toHaveAttribute('aria-pressed', 'true');
+	await page.keyboard.press('Escape');
+
+	// The card off: pad 1 reads Off; on again, it still has its noise (the card doesn't
+	// change a pad's own switch)
+	await card.click();
+	await dot(0).click();
+	await expect(padNoise).toHaveAttribute('aria-pressed', 'false');
+	await page.keyboard.press('Escape');
+	await card.click();
+	await dot(0).click();
+	await expect(padNoise).toHaveAttribute('aria-pressed', 'true');
+});
+
 test("a pad's settings: a key previews the pad as it plays (its noise, its repeats), only while stopped; Play keeps them open", async ({ page }) => {
 	const popover = page.locator('.pad-popover');
 	// Sources started for notes (the LFO's oscillator starts at 0, "now": not a note). A buffer
