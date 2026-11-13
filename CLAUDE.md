@@ -650,7 +650,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   columns around it never move.
 - The arpeggio (PR 57; `bakeArp()` builds the notes, `src/lib/melody/arp.ts` lays them out,
   unit-tested): **Rate places the notes**, as a hardware arpeggiator plays them: a note on
-  every step at 1/16, every other step at 1/8, every beat at 1/4 (`arpSlots()`), and the steps
+  every step at 1/16, every other step at 1/8 (`arpSlots()`), and the steps
   between go off (it emits `update:steps` with the pitches, one undo step). Before, Rate only
   grouped the pads that were on (1/4: four pads in a row one note), and every pad still played.
   "Active Pads Only" is Melody's: an arpeggio sets its own rhythm. **Fitted to the bar** by
@@ -658,6 +658,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   into the next octave when rising (a triad 1-3-5 → 1-3-5-8, a 7-note scale up to the octave),
   the octave below when falling, round again otherwise (`arpSequence()`; notes kept in the pads'
   range by octaves). Before, a triad's 3-note cycle ended mid-bar and jumped at the bar line.
+  **1/4 was dropped** (PR 71: four notes a bar sounded like a slow bassline, not an arpeggio);
+  a project saved with it gets 1/8 (`arpRateFrom()`). A 1/32 made from Repeats was turned
+  down: a pad's repeats only stay or climb the key's chord, so it would be right only for Up
+  or Down on chord tones, and each repeat is cut short where the next begins.
   The Pattern list's Random (the chord's notes shuffled once) stays.
 - **Options on the card, no ⋯ menu** (PR 68; the menu was "Advanced Options", in the card's
   header): each mode's panel ends with its toggle (a cap with an LED, `.mm-toggle`), in the
@@ -1276,14 +1280,32 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Item 1 comes from the maintainer's brainstorm after PR 63 (its first items were PRs 64–70) (Claude's recommendations, which
-the maintainer accepted; no one else uses the app yet, so older projects need no special care
-in them: a removed setting can simply stop applying).
+Items 1 and 2 come from the maintainer's brainstorm after PR 70 (its first item, the LFO's
+square icon and the arpeggio's 1/4 dropped, was PR 71). Item 3 comes from the one after
+PR 63 (PRs 64–70); no one else uses the app yet, so older projects need no special care: a
+removed setting can simply stop applying.
 
-1. **Fit the window without scrolling**, centred vertically when it fits: tighten spacing,
+1. **Phone mode fixes**: on a phone, the Melody Maker's waiting key says "at the next bar"
+   without "Shift+click" (it still waits for the bar; no tap to apply it at once, the
+   maintainer's call); the Pattern row loses Clear and matches the Sound row (Reset… in ☰
+   still clears); the FX page's three pedals get a maximum width, centred, near their desktop
+   proportions instead of stretched; the ☰ menu redone: a header with a ✕ (no Close button),
+   a Project section (File, name, Save; the desktop File bar's Undo and Redo, which landed
+   on the name box, hidden there; Redo beside the top bar's Undo if it fits), Theme, and a
+   footer with Desktop View and Reset… the same size.
+2. **Phone mode additions**: a tiny display-only row of the 16 pads in the top bar (lit in
+   their colours, the playing step outlined, beats marked; on every page, as the scope is;
+   measured to fit from 568 px); and what the desktop gained since phone mode: the **LFO**
+   card on the Sound page (it has none, so an LFO can't be seen or changed there),
+   **Swing** beside Tempo, the Noise card's **pad buttons** (Accents, Every 2, All) and
+   **Humanize** (the Filter's VEL switch needs velocities that differ). Each only if it fits
+   and is useful on a phone. Not brought over: the screen views, MIDI, the Repeats brush,
+   the rest of Pattern Tools.
+3. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
+   changes to come may change the height), centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-2. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Not now (looked into after PR 37):
@@ -1474,6 +1496,7 @@ Done:
 | 68 | Melody Maker's options on the card, its ⋯ menu gone: Melody's **Active Pads Only** and the arpeggio's **Skip** are toggles under their settings (now saved); Tones has **7th** (the 7th chord, 1-3-5-7) in place of "7th on downbeats"; Free cycle and Occasional octave hops dropped. The card is as tall as before. |
 | 69 | Presets: the Noise card's Backbeat became **Accents** (noise on the pattern's loudest hits, `src/lib/noise/accents.ts`); the patterns Offbeat and Broken became **Halftime** (the snare an octave up on beat 3) and **Breaks** (snares on 2 and 4, a breakbeat), to audition. |
 | 70 | Screen views: F1 Scope, F2 **Spectrum** (new: the live frequency curve on a log axis, in the pads' colours, with a falling peak-hold line, the strongest note named with its cents, and the C notes ticked; `src/components/spectrumView.ts`), F3 Spectrogram, F4 Tuner; the Envelope view has no F-key and shows while its knobs, or the Pitch card's, are turned, the pitch sweep drawn on it. |
+| 71 | The LFO card's square-wave icon redrawn (two even cycles at the sine's height; it was lopsided), and the arpeggio's 1/4 rate dropped (1/8 and 1/16 left; a project saved at 1/4 plays at 1/8). Plan: the maintainer's brainstorm after PR 70 (phone fixes and additions); fitting the window put off. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

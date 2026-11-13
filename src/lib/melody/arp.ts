@@ -3,7 +3,7 @@
 // bakeArp() builds the notes and calls these).
 //
 // Rate places the notes, as a hardware arpeggiator plays them: a note on every step at 1/16,
-// every other step at 1/8, every beat at 1/4 (arpSlots()). The steps between are off.
+// every other step at 1/8 (arpSlots()). The steps between are off.
 //
 // Fitting the bar: an arpeggio's cycle (its notes in order, once round) often doesn't divide
 // the bar: a chord is 3 notes, 16 steps hold 5 of them and one left over, so the cycle ended
@@ -12,11 +12,20 @@
 // octave until the block is full (1-3-5 → 1-3-5-8); falling, into the octave below; other
 // orders (up and down, random) go round again (arpSequence()). "Free" keeps the old cycle.
 
-export type ArpRate = '1/4' | '1/8' | '1/16';
+// 1/4 was dropped (a note every beat sounded more like a slow bassline than an arpeggio);
+// a project that has it gets 1/8 (arpRateFrom())
+export type ArpRate = '1/8' | '1/16';
 export type ArpDirection = 'up' | 'down' | 'updown' | 'random';
 
 // Steps from one note to the next
-export const RATE_STEPS: Record<ArpRate, number> = { '1/4': 4, '1/8': 2, '1/16': 1 };
+export const RATE_STEPS: Record<ArpRate, number> = { '1/8': 2, '1/16': 1 };
+
+// A saved rate as one the switch has: 1/4 (dropped) and anything unknown play as 1/8, the
+// nearest; nothing (no rate saved) is null
+export function arpRateFrom(v: unknown): ArpRate | null {
+	if (v === '1/16' || v === '1/8') return v;
+	return v ? '1/8' : null;
+}
 
 // The steps that get a note: every RATE_STEPS[rate]-th, from step 1
 export function arpSlots(stepCount: number, rate: ArpRate): number[] {

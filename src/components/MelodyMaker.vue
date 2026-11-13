@@ -110,7 +110,7 @@
 import { ref, computed, watch, defineExpose } from 'vue';
 import PtSelect from './PtSelect.vue';
 import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
-import { arpSlots, arpSequence } from '../lib/melody/arp';
+import { arpSlots, arpSequence, arpRateFrom, type ArpRate } from '../lib/melody/arp';
 
 // The arpeggio's tones: Chord (1-3-5), 7th chord (1-3-5-7; PR 68, in place of the ⋯ menu's
 // "7th on downbeats", which put the 7th on every beat and sounded repetitive) or the whole scale
@@ -137,7 +137,7 @@ const props = defineProps<{
     initialRangePreset?: 'low' | 'mid' | 'high' | 'wide';
 
     initialArpPattern?: 'up' | 'down' | 'updown' | 'random';
-    initialArpRate?: '1/4' | '1/8' | '1/16';
+    initialArpRate?: string;
     initialArpOctaves?: 1 | 2 | 3;
     initialArpTones?: ArpTones;
     initialArpSkip?: boolean;
@@ -157,7 +157,7 @@ const emit = defineEmits<{
     (e: 'key-scale-change', scale: KeyScale): void;
     (e: 'range-preset-change', preset: PresetKey): void;
     (e: 'arp-pattern-change', v: 'up' | 'down' | 'updown' | 'random'): void;
-    (e: 'arp-rate-change', v: '1/4' | '1/8' | '1/16'): void;
+    (e: 'arp-rate-change', v: ArpRate): void;
     (e: 'arp-octaves-change', v: 1 | 2 | 3): void;
     (e: 'arp-tones-change', v: ArpTones): void;
     (e: 'arp-skip-change', v: boolean): void;
@@ -550,8 +550,8 @@ function clampArpOctaves(v: number | undefined): 1 | 2 | 3 {
 const arpPattern = ref<'up' | 'down' | 'updown' | 'random'>(
     props.initialArpPattern ?? 'up'
 );
-const arpRate = ref<'1/4' | '1/8' | '1/16'>(
-    props.initialArpRate ?? '1/16'
+const arpRate = ref<ArpRate>(
+    arpRateFrom(props.initialArpRate) ?? '1/16'
 );
 const arpOctaves = ref<1 | 2 | 3>(
     clampArpOctaves(props.initialArpOctaves)
@@ -571,7 +571,7 @@ watch(arpOctaves, (v) => emit('arp-octaves-change', v));
 watch(arpTones, (v) => emit('arp-tones-change', v));
 
 watch(() => props.initialArpPattern, (v) => { if (v) arpPattern.value = v; });
-watch(() => props.initialArpRate, (v) => { if (v) arpRate.value = v; });
+watch(() => props.initialArpRate, (v) => { const r = arpRateFrom(v); if (r) arpRate.value = r; });
 watch(() => props.initialArpOctaves, (v) => { if (v) arpOctaves.value = clampArpOctaves(v); });
 watch(() => props.initialArpTones, (v) => { if (v) arpTones.value = v; });
 watch(arpSkip, (v) => emit('arp-skip-change', v));
@@ -584,7 +584,6 @@ const arpPatternOptions = [
     { label: 'Random', value: 'random' }
 ] as const;
 const arpRateOptions = [
-    { label: '1/4', value: '1/4' },
     { label: '1/8', value: '1/8' },
     { label: '1/16', value: '1/16' }
 ] as const;
@@ -654,7 +653,7 @@ function bakeArp(): void {
     if (!props.frequencies || !props.frequencies.length) return;
 
     // Rate places the notes (src/lib/melody/arp.ts): a note on every step at 1/16, every other
-    // at 1/8, every beat at 1/4; the steps between go off. "Active Pads Only" is the Melody
+    // at 1/8; the steps between go off. "Active Pads Only" is the Melody
     // mode's: an arpeggio sets its own rhythm.
     const out = props.frequencies.slice();
     const slots = arpSlots(out.length, arpRate.value);
@@ -827,7 +826,7 @@ type UiSnapshot = {
     keyScale: KeyScale;
     rangePreset: PresetKey;
     arpPattern: 'up' | 'down' | 'updown' | 'random';
-    arpRate: '1/4' | '1/8' | '1/16';
+    arpRate: string;
     arpOctaves: 1 | 2 | 3;
     arpTones: ArpTones;
     mode: 'random' | 'arp';
@@ -852,7 +851,7 @@ function setUi(u: Partial<UiSnapshot>) {
     if (u.rangePreset) rangePreset.value = u.rangePreset as PresetKey;
 
     if (u.arpPattern) arpPattern.value = u.arpPattern;
-    if (u.arpRate) arpRate.value = u.arpRate;
+    { const r = arpRateFrom(u.arpRate); if (r) arpRate.value = r; }
     if (u.arpOctaves) arpOctaves.value = clampArpOctaves(u.arpOctaves);
     if (u.arpTones) arpTones.value = u.arpTones;
     if (u.mode) mode.value = u.mode;

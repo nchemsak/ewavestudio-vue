@@ -80,7 +80,7 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 		},
 		instruments,
 		melody: reactive({
-			keyRoot: 'C', keyScale: 'major', rangePreset: 'low', arpPattern: 'down', arpRate: '1/4',
+			keyRoot: 'C', keyScale: 'major', rangePreset: 'low', arpPattern: 'down', arpRate: '1/16',
 			arpOctaves: 3, arpTones: 'scale', arpSkip: false, activeOnly: true, mode: 'random',
 		}),
 		selectedWaveform: ref<Wave>('square'),
