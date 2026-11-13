@@ -2977,10 +2977,16 @@ test("the Repeats brush shows it's picked (a frame, a tag, its own cursor), and 
 	expect(await frame.boundingBox()).toEqual(frameBox);
 	expect(await stepCard.boundingBox()).toEqual(cardBox);
 
-	// It stays picked from pad to pad (every other pad is one click each), and through Play / Stop
+	// It stays picked from pad to pad (every other pad is one click each), and through what
+	// goes with painting: Play / Stop to hear it, Undo / Redo to take a stroke back
+	await page.waitForTimeout(SETTLED);
 	for (const i of [0, 2, 4]) await pads(page).nth(i).click();
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(pads(page).nth(4)).toHaveAttribute('aria-pressed', 'false');
+	await page.getByRole('button', { name: 'Redo', exact: true }).click();
 	await expect(x3).toHaveAttribute('aria-pressed', 'true');
 	for (const i of [0, 2, 4]) await expect(pads(page).nth(i)).toHaveAttribute('aria-pressed', 'true');
 
@@ -3038,7 +3044,10 @@ test('the Repeats brush gives every pad it crosses that many hits, and takes the
 	await page.getByRole('button', { name: 'Redo', exact: true }).click();
 	for (const i of [0, 1, 2, 3]) await expect(badge(i)).toHaveText('×3');
 
-	// A pad that has the brush's hits already goes back to one, and stays on
+	// A pad that has the brush's hits already goes back to one, and stays on (the File menu's
+	// clicks above put the brush down, as any click elsewhere does since PR 74: pick it again)
+	await expect(x3).toHaveAttribute('aria-pressed', 'false');
+	await x3.click();
 	await pads(page).nth(1).click();
 	await page.mouse.move(5, 5);
 	await expect(badge(1)).toHaveCount(0);

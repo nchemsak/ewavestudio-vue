@@ -214,7 +214,7 @@
 
 					<!-- Play (+ the MIDI fallback) -->
 					<div class="transport-right">
-						<button type="button" class="pt-btn btn-lg btn3d" data-keeps-pad-settings @click="onPlayClick"
+						<button type="button" class="pt-btn btn-lg btn3d" data-keeps-pad-settings data-keeps-brush @click="onPlayClick"
 							:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
 							:aria-pressed="isPlaying">
 							<span class="btn-face">
@@ -882,12 +882,13 @@ function toggleRepeatBrush(n: number) {
 
 // A click anywhere else puts the brush down (PR 74), so pads go back to turning on and off
 // without having to find the lit button: anywhere but the pads' frame, the brush's own
-// buttons, and Play / Stop (to hear what was painted). The click still does its own job.
+// buttons, and what goes with painting (data-keeps-brush): Play / Stop, to hear it, and Undo /
+// Redo, to take a stroke back and carry on. The click still does its own job.
 function onBrushPointerDown(e: PointerEvent) {
 	if (!repeatBrush.value) return;
 	const t = e.target as Element | null;
 	if (!t?.closest || t === document.documentElement) return; // the page's scrollbar
-	if (t.closest('.step-card__grid, .repeat-brush, [data-keeps-pad-settings]')) return;
+	if (t.closest('.step-card__grid, .repeat-brush, [data-keeps-brush]')) return;
 	repeatBrush.value = null;
 }
 onMounted(() => document.addEventListener('pointerdown', onBrushPointerDown, true));

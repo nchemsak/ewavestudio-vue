@@ -370,8 +370,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   over a pad is an arrow carrying "×3" (an SVG data URL per count in `SynthStepGrid.vue`,
   from the grid's `data-brush`; it was `copy`). **A click elsewhere puts it down** and still
   does its own job (`onBrushPointerDown()` in `DrumSequencer.vue`): anywhere but the pads'
-  frame, the brush's buttons and Play / Stop (`data-keeps-pad-settings`, to hear what was
-  painted). The brush still turns an off pad on: a repeat on a silent step can't be heard, so
+  frame, the brush's buttons, and what goes with painting (`data-keeps-brush`): Play / Stop,
+  to hear it, and Undo / Redo, to take a stroke back and carry on. The brush still turns an off pad on: a repeat on a silent step can't be heard, so
   leaving pads as they are would make a click seem to do nothing.
   Ratchets are part of the pattern: sounds (presets) and their dice leave them alone; patterns
   set them.
