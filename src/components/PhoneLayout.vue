@@ -20,6 +20,7 @@
 				<span aria-hidden="true">{{ ctx.isPlaying ? 'Stop' : 'Play' }}</span>
 			</button>
 			<button type="button" class="pl-icon" aria-label="Undo" title="Undo" :disabled="!ctx.canUndo" @click="ctx.undo()">↶</button>
+			<button type="button" class="pl-icon" aria-label="Redo" title="Redo" :disabled="!ctx.canRedo" @click="ctx.redo()">↷</button>
 			<button type="button" class="pl-icon" aria-label="Menu" title="Menu" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">☰</button>
 		</header>
 
@@ -60,8 +61,6 @@
 						<button type="button" class="pl-icon pl-dice" aria-label="Random pattern" title="Random pattern" @click="rollPattern">
 							<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3" /><circle cx="5" cy="5" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="11" cy="11" r="1.2" /></svg>
 						</button>
-						<button type="button" class="pl-clear" title="Turn every step off (Undo brings them back)"
-							@click="clearSteps">Clear</button>
 					</div>
 					<div class="pl-pick">
 						<div class="pl-mini" role="group" aria-label="Tempo">
@@ -141,39 +140,43 @@
 			</div>
 		</div>
 
-		<!-- The menu, a panel from the left: the File bar (moved here by DrumSequencer), themes,
-			 the desktop view -->
+		<!-- The menu, a panel from the left (PR 72's layout): a header with ✕; Project, the File bar
+			 itself (moved here by DrumSequencer; its Undo and Redo hidden, they're in the top bar);
+			 Theme; and at the bottom Desktop View and Reset… side by side -->
 		<div v-show="menuOpen" class="pl-scrim" @click="menuOpen = false"></div>
 		<div v-show="menuOpen" class="pl-menu" role="dialog" aria-label="Menu">
-			<div id="phone-menu-slot"></div>
-			<div class="pl-row">
+			<div class="pl-menu-head">
+				<span class="pl-menu-title">Menu</span>
+				<button type="button" class="pl-icon" aria-label="Close menu" title="Close" @click="menuOpen = false">✕</button>
+			</div>
+			<div class="pl-menu-sec">
+				<span class="pl-cap">Project</span>
+				<div id="phone-menu-slot"></div>
+			</div>
+			<div class="pl-menu-sec">
 				<span class="pl-cap">Theme</span>
 				<ThemeToggle />
 			</div>
 			<!-- Start over: two taps (Reset…, then what to reset), and Undo brings it all back -->
-			<div class="pl-row pl-reset">
+			<div class="pl-menu-foot">
 				<template v-if="!resetAsk">
-					<button type="button" class="pt-btn" @click="resetAsk = true">Reset…</button>
-					<span class="pl-cap">Start over with blank pads</span>
+					<button type="button" class="pt-btn" @click="menuOpen = false; ctx.fullLayout()">Desktop View</button>
+					<button type="button" class="pt-btn pt-danger" title="Start over with blank pads (Undo brings them back)"
+						@click="resetAsk = true">Reset…</button>
 				</template>
 				<template v-else>
-					<span class="pl-reset-q">Every pad off, at full velocity, on A, one hit each.</span>
-					<button type="button" class="pt-btn pl-small" @click="doReset(false)">Reset pads</button>
-					<button type="button" class="pt-btn pl-small" @click="doReset(true)">Pads and sound</button>
-					<button type="button" class="pt-btn pl-small" @click="resetAsk = false">Cancel</button>
+					<span class="pl-reset-q">Start over? Every pad off, at full velocity, on A, one hit each.</span>
+					<button type="button" class="pt-btn pt-danger" @click="doReset(false)">Reset pads</button>
+					<button type="button" class="pt-btn pt-danger" @click="doReset(true)">Pads and sound</button>
+					<button type="button" class="pt-btn" @click="resetAsk = false">Cancel</button>
 				</template>
-			</div>
-			<div class="pl-row">
-				<button type="button" class="pt-btn" @click="menuOpen = false; ctx.fullLayout()">Desktop View</button>
-				<span class="pl-grow"></span>
-				<button type="button" class="pt-btn pl-small" @click="menuOpen = false">Close</button>
 			</div>
 		</div>
 	</div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, provide, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, provide, watch, onMounted, onBeforeUnmount } from 'vue';
 import Knob from './Knob.vue';
 import ThemeToggle from './ThemeToggle.vue';
 import { SCALES, NOTE_TO_SEMITONE, midiToFreq, freqToMidiExact } from '../lib/melody/theory';
@@ -195,6 +198,8 @@ const page = ref<PageId>('play');
 const menuOpen = ref(false);
 // The menu's Reset: asked first, then pads only or pads and sound
 const resetAsk = ref(false);
+// Closing the menu drops a question left open, so it opens on Desktop View and Reset… again
+watch(menuOpen, (open) => { if (!open) resetAsk.value = false; });
 function doReset(sound: boolean) {
 	ctx.reset(sound);
 	resetAsk.value = false;
@@ -343,8 +348,6 @@ onMounted(() => { scopeFrame = requestAnimationFrame(drawScope); });
 onBeforeUnmount(() => cancelAnimationFrame(scopeFrame));
 
 const replace = (arr: any[], i: number, v: any) => arr.map((x, j) => (j === i ? v : x));
-// Clear: a new pattern from scratch, every step off (one undo step)
-function clearSteps() { ctx.inst.steps = ctx.inst.steps.map(() => false); }
 function setStepOn(i: number, on: boolean) { ctx.inst.steps = replace(ctx.inst.steps, i, on); }
 function toggleStep(i: number) { setStepOn(i, !ctx.inst.steps[i]); }
 function setVelocity(i: number, v: number) { ctx.inst.velocities = replace(ctx.inst.velocities, i, v); }
@@ -910,19 +913,6 @@ function hzText(hz: number) {
 	accent-color: hsl(var(--pt-accent) 75% 55%);
 }
 
-.pl-clear {
-	height: 32px;
-	padding: 0 9px;
-	border-radius: 9px;
-	flex: none;
-	background: var(--pt-panel);
-	color: var(--pt-text);
-	border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 55%);
-	font: inherit;
-	font-size: 11px;
-	letter-spacing: .06em;
-}
-
 /* The menu: a panel from the left, as tall as the screen, so the File menu opens in it without
    scrolling (its rows tighter than on a computer; Open's list of projects beside the panel) */
 .pl-menu {
@@ -946,14 +936,74 @@ function hzText(hz: number) {
 	gap: 10px;
 }
 
+.pl-menu-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.pl-menu-title {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: .14em;
+	text-transform: uppercase;
+}
+
+.pl-menu-sec {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+/* At the bottom: Desktop View and Reset…, the same size; Reset's question wraps over its
+   buttons */
+.pl-menu-foot {
+	margin-top: auto;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding-top: 10px;
+	border-top: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 60%);
+}
+
+.pl-menu-foot .pt-btn {
+	flex: 1 1 0;
+	min-height: 32px;
+	padding: 4px 8px;
+	white-space: nowrap;
+}
+
+.pl-reset-q {
+	flex: 1 0 100%;
+	font-size: 12px;
+	color: var(--pt-muted);
+}
+
 .pl-menu :deep(.pt-card) {
 	margin: 0;
 	padding: 6px;
 }
 
+/* The File bar: File, the name, Save. Its Undo and Redo are in the top bar (here they landed on
+   the name box), and the name takes the room between */
+.pl-menu :deep(.pc-history) {
+	display: none;
+}
+
 .pl-menu :deep(.pc-toolbar) {
-	flex-wrap: wrap;
-	row-gap: 6px;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	gap: 8px;
+	padding: 6px 8px;
+}
+
+.pl-menu :deep(.pc-center) {
+	justify-self: stretch;
+}
+
+.pl-menu :deep(.pc-name) {
+	width: 100%;
+	max-width: none;
+	min-width: 0;
 }
 
 .pl-menu :deep(.topbar-logo) {

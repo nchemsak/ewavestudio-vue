@@ -3211,7 +3211,7 @@ const SCALE_LABELS: Record<string, string> = {
 };
 const phoneCtx = reactive({
 	inst: synthInstrument,
-	currentStep, isPlaying, tempo, canUndo,
+	currentStep, isPlaying, tempo, canUndo, canRedo,
 	presets: PRESETS, patterns: PATTERNS, activePresetId, activePatternId,
 	keyRoot: computed(() => melodyUi.keyRoot),
 	keyScale: computed(() => melodyUi.keyScale),
@@ -3240,6 +3240,7 @@ const phoneCtx = reactive({
 	}),
 	togglePlay: onPlayClick,
 	undo,
+	redo,
 	choosePreset, randomSound: rollRandomSound, choosePattern, randomPattern: rollRandomPattern,
 	audition: auditionNote,
 	auditionPad,
@@ -3785,12 +3786,23 @@ const phoneCtx = reactive({
 	font-weight: 700;
 }
 
-.pl-fx {
-	display: flex;
+/* The pedals near their desktop proportions (118 × 239 there), centred: stretched across the
+   phone's width they were 262 px wide and looked fat */
+.fx-pair.pl-fx {
+	grid-template-columns: repeat(3, minmax(0, 150px));
 	justify-content: center;
-	gap: 12px;
+	align-content: center;
+	align-items: start;
+	column-gap: 28px;
 	height: 100%;
-	align-items: center;
+}
+
+/* Each pedal fills its column (under 720 px the pedals make themselves half wide, for the
+   desktop's one-column layout) */
+.pl-fx :deep(.delay-pedal),
+.pl-fx :deep(.drive-pedal),
+.pl-fx :deep(.reverb-pedal) {
+	width: 100%;
 }
 
 .pl-melody {
