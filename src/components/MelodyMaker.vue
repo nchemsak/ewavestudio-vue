@@ -1,6 +1,158 @@
 <template>
     <div class="melody-maker mm-skin" :class="props.currentTheme">
-        <section class="pt-section">
+        <!-- MOCKUPS START (?mm=a|b|c: the redesign's options, not for shipping as is) -->
+        <section v-if="mockVariant" class="pt-section mmv" :class="`mmv-${mockVariant}`">
+            <button v-if="mockVariant === 'c'" type="button" class="mmv-gen mmv-gen--head hw-cap" @click="generate()">
+                <span class="mmv-dice" aria-hidden="true">⚄</span> Generate</button>
+            <div class="mm-kb-wrap">
+                <div class="mm-field">
+                    <div class="mm-label" id="mmv-key-label">Key<span v-if="queuedKey" class="mm-queued-note"
+                            role="status"> · {{ queuedKey }} at the next bar<span class="mm-shift-hint"> (Shift+click: now)</span></span></div>
+                    <div class="mm-kb" role="radiogroup" aria-labelledby="mmv-key-label">
+                        <div v-for="k in NATURALS" :key="k.n" class="kb-cell" :class="{ 'has-sharp': k.hasSharp }">
+                            <button type="button" class="kb-white"
+                                :class="{ 'is-active': keyRoot === k.n, 'is-queued': queuedKey === k.n, 'in-scale': mockVariant === 'c' && inScale(k.n) }"
+                                role="radio" :aria-checked="keyRoot === k.n ? 'true' : 'false'" @click="chooseKey(k.n, $event)">
+                                <span class="wlabel">{{ k.n }}</span>
+                            </button>
+                            <button v-if="k.hasSharp && k.sharp" type="button" class="kb-black"
+                                :class="{ 'is-active': keyRoot === k.sharp, 'is-queued': queuedKey === k.sharp, 'in-scale': mockVariant === 'c' && inScale(k.sharp) }" role="radio"
+                                :aria-checked="keyRoot === k.sharp ? 'true' : 'false'" @click="chooseKey(k.sharp, $event)">
+                                <span class="blabel">{{ k.sharp }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- B: a screen with the pattern as it is, over the notes the key, scale and range allow -->
+            <div v-if="mockVariant === 'b'" class="mmv-screen" aria-hidden="true">
+                <svg class="mmv-roll" :viewBox="`0 0 ${ROLL_W} ${ROLL_H}`" preserveAspectRatio="none">
+                    <line v-for="r in roll.rows" :key="'r' + r.y" x1="0" :x2="ROLL_W" :y1="r.y" :y2="r.y" class="mmv-rowline" :class="{ root: r.root }" />
+                    <line v-for="b in [4, 8, 12]" :key="'b' + b" :x1="b * ROLL_W / 16" :x2="b * ROLL_W / 16" y1="0" :y2="ROLL_H" class="mmv-beat" />
+                    <rect v-for="n in roll.notes" :key="'n' + n.i" :x="n.x + 1.5" :y="n.y - 2" :width="ROLL_W / 16 - 3" height="4" rx="1"
+                        :style="{ fill: n.colour }" />
+                </svg>
+                <span class="mmv-read mmv-read--l">{{ keyRoot }} {{ scaleShort }} · {{ rangeLabel }}</span>
+                <span class="mmv-read mmv-read--r">{{ poolSummary }}</span>
+            </div>
+
+            <template v-if="mockVariant !== 'c'">
+                <div class="mmv-block">
+                    <div class="mmv-head"><span class="mm-label">Scale</span><span v-if="mockVariant === 'a'" class="mmv-pool">{{ poolSummary }}</span></div>
+                    <div class="mmv-scales" role="radiogroup" aria-label="Scale">
+                        <button v-for="o in mockScales" :key="o.value" type="button" class="pt-seg-btn hw-led-top mmv-scale"
+                            :class="{ 'is-active': keyScale === o.value }" role="radio" :aria-label="o.long"
+                            :aria-checked="keyScale === o.value ? 'true' : 'false'" @click="chooseScale(o.value)">{{ o.label }}</button>
+                    </div>
+                </div>
+                <div class="mmv-row"><span class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Register range">
+                        <button v-for="o in rangeOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset === o.value }"
+                            role="radio" :aria-checked="rangePreset === o.value ? 'true' : 'false'" @click="rangePreset = o.value as any">{{ o.label }}</button></div></div>
+            </template>
+            <!-- C: the scale on a stepper, its notes lit on the keyboard -->
+            <div v-else class="mmv-pair mmv-c-row">
+                <div class="mmv-row"><span class="mmv-cap">Scale</span>
+                    <div class="mmv-stepper" role="group" aria-label="Scale">
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous scale" @click="stepScale(-1)">◂</button>
+                        <span class="mmv-step-name">{{ scaleShort }}</span>
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next scale" @click="stepScale(1)">▸</button>
+                    </div>
+                </div>
+                <div class="mmv-row"><span class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Register range">
+                        <button v-for="o in rangeOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset === o.value }"
+                            role="radio" :aria-checked="rangePreset === o.value ? 'true' : 'false'" @click="rangePreset = o.value as any">{{ o.label }}</button></div></div>
+            </div>
+            <!-- C: the same screen, taller, in the room the stepper leaves -->
+            <div v-if="mockVariant === 'c'" class="mmv-screen mmv-screen--tall" aria-hidden="true">
+                <svg class="mmv-roll" :viewBox="`0 0 ${ROLL_W} ${ROLL_H}`" preserveAspectRatio="none">
+                    <line v-for="r in roll.rows" :key="'r' + r.y" x1="0" :x2="ROLL_W" :y1="r.y" :y2="r.y" class="mmv-rowline" :class="{ root: r.root }" />
+                    <line v-for="b in [4, 8, 12]" :key="'b' + b" :x1="b * ROLL_W / 16" :x2="b * ROLL_W / 16" y1="0" :y2="ROLL_H" class="mmv-beat" />
+                    <rect v-for="n in roll.notes" :key="'n' + n.i" :x="n.x + 1.5" :y="n.y - 2" :width="ROLL_W / 16 - 3" height="4" rx="1"
+                        :style="{ fill: n.colour }" />
+                </svg>
+                <span class="mmv-read mmv-read--l">{{ keyRoot }} {{ scaleShort }} · {{ rangeLabel }}</span>
+                <span class="mmv-read mmv-read--r">{{ poolSummary }}</span>
+            </div>
+
+
+            <!-- A: no modes and no Generate: Melody and Arpeggio each make one -->
+            <div v-if="mockVariant === 'a'" class="mmv-makers">
+                <div class="mmv-box">
+                    <div class="mmv-box-row">
+                        <button type="button" class="mmv-gen hw-cap" @click="mode = 'random'; generate()"><span class="mmv-dice" aria-hidden="true">⚄</span> Melody</button>
+                        <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
+                        :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
+                        @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button>
+                    </div>
+                </div>
+                <div class="mmv-box">
+                    <div class="mmv-row"><span class="mmv-cap">Pattern</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp pattern">
+                        <button v-for="o in arpPatternOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpPattern === o.value }"
+                            role="radio" :aria-checked="arpPattern === o.value ? 'true' : 'false'" @click="arpPattern = o.value as any">{{ o.label }}</button></div></div>
+                    <div class="mmv-pair">
+                    <div class="mmv-row"><span class="mmv-cap">Rate</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp rate">
+                        <button v-for="o in arpRateOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpRate === o.value }"
+                            role="radio" :aria-checked="arpRate === o.value ? 'true' : 'false'" @click="arpRate = o.value as any">{{ o.label }}</button></div></div>
+                    <div class="mmv-row"><span class="mmv-cap">Octaves</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp octaves">
+                        <button v-for="o in arpOctaveOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpOctaves === o.value }"
+                            role="radio" :aria-checked="arpOctaves === o.value ? 'true' : 'false'" @click="arpOctaves = o.value as any">{{ o.label }}</button></div></div>
+                    </div>
+                    <div class="mmv-pair">
+                    <div class="mmv-row"><span class="mmv-cap">Tones</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp tones">
+                        <button v-for="o in arpToneOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpTones === o.value }"
+                            role="radio" :aria-checked="arpTones === o.value ? 'true' : 'false'" @click="arpTones = o.value as any">{{ o.label }}</button></div></div>
+                    <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left mmv-skip" :class="{ on: arpSkip }"
+                        :aria-pressed="arpSkip ? 'true' : 'false'" @click="arpSkip = !arpSkip">Skip</button>
+                    </div>
+                    <button type="button" class="mmv-gen mmv-gen--wide hw-cap" @click="mode = 'arp'; generate()"><span class="mmv-dice" aria-hidden="true">▲</span> Arpeggio</button>
+                </div>
+            </div>
+
+            <!-- B, C: the Melody | Arpeggio switch (B: Generate beside it) and the chosen one's settings -->
+            <div v-else class="mmv-group">
+                <div class="mmv-mode-row">
+                    <div class="pt-seg pt-seg-sm mm-mode mmv-mode" role="group" aria-label="Generate">
+                        <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'random' }"
+                            :aria-pressed="mode === 'random'" @click="mode = 'random'">Melody</button>
+                        <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'arp' }"
+                            :aria-pressed="mode === 'arp'" @click="mode = 'arp'">Arpeggio</button>
+                    </div>
+                    <button v-if="mockVariant === 'b'" type="button" class="mmv-gen hw-cap" @click="generate()"><span class="mmv-dice" aria-hidden="true">⚄</span> Generate</button>
+                </div>
+                <div class="mm-mode-body">
+                    <div class="mm-mode-panel" :class="{ 'is-hidden': mode !== 'random' }">
+                        <p class="mm-mode-note">{{ randomNote }}</p>
+                        <div class="mm-opts"><button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
+                        :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
+                        @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button></div>
+                    </div>
+                    <div class="mm-mode-panel mmv-arp" :class="{ 'is-hidden': mode !== 'arp' }">
+                    <div class="mmv-row"><span class="mmv-cap">Pattern</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp pattern">
+                        <button v-for="o in arpPatternOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpPattern === o.value }"
+                            role="radio" :aria-checked="arpPattern === o.value ? 'true' : 'false'" @click="arpPattern = o.value as any">{{ o.label }}</button></div></div>
+                    <div class="mmv-pair">
+                    <div class="mmv-row"><span class="mmv-cap">Rate</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp rate">
+                        <button v-for="o in arpRateOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpRate === o.value }"
+                            role="radio" :aria-checked="arpRate === o.value ? 'true' : 'false'" @click="arpRate = o.value as any">{{ o.label }}</button></div></div>
+                    <div class="mmv-row"><span class="mmv-cap">Octaves</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp octaves">
+                        <button v-for="o in arpOctaveOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpOctaves === o.value }"
+                            role="radio" :aria-checked="arpOctaves === o.value ? 'true' : 'false'" @click="arpOctaves = o.value as any">{{ o.label }}</button></div></div>
+                    </div>
+                    <div class="mmv-pair">
+                    <div class="mmv-row"><span class="mmv-cap">Tones</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp tones">
+                        <button v-for="o in arpToneOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpTones === o.value }"
+                            role="radio" :aria-checked="arpTones === o.value ? 'true' : 'false'" @click="arpTones = o.value as any">{{ o.label }}</button></div></div>
+                    <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left mmv-skip" :class="{ on: arpSkip }"
+                        :aria-pressed="arpSkip ? 'true' : 'false'" @click="arpSkip = !arpSkip">Skip</button>
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- MOCKUPS END -->
+
+        <section v-else class="pt-section">
             <div class="mm-kb-wrap">
                 <div class="mm-field">
                     <div class="mm-label" id="mm-key-label">Key<span v-if="queuedKey" class="mm-queued-note"
@@ -108,6 +260,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, defineExpose } from 'vue';
+import { padHue } from '../lib/padColour';
 import PtSelect from './PtSelect.vue';
 import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
 import { arpSlots, arpSequence, arpRateFrom, type ArpRate } from '../lib/melody/arp';
@@ -267,6 +420,52 @@ function buildCandidateMidiPool(
     }
     return pool;
 }
+
+// MOCKUPS START
+const mockVariant = new URLSearchParams(location.search).get('mm') || '';
+const mockScales = [
+    { value: 'none', label: 'None', long: 'None' },
+    { value: 'major', label: 'Major', long: 'Major' },
+    { value: 'naturalMinor', label: 'Minor', long: 'Minor' },
+    { value: 'pentMajor', label: 'Pent Maj', long: 'Pentatonic Major' },
+    { value: 'pentMinor', label: 'Pent Min', long: 'Pentatonic Minor' },
+    { value: 'lydian', label: 'Lydian', long: 'Lydian' },
+    { value: 'dorian', label: 'Dorian', long: 'Dorian' },
+    { value: 'mixolydian', label: 'Mixolyd', long: 'Mixolydian' },
+];
+const scaleShort = computed(() => mockScales.find((o) => o.value === keyScale.value)?.label ?? '');
+const rangeLabel = computed(() => PRESETS[rangePreset.value].label);
+function stepScale(d: number) {
+    const i = mockScales.findIndex((o) => o.value === keyScale.value);
+    chooseScale(mockScales[(i + d + mockScales.length) % mockScales.length].value);
+}
+// Is this key's note in the scale? (C: lit on the keyboard)
+function inScale(note: string) {
+    if (keyScale.value === 'none') return false;
+    const rel = ((NOTE_TO_SEMITONE[note] ?? 0) - (NOTE_TO_SEMITONE[keyRoot.value] ?? 0) + 12) % 12;
+    return (SCALE_STEPS[keyScale.value] ?? []).includes(rel);
+}
+// B's screen: the pattern (steps that are on, at their pitch, in their pad's colour) over a
+// line for every note of the key's root in the range
+const ROLL_W = 352;
+const ROLL_H = 56;
+const roll = computed(() => {
+    const lo = Math.max(props.minFreq ?? 100, midiToFreq(12 * (minOctave.value + 1)));
+    const hi = Math.min(props.maxFreq ?? 2000, midiToFreq(12 * (maxOctave.value + 2) - 1));
+    const y = (hz: number) => 14 + (1 - Math.min(1, Math.max(0, Math.log(hz / lo) / Math.log(hi / lo)))) * (ROLL_H - 20);
+    const semi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
+    const rows: { y: number; root: boolean }[] = [];
+    for (let m = 24; m < 108; m++) {
+        const f = midiToFreq(m);
+        if (f < lo || f > hi) continue;
+        const rel = (m - semi + 120) % 12;
+        if (rel === 0) rows.push({ y: y(f), root: true });
+    }
+    const notes = (props.frequencies ?? []).map((hz, i) => ({ i, hz })).filter((n) => props.steps?.[n.i])
+        .map((n) => ({ i: n.i, x: (n.i * ROLL_W) / 16, y: y(n.hz), colour: `hsl(${padHue(n.hz)} 90% 62%)` }));
+    return { rows, notes };
+});
+// MOCKUPS END
 
 const poolSummary = computed(() => {
     const fMin = props.minFreq ?? 100;
@@ -1266,4 +1465,344 @@ defineExpose({ getUi, setUi });
         --blackH: 30px;
     }
 } */
+/* MOCKUPS START */
+.mmv {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    height: 100%;
+}
+
+/* A and B are fuller: a little closer, so the card is the height it was (522 px) */
+.mmv-a,
+.mmv-b {
+    gap: 7px;
+}
+
+.mmv-a .mmv-box {
+    padding: 8px 9px;
+    gap: 6px;
+}
+
+.mmv-a .mmv-makers {
+    gap: 7px;
+}
+
+.mmv-b .mmv-screen {
+    height: 52px;
+}
+
+.mmv-b .mmv-group {
+    gap: 7px;
+    padding-top: 8px;
+}
+
+.mmv .mm-kb-wrap {
+    margin-bottom: 0;
+}
+
+.mmv-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mmv-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.mmv-pool {
+    color: var(--pt-muted);
+    font-size: 11px;
+    font-style: italic;
+}
+
+.mmv-pool--line {
+    text-align: center;
+    margin-top: -3px;
+}
+
+.mmv-scales {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.mmv-scale {
+    min-height: 28px;
+    padding: 2px 2px;
+    font-size: 0.65rem;
+    white-space: nowrap;
+}
+
+/* A switch row: its caption, then its options sharing the rest of the line */
+.mmv-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.mmv-cap {
+    flex: none;
+    width: 52px;
+    color: var(--pt-muted);
+    font-weight: 600;
+    font-size: 0.72rem;
+}
+
+.mmv-seg {
+    flex: 1;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 5px;
+    min-width: 0;
+}
+
+.mmv-seg .pt-seg-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+    white-space: nowrap;
+}
+
+.mmv-pair {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mmv-pair .mmv-row + .mmv-row .mmv-cap {
+    width: auto;
+}
+
+.mmv-skip {
+    flex: none;
+}
+
+/* The makers (A): two recessed boxes, each with its own button */
+.mmv-makers {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: auto;
+}
+
+.mmv-box {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 9px;
+    border-radius: 10px;
+    background: var(--pt-inset, rgba(0, 0, 0, 0.25));
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.mmv-box-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+/* A maker's button: a cap in the accent's colours, as Generate was */
+.mmv-gen {
+    --cap-travel: 2px;
+    --cap-hi: hsl(var(--pt-accent) 80% 60%);
+    --cap-lo: hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%);
+    --cap-edge: color-mix(in oklab, var(--cap-lo), black 60%);
+    --cap-ink: var(--pt-text);
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 9px;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--pt-text-strong);
+}
+
+.mmv-gen--wide {
+    width: 100%;
+}
+
+.mmv-gen--head {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    height: 26px;
+}
+
+.mmv-dice {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+/* B and C: the mode switch (and Generate), then the chosen maker's settings */
+.mmv-group {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px dashed var(--pt-hairline);
+}
+
+.mmv-mode-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mmv-mode {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.mmv-arp {
+    justify-content: flex-start;
+    gap: 7px;
+}
+
+/* B: the screen */
+.mmv-screen {
+    --lcd-bg: #0c1118;
+    --lcd-ink: #cfe0ff;
+    position: relative;
+    height: 58px;
+    border-radius: 6px;
+    background: var(--lcd-bg);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 2px 10px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+}
+
+.mmv-screen--tall {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 60px;
+}
+
+.theme-sand .mmv-screen {
+    --lcd-bg: #a9b29a;
+    --lcd-ink: #1d2419;
+}
+
+.mmv-roll {
+    position: absolute;
+    inset: 2px;
+    width: calc(100% - 4px);
+    height: calc(100% - 4px);
+}
+
+.mmv-rowline {
+    stroke: var(--lcd-ink);
+    stroke-opacity: 0.14;
+    vector-effect: non-scaling-stroke;
+}
+
+.mmv-rowline.root {
+    stroke-opacity: 0.3;
+    stroke-dasharray: 2 3;
+}
+
+.mmv-beat {
+    stroke: var(--lcd-ink);
+    stroke-opacity: 0.14;
+    vector-effect: non-scaling-stroke;
+}
+
+.mmv-read {
+    position: absolute;
+    top: 4px;
+    font-size: 9px;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--lcd-ink);
+    opacity: 0.9;
+}
+
+.mmv-read--l {
+    left: 7px;
+}
+
+.mmv-read--r {
+    right: 7px;
+}
+
+/* C: the stepper, and the scale's notes lit on the keys */
+.mmv-stepper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.mmv-step {
+    flex: none;
+    width: 24px;
+    height: 26px;
+    border: 0;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.8rem;
+}
+
+.mmv-step-name {
+    flex: 1;
+    min-width: 0;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    background: #0c1118;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 1px 5px rgba(0, 0, 0, 0.7);
+    color: #cfe0ff;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.mmv-c-row .mmv-row:first-child {
+    flex: 0 0 46%;
+}
+
+.mmv-c-row .mmv-cap {
+    width: auto;
+}
+
+.kb-white.in-scale::before,
+.kb-black.in-scale::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    margin-left: -3px;
+    border-radius: 50%;
+    background: var(--hw-led);
+    box-shadow: 0 0 5px var(--hw-led), 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.kb-white.in-scale::before {
+    bottom: 24px;
+}
+
+.kb-black.in-scale::before {
+    top: 6px;
+}
+/* MOCKUPS END */
 </style>
