@@ -101,7 +101,18 @@
 			<template #key>
 				<div class="module melody pl-melody">
 					<SectionWrap id="pl-melody" title="Melody Maker" :modelValue="true">
-						<MelodyMaker :key="`pl-melody-${resetNonce}`" :frequencies="padFrequencies"
+						<!-- Generate (PR 76): in the header, not under the card; the dice the preset boxes use -->
+						<template #tools>
+							<button type="button" class="mm-generate hw-cap" title="Make a melody or an arpeggio, whichever is chosen below"
+								@click="melodyPhoneRef?.generate?.()">
+								<svg viewBox="0 0 24 24" aria-hidden="true">
+									<rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+									<circle cx="8" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="16" cy="16" r="1.6" />
+								</svg>
+								<span>Generate</span>
+							</button>
+						</template>
+						<MelodyMaker :key="`pl-melody-${resetNonce}`" ref="melodyPhoneRef" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
@@ -493,6 +504,17 @@
 				<div class="module melody">
 					<!-- Its options are on the card since PR 68 (no ⋯ menu) -->
 					<SectionWrap id="melody" title="Melody Maker" v-model="collapsibleState['melody']">
+							<!-- Generate (PR 76): in the header, not under the card; the dice the preset boxes use -->
+							<template #tools>
+								<button type="button" class="mm-generate hw-cap" title="Make a melody or an arpeggio, whichever is chosen below"
+									@click="melodyRef?.generate?.()">
+									<svg viewBox="0 0 24 24" aria-hidden="true">
+										<rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+										<circle cx="8" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="16" cy="16" r="1.6" />
+									</svg>
+									<span>Generate</span>
+								</button>
+							</template>
 						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
@@ -767,7 +789,10 @@ const showPitch = ref(false);
 const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 	getUi?: () => any;
 	setUi?: (u: any) => void;
+	generate?: () => void;
 }) | null>(null);
+// The phone's Key page has a Melody Maker of its own
+const melodyPhoneRef = ref<{ generate?: () => void } | null>(null);
 
 const melodyUi = reactive<MelodyUi>({
 	keyRoot: 'A',
@@ -4002,6 +4027,38 @@ const phoneCtx = reactive({
 		flex: 1 1 154px;
 		min-height: 0;
 	}
+}
+
+/* The Melody Maker's Generate, in its card's header: a dark cap like File, with the dice the
+   preset boxes use (it's the same idea: make one for me) */
+.mm-generate {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	height: 28px;
+	padding: 0 11px;
+	border: 0;
+	border-radius: 8px;
+	font: inherit;
+	font-size: 0.74rem;
+	font-weight: 600;
+}
+
+.mm-generate svg {
+	flex: none;
+	width: 17px;
+	height: 17px;
+}
+
+.mm-generate svg rect {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.6px;
+}
+
+.mm-generate svg circle {
+	fill: currentColor;
 }
 
 .noise-ribbon {

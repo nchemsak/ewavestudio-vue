@@ -161,8 +161,8 @@ src/components/
   PhoneLayout.vue        Phone mode's layout (see "Phone mode"): pads, Play, steppers, macros;
                          its Sound, FX and Key pages are DrumSequencer's slots
   LfoBendMark.vue        The LFO's pitch bend drawn on a lit pad (see "LFO visualizer")
-  MelodyMaker.vue        Key, scale and range; one Generate (Melody or Arpeggio); a key or scale
-                         picked moves the pattern (see "Melody Maker")
+  MelodyMaker.vue        Key, scale and range, a screen, Melody or Arpeggio (Generate is in its
+                         card's header); a key or scale picked moves the pattern (see "Melody Maker")
   PatternTools.vue       Synth-lane tools: step fills (all, every 2/4, invert, random, clear),
                          velocity shapes ("Humanize") and octave shift (with the Active Pads
                          Only toggle)
@@ -227,6 +227,7 @@ src/lib/lfoPlot.ts       What the LFO card's screen draws: the wave across the b
 src/lib/padColour.ts     The pads' colours, which the spectrogram uses too (see "Pad and
                          spectrogram colours")
 src/lib/melody/theory.ts  Keys and scales; moving a pattern to another key or scale (pure)
+src/lib/melody/roll.ts   What the Melody Maker's screen draws: the pattern, what Generate would change (pure)
 src/lib/melody/arp.ts    The arpeggio on the pads: where Rate puts notes, the cycle fitted to
                          the bar (pure; see "Melody Maker")
 src/lib/knobDetents.ts   Knob notches: the drag's travel with a hold at each, and the Tempo and
@@ -670,6 +671,40 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### Melody Maker
 - `MelodyMaker.vue`, with its music theory in `src/lib/melody/theory.ts` (unit-tested).
+- **The card** (PR 76; option E2 after four rounds of mockups, the same size as before and as
+  tall in both modes; **no dropdowns**: the maintainer found a card of switches for every
+  choice "chaotic", so words went on steppers and only numbers stayed switches):
+  - **Generate** is in the card's header, top right (DrumSequencer's `SectionWrap` tools; a
+    dark cap with the preset boxes' dice and the word; `generate` is exposed). The wide
+    gradient button at the card's bottom is gone.
+  - The **keyboard** as before, with the scale's notes lit on the keys (`inScale()`).
+  - **Scale** is a **stepper**: ◂ and ▸ go to the neighbouring scale (round the ends), and a
+    click on the name (a small window with a ▾) opens the whole list with full names, as the
+    phone's Sound and Pattern do; Esc or a click elsewhere closes it (`openList`). The
+    arpeggio's **Pattern** and **Tones** are steppers too (their lists open upwards). Their
+    buttons are named "Scale: Minor", "Arp pattern: Up", "Arp tones: Chord". Notched knobs
+    were mocked up and turned down (you can't see the choices, and dragging to a scale moves
+    the pattern through the ones between).
+  - **Range** is **Narrow | Wide**, beside Scale, for a melody and an arpeggio alike. Low,
+    Mid and High went (the same two octaves an octave apart; Pattern Tools' Octave arrows do
+    that): Narrow is saved as `'mid'`, and `applySnapshot()` opens `'low'` and `'high'` as it.
+  - **The screen** (`.mm-screen`, `src/lib/melody/roll.ts`, unit-tested): the pattern across
+    the bar, each step that's on at its pitch (log in Hz over the pads' 100–2000 Hz) in its
+    pad's colour, a dashed line for every octave of the key. It also shows what Generate would
+    do: with Melody, a band over the notes a melody can use (random, so the notes themselves
+    can't be drawn), which is what Narrow and Wide change; with Arpeggio, the notes it would
+    write as dashed outlines where they differ from the pattern (`bakeArp(true)` works them
+    out without writing them; the Random pattern is shuffled afresh on every Generate, so it
+    has none and the readout says "shuffled on Generate"). Readouts: the key and scale, and
+    the pool ("A2–G6 • 30 notes") or the pattern and rate.
+  - **Melody | Arpeggio**, then the chosen one's panel, both in one grid cell so the card
+    never changes height: Melody's Active Pads Only and its note; the arpeggio's Pattern and
+    Tones steppers over Rate (1/8 | 1/16), Octaves (1 | 2 | 3) and Skip.
+  - **Captions** only where the control doesn't explain itself: Key, Scale, Octaves. Range,
+    Rate, Pattern and Tones have none (their names are tooltips and accessible names), so the
+    tones name themselves: Chord, 7th chord, Whole scale.
+  - A wide card (a tablet's Compose tab, the phone's Key page, from 640 px): the screen beside
+    the keyboard, Scale and the makers. Under 1200 px the screen is at least 110 px tall.
 - Clicking a key on its keyboard moves the whole pattern to that key, every pad (on or off)
   by the same interval, the shorter way round (`shortestInterval()`: C → D up 2, C → A down 3,
   a tritone up), so it's the same melody in the same register (`transposePitches()`). If that
@@ -691,7 +726,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   A project or an undo step brings its own pads and key together (`synth.tuning`). A key click
   is one undo step, pads and key together. (Before PR 39, a key change moved only the pads that
   were off and still on the old default note.)
-- One Generate button: a Melody / Arpeggio switch (`mode`, saved as `random` or `arp`; the
+- One Generate button (in the card's header since PR 76): a Melody / Arpeggio switch (`mode`, saved as `random` or `arp`; the
   Melody button read "Random" until PR 57, which clashed with the arpeggio's Random order).
   Melody keeps its old behaviour (random notes from the scale and range on the pads that are
   on, with "Active Pads Only", the first one gets the key; with no scale, the key's note in the
@@ -1274,7 +1309,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   by side, the same height, two buttons across; stacked under 340 px), Noise (mask buttons
   beside the knobs, under them below 320 px), the phone's LFO card (Wave / Target captions hidden under
   440 px, so it stays one row), FM (its ratio switch on a line of its own under 360 px), and
-  Melody Maker (keyboard and selects beside Generate from 640 px, as in a tablet's Compose tab).
+  Melody Maker (its screen beside the keyboard and controls from 640 px, as in a tablet's Compose tab).
   A browser test checks the arrangement at 1600 and 1280 px (flush bottoms, one line of knobs,
   rows filled, titles on one line, no sideways scroll) and the tabs at 1024 and 390 px, and
   another that every control can be clicked (none drawn over by another) at 1600, 1280, 1024
@@ -1350,30 +1385,25 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Items 1 and 2 come from the maintainer's brainstorm after PR 73 (its three small fixes were
-PR 74, the LFO card PR 75); item 3 from the one after PR 63 (PRs 64–70; the one after PR 70
-was PRs 71–73). No one else uses the app yet, so older projects need no special care: a
-removed setting can simply stop applying.
+Item 1 comes from the maintainer's brainstorm after PR 73 (its three small fixes were PR 74,
+the LFO card PR 75, the Melody Maker PR 76); item 2 from the one after PR 63 (PRs 64–70; the
+one after PR 70 was PRs 71–73). No one else uses the app yet, so older projects need no
+special care: a removed setting can simply stop applying.
 
-The redesigns (items 1 and 2) are visual only: every control keeps working as it does, and
-each card keeps its size. They are for the desktop; the phone can keep what suits it
-(dropdowns save room there, and it needn't look like hardware). Each starts with a few
+Redesigns are visual: every control keeps working as it does, and each card keeps its size.
+They are for the desktop first; the phone can keep what suits it. Each starts with a few
 mockups for the maintainer to pick from (built in the app behind a URL switch, photographed
-onto one page), as the LFO card's did. Its look, a ribbon switch, a small screen that shows
-what the controls do, sockets, is the one to carry on.
+onto one page, the code kept on the branch without a PR), as the LFO card's and the Melody
+Maker's did. What they settled: a ribbon switch, a small screen that shows what the controls
+do, sockets, steppers that open a list for a choice of words, switches for numbers, captions
+only where a control doesn't explain itself, and not too many buttons on show.
 
-1. **Melody Maker redesign.** The keyboard stays. As few dropdowns as possible: Range,
-   Pattern, Rate, Octaves and Tones (2–4 options each) as switch rows; Scale (8) as a 4×2
-   grid of small caps, or a ◂ Major ▸ stepper if that doesn't fit. The maintainer doesn't
-   like the Generate button at the bottom: mock up a small accent cap beside the Melody |
-   Arpeggio switch, and no Generate at all (pressing Melody or Arpeggio makes one). The room
-   comes from Generate's row and the nearly empty Melody panel.
-2. **The plain cards** (Envelope, Pitch, FM, Unison, Filter), in the LFO card's look.
-3. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
+1. **The plain cards** (Envelope, Pitch, FM, Unison, Filter), in that look.
+2. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
    changes to come may change the height), centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+3. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Decided after PR 73 (the maintainer's call, "for now"): the Sound and Pattern presets stay in
@@ -1574,6 +1604,7 @@ Done:
 | 73 | Phone mode additions: tiny pads in the top bar (two rows of 8 in their colours, the playing step outlined, on every page); a **Mod** page with the LFO card (it wasn't on the phone) and the Noise card with its pad buttons (Noise left the Sound page); **Swing** beside Tempo (− / + by its notches) and **Humanize** beside Octave (the velocity shapes, now `src/lib/patterns/velocityShapes.ts`, shared with Pattern Tools), the four knobs on one line; the small-phone rules (a narrower scope and tabs under 720 px), which never applied, fixed. |
 | 74 | Three fixes from the maintainer's brainstorm after PR 73 (whose plan it also adds: the LFO, Melody Maker and plain-card redesigns): the Pitch card's RND toggle reads **Random**; a Noise pad button turns the card on, **Backbeat** and **Offbeats** replace Every 4 and Random, a note says when a button's steps are all off, and the NOISE ribbon has an LED; the **Repeats brush** stays picked but shows it (a dashed frame round the pads with a tag, a cursor carrying ×3), and a click elsewhere puts it down. |
 | 75 | The LFO card redesigned (options A + B of four mockups), the same size as before: a ribbon down its left edge is its name and switch, as Noise's; a screen draws the wave across the bar over the pattern's steps (Rate as cycles per bar, Depth as height, RETRIG starting it again at each hit; `src/lib/lfoPlot.ts`); and a patch bay, one cable from LFO out to the target's socket. Under 1200 px the knobs sit beside the screen, so the card is no taller; the phone keeps the card as it was. |
+| 76 | The Melody Maker redesigned (option E2 after four rounds of mockups), the same size and as tall in both modes, with no dropdowns: Generate in the card's header (a dark cap with the preset boxes' dice); the scale's notes lit on the keyboard; Scale, Pattern and Tones on steppers whose name opens the list; Range as Narrow | Wide (Low and High open as Narrow); a screen that draws the pattern and what Generate would do (a melody's band of notes, an arpeggio as outlines; `src/lib/melody/roll.ts`); captions only on Key, Scale and Octaves. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -1,338 +1,13 @@
+<!-- src/components/MelodyMaker.vue -->
+<!-- The Melody Maker card (PR 76, option E2 of the mockups; no dropdowns). The keyboard picks the
+     key, its scale's notes lit. Scale is a stepper (arrows step; a click on the name opens the
+     whole list) beside Range (Narrow | Wide). A screen draws the pattern across the bar and
+     what Generate would do: the band a melody stays in, or the arpeggio as outlines. Then
+     Melody | Arpeggio and the chosen one's settings. Generate itself is in the card's header
+     (DrumSequencer's SectionWrap tools; `generate` is exposed). -->
 <template>
     <div class="melody-maker mm-skin" :class="props.currentTheme">
-        <!-- MOCKUPS, rounds 2 and 3 (?mm=c1|c2|c3|d1|d2): option C made simpler -->
-        <section v-if="mockCx" class="pt-section mmv mmv-c mmv-cx" :class="[`mmv-${mockVariant}`, { 'mmv-toprange': mockTopRange, 'mmv-knobs': mockKnobs }]" @click="mockMenu = null">
-            <button type="button" class="mmv-gen mmv-gen--head hw-cap" :class="mockGenClass" aria-label="Generate" title="Generate" @click="generate()">
-                <span v-if="!mockGen" class="mmv-dice" aria-hidden="true">⚄</span>
-                <svg v-else class="mmv-die" viewBox="0 0 24 24" aria-hidden="true">
-                    <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
-                    <circle cx="8" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="16" cy="16" r="1.6" />
-                </svg>
-                <span class="mmv-gen-word"> Generate</span></button>
-            <div class="mm-kb-wrap">
-                <div class="mm-field">
-                    <div class="mm-label" id="mmx-key-label">Key<span v-if="queuedKey" class="mm-queued-note"
-                            role="status"> · {{ queuedKey }} at the next bar<span class="mm-shift-hint"> (Shift+click: now)</span></span></div>
-                    <div class="mm-kb" role="radiogroup" aria-labelledby="mmx-key-label">
-                        <div v-for="k in NATURALS" :key="k.n" class="kb-cell" :class="{ 'has-sharp': k.hasSharp }">
-                            <button type="button" class="kb-white"
-                                :class="{ 'is-active': keyRoot === k.n, 'is-queued': queuedKey === k.n, 'in-scale': inScale(k.n) }"
-                                role="radio" :aria-checked="keyRoot === k.n ? 'true' : 'false'" @click="chooseKey(k.n, $event)">
-                                <span class="wlabel">{{ k.n }}</span>
-                            </button>
-                            <button v-if="k.hasSharp && k.sharp" type="button" class="kb-black"
-                                :class="{ 'is-active': keyRoot === k.sharp, 'is-queued': queuedKey === k.sharp, 'in-scale': inScale(k.sharp) }" role="radio"
-                                :aria-checked="keyRoot === k.sharp ? 'true' : 'false'" @click="chooseKey(k.sharp, $event)">
-                                <span class="blabel">{{ k.sharp }}</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-
-            <div class="mmv-pair mmv-c-row">
-                <div class="mmv-row mmv-sel"><span class="mmv-cap">Scale</span>
-                    <template v-if="mockKnobs">
-                        <Knob :modelValue="scaleIndex" @update:modelValue="chooseScale(mockScales[Math.round($event)].value)" size="small" hideLabel label="Scale" :value-text="(mockTopRange ? scaleShort : scaleLong)"
-                            :min="0" :max="mockScales.length - 1" :step="1" :showMarkers="true" :markers="mockScales.map((_, i) => i / (mockScales.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
-                        <span class="mmv-step-name mmv-knob-name">{{ (mockTopRange ? scaleShort : scaleLong) }}</span>
-                    </template>
-                    <div v-else class="mmv-stepper" role="group" aria-label="Scale">
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous" @click="stepScale(-1)">◂</button>
-                        <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'scale'" @click.stop="mockMenus && (mockMenu = mockMenu === 'scale' ? null : 'scale')">{{ (mockTopRange ? scaleShort : scaleLong) }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepScale(1)">▸</button>
-                        <div v-if="mockMenu === 'scale'" class="mmv-menu" role="listbox" aria-label="Scale">
-                            <button v-for="o in mockScales" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === keyScale }"
-                                :aria-selected="o.value === keyScale" @click.stop="chooseScale(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
-                        </div>
-                    </div>
-                </div>
-                <template v-if="mockTopRange"><div class="mmv-row mmv-range2"><span v-if="!mockHide.includes('Range')" class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Range">
-                            <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset !== 'wide' }" role="radio"
-                                :aria-checked="rangePreset !== 'wide' ? 'true' : 'false'" title="Notes stay within two octaves" @click="rangePreset = 'mid'">Narrow</button>
-                            <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset === 'wide' }" role="radio"
-                                :aria-checked="rangePreset === 'wide' ? 'true' : 'false'" title="Notes from the pads' whole range" @click="rangePreset = 'wide'">Wide</button></div></div></template>
-            </div>
-
-            <div class="mmv-screen mmv-screen--tall" aria-hidden="true">
-                <svg class="mmv-roll" :viewBox="`0 0 ${ROLL_W} ${ROLLX_H}`" preserveAspectRatio="none">
-                    <rect v-if="rollX.band" x="0" :y="rollX.band.y" :width="ROLL_W" :height="rollX.band.h" class="mmv-band" />
-                    <line v-for="r in rollX.rows" :key="'r' + r.y + r.pool" x1="0" :x2="ROLL_W" :y1="r.y" :y2="r.y" class="mmv-rowline" :class="{ root: r.root, pool: r.pool }" />
-                    <line v-for="b in [4, 8, 12]" :key="'b' + b" :x1="b * ROLL_W / 16" :x2="b * ROLL_W / 16" y1="0" :y2="ROLLX_H" class="mmv-beat" />
-                    <rect v-for="n in rollX.ghost" :key="'g' + n.i" :x="n.x + 1.5" :y="n.y - 2.5" :width="ROLL_W / 16 - 3" height="5" rx="1" class="mmv-ghost" />
-                    <rect v-for="n in rollX.notes" :key="'n' + n.i" :x="n.x + 1.5" :y="n.y - 2.5" :width="ROLL_W / 16 - 3" height="5" rx="1"
-                        :style="{ fill: n.colour }" />
-                </svg>
-                <span class="mmv-read mmv-read--l">{{ keyRoot }} {{ scaleShort }}</span>
-                <span class="mmv-read mmv-read--r">{{ screenNote }}</span>
-            </div>
-
-            <div class="mmv-group">
-                <div class="mmv-mode-row">
-                    <div class="pt-seg pt-seg-sm mm-mode mmv-mode" role="group" aria-label="Generate">
-                        <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'random' }"
-                            :aria-pressed="mode === 'random'" @click="mode = 'random'">Melody</button>
-                        <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'arp' }"
-                            :aria-pressed="mode === 'arp'" @click="mode = 'arp'">Arpeggio</button>
-                    </div>
-                </div>
-                <div class="mm-mode-body">
-                    <div class="mm-mode-panel mmv-arp" :class="{ 'is-hidden': mode !== 'random' }">
-                        <div v-if="mockTopRange" class="mmv-pair mmv-center"><button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
-                            :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
-                            @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button></div>
-                        <div v-else class="mmv-pair">
-                            <div class="mmv-row mmv-range2"><span v-if="!mockHide.includes('Range')" class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Range">
-                            <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset !== 'wide' }" role="radio"
-                                :aria-checked="rangePreset !== 'wide' ? 'true' : 'false'" title="Notes stay within two octaves" @click="rangePreset = 'mid'">Narrow</button>
-                            <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset === 'wide' }" role="radio"
-                                :aria-checked="rangePreset === 'wide' ? 'true' : 'false'" title="Notes from the pads' whole range" @click="rangePreset = 'wide'">Wide</button></div></div>
-                            <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
-                            :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
-                            @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button>
-                        </div>
-                        <p class="mm-mode-note mmv-note">{{ melodyHint }}</p>
-                    </div>
-                    <div class="mm-mode-panel mmv-arp" :class="{ 'is-hidden': mode !== 'arp' }">
-                        <template v-if="mockKnobs">
-                        <div class="mmv-pair mmv-knobrow">
-                            <div class="mmv-row mmv-sel"><span v-if="!mockHide.includes('Pattern')" class="mmv-cap">Pattern</span>
-                    <template v-if="mockKnobs">
-                        <Knob :modelValue="patternIndex" @update:modelValue="setPattern(arpPatternOptions[Math.round($event)].value)" size="small" hideLabel label="Arp pattern" :value-text="patternLabel"
-                            :min="0" :max="arpPatternOptions.length - 1" :step="1" :showMarkers="true" :markers="arpPatternOptions.map((_, i) => i / (arpPatternOptions.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
-                        <span class="mmv-step-name mmv-knob-name">{{ patternLabel }}</span>
-                    </template>
-                    <div v-else class="mmv-stepper" role="group" aria-label="Arp pattern">
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous" @click="stepPattern(-1)">◂</button>
-                        <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'pattern'" @click.stop="mockMenus && (mockMenu = mockMenu === 'pattern' ? null : 'pattern')">{{ patternLabel }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepPattern(1)">▸</button>
-                        <div v-if="mockMenu === 'pattern'" class="mmv-menu" role="listbox" aria-label="Arp pattern">
-                            <button v-for="o in arpPatternOptions" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpPattern }"
-                                :aria-selected="o.value === arpPattern" @click.stop="setPattern(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
-                        </div>
-                    </div>
-                </div>
-                            <div class="mmv-row mmv-sel"><span v-if="!mockHide.includes('Tones')" class="mmv-cap">Tones</span>
-                    <template v-if="mockKnobs">
-                        <Knob :modelValue="tonesIndex" @update:modelValue="setTones(toneOpts[Math.round($event)].value)" size="small" hideLabel label="Arp tones" :value-text="tonesLabel"
-                            :min="0" :max="toneOpts.length - 1" :step="1" :showMarkers="true" :markers="toneOpts.map((_, i) => i / (toneOpts.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
-                        <span class="mmv-step-name mmv-knob-name">{{ tonesLabel }}</span>
-                    </template>
-                    <div v-else class="mmv-stepper" role="group" aria-label="Arp tones">
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous" @click="stepTones(-1)">◂</button>
-                        <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'tones'" @click.stop="mockMenus && (mockMenu = mockMenu === 'tones' ? null : 'tones')">{{ tonesLabel }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepTones(1)">▸</button>
-                        <div v-if="mockMenu === 'tones'" class="mmv-menu" role="listbox" aria-label="Arp tones">
-                            <button v-for="o in toneOpts" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpTones }"
-                                :aria-selected="o.value === arpTones" @click.stop="setTones(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
-                        </div>
-                    </div>
-                </div>
-                        </div>
-                        </template>
-                        <div v-else class="mmv-pair">
-                            <div class="mmv-row mmv-sel"><span v-if="!mockHide.includes('Pattern')" class="mmv-cap">Pattern</span>
-                    <template v-if="mockKnobs">
-                        <Knob :modelValue="patternIndex" @update:modelValue="setPattern(arpPatternOptions[Math.round($event)].value)" size="small" hideLabel label="Arp pattern" :value-text="patternLabel"
-                            :min="0" :max="arpPatternOptions.length - 1" :step="1" :showMarkers="true" :markers="arpPatternOptions.map((_, i) => i / (arpPatternOptions.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
-                        <span class="mmv-step-name mmv-knob-name">{{ patternLabel }}</span>
-                    </template>
-                    <div v-else class="mmv-stepper" role="group" aria-label="Arp pattern">
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous" @click="stepPattern(-1)">◂</button>
-                        <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'pattern'" @click.stop="mockMenus && (mockMenu = mockMenu === 'pattern' ? null : 'pattern')">{{ patternLabel }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepPattern(1)">▸</button>
-                        <div v-if="mockMenu === 'pattern'" class="mmv-menu" role="listbox" aria-label="Arp pattern">
-                            <button v-for="o in arpPatternOptions" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpPattern }"
-                                :aria-selected="o.value === arpPattern" @click.stop="setPattern(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
-                        </div>
-                    </div>
-                </div>
-                            <div class="mmv-row mmv-sel"><span v-if="!mockHide.includes('Tones')" class="mmv-cap">Tones</span>
-                    <template v-if="mockKnobs">
-                        <Knob :modelValue="tonesIndex" @update:modelValue="setTones(toneOpts[Math.round($event)].value)" size="small" hideLabel label="Arp tones" :value-text="tonesLabel"
-                            :min="0" :max="toneOpts.length - 1" :step="1" :showMarkers="true" :markers="toneOpts.map((_, i) => i / (toneOpts.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
-                        <span class="mmv-step-name mmv-knob-name">{{ tonesLabel }}</span>
-                    </template>
-                    <div v-else class="mmv-stepper" role="group" aria-label="Arp tones">
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous" @click="stepTones(-1)">◂</button>
-                        <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'tones'" @click.stop="mockMenus && (mockMenu = mockMenu === 'tones' ? null : 'tones')">{{ tonesLabel }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepTones(1)">▸</button>
-                        <div v-if="mockMenu === 'tones'" class="mmv-menu" role="listbox" aria-label="Arp tones">
-                            <button v-for="o in toneOpts" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpTones }"
-                                :aria-selected="o.value === arpTones" @click.stop="setTones(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
-                        </div>
-                    </div>
-                </div>
-                        </div>
-                        <div class="mmv-pair">
-                            <div class="mmv-row"><span v-if="!mockHide.includes('Rate')" class="mmv-cap">Rate</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp rate">
-                                <button v-for="o in arpRateOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpRate === o.value }"
-                                    role="radio" :aria-checked="arpRate === o.value ? 'true' : 'false'" @click="arpRate = o.value as any">{{ o.label }}</button></div></div>
-                            <div class="mmv-row"><span class="mmv-cap">Octaves</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp octaves">
-                                <button v-for="o in arpOctaveOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpOctaves === o.value }"
-                                    role="radio" :aria-checked="arpOctaves === o.value ? 'true' : 'false'" @click="arpOctaves = o.value as any">{{ o.label }}</button></div></div>
-                            <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left mmv-skip" :class="{ on: arpSkip }"
-                                :aria-pressed="arpSkip ? 'true' : 'false'" title="Skip every other tone: wider leaps" @click="arpSkip = !arpSkip">Skip</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- MOCKUPS START (?mm=a|b|c: the redesign's options, not for shipping as is) -->
-        <section v-else-if="mockVariant" class="pt-section mmv" :class="`mmv-${mockVariant}`">
-            <button v-if="mockVariant === 'c'" type="button" class="mmv-gen mmv-gen--head hw-cap" @click="generate()">
-                <span class="mmv-dice" aria-hidden="true">⚄</span> Generate</button>
-            <div class="mm-kb-wrap">
-                <div class="mm-field">
-                    <div class="mm-label" id="mmv-key-label">Key<span v-if="queuedKey" class="mm-queued-note"
-                            role="status"> · {{ queuedKey }} at the next bar<span class="mm-shift-hint"> (Shift+click: now)</span></span></div>
-                    <div class="mm-kb" role="radiogroup" aria-labelledby="mmv-key-label">
-                        <div v-for="k in NATURALS" :key="k.n" class="kb-cell" :class="{ 'has-sharp': k.hasSharp }">
-                            <button type="button" class="kb-white"
-                                :class="{ 'is-active': keyRoot === k.n, 'is-queued': queuedKey === k.n, 'in-scale': mockVariant === 'c' && inScale(k.n) }"
-                                role="radio" :aria-checked="keyRoot === k.n ? 'true' : 'false'" @click="chooseKey(k.n, $event)">
-                                <span class="wlabel">{{ k.n }}</span>
-                            </button>
-                            <button v-if="k.hasSharp && k.sharp" type="button" class="kb-black"
-                                :class="{ 'is-active': keyRoot === k.sharp, 'is-queued': queuedKey === k.sharp, 'in-scale': mockVariant === 'c' && inScale(k.sharp) }" role="radio"
-                                :aria-checked="keyRoot === k.sharp ? 'true' : 'false'" @click="chooseKey(k.sharp, $event)">
-                                <span class="blabel">{{ k.sharp }}</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- B: a screen with the pattern as it is, over the notes the key, scale and range allow -->
-            <div v-if="mockVariant === 'b'" class="mmv-screen" aria-hidden="true">
-                <svg class="mmv-roll" :viewBox="`0 0 ${ROLL_W} ${ROLL_H}`" preserveAspectRatio="none">
-                    <line v-for="r in roll.rows" :key="'r' + r.y" x1="0" :x2="ROLL_W" :y1="r.y" :y2="r.y" class="mmv-rowline" :class="{ root: r.root }" />
-                    <line v-for="b in [4, 8, 12]" :key="'b' + b" :x1="b * ROLL_W / 16" :x2="b * ROLL_W / 16" y1="0" :y2="ROLL_H" class="mmv-beat" />
-                    <rect v-for="n in roll.notes" :key="'n' + n.i" :x="n.x + 1.5" :y="n.y - 2" :width="ROLL_W / 16 - 3" height="4" rx="1"
-                        :style="{ fill: n.colour }" />
-                </svg>
-                <span class="mmv-read mmv-read--l">{{ keyRoot }} {{ scaleShort }} · {{ rangeLabel }}</span>
-                <span class="mmv-read mmv-read--r">{{ poolSummary }}</span>
-            </div>
-
-            <template v-if="mockVariant !== 'c'">
-                <div class="mmv-block">
-                    <div class="mmv-head"><span class="mm-label">Scale</span><span v-if="mockVariant === 'a'" class="mmv-pool">{{ poolSummary }}</span></div>
-                    <div class="mmv-scales" role="radiogroup" aria-label="Scale">
-                        <button v-for="o in mockScales" :key="o.value" type="button" class="pt-seg-btn hw-led-top mmv-scale"
-                            :class="{ 'is-active': keyScale === o.value }" role="radio" :aria-label="o.long"
-                            :aria-checked="keyScale === o.value ? 'true' : 'false'" @click="chooseScale(o.value)">{{ o.label }}</button>
-                    </div>
-                </div>
-                <div class="mmv-row"><span class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Register range">
-                        <button v-for="o in rangeOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset === o.value }"
-                            role="radio" :aria-checked="rangePreset === o.value ? 'true' : 'false'" @click="rangePreset = o.value as any">{{ o.label }}</button></div></div>
-            </template>
-            <!-- C: the scale on a stepper, its notes lit on the keyboard -->
-            <div v-else class="mmv-pair mmv-c-row">
-                <div class="mmv-row"><span class="mmv-cap">Scale</span>
-                    <div class="mmv-stepper" role="group" aria-label="Scale">
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous scale" @click="stepScale(-1)">◂</button>
-                        <span class="mmv-step-name">{{ scaleShort }}</span>
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next scale" @click="stepScale(1)">▸</button>
-                    </div>
-                </div>
-                <div class="mmv-row"><span class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Register range">
-                        <button v-for="o in rangeOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset === o.value }"
-                            role="radio" :aria-checked="rangePreset === o.value ? 'true' : 'false'" @click="rangePreset = o.value as any">{{ o.label }}</button></div></div>
-            </div>
-            <!-- C: the same screen, taller, in the room the stepper leaves -->
-            <div v-if="mockVariant === 'c'" class="mmv-screen mmv-screen--tall" aria-hidden="true">
-                <svg class="mmv-roll" :viewBox="`0 0 ${ROLL_W} ${ROLL_H}`" preserveAspectRatio="none">
-                    <line v-for="r in roll.rows" :key="'r' + r.y" x1="0" :x2="ROLL_W" :y1="r.y" :y2="r.y" class="mmv-rowline" :class="{ root: r.root }" />
-                    <line v-for="b in [4, 8, 12]" :key="'b' + b" :x1="b * ROLL_W / 16" :x2="b * ROLL_W / 16" y1="0" :y2="ROLL_H" class="mmv-beat" />
-                    <rect v-for="n in roll.notes" :key="'n' + n.i" :x="n.x + 1.5" :y="n.y - 2" :width="ROLL_W / 16 - 3" height="4" rx="1"
-                        :style="{ fill: n.colour }" />
-                </svg>
-                <span class="mmv-read mmv-read--l">{{ keyRoot }} {{ scaleShort }} · {{ rangeLabel }}</span>
-                <span class="mmv-read mmv-read--r">{{ poolSummary }}</span>
-            </div>
-
-
-            <!-- A: no modes and no Generate: Melody and Arpeggio each make one -->
-            <div v-if="mockVariant === 'a'" class="mmv-makers">
-                <div class="mmv-box">
-                    <div class="mmv-box-row">
-                        <button type="button" class="mmv-gen hw-cap" @click="mode = 'random'; generate()"><span class="mmv-dice" aria-hidden="true">⚄</span> Melody</button>
-                        <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
-                        :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
-                        @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button>
-                    </div>
-                </div>
-                <div class="mmv-box">
-                    <div class="mmv-row"><span class="mmv-cap">Pattern</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp pattern">
-                        <button v-for="o in arpPatternOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpPattern === o.value }"
-                            role="radio" :aria-checked="arpPattern === o.value ? 'true' : 'false'" @click="arpPattern = o.value as any">{{ o.label }}</button></div></div>
-                    <div class="mmv-pair">
-                    <div class="mmv-row"><span class="mmv-cap">Rate</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp rate">
-                        <button v-for="o in arpRateOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpRate === o.value }"
-                            role="radio" :aria-checked="arpRate === o.value ? 'true' : 'false'" @click="arpRate = o.value as any">{{ o.label }}</button></div></div>
-                    <div class="mmv-row"><span class="mmv-cap">Octaves</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp octaves">
-                        <button v-for="o in arpOctaveOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpOctaves === o.value }"
-                            role="radio" :aria-checked="arpOctaves === o.value ? 'true' : 'false'" @click="arpOctaves = o.value as any">{{ o.label }}</button></div></div>
-                    </div>
-                    <div class="mmv-pair">
-                    <div class="mmv-row"><span class="mmv-cap">Tones</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp tones">
-                        <button v-for="o in arpToneOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpTones === o.value }"
-                            role="radio" :aria-checked="arpTones === o.value ? 'true' : 'false'" @click="arpTones = o.value as any">{{ o.label }}</button></div></div>
-                    <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left mmv-skip" :class="{ on: arpSkip }"
-                        :aria-pressed="arpSkip ? 'true' : 'false'" @click="arpSkip = !arpSkip">Skip</button>
-                    </div>
-                    <button type="button" class="mmv-gen mmv-gen--wide hw-cap" @click="mode = 'arp'; generate()"><span class="mmv-dice" aria-hidden="true">▲</span> Arpeggio</button>
-                </div>
-            </div>
-
-            <!-- B, C: the Melody | Arpeggio switch (B: Generate beside it) and the chosen one's settings -->
-            <div v-else class="mmv-group">
-                <div class="mmv-mode-row">
-                    <div class="pt-seg pt-seg-sm mm-mode mmv-mode" role="group" aria-label="Generate">
-                        <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'random' }"
-                            :aria-pressed="mode === 'random'" @click="mode = 'random'">Melody</button>
-                        <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'arp' }"
-                            :aria-pressed="mode === 'arp'" @click="mode = 'arp'">Arpeggio</button>
-                    </div>
-                    <button v-if="mockVariant === 'b'" type="button" class="mmv-gen hw-cap" @click="generate()"><span class="mmv-dice" aria-hidden="true">⚄</span> Generate</button>
-                </div>
-                <div class="mm-mode-body">
-                    <div class="mm-mode-panel" :class="{ 'is-hidden': mode !== 'random' }">
-                        <p class="mm-mode-note">{{ randomNote }}</p>
-                        <div class="mm-opts"><button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
-                        :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
-                        @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button></div>
-                    </div>
-                    <div class="mm-mode-panel mmv-arp" :class="{ 'is-hidden': mode !== 'arp' }">
-                    <div class="mmv-row"><span class="mmv-cap">Pattern</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp pattern">
-                        <button v-for="o in arpPatternOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpPattern === o.value }"
-                            role="radio" :aria-checked="arpPattern === o.value ? 'true' : 'false'" @click="arpPattern = o.value as any">{{ o.label }}</button></div></div>
-                    <div class="mmv-pair">
-                    <div class="mmv-row"><span class="mmv-cap">Rate</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp rate">
-                        <button v-for="o in arpRateOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpRate === o.value }"
-                            role="radio" :aria-checked="arpRate === o.value ? 'true' : 'false'" @click="arpRate = o.value as any">{{ o.label }}</button></div></div>
-                    <div class="mmv-row"><span class="mmv-cap">Octaves</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp octaves">
-                        <button v-for="o in arpOctaveOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpOctaves === o.value }"
-                            role="radio" :aria-checked="arpOctaves === o.value ? 'true' : 'false'" @click="arpOctaves = o.value as any">{{ o.label }}</button></div></div>
-                    </div>
-                    <div class="mmv-pair">
-                    <div class="mmv-row"><span class="mmv-cap">Tones</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp tones">
-                        <button v-for="o in arpToneOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpTones === o.value }"
-                            role="radio" :aria-checked="arpTones === o.value ? 'true' : 'false'" @click="arpTones = o.value as any">{{ o.label }}</button></div></div>
-                    <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left mmv-skip" :class="{ on: arpSkip }"
-                        :aria-pressed="arpSkip ? 'true' : 'false'" @click="arpSkip = !arpSkip">Skip</button>
-                    </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-        <!-- MOCKUPS END -->
-
-        <section v-else class="pt-section">
+        <section class="pt-section mm-card">
             <div class="mm-kb-wrap">
                 <div class="mm-field">
                     <div class="mm-label" id="mm-key-label">Key<span v-if="queuedKey" class="mm-queued-note"
@@ -342,7 +17,7 @@
                         <div v-for="k in NATURALS" :key="k.n" class="kb-cell" :class="{ 'has-sharp': k.hasSharp }">
                             <!-- White key -->
                             <button type="button" class="kb-white"
-                                :class="{ 'is-active': keyRoot === k.n, 'is-queued': queuedKey === k.n }"
+                                :class="{ 'is-active': keyRoot === k.n, 'is-queued': queuedKey === k.n, 'in-scale': inScale(k.n) }"
                                 role="radio" :aria-checked="keyRoot === k.n ? 'true' : 'false'" @click="chooseKey(k.n, $event)"
                                 :title="keyTitle(k.n)">
                                 <span class="wlabel">{{ k.n }}</span>
@@ -350,7 +25,7 @@
 
                             <!-- Black key -->
                             <button v-if="k.hasSharp && k.sharp" type="button" class="kb-black"
-                                :class="{ 'is-active': keyRoot === k.sharp, 'is-queued': queuedKey === k.sharp }" role="radio"
+                                :class="{ 'is-active': keyRoot === k.sharp, 'is-queued': queuedKey === k.sharp, 'in-scale': inScale(k.sharp) }" role="radio"
                                 :aria-checked="keyRoot === k.sharp ? 'true' : 'false'" @click="chooseKey(k.sharp, $event)"
                                 :title="keyTitle(k.sharp)">
                                 <span class="blabel">{{ k.sharp }}</span>
@@ -360,24 +35,45 @@
                 </div>
             </div>
 
-            <div class="mm-head-row2">
-                <label class="mm-field">
-                    <span class="mm-label">Scale / Mode</span>
-                    <PtSelect :modelValue="keyScale" @update:modelValue="chooseScale" :options="scaleOptions"
-                        aria-label="Scale" />
-                </label>
-
-                <label class="mm-field">
-                    <span class="mm-label">Range</span>
-                    <PtSelect v-model="rangePreset" :options="rangeOptions" aria-label="Register range" />
-                </label>
+            <!-- Scale (a stepper) and Range (Narrow | Wide: for a melody and an arpeggio alike) -->
+            <div class="mm-row mm-scale-row">
+                <span class="mm-cap">Scale</span>
+                <div class="mm-stepper" role="group" aria-label="Scale" :title="'Scale'">
+                    <button type="button" class="hw-cap hw-cap-sm mm-step" aria-label="Previous" @click="stepScale(-1)">◂</button>
+                    <button type="button" class="mm-step-name" :aria-label="`Scale: ${scaleShort}`" aria-haspopup="listbox"
+                        :aria-expanded="openList === 'scale'" @click.stop="openList = openList === 'scale' ? null : 'scale'">
+                        <span>{{ scaleShort }}</span><span class="mm-caret" aria-hidden="true">▾</span></button>
+                    <button type="button" class="hw-cap hw-cap-sm mm-step" aria-label="Next" @click="stepScale(1)">▸</button>
+                    <div v-if="openList === 'scale'" class="mm-list" role="listbox" aria-label="Scale">
+                        <button v-for="o in SCALE_CHOICES" :key="String(o.value)" type="button" role="option" class="mm-list-item" :class="{ on: o.value === keyScale }"
+                            :aria-selected="o.value === keyScale" @click.stop="chooseScale(o.value); openList = null">{{ o.long ?? o.label }}</button>
+                    </div>
+                </div>
+                <div class="pt-seg pt-seg-sm mm-seg mm-range" role="radiogroup" aria-label="Range" title="Range">
+                    <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset !== 'wide' }" role="radio"
+                        :aria-checked="rangePreset !== 'wide' ? 'true' : 'false'" title="Narrow: notes stay within two octaves" @click="rangePreset = 'mid'">Narrow</button>
+                    <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset === 'wide' }" role="radio"
+                        :aria-checked="rangePreset === 'wide' ? 'true' : 'false'" title="Wide: notes from the pads' whole range" @click="rangePreset = 'wide'">Wide</button>
+                </div>
             </div>
 
-            <div class="mm-hint">{{ poolSummary }}</div>
+            <!-- The screen: the pattern across the bar (each step that's on, at its pitch, in its
+                 pad's colour), a line for every octave of the key, and what Generate would do -->
+            <div class="mm-screen" role="img" :aria-label="screenLabel">
+                <svg class="mm-roll" :viewBox="`0 0 ${ROLL_W} ${ROLL_H}`" preserveAspectRatio="none" aria-hidden="true">
+                    <rect v-if="roll.band" x="0" :y="roll.band.y" :width="ROLL_W" :height="roll.band.h" class="mm-band" />
+                    <line v-for="y in roll.rows" :key="'r' + y" x1="0" :x2="ROLL_W" :y1="y" :y2="y" class="mm-rowline" />
+                    <line v-for="b in [4, 8, 12]" :key="'b' + b" :x1="b * ROLL_W / 16" :x2="b * ROLL_W / 16" y1="0" :y2="ROLL_H" class="mm-beat" />
+                    <rect v-for="n in roll.ghost" :key="'g' + n.i" :x="n.x + 1.5" :y="n.y - 2.5" :width="ROLL_W / 16 - 3" height="5" rx="1" class="mm-ghost" />
+                    <rect v-for="n in roll.notes" :key="'n' + n.i" :x="n.x + 1.5" :y="n.y - 2.5" :width="ROLL_W / 16 - 3" height="5" rx="1"
+                        class="mm-note" :style="{ fill: n.colour }" />
+                </svg>
+                <span class="mm-read mm-read--l" aria-hidden="true">{{ keyRoot }} {{ scaleShort }}</span>
+                <span class="mm-read mm-read--r" aria-hidden="true">{{ screenNote }}</span>
+            </div>
 
-            <!-- What Generate makes: random notes, or an arpeggio (its settings below). Both
-                 sit in the same place, the one not chosen hidden, so the card keeps its height
-                 and the columns around it don't move. -->
+            <!-- What Generate makes: random notes, or an arpeggio. Both panels sit in the same
+                 place, the one not chosen hidden, so the card is as tall in both modes. -->
             <div class="mm-group">
                 <div class="pt-seg pt-seg-sm mm-mode" role="group" aria-label="Generate">
                     <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'random' }"
@@ -387,62 +83,69 @@
                 </div>
 
                 <div class="mm-mode-body">
-                <!-- Melody: what it makes, and which pads it fills -->
-                <div class="mm-mode-panel" :class="{ 'is-hidden': mode !== 'random' }">
-                <p class="mm-mode-note">{{ randomNote }}</p>
-                <div class="mm-opts">
-                    <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
-                        :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
-                        title="On: Generate gives notes to the pads that are on. Off: to every pad"
-                        @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button>
+                    <!-- Melody: which pads it fills -->
+                    <div class="mm-mode-panel" :class="{ 'is-hidden': mode !== 'random' }">
+                        <div class="mm-opts">
+                            <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
+                                :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
+                                title="On: Generate gives notes to the pads that are on. Off: to every pad"
+                                @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button>
+                        </div>
+                        <p class="mm-mode-note">{{ randomNote }}</p>
+                    </div>
+                    <!-- Arpeggio: words on steppers (Pattern, Tones), numbers on switches (Rate,
+                         Octaves), and Skip -->
+                    <div class="mm-mode-panel" :class="{ 'is-hidden': mode !== 'arp' }">
+                        <div class="mm-row">
+                            <div class="mm-stepper" role="group" aria-label="Arp pattern" :title="'Arp pattern'">
+                    <button type="button" class="hw-cap hw-cap-sm mm-step" aria-label="Previous" @click="stepPattern(-1)">◂</button>
+                    <button type="button" class="mm-step-name" :aria-label="`Arp pattern: ${patternLabel}`" aria-haspopup="listbox"
+                        :aria-expanded="openList === 'pattern'" @click.stop="openList = openList === 'pattern' ? null : 'pattern'">
+                        <span>{{ patternLabel }}</span><span class="mm-caret" aria-hidden="true">▾</span></button>
+                    <button type="button" class="hw-cap hw-cap-sm mm-step" aria-label="Next" @click="stepPattern(1)">▸</button>
+                    <div v-if="openList === 'pattern'" class="mm-list mm-list--up" role="listbox" aria-label="Arp pattern">
+                        <button v-for="o in arpPatternOptions" :key="String(o.value)" type="button" role="option" class="mm-list-item" :class="{ on: o.value === arpPattern }"
+                            :aria-selected="o.value === arpPattern" @click.stop="setPattern(o.value); openList = null">{{ o.long ?? o.label }}</button>
+                    </div>
                 </div>
+                            <div class="mm-stepper" role="group" aria-label="Arp tones" :title="'Arp tones'">
+                    <button type="button" class="hw-cap hw-cap-sm mm-step" aria-label="Previous" @click="stepTones(-1)">◂</button>
+                    <button type="button" class="mm-step-name" :aria-label="`Arp tones: ${tonesLabel}`" aria-haspopup="listbox"
+                        :aria-expanded="openList === 'tones'" @click.stop="openList = openList === 'tones' ? null : 'tones'">
+                        <span>{{ tonesLabel }}</span><span class="mm-caret" aria-hidden="true">▾</span></button>
+                    <button type="button" class="hw-cap hw-cap-sm mm-step" aria-label="Next" @click="stepTones(1)">▸</button>
+                    <div v-if="openList === 'tones'" class="mm-list mm-list--up" role="listbox" aria-label="Arp tones">
+                        <button v-for="o in arpToneOptions" :key="String(o.value)" type="button" role="option" class="mm-list-item" :class="{ on: o.value === arpTones }"
+                            :aria-selected="o.value === arpTones" @click.stop="setTones(o.value); openList = null">{{ o.long ?? o.label }}</button>
+                    </div>
                 </div>
-                <!-- Arpeggio: its settings, and Skip (PR 68: on the card, where the ⋯ menu had them) -->
-                <div class="mm-mode-panel" :class="{ 'is-hidden': mode !== 'arp' }">
-                <div class="mm-grid">
-                    <label class="mm-field">
-                        <span class="mm-label">Pattern</span>
-                        <PtSelect v-model="arpPattern" :options="arpPatternOptions" aria-label="Arp pattern" />
-                    </label>
-
-                    <label class="mm-field">
-                        <span class="mm-label">Rate</span>
-                        <PtSelect v-model="arpRate" :options="arpRateOptions" aria-label="Arp rate" />
-                    </label>
-
-                    <label class="mm-field">
-                        <span class="mm-label">Octaves</span>
-                        <PtSelect v-model="arpOctaves" :options="arpOctaveOptions" aria-label="Arp octaves" />
-                    </label>
-
-                    <label class="mm-field">
-                        <span class="mm-label">Tones</span>
-                        <PtSelect v-model="arpTones" :options="arpToneOptions" aria-label="Arp tones" />
-                    </label>
-                </div>
-                <div class="mm-opts">
-                    <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: arpSkip }"
-                        :aria-pressed="arpSkip ? 'true' : 'false'"
-                        title="Skip every other tone: 1-5-3-7 instead of 1-3-5-7, wider leaps"
-                        @click="arpSkip = !arpSkip">Skip</button>
-                </div>
-                </div>
-                </div>
-
-                <div class="mm-primary">
-                    <button class="mm-btn mm-primary-btn melody-btn hw-cap" @click="generate()">Generate</button>
+                        </div>
+                        <div class="mm-row">
+                            <div class="pt-seg pt-seg-sm mm-seg" role="radiogroup" aria-label="Arp rate" title="Arp rate">
+                            <button v-for="o in arpRateOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpRate === o.value }"
+                                role="radio" :aria-checked="arpRate === o.value ? 'true' : 'false'" @click="arpRate = o.value">{{ o.label }}</button>
+                        </div>
+                            <span class="mm-cap">Octaves</span>
+                            <div class="pt-seg pt-seg-sm mm-seg" role="radiogroup" aria-label="Arp octaves" title="Arp octaves">
+                            <button v-for="o in arpOctaveOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpOctaves === o.value }"
+                                role="radio" :aria-checked="arpOctaves === o.value ? 'true' : 'false'" @click="arpOctaves = o.value">{{ o.label }}</button>
+                        </div>
+                            <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: arpSkip }"
+                                :aria-pressed="arpSkip ? 'true' : 'false'"
+                                title="Skip every other tone: 1-5-3-7 instead of 1-3-5-7, wider leaps"
+                                @click="arpSkip = !arpSkip">Skip</button>
+                        </div>
+                    </div>
                 </div>
             </div>
-
         </section>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, defineExpose } from 'vue';
+import { ref, computed, watch, defineExpose, onMounted, onBeforeUnmount } from 'vue';
 import { padHue } from '../lib/padColour';
-import Knob from './Knob.vue';
-import PtSelect from './PtSelect.vue';
+import { rollY, rootOctavesHz, rollNotes, ghostNotes, type RollNote } from '../lib/melody/roll';
 import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
 import { arpSlots, arpSequence, arpRateFrom, type ArpRate } from '../lib/melody/arp';
 
@@ -602,123 +305,93 @@ function buildCandidateMidiPool(
     return pool;
 }
 
-// MOCKUPS START
-const mockVariant = new URLSearchParams(location.search).get('mm') || '';
-const mockScales = [
-    { value: 'none', label: 'None', long: 'None' },
-    { value: 'major', label: 'Major', long: 'Major' },
-    { value: 'naturalMinor', label: 'Minor', long: 'Minor' },
+// THE CARD (PR 76) START
+type Choice<T> = { value: T; label: string; long?: string };
+
+// The scales, as the stepper's window names them (short) and as its list does (long)
+const SCALE_CHOICES: Choice<KeyScale>[] = [
+    { value: 'none', label: 'None' },
+    { value: 'major', label: 'Major' },
+    { value: 'naturalMinor', label: 'Minor' },
     { value: 'pentMajor', label: 'Pent Maj', long: 'Pentatonic Major' },
     { value: 'pentMinor', label: 'Pent Min', long: 'Pentatonic Minor' },
-    { value: 'lydian', label: 'Lydian', long: 'Lydian' },
-    { value: 'dorian', label: 'Dorian', long: 'Dorian' },
+    { value: 'lydian', label: 'Lydian' },
+    { value: 'dorian', label: 'Dorian' },
     { value: 'mixolydian', label: 'Mixolyd', long: 'Mixolydian' },
 ];
-const scaleShort = computed(() => mockScales.find((o) => o.value === keyScale.value)?.label ?? '');
-const rangeLabel = computed(() => PRESETS[rangePreset.value].label);
-function stepScale(d: number) {
-    const i = mockScales.findIndex((o) => o.value === keyScale.value);
-    chooseScale(mockScales[(i + d + mockScales.length) % mockScales.length].value);
+const scaleShort = computed(() => SCALE_CHOICES.find((o) => o.value === keyScale.value)?.label ?? '');
+
+// A stepper: its arrows go to the neighbouring choice (round the ends); a click on its name
+// opens the whole list (openList), which a click elsewhere or Esc closes
+function neighbour<T>(opts: readonly Choice<T>[], cur: T, d: number): T {
+    const i = Math.max(0, opts.findIndex((o) => o.value === cur));
+    return opts[(i + d + opts.length) % opts.length].value;
 }
-// Is this key's note in the scale? (C: lit on the keyboard)
+const openList = ref<null | 'scale' | 'pattern' | 'tones'>(null);
+const closeList = () => { openList.value = null; };
+const onListKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeList(); };
+onMounted(() => { document.addEventListener('click', closeList); window.addEventListener('keydown', onListKey); });
+onBeforeUnmount(() => { document.removeEventListener('click', closeList); window.removeEventListener('keydown', onListKey); });
+
+function stepScale(d: number) { chooseScale(neighbour(SCALE_CHOICES, keyScale.value, d)); }
+function stepPattern(d: number) { arpPattern.value = neighbour(arpPatternOptions, arpPattern.value, d); }
+function stepTones(d: number) { arpTones.value = neighbour(arpToneOptions, arpTones.value, d); }
+function setPattern(v: ArpPattern) { arpPattern.value = v; }
+function setTones(v: ArpTones) { arpTones.value = v; }
+const patternLabel = computed(() => arpPatternOptions.find((o) => o.value === arpPattern.value)?.label ?? '');
+const tonesLabel = computed(() => arpToneOptions.find((o) => o.value === arpTones.value)?.label ?? '');
+
+// Is this key's note in the scale? Those keys are lit
 function inScale(note: string) {
     if (keyScale.value === 'none') return false;
     const rel = ((NOTE_TO_SEMITONE[note] ?? 0) - (NOTE_TO_SEMITONE[keyRoot.value] ?? 0) + 12) % 12;
     return (SCALE_STEPS[keyScale.value] ?? []).includes(rel);
 }
-// B's screen: the pattern (steps that are on, at their pitch, in their pad's colour) over a
-// line for every note of the key's root in the range
+
+// The screen (src/lib/melody/roll.ts): the pattern, a line for each octave of the key, and
+// what Generate would do: for a melody (random, so it can't be drawn) the band of notes it
+// picks from, which is what Narrow and Wide change; for an arpeggio the notes it would write,
+// as outlines, where they differ from the pattern (the Random pattern is shuffled afresh on
+// every Generate, so it has none)
 const ROLL_W = 352;
-const ROLL_H = 56;
+const ROLL_H = 120;
 const roll = computed(() => {
-    const lo = Math.max(props.minFreq ?? 100, midiToFreq(12 * (minOctave.value + 1)));
-    const hi = Math.min(props.maxFreq ?? 2000, midiToFreq(12 * (maxOctave.value + 2) - 1));
-    const y = (hz: number) => 14 + (1 - Math.min(1, Math.max(0, Math.log(hz / lo) / Math.log(hi / lo)))) * (ROLL_H - 20);
-    const semi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
-    const rows: { y: number; root: boolean }[] = [];
-    for (let m = 24; m < 108; m++) {
-        const f = midiToFreq(m);
-        if (f < lo || f > hi) continue;
-        const rel = (m - semi + 120) % 12;
-        if (rel === 0) rows.push({ y: y(f), root: true });
-    }
-    const notes = (props.frequencies ?? []).map((hz, i) => ({ i, hz })).filter((n) => props.steps?.[n.i])
-        .map((n) => ({ i: n.i, x: (n.i * ROLL_W) / 16, y: y(n.hz), colour: `hsl(${padHue(n.hz)} 90% 62%)` }));
-    return { rows, notes };
-});
-// Round 2 (c1, c2, c3)
-const mockCx = /^(c[123]|d[12]|e[12])$/.test(mockVariant);
-const mockTopRange = ['c1', 'd1', 'd2', 'e1', 'e2'].includes(mockVariant); // Range beside Scale
-const mockPreview = ['c3', 'd1', 'd2', 'e1', 'e2'].includes(mockVariant);  // the screen previews
-const mockMenus = ['d1', 'e1', 'e2'].includes(mockVariant);                        // a stepper's name opens a list
-const mockKnobs = mockVariant === 'd2';                        // notched knobs for the word choices
-const mockMenu = ref<string | null>(null);
-// Round 4 (e1, e2): fewer captions, and Generate's looks (?gen=1..6)
-const mockE = /^e[12]$/.test(mockVariant);
-const mockHide = mockVariant === 'e1' ? ['Range', 'Rate', 'Tones'] : mockVariant === 'e2' ? ['Range', 'Rate', 'Tones', 'Pattern'] : [];
-const mockGen = mockE ? Number(new URLSearchParams(location.search).get('gen') || 3) : 0;
-const mockGenClass = mockGen ? `mmv-gen--g mmv-gen--g${mockGen}` : { 'mmv-gen--cap': mockVariant === 'd1', 'mmv-gen--round': mockVariant === 'd2' };
-// Without its caption a "Scale" under the Scale stepper would confuse: the tones say what they are
-const toneOpts = computed(() => (mockE ? [
-    { label: 'Chord', long: 'Chord: 1-3-5', value: 'chord' },
-    { label: '7th chord', long: '7th chord: 1-3-5-7', value: 'seventh' },
-    { label: 'Whole scale', long: 'Whole scale', value: 'scale' },
-] : arpToneOptions) as readonly { label: string; long?: string; value: ArpTones }[]);
-const scaleIndex = computed(() => Math.max(0, mockScales.findIndex((o) => o.value === keyScale.value)));
-const patternIndex = computed(() => Math.max(0, arpPatternOptions.findIndex((o) => o.value === arpPattern.value)));
-const tonesIndex = computed(() => Math.max(0, toneOpts.value.findIndex((o) => o.value === arpTones.value)));
-function setPattern(v: any) { arpPattern.value = v; }
-function setTones(v: any) { arpTones.value = v; }
-const scaleLong = computed(() => mockScales.find((o) => o.value === keyScale.value)?.long ?? '');
-const patternLabel = computed(() => arpPatternOptions.find((o) => o.value === arpPattern.value)?.label ?? '');
-function stepPattern(d: number) {
-    const i = arpPatternOptions.findIndex((o) => o.value === arpPattern.value);
-    arpPattern.value = arpPatternOptions[(i + d + arpPatternOptions.length) % arpPatternOptions.length].value;
-}
-const tonesLabel = computed(() => toneOpts.value.find((o) => o.value === arpTones.value)?.label ?? '');
-function stepTones(d: number) {
-    const opts = toneOpts.value;
-    const i = opts.findIndex((o) => o.value === arpTones.value);
-    arpTones.value = opts[(i + d + opts.length) % opts.length].value;
-}
-const melodyHint = computed(() => (keyScale.value === 'none'
-    ? "No scale: every pad gets the key's note."
-    : "Random notes from the scale; the first pad that's on gets the key."));
-const screenNote = computed(() => {
-    if (mode.value === 'arp') return `${patternLabel.value} · ${arpRate.value}${mockPreview && arpPattern.value === 'random' ? ' · shuffled on Generate' : ''}`;
-    return poolSummary.value;
-});
-const ROLLX_H = 120;
-const rollX = computed(() => {
     const lo = props.minFreq ?? 100, hi = props.maxFreq ?? 2000;
-    const y = (hz: number) => 16 + (1 - Math.min(1, Math.max(0, Math.log(hz / lo) / Math.log(hi / lo)))) * (ROLLX_H - 26);
-    const semi = NOTE_TO_SEMITONE[keyRoot.value] ?? 0;
-    const rows: { y: number; root: boolean; pool: boolean }[] = [];
-    for (let m = 24; m < 108; m++) {
-        const f = midiToFreq(m);
-        if (f < lo || f > hi) continue;
-        if ((m - semi + 120) % 12 === 0) rows.push({ y: y(f), root: true, pool: false });
-    }
-    // c3, Melody: the band of notes it can pick from (Narrow or Wide)
+    const y = (hz: number) => rollY(hz, lo, hi, ROLL_H);
+    const place = (notes: RollNote[]) => notes.map((n) => ({ i: n.i, x: (n.i * ROLL_W) / 16, y: y(n.hz), colour: `hsl(${padHue(n.hz)} 90% 62%)` }));
+    const now = rollNotes(props.frequencies ?? [], props.steps ?? []);
+
     let band: { y: number; h: number } | null = null;
-    if (mockPreview && mode.value === 'random' && keyScale.value !== 'none') {
-        const pool = buildCandidateMidiPool(keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, lo, hi);
-        if (pool.length) band = { y: y(midiToFreq(Math.max(...pool))) - 4, h: y(midiToFreq(Math.min(...pool))) - y(midiToFreq(Math.max(...pool))) + 8 };
-    }
-    const at = (freqs: readonly number[], steps: readonly boolean[]) => freqs.map((hz, i) => ({ i, hz })).filter((n) => steps[n.i])
-        .map((n) => ({ i: n.i, x: (n.i * ROLL_W) / 16, y: y(n.hz), colour: `hsl(${padHue(n.hz)} 90% 62%)` }));
-    const notes = at(props.frequencies ?? [], props.steps ?? []);
-    // c3, Arpeggio: what Generate would write, where it differs from the pattern
-    let ghost: typeof notes = [];
-    if (mockPreview && mode.value === 'arp') {
-        const next = bakeArp(true);
-        if (next) {
-            ghost = at(next.freqs, next.steps).filter((g) => !notes.some((n) => n.i === g.i && Math.abs(n.y - g.y) < 0.5));
+    let ghost: RollNote[] = [];
+    if (mode.value === 'random') {
+        const pool = keyScale.value === 'none' ? []
+            : buildCandidateMidiPool(keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, lo, hi);
+        if (pool.length) {
+            const top = y(midiToFreq(Math.max(...pool))), bottom = y(midiToFreq(Math.min(...pool)));
+            band = { y: top - 4, h: bottom - top + 8 };
         }
+    } else {
+        const next = bakeArp(true);
+        if (next) ghost = ghostNotes(now, rollNotes(next.freqs, next.steps));
     }
-    return { rows, notes, ghost, band };
+    return {
+        rows: rootOctavesHz(NOTE_TO_SEMITONE[keyRoot.value] ?? 0, lo, hi).map(y),
+        notes: place(now),
+        ghost: place(ghost),
+        band,
+    };
 });
-// MOCKUPS END
+const screenNote = computed(() => (mode.value === 'arp'
+    ? `${patternLabel.value} · ${arpRate.value}${arpPattern.value === 'random' ? ' · shuffled on Generate' : ''}`
+    : poolSummary.value));
+const screenLabel = computed(() => {
+    const on = roll.value.notes.length;
+    const what = mode.value === 'arp'
+        ? (roll.value.ghost.length ? `Generate would write an arpeggio: ${patternLabel.value}, ${arpRate.value}` : `Arpeggio: ${patternLabel.value}, ${arpRate.value}`)
+        : `A melody would use ${poolSummary.value}`;
+    return `${keyRoot.value} ${scaleShort.value}. ${on} ${on === 1 ? 'step' : 'steps'} on. ${what}.`;
+});
+// THE CARD END
 
 const poolSummary = computed(() => {
     const fMin = props.minFreq ?? 100;
@@ -760,21 +433,6 @@ const poolSummary = computed(() => {
     return `${midiToName(pool[0])}–${midiToName(pool[pool.length - 1])} • ${pool.length
         } notes`;
 });
-
-const scaleOptions = [
-    { label: 'None', value: 'none' },
-    { label: SCALE_LABELS.major, value: 'major' },
-    { label: SCALE_LABELS.naturalMinor, value: 'naturalMinor' },
-    { label: SCALE_LABELS.pentMajor, value: 'pentMajor' },
-    { label: SCALE_LABELS.pentMinor, value: 'pentMinor' },
-    { label: SCALE_LABELS.lydian, value: 'lydian' },
-    { label: SCALE_LABELS.dorian, value: 'dorian' },
-    { label: SCALE_LABELS.mixolydian, value: 'mixolydian' }
-];
-
-const rangeOptions = (
-    Object.entries(PRESETS) as [PresetKey, (typeof PRESETS)[PresetKey]][]
-).map(([value, def]) => ({ label: def.label, value }));
 
 watch(
     keyRoot,
@@ -1029,12 +687,13 @@ watch(() => props.initialArpTones, (v) => { if (v) arpTones.value = v; });
 watch(arpSkip, (v) => emit('arp-skip-change', v));
 watch(() => props.initialArpSkip, (v) => { if (typeof v === 'boolean') arpSkip.value = v; });
 
-const arpPatternOptions = [
+type ArpPattern = 'up' | 'down' | 'updown' | 'random';
+const arpPatternOptions: Choice<ArpPattern>[] = [
     { label: 'Up', value: 'up' },
     { label: 'Down', value: 'down' },
     { label: 'Up/Down', value: 'updown' },
     { label: 'Random', value: 'random' }
-] as const;
+];
 const arpRateOptions = [
     { label: '1/8', value: '1/8' },
     { label: '1/16', value: '1/16' }
@@ -1044,11 +703,13 @@ const arpOctaveOptions = [
     { label: '2', value: 2 },
     { label: '3', value: 3 }
 ] as const;
-const arpToneOptions = [
-    { label: 'Chord', value: 'chord' },
-    { label: '7th', value: 'seventh' }, // the 7th chord, 1-3-5-7 ("7th chord" wrapped in the narrow box)
-    { label: 'Scale', value: 'scale' }
-] as const;
+// The tones name themselves (PR 76: their stepper has no caption, and a bare "Scale" under the
+// Scale stepper would confuse)
+const arpToneOptions: Choice<ArpTones>[] = [
+    { label: 'Chord', long: 'Chord: 1-3-5', value: 'chord' },
+    { label: '7th chord', long: '7th chord: 1-3-5-7', value: 'seventh' },
+    { label: 'Whole scale', value: 'scale' }
+];
 
 function rotate<T>(arr: T[], n: number) {
     if (!arr.length) return arr;
@@ -1311,7 +972,7 @@ function setUi(u: Partial<UiSnapshot>) {
     if (u.mode) mode.value = u.mode;
 }
 
-defineExpose({ getUi, setUi });
+defineExpose({ getUi, setUi, generate });
 </script>
 
 <style scoped>
@@ -1324,34 +985,36 @@ defineExpose({ getUi, setUi });
     container: melody / inline-size;
 }
 
-/* A wide card (a tablet's Compose tab): the keyboard, scale and range on the left, Generate on
-   the right */
+.melody-maker {
+    display: flex;
+    flex-direction: column;
+}
+
+/* A wide card (a tablet's Compose tab): the keyboard, Scale, Range and the makers on the left,
+   the screen beside them */
 @container melody (min-width: 640px) {
-    .melody-maker>.pt-section {
+    .melody-maker>.mm-card {
         display: grid;
         grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-        grid-template-areas: "kb group" "sel group" "hint group";
-        column-gap: 28px;
-        align-items: start;
+        grid-template-rows: auto auto 1fr;
+        grid-template-areas: "kb screen" "scale screen" "group screen";
+        column-gap: 24px;
     }
 
     .mm-kb-wrap {
         grid-area: kb;
     }
 
-    .mm-head-row2 {
-        grid-area: sel;
+    .mm-scale-row {
+        grid-area: scale;
     }
 
-    .mm-hint {
-        grid-area: hint;
+    .mm-screen {
+        grid-area: screen;
     }
 
     .mm-group {
         grid-area: group;
-        margin-top: 0;
-        padding-top: 0;
-        border-top: 0;
     }
 }
 
@@ -1720,364 +1383,150 @@ defineExpose({ getUi, setUi });
         --blackH: 30px;
     }
 } */
-/* MOCKUPS START */
-.mmv {
+/* THE CARD (PR 76) START */
+/* Keyboard, Scale and Range, the screen (which takes the room that's left), the makers */
+.mm-card {
+    --mm-lcd-bg: #0c1118;
+    --mm-lcd-ink: #cfe0ff;
     position: relative;
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     gap: 9px;
-    height: 100%;
+    min-height: 0;
 }
 
-/* A and B are fuller: a little closer, so the card is the height it was (522 px) */
-.mmv-a,
-.mmv-b {
-    gap: 7px;
+.theme-analog .mm-card {
+    --mm-lcd-bg: #160f05;
+    --mm-lcd-ink: #ffcf8a;
 }
 
-.mmv-a .mmv-box {
-    padding: 8px 9px;
-    gap: 6px;
+.theme-slate .mm-card {
+    --mm-lcd-bg: #0b181d;
+    --mm-lcd-ink: #bfe6e0;
 }
 
-.mmv-a .mmv-makers {
-    gap: 7px;
+.theme-sand .mm-card {
+    --mm-lcd-bg: #a9b29a;
+    --mm-lcd-ink: #1d2419;
 }
 
-.mmv-b .mmv-screen {
-    height: 52px;
+.theme-light .mm-card {
+    --mm-lcd-bg: #cdd2d5;
+    --mm-lcd-ink: #111;
 }
 
-.mmv-b .mmv-group {
-    gap: 7px;
-    padding-top: 8px;
-}
-
-.mmv .mm-kb-wrap {
+.mm-card .mm-kb-wrap {
     margin-bottom: 0;
 }
 
-.mmv-block {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+/* The scale's notes, lit on the keys */
+.kb-white.in-scale::before,
+.kb-black.in-scale::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    margin-left: -3px;
+    border-radius: 50%;
+    background: var(--hw-led);
+    box-shadow: 0 0 5px var(--hw-led), 0 0 0 1px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
 }
 
-.mmv-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
+.kb-white.in-scale::before {
+    bottom: 24px;
 }
 
-.mmv-pool {
-    color: var(--pt-muted);
-    font-size: 11px;
-    font-style: italic;
+.kb-black.in-scale::before {
+    top: 6px;
 }
 
-.mmv-pool--line {
-    text-align: center;
-    margin-top: -3px;
-}
-
-.mmv-scales {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
-}
-
-.mmv-scale {
-    min-height: 28px;
-    padding: 2px 2px;
-    font-size: 0.65rem;
-    white-space: nowrap;
-}
-
-/* A switch row: its caption, then its options sharing the rest of the line */
-.mmv-row {
+/* A line of controls */
+.mm-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     min-width: 0;
-    flex: 1 1 auto;
 }
 
-.mmv-cap {
+.mm-cap {
     flex: none;
-    width: 52px;
     color: var(--pt-muted);
     font-weight: 600;
     font-size: 0.72rem;
 }
 
-.mmv-seg {
-    flex: 1;
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 5px;
-    min-width: 0;
-}
-
-.mmv-seg .pt-seg-btn {
-    flex: 1 1 0;
-    min-width: 0;
-    padding-left: 2px;
-    padding-right: 2px;
-    white-space: nowrap;
-}
-
-.mmv-pair {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.mmv-pair .mmv-row + .mmv-row .mmv-cap {
-    width: auto;
-}
-
-.mmv-skip {
-    flex: none;
-}
-
-/* The makers (A): two recessed boxes, each with its own button */
-.mmv-makers {
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-    margin-top: auto;
-}
-
-.mmv-box {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    padding: 9px;
-    border-radius: 10px;
-    background: var(--pt-inset, rgba(0, 0, 0, 0.25));
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35);
-}
-
-.mmv-box-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-}
-
-/* A maker's button: a cap in the accent's colours, as Generate was */
-.mmv-gen {
-    --cap-travel: 2px;
-    --cap-hi: hsl(var(--pt-accent) 80% 60%);
-    --cap-lo: hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%);
-    --cap-edge: color-mix(in oklab, var(--cap-lo), black 60%);
-    --cap-ink: var(--pt-text);
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    height: 30px;
-    padding: 0 14px;
-    border: 0;
-    border-radius: 9px;
-    font: inherit;
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--pt-text-strong);
-}
-
-.mmv-gen--wide {
-    width: 100%;
-}
-
-.mmv-gen--head {
-    position: absolute;
-    top: -40px;
-    right: 0;
-    height: 26px;
-}
-
-.mmv-dice {
-    font-size: 1rem;
-    line-height: 1;
-}
-
-/* B and C: the mode switch (and Generate), then the chosen maker's settings */
-.mmv-group {
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-    margin-top: auto;
-    padding-top: 10px;
-    border-top: 1px dashed var(--pt-hairline);
-}
-
-.mmv-mode-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.mmv-mode {
-    flex: 1;
-    margin-bottom: 0;
-}
-
-.mmv-arp {
-    justify-content: flex-start;
-    gap: 7px;
-}
-
-/* B: the screen */
-.mmv-screen {
-    --lcd-bg: #0c1118;
-    --lcd-ink: #cfe0ff;
+/* A stepper: ◂ name ▸; the name is a window that opens the list */
+.mm-stepper {
     position: relative;
-    height: 58px;
-    border-radius: 6px;
-    background: var(--lcd-bg);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 2px 10px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(0, 0, 0, 0.45);
-    overflow: hidden;
-}
-
-.mmv-screen--tall {
     flex: 1 1 0;
-    height: auto;
-    min-height: 60px;
-}
-
-.theme-sand .mmv-screen {
-    --lcd-bg: #a9b29a;
-    --lcd-ink: #1d2419;
-}
-
-.mmv-roll {
-    position: absolute;
-    inset: 2px;
-    width: calc(100% - 4px);
-    height: calc(100% - 4px);
-}
-
-.mmv-rowline {
-    stroke: var(--lcd-ink);
-    stroke-opacity: 0.14;
-    vector-effect: non-scaling-stroke;
-}
-
-.mmv-rowline.root {
-    stroke-opacity: 0.3;
-    stroke-dasharray: 2 3;
-}
-
-.mmv-beat {
-    stroke: var(--lcd-ink);
-    stroke-opacity: 0.14;
-    vector-effect: non-scaling-stroke;
-}
-
-.mmv-read {
-    position: absolute;
-    top: 4px;
-    font-size: 9px;
-    line-height: 1;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--lcd-ink);
-    opacity: 0.9;
-}
-
-.mmv-read--l {
-    left: 7px;
-}
-
-.mmv-read--r {
-    right: 7px;
-}
-
-/* Round 2 */
-.mmv-cx .mmv-c-row .mmv-row:first-child {
-    flex: 1 1 54%;
-}
-
-.mmv-c2 .mmv-c-row .mmv-row:first-child,
-.mmv-c3 .mmv-c-row .mmv-row:first-child {
-    flex: 1 1 100%;
-}
-
-.mmv-cx .mmv-cap {
-    width: auto;
-}
-
-.mmv-cx .mmv-pair {
-    gap: 10px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
     min-width: 0;
 }
 
-.mmv-cx .mmv-row {
-    flex: 1 1 0;
-    min-width: 0;
-}
-
-.mmv-cx .mm-mode-panel {
-    min-width: 0;
-}
-
-.mmv-cx .mm-toggle {
-    flex: none;
-    white-space: nowrap;
-}
-
-.mmv-center {
-    justify-content: center;
-}
-
-.mmv-note {
-    font-size: 11px;
-}
-
-.mmv-band {
-    fill: var(--hw-led);
-    fill-opacity: 0.13;
-}
-
-.mmv-toprange .mmv-c-row .mmv-row:first-child {
+.mm-scale-row .mm-stepper {
     flex: 1.3 1 0;
 }
 
-/* Round 3. A stepper's name is a button: it opens the whole list (d1) */
-button.mmv-step-name {
+.mm-step {
+    flex: none;
+    width: 24px;
+    height: 26px;
     border: 0;
+    border-radius: 6px;
     font: inherit;
-    font-size: 0.68rem;
-    cursor: default;
-    gap: 5px;
+    font-size: 0.8rem;
 }
 
-button.mmv-step-name.is-menu {
+.mm-step-name {
+    flex: 1;
+    min-width: 0;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 5px;
+    background: var(--mm-lcd-bg);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 1px 5px rgba(0, 0, 0, 0.7);
+    color: var(--mm-lcd-ink);
+    font: inherit;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
     cursor: pointer;
 }
 
-button.mmv-step-name.is-menu:hover {
+.mm-step-name:hover,
+.mm-step-name[aria-expanded="true"] {
     box-shadow: inset 0 0 0 1px hsl(var(--pt-accent) 80% 65% / 0.7), inset 0 1px 5px rgba(0, 0, 0, 0.7);
 }
 
-.mmv-caret {
+.theme-sand .mm-step-name,
+.theme-light .mm-step-name {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 1px 4px rgba(0, 0, 0, 0.3);
+    font-weight: 600;
+}
+
+.mm-caret {
     font-size: 0.6rem;
     opacity: 0.7;
 }
 
-.mmv-stepper {
-    position: relative;
-}
-
-.mmv-menu {
+.mm-list {
     position: absolute;
     left: 28px;
-    min-width: calc(100% - 56px);
-    width: max-content;
     top: calc(100% + 4px);
     z-index: 30;
+    min-width: calc(100% - 56px);
+    width: max-content;
     display: flex;
     flex-direction: column;
     padding: 4px;
@@ -2086,7 +1535,13 @@ button.mmv-step-name.is-menu:hover {
     box-shadow: 0 0 0 1px hsl(var(--pt-accent) 80% 65% / 0.6), 0 10px 24px rgba(0, 0, 0, 0.6);
 }
 
-.mmv-menu-item {
+/* Near the card's bottom (the arpeggio's steppers): the list opens upwards */
+.mm-list--up {
+    top: auto;
+    bottom: calc(100% + 4px);
+}
+
+.mm-list-item {
     padding: 5px 8px;
     border: 0;
     border-radius: 5px;
@@ -2101,243 +1556,164 @@ button.mmv-step-name.is-menu:hover {
     cursor: pointer;
 }
 
-.mmv-menu-item:hover {
-    background: rgba(255, 255, 255, 0.08);
+.mm-list-item:hover,
+.mm-list-item:focus-visible {
+    background: rgba(255, 255, 255, 0.1);
 }
 
-.mmv-menu-item.on {
-    color: var(--hw-led);
+.mm-list-item.on {
+    color: var(--hw-led, #5effb0);
 }
 
-.mmv-menu-item.on::before {
+.mm-list-item.on::before {
     content: "● ";
     font-size: 0.5rem;
     vertical-align: middle;
 }
 
-/* Generate, restyled. d1: a dark cap like the others, its lettering and a bar under it in the accent */
-.mmv-gen--cap {
-    --cap-hi: #43207a;
-    --cap-lo: #2a0f52;
-    --cap-edge: #0b021c;
-    height: 28px;
-    padding: 0 12px;
-    border-radius: 7px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    font-size: 0.68rem;
-    color: hsl(var(--pt-accent) 90% 78%);
-    box-shadow: inset 0 -2px 0 hsl(var(--pt-accent) 85% 62%), 0 0 10px hsl(var(--pt-accent) 85% 60% / 0.35);
+/* A switch on a line: its options share its width */
+.mm-seg {
+    flex: 1 1 0;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 5px;
+    min-width: 0;
 }
 
-.theme-sand .mmv-gen--cap {
-    --cap-hi: #524c45;
-    --cap-lo: #38342f;
-    --cap-edge: #1b1917;
-}
-
-/* Round 4: Generate as a dark cap, six ways (.mmv-gen--g1 … g6) */
-.mmv-gen--g {
-    --cap-hi: #43207a;
-    --cap-lo: #2a0f52;
-    --cap-edge: #0b021c;
-    --cap-ink: #fdfdff;
-    height: 28px;
-    padding: 0 11px;
-    gap: 7px;
-    border-radius: 8px;
-    font-size: 0.74rem;
-    font-weight: 600;
-    color: var(--cap-ink);
-}
-
-.theme-sand .mmv-gen--g {
-    --cap-hi: #524c45;
-    --cap-lo: #38342f;
-    --cap-edge: #1b1917;
-    --cap-ink: #f2eee6;
-}
-
-.mmv-die {
-    width: 17px;
-    height: 17px;
-    flex: none;
-}
-
-.mmv-die rect {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.6px;
-}
-
-.mmv-die circle {
-    fill: currentColor;
-}
-
-/* 1: D1's, for reference: accent lettering, a lit lower edge */
-.mmv-gen--g1 {
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    font-size: 0.68rem;
-    color: hsl(var(--pt-accent) 90% 78%);
-    box-shadow: inset 0 -2px 0 hsl(var(--pt-accent) 85% 62%), 0 0 10px hsl(var(--pt-accent) 85% 60% / 0.35);
-}
-
-/* 2: a plain cap, as File's: the word only */
-.mmv-gen--g2 .mmv-die {
-    display: none;
-}
-
-/* 3: the preset boxes' dice and the word */
-
-/* 4: the dice alone, as on the preset boxes */
-.mmv-gen--g4 {
-    width: 28px;
-    padding: 0;
-}
-
-.mmv-gen--g4 .mmv-gen-word {
-    display: none;
-}
-
-.mmv-gen--g4 .mmv-die {
-    width: 20px;
-    height: 20px;
-}
-
-/* 5: the dice in the accent, the word plain */
-.mmv-gen--g5 .mmv-die {
-    color: hsl(var(--pt-accent) 90% 72%);
-    filter: drop-shadow(0 0 4px hsl(var(--pt-accent) 90% 60% / 0.7));
-}
-
-/* 6: a thin ring in the accent round the cap */
-.mmv-gen--g6 {
-    outline: 1px solid hsl(var(--pt-accent) 80% 66%);
-    outline-offset: 1px;
-}
-
-.mmv-gen--g6 .mmv-die {
-    display: none;
-}
-
-/* Round 4: with fewer captions the steppers and switches take the room */
-.mmv-e1 .mmv-range2,
-.mmv-e2 .mmv-range2 {
-    flex: 0.72 1 0;
-}
-
-/* d2: a round lit button, its name beside it */
-.mmv-gen--round {
-    --cap-hi: hsl(var(--pt-accent) 85% 66%);
-    --cap-lo: hsl(var(--pt-accent) 80% 44%);
-    width: 34px;
-    height: 34px;
-    top: -44px;
-    padding: 0;
-    border-radius: 50%;
-    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.45), 0 0 0 4px hsl(var(--pt-accent) 80% 65% / 0.55), 0 0 14px hsl(var(--pt-accent) 85% 60% / 0.5);
-}
-
-.mmv-gen--round .mmv-gen-word {
-    position: absolute;
-    right: calc(100% + 10px);
-    font-size: 0.68rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--pt-muted);
+.mm-seg .pt-seg-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 2px;
+    padding-right: 2px;
     white-space: nowrap;
 }
 
-.mmv-gen--round .mmv-dice {
-    font-size: 1.15rem;
+.mm-range {
+    flex: 0.9 1 0;
 }
 
-/* d2: notched knobs for the word choices, the choice shown beside the knob */
-.mmv-knobs .mmv-sel {
-    gap: 6px;
+/* The screen */
+.mm-screen {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 64px;
+    border-radius: 6px;
+    background: var(--mm-lcd-bg);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 2px 10px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
 }
 
-.mmv-knobs .mmv-sel :deep(.knob-wrapper) {
-    flex: none;
+/* Under 1200 px the card isn't stretched beside Sound, so the screen sets its own height */
+@media (max-width: 1199px) {
+    .mm-screen {
+        min-height: 110px;
+    }
 }
 
-.mmv-knob-name {
-    flex: 1;
+.theme-sand .mm-screen,
+.theme-light .mm-screen {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 0, 0, 0.45);
 }
 
-.mmv-ghost {
+.mm-roll {
+    position: absolute;
+    inset: 2px;
+    width: calc(100% - 4px);
+    height: calc(100% - 4px);
+}
+
+.mm-rowline {
+    stroke: var(--mm-lcd-ink);
+    stroke-opacity: 0.3;
+    stroke-dasharray: 2 3;
+    vector-effect: non-scaling-stroke;
+}
+
+.mm-beat {
+    stroke: var(--mm-lcd-ink);
+    stroke-opacity: 0.14;
+    vector-effect: non-scaling-stroke;
+}
+
+/* The notes a melody can use */
+.mm-band {
+    fill: var(--hw-led);
+    fill-opacity: 0.13;
+}
+
+.theme-sand .mm-band,
+.theme-light .mm-band {
+    fill: #1d2419;
+    fill-opacity: 0.12;
+}
+
+/* The arpeggio Generate would write */
+.mm-ghost {
     fill: none;
-    stroke: var(--lcd-ink);
+    stroke: var(--mm-lcd-ink);
     stroke-opacity: 0.75;
     stroke-width: 1;
     stroke-dasharray: 2 2;
     vector-effect: non-scaling-stroke;
 }
 
-/* C: the stepper, and the scale's notes lit on the keys */
-.mmv-stepper {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
+.theme-sand .mm-note,
+.theme-light .mm-note {
+    filter: brightness(0.62) saturate(1.4);
 }
 
-.mmv-step {
-    flex: none;
-    width: 24px;
-    height: 26px;
-    border: 0;
-    border-radius: 6px;
-    font: inherit;
-    font-size: 0.8rem;
-}
-
-.mmv-step-name {
-    flex: 1;
-    min-width: 0;
-    height: 26px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 5px;
-    background: #0c1118;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 1px 5px rgba(0, 0, 0, 0.7);
-    color: #cfe0ff;
-    font-size: 0.68rem;
-    letter-spacing: 0.06em;
+.mm-read {
+    position: absolute;
+    top: 4px;
+    font-size: 9px;
+    line-height: 1;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
+    color: var(--mm-lcd-ink);
+    opacity: 0.9;
     white-space: nowrap;
 }
 
-.mmv-c-row .mmv-row:first-child {
-    flex: 0 0 46%;
+.theme-sand .mm-read,
+.theme-light .mm-read {
+    opacity: 1;
+    font-weight: 600;
 }
 
-.mmv-c-row .mmv-cap {
-    width: auto;
+.mm-read--l {
+    left: 7px;
 }
 
-.kb-white.in-scale::before,
-.kb-black.in-scale::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    width: 6px;
-    height: 6px;
-    margin-left: -3px;
-    border-radius: 50%;
-    background: var(--hw-led);
-    box-shadow: 0 0 5px var(--hw-led), 0 0 0 1px rgba(0, 0, 0, 0.45);
+.mm-read--r {
+    right: 7px;
 }
 
-.kb-white.in-scale::before {
-    bottom: 24px;
+/* The makers */
+.mm-card .mm-group {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: 0;
+    padding-top: 10px;
 }
 
-.kb-black.in-scale::before {
-    top: 6px;
+.mm-card .mm-mode {
+    margin-bottom: 0;
 }
-/* MOCKUPS END */
+
+.mm-card .mm-mode-panel {
+    min-width: 0;
+    justify-content: flex-start;
+    gap: 7px;
+}
+
+.mm-card .mm-mode-note {
+    font-size: 11px;
+}
+
+.mm-card .mm-toggle {
+    flex: none;
+    white-space: nowrap;
+}
+/* THE CARD END */
 </style>

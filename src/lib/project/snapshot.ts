@@ -587,7 +587,9 @@ export function applySnapshot(st: ProjectState, s: any) {
 	if (s.melody) {
 		if (s.melody.keyRoot) melodyUi.keyRoot = s.melody.keyRoot;
 		if (s.melody.keyScale) melodyUi.keyScale = s.melody.keyScale;
-		if (s.melody.rangePreset) melodyUi.rangePreset = s.melody.rangePreset;
+		// Range is Narrow or Wide since PR 76: Low, Mid and High (the same two octaves, an octave
+		// apart; Pattern Tools' Octave arrows do that) open as Narrow, saved as 'mid'
+		if (s.melody.rangePreset) melodyUi.rangePreset = s.melody.rangePreset === 'wide' ? 'wide' : 'mid';
 
 		// Also keep arp aligned if present
 		if (s.melody.arpPattern) melodyUi.arpPattern = s.melody.arpPattern;
