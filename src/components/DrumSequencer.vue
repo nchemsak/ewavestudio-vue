@@ -214,7 +214,7 @@
 
 					<!-- Play (+ the MIDI fallback) -->
 					<div class="transport-right">
-						<button type="button" class="pt-btn btn-lg btn3d" data-keeps-pad-settings @click="onPlayClick"
+						<button type="button" class="pt-btn btn-lg btn3d" data-keeps-pad-settings data-keeps-brush @click="onPlayClick"
 							:aria-label="isPlaying ? 'Stop' : 'Play'" :title="isPlaying ? 'Stop' : 'Play'"
 							:aria-pressed="isPlaying">
 							<span class="btn-face">
@@ -261,9 +261,10 @@
 						</span>
 
 						<!-- The Repeats brush: pick ×2–×4, then click or drag across pads to give them that
-						     many quick hits (a pad that has them already goes back to one) -->
+						     many quick hits (a pad that has them already goes back to one). It stays
+						     picked until Esc, its lit button, or a click outside the pads' frame. -->
 						<div class="repeat-brush" role="group" aria-label="Repeats brush"
-							title="Pick a number, then click or drag across pads to give them that many quick hits. Click a pad again for one hit; Esc or the lit button to stop.">
+							title="Pick a number, then click or drag across pads to give them that many quick hits. Click a pad again for one hit. Esc, the lit button or a click elsewhere puts the brush down.">
 							<span class="repeat-brush__label" aria-hidden="true">Repeats</span>
 							<button v-for="n in BRUSH_COUNTS" :key="n" type="button" class="vel-btn hw-cap hw-cap-sm hw-led-left"
 								:class="{ on: repeatBrush === n }" :aria-pressed="repeatBrush === n"
@@ -293,7 +294,12 @@
 					<div v-if="stepsAdvanced.open" class="mm-overlay" @click="stepsAdvanced.open = false"></div>
 				</div>
 
-				<div class="step-card__grid">
+				<!-- While the Repeats brush is picked: a dashed frame round the pads, and a tag on
+				     it saying so and how to finish (neither changes the layout) -->
+				<div class="step-card__grid" :class="{ 'is-brushing': !!repeatBrush }">
+					<div v-if="repeatBrush" class="brush-note" role="status">
+						Painting ×{{ repeatBrush }} repeats<span class="brush-note__how"> · Esc or click elsewhere to finish</span>
+					</div>
 					<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
@@ -417,6 +423,8 @@
 								<button type="button" class="noise-ribbon" :class="{ 'is-on': noiseEnabled }"
 									:aria-pressed="noiseEnabled" aria-label="Toggle noise"
 									@click="noiseEnabled = !noiseEnabled">
+									<!-- An LED, so the ribbon reads as the card's switch, not a label (PR 74) -->
+									<span class="noise-ribbon-led" aria-hidden="true"></span>
 									<span class="noise-ribbon-label">NOISE</span>
 								</button>
 
@@ -871,6 +879,20 @@ const repeatBrush = ref<number | null>(null);
 function toggleRepeatBrush(n: number) {
 	repeatBrush.value = repeatBrush.value === n ? null : n;
 }
+
+// A click anywhere else puts the brush down (PR 74), so pads go back to turning on and off
+// without having to find the lit button: anywhere but the pads' frame, the brush's own
+// buttons, and what goes with painting (data-keeps-brush): Play / Stop, to hear it, and Undo /
+// Redo, to take a stroke back and carry on. The click still does its own job.
+function onBrushPointerDown(e: PointerEvent) {
+	if (!repeatBrush.value) return;
+	const t = e.target as Element | null;
+	if (!t?.closest || t === document.documentElement) return; // the page's scrollbar
+	if (t.closest('.step-card__grid, .repeat-brush, [data-keeps-brush]')) return;
+	repeatBrush.value = null;
+}
+onMounted(() => document.addEventListener('pointerdown', onBrushPointerDown, true));
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onBrushPointerDown, true));
 
 // Every pad back to one hit (the Step Sequencer's ⋯ menu); one undo step
 function clearRepeats() {
@@ -3984,6 +4006,24 @@ const phoneCtx = reactive({
 	filter: brightness(1.05) contrast(1.02);
 }
 
+/* The switch's LED, at the ribbon's top (the caps' LED colours, _hardware.scss) */
+.noise-ribbon-led {
+	position: absolute;
+	top: 9px;
+	left: 50%;
+	width: 6px;
+	height: 6px;
+	margin-left: -3px;
+	border-radius: 50%;
+	background: var(--hw-led-off);
+	box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
+}
+
+.noise-ribbon.is-on .noise-ribbon-led {
+	background: var(--hw-led);
+	box-shadow: 0 0 6px var(--hw-led), 0 0 1px var(--hw-led);
+}
+
 .noise-ribbon-label {
 	writing-mode: vertical-rl;
 	text-orientation: mixed;
@@ -4230,6 +4270,47 @@ const phoneCtx = reactive({
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
+}
+
+/* The Repeats brush is picked: a dashed frame round the pads (an outline, so nothing moves)
+   and a tag on its top edge */
+.step-card__grid {
+	position: relative;
+}
+
+/* Drawn past the grid's bottom, round the pads' note chips; a pseudo-element, so nothing moves */
+.step-card__grid.is-brushing::after {
+	content: "";
+	position: absolute;
+	inset: -2px -2px -9px;
+	border: 1px dashed hsl(var(--pt-accent) 80% 68%);
+	border-radius: 10px;
+	pointer-events: none;
+}
+
+.brush-note {
+	position: absolute;
+	top: -2px;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 1001; /* over the pad numbers (1000) */
+	padding: 1px 9px;
+	border-radius: 999px;
+	border: 1px solid hsl(var(--pt-accent) 80% 68%);
+	background: hsl(var(--pt-accent) 55% 16%);
+	color: #fff;
+	font-size: 10px;
+	line-height: 1.5;
+	letter-spacing: 0.04em;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+/* A narrow screen: only what it's doing */
+@media (max-width: 480px) {
+	.brush-note__how {
+		display: none;
+	}
 }
 
 .repeat-brush__label {

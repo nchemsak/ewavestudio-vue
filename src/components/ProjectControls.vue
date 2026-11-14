@@ -97,7 +97,8 @@
                 </div>
             </div>
 
-            <div class="pc-history">
+            <!-- data-keeps-brush: Undo and Redo don't put the Repeats brush down (DrumSequencer) -->
+            <div class="pc-history" data-keeps-brush>
                 <button class="pc-btn pc-icon-btn hw-cap" :disabled="!props.canUndo" @click="emit('undo')"
                     aria-label="Undo" :title="undoTitle">
                     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">

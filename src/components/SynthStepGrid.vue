@@ -2,7 +2,7 @@
 <template>
     <div class="d-flex pad-row">
         <!-- One Tab stop for all pads: the arrow keys move between them, Enter turns one on or off -->
-        <div class="padTEST-grid" :class="{ brushing: !!repeatBrush }" data-equal-cols role="group" aria-label="Steps">
+        <div class="padTEST-grid" :class="{ brushing: !!repeatBrush }" :data-brush="repeatBrush || null" data-equal-cols role="group" aria-label="Steps">
             <div v-for="(active, index) in steps" :key="index" class="pad-col" @mouseleave="hovered = null">
                 <div class="pad-head">
                     <button class="pad-settings-dot" @mousedown.stop @click.stop="emitOpenSettings(index, $event)"
@@ -487,8 +487,22 @@ const nearestNote = props.nearestNote;
     background: hsl(var(--pt-accent) 60% 20% / .85);
 }
 
+/* The brush's cursor carries its count ("×3"), so it can't be mistaken for the pointer that
+   turns pads on and off (PR 74; it was `copy`, an arrow with a small plus) */
 .brushing .padTEST {
     cursor: copy;
+}
+
+.brushing[data-brush="2"] .padTEST {
+    cursor: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M3 2v15.5l4.2-3.8 2.9 6.8 2.7-1.2-2.9-6.6H15z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='12.5' y='17.5' width='19' height='13' rx='4' fill='%2315101f' stroke='%23fff' stroke-width='1.2'/%3E%3Ctext x='22' y='27.6' font-family='Arial%2CHelvetica%2Csans-serif' font-size='10' font-weight='700' fill='%23fff' text-anchor='middle'%3E%C3%972%3C/text%3E%3C/svg%3E") 3 2, copy;
+}
+
+.brushing[data-brush="3"] .padTEST {
+    cursor: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M3 2v15.5l4.2-3.8 2.9 6.8 2.7-1.2-2.9-6.6H15z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='12.5' y='17.5' width='19' height='13' rx='4' fill='%2315101f' stroke='%23fff' stroke-width='1.2'/%3E%3Ctext x='22' y='27.6' font-family='Arial%2CHelvetica%2Csans-serif' font-size='10' font-weight='700' fill='%23fff' text-anchor='middle'%3E%C3%973%3C/text%3E%3C/svg%3E") 3 2, copy;
+}
+
+.brushing[data-brush="4"] .padTEST {
+    cursor: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M3 2v15.5l4.2-3.8 2.9 6.8 2.7-1.2-2.9-6.6H15z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='12.5' y='17.5' width='19' height='13' rx='4' fill='%2315101f' stroke='%23fff' stroke-width='1.2'/%3E%3Ctext x='22' y='27.6' font-family='Arial%2CHelvetica%2Csans-serif' font-size='10' font-weight='700' fill='%23fff' text-anchor='middle'%3E%C3%974%3C/text%3E%3C/svg%3E") 3 2, copy;
 }
 
 .note-chip {

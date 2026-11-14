@@ -1,8 +1,8 @@
 <!-- components/modules/PitchEnvModule.vue -->
 <!-- Pitch envelope card ("Pitch"), in the Envelope / Filter row: three narrow cards, so the
-     title is short and the controls are two knobs and a small RND pill (its VEL switch went in PR 67). Amount is one bipolar knob: right of
+     title is short and the controls are two knobs and a small Random toggle (labelled RND until PR 74, which could be read as "Round"; its VEL switch went in PR 67). Amount is one bipolar knob: right of
      centre the note starts above its pitch and drops into it (mode 'up'), left of centre it
-     starts below and rises (mode 'down'). RND (mode 'random') gives each note its own offset
+     starts below and rises (mode 'down'). Random (mode 'random') gives each note its own offset
      within ±Amount. The saved settings stay `semitones` (0–48) and `mode`. -->
 <template>
     <SectionWrap id="pitch-env" title="Pitch" aria-label="Pitch envelope">
@@ -10,7 +10,7 @@
             <button type="button" class="pe-rnd hw-cap hw-cap-sm hw-led-left" :class="{ on: isRandom }" :aria-pressed="isRandom"
                 :disabled="!enabled" aria-label="Random sweep"
                 title="Random: each note starts at its own offset within ±Amount"
-                @click="toggleRandom">RND</button>
+                @click="toggleRandom">Random</button>
         </template>
 
         <div class="pt-subblock">
@@ -73,7 +73,7 @@ function knobEnd() {
 const isRandom = computed(() => props.mode === 'random')
 
 // The knob's signed position. In random mode the sign has no meaning, so the knob keeps
-// whichever side it was on, and turning RND off goes back to that direction.
+// whichever side it was on, and turning Random off goes back to that direction.
 const clampAmount = (v: number) => Math.max(0, Math.min(AMOUNT_MAX, Math.round(Math.abs(v))))
 const signed = ref(props.mode === 'down' ? -clampAmount(props.semitones) : clampAmount(props.semitones))
 

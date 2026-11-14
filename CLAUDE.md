@@ -218,6 +218,7 @@ src/lib/export/          Export helpers (pure, unit-tested): audio.ts (loop fold
                          trimming, normalizing), midi.ts (MIDI file), zip.ts, names.ts
 src/lib/random.ts        Seeded random numbers (export stems; tests)
 src/lib/noise/accents.ts  The Noise card's Accents: noise on the pattern's loudest hits (pure)
+src/lib/noise/masks.ts   The Noise card's Backbeat and Offbeats, and whether a mask is heard (pure)
 src/lib/patterns/velocityShapes.ts  Humanize's velocity shapes (Pattern Tools, the phone; pure)
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
@@ -293,7 +294,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   frequency itself stays at the note's pitch. The offset is picked once per note
   (`pitchEnvStartCents`), so unison voices sweep together. Amount 0 (the default) is off.
   In the panel, Amount is one bipolar knob (−48…+48): right of centre is mode `up` (starts
-  above, drops), left is `down`; the RND pill is `random`. Saved as before: `semitones` (0–48)
+  above, drops), left is `down`; the **Random** toggle (labelled RND until PR 74, which could
+  be read as "Round") is `random`. Saved as before: `semitones` (0–48)
   and `mode`.
 - Waves (`waves.ts`, shared by both engines): `createVoiceSource()` builds each voice's
   source; the engines set its `osc` (frequency, detune, FM, LFO pitch) and connect its `output`
@@ -317,7 +319,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   { decay, cutoff, pitchEnv, noise }; older projects get none.
   **VEL switches** (PR 59, replacing PR 28's "Vel →" pop-up of four knobs, which people didn't
   find and whose effect was hard to hear): a pill with an LED in the top-right corner of the
-  Envelope, Pitch (before RND) and Filter cards' headers and of the Noise card
+  Envelope, Pitch (before Random) and Filter cards' headers and of the Noise card
   (`VelSwitch.vue`, `role="switch"`; greyed out while its card is off). On sets one fixed
   amount, `VELOCITY_SWITCH_AMOUNT` (+75 %: a half-velocity step gets about 60 % of the
   Decay, sweep or noise, and its cutoff ¾ octave lower), off 0. Mini knobs beside the targets
@@ -359,6 +361,18 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   decides, as with steps). The pad under the mouse shows what a click would give (a dashed
   badge), and its velocity and pitch sliders hide. Enter on a focused pad paints it; Esc, the
   lit button or File → New puts the brush down. A drag is one undo step.
+  **It stays picked, and says so** (PR 74; the maintainer's worry: someone who wants to turn
+  pads on and off doesn't realise the brush is still picked). It stays picked from pad to pad
+  on purpose, so repeats on every other pad are one click each (a brush that put itself down
+  after one stroke was turned down for that). While it's picked: a dashed frame round the pads
+  (`.step-card__grid.is-brushing::after`) with a tag on its top edge, "Painting ×3 repeats ·
+  Esc or click elsewhere to finish" (`.brush-note`; neither moves anything), and the cursor
+  over a pad is an arrow carrying "×3" (an SVG data URL per count in `SynthStepGrid.vue`,
+  from the grid's `data-brush`; it was `copy`). **A click elsewhere puts it down** and still
+  does its own job (`onBrushPointerDown()` in `DrumSequencer.vue`): anywhere but the pads'
+  frame, the brush's buttons, and what goes with painting (`data-keeps-brush`): Play / Stop,
+  to hear it, and Undo / Redo, to take a stroke back and carry on. The brush still turns an off pad on: a repeat on a silent step can't be heard, so
+  leaving pads as they are would make a click seem to do nothing.
   Ratchets are part of the pattern: sounds (presets) and their dice leave them alone; patterns
   set them.
   **Repeat notes** (PR 58; the pad's ⋮ menu, "Notes" under Repeats: Same / Up ↑ / Down ↓,
@@ -477,8 +491,23 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   in the pattern; any other click outside closes it (PR 56).
 
 ### The Noise card's pad buttons
-- Every 2, Every 4, **Accents**, Random, Invert, All (`NoiseModule.vue`) set which pads get
-  noise (the noise mask). **Accents** (PR 69, replacing Backbeat, whose steps 5 and 13 often
+- Every 2, **Backbeat**, **Offbeats**, **Accents**, Invert, All (`NoiseModule.vue`) set which
+  pads get noise (the noise mask). **A click also turns the card on** (PR 74; one undo step):
+  before, the buttons worked while the card was off, with nothing to hear. The card still
+  starts off with noise on every pad, so the ribbon alone gives noise on every hit; "on by
+  default with no pads" and a Clear button were turned down (a lit switch that does nothing).
+  **Backbeat** (beats 2 and 4: pads 5 and 13, where a snare sits) and **Offbeats** (pads 3, 7,
+  11 and 15, where an open hi-hat sits) replaced Every 4 and Random in PR 74 (`backbeatMask()`,
+  `offbeatMask()` in `src/lib/noise/masks.ts`, unit-tested). Noise is part of a step's note,
+  so it's only heard on steps that are on: when none of a button's pads is, a bubble over the
+  buttons says "Those steps are off" for 3.5 s ("No pad has noise now" after an Invert that
+  leaves none; `noiseGap()`), which is what Backbeat lacked before PR 69. The buttons' letters
+  are 0.6rem, 5 px apart (0.65rem and 8 px before), so the two eight-letter names fit; the
+  card is the same size.
+- The **ribbon** (the NOISE strip on the card's left edge, the card's on/off switch) has an
+  LED at its top since PR 74 (`.noise-ribbon-led`, the caps' LED colours), so it reads as a
+  switch, not a label.
+- **Accents** (PR 69, replacing Backbeat, whose steps 5 and 13 often
   had no hit, so the button seemed to do nothing) puts noise on the pattern's loudest hits:
   the steps that are on within 10 % of the loudest one's velocity; when every hit is as loud
   (more than four), only those on a beat; with nothing on, the beats (`accentMask()` in
@@ -1147,7 +1176,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     pad settings, the Export dialog); `hw-led-mini` is a slim LED bar at the cap's top edge
     where the label leaves no room (the presets, the theme buttons, MIDI Learn).
   - A **toggle** is a cap with an LED beside its label (`hw-led-left`), down and lit while on:
-    Filter's VEL switch and RETRIG (`PillSwitch.vue`), Pitch's RND, the Repeats brush, Pattern
+    Filter's VEL switch and RETRIG (`PillSwitch.vue`), Pitch's Random, the Repeats brush, Pattern
     Tools' Active Pads Only (PR 67: it was a web checkbox; the octave arrows move only the pads
     that are on while it's lit, as before). The
     tiles (the eight waves, FM, Unison, the LFO's power tile) are caps too, with the LED beside
@@ -1166,7 +1195,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     Clear and Reset have red lettering (`pt-danger`).
   - Not caps, on purpose (the maintainer's call): the pedals' CRUSH and PING PONG switches and
     footswitches. Also left as they were: the screen's F-keys, the piano keys, the NOISE
-    ribbon, the ⋯ menus and their sliding switches, the Sound / Effects / Compose tabs, the
+    ribbon (which got an LED in PR 74), the ⋯ menus and their sliding switches, the Sound / Effects / Compose tabs, the
     wave tiles' dice badges, and phone mode's own top bar, steppers and pads (the desktop
     panels it shows on its Sound, FX and Key pages have the caps).
   - A browser test checks a push button sinks and springs back, a chosen option, a toggle and
@@ -1300,16 +1329,42 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Item 1 comes from the maintainer's brainstorm after PR 63 (PRs 64–70; the one after PR 70 was
-PRs 71–73); no one else uses the app yet, so older projects need no special care: a removed
-setting can simply stop applying.
+Items 1–3 come from the maintainer's brainstorm after PR 73 (its three small fixes were
+PR 74); item 4 from the one after PR 63 (PRs 64–70; the one after PR 70 was PRs 71–73). No one
+else uses the app yet, so older projects need no special care: a removed setting can simply
+stop applying.
 
-1. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
+The redesigns (items 1–3) are visual only: every control keeps working as it does, and each
+card keeps its size. They are for the desktop; the phone can keep what suits it (dropdowns
+save room there, and it needn't look like hardware). Each starts with a few mockups for the
+maintainer to pick from, as the layout, the LFO's targets and the buttons did.
+
+1. **LFO card redesign.** The same controls in the same space, filled better. Directions to
+   mock up: a vertical LFO ribbon as its switch (like Noise's) with the wave drawn across one
+   bar's 16 steps where the power tile was, so Rate and Depth show what they do against the
+   pattern; a patch bay (the five targets as jacks, a plug in the chosen one: where the patch
+   cables, on hold below, would leave from; but jacks suggest several targets at once, and
+   the LFO has one); Wave and Target as two rotary selectors with their options printed
+   round them. What's picked sets the look for items 2 and 3.
+2. **Melody Maker redesign.** The keyboard stays. As few dropdowns as possible: Range,
+   Pattern, Rate, Octaves and Tones (2–4 options each) as switch rows; Scale (8) as a 4×2
+   grid of small caps, or a ◂ Major ▸ stepper if that doesn't fit. The maintainer doesn't
+   like the Generate button at the bottom: mock up a small accent cap beside the Melody |
+   Arpeggio switch, and no Generate at all (pressing Melody or Arpeggio makes one). The room
+   comes from Generate's row and the nearly empty Melody panel.
+3. **The plain cards** (Envelope, Pitch, FM, Unison, Filter), in the look items 1 and 2
+   settle.
+4. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
    changes to come may change the height), centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-2. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+5. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
+
+Decided after PR 73 (the maintainer's call, "for now"): the Sound and Pattern presets stay in
+the transport card, and Step Fills and Humanize in Pattern Tools; they aren't gathered in one
+place. The transport's boxes replace everything (a starting point); Pattern Tools' buttons
+edit what's there.
 
 Not now (looked into after PR 37):
 - **A smart TV app with a phone as the controller.** Casting a tab already shows the app on a
@@ -1502,6 +1557,7 @@ Done:
 | 71 | The LFO card's square-wave icon redrawn (two even cycles at the sine's height; it was lopsided), and the arpeggio's 1/4 rate dropped (1/8 and 1/16 left; a project saved at 1/4 plays at 1/8). Plan: the maintainer's brainstorm after PR 70 (phone fixes and additions); fitting the window put off. |
 | 72 | Phone mode fixes: the ☰ menu laid out (a header with ✕; Project: File, name, Save, without the Undo and Redo that landed on the name; Theme; Desktop View and Reset… side by side at the bottom), Redo beside Undo in the top bar, the Pattern row without Clear (like the Sound row; Reset… clears), the FX page's pedals at most 150 px wide and centred (they were stretched to 262), and on a touch screen the waiting key's caption without "Shift+click". |
 | 73 | Phone mode additions: tiny pads in the top bar (two rows of 8 in their colours, the playing step outlined, on every page); a **Mod** page with the LFO card (it wasn't on the phone) and the Noise card with its pad buttons (Noise left the Sound page); **Swing** beside Tempo (− / + by its notches) and **Humanize** beside Octave (the velocity shapes, now `src/lib/patterns/velocityShapes.ts`, shared with Pattern Tools), the four knobs on one line; the small-phone rules (a narrower scope and tabs under 720 px), which never applied, fixed. |
+| 74 | Three fixes from the maintainer's brainstorm after PR 73 (whose plan it also adds: the LFO, Melody Maker and plain-card redesigns): the Pitch card's RND toggle reads **Random**; a Noise pad button turns the card on, **Backbeat** and **Offbeats** replace Every 4 and Random, a note says when a button's steps are all off, and the NOISE ribbon has an LED; the **Repeats brush** stays picked but shows it (a dashed frame round the pads with a tag, a cursor carrying ×3), and a click elsewhere puts it down. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

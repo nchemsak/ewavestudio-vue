@@ -1372,7 +1372,7 @@ test('the pitch envelope sweeps each note down from Amount, and short decays are
 	expect(late).toBeLessThan(0.5);
 	expect(early).toBeGreaterThan(late * 3);
 
-	// Left of centre starts below and rises (saved as mode 'down'); RND is mode 'random', and
+	// Left of centre starts below and rises (saved as mode 'down'); Random (RND until PR 74) is mode 'random', and
 	// turning it off goes back to the knob's side
 	const pitchEnv = async () =>
 		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.pitchEnv;
@@ -1382,6 +1382,7 @@ test('the pitch envelope sweeps each note down from Amount, and short decays are
 	await expect(amount).toHaveAttribute('aria-valuenow', '-12');
 	expect(await pitchEnv()).toMatchObject({ semitones: 12, mode: 'down' });
 	const rnd = card.getByRole('button', { name: 'Random sweep' });
+	await expect(rnd).toHaveText('Random'); // spelled out (PR 74): RND could be read as Round
 	await rnd.click();
 	await expect(rnd).toHaveAttribute('aria-pressed', 'true');
 	expect(await pitchEnv()).toMatchObject({ semitones: 12, mode: 'random' });
@@ -2071,7 +2072,6 @@ test("the Noise card's Accents puts noise on the pattern's loudest hits; Halftim
 	const noise = page.getByRole('button', { name: 'Toggle noise' });
 	await noise.click();
 	const card = page.locator('.module.noise');
-	await expect(card.getByRole('button', { name: 'Backbeat' })).toHaveCount(0);
 
 	// Tresillo's accents are its first and fifth hits (steps 1 and 9), where Backbeat's 5 and 13
 	// had no hit at all
@@ -2089,6 +2089,58 @@ test("the Noise card's Accents puts noise on the pattern's loudest hits; Halftim
 	}
 	await expect(patternsBox(page).getByRole('button', { name: 'Offbeat' })).toHaveCount(0);
 	await expect(patternsBox(page).getByRole('button', { name: 'Broken' })).toHaveCount(0);
+});
+
+test("a Noise pad button turns the card on; Backbeat and Offbeats, with a note when their steps are off", async ({ page }) => {
+	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	const marked = (mask: boolean[]) => mask.map((m, i) => (m ? i : -1)).filter((i) => i >= 0);
+	const ribbon = page.getByRole('button', { name: 'Toggle noise' });
+	const card = page.locator('.module.noise');
+	const note = card.locator('.mask-note');
+	const led = () => ribbon.locator('.noise-ribbon-led').evaluate((el) => getComputedStyle(el).backgroundColor);
+	await page.waitForTimeout(SETTLED); // the opened project becomes the starting point
+
+	// Every 4 and Random made way for Backbeat and Offbeats; the ribbon's LED is dark while off
+	await expect(card.locator('.mask-stack').getByRole('button'))
+		.toHaveText(['Every 2', 'Backbeat', 'Offbeats', 'Accents', 'Invert', 'All']);
+	await expect(ribbon).toHaveAttribute('aria-pressed', 'false');
+	const ledOff = await led();
+	const size = await card.boundingBox();
+
+	// A pad button while the card is off: the card comes on with it (before, nothing was heard).
+	// No step is on yet, so a note says why there's still nothing to hear; the card stays its size.
+	await card.getByRole('button', { name: 'Backbeat' }).click();
+	await expect(ribbon).toHaveAttribute('aria-pressed', 'true');
+	expect(await led()).not.toBe(ledOff);
+	await expect(note).toHaveText('Those steps are off');
+	expect(await card.boundingBox()).toEqual(size);
+	let data = await saved();
+	expect(data.synth.noise.enabled).toBe(true);
+	expect(marked(data.synth.noise.mask)).toEqual([4, 12]); // beats 2 and 4: pads 5 and 13
+
+	// One undo step: the card off again, noise back on every pad
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(ribbon).toHaveAttribute('aria-pressed', 'false');
+	data = await saved();
+	expect(data.synth.noise.enabled).toBe(false);
+	expect(marked(data.synth.noise.mask)).toHaveLength(16);
+
+	// With pad 5 on: Backbeat has a hit to play on, so no note; Offbeats (pads 3, 7, 11, 15) hasn't
+	await turnOnPads(page, [4]);
+	await card.getByRole('button', { name: 'Backbeat' }).click();
+	await expect(ribbon).toHaveAttribute('aria-pressed', 'true');
+	await expect(note).toHaveCount(0);
+	await card.getByRole('button', { name: 'Offbeats' }).click();
+	await expect(note).toHaveText('Those steps are off');
+	expect(marked((await saved()).synth.noise.mask)).toEqual([2, 6, 10, 14]);
+
+	// Invert after All leaves no pad with noise, and says so
+	await card.getByRole('button', { name: 'All' }).click();
+	await expect(note).toHaveCount(0);
+	await card.getByRole('button', { name: 'Invert' }).click();
+	await expect(note).toHaveText('No pad has noise now');
+	expect(marked((await saved()).synth.noise.mask)).toEqual([]);
 });
 
 test('starting new projects does not leave old keyboard listeners behind', async ({ page }) => {
@@ -2906,6 +2958,57 @@ test("a step's Repeats play quick hits within the step, live and in WAV exports"
 	await expect(page.locator('.ratchet-badge')).toHaveCount(0);
 });
 
+test("the Repeats brush shows it's picked (a frame, a tag, its own cursor), and a click elsewhere puts it down", async ({ page }) => {
+	const x3 = page.getByRole('button', { name: 'Repeats brush ×3' });
+	const x2 = page.getByRole('button', { name: 'Repeats brush ×2' });
+	const frame = page.locator('.step-card__grid');
+	const stepCard = page.locator('.step-card');
+	const cursor = () => pads(page).nth(0).evaluate((el) => decodeURIComponent(getComputedStyle(el).cursor));
+	const frameBox = await frame.boundingBox(), cardBox = await stepCard.boundingBox();
+	expect(await cursor()).toBe('pointer');
+
+	// Picked: a dashed frame round the pads with a tag on it, and a cursor that carries the
+	// count, none of which moves anything
+	await x3.click();
+	await expect(frame).toHaveClass(/is-brushing/);
+	await expect(frame.getByRole('status')).toHaveText('Painting ×3 repeats · Esc or click elsewhere to finish');
+	expect(await frame.evaluate((el) => getComputedStyle(el, '::after').borderTopStyle)).toBe('dashed');
+	expect(await cursor()).toMatch(/^url\(.*×3.*\) 3 2, copy$/);
+	expect(await frame.boundingBox()).toEqual(frameBox);
+	expect(await stepCard.boundingBox()).toEqual(cardBox);
+
+	// It stays picked from pad to pad (every other pad is one click each), and through what
+	// goes with painting: Play / Stop to hear it, Undo / Redo to take a stroke back
+	await page.waitForTimeout(SETTLED);
+	for (const i of [0, 2, 4]) await pads(page).nth(i).click();
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(pads(page).nth(4)).toHaveAttribute('aria-pressed', 'false');
+	await page.getByRole('button', { name: 'Redo', exact: true }).click();
+	await expect(x3).toHaveAttribute('aria-pressed', 'true');
+	for (const i of [0, 2, 4]) await expect(pads(page).nth(i)).toHaveAttribute('aria-pressed', 'true');
+
+	// Another count: the cursor follows
+	await x2.click();
+	expect(await cursor()).toContain('×2');
+	await expect(frame.getByRole('status')).toContainText('Painting ×2 repeats');
+
+	// A click elsewhere puts the brush down, and still does its own job (here: Noise on)
+	const noise = page.getByRole('button', { name: 'Toggle noise' });
+	await noise.click();
+	await expect(noise).toHaveAttribute('aria-pressed', 'true');
+	await expect(x2).toHaveAttribute('aria-pressed', 'false');
+	await expect(frame).not.toHaveClass(/is-brushing/);
+	await expect(frame.getByRole('status')).toHaveCount(0);
+	expect(await cursor()).toBe('pointer');
+
+	// So the next click on a pad turns it off, as without the brush
+	await pads(page).nth(0).click();
+	await expect(pads(page).nth(0)).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('the Repeats brush gives every pad it crosses that many hits, and takes them off again', async ({ page }) => {
 	const ratchets = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data
 		.instruments.find((l: any) => l.name === 'synth-voice').ratchets as number[];
@@ -2941,7 +3044,10 @@ test('the Repeats brush gives every pad it crosses that many hits, and takes the
 	await page.getByRole('button', { name: 'Redo', exact: true }).click();
 	for (const i of [0, 1, 2, 3]) await expect(badge(i)).toHaveText('×3');
 
-	// A pad that has the brush's hits already goes back to one, and stays on
+	// A pad that has the brush's hits already goes back to one, and stays on (the File menu's
+	// clicks above put the brush down, as any click elsewhere does since PR 74: pick it again)
+	await expect(x3).toHaveAttribute('aria-pressed', 'false');
+	await x3.click();
 	await pads(page).nth(1).click();
 	await page.mouse.move(5, 5);
 	await expect(badge(1)).toHaveCount(0);
