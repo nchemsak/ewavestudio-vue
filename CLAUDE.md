@@ -223,6 +223,7 @@ src/lib/patterns/velocityShapes.ts  Humanize's velocity shapes (Pattern Tools, t
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
+src/lib/lfoPlot.ts       What the LFO card's screen draws: the wave across the bar (pure)
 src/lib/padColour.ts     The pads' colours, which the spectrogram uses too (see "Pad and
                          spectrogram colours")
 src/lib/melody/theory.ts  Keys and scales; moving a pattern to another key or scale (pure)
@@ -459,9 +460,29 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     back into step after a tempo change. Before PR 66 it ran free from whenever it first
     started. The export's LFO starts with its first bar, as before. With RETRIG each note's own
     LFO is unchanged (a 4-bar rate barely moves within a hit).
-  - The card (option C of three mockups, PR 61): the power tile, Rate, Depth and the Wave
-    switch on one line, the Target switch's five buttons on a full-width line under them (its
-    caption shown); five didn't fit beside the knobs.
+  - **The card** (PR 75, options A + B of four mockups; `LFOGroup.vue`; the same size as
+    before, 189 px beside Effects, and Noise above it unchanged). No header: a **ribbon** down
+    its left edge names it and is its switch, as Noise's (amber, `--lfo-mod`, while on; an LED
+    at its top). A **screen** (`.lv-screen`, in each theme's screen colours) draws the wave
+    across one bar over the pattern's 16 steps, the ones that are on marked along the bottom:
+    Rate shows as cycles per bar, Depth as the wave's height, and with RETRIG the wave starts
+    again at each step that's on (`src/lib/lfoPlot.ts`, unit-tested; a 2- or 4-bar rate shows
+    its whole cycle, "4 bars · 4 bars shown"). Its readout names the rate, and the target and
+    depth ("Pitch 25 cents"), or in amber why the LFO moves nothing ("No Pulse", "FM off":
+    `.lfo-status`). Under it Rate, Depth, the Wave switch and RETRIG (`PillSwitch`, now inside
+    the card) on one line, and a **patch bay** (`.lv-bay`): an "LFO out" socket and the five
+    targets' sockets (still `role="radio"` buttons, named as before), with one cable from LFO
+    out to the target's, hanging under the sockets between (`cablePath`); a click on a socket
+    moves it. One cable, because the LFO has one target; the plugged socket is where the patch
+    cables (on hold) would leave from. A target that does nothing right now is dimmed, with a
+    title saying why. Rotary selectors for Wave and Target (option C) were turned down.
+    Under 1200 px the card isn't stretched (154 px), so the knobs sit over the Wave switch and
+    RETRIG beside the screen (a media query, not a container query: the desktop's card is
+    narrower than a tablet's but taller); a narrow screen shows the rate and depth only. On
+    the desktop its own height counts as 154 px (`.sound-stack>.module.mod.lfo-card`), so Noise
+    keeps its 119. The phone's Mod page keeps the card as it was (`classic`: the power tile,
+    the Target switch's five buttons on a line of their own, option C of PR 61's mockups; its
+    RETRIG is in its header).
 - Audio export uses a **separate** offline engine (`scheduleStepSequencer.ts`), fed by the
   `exportState` computed. It renders only the synth lane. Changes to the live sound (new
   parameters, changed gain staging) must be mirrored there, or exports will sound different.
@@ -1179,7 +1200,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     Filter's VEL switch and RETRIG (`PillSwitch.vue`), Pitch's Random, the Repeats brush, Pattern
     Tools' Active Pads Only (PR 67: it was a web checkbox; the octave arrows move only the pads
     that are on while it's lit, as before). The
-    tiles (the eight waves, FM, Unison, the LFO's power tile) are caps too, with the LED beside
+    tiles (the eight waves, FM, Unison, and on the phone the LFO's power tile) are caps too, with the LED beside
     their caption; they keep their icons, animations, dice and the Pulse Width knob (which
     goes down with its tile), and the chosen one has a thin ring in the accent.
   - A cap counts as down when it has `is-active`, `on`, `active`, `hw-down`,
@@ -1195,7 +1216,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     Clear and Reset have red lettering (`pt-danger`).
   - Not caps, on purpose (the maintainer's call): the pedals' CRUSH and PING PONG switches and
     footswitches. Also left as they were: the screen's F-keys, the piano keys, the NOISE
-    ribbon (which got an LED in PR 74), the ⋯ menus and their sliding switches, the Sound / Effects / Compose tabs, the
+    ribbon (which got an LED in PR 74) and the LFO card's ribbon and sockets (PR 75), the ⋯ menus and their sliding switches, the Sound / Effects / Compose tabs, the
     wave tiles' dice badges, and phone mode's own top bar, steppers and pads (the desktop
     panels it shows on its Sound, FX and Key pages have the caps).
   - A browser test checks a push button sinks and springs back, a chosen option, a toggle and
@@ -1245,13 +1266,13 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   FM over Unison; Envelope | Pitch | Filter (their eight knobs on one line, Filter's four with a
   hairline before its envelope's two); Noise over LFO | Effects. A card stretched taller than
   its controls keeps them centred. FM and Unison are cards of their own; their tile is the
-  on/off switch and shows Off / On, as the LFO's does. Under 1200 px: the screen beside the
+  on/off switch and shows Off / On. Under 1200 px: the screen beside the
   transport, the steps across, then tabs (Sound, Effects, Compose; not saved) under the steps,
   showing one at a time (`data-tab` on the grid; the arrow keys move between tabs); under
   720 px one column, the screen on top. Cards that change shape with their width use
   container queries on their own width, not the window's: Pattern Tools (three sections side
   by side, the same height, two buttons across; stacked under 340 px), Noise (mask buttons
-  beside the knobs, under them below 320 px), the LFO (Wave / Target captions hidden under
+  beside the knobs, under them below 320 px), the phone's LFO card (Wave / Target captions hidden under
   440 px, so it stays one row), FM (its ratio switch on a line of its own under 360 px), and
   Melody Maker (keyboard and selects beside Generate from 640 px, as in a tablet's Compose tab).
   A browser test checks the arrangement at 1600 and 1280 px (flush bottoms, one line of knobs,
@@ -1329,36 +1350,30 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Items 1–3 come from the maintainer's brainstorm after PR 73 (its three small fixes were
-PR 74); item 4 from the one after PR 63 (PRs 64–70; the one after PR 70 was PRs 71–73). No one
-else uses the app yet, so older projects need no special care: a removed setting can simply
-stop applying.
+Items 1 and 2 come from the maintainer's brainstorm after PR 73 (its three small fixes were
+PR 74, the LFO card PR 75); item 3 from the one after PR 63 (PRs 64–70; the one after PR 70
+was PRs 71–73). No one else uses the app yet, so older projects need no special care: a
+removed setting can simply stop applying.
 
-The redesigns (items 1–3) are visual only: every control keeps working as it does, and each
-card keeps its size. They are for the desktop; the phone can keep what suits it (dropdowns
-save room there, and it needn't look like hardware). Each starts with a few mockups for the
-maintainer to pick from, as the layout, the LFO's targets and the buttons did.
+The redesigns (items 1 and 2) are visual only: every control keeps working as it does, and
+each card keeps its size. They are for the desktop; the phone can keep what suits it
+(dropdowns save room there, and it needn't look like hardware). Each starts with a few
+mockups for the maintainer to pick from (built in the app behind a URL switch, photographed
+onto one page), as the LFO card's did. Its look, a ribbon switch, a small screen that shows
+what the controls do, sockets, is the one to carry on.
 
-1. **LFO card redesign.** The same controls in the same space, filled better. Directions to
-   mock up: a vertical LFO ribbon as its switch (like Noise's) with the wave drawn across one
-   bar's 16 steps where the power tile was, so Rate and Depth show what they do against the
-   pattern; a patch bay (the five targets as jacks, a plug in the chosen one: where the patch
-   cables, on hold below, would leave from; but jacks suggest several targets at once, and
-   the LFO has one); Wave and Target as two rotary selectors with their options printed
-   round them. What's picked sets the look for items 2 and 3.
-2. **Melody Maker redesign.** The keyboard stays. As few dropdowns as possible: Range,
+1. **Melody Maker redesign.** The keyboard stays. As few dropdowns as possible: Range,
    Pattern, Rate, Octaves and Tones (2–4 options each) as switch rows; Scale (8) as a 4×2
    grid of small caps, or a ◂ Major ▸ stepper if that doesn't fit. The maintainer doesn't
    like the Generate button at the bottom: mock up a small accent cap beside the Melody |
    Arpeggio switch, and no Generate at all (pressing Melody or Arpeggio makes one). The room
    comes from Generate's row and the nearly empty Melody panel.
-3. **The plain cards** (Envelope, Pitch, FM, Unison, Filter), in the look items 1 and 2
-   settle.
-4. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
+2. **The plain cards** (Envelope, Pitch, FM, Unison, Filter), in the LFO card's look.
+3. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
    changes to come may change the height), centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-5. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Decided after PR 73 (the maintainer's call, "for now"): the Sound and Pattern presets stay in
@@ -1558,6 +1573,7 @@ Done:
 | 72 | Phone mode fixes: the ☰ menu laid out (a header with ✕; Project: File, name, Save, without the Undo and Redo that landed on the name; Theme; Desktop View and Reset… side by side at the bottom), Redo beside Undo in the top bar, the Pattern row without Clear (like the Sound row; Reset… clears), the FX page's pedals at most 150 px wide and centred (they were stretched to 262), and on a touch screen the waiting key's caption without "Shift+click". |
 | 73 | Phone mode additions: tiny pads in the top bar (two rows of 8 in their colours, the playing step outlined, on every page); a **Mod** page with the LFO card (it wasn't on the phone) and the Noise card with its pad buttons (Noise left the Sound page); **Swing** beside Tempo (− / + by its notches) and **Humanize** beside Octave (the velocity shapes, now `src/lib/patterns/velocityShapes.ts`, shared with Pattern Tools), the four knobs on one line; the small-phone rules (a narrower scope and tabs under 720 px), which never applied, fixed. |
 | 74 | Three fixes from the maintainer's brainstorm after PR 73 (whose plan it also adds: the LFO, Melody Maker and plain-card redesigns): the Pitch card's RND toggle reads **Random**; a Noise pad button turns the card on, **Backbeat** and **Offbeats** replace Every 4 and Random, a note says when a button's steps are all off, and the NOISE ribbon has an LED; the **Repeats brush** stays picked but shows it (a dashed frame round the pads with a tag, a cursor carrying ×3), and a click elsewhere puts it down. |
+| 75 | The LFO card redesigned (options A + B of four mockups), the same size as before: a ribbon down its left edge is its name and switch, as Noise's; a screen draws the wave across the bar over the pattern's steps (Rate as cycles per bar, Depth as height, RETRIG starting it again at each hit; `src/lib/lfoPlot.ts`); and a patch bay, one cable from LFO out to the target's socket. Under 1200 px the knobs sit beside the screen, so the card is no taller; the phone keeps the card as it was. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
