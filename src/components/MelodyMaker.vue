@@ -1,9 +1,9 @@
 <template>
     <div class="melody-maker mm-skin" :class="props.currentTheme">
-        <!-- MOCKUPS, round 2 (?mm=c1|c2|c3): option C made simpler -->
-        <section v-if="mockCx" class="pt-section mmv mmv-c mmv-cx" :class="`mmv-${mockVariant}`">
-            <button type="button" class="mmv-gen mmv-gen--head hw-cap" @click="generate()">
-                <span class="mmv-dice" aria-hidden="true">⚄</span> Generate</button>
+        <!-- MOCKUPS, rounds 2 and 3 (?mm=c1|c2|c3|d1|d2): option C made simpler -->
+        <section v-if="mockCx" class="pt-section mmv mmv-c mmv-cx" :class="[`mmv-${mockVariant}`, { 'mmv-toprange': mockTopRange, 'mmv-knobs': mockKnobs }]" @click="mockMenu = null">
+            <button type="button" class="mmv-gen mmv-gen--head hw-cap" :class="{ 'mmv-gen--cap': mockVariant === 'd1', 'mmv-gen--round': mockVariant === 'd2' }" @click="generate()">
+                <span class="mmv-dice" aria-hidden="true">⚄</span><span class="mmv-gen-word"> Generate</span></button>
             <div class="mm-kb-wrap">
                 <div class="mm-field">
                     <div class="mm-label" id="mmx-key-label">Key<span v-if="queuedKey" class="mm-queued-note"
@@ -25,23 +25,31 @@
                 </div>
             </div>
 
+
             <div class="mmv-pair mmv-c-row">
-                <div class="mmv-row"><span class="mmv-cap">Scale</span>
-                    <div class="mmv-stepper" role="group" aria-label="Scale">
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous scale" @click="stepScale(-1)">◂</button>
-                        <span class="mmv-step-name">{{ mockVariant === 'c1' ? scaleShort : scaleLong }}</span>
-                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next scale" @click="stepScale(1)">▸</button>
+                <div class="mmv-row mmv-sel"><span class="mmv-cap">Scale</span>
+                    <template v-if="mockKnobs">
+                        <Knob :modelValue="scaleIndex" @update:modelValue="chooseScale(mockScales[Math.round($event)].value)" size="small" hideLabel label="Scale" :value-text="(mockTopRange ? scaleShort : scaleLong)"
+                            :min="0" :max="mockScales.length - 1" :step="1" :showMarkers="true" :markers="mockScales.map((_, i) => i / (mockScales.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
+                        <span class="mmv-step-name mmv-knob-name">{{ (mockTopRange ? scaleShort : scaleLong) }}</span>
+                    </template>
+                    <div v-else class="mmv-stepper" role="group" aria-label="Scale">
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous" @click="stepScale(-1)">◂</button>
+                        <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'scale'" @click.stop="mockMenus && (mockMenu = mockMenu === 'scale' ? null : 'scale')">{{ (mockTopRange ? scaleShort : scaleLong) }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepScale(1)">▸</button>
+                        <div v-if="mockMenu === 'scale'" class="mmv-menu" role="listbox" aria-label="Scale">
+                            <button v-for="o in mockScales" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === keyScale }"
+                                :aria-selected="o.value === keyScale" @click.stop="chooseScale(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
+                        </div>
                     </div>
                 </div>
-                <template v-if="mockVariant === 'c1'"><div class="mmv-row mmv-range2"><span class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Range">
+                <template v-if="mockTopRange"><div class="mmv-row mmv-range2"><span class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Range">
                             <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset !== 'wide' }" role="radio"
                                 :aria-checked="rangePreset !== 'wide' ? 'true' : 'false'" title="Notes stay within two octaves" @click="rangePreset = 'mid'">Narrow</button>
                             <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset === 'wide' }" role="radio"
                                 :aria-checked="rangePreset === 'wide' ? 'true' : 'false'" title="Notes from the pads' whole range" @click="rangePreset = 'wide'">Wide</button></div></div></template>
             </div>
 
-            <!-- The screen: the pattern across the bar. c3 also draws what the controls would do:
-                 the notes a melody can use (faint rows), the arpeggio Generate would write (outlines) -->
             <div class="mmv-screen mmv-screen--tall" aria-hidden="true">
                 <svg class="mmv-roll" :viewBox="`0 0 ${ROLL_W} ${ROLLX_H}`" preserveAspectRatio="none">
                     <rect v-if="rollX.band" x="0" :y="rollX.band.y" :width="ROLL_W" :height="rollX.band.h" class="mmv-band" />
@@ -66,7 +74,7 @@
                 </div>
                 <div class="mm-mode-body">
                     <div class="mm-mode-panel mmv-arp" :class="{ 'is-hidden': mode !== 'random' }">
-                        <div v-if="mockVariant === 'c1'" class="mmv-pair mmv-center"><button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
+                        <div v-if="mockTopRange" class="mmv-pair mmv-center"><button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
                             :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
                             @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button></div>
                         <div v-else class="mmv-pair">
@@ -82,22 +90,75 @@
                         <p class="mm-mode-note mmv-note">{{ melodyHint }}</p>
                     </div>
                     <div class="mm-mode-panel mmv-arp" :class="{ 'is-hidden': mode !== 'arp' }">
-                        <!-- Words on steppers, numbers on switches -->
-                        <div class="mmv-pair">
-                            <div class="mmv-row"><span class="mmv-cap">Pattern</span>
-                                <div class="mmv-stepper" role="group" aria-label="Arp pattern">
-                                    <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous pattern" @click="stepPattern(-1)">◂</button>
-                                    <span class="mmv-step-name">{{ patternLabel }}</span>
-                                    <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next pattern" @click="stepPattern(1)">▸</button>
-                                </div>
-                            </div>
-                            <div class="mmv-row"><span class="mmv-cap">Tones</span>
-                                <div class="mmv-stepper" role="group" aria-label="Arp tones">
-                                    <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous tones" @click="stepTones(-1)">◂</button>
-                                    <span class="mmv-step-name">{{ tonesLabel }}</span>
-                                    <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next tones" @click="stepTones(1)">▸</button>
-                                </div>
-                            </div>
+                        <template v-if="mockKnobs">
+                        <div class="mmv-pair mmv-knobrow">
+                            <div class="mmv-row mmv-sel"><span class="mmv-cap">Pattern</span>
+                    <template v-if="mockKnobs">
+                        <Knob :modelValue="patternIndex" @update:modelValue="setPattern(arpPatternOptions[Math.round($event)].value)" size="small" hideLabel label="Arp pattern" :value-text="patternLabel"
+                            :min="0" :max="arpPatternOptions.length - 1" :step="1" :showMarkers="true" :markers="arpPatternOptions.map((_, i) => i / (arpPatternOptions.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
+                        <span class="mmv-step-name mmv-knob-name">{{ patternLabel }}</span>
+                    </template>
+                    <div v-else class="mmv-stepper" role="group" aria-label="Arp pattern">
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous" @click="stepPattern(-1)">◂</button>
+                        <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'pattern'" @click.stop="mockMenus && (mockMenu = mockMenu === 'pattern' ? null : 'pattern')">{{ patternLabel }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepPattern(1)">▸</button>
+                        <div v-if="mockMenu === 'pattern'" class="mmv-menu" role="listbox" aria-label="Arp pattern">
+                            <button v-for="o in arpPatternOptions" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpPattern }"
+                                :aria-selected="o.value === arpPattern" @click.stop="setPattern(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
+                        </div>
+                    </div>
+                </div>
+                            <div class="mmv-row mmv-sel"><span class="mmv-cap">Tones</span>
+                    <template v-if="mockKnobs">
+                        <Knob :modelValue="tonesIndex" @update:modelValue="setTones(arpToneOptions[Math.round($event)].value)" size="small" hideLabel label="Arp tones" :value-text="tonesLabel"
+                            :min="0" :max="arpToneOptions.length - 1" :step="1" :showMarkers="true" :markers="arpToneOptions.map((_, i) => i / (arpToneOptions.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
+                        <span class="mmv-step-name mmv-knob-name">{{ tonesLabel }}</span>
+                    </template>
+                    <div v-else class="mmv-stepper" role="group" aria-label="Arp tones">
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous" @click="stepTones(-1)">◂</button>
+                        <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'tones'" @click.stop="mockMenus && (mockMenu = mockMenu === 'tones' ? null : 'tones')">{{ tonesLabel }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepTones(1)">▸</button>
+                        <div v-if="mockMenu === 'tones'" class="mmv-menu" role="listbox" aria-label="Arp tones">
+                            <button v-for="o in arpToneOptions" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpTones }"
+                                :aria-selected="o.value === arpTones" @click.stop="setTones(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
+                        </div>
+                    </div>
+                </div>
+                        </div>
+                        </template>
+                        <div v-else class="mmv-pair">
+                            <div class="mmv-row mmv-sel"><span class="mmv-cap">Pattern</span>
+                    <template v-if="mockKnobs">
+                        <Knob :modelValue="patternIndex" @update:modelValue="setPattern(arpPatternOptions[Math.round($event)].value)" size="small" hideLabel label="Arp pattern" :value-text="patternLabel"
+                            :min="0" :max="arpPatternOptions.length - 1" :step="1" :showMarkers="true" :markers="arpPatternOptions.map((_, i) => i / (arpPatternOptions.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
+                        <span class="mmv-step-name mmv-knob-name">{{ patternLabel }}</span>
+                    </template>
+                    <div v-else class="mmv-stepper" role="group" aria-label="Arp pattern">
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous" @click="stepPattern(-1)">◂</button>
+                        <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'pattern'" @click.stop="mockMenus && (mockMenu = mockMenu === 'pattern' ? null : 'pattern')">{{ patternLabel }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepPattern(1)">▸</button>
+                        <div v-if="mockMenu === 'pattern'" class="mmv-menu" role="listbox" aria-label="Arp pattern">
+                            <button v-for="o in arpPatternOptions" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpPattern }"
+                                :aria-selected="o.value === arpPattern" @click.stop="setPattern(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
+                        </div>
+                    </div>
+                </div>
+                            <div class="mmv-row mmv-sel"><span class="mmv-cap">Tones</span>
+                    <template v-if="mockKnobs">
+                        <Knob :modelValue="tonesIndex" @update:modelValue="setTones(arpToneOptions[Math.round($event)].value)" size="small" hideLabel label="Arp tones" :value-text="tonesLabel"
+                            :min="0" :max="arpToneOptions.length - 1" :step="1" :showMarkers="true" :markers="arpToneOptions.map((_, i) => i / (arpToneOptions.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
+                        <span class="mmv-step-name mmv-knob-name">{{ tonesLabel }}</span>
+                    </template>
+                    <div v-else class="mmv-stepper" role="group" aria-label="Arp tones">
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Previous" @click="stepTones(-1)">◂</button>
+                        <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'tones'" @click.stop="mockMenus && (mockMenu = mockMenu === 'tones' ? null : 'tones')">{{ tonesLabel }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
+                        <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepTones(1)">▸</button>
+                        <div v-if="mockMenu === 'tones'" class="mmv-menu" role="listbox" aria-label="Arp tones">
+                            <button v-for="o in arpToneOptions" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpTones }"
+                                :aria-selected="o.value === arpTones" @click.stop="setTones(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
+                        </div>
+                    </div>
+                </div>
                         </div>
                         <div class="mmv-pair">
                             <div class="mmv-row"><span class="mmv-cap">Rate</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp rate">
@@ -375,6 +436,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, defineExpose } from 'vue';
 import { padHue } from '../lib/padColour';
+import Knob from './Knob.vue';
 import PtSelect from './PtSelect.vue';
 import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
 import { arpSlots, arpSequence, arpRateFrom, type ArpRate } from '../lib/melody/arp';
@@ -580,7 +642,17 @@ const roll = computed(() => {
     return { rows, notes };
 });
 // Round 2 (c1, c2, c3)
-const mockCx = /^c[123]$/.test(mockVariant);
+const mockCx = /^(c[123]|d[12])$/.test(mockVariant);
+const mockTopRange = ['c1', 'd1', 'd2'].includes(mockVariant); // Range beside Scale
+const mockPreview = ['c3', 'd1', 'd2'].includes(mockVariant);  // the screen previews
+const mockMenus = mockVariant === 'd1';                        // a stepper's name opens a list
+const mockKnobs = mockVariant === 'd2';                        // notched knobs for the word choices
+const mockMenu = ref<string | null>(null);
+const scaleIndex = computed(() => Math.max(0, mockScales.findIndex((o) => o.value === keyScale.value)));
+const patternIndex = computed(() => Math.max(0, arpPatternOptions.findIndex((o) => o.value === arpPattern.value)));
+const tonesIndex = computed(() => Math.max(0, arpToneOptions.findIndex((o) => o.value === arpTones.value)));
+function setPattern(v: any) { arpPattern.value = v; }
+function setTones(v: any) { arpTones.value = v; }
 const scaleLong = computed(() => mockScales.find((o) => o.value === keyScale.value)?.long ?? '');
 const patternLabel = computed(() => arpPatternOptions.find((o) => o.value === arpPattern.value)?.label ?? '');
 function stepPattern(d: number) {
@@ -596,7 +668,7 @@ const melodyHint = computed(() => (keyScale.value === 'none'
     ? "No scale: every pad gets the key's note."
     : "Random notes from the scale; the first pad that's on gets the key."));
 const screenNote = computed(() => {
-    if (mode.value === 'arp') return `${patternLabel.value} · ${arpRate.value}${mockVariant === 'c3' && arpPattern.value === 'random' ? ' · shuffled on Generate' : ''}`;
+    if (mode.value === 'arp') return `${patternLabel.value} · ${arpRate.value}${mockPreview && arpPattern.value === 'random' ? ' · shuffled on Generate' : ''}`;
     return poolSummary.value;
 });
 const ROLLX_H = 120;
@@ -612,7 +684,7 @@ const rollX = computed(() => {
     }
     // c3, Melody: the band of notes it can pick from (Narrow or Wide)
     let band: { y: number; h: number } | null = null;
-    if (mockVariant === 'c3' && mode.value === 'random' && keyScale.value !== 'none') {
+    if (mockPreview && mode.value === 'random' && keyScale.value !== 'none') {
         const pool = buildCandidateMidiPool(keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, lo, hi);
         if (pool.length) band = { y: y(midiToFreq(Math.max(...pool))) - 4, h: y(midiToFreq(Math.min(...pool))) - y(midiToFreq(Math.max(...pool))) + 8 };
     }
@@ -621,7 +693,7 @@ const rollX = computed(() => {
     const notes = at(props.frequencies ?? [], props.steps ?? []);
     // c3, Arpeggio: what Generate would write, where it differs from the pattern
     let ghost: typeof notes = [];
-    if (mockVariant === 'c3' && mode.value === 'arp') {
+    if (mockPreview && mode.value === 'arp') {
         const next = bakeArp(true);
         if (next) {
             ghost = at(next.freqs, next.steps).filter((g) => !notes.some((n) => n.i === g.i && Math.abs(n.y - g.y) < 0.5));
@@ -1952,8 +2024,138 @@ defineExpose({ getUi, setUi });
     fill-opacity: 0.13;
 }
 
-.mmv-c1 .mmv-c-row .mmv-row:first-child {
+.mmv-toprange .mmv-c-row .mmv-row:first-child {
     flex: 1.3 1 0;
+}
+
+/* Round 3. A stepper's name is a button: it opens the whole list (d1) */
+button.mmv-step-name {
+    border: 0;
+    font: inherit;
+    font-size: 0.68rem;
+    cursor: default;
+    gap: 5px;
+}
+
+button.mmv-step-name.is-menu {
+    cursor: pointer;
+}
+
+button.mmv-step-name.is-menu:hover {
+    box-shadow: inset 0 0 0 1px hsl(var(--pt-accent) 80% 65% / 0.7), inset 0 1px 5px rgba(0, 0, 0, 0.7);
+}
+
+.mmv-caret {
+    font-size: 0.6rem;
+    opacity: 0.7;
+}
+
+.mmv-stepper {
+    position: relative;
+}
+
+.mmv-menu {
+    position: absolute;
+    left: 28px;
+    min-width: calc(100% - 56px);
+    width: max-content;
+    top: calc(100% + 4px);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    border-radius: 8px;
+    background: #0c1118;
+    box-shadow: 0 0 0 1px hsl(var(--pt-accent) 80% 65% / 0.6), 0 10px 24px rgba(0, 0, 0, 0.6);
+}
+
+.mmv-menu-item {
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 5px;
+    background: none;
+    color: #cfe0ff;
+    font: inherit;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.mmv-menu-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.mmv-menu-item.on {
+    color: var(--hw-led);
+}
+
+.mmv-menu-item.on::before {
+    content: "● ";
+    font-size: 0.5rem;
+    vertical-align: middle;
+}
+
+/* Generate, restyled. d1: a dark cap like the others, its lettering and a bar under it in the accent */
+.mmv-gen--cap {
+    --cap-hi: #43207a;
+    --cap-lo: #2a0f52;
+    --cap-edge: #0b021c;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 7px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    color: hsl(var(--pt-accent) 90% 78%);
+    box-shadow: inset 0 -2px 0 hsl(var(--pt-accent) 85% 62%), 0 0 10px hsl(var(--pt-accent) 85% 60% / 0.35);
+}
+
+.theme-sand .mmv-gen--cap {
+    --cap-hi: #524c45;
+    --cap-lo: #38342f;
+    --cap-edge: #1b1917;
+}
+
+/* d2: a round lit button, its name beside it */
+.mmv-gen--round {
+    --cap-hi: hsl(var(--pt-accent) 85% 66%);
+    --cap-lo: hsl(var(--pt-accent) 80% 44%);
+    width: 34px;
+    height: 34px;
+    top: -44px;
+    padding: 0;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.45), 0 0 0 4px hsl(var(--pt-accent) 80% 65% / 0.55), 0 0 14px hsl(var(--pt-accent) 85% 60% / 0.5);
+}
+
+.mmv-gen--round .mmv-gen-word {
+    position: absolute;
+    right: calc(100% + 10px);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pt-muted);
+    white-space: nowrap;
+}
+
+.mmv-gen--round .mmv-dice {
+    font-size: 1.15rem;
+}
+
+/* d2: notched knobs for the word choices, the choice shown beside the knob */
+.mmv-knobs .mmv-sel {
+    gap: 6px;
+}
+
+.mmv-knobs .mmv-sel :deep(.knob-wrapper) {
+    flex: none;
+}
+
+.mmv-knob-name {
+    flex: 1;
 }
 
 .mmv-ghost {
