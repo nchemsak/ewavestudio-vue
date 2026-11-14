@@ -1,182 +1,95 @@
-<!-- components/LFOGroup.vue -->
+<!-- src/components/modules/LFOGroup.vue -->
+<!-- The LFO card (PR 75, options A + B of the mockups): a ribbon down its left edge is the
+     switch (as Noise's); a screen draws the wave across the bar over the pattern's steps; Rate,
+     Depth, the Wave switch and RETRIG; and a patch bay, where a cable runs from "LFO out" to the
+     target's socket. `classic` (the phone's Mod page) draws the card as it was before. -->
 <template>
     <KnobGroup v-model="localEnabled" :color="color" :showToggle="showToggle" :showHeader="false">
-        <!-- MOCKUPS START (PR 75's options, picked with ?lfo=a|b|c; not for shipping as is) -->
-        <!-- A: ribbon + bar display -->
-        <div v-if="variant === 'a' || variant === 'ab'" class="lv lva" :class="{ 'is-off': !localEnabled }">
+        <div v-if="!classic" class="lv" :class="{ 'is-off': !localEnabled }">
             <button type="button" class="lv-ribbon" :class="{ 'is-on': localEnabled }" :aria-pressed="localEnabled"
-                aria-label="LFO on" @click="localEnabled = !localEnabled">
+                aria-label="LFO on" :title="idleTitle || 'Toggle LFO'" @click="localEnabled = !localEnabled">
                 <span class="lv-ribbon-led" aria-hidden="true"></span>
                 <span class="lv-ribbon-label">LFO</span>
             </button>
-            <div class="lva-main">
-                <div class="lva-screen" aria-hidden="true">
-                    <svg class="lva-plot" :viewBox="`0 0 ${PLOT_W} ${PLOT_H}`" preserveAspectRatio="none">
+
+            <div class="lv-main">
+                <!-- The wave across one bar (or its whole cycle, for the 2- and 4-bar rates), the
+                     pattern's steps along the bottom; with RETRIG it starts again at each hit -->
+                <div class="lv-screen">
+                    <svg class="lv-plot" :viewBox="`0 0 ${PLOT_W} ${PLOT_H}`" preserveAspectRatio="none" aria-hidden="true">
                         <line v-for="b in plot.beats" :key="'b' + b.x" :x1="b.x" y1="0" :x2="b.x" :y2="PLOT_H"
-                            class="lva-beat" :class="{ bar: b.bar }" />
-                        <line x1="0" :y1="PLOT_H / 2" :x2="PLOT_W" :y2="PLOT_H / 2" class="lva-mid" />
+                            class="lv-beat" :class="{ bar: b.bar }" />
+                        <line x1="0" :y1="PLOT_H / 2" :x2="PLOT_W" :y2="PLOT_H / 2" class="lv-mid" />
                         <rect v-for="t in plot.ticks" :key="'t' + t.x" :x="t.x + 1" :y="PLOT_H - 4" :width="t.w - 2" height="3"
-                            class="lva-step" :class="{ on: t.on }" />
-                        <path :d="plot.path" class="lva-wave" />
+                            class="lv-step" :class="{ on: t.on }" />
+                        <path :d="plot.path" class="lv-wave" />
                     </svg>
-                    <span class="lva-read lva-read--l">{{ localEnabled ? rateLabel : 'OFF' }}<template v-if="plot.span > 1"> · {{ plot.span }} bars shown</template></span>
-                    <span class="lva-read lva-read--r" :class="{ idle: !!idleText }">{{ idleText || `${targetLabel} ${depthShort}` }}</span>
+                    <span class="lv-read lv-read--l">{{ localEnabled ? rateLabel : 'Off' }}<span v-if="localEnabled && plot.span > 1" class="lv-read-more"> · {{ plot.span }} bars shown</span></span>
+                    <span class="lv-read lv-read--r lfo-status" :class="{ idle: !!idleText }" :title="idleTitle || undefined"><template v-if="idleText">{{ idleText }}</template><template v-else><span class="lv-read-more">{{ targetLabel }}&nbsp;</span>{{ depthShort }}</template></span>
                 </div>
-                <div class="lva-row">
-                    <div class="pt-knob-row lfo-knobs">
-                        <div class="position-relative text-center">
-                            <Knob :value-text="rateLabel" v-model="divisionIndex" size="small" :min="0" :max="divisions.length - 1" :step="1"
-                                label="Rate" :color="color" :disabled="!localEnabled" :showMarkers="true"
-                                :markers="rateMarkers" :markersOnly="true" :markersOffsetDeg="-90" />
+
+                <div class="lv-controls">
+                    <div class="lfo-row">
+                        <div class="pt-knob-row lfo-knobs">
+                            <div class="position-relative text-center">
+                                <!-- Always locked to the tempo: 4 bars (slowest) to 1/64 -->
+                                <Knob midi-id="lfo.rate" :value-text="rateLabel" v-model="divisionIndex" size="small" :min="0" :max="divisions.length - 1" :step="1"
+                                    label="Rate" :color="color" :disabled="!localEnabled" :showMarkers="true"
+                                    :markers="rateMarkers" :markersOnly="true" :markersOffsetDeg="-90"
+                                    @knobStart="activeKnob = 'rate'" @knobEnd="activeKnob = null" />
+                                <span v-if="activeKnob === 'rate'" class="custom-tooltip">{{ rateLabel }}</span>
+                            </div>
+                            <div class="position-relative text-center">
+                                <Knob midi-id="lfo.depth" :value-text="depthReadout" v-model="localDepth" size="small" :min="0" :max="depthMax" :step="depthStep" label="Depth"
+                                    :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'depth'"
+                                    @knobEnd="activeKnob = null" />
+                                <span v-if="activeKnob === 'depth'" class="custom-tooltip">{{ depthReadout }}</span>
+                            </div>
                         </div>
-                        <div class="position-relative text-center">
-                            <Knob :value-text="depthReadout" v-model="localDepth" size="small" :min="0" :max="depthMax" :step="depthStep" label="Depth"
-                                :color="color" :disabled="!localEnabled" />
+                        <div class="lv-side">
+                            <div class="lfo-seg" role="radiogroup" aria-label="LFO Waveform">
+                                <button v-for="w in waves" :key="w" type="button" class="lfo-seg-btn hw-cap hw-led-top"
+                                    :class="{ active: localWaveform === w }" role="radio"
+                                    :aria-checked="localWaveform === w ? 'true' : 'false'" :aria-label="waveLong(w)"
+                                    :disabled="!localEnabled" @click="setWave(w)" :title="waveLong(w)">
+                                    <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
+                                        <path :d="wavePath(w)" class="wv" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <!-- RETRIG: each note starts the LFO afresh (src/audio/lfo.ts) -->
+                            <PillSwitch :modelValue="retrigger" @update:modelValue="emit('update:retrigger', $event)" label="RETRIG"
+                                name="LFO retrigger" tip="Each note starts the LFO from the beginning" :disabled="!localEnabled" />
                         </div>
                     </div>
-                    <div class="lva-side">
-                        <div class="lfo-seg" role="radiogroup" aria-label="LFO Waveform">
-                            <button v-for="w in waves" :key="w" type="button" class="lfo-seg-btn hw-cap hw-led-top"
-                                :class="{ active: localWaveform === w }" role="radio"
-                                :aria-checked="localWaveform === w ? 'true' : 'false'" :aria-label="waveLong(w)"
-                                :disabled="!localEnabled" @click="setWave(w)">
-                                <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true"><path :d="wavePath(w)" class="wv" /></svg>
-                            </button>
-                        </div>
-                        <button type="button" class="lv-retrig hw-cap hw-cap-sm hw-led-left" :class="{ on: retrigger }"
-                            :aria-pressed="retrigger" :disabled="!localEnabled" @click="emit('update:retrigger', !retrigger)">RETRIG</button>
-                    </div>
                 </div>
-                <!-- A + B: the patch bay in place of the target buttons -->
-                <div v-if="variant === 'ab'" class="lvb-bay lvb-bay--slim" :class="{ 'is-off': !localEnabled }" role="radiogroup" aria-label="LFO Target">
-                    <svg class="lvb-cables" viewBox="0 0 600 48" preserveAspectRatio="none" aria-hidden="true">
-                        <path :d="cablePath" class="lvb-cable-shadow" />
-                        <path :d="cablePath" class="lvb-cable" />
+
+                <!-- The patch bay: one cable from "LFO out" to the target's socket (one target at a
+                     time). A socket that does nothing right now (Pulse with no pulse playing, FM
+                     while FM is off) is dimmed, with a title saying why. -->
+                <div class="lv-bay" role="radiogroup" aria-label="LFO Target">
+                    <svg class="lv-cables" :viewBox="`0 0 ${BAY_W} ${BAY_H}`" preserveAspectRatio="none" aria-hidden="true">
+                        <path :d="cablePath" class="lv-cable-shadow" />
+                        <path :d="cablePath" class="lv-cable" />
                     </svg>
-                    <div class="lvb-jack lvb-out">
-                        <span class="lvb-lab">LFO out</span>
-                        <span class="lvb-hole plugged"></span>
+                    <div class="lv-jack lv-out" aria-hidden="true">
+                        <span class="lv-lab">LFO out</span>
+                        <span class="lv-hole plugged"></span>
                     </div>
-                    <button v-for="t in TARGETS" :key="t.value" type="button" class="lvb-jack"
-                        :class="{ plugged: currentTarget === t.value, idle: t.idle?.() }" :disabled="!localEnabled"
-                        role="radio" :aria-checked="currentTarget === t.value ? 'true' : 'false'" :aria-label="t.aria || t.label" @click="updateTarget(t.value)">
-                        <span class="lvb-lab">{{ t.label }}</span>
-                        <span class="lvb-hole" :class="{ plugged: currentTarget === t.value }"></span>
-                    </button>
-                </div>
-                <div v-else class="lfo-seg lva-targets" role="radiogroup" aria-label="LFO Target">
-                    <button v-for="t in TARGETS" :key="t.value" type="button" class="lfo-seg-btn hw-cap hw-led-top"
-                        :class="{ active: currentTarget === t.value, 'no-pulse': t.idle?.() }" :disabled="!localEnabled"
+                    <button v-for="t in TARGETS" :key="t.value" type="button" class="lv-jack"
+                        :class="{ plugged: currentTarget === t.value, 'no-pulse': t.idle?.() }" :disabled="!localEnabled"
                         role="radio" :aria-checked="currentTarget === t.value ? 'true' : 'false'"
-                        @click="updateTarget(t.value)">{{ t.label }}</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- B: patch bay -->
-        <div v-else-if="variant === 'b'" class="lfo-root lfo-container lvb">
-            <div class="lfo-row">
-                <button type="button" class="lfo-power hw-cap" :class="{ on: localEnabled, idle: !!idleText }"
-                    :aria-pressed="localEnabled" aria-label="LFO on" @click="localEnabled = !localEnabled">
-                    <span class="lfo-status">{{ idleText || (localEnabled ? 'On' : 'Off') }}</span>
-                    <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true"><path :d="wavePath(localWaveform || 'sine')" class="wv" /></svg>
-                </button>
-                <div class="pt-knob-row lfo-knobs">
-                    <div class="position-relative text-center">
-                        <Knob :value-text="rateLabel" v-model="divisionIndex" size="small" :min="0" :max="divisions.length - 1" :step="1"
-                            label="Rate" :color="color" :disabled="!localEnabled" :showMarkers="true"
-                            :markers="rateMarkers" :markersOnly="true" :markersOffsetDeg="-90" />
-                    </div>
-                    <div class="position-relative text-center">
-                        <Knob :value-text="depthReadout" v-model="localDepth" size="small" :min="0" :max="depthMax" :step="depthStep" label="Depth"
-                            :color="color" :disabled="!localEnabled" />
-                    </div>
-                </div>
-                <div class="lfo-switches">
-                    <div class="lfo-switch">
-                        <span class="lfo-switch-label" aria-hidden="true">Wave</span>
-                        <div class="lfo-seg" role="radiogroup" aria-label="LFO Waveform">
-                            <button v-for="w in waves" :key="w" type="button" class="lfo-seg-btn hw-cap hw-led-top"
-                                :class="{ active: localWaveform === w }" role="radio"
-                                :aria-checked="localWaveform === w ? 'true' : 'false'" :aria-label="waveLong(w)"
-                                :disabled="!localEnabled" @click="setWave(w)">
-                                <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true"><path :d="wavePath(w)" class="wv" /></svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="lvb-bay" :class="{ 'is-off': !localEnabled }" role="radiogroup" aria-label="LFO Target">
-                <svg class="lvb-cables" viewBox="0 0 600 56" preserveAspectRatio="none" aria-hidden="true">
-                    <path :d="cablePath" class="lvb-cable-shadow" />
-                    <path :d="cablePath" class="lvb-cable" />
-                </svg>
-                <div class="lvb-jack lvb-out">
-                    <span class="lvb-lab">LFO out</span>
-                    <span class="lvb-hole plugged"></span>
-                </div>
-                <button v-for="t in TARGETS" :key="t.value" type="button" class="lvb-jack"
-                    :class="{ plugged: currentTarget === t.value, idle: t.idle?.() }" :disabled="!localEnabled"
-                    role="radio" :aria-checked="currentTarget === t.value ? 'true' : 'false'" @click="updateTarget(t.value)">
-                    <span class="lvb-lab">{{ t.label }}</span>
-                    <span class="lvb-hole" :class="{ plugged: currentTarget === t.value }"></span>
-                </button>
-            </div>
-        </div>
-
-        <!-- C: rotary selectors -->
-        <div v-else-if="variant === 'c'" class="lv lvc" :class="{ 'is-off': !localEnabled }">
-            <button type="button" class="lv-ribbon" :class="{ 'is-on': localEnabled }" :aria-pressed="localEnabled"
-                aria-label="LFO on" @click="localEnabled = !localEnabled">
-                <span class="lv-ribbon-led" aria-hidden="true"></span>
-                <span class="lv-ribbon-label">LFO</span>
-            </button>
-            <div class="lvc-main">
-                <div class="lvc-knobs">
-                    <div class="pt-knob-row lfo-knobs">
-                        <div class="position-relative text-center">
-                            <Knob :value-text="rateLabel" v-model="divisionIndex" size="small" :min="0" :max="divisions.length - 1" :step="1"
-                                label="Rate" :color="color" :disabled="!localEnabled" :showMarkers="true"
-                                :markers="rateMarkers" :markersOnly="true" :markersOffsetDeg="-90" />
-                        </div>
-                        <div class="position-relative text-center">
-                            <Knob :value-text="depthReadout" v-model="localDepth" size="small" :min="0" :max="depthMax" :step="depthStep" label="Depth"
-                                :color="color" :disabled="!localEnabled" />
-                        </div>
-                    </div>
-                    <div class="lvc-readout" :class="{ idle: !!idleText }">{{ idleText || `${rateLabel} · ${depthShort}` }}</div>
-                    <button type="button" class="lv-retrig hw-cap hw-cap-sm hw-led-left" :class="{ on: retrigger }"
-                        :aria-pressed="retrigger" :disabled="!localEnabled" @click="emit('update:retrigger', !retrigger)">RETRIG</button>
-                </div>
-                <div class="lvc-sel lvc-sel--wave" role="radiogroup" aria-label="LFO Waveform">
-                    <span class="lvc-cap">Wave</span>
-                    <button v-for="(w, i) in waves" :key="w" type="button" class="lvc-pos" :class="{ on: localWaveform === w }"
-                        :style="posStyle(WAVE_ANGLES[i], 31)" role="radio" :aria-checked="localWaveform === w ? 'true' : 'false'"
-                        :aria-label="waveLong(w)" :disabled="!localEnabled" @click="setWave(w)">
-                        <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true"><path :d="wavePath(w)" class="wv" /></svg>
-                    </button>
-                    <span v-for="a in WAVE_ANGLES" :key="a" class="lvc-tick" :style="tickStyle(a)"></span>
-                    <button type="button" class="lvc-dial" :disabled="!localEnabled" aria-label="Next wave"
-                        @click="setWave(waves[(waves.indexOf(localWaveform as Wave) + 1) % waves.length])">
-                        <span class="lvc-rotor" :style="{ transform: `rotate(${waveAngle}deg)` }"></span>
-                    </button>
-                </div>
-                <div class="lvc-sel lvc-sel--target" role="radiogroup" aria-label="LFO Target">
-                    <span class="lvc-cap">Target</span>
-                    <button v-for="(t, i) in TARGETS" :key="t.value" type="button" class="lvc-pos"
-                        :class="{ on: currentTarget === t.value, idle: t.idle?.() }" :style="posStyle(TARGET_ANGLES[i], 33)"
-                        role="radio" :aria-checked="currentTarget === t.value ? 'true' : 'false'" :disabled="!localEnabled"
-                        @click="updateTarget(t.value)">{{ t.label }}</button>
-                    <span v-for="a in TARGET_ANGLES" :key="a" class="lvc-tick" :style="tickStyle(a)"></span>
-                    <button type="button" class="lvc-dial" :disabled="!localEnabled" aria-label="Next target"
-                        @click="updateTarget(TARGETS[(TARGETS.findIndex((t) => t.value === currentTarget) + 1) % TARGETS.length].value)">
-                        <span class="lvc-rotor" :style="{ transform: `rotate(${targetAngle}deg)` }"></span>
+                        :aria-label="t.aria || t.label" @click="updateTarget(t.value)"
+                        :title="t.idle?.() ? t.idleTitle : t.title">
+                        <span class="lv-lab">{{ t.label }}</span>
+                        <span class="lv-hole" :class="{ plugged: currentTarget === t.value }"></span>
                     </button>
                 </div>
             </div>
         </div>
-        <!-- MOCKUPS END -->
 
+        <!-- The card as it was until PR 75 (the phone's Mod page keeps it): the power tile, Rate
+             and Depth, and the Wave switch on one line; the Target switch under them -->
         <div v-else class="lfo-root lfo-container">
             <!-- Option C (PR 61): the power tile, Rate and Depth, and the Wave switch on one line;
                  the Target switch on a line of its own under them (five targets don't fit beside) -->
@@ -195,7 +108,7 @@
                     <div class="position-relative text-center">
                         <!-- Always locked to the tempo: 4 bars (slowest) to 1/64 (PR 66 dropped the
                              free rate in Hz and the card's ⋯ menu, where it was switched on) -->
-                        <Knob midi-id="lfo.rate" :value-text="rateLabel" v-model="divisionIndex" size="small" :min="0" :max="divisions.length - 1" :step="1"
+                        <Knob :value-text="rateLabel" v-model="divisionIndex" size="small" :min="0" :max="divisions.length - 1" :step="1"
                             label="Rate" :color="color" :disabled="!localEnabled" :showMarkers="true"
                             :markers="rateMarkers" :markersOnly="true" :markersOffsetDeg="-90"
                             @knobStart="activeKnob = 'rate'" @knobEnd="activeKnob = null" />
@@ -203,7 +116,7 @@
                     </div>
 
                     <div class="position-relative text-center">
-                        <Knob midi-id="lfo.depth" :value-text="depthReadout" v-model="localDepth" size="small" :min="0" :max="depthMax" :step="depthStep" label="Depth"
+                        <Knob :value-text="depthReadout" v-model="localDepth" size="small" :min="0" :max="depthMax" :step="depthStep" label="Depth"
                             :color="color" :disabled="!localEnabled" @knobStart="activeKnob = 'depth'"
                             @knobEnd="activeKnob = null" />
                         <span v-if="activeKnob === 'depth'" class="custom-tooltip">
@@ -249,7 +162,8 @@ import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 import { LFO_DIVISIONS, lfoDivisionLabel, type LfoTarget } from '../../audio/lfo';
-import { divisionBars } from '../../audio/synthHelpers';
+import PillSwitch from '../PillSwitch.vue';
+import { lfoPlotPath, plotSpanBars, STEPS_PER_BAR } from '../../lib/lfoPlot';
 
 type Target = LfoTarget;
 type Wave = 'sine' | 'square';
@@ -272,9 +186,10 @@ const props = withDefaults(
         pulseInUse?: boolean;
         // Is FM on (with some Amount)? The FM target moves its Amount, so nothing while it's off
         fmInUse?: boolean;
-        // MOCKUPS: which option to draw ('' = the card as it is), and the pattern for A's display
-        variant?: string;
+        // The pattern's steps, for the screen
         steps?: boolean[];
+        // The card as it was before PR 75 (the phone's Mod page)
+        classic?: boolean;
     }>(),
     {
         modelValue: false,
@@ -291,8 +206,8 @@ const props = withDefaults(
         bipolar: false,
         pulseInUse: true,
         fmInUse: true,
-        variant: '',
-        steps: () => []
+        steps: () => [],
+        classic: false
     }
 );
 
@@ -431,82 +346,40 @@ const divisionIndex = computed<number>({
     }
 });
 
-// MOCKUPS START
+// THE SCREEN AND THE PATCH BAY START
 const targetLabel = computed(() => TARGETS.find((t) => t.value === currentTarget.value)?.label ?? '');
+// The depth for the screen: "25 cents", "1500 Hz", "40 %"
+const depthShort = computed(() => depthReadout.value.replace(/% .*/, ' %').replace('±', '± '));
 
-// A: the wave across the bar (or across its whole cycle when that's longer), the pattern's steps
-// along the bottom; with RETRIG it starts again at every step that's on
+// The screen's drawing (src/lib/lfoPlot.ts), in a box stretched over the screen
 const PLOT_W = 352;
 const PLOT_H = 58;
 const plot = computed(() => {
-    const [p, q] = divisionBars(localDivision.value || '1/8');
-    const cycleBars = p / q;
-    const span = Math.max(1, Math.ceil(cycleBars - 1e-9));
-    const stepsPerBar = 16;
-    const total = stepsPerBar * span;
-    const on = (i: number) => !!props.steps?.[i % stepsPerBar];
-    const amp = localEnabled.value ? Math.min(1, (localDepth.value || 0) / (props.depthMax || 1)) * (PLOT_H / 2 - 13) : 0;
-    const mid = PLOT_H / 2;
-    const anyOn = Array.from({ length: stepsPerBar }, (_, i) => on(i)).some(Boolean);
-    const pts: string[] = [];
-    const N = PLOT_W * 2;
-    let prev = NaN;
-    for (let k = 0; k <= N; k++) {
-        const bars = (k / N) * span;
-        let t = bars;
-        if (props.retrigger && anyOn) {
-            // since the last step that's on (wrapping to the bar before)
-            const stepPos = bars * stepsPerBar;
-            let i = Math.floor(stepPos + 1e-9);
-            let back = 0;
-            while (!on(((i % stepsPerBar) + stepsPerBar) % stepsPerBar) && back < stepsPerBar) { i--; back++; }
-            t = (stepPos - i) / stepsPerBar;
-        }
-        const ph = (t / cycleBars) % 1;
-        const v = localWaveform.value === 'square' ? (ph < 0.5 ? 1 : -1) : Math.sin(2 * Math.PI * ph);
-        const x = (k / N) * PLOT_W;
-        const y = mid - v * amp;
-        if (Math.abs(y - prev) > amp) pts.push(`${x.toFixed(1)} ${prev.toFixed(1)}`); // a square's edge, upright
-        pts.push(`${x.toFixed(1)} ${y.toFixed(1)}`);
-        prev = y;
-    }
+    const division = localDivision.value || '1/8';
+    const span = plotSpanBars(division);
+    const total = STEPS_PER_BAR * span;
     const w = PLOT_W / total;
+    const amp = localEnabled.value ? (localDepth.value || 0) / (props.depthMax || 1) : 0;
     return {
         span,
-        path: 'M' + pts.join(' L'),
-        ticks: Array.from({ length: total }, (_, i) => ({ x: i * w, w, on: on(i) })),
+        path: lfoPlotPath({ division, wave: localWaveform.value || 'sine', retrigger: props.retrigger, steps: props.steps },
+            PLOT_W, PLOT_H, amp, 13),
+        ticks: Array.from({ length: total }, (_, i) => ({ x: i * w, w, on: !!props.steps[i % STEPS_PER_BAR] })),
         beats: Array.from({ length: total / 4 - 1 }, (_, i) => ({ x: (i + 1) * 4 * w, bar: (i + 1) % 4 === 0 })),
     };
 });
 
-// B: the cable from "LFO out" (the first of six jacks) to the chosen target's jack, sagging
-// under the others; drawn in a 600 × 56 box stretched over the bay
+// The cable, from "LFO out" (the first of six sockets) to the target's, hanging under the ones
+// between; drawn in a box stretched over the bay
+const BAY_W = 600;
+const BAY_H = 48;
 const cablePath = computed(() => {
     const i = Math.max(0, TARGETS.findIndex((t) => t.value === currentTarget.value)) + 1;
-    const slim = props.variant === 'ab';
-    const x0 = 50, x1 = i * 100 + 50, y = slim ? 29 : 36;
-    const sag = (slim ? 8 : 14) + i * 2;
-    return `M${x0} ${y} C${x0 + 12} ${y + sag + 10}, ${x1 - 12} ${y + sag + 10}, ${x1} ${y}`;
+    const x0 = BAY_W / 12, x1 = (i + 0.5) * (BAY_W / 6), y = 29;
+    const drop = 18 + i * 2;
+    return `M${x0} ${y} C${x0 + 12} ${y + drop}, ${x1 - 12} ${y + drop}, ${x1} ${y}`;
 });
-
-// C: where a selector's positions sit round its dial (0° = straight up)
-const WAVE_ANGLES = [-38, 38];
-const TARGET_ANGLES = [-100, -50, 0, 50, 100];
-// The depth without its unit's long name ("25 cents", "1500 Hz", "15 %")
-const depthShort = computed(() => depthReadout.value.replace(/% .*/, ' %').replace('±', '± '));
-const waveAngle = computed(() => WAVE_ANGLES[Math.max(0, props.waves.indexOf(localWaveform.value as Wave))]);
-const targetAngle = computed(() => TARGET_ANGLES[Math.max(0, TARGETS.findIndex((t) => t.value === currentTarget.value))]);
-function posStyle(deg: number, r: number) {
-    const a = (deg * Math.PI) / 180;
-    // anchored on the side that faces away from the dial, so longer names grow outwards
-    const tx = deg < -10 ? '-100%' : deg > 10 ? '0%' : '-50%';
-    const ty = Math.abs(deg) < 10 ? '-100%' : '-50%';
-    return { left: `calc(50% + ${(Math.sin(a) * r).toFixed(1)}px)`, top: `calc(var(--dial-y) - ${(Math.cos(a) * r).toFixed(1)}px)`, transform: `translate(${tx}, ${ty})` };
-}
-function tickStyle(deg: number) {
-    return { transform: `translate(-50%, -100%) rotate(${deg}deg)` };
-}
-// MOCKUPS END
+// THE SCREEN AND THE PATCH BAY END
 
 function wavePath(w: Wave | string): string {
     switch (w) {
@@ -710,8 +583,8 @@ svg {
     opacity: 0.4;
 }
 
-/* MOCKUPS START */
-/* The ribbon (A, C): the card's switch, as Noise's */
+/* THE CARD (PR 75) START */
+/* Ribbon | screen, controls, patch bay */
 .lv {
     position: relative;
     display: flex;
@@ -720,6 +593,7 @@ svg {
     min-height: 0;
 }
 
+/* The ribbon: the card's switch, as Noise's, in the LFO's own colour (the visualizer's amber) */
 .lv-ribbon {
     flex: none;
     position: relative;
@@ -733,6 +607,11 @@ svg {
     background: linear-gradient(180deg, var(--pt-surface-3, #26263a), var(--pt-surface-1, #151522));
     color: color-mix(in oklab, var(--pt-text, #e5e9ff), transparent 20%);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 1px 0 0 rgba(0, 0, 0, 0.7);
+    transition: filter 120ms ease;
+}
+
+.lv-ribbon:hover {
+    filter: brightness(1.06);
 }
 
 .lv-ribbon.is-on {
@@ -766,25 +645,7 @@ svg {
     font-weight: 600;
 }
 
-.lv-retrig {
-    --hw-led-size: 5px;
-    flex: none;
-    padding: 2px 6px 2px 5px;
-    border-radius: 5px;
-    border: 1px solid transparent;
-    font: inherit;
-    font-size: 9px;
-    line-height: 1.4;
-    letter-spacing: 0.06em;
-}
-
-.lv-retrig:disabled {
-    opacity: 0.4;
-    cursor: default;
-}
-
-/* A: the display, the knobs' row, the targets */
-.lva-main {
+.lv-main {
     flex: 1;
     min-width: 0;
     display: flex;
@@ -794,51 +655,85 @@ svg {
     padding: 9px 12px 9px 10px;
 }
 
-.lva-screen {
+/* The screen: a small LCD in each theme's screen colours */
+.lv-screen {
+    --lfo-lcd-bg: #0c1118;
+    --lfo-lcd-ink: #cfe0ff;
     position: relative;
     flex: 1 1 0;
     min-height: 48px;
     border-radius: 6px;
-    background: var(--lfo-lcd-bg, #0c1118);
+    container: lfoscreen / inline-size;
+    background: var(--lfo-lcd-bg);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 2px 10px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(0, 0, 0, 0.45);
     overflow: hidden;
 }
 
-.lva-plot {
+.theme-analog .lv-screen {
+    --lfo-lcd-bg: #160f05;
+    --lfo-lcd-ink: #ffcf8a;
+}
+
+.theme-slate .lv-screen {
+    --lfo-lcd-bg: #0b181d;
+    --lfo-lcd-ink: #bfe6e0;
+}
+
+/* Sand's screen is a green-grey LCD with dark ink; Light's is pale grey */
+.theme-sand .lv-screen,
+.theme-light .lv-screen {
+    --lfo-lcd-bg: #a9b29a;
+    --lfo-lcd-ink: #1d2419;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 0, 0, 0.45);
+}
+
+.theme-light .lv-screen {
+    --lfo-lcd-bg: #cdd2d5;
+    --lfo-lcd-ink: #111;
+}
+
+/* Dark ink on a pale screen: full strength and a little heavier, to stay readable at 9 px */
+.theme-sand .lv-read,
+.theme-light .lv-read {
+    opacity: 1;
+    font-weight: 600;
+}
+
+.lv-plot {
     position: absolute;
     inset: 2px;
     width: calc(100% - 4px);
     height: calc(100% - 4px);
 }
 
-.lva-beat {
-    stroke: var(--lfo-lcd-ink, #cfe0ff);
+.lv-beat {
+    stroke: var(--lfo-lcd-ink);
     stroke-opacity: 0.12;
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
 }
 
-.lva-beat.bar {
+.lv-beat.bar {
     stroke-opacity: 0.4;
 }
 
-.lva-mid {
-    stroke: var(--lfo-lcd-ink, #cfe0ff);
+.lv-mid {
+    stroke: var(--lfo-lcd-ink);
     stroke-opacity: 0.16;
     stroke-dasharray: 2 4;
     vector-effect: non-scaling-stroke;
 }
 
-.lva-step {
-    fill: var(--lfo-lcd-ink, #cfe0ff);
+.lv-step {
+    fill: var(--lfo-lcd-ink);
     fill-opacity: 0.16;
 }
 
-.lva-step.on {
+.lv-step.on {
     fill-opacity: 0.85;
 }
 
-.lva-wave {
+.lv-wave {
     fill: none;
     stroke: var(--lfo-mod);
     stroke-width: 2;
@@ -847,119 +742,119 @@ svg {
     filter: drop-shadow(0 0 3px color-mix(in oklab, var(--lfo-mod), transparent 40%));
 }
 
-.is-off .lva-wave {
+.theme-sand .lv-wave,
+.theme-light .lv-wave {
+    stroke: #7a3d00;
+    filter: none;
+}
+
+.is-off .lv-wave {
     stroke-opacity: 0.35;
     filter: none;
 }
 
-.lva-read {
+.lv-read {
     position: absolute;
     top: 4px;
     font-size: 9px;
     line-height: 1;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--lfo-lcd-ink, #cfe0ff);
+    color: var(--lfo-lcd-ink);
     opacity: 0.85;
+    white-space: nowrap;
 }
 
-.lva-read--l {
+/* (the classic card's tile puts an LED before its status) */
+.lv-read.lfo-status::before {
+    display: none;
+}
+
+/* A narrow screen (a small tablet's): the rate and the depth only */
+@container lfoscreen (max-width: 200px) {
+    .lv-read-more {
+        display: none;
+    }
+}
+
+.lv-read--l {
     left: 7px;
 }
 
-.lva-read--r {
+.lv-read--r {
     right: 7px;
 }
 
-.lva-read.idle {
+/* On with nothing to move ("No Pulse", "FM off"): amber words say so */
+.lv-read.idle {
     color: #ffc107;
     opacity: 1;
 }
 
-.lva-row {
-    display: flex;
-    align-items: center;
+.theme-sand .lv-read.idle,
+.theme-light .lv-read.idle {
+    color: #7a3d00;
+    font-weight: 700;
+}
+
+.lv .lfo-row {
+    flex-wrap: nowrap;
     justify-content: space-between;
     gap: 10px;
 }
 
-.lva-side {
+.lv-side {
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
-.lva-targets {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    width: 100%;
-}
-
-.lva-targets .lfo-seg-btn {
-    padding: 0 4px;
-}
-
-/* Sand's screen is a green-grey LCD with dark ink */
-.theme-sand .lva-screen,
-.theme-sand .lvc-readout {
-    --lfo-lcd-bg: #a9b29a;
-    --lfo-lcd-ink: #1d2419;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 0, 0, 0.45);
-}
-
-.theme-sand .lva-wave {
-    stroke: #7a3d00;
-    filter: none;
-}
-
-.theme-sand .lvc-readout {
-    color: #3a2a08;
-}
-
-/* B: the patch bay */
-.lvb-bay {
+/* The patch bay: a recessed strip of six sockets, their names above them */
+.lv-bay {
     position: relative;
+    flex: none;
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    margin-top: 10px;
-    height: 56px;
+    height: 48px;
     border-radius: 8px;
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.26));
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
-.lvb-bay--slim {
-    flex: none;
-    margin-top: 0;
-    height: 48px;
+.theme-sand .lv-bay,
+.theme-light .lv-bay {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.09));
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
-.lvb-bay--slim .lvb-jack {
-    padding-top: 5px;
-    gap: 4px;
-}
-
-.lvb-jack {
+.lv-jack {
     position: relative;
     z-index: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 5px;
-    padding: 7px 0 0;
+    gap: 4px;
+    min-width: 0;
+    padding: 5px 0 0;
     border: 0;
+    border-radius: 8px;
     background: none;
     color: inherit;
     font: inherit;
     cursor: pointer;
 }
 
-.lvb-out {
+.lv-jack:disabled {
     cursor: default;
-    box-shadow: 1px 0 0 rgba(255, 255, 255, 0.08);
 }
 
-.lvb-lab {
+.lv-out {
+    cursor: default;
+    border-radius: 8px 0 0 8px;
+    box-shadow: 1px 0 0 color-mix(in oklab, currentColor, transparent 88%);
+}
+
+.lv-lab {
     font-size: 9px;
     line-height: 1;
     letter-spacing: 0.08em;
@@ -968,18 +863,19 @@ svg {
     white-space: nowrap;
 }
 
-.lvb-jack.plugged .lvb-lab,
-.lvb-out .lvb-lab {
+.lv-jack.plugged .lv-lab,
+.lv-out .lv-lab {
     opacity: 1;
     color: var(--lfo-mod);
 }
 
-.lvb-jack.idle:not(.plugged) {
+/* A target that does nothing right now: still clickable, but dimmer (its title says why) */
+.lv-jack.no-pulse:not(.plugged) {
     opacity: 0.45;
 }
 
 /* A socket: a metal nut round a dark hole; plugged, the cable's plug sits in it */
-.lvb-hole {
+.lv-hole {
     width: 20px;
     height: 20px;
     border-radius: 50%;
@@ -987,16 +883,16 @@ svg {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
 
-.lvb-hole.plugged {
+.lv-hole.plugged {
     background: radial-gradient(circle, color-mix(in oklab, var(--lfo-mod), white 25%) 0 22%, var(--lfo-mod) 26% 46%, color-mix(in oklab, var(--lfo-mod), black 45%) 50% 56%, #d9dce4 60%, #6b7080 70%, #2a2d38 74%);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.7), 0 0 8px color-mix(in oklab, var(--lfo-mod), transparent 45%);
 }
 
-.lvb-jack:not(.lvb-out):hover .lvb-hole:not(.plugged) {
+button.lv-jack:not(:disabled):hover .lv-hole:not(.plugged) {
     box-shadow: 0 0 0 2px color-mix(in oklab, var(--lfo-mod), transparent 55%);
 }
 
-.lvb-cables {
+.lv-cables {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -1006,215 +902,75 @@ svg {
     overflow: visible;
 }
 
-.lvb-cable,
-.lvb-cable-shadow {
+.lv-cable,
+.lv-cable-shadow {
     fill: none;
     stroke-linecap: round;
     vector-effect: non-scaling-stroke;
 }
 
-.lvb-cable {
+.lv-cable {
     stroke: var(--lfo-mod);
     stroke-width: 4;
+    transition: d 0.18s ease-out;
 }
 
-.lvb-cable-shadow {
-    stroke: rgba(0, 0, 0, 0.55);
+.lv-cable-shadow {
+    stroke: rgba(0, 0, 0, 0.5);
     stroke-width: 7;
     transform: translateY(2px);
+    transition: d 0.18s ease-out;
 }
 
-.lvb-bay.is-off .lvb-cable {
+@media (prefers-reduced-motion: reduce) {
+    .lv-cable,
+    .lv-cable-shadow {
+        transition: none;
+    }
+}
+
+/* Off: the cable and its plugs go dull */
+.is-off .lv-cable {
     stroke: color-mix(in oklab, var(--lfo-mod), #555 65%);
 }
 
-.lvb-bay.is-off .lvb-hole.plugged {
+.is-off .lv-hole.plugged {
     filter: saturate(0.3) brightness(0.8);
 }
 
-/* C: knobs and two selectors, as on a hardware panel */
-.lvc-main {
-    position: relative;
-    flex: 1;
-    min-width: 0;
-    display: grid;
-    grid-template-columns: auto minmax(0, 0.62fr) minmax(0, 1fr);
-    align-items: center;
-    column-gap: 4px;
-    padding: 10px 8px 10px 12px;
-}
-
-.lvc-knobs {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 9px;
-}
-
-.lvc-knobs .lfo-knobs {
-    gap: 10px;
-}
-
-.lvc-readout {
-    min-width: 96px;
-    padding: 4px 6px;
-    border-radius: 4px;
-    background: var(--lfo-lcd-bg, #0c1118);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 1px 5px rgba(0, 0, 0, 0.7);
-    color: var(--lfo-mod);
-    font-size: 10px;
-    line-height: 1.2;
-    letter-spacing: 0.04em;
-    text-align: center;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.lvc-readout.idle {
-    color: #ffc107;
-}
-
-.is-off .lvc-readout {
-    color: color-mix(in oklab, var(--lfo-mod), #555 70%);
-}
-
-.lvc-sel {
-    --dial-y: 84px;
-    --dial-r: 17px;
-    position: relative;
-    height: 150px;
-    align-self: center;
-}
-
-.lvc-cap {
-    position: absolute;
-    left: 50%;
-    top: calc(var(--dial-y) + var(--dial-r) + 14px);
-    transform: translateX(-50%);
-    font-size: 11px;
-    opacity: 0.85;
-}
-
-/* The selector: a pointer knob, a round skirt under a raised bar that points at the choice */
-.lvc-dial {
-    position: absolute;
-    left: 50%;
-    top: var(--dial-y);
-    width: calc(var(--dial-r) * 2);
-    height: calc(var(--dial-r) * 2);
-    padding: 0;
-    border: 0;
-    border-radius: 50%;
-    background: var(--knob-face, #222);
-    box-shadow:
-        inset 0 0 8px rgba(0, 0, 0, 0.55),
-        inset -6px -6px 12px rgba(0, 0, 0, 0.6),
-        inset 5px 5px 10px rgba(255, 255, 255, 0.06),
-        0 2px 5px rgba(0, 0, 0, 0.55);
-    transform: translate(-50%, -50%);
-    cursor: pointer;
-}
-
-.lvc-rotor {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    transition: transform 0.14s ease-out;
-}
-
-.lvc-rotor::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: -3px;
-    bottom: -3px;
-    width: 11px;
-    margin-left: -5.5px;
-    border-radius: 5px;
-    background: linear-gradient(90deg, #15151c, #3a3a48 45%, #22222b);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-}
-
-.lvc-rotor::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: -1px;
-    width: 2.5px;
-    height: 12px;
-    margin-left: -1.25px;
-    border-radius: 2px;
-    background: var(--lfo-mod);
-    box-shadow: 0 0 5px color-mix(in oklab, var(--lfo-mod), transparent 40%);
-}
-
-.is-off .lvc-rotor::after {
-    background: #9a9aa6;
-    box-shadow: none;
-}
-
-.lvc-dial:disabled {
-    cursor: default;
-}
-
-/* A printed line from the dial towards each position */
-.lvc-tick {
-    position: absolute;
-    left: 50%;
-    top: var(--dial-y);
-    width: 1.5px;
-    height: calc(var(--dial-r) + 11px);
-    transform-origin: 50% 100%;
-    background: linear-gradient(180deg, color-mix(in oklab, var(--pt-text, #fff), transparent 50%) 0 5px, transparent 5px);
-}
-
-.lvc-pos {
-    position: absolute;
-    padding: 2px 2px;
-    border: 0;
-    background: none;
+.is-off .lv-jack.plugged .lv-lab,
+.is-off .lv-out .lv-lab {
     color: inherit;
-    font: inherit;
-    font-size: 9px;
-    line-height: 1;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    white-space: nowrap;
     opacity: 0.6;
-    cursor: pointer;
 }
 
-.lvc-pos svg {
-    width: 22px;
-    height: 11px;
-}
+/* Under 1200 px the card isn't stretched (154 px tall, beside Noise in the Sound tab or in one
+   column): the knobs over the Wave switch and RETRIG, beside the screen, so the card is no
+   taller than it was before PR 75. The window decides, not the card's width: the desktop's
+   card is narrower than a tablet's but 189 px tall. */
+@media (max-width: 1199px) {
+    .lv-main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: minmax(0, 1fr) auto;
+        gap: 7px 12px;
+        padding-top: 7px;
+        padding-bottom: 7px;
+    }
 
-.lvc-pos.on {
-    opacity: 1;
-    color: var(--lfo-mod);
-    text-shadow: 0 0 8px color-mix(in oklab, var(--lfo-mod), transparent 50%);
-}
+    .lv-screen {
+        min-height: 0;
+    }
 
-.lvc-pos.on .wv {
-    stroke: var(--lfo-mod);
-}
+    .lv .lfo-row {
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+    }
 
-.lvc-pos.idle:not(.on) {
-    opacity: 0.3;
+    .lv-bay {
+        grid-column: 1 / -1;
+    }
 }
-
-.lvc-pos:disabled {
-    cursor: default;
-}
-
-.is-off .lvc-pos.on {
-    color: inherit;
-    text-shadow: none;
-    opacity: 0.75;
-}
-
-.is-off .lvc-pos.on .wv {
-    stroke: currentColor;
-}
-/* MOCKUPS END */
+/* THE CARD END */
 </style>

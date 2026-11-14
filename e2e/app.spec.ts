@@ -1423,8 +1423,11 @@ test('laid out like hardware: Sound in rows beside Compose, ending on one line; 
 		await expect(page.locator('.module.unison .pt-title')).toHaveText('Unison');
 		await expect(page.getByRole('switch', { name: 'FM' })).toHaveText('Off');
 		await expect(page.getByRole('switch', { name: 'Unison' })).toHaveText('Off');
-		// The LFO's controls stay on one line
+		// The LFO's knobs, Wave switch and RETRIG stay on one line, and the card and Noise above
+		// it are the size they were before the card's redesign (PR 75)
 		expect((await rect('.module.mod .lfo-row')).height, `${at}: LFO one row`).toBeLessThan(80);
+		expect(Math.abs((await rect('.module.mod')).height - 189), `${at}: LFO card's height`).toBeLessThanOrEqual(1);
+		expect(Math.abs((await rect('.module.noise')).height - 119), `${at}: Noise card's height`).toBeLessThanOrEqual(1);
 		// Titles on one line, and every control inside its card
 		const cards = await page.locator('.ds-section .module').evaluateAll((els) => els.map((el) => {
 			const box = el.getBoundingClientRect();
@@ -1464,8 +1467,8 @@ test('laid out like hardware: Sound in rows beside Compose, ending on one line; 
 		await expect(page.locator('.ds-sound'), at).toBeHidden();
 		expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), `${at}: no sideways scroll`).toBe(false);
 		await tab('Sound').click();
-		// The LFO stays one compact row, even on a phone
-		expect((await rect('.module.mod .lfo-row')).height, `${at}: LFO one row`).toBeLessThan(80);
+		// The LFO card is no taller than before its redesign (PR 75: its knobs beside the screen)
+		expect((await rect('.module.mod')).height, `${at}: LFO card's height`).toBeLessThanOrEqual(155);
 	}
 });
 
@@ -1618,7 +1621,7 @@ test('Pulse Width sits on the Pulse tile, and the LFO says when PW has no pulse 
 	await expect(width).toHaveAttribute('aria-valuenow', '50');
 	expect(await barWidth()).toBeGreaterThan(thin * 3);
 
-	// The LFO on PW with no pulse playing: PW looks dimmer and says why; the tile says No Pulse
+	// The LFO on PW with no pulse playing: PW looks dimmer and says why; the screen says No Pulse
 	const pw = page.locator('.module.mod').getByRole('radio', { name: 'Pulse width' });
 	await expect(pw).toHaveText('Pulse'); // spelled out: "PW" meant little to a newcomer
 	const status = page.locator('.module.mod .lfo-status');
@@ -1628,7 +1631,8 @@ test('Pulse Width sits on the Pulse tile, and the LFO says when PW has no pulse 
 	// A pad set to Pulse (here: every pad, from its tile) and it's on again
 	await turnOnPads(page, [0]);
 	await pulse.click();
-	await expect(status).toHaveText('On');
+	await expect(status).toContainText('Pulse'); // the target and its depth again
+	await expect(status).not.toHaveText('No Pulse');
 	await expect(pw).toHaveAttribute('title', "Modulate the pulse wave's width");
 	// Back to Sine: no pulse again
 	await sine.click();
@@ -1700,16 +1704,16 @@ test('LFO targets Level and FM: on their own line, in the export, and FM says wh
 	const target = page.getByRole('radiogroup', { name: 'LFO Target' });
 	await expect(target.getByRole('radio')).toHaveText(['Pitch', 'Filter', 'Pulse', 'Level', 'FM']);
 
-	// FM with the FM card off: its button is dimmed and the tile says so
+	// FM with the FM card off: its socket is dimmed and the screen says so
 	await target.getByRole('radio', { name: 'FM amount' }).click();
 	await expect(target.getByRole('radio', { name: 'FM amount' })).toHaveAttribute('aria-checked', 'true');
-	await expect(page.getByRole('button', { name: 'LFO on' })).toContainText('FM off');
+	await expect(page.locator('.module.mod .lfo-status')).toHaveText('FM off');
 	await expect(target.getByRole('radio', { name: 'FM amount' })).toHaveAttribute('title', /FM is on/);
 
 	// With FM on, the LFO moves its Amount: the export changes with the LFO's depth
 	const fmOn = (data: any) => { data.synth.fm = { ...data.synth.fm, enabled: true, index: 4, ratio: 2 }; };
 	await importLfoProject(page, 'lfo-fm-0', { target: 'fm', depth: 0, division: '1/16', retrigger: true }, fmOn);
-	await expect(page.getByRole('button', { name: 'LFO on' })).not.toContainText('FM off');
+	await expect(page.locator('.module.mod .lfo-status')).not.toHaveText('FM off');
 	const still = wavSamples(await exportWav(page)).samples;
 	await importLfoProject(page, 'lfo-fm-100', { target: 'fm', depth: 100, division: '1/16', retrigger: true }, fmOn);
 	const moved = wavSamples(await exportWav(page)).samples;
@@ -1721,6 +1725,83 @@ test('LFO targets Level and FM: on their own line, in the export, and FM says wh
 	await importLfoProject(page, 'lfo-amp', { target: 'amp', depth: 40, division: '1/8' });
 	await expect(target.getByRole('radio', { name: 'Level' })).toHaveAttribute('aria-checked', 'true');
 	await expect(page.getByRole('slider', { name: 'Depth' })).toHaveAttribute('aria-valuetext', '40% level');
+});
+
+test("the LFO card: a ribbon switch, a screen that draws the wave over the bar, and a patch bay with one cable", async ({ page }) => {
+	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.lfo;
+	const lfo = page.locator('.module.mod');
+	const ribbon = lfo.getByRole('button', { name: 'LFO on' });
+	const wave = () => lfo.locator('.lv-wave').getAttribute('d');
+	const ys = (d: string) => d.slice(1).split(' L').map((pt) => Number(pt.split(' ')[1]));
+	const height = (d: string) => Math.max(...ys(d)) - Math.min(...ys(d));
+	// crossings of the middle line, going up: one per cycle
+	const cycles = (d: string) => { const y = ys(d), mid = (Math.max(...y) + Math.min(...y)) / 2; let n = 0; for (let i = 1; i < y.length; i++) if (y[i - 1] > mid && y[i] <= mid) n++; return n; };
+	const cable = () => lfo.locator('.lv-cable').getAttribute('d');
+	const cableEnd = async () => Number((await cable())!.split(' ').at(-2));
+	await page.waitForTimeout(SETTLED);
+
+	// No header: the ribbon names the card and switches it; RETRIG is on the card
+	await expect(lfo.locator('.pt-title')).toBeHidden();
+	await expect(ribbon).toHaveText('LFO');
+	await expect(lfo.getByRole('switch', { name: 'LFO retrigger' })).toBeVisible();
+
+	// Depth 0: a flat line. Depth up: the wave grows. The readout names the target and depth.
+	expect(height((await wave())!)).toBe(0);
+	const depth = lfo.getByRole('slider', { name: 'Depth' });
+	await depth.focus();
+	for (let i = 0; i < 3; i++) await page.keyboard.press('PageUp');
+	const low = height((await wave())!);
+	for (let i = 0; i < 3; i++) await page.keyboard.press('PageUp');
+	expect(low).toBeGreaterThan(2);
+	expect(height((await wave())!)).toBeGreaterThan(low * 1.5);
+	await expect(lfo.locator('.lfo-status')).toHaveText(/^Pitch\s+\d+ cents$/);
+
+	// Rate: as many cycles across the bar as the division has (1/4: four; 1/8: eight); a 4-bar
+	// rate shows its whole cycle over four bars of steps
+	const rate = lfo.getByRole('slider', { name: 'Rate' });
+	const setRate = async (label: string) => {
+		await rate.focus();
+		await page.keyboard.press('Home');
+		for (let i = 0; i < 12 && (await rate.getAttribute('aria-valuetext')) !== label; i++) await page.keyboard.press('ArrowUp');
+		await expect(rate).toHaveAttribute('aria-valuetext', label);
+	};
+	await setRate('1/4');
+	expect(cycles((await wave())!)).toBe(4);
+	await expect(lfo.locator('.lv-read--l')).toHaveText('1/4');
+	await setRate('1/8');
+	expect(cycles((await wave())!)).toBe(8);
+	await expect(lfo.locator('.lv-step')).toHaveCount(16);
+	await setRate('4 bars');
+	expect(cycles((await wave())!)).toBeLessThanOrEqual(1);
+	await expect(lfo.locator('.lv-step')).toHaveCount(64);
+	await expect(lfo.locator('.lv-read--l')).toHaveText('4 bars · 4 bars shown');
+
+	// The steps that are on show along the bottom, and with RETRIG the wave starts again at each
+	await setRate('1/2');
+	await turnOnPads(page, [0, 3, 8]);
+	await expect(lfo.locator('.lv-step.on')).toHaveCount(3);
+	const free = await wave();
+	await lfo.getByRole('switch', { name: 'LFO retrigger' }).click();
+	expect(await wave()).not.toBe(free);
+	await lfo.getByRole('switch', { name: 'LFO retrigger' }).click();
+	expect(await wave()).toBe(free);
+
+	// The patch bay: one cable, from LFO out to the target's socket; a click on a socket moves it
+	await expect(lfo.locator('.lv-cable')).toHaveCount(1);
+	const atPitch = await cableEnd();
+	await lfo.getByRole('radio', { name: 'Level' }).click();
+	await expect(lfo.getByRole('radio', { name: 'Level' })).toHaveAttribute('aria-checked', 'true');
+	expect(await cableEnd()).toBeGreaterThan(atPitch + 200); // three sockets along, of a 600-wide box
+	await expect(lfo.locator('.lv-jack.plugged')).toHaveText('Level');
+	expect((await saved()).target).toBe('amp');
+
+	// The ribbon switches the LFO off: the wave goes flat, the knobs and sockets stop
+	await ribbon.click();
+	await expect(ribbon).toHaveAttribute('aria-pressed', 'false');
+	expect(height((await wave())!)).toBe(0);
+	await expect(lfo.getByRole('radio', { name: 'Pitch' })).toBeDisabled();
+	await expect(lfo.locator('.lv-read--l')).toHaveText('Off');
+	expect((await saved()).enabled).toBe(false);
 });
 
 test('the LFO visualizer shows what the LFO moves, without turning the knob', async ({ page }) => {
@@ -2646,13 +2727,17 @@ test('the Sand theme: its button sits beside Dark and Synthwave, is remembered, 
 	expect(await page.evaluate(() => getComputedStyle(document.body).backgroundImage)).toContain('rgb(217, 160, 195)');
 });
 
-test('Sand: the tiles are dark caps with light lettering, and the LFO switch has dark ink', async ({ page }) => {
+test("Sand: the tiles are dark caps with light lettering, and the LFO's screen has dark ink", async ({ page }) => {
 	await page.getByRole('button', { name: 'Sand', exact: true }).click();
-	for (const tile of [page.getByRole('radio', { name: 'Sine' }).first(), page.getByRole('switch', { name: 'FM' }), page.locator('.lfo-power')]) {
+	for (const tile of [page.getByRole('radio', { name: 'Sine' }).first(), page.getByRole('switch', { name: 'FM' })]) {
 		await tile.scrollIntoViewIfNeeded();
-		const label = tile.locator('.wave-label, .lfo-status').first();
+		const label = tile.locator('.wave-label').first();
 		expect(await textContrast(page, label), await label.textContent() ?? '').toBeGreaterThanOrEqual(4.5);
 	}
+	// The LFO card's screen (PR 75; its power tile is gone): a green-grey LCD, dark ink
+	const read = page.locator('.module.mod .lv-read--l');
+	await read.scrollIntoViewIfNeeded();
+	expect(await textContrast(page, read), 'LFO screen').toBeGreaterThanOrEqual(4.5);
 });
 
 test('Analog and Slate: their buttons apply their own colours, and are remembered', async ({ page }) => {

@@ -68,7 +68,7 @@
 								v-model:depth="lfoDepth" :target="lfoTarget" @update:target="chooseLfoTarget" v-model:waveform="lfoWaveform"
 								v-model:division="lfoDivision"
 								v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
-								color="#00BCD4" />
+								classic color="#00BCD4" />
 						</SectionWrap>
 					</div>
 					<div class="module noise">
@@ -446,19 +446,15 @@
 						</div>
 
 						<!-- LFO -->
-						<div class="module mod" :class="lfoMock && [`lfo-v-${lfoMock[0]}`, `lfo-v-${lfoMock}`]">
+						<!-- No header: the card's ribbon is its name and its switch, and RETRIG is on the
+						     card (LFOGroup.vue, PR 75). SectionWrap stays for the card's frame. -->
+						<div class="module mod lfo-card">
 							<SectionWrap id="mod" title="LFO" v-model="collapsibleState['mod']">
-								<template #tools>
-									<!-- RETRIG: each note starts the LFO afresh (src/audio/lfo.ts) -->
-									<PillSwitch v-model="lfoRetrigger" label="RETRIG" name="LFO retrigger"
-										tip="Each note starts the LFO from the beginning" :disabled="!lfoEnabled" />
-								</template>
 								<LFOGroup :showToggle="false" :pulseInUse="pulseInUse" :fmInUse="fmInUse" v-model="lfoEnabled"
 									v-model:depth="lfoDepth" :target="lfoTarget" @update:target="chooseLfoTarget" v-model:waveform="lfoWaveform"
 									v-model:division="lfoDivision"
 									v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
-									:variant="lfoMock" :steps="steps"
-									color="#00BCD4" />
+									:steps="steps" color="#00BCD4" />
 							</SectionWrap>
 						</div>
 					</div>
@@ -824,8 +820,6 @@ const padSizeStyle = computed(() => ({ '--padTEST-size': '41px' }));
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// MOCKUPS: ?lfo=a|b|c draws one of the LFO card's redesign options (LFOGroup.vue)
-const lfoMock = new URLSearchParams(location.search).get('lfo') || '';
 const lfoRetrigger = ref(false)
 const lfoBipolar = ref(false)
 
@@ -3978,27 +3972,21 @@ const phoneCtx = reactive({
 	position: relative;
 }
 
-/* MOCKUPS: options A and C have no header (their ribbon is the title and the switch) and
-   fill the card edge to edge */
-.module.mod.lfo-v-a :deep(.pt-card),
-.module.mod.lfo-v-c :deep(.pt-card) {
+/* The LFO card (PR 75): no header (its ribbon is the title and the switch), filled edge to
+   edge by LFOGroup */
+.module.mod.lfo-card :deep(.pt-card) {
 	padding: 0;
 	overflow: hidden;
 }
 
-.module.mod.lfo-v-a :deep(.pt-subheader),
-.module.mod.lfo-v-c :deep(.pt-subheader) {
+.module.mod.lfo-card :deep(.pt-subheader) {
 	display: none;
 }
 
-.module.mod.lfo-v-a :deep(.pt-card),
-.module.mod.lfo-v-c :deep(.pt-card),
-.module.mod.lfo-v-a :deep(.pt-collapse-body),
-.module.mod.lfo-v-c :deep(.pt-collapse-body),
-.module.mod.lfo-v-a :deep(.knob-group),
-.module.mod.lfo-v-c :deep(.knob-group),
-.module.mod.lfo-v-a :deep(.knob-stack),
-.module.mod.lfo-v-c :deep(.knob-stack) {
+.module.mod.lfo-card :deep(.pt-card),
+.module.mod.lfo-card :deep(.pt-collapse-body),
+.module.mod.lfo-card :deep(.knob-group),
+.module.mod.lfo-card :deep(.knob-stack) {
 	display: flex;
 	flex: 1 1 auto;
 	flex-direction: column;
@@ -4007,19 +3995,13 @@ const phoneCtx = reactive({
 	min-height: 0;
 }
 
-/* The card's own height today is 154 px (it's stretched to 189 beside Effects): the options
-   count as that tall, so Noise above keeps its 119 */
-.sound-stack>.module.mod[class*="lfo-v-"] {
-	flex: 1 1 154px;
-	min-height: 0;
-}
-
-.module.mod.lfo-v-b :deep(.pt-collapse-body) {
-	margin-top: 6px;
-}
-
-.module.mod.lfo-v-b :deep(.knob-group) {
-	padding: 0;
+/* Beside Effects the card is stretched to 189 px, which the screen fills; its own height
+   counts as the 154 px it had before PR 75, so the Noise card above keeps its 119 */
+@media (min-width: 1200px) {
+	.sound-stack>.module.mod.lfo-card {
+		flex: 1 1 154px;
+		min-height: 0;
+	}
 }
 
 .noise-ribbon {
