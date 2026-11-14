@@ -510,8 +510,7 @@ test("saves a project, restores it after a reload, and keeps it in /studio2/'s o
 	await page.getByRole('button', { name: 'Arpeggio', exact: true }).click();
 	await page.getByRole('button', { name: 'Arp pattern' }).click();
 	await page.getByRole('option', { name: 'Down', exact: true }).click();
-	await page.getByRole('button', { name: 'Arp rate' }).click();
-	await page.getByRole('option', { name: '1/8', exact: true }).click();
+	await chooseRate(page, '1/8');
 	const name = page.getByRole('textbox', { name: 'Project name' });
 	await name.fill('E2E Song');
 	await name.press('Enter');
@@ -544,7 +543,7 @@ test("saves a project, restores it after a reload, and keeps it in /studio2/'s o
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(3);
 	await expect(page.getByRole('button', { name: 'Arpeggio', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.getByRole('button', { name: 'Arp pattern' })).toContainText('Down');
-	await expect(page.getByRole('button', { name: 'Arp rate' })).toContainText('1/8');
+	await expect(arpRate(page, '1/8')).toHaveAttribute('aria-checked', 'true');
 });
 
 test('File → Save as… saves a copy under a new name, leaves the original, and keeps undo', async ({ page }) => {
@@ -3907,8 +3906,16 @@ const noteMidi = (name: string) => {
 };
 const keyButton = (page: Page, key: string) => page.locator('.mm-kb').getByRole('radio', { name: key, exact: true });
 
+// The Melody Maker's choices (PR 76: no dropdowns). Scale, Arp pattern and Arp tones are
+// steppers whose name opens a list (chooseOption, below, as it did for the dropdowns); the
+// arpeggio's Rate is a switch
+const arpRate = (page: Page, rate: string) => page.getByRole('radiogroup', { name: 'Arp rate' }).getByRole('radio', { name: rate, exact: true });
+async function chooseRate(page: Page, rate: string) {
+	await arpRate(page, rate).click();
+}
+
 async function chooseOption(page: Page, select: string, option: string) {
-	await page.getByRole('button', { name: select }).click();
+	await page.getByRole('button', { name: new RegExp(`^${select}:`) }).click(); // "Scale: Minor"
 	await page.getByRole('option', { name: option, exact: true }).click();
 }
 
@@ -4086,7 +4093,7 @@ test('Melody Maker: a new scale keeps each note on its degree; a project opening
 	await chooseOption(page, 'Scale', 'Minor');
 	// An arpeggio up the C minor scale: C D Eb F G Ab Bb C
 	await page.getByRole('button', { name: 'Arpeggio', exact: true }).click();
-	await chooseOption(page, 'Arp tones', 'Scale');
+	await chooseOption(page, 'Arp tones', 'Whole scale');
 	await page.getByRole('button', { name: 'Generate', exact: true }).click();
 	const minor = (await padNotes(page, on)).map(noteMidi);
 	expect(minor.map((m) => (m - minor[0] + 120) % 12)).toEqual([0, 2, 3, 5, 7, 8, 10, 0]);
@@ -4113,6 +4120,84 @@ test('Melody Maker: a new scale keeps each note on its degree; a project opening
 	await expect(page.getByRole('textbox', { name: 'Project name' })).toHaveValue('Minor');
 	await expect(keyButton(page, 'C')).toHaveAttribute('aria-checked', 'true');
 	expect((await padNotes(page, on)).map(noteMidi)).toEqual(minor);
+});
+
+test('Melody Maker: no dropdowns; steppers with lists, Narrow | Wide, and a screen that previews what Generate would do', async ({ page }) => {
+	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.melody;
+	const card = page.locator('.module.melody');
+	const scale = card.getByRole('group', { name: 'Scale' });
+	const scaleName = scale.getByRole('button', { name: /^Scale:/ });
+	const generate = card.getByRole('button', { name: 'Generate', exact: true });
+	const size = async () => { const b = (await card.boundingBox())!; return [b.width, b.height]; };
+	const cardSize = await size();
+
+	// Not one dropdown; the captions left are Key, Scale and Octaves
+	await expect(card.locator('select, .pt-select, .pt-selectbtn')).toHaveCount(0);
+	await expect(card.locator('.mm-cap')).toHaveText(['Scale', 'Octaves']);
+
+	// The Scale stepper: its arrows step (round the ends), and the scale's notes light on the keys
+	await expect(scaleName).toHaveText(/None/);
+	await expect(card.locator('.mm-kb .in-scale')).toHaveCount(0);
+	await scale.getByRole('button', { name: 'Next' }).click();
+	await expect(scaleName).toHaveText(/Major/);
+	await expect(card.locator('.mm-kb .in-scale')).toHaveCount(7);
+	await scale.getByRole('button', { name: 'Previous' }).click();
+	await scale.getByRole('button', { name: 'Previous' }).click();
+	await expect(scaleName).toHaveText(/Mixolyd/);
+	expect((await saved()).keyScale).toBe('mixolydian');
+
+	// A click on the name opens the whole list, with full names; Esc and a click elsewhere close it
+	await scaleName.click();
+	await expect(card.getByRole('listbox', { name: 'Scale' }).getByRole('option'))
+		.toHaveText(['None', 'Major', 'Minor', 'Pentatonic Major', 'Pentatonic Minor', 'Lydian', 'Dorian', 'Mixolydian']);
+	await page.keyboard.press('Escape');
+	await expect(card.getByRole('listbox')).toHaveCount(0);
+	await scaleName.click();
+	await card.locator('.pt-title').click();
+	await expect(card.getByRole('listbox')).toHaveCount(0);
+	await chooseOption(page, 'Scale', 'Pentatonic Minor');
+	await expect(scaleName).toHaveText(/Pent Min/);
+	await expect(card.locator('.mm-kb .in-scale')).toHaveCount(5);
+
+	// Range is Narrow or Wide (Low, Mid and High went). Melody: the screen's band is the notes
+	// a melody can use, so Narrow's is shorter
+	const range = card.getByRole('radiogroup', { name: 'Range' });
+	await expect(range.getByRole('radio')).toHaveText(['Narrow', 'Wide']);
+	await expect(range.getByRole('radio', { name: 'Wide' })).toHaveAttribute('aria-checked', 'true');
+	const band = () => card.locator('.mm-band').evaluate((el) => Number(el.getAttribute('height')));
+	const wide = await band();
+	await range.getByRole('radio', { name: 'Narrow' }).click();
+	expect(await band()).toBeLessThan(wide * 0.7);
+	expect((await saved()).rangePreset).toBe('mid');
+
+	// A project saved with Low opens as Narrow
+	await importChanged(page, 'low-range', (data) => { data.melody.rangePreset = 'low'; });
+	await expect(range.getByRole('radio', { name: 'Narrow' })).toHaveAttribute('aria-checked', 'true');
+	expect((await saved()).rangePreset).toBe('mid');
+
+	// Arpeggio: the screen draws the pattern (solid) and, as outlines, the arpeggio Generate
+	// would write; after Generate they're the pattern, and no outline is left
+	await turnOnPads(page, [0, 5]);
+	await card.getByRole('button', { name: 'Arpeggio', exact: true }).click();
+	await expect(card.locator('.mm-band')).toHaveCount(0);
+	await expect(card.locator('.mm-note')).toHaveCount(2);
+	const ghosts = card.locator('.mm-ghost');
+	expect(await ghosts.count()).toBeGreaterThanOrEqual(14); // 16 notes at 1/16, less any the pads already play
+	await chooseRate(page, '1/8');
+	expect(await ghosts.count()).toBeLessThanOrEqual(8);
+	await chooseOption(page, 'Arp pattern', 'Random'); // shuffled on every Generate: nothing to preview
+	await expect(ghosts).toHaveCount(0);
+	await expect(card.locator('.mm-read--r')).toContainText('shuffled on Generate');
+	await card.getByRole('group', { name: 'Arp pattern' }).getByRole('button', { name: 'Next' }).click(); // round to Up
+	await expect(card.getByRole('button', { name: /^Arp pattern:/ })).toHaveText(/Up/);
+	await generate.click();
+	await expect(ghosts).toHaveCount(0);
+	await expect(card.locator('.mm-note')).toHaveCount(8);
+
+	// The card is the size it was before all that, in both modes
+	expect(await size()).toEqual(cardSize);
+	await card.getByRole('button', { name: 'Melody', exact: true }).click();
+	expect(await size()).toEqual(cardSize);
 });
 
 test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its height, the choice is saved', async ({ page }) => {
@@ -4147,15 +4232,13 @@ test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its 
 	expect(await lit()).toEqual([...Array(16).keys()]);
 	const all = (await padNotes(page, [...Array(16).keys()])).map(noteMidi);
 	for (let i = 0; i < 16; i++) expect(all[i]).toBe(all[i % 4]);
-	await chooseOption(page, 'Arp rate', '1/8');
+	await chooseRate(page, '1/8');
 	await generate.click();
 	expect(await lit()).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
 	expect((await padNotes(page, [0, 2, 4, 6])).map(noteMidi).map((m) => m - notes[0])).toEqual([0, 4, 7, 12]);
-	await page.getByRole('button', { name: 'Arp rate' }).click();
-	await expect(page.getByRole('option')).toHaveText(['1/8', '1/16']);
-	await page.getByRole('option', { name: '1/8', exact: true }).click();
+	await expect(page.getByRole('radiogroup', { name: 'Arp rate' }).getByRole('radio')).toHaveText(['1/8', '1/16']);
 	await page.waitForTimeout(600); // its own undo step (changes 400 ms apart are one)
-	await chooseOption(page, 'Arp rate', '1/16');
+	await chooseRate(page, '1/16');
 	await generate.click();
 	expect(await lit()).toEqual([...Array(16).keys()]);
 	// One undo step: the 1/8 arpeggio's steps and notes come back together
@@ -4166,8 +4249,8 @@ test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its 
 
 	// Tones → 7th: the 7th chord, 1-3-5-7 (in place of the ⋯ menu's "7th on downbeats", PR 68),
 	// four notes, so the cycle of four repeats across the bar
-	await chooseOption(page, 'Arp rate', '1/16');
-	await chooseOption(page, 'Arp tones', '7th');
+	await chooseRate(page, '1/16');
+	await chooseOption(page, 'Arp tones', '7th chord: 1-3-5-7');
 	await generate.click();
 	const seventh = (await padNotes(page, [...Array(16).keys()])).map(noteMidi);
 	expect(seventh.slice(0, 4).map((m) => m - seventh[0])).toEqual([0, 4, 7, 11]);

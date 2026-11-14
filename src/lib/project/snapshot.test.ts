@@ -129,6 +129,16 @@ describe('saving and loading a project', () => {
 		expect(st.melody.arpRate).toBe('1/16');
 	});
 
+	it('opens a Range of Low, Mid or High (gone in PR 76) as Narrow, and keeps Wide', () => {
+		for (const [saved, opens] of [['low', 'mid'], ['mid', 'mid'], ['high', 'mid'], ['wide', 'wide']] as const) {
+			const state = makeState();
+			const snap = buildSnapshot(state);
+			snap.melody.rangePreset = saved;
+			applySnapshot(state, snap);
+			expect(state.melody.rangePreset, saved).toBe(opens);
+		}
+	});
+
 	it('works out the delay division of projects saved before it was saved', () => {
 		const delay = (tempo: number, time: number) => {
 			const st = fresh();
