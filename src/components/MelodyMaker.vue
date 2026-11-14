@@ -2,8 +2,13 @@
     <div class="melody-maker mm-skin" :class="props.currentTheme">
         <!-- MOCKUPS, rounds 2 and 3 (?mm=c1|c2|c3|d1|d2): option C made simpler -->
         <section v-if="mockCx" class="pt-section mmv mmv-c mmv-cx" :class="[`mmv-${mockVariant}`, { 'mmv-toprange': mockTopRange, 'mmv-knobs': mockKnobs }]" @click="mockMenu = null">
-            <button type="button" class="mmv-gen mmv-gen--head hw-cap" :class="{ 'mmv-gen--cap': mockVariant === 'd1', 'mmv-gen--round': mockVariant === 'd2' }" @click="generate()">
-                <span class="mmv-dice" aria-hidden="true">⚄</span><span class="mmv-gen-word"> Generate</span></button>
+            <button type="button" class="mmv-gen mmv-gen--head hw-cap" :class="mockGenClass" aria-label="Generate" title="Generate" @click="generate()">
+                <span v-if="!mockGen" class="mmv-dice" aria-hidden="true">⚄</span>
+                <svg v-else class="mmv-die" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+                    <circle cx="8" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="16" cy="16" r="1.6" />
+                </svg>
+                <span class="mmv-gen-word"> Generate</span></button>
             <div class="mm-kb-wrap">
                 <div class="mm-field">
                     <div class="mm-label" id="mmx-key-label">Key<span v-if="queuedKey" class="mm-queued-note"
@@ -43,7 +48,7 @@
                         </div>
                     </div>
                 </div>
-                <template v-if="mockTopRange"><div class="mmv-row mmv-range2"><span class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Range">
+                <template v-if="mockTopRange"><div class="mmv-row mmv-range2"><span v-if="!mockHide.includes('Range')" class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Range">
                             <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset !== 'wide' }" role="radio"
                                 :aria-checked="rangePreset !== 'wide' ? 'true' : 'false'" title="Notes stay within two octaves" @click="rangePreset = 'mid'">Narrow</button>
                             <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset === 'wide' }" role="radio"
@@ -78,7 +83,7 @@
                             :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
                             @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button></div>
                         <div v-else class="mmv-pair">
-                            <div class="mmv-row mmv-range2"><span class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Range">
+                            <div class="mmv-row mmv-range2"><span v-if="!mockHide.includes('Range')" class="mmv-cap">Range</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Range">
                             <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset !== 'wide' }" role="radio"
                                 :aria-checked="rangePreset !== 'wide' ? 'true' : 'false'" title="Notes stay within two octaves" @click="rangePreset = 'mid'">Narrow</button>
                             <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset === 'wide' }" role="radio"
@@ -92,7 +97,7 @@
                     <div class="mm-mode-panel mmv-arp" :class="{ 'is-hidden': mode !== 'arp' }">
                         <template v-if="mockKnobs">
                         <div class="mmv-pair mmv-knobrow">
-                            <div class="mmv-row mmv-sel"><span class="mmv-cap">Pattern</span>
+                            <div class="mmv-row mmv-sel"><span v-if="!mockHide.includes('Pattern')" class="mmv-cap">Pattern</span>
                     <template v-if="mockKnobs">
                         <Knob :modelValue="patternIndex" @update:modelValue="setPattern(arpPatternOptions[Math.round($event)].value)" size="small" hideLabel label="Arp pattern" :value-text="patternLabel"
                             :min="0" :max="arpPatternOptions.length - 1" :step="1" :showMarkers="true" :markers="arpPatternOptions.map((_, i) => i / (arpPatternOptions.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
@@ -108,10 +113,10 @@
                         </div>
                     </div>
                 </div>
-                            <div class="mmv-row mmv-sel"><span class="mmv-cap">Tones</span>
+                            <div class="mmv-row mmv-sel"><span v-if="!mockHide.includes('Tones')" class="mmv-cap">Tones</span>
                     <template v-if="mockKnobs">
-                        <Knob :modelValue="tonesIndex" @update:modelValue="setTones(arpToneOptions[Math.round($event)].value)" size="small" hideLabel label="Arp tones" :value-text="tonesLabel"
-                            :min="0" :max="arpToneOptions.length - 1" :step="1" :showMarkers="true" :markers="arpToneOptions.map((_, i) => i / (arpToneOptions.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
+                        <Knob :modelValue="tonesIndex" @update:modelValue="setTones(toneOpts[Math.round($event)].value)" size="small" hideLabel label="Arp tones" :value-text="tonesLabel"
+                            :min="0" :max="toneOpts.length - 1" :step="1" :showMarkers="true" :markers="toneOpts.map((_, i) => i / (toneOpts.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
                         <span class="mmv-step-name mmv-knob-name">{{ tonesLabel }}</span>
                     </template>
                     <div v-else class="mmv-stepper" role="group" aria-label="Arp tones">
@@ -119,7 +124,7 @@
                         <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'tones'" @click.stop="mockMenus && (mockMenu = mockMenu === 'tones' ? null : 'tones')">{{ tonesLabel }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
                         <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepTones(1)">▸</button>
                         <div v-if="mockMenu === 'tones'" class="mmv-menu" role="listbox" aria-label="Arp tones">
-                            <button v-for="o in arpToneOptions" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpTones }"
+                            <button v-for="o in toneOpts" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpTones }"
                                 :aria-selected="o.value === arpTones" @click.stop="setTones(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
                         </div>
                     </div>
@@ -127,7 +132,7 @@
                         </div>
                         </template>
                         <div v-else class="mmv-pair">
-                            <div class="mmv-row mmv-sel"><span class="mmv-cap">Pattern</span>
+                            <div class="mmv-row mmv-sel"><span v-if="!mockHide.includes('Pattern')" class="mmv-cap">Pattern</span>
                     <template v-if="mockKnobs">
                         <Knob :modelValue="patternIndex" @update:modelValue="setPattern(arpPatternOptions[Math.round($event)].value)" size="small" hideLabel label="Arp pattern" :value-text="patternLabel"
                             :min="0" :max="arpPatternOptions.length - 1" :step="1" :showMarkers="true" :markers="arpPatternOptions.map((_, i) => i / (arpPatternOptions.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
@@ -143,10 +148,10 @@
                         </div>
                     </div>
                 </div>
-                            <div class="mmv-row mmv-sel"><span class="mmv-cap">Tones</span>
+                            <div class="mmv-row mmv-sel"><span v-if="!mockHide.includes('Tones')" class="mmv-cap">Tones</span>
                     <template v-if="mockKnobs">
-                        <Knob :modelValue="tonesIndex" @update:modelValue="setTones(arpToneOptions[Math.round($event)].value)" size="small" hideLabel label="Arp tones" :value-text="tonesLabel"
-                            :min="0" :max="arpToneOptions.length - 1" :step="1" :showMarkers="true" :markers="arpToneOptions.map((_, i) => i / (arpToneOptions.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
+                        <Knob :modelValue="tonesIndex" @update:modelValue="setTones(toneOpts[Math.round($event)].value)" size="small" hideLabel label="Arp tones" :value-text="tonesLabel"
+                            :min="0" :max="toneOpts.length - 1" :step="1" :showMarkers="true" :markers="toneOpts.map((_, i) => i / (toneOpts.length - 1))" :markersOnly="true" :markersOffsetDeg="-90" />
                         <span class="mmv-step-name mmv-knob-name">{{ tonesLabel }}</span>
                     </template>
                     <div v-else class="mmv-stepper" role="group" aria-label="Arp tones">
@@ -154,14 +159,14 @@
                         <button type="button" class="mmv-step-name" :class="{ 'is-menu': mockMenus }" :aria-expanded="mockMenu === 'tones'" @click.stop="mockMenus && (mockMenu = mockMenu === 'tones' ? null : 'tones')">{{ tonesLabel }}<span v-if="mockMenus" class="mmv-caret" aria-hidden="true">▾</span></button>
                         <button type="button" class="hw-cap hw-cap-sm mmv-step" aria-label="Next" @click="stepTones(1)">▸</button>
                         <div v-if="mockMenu === 'tones'" class="mmv-menu" role="listbox" aria-label="Arp tones">
-                            <button v-for="o in arpToneOptions" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpTones }"
+                            <button v-for="o in toneOpts" :key="String(o.value)" type="button" role="option" class="mmv-menu-item" :class="{ on: o.value === arpTones }"
                                 :aria-selected="o.value === arpTones" @click.stop="setTones(o.value); mockMenu = null">{{ (o as any).long ?? o.label }}</button>
                         </div>
                     </div>
                 </div>
                         </div>
                         <div class="mmv-pair">
-                            <div class="mmv-row"><span class="mmv-cap">Rate</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp rate">
+                            <div class="mmv-row"><span v-if="!mockHide.includes('Rate')" class="mmv-cap">Rate</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp rate">
                                 <button v-for="o in arpRateOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpRate === o.value }"
                                     role="radio" :aria-checked="arpRate === o.value ? 'true' : 'false'" @click="arpRate = o.value as any">{{ o.label }}</button></div></div>
                             <div class="mmv-row"><span class="mmv-cap">Octaves</span><div class="pt-seg pt-seg-sm mmv-seg" role="radiogroup" aria-label="Arp octaves">
@@ -642,15 +647,26 @@ const roll = computed(() => {
     return { rows, notes };
 });
 // Round 2 (c1, c2, c3)
-const mockCx = /^(c[123]|d[12])$/.test(mockVariant);
-const mockTopRange = ['c1', 'd1', 'd2'].includes(mockVariant); // Range beside Scale
-const mockPreview = ['c3', 'd1', 'd2'].includes(mockVariant);  // the screen previews
-const mockMenus = mockVariant === 'd1';                        // a stepper's name opens a list
+const mockCx = /^(c[123]|d[12]|e[12])$/.test(mockVariant);
+const mockTopRange = ['c1', 'd1', 'd2', 'e1', 'e2'].includes(mockVariant); // Range beside Scale
+const mockPreview = ['c3', 'd1', 'd2', 'e1', 'e2'].includes(mockVariant);  // the screen previews
+const mockMenus = ['d1', 'e1', 'e2'].includes(mockVariant);                        // a stepper's name opens a list
 const mockKnobs = mockVariant === 'd2';                        // notched knobs for the word choices
 const mockMenu = ref<string | null>(null);
+// Round 4 (e1, e2): fewer captions, and Generate's looks (?gen=1..6)
+const mockE = /^e[12]$/.test(mockVariant);
+const mockHide = mockVariant === 'e1' ? ['Range', 'Rate', 'Tones'] : mockVariant === 'e2' ? ['Range', 'Rate', 'Tones', 'Pattern'] : [];
+const mockGen = mockE ? Number(new URLSearchParams(location.search).get('gen') || 3) : 0;
+const mockGenClass = mockGen ? `mmv-gen--g mmv-gen--g${mockGen}` : { 'mmv-gen--cap': mockVariant === 'd1', 'mmv-gen--round': mockVariant === 'd2' };
+// Without its caption a "Scale" under the Scale stepper would confuse: the tones say what they are
+const toneOpts = computed(() => (mockE ? [
+    { label: 'Chord', long: 'Chord: 1-3-5', value: 'chord' },
+    { label: '7th chord', long: '7th chord: 1-3-5-7', value: 'seventh' },
+    { label: 'Whole scale', long: 'Whole scale', value: 'scale' },
+] : arpToneOptions) as readonly { label: string; long?: string; value: ArpTones }[]);
 const scaleIndex = computed(() => Math.max(0, mockScales.findIndex((o) => o.value === keyScale.value)));
 const patternIndex = computed(() => Math.max(0, arpPatternOptions.findIndex((o) => o.value === arpPattern.value)));
-const tonesIndex = computed(() => Math.max(0, arpToneOptions.findIndex((o) => o.value === arpTones.value)));
+const tonesIndex = computed(() => Math.max(0, toneOpts.value.findIndex((o) => o.value === arpTones.value)));
 function setPattern(v: any) { arpPattern.value = v; }
 function setTones(v: any) { arpTones.value = v; }
 const scaleLong = computed(() => mockScales.find((o) => o.value === keyScale.value)?.long ?? '');
@@ -659,10 +675,11 @@ function stepPattern(d: number) {
     const i = arpPatternOptions.findIndex((o) => o.value === arpPattern.value);
     arpPattern.value = arpPatternOptions[(i + d + arpPatternOptions.length) % arpPatternOptions.length].value;
 }
-const tonesLabel = computed(() => arpToneOptions.find((o) => o.value === arpTones.value)?.label ?? '');
+const tonesLabel = computed(() => toneOpts.value.find((o) => o.value === arpTones.value)?.label ?? '');
 function stepTones(d: number) {
-    const i = arpToneOptions.findIndex((o) => o.value === arpTones.value);
-    arpTones.value = arpToneOptions[(i + d + arpToneOptions.length) % arpToneOptions.length].value;
+    const opts = toneOpts.value;
+    const i = opts.findIndex((o) => o.value === arpTones.value);
+    arpTones.value = opts[(i + d + opts.length) % opts.length].value;
 }
 const melodyHint = computed(() => (keyScale.value === 'none'
     ? "No scale: every pad gets the key's note."
@@ -2117,6 +2134,97 @@ button.mmv-step-name.is-menu:hover {
     --cap-hi: #524c45;
     --cap-lo: #38342f;
     --cap-edge: #1b1917;
+}
+
+/* Round 4: Generate as a dark cap, six ways (.mmv-gen--g1 … g6) */
+.mmv-gen--g {
+    --cap-hi: #43207a;
+    --cap-lo: #2a0f52;
+    --cap-edge: #0b021c;
+    --cap-ink: #fdfdff;
+    height: 28px;
+    padding: 0 11px;
+    gap: 7px;
+    border-radius: 8px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--cap-ink);
+}
+
+.theme-sand .mmv-gen--g {
+    --cap-hi: #524c45;
+    --cap-lo: #38342f;
+    --cap-edge: #1b1917;
+    --cap-ink: #f2eee6;
+}
+
+.mmv-die {
+    width: 17px;
+    height: 17px;
+    flex: none;
+}
+
+.mmv-die rect {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6px;
+}
+
+.mmv-die circle {
+    fill: currentColor;
+}
+
+/* 1: D1's, for reference: accent lettering, a lit lower edge */
+.mmv-gen--g1 {
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    color: hsl(var(--pt-accent) 90% 78%);
+    box-shadow: inset 0 -2px 0 hsl(var(--pt-accent) 85% 62%), 0 0 10px hsl(var(--pt-accent) 85% 60% / 0.35);
+}
+
+/* 2: a plain cap, as File's: the word only */
+.mmv-gen--g2 .mmv-die {
+    display: none;
+}
+
+/* 3: the preset boxes' dice and the word */
+
+/* 4: the dice alone, as on the preset boxes */
+.mmv-gen--g4 {
+    width: 28px;
+    padding: 0;
+}
+
+.mmv-gen--g4 .mmv-gen-word {
+    display: none;
+}
+
+.mmv-gen--g4 .mmv-die {
+    width: 20px;
+    height: 20px;
+}
+
+/* 5: the dice in the accent, the word plain */
+.mmv-gen--g5 .mmv-die {
+    color: hsl(var(--pt-accent) 90% 72%);
+    filter: drop-shadow(0 0 4px hsl(var(--pt-accent) 90% 60% / 0.7));
+}
+
+/* 6: a thin ring in the accent round the cap */
+.mmv-gen--g6 {
+    outline: 1px solid hsl(var(--pt-accent) 80% 66%);
+    outline-offset: 1px;
+}
+
+.mmv-gen--g6 .mmv-die {
+    display: none;
+}
+
+/* Round 4: with fewer captions the steppers and switches take the room */
+.mmv-e1 .mmv-range2,
+.mmv-e2 .mmv-range2 {
+    flex: 0.72 1 0;
 }
 
 /* d2: a round lit button, its name beside it */
