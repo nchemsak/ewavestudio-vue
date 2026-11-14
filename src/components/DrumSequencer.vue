@@ -446,7 +446,7 @@
 						</div>
 
 						<!-- LFO -->
-						<div class="module mod" :class="lfoMock && `lfo-v-${lfoMock}`">
+						<div class="module mod" :class="lfoMock && [`lfo-v-${lfoMock[0]}`, `lfo-v-${lfoMock}`]">
 							<SectionWrap id="mod" title="LFO" v-model="collapsibleState['mod']">
 								<template #tools>
 									<!-- RETRIG: each note starts the LFO afresh (src/audio/lfo.ts) -->

@@ -3,7 +3,7 @@
     <KnobGroup v-model="localEnabled" :color="color" :showToggle="showToggle" :showHeader="false">
         <!-- MOCKUPS START (PR 75's options, picked with ?lfo=a|b|c; not for shipping as is) -->
         <!-- A: ribbon + bar display -->
-        <div v-if="variant === 'a'" class="lv lva" :class="{ 'is-off': !localEnabled }">
+        <div v-if="variant === 'a' || variant === 'ab'" class="lv lva" :class="{ 'is-off': !localEnabled }">
             <button type="button" class="lv-ribbon" :class="{ 'is-on': localEnabled }" :aria-pressed="localEnabled"
                 aria-label="LFO on" @click="localEnabled = !localEnabled">
                 <span class="lv-ribbon-led" aria-hidden="true"></span>
@@ -47,7 +47,24 @@
                             :aria-pressed="retrigger" :disabled="!localEnabled" @click="emit('update:retrigger', !retrigger)">RETRIG</button>
                     </div>
                 </div>
-                <div class="lfo-seg lva-targets" role="radiogroup" aria-label="LFO Target">
+                <!-- A + B: the patch bay in place of the target buttons -->
+                <div v-if="variant === 'ab'" class="lvb-bay lvb-bay--slim" :class="{ 'is-off': !localEnabled }" role="radiogroup" aria-label="LFO Target">
+                    <svg class="lvb-cables" viewBox="0 0 600 48" preserveAspectRatio="none" aria-hidden="true">
+                        <path :d="cablePath" class="lvb-cable-shadow" />
+                        <path :d="cablePath" class="lvb-cable" />
+                    </svg>
+                    <div class="lvb-jack lvb-out">
+                        <span class="lvb-lab">LFO out</span>
+                        <span class="lvb-hole plugged"></span>
+                    </div>
+                    <button v-for="t in TARGETS" :key="t.value" type="button" class="lvb-jack"
+                        :class="{ plugged: currentTarget === t.value, idle: t.idle?.() }" :disabled="!localEnabled"
+                        role="radio" :aria-checked="currentTarget === t.value ? 'true' : 'false'" :aria-label="t.aria || t.label" @click="updateTarget(t.value)">
+                        <span class="lvb-lab">{{ t.label }}</span>
+                        <span class="lvb-hole" :class="{ plugged: currentTarget === t.value }"></span>
+                    </button>
+                </div>
+                <div v-else class="lfo-seg lva-targets" role="radiogroup" aria-label="LFO Target">
                     <button v-for="t in TARGETS" :key="t.value" type="button" class="lfo-seg-btn hw-cap hw-led-top"
                         :class="{ active: currentTarget === t.value, 'no-pulse': t.idle?.() }" :disabled="!localEnabled"
                         role="radio" :aria-checked="currentTarget === t.value ? 'true' : 'false'"
@@ -466,8 +483,9 @@ const plot = computed(() => {
 // under the others; drawn in a 600 × 56 box stretched over the bay
 const cablePath = computed(() => {
     const i = Math.max(0, TARGETS.findIndex((t) => t.value === currentTarget.value)) + 1;
-    const x0 = 50, x1 = i * 100 + 50, y = 36;
-    const sag = 14 + i * 2;
+    const slim = props.variant === 'ab';
+    const x0 = 50, x1 = i * 100 + 50, y = slim ? 29 : 36;
+    const sag = (slim ? 8 : 14) + i * 2;
     return `M${x0} ${y} C${x0 + 12} ${y + sag + 10}, ${x1 - 12} ${y + sag + 10}, ${x1} ${y}`;
 });
 
@@ -773,7 +791,7 @@ svg {
     flex-direction: column;
     justify-content: space-between;
     gap: 8px;
-    padding: 10px 12px 10px 10px;
+    padding: 9px 12px 9px 10px;
 }
 
 .lva-screen {
@@ -908,6 +926,17 @@ svg {
     border-radius: 8px;
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.26));
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.lvb-bay--slim {
+    flex: none;
+    margin-top: 0;
+    height: 48px;
+}
+
+.lvb-bay--slim .lvb-jack {
+    padding-top: 5px;
+    gap: 4px;
 }
 
 .lvb-jack {
