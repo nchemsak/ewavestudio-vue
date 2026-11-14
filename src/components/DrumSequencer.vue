@@ -446,7 +446,7 @@
 						</div>
 
 						<!-- LFO -->
-						<div class="module mod">
+						<div class="module mod" :class="lfoMock && `lfo-v-${lfoMock}`">
 							<SectionWrap id="mod" title="LFO" v-model="collapsibleState['mod']">
 								<template #tools>
 									<!-- RETRIG: each note starts the LFO afresh (src/audio/lfo.ts) -->
@@ -457,6 +457,7 @@
 									v-model:depth="lfoDepth" :target="lfoTarget" @update:target="chooseLfoTarget" v-model:waveform="lfoWaveform"
 									v-model:division="lfoDivision"
 									v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
+									:variant="lfoMock" :steps="steps"
 									color="#00BCD4" />
 							</SectionWrap>
 						</div>
@@ -823,6 +824,8 @@ const padSizeStyle = computed(() => ({ '--padTEST-size': '41px' }));
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+// MOCKUPS: ?lfo=a|b|c draws one of the LFO card's redesign options (LFOGroup.vue)
+const lfoMock = new URLSearchParams(location.search).get('lfo') || '';
 const lfoRetrigger = ref(false)
 const lfoBipolar = ref(false)
 
@@ -3973,6 +3976,50 @@ const phoneCtx = reactive({
 
 .module.noise .noise-tv-bg {
 	position: relative;
+}
+
+/* MOCKUPS: options A and C have no header (their ribbon is the title and the switch) and
+   fill the card edge to edge */
+.module.mod.lfo-v-a :deep(.pt-card),
+.module.mod.lfo-v-c :deep(.pt-card) {
+	padding: 0;
+	overflow: hidden;
+}
+
+.module.mod.lfo-v-a :deep(.pt-subheader),
+.module.mod.lfo-v-c :deep(.pt-subheader) {
+	display: none;
+}
+
+.module.mod.lfo-v-a :deep(.pt-card),
+.module.mod.lfo-v-c :deep(.pt-card),
+.module.mod.lfo-v-a :deep(.pt-collapse-body),
+.module.mod.lfo-v-c :deep(.pt-collapse-body),
+.module.mod.lfo-v-a :deep(.knob-group),
+.module.mod.lfo-v-c :deep(.knob-group),
+.module.mod.lfo-v-a :deep(.knob-stack),
+.module.mod.lfo-v-c :deep(.knob-stack) {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	margin: 0;
+	padding: 0;
+	min-height: 0;
+}
+
+/* The card's own height today is 154 px (it's stretched to 189 beside Effects): the options
+   count as that tall, so Noise above keeps its 119 */
+.sound-stack>.module.mod[class*="lfo-v-"] {
+	flex: 1 1 154px;
+	min-height: 0;
+}
+
+.module.mod.lfo-v-b :deep(.pt-collapse-body) {
+	margin-top: 6px;
+}
+
+.module.mod.lfo-v-b :deep(.knob-group) {
+	padding: 0;
 }
 
 .noise-ribbon {
