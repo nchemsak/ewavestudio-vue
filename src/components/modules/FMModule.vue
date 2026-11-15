@@ -1,63 +1,55 @@
 <!-- components/modules/FMModule.vue -->
+<!-- The FM card (PR 77): a ribbon down its left edge is its name and switch (as Noise's and the
+     LFO's); a screen draws the carrier bent by the modulator and can be dragged up and down
+     for Amount (ShapePad.vue); the ratio's four choices are keys under the screen; Mod Freq
+     (for Free) and Amount are mini knobs on the right. Until PR 77: a tile, a row of ratio
+     buttons and two knobs. The phone's Sound page has its own FM button and knob. -->
 <template>
-    <KnobGroup class="fm-group" v-model="localEnabled" :showHeader="false">
-        <div class="pt-stack">
-            <div class="fm-top">
-                <FmTowerButton v-model="localEnabled" label="FM" showState />
-            </div>
-
-            <div class="pt-seg pt-seg-sm pt-seg-row" role="group" aria-label="FM Ratio Presets">
-                <button class="pt-seg-btn hw-led-top" :class="{ 'is-active': localRatio === 1, 'is-fm-off': !localEnabled }"
-                    :aria-pressed="localRatio === 1" :aria-disabled="!localEnabled" @click="setRatio(1)">
-                    Lock <span class="selector-tooltip">1:1 Sync</span>
-                </button>
-
-                <button class="pt-seg-btn hw-led-top" :class="{ 'is-active': localRatio === 1.5, 'is-fm-off': !localEnabled }"
-                    :aria-pressed="localRatio === 1.5" :aria-disabled="!localEnabled" @click="setRatio(1.5)">
-                    Metal <span class="selector-tooltip">3:2 Fifth</span>
-                </button>
-
-                <button class="pt-seg-btn hw-led-top" :class="{ 'is-active': localRatio === 2, 'is-fm-off': !localEnabled }"
-                    :aria-pressed="localRatio === 2" :aria-disabled="!localEnabled" @click="setRatio(2)">
-                    Bell <span class="selector-tooltip">2:1 Octave</span>
-                </button>
-
-                <button class="pt-seg-btn hw-led-top" :class="{ 'is-active': localRatio === null, 'is-fm-off': !localEnabled }"
-                    :aria-pressed="localRatio === null" :aria-disabled="!localEnabled" @click="setRatio(null)">
-                    Free <span class="selector-tooltip">Hz</span>
-                </button>
-            </div>
-
-            <div class="pt-knob-row">
-                <div class="position-relative text-center"
-                    :class="{ 'is-disabled': modFreqDisabled, 'is-fm-off': !localEnabled }"
-                    :aria-disabled="modFreqDisabled">
-                    <Knob midi-id="fm.modFreq" :value-text="`${displayHz} Hz`" v-model="localModFreqCtrl" label="Mod Freq" size="small" :min="0" :max="CTRL_MAX" :step="1"
-                        :disabled="modFreqDisabled" :color="color" @knobStart="activeKnob = 'mf'"
-                        @knobEnd="activeKnob = null" />
-                    <span v-if="activeKnob === 'mf'" class="custom-tooltip">
-                        {{ displayHz }} Hz
-                    </span>
+    <section class="pt-card sp-unit fm-unit" :class="{ 'is-off': !localEnabled }" aria-label="FM">
+        <div class="sp-body">
+            <button type="button" class="sp-ribbon" :class="{ 'is-on': localEnabled }" role="switch" :aria-checked="localEnabled" aria-label="FM"
+                :title="localEnabled ? 'FM: on' : 'FM: off'" @click="localEnabled = !localEnabled">
+                <span class="sp-ribbon-led" aria-hidden="true"></span>
+                <span class="sp-ribbon-label">FM</span>
+            </button>
+            <div class="sp-face">
+                <div class="sp-screencol">
+                    <ShapePad :w="PAD_W" :h="PAD_H" :title="ratioName" :readout="readout" hint="↕ amount" :disabled="!localEnabled"
+                        @start="activeKnob = 'ix'" @move="onPadMove" @end="activeKnob = null">
+                        <path :d="wave" class="sp-line" />
+                        <!-- The LFO on Amount: the wave as it has it now -->
+                        <path v-if="lfoWave" :d="lfoWave" class="sp-lfo" />
+                    </ShapePad>
+                    <div class="sp-keys" role="group" aria-label="FM Ratio Presets">
+                        <button v-for="r in RATIOS" :key="r.name" type="button" class="sp-key" :class="{ on: localRatio === r.value }"
+                            :aria-pressed="localRatio === r.value" :title="r.tip" @click="setRatio(r.value)">{{ r.name }}</button>
+                    </div>
                 </div>
-
-                <div class="position-relative text-center" :class="{ 'is-fm-off': !localEnabled }">
-                    <Knob midi-id="fm.amount" :value-text="localIndex.toFixed(1)" v-model="localIndex" label="Amount" size="small" :min="0" :max="50" :step="0.1" :color="color"
-                        :modValue="lfoView?.fmAmount ?? null" :modRange="lfoView?.fmAmountRange ?? null"
-                        @knobStart="activeKnob = 'ix'" @knobEnd="activeKnob = null" />
-                    <span v-if="activeKnob === 'ix'" class="custom-tooltip">
-                        {{ localIndex.toFixed(1) }}
-                    </span>
+                <div class="sp-minis">
+                    <div class="sp-mini" :class="{ 'is-disabled': modFreqDisabled }">
+                        <Knob midi-id="fm.modFreq" :value-text="`${displayHz} Hz`" v-model="localModFreqCtrl" label="Mod Freq" hideLabel size="mini" :min="0" :max="CTRL_MAX" :step="1"
+                            :disabled="modFreqDisabled" :color="color" @knobStart="activeKnob = 'mf'"
+                            @knobEnd="activeKnob = null" />
+                        <span>Freq</span>
+                        <span v-if="activeKnob === 'mf'" class="custom-tooltip">{{ displayHz }} Hz</span>
+                    </div>
+                    <div class="sp-mini">
+                        <Knob midi-id="fm.amount" :value-text="localIndex.toFixed(1)" v-model="localIndex" label="Amount" hideLabel size="mini" :min="0" :max="50" :step="0.1" :color="color"
+                            :modValue="lfoView?.fmAmount ?? null" :modRange="lfoView?.fmAmountRange ?? null"
+                            @knobStart="activeKnob = 'ix'" @knobEnd="activeKnob = null" />
+                        <span>Amount</span>
+                    </div>
                 </div>
             </div>
         </div>
-    </KnobGroup>
+    </section>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
-import KnobGroup from '../KnobGroup.vue';
-import FmTowerButton from '../FmTowerButton.vue';
+import ShapePad, { type PadPoint } from '../ShapePad.vue';
+import { fmPts, toPath } from '../../lib/shapeViews';
 import type { LfoView } from '../../lib/lfoVisual';
 
 type Ratio = number | null;
@@ -178,103 +170,33 @@ function setRatio(r: Ratio): void {
 
 const modFreqDisabled = computed(() => localRatio.value !== null);
 const activeKnob = ref<null | 'mf' | 'ix'>(null);
+
+// The ratio's keys
+const RATIOS: { value: Ratio; name: string; tip: string }[] = [
+    { value: 1, name: 'Lock', tip: '1:1 Sync' }, { value: 1.5, name: 'Metal', tip: '3:2 Fifth' },
+    { value: 2, name: 'Bell', tip: '2:1 Octave' }, { value: null, name: 'Free', tip: 'Any frequency, in Hz (the Freq knob)' },
+];
+const ratioName = computed(() => RATIOS.find((r) => r.value === localRatio.value)?.name ?? 'Free');
+
+// The screen: two cycles of the carrier, bent by the modulator. A free modulator's ratio is
+// drawn against A3 (220 Hz), the pads' default note. A plain sine while FM is off.
+const PAD_W = 200;
+const PAD_H = 60;
+const drawnRatio = computed(() => localRatio.value ?? Math.max(0.25, displayHz.value / 220));
+const wave = computed(() => toPath(fmPts(drawnRatio.value, localEnabled.value ? localIndex.value : 0, PAD_W, PAD_H)));
+const lfoWave = computed(() => {
+    const now = props.lfoView?.fmAmount;
+    return now != null && localEnabled.value ? toPath(fmPts(drawnRatio.value, now, PAD_W, PAD_H)) : '';
+});
+const readout = computed(() => `${localRatio.value === null ? `${displayHz.value} Hz` : RATIOS.find((r) => r.value === localRatio.value)?.tip.split(' ')[0] ?? ''} · ${localIndex.value.toFixed(1)}`);
+function onPadMove(p: PadPoint) {
+    localIndex.value = Math.round(Math.max(0, Math.min(1, 1 - p.y / PAD_H)) * 500) / 10;
+}
 </script>
 
 <style scoped>
-/* The card's width decides the layout (container queries below) */
-.fm-group {
-    container: fm / inline-size;
-    padding: 0;
-}
-
-/* One line: the on/off tile, the ratio switch, the two knobs */
-.pt-stack {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    width: 100%;
-}
-
-.pt-seg-row {
-    display: flex;
-    gap: 6px;
-    justify-content: center;
-    flex: 1 1 auto;
-    flex-wrap: nowrap;
-    margin: 0;
-}
-
-.pt-seg-row .pt-seg-btn {
-    padding-left: 7px;
-    padding-right: 7px;
-}
-
-.pt-knob-row {
-    display: flex;
-    gap: 16px;
-    flex-wrap: nowrap;
-}
-
-.pt-knob-row :deep(.knob-label) {
-    white-space: nowrap;
-}
-
-/* The tile: small, like the LFO's */
-.fm-top {
-    flex: none;
-    display: flex;
-}
-
-.fm-top :deep(.wave-btn) {
-    --w: 58px;
-    height: 52px;
-    padding: 3px;
-    justify-content: center;
-    gap: 1px;
-}
-
-.fm-top :deep(.wave-svg) {
-    width: 30px;
-    height: 30px;
-}
-
-.fm-top :deep(.wave-label) {
-    font-size: .62rem;
-    text-transform: uppercase;
-}
-
-/* A narrow card (a phone): the ratio switch on a line of its own */
-@container fm (max-width: 360px) {
-    .pt-stack {
-        flex-wrap: wrap;
-        row-gap: 10px;
-    }
-
-    .pt-seg-row {
-        order: 3;
-        flex-basis: 100%;
-    }
-}
-
-.is-disabled :deep(.knob-label) {
-    color: #9aa0a6;
-    opacity: 0.7;
-}
-
-.is-disabled :deep(.knob-readout),
-.is-disabled :deep(.knob-value) {
-    color: #9aa0a6;
-    opacity: 0.6;
-}
-
-.pt-seg-btn.is-fm-off {
-    opacity: 0.6;
-}
-
-.is-fm-off :deep(.knob-label),
-.is-fm-off :deep(.knob-readout),
-.is-fm-off :deep(.knob-value) {
-    opacity: 0.7;
+/* Mod Freq only does something with Free */
+.is-disabled {
+    opacity: 0.55;
 }
 </style>

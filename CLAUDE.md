@@ -47,7 +47,7 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   because the code was written without a type checker. It must stay at zero errors.
 - **Unit tests** (Vitest, in Node): pure logic such as loading and upgrading saved projects,
   WAV encoding, storage names, the playback clock, synth helpers, the LFO visualizer's
-  arithmetic, MIDI input (with a fake MIDI system), MIDI learn (and that every learnable knob
+  arithmetic, the cards' screens (`shapeViews.ts`), MIDI input (with a fake MIDI system), MIDI learn (and that every learnable knob
   is in the app), the undo history, project snapshots (save → load round trip, older
   projects, factory defaults), presets (exact values, knob ranges, pattern untouched),
   patterns (from the key, sound untouched, the dice's rolls), pad colours,
@@ -178,6 +178,8 @@ src/components/
   WaveButton.vue, WaveIcon.vue  A wave's big tile (Waveforms panel) and small line icon (pads)
   VelSwitch.vue          The Filter card's VEL switch: velocity routing (the only one since PR 67)
   PillSwitch.vue         The small on/off pill with an LED in a card's header (VEL, RETRIG)
+  ShapePad.vue           A card's screen that you drag (Envelope, Pitch, Filter, FM, Unison), and
+                         those cards' shared styles (see "The shape cards")
   filterView.ts          The screen's filter view (drawing loop and its pure helpers)
   spectrumView.ts        The screen's Spectrum view, F2 (drawing loop and its pure helpers)
   LfoModKnob.vue         A Knob that draws the LFO visualizer's dot and arc itself (the Vol knob)
@@ -224,6 +226,8 @@ src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelay
                          "Delay time")
 src/lib/lfoVisual.ts     What the LFO visualizer shows (pure; see "LFO visualizer")
 src/lib/lfoPlot.ts       What the LFO card's screen draws: the wave across the bar (pure)
+src/lib/shapeViews.ts    What the Envelope, Pitch, Filter, FM and Unison cards' screens draw, and
+                         what a drag on one sets (pure; see "The shape cards")
 src/lib/padColour.ts     The pads' colours, which the spectrogram uses too (see "Pad and
                          spectrogram colours")
 src/lib/melody/theory.ts  Keys and scales; moving a pattern to another key or scale (pure)
@@ -389,7 +393,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `clampRepeatNotes()`); a pattern, Reset Pads, Clear Repeats and File → New put them back to
   Same. The pad's badge shows ×3↑ or ×3↓; the phone's hold sheet has a button that goes
   Same → Up → Down.
-- Unison (`unison.ts`, both engines; the Unison card: its tile, Voices, Detune, Spread):
+- Unison (`unison.ts`, both engines; the Unison card: its ribbon, the Voices keys, Detune, Spread):
   2–4 voices (3 at most on a small screen), spread from left (lowest) to right (highest) by
   Detune (default 12 cents, a notch on the knob) and Spread (pan; default 100 % since PR 52,
   was 50). Since PR 52 the voices also start at different points of their cycle, as far as
@@ -490,6 +494,49 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (Until PR 34 it sent the noise layer through drive, delay and reverb, unfiltered; now it
   matches the live engine: 40 Hz–16 kHz, straight to the master.) See "Export audio".
 
+### The shape cards
+- PR 77 (option C of three mockups, "touch the shape", with the third of three ideas for FM's
+  and Unison's middle): Envelope, Pitch, Filter, FM and Unison are each a **screen that draws
+  what the card does and can be dragged** (`ShapePad.vue`), with a **mini knob** (26 px, its
+  caption under it) for every setting beside it. Every card is the size it was (115 px tall at
+  every width; FM was 153 at 390 px, where its ratio buttons wrapped).
+  - **Envelope**: the amp envelope; drag the peak sideways for Attack, the end point for Decay.
+  - **Pitch**: the sweep against the note (the dashed middle line; both ways for Random); drag
+    the start up or down for Amount (above the line: starts above and drops), the settle point
+    sideways for Decay. Random is a small toggle under the mini knobs.
+  - **Filter**: the low-pass response on a log axis, dashed where the filter's envelope starts
+    each note; drag the point sideways for Cutoff and up for Resonance. Env Amt and Decay are
+    mini knobs only. The VEL switch is under the mini knobs (FilterModule's `tools` slot).
+  - **FM**: a **ribbon** down the left edge is its name and switch (`role="switch"`, as
+    Noise's and the LFO's, in the accent while on); the screen draws the carrier bent by the
+    modulator (a plain sine while off), drag up and down for Amount; the ratio is four **keys**
+    under the screen (Lock, Metal, Bell, Free; `.sp-key`, lit in the accent); Freq (Mod Freq,
+    for Free) and Amount are mini knobs on the right.
+  - **Unison**: a ribbon; the screen draws a wave per voice drifting apart (Detune) and dots
+    for where they sit left to right (Spread), drag sideways for Detune and up for Spread;
+    **Voices is keys** (2 | 3 | 4 voices; 2 | 3 on a small screen), a knob until PR 77, so
+    `unison.voices` is no longer MIDI-learnable (a link saved to it is dropped on load).
+- A grip is taken by the nearest one to where the drag starts (`nearestHandle()`). A drag
+  emits the same `knob-start` / `knob-end` as the card's knobs, so the main screen shows the
+  envelope or filter view meanwhile, and it's one undo step (the pointer is held). FM's and
+  Unison's screens don't take a drag while the card is off. The pad takes no focus and is
+  hidden from screen readers: the mini knobs are the keyboard's and MIDI learn's way in, with
+  the names and value texts the knobs had. The numbers are printed in the screen (the
+  readout under the title), so these knobs have no tooltip, except Env Amt, Decay and Freq.
+- Time runs on a square-root scale (`timeX()`), so a 20 ms attack shows beside a 2 s decay.
+  `src/lib/shapeViews.ts` has the curves and the drag's inverse maps (unit-tested).
+- Colours: the screens are each theme's screen colours (as the LFO card's), the curves in the
+  accent (dark ink on Sand's and Light's pale screens), not amber: amber stays the LFO's. When
+  the LFO moves the cutoff, the Filter screen shows its swing as an amber band and where it is
+  now as an amber line; on FM's Amount, the wave as the LFO has it now in amber (from
+  `lfoView`; the mini knobs keep their dot and arc).
+- The phone's Sound page keeps the cards as they were: `classic` on EnvelopeModule,
+  PitchEnvModule and FilterModule (knobs with a title; no `midi-id`, since each id must be on
+  one knob in the source), and its own FM and Unison buttons and knobs. The FM and Unison
+  tiles (`FmTowerButton.vue`, `UnisonButton.vue`) were deleted; they're in git history.
+- A browser test drags each screen and checks the knobs' values, one undo step for a filter
+  drag, the keys, and the cards' heights.
+
 ### Pad settings (the ⋮ popover)
 - `PadSettingsPopover.vue`, opened by a pad's ⋮ (`openPadSettings()` in `DrumSequencer.vue`):
   the pad's wave, noise, Repeats, note (a keyboard and octaves), Fine and Hz. The same ⋮ again
@@ -573,7 +620,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   - Pitch: on each lit step pad, an amber bar slides up (sharper) and down (flatter) along a
     faint track for the whole bend; an octave fills the track (`LfoBendMark.vue`).
   - FM (PR 62): a dot and an arc on the FM card's Amount knob, as on Cutoff (`FMModule`'s
-    `lfoView`); only while FM is on (with it off, the LFO moves nothing).
+    `lfoView`); only while FM is on (with it off, the LFO moves nothing). Since PR 77 the
+    Cutoff and Amount knobs are mini knobs, so the Filter and FM screens show it too (see
+    "The shape cards").
   - Level (PR 62): a dot and an arc on the Step Sequencer's Vol knob, from full down to
     (100 − Depth) % of it. Not on the pads (the maintainer agreed): a lit pad's fill height is
     its velocity, so a level shown there would look like the velocities moving. The Vol knob
@@ -647,7 +696,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### MIDI learn
 - A controller's knobs turn the app's knobs. Learn (in the MIDI toolbar, once an input is
-  chosen) starts learn mode: the 32 learnable knobs get a dashed outline and a badge ("CC 21",
+  chosen) starts learn mode: the 31 learnable knobs (32 until PR 77 made Unison's Voices keys) get a dashed outline and a badge ("CC 21",
   or "CC 7 ch 3" off channel 1) for the controller knob they follow, and a bar at the bottom of
   the screen says what to do (with Clear all and Done; a spacer under the page lets the last
   knobs scroll clear of it). Click a knob (or Enter on it) to arm it, then turn a controller
@@ -1235,7 +1284,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     Filter's VEL switch and RETRIG (`PillSwitch.vue`), Pitch's Random, the Repeats brush, Pattern
     Tools' Active Pads Only (PR 67: it was a web checkbox; the octave arrows move only the pads
     that are on while it's lit, as before). The
-    tiles (the eight waves, FM, Unison, and on the phone the LFO's power tile) are caps too, with the LED beside
+    tiles (the eight waves, and on the phone the LFO's power tile; FM's and Unison's until PR 77) are caps too, with the LED beside
     their caption; they keep their icons, animations, dice and the Pulse Width knob (which
     goes down with its tile), and the chosen one has a thin ring in the accent.
   - A cap counts as down when it has `is-active`, `on`, `active`, `hw-down`,
@@ -1251,7 +1300,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     Clear and Reset have red lettering (`pt-danger`).
   - Not caps, on purpose (the maintainer's call): the pedals' CRUSH and PING PONG switches and
     footswitches. Also left as they were: the screen's F-keys, the piano keys, the NOISE
-    ribbon (which got an LED in PR 74) and the LFO card's ribbon and sockets (PR 75), the ⋯ menus and their sliding switches, the Sound / Effects / Compose tabs, the
+    ribbon (which got an LED in PR 74), the LFO card's ribbon and sockets (PR 75), FM's and Unison's ribbons and keys and Pitch's Random pill aside the screens (PR 77), the ⋯ menus and their sliding switches, the Sound / Effects / Compose tabs, the
     wave tiles' dice badges, and phone mode's own top bar, steppers and pads (the desktop
     panels it shows on its Sound, FX and Key pages have the caps).
   - A browser test checks a push button sinks and springs back, a chosen option, a toggle and
@@ -1298,17 +1347,17 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   them as tall as both; under them two recessed sections, **Sound** (two thirds) and
   **Compose** (Pattern Tools, Melody Maker), which end on one line (Sound's last row and Melody
   Maker take up any difference). Sound is three rows, each filled edge to edge: Waveforms |
-  FM over Unison; Envelope | Pitch | Filter (their eight knobs on one line, Filter's four with a
-  hairline before its envelope's two); Noise over LFO | Effects. A card stretched taller than
-  its controls keeps them centred. FM and Unison are cards of their own; their tile is the
-  on/off switch and shows Off / On. Under 1200 px: the screen beside the
+  FM over Unison; Envelope | Pitch | Filter (three screens on one line, their mini knobs beside
+  them; see "The shape cards"); Noise over LFO | Effects. A card stretched taller than
+  its controls keeps them centred. FM and Unison are cards of their own; their ribbon is the
+  on/off switch. Under 1200 px: the screen beside the
   transport, the steps across, then tabs (Sound, Effects, Compose; not saved) under the steps,
   showing one at a time (`data-tab` on the grid; the arrow keys move between tabs); under
   720 px one column, the screen on top. Cards that change shape with their width use
   container queries on their own width, not the window's: Pattern Tools (three sections side
   by side, the same height, two buttons across; stacked under 340 px), Noise (mask buttons
   beside the knobs, under them below 320 px), the phone's LFO card (Wave / Target captions hidden under
-  440 px, so it stays one row), FM (its ratio switch on a line of its own under 360 px), and
+  440 px, so it stays one row), and
   Melody Maker (its screen beside the keyboard and controls from 640 px, as in a tablet's Compose tab).
   A browser test checks the arrangement at 1600 and 1280 px (flush bottoms, one line of knobs,
   rows filled, titles on one line, no sideways scroll) and the tabs at 1024 and 390 px, and
@@ -1385,25 +1434,24 @@ PRs 55–63 come from the maintainer's brainstorm after PR 52 (Claude's recommen
 what the maintainer turned down: Converge or Up + octave as arpeggio patterns, Pan as an LFO
 target, and for now a second oscillator and a second pad lane, on hold below).
 
-Item 1 comes from the maintainer's brainstorm after PR 73 (its three small fixes were PR 74,
-the LFO card PR 75, the Melody Maker PR 76); item 2 from the one after PR 63 (PRs 64–70; the
-one after PR 70 was PRs 71–73). No one else uses the app yet, so older projects need no
+The maintainer's brainstorm after PR 73 is done (its three small fixes were PR 74, the LFO
+card PR 75, the Melody Maker PR 76, the plain cards PR 77); item 1 comes from the one after
+PR 63 (PRs 64–70; the one after PR 70 was PRs 71–73). No one else uses the app yet, so older projects need no
 special care: a removed setting can simply stop applying.
 
 Redesigns are visual: every control keeps working as it does, and each card keeps its size.
 They are for the desktop first; the phone can keep what suits it. Each starts with a few
 mockups for the maintainer to pick from (built in the app behind a URL switch, photographed
-onto one page, the code kept on the branch without a PR), as the LFO card's and the Melody
-Maker's did. What they settled: a ribbon switch, a small screen that shows what the controls
+onto one page, the code kept on the branch without a PR), as the LFO card's, the Melody
+Maker's and the plain cards' did. What they settled: a ribbon switch, a small screen that shows what the controls
 do, sockets, steppers that open a list for a choice of words, switches for numbers, captions
 only where a control doesn't explain itself, and not too many buttons on show.
 
-1. **The plain cards** (Envelope, Pitch, FM, Unison, Filter), in that look.
-2. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
+1. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
    changes to come may change the height), centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-3. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+2. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Decided after PR 73 (the maintainer's call, "for now"): the Sound and Pattern presets stay in
@@ -1605,6 +1653,7 @@ Done:
 | 74 | Three fixes from the maintainer's brainstorm after PR 73 (whose plan it also adds: the LFO, Melody Maker and plain-card redesigns): the Pitch card's RND toggle reads **Random**; a Noise pad button turns the card on, **Backbeat** and **Offbeats** replace Every 4 and Random, a note says when a button's steps are all off, and the NOISE ribbon has an LED; the **Repeats brush** stays picked but shows it (a dashed frame round the pads with a tag, a cursor carrying ×3), and a click elsewhere puts it down. |
 | 75 | The LFO card redesigned (options A + B of four mockups), the same size as before: a ribbon down its left edge is its name and switch, as Noise's; a screen draws the wave across the bar over the pattern's steps (Rate as cycles per bar, Depth as height, RETRIG starting it again at each hit; `src/lib/lfoPlot.ts`); and a patch bay, one cable from LFO out to the target's socket. Under 1200 px the knobs sit beside the screen, so the card is no taller; the phone keeps the card as it was. |
 | 76 | The Melody Maker redesigned (option E2 after four rounds of mockups), the same size and as tall in both modes, with no dropdowns: Generate in the card's header (a dark cap with the preset boxes' dice); the scale's notes lit on the keyboard; Scale, Pattern and Tones on steppers whose name opens the list; Range as Narrow | Wide (Low and High open as Narrow); a screen that draws the pattern and what Generate would do (a melody's band of notes, an arpeggio as outlines; `src/lib/melody/roll.ts`); captions only on Key, Scale and Octaves. |
+| 77 | The plain cards redesigned (option C of three mockups, "touch the shape"), each the size it was: Envelope, Pitch, Filter, FM and Unison are screens that draw what the card does and can be dragged (the envelope's peak and end, the sweep's start and settle point, the filter's point for Cutoff and Resonance, FM's Amount, Unison's Detune and Spread), with a mini knob for every setting beside them; FM and Unison have a ribbon switch, and their ratio and voices are keys under the screen (`ShapePad.vue`, `src/lib/shapeViews.ts`). The phone keeps the cards as they were. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

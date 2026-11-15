@@ -199,7 +199,7 @@ $down: ".is-active", ".on", ".active", ".hw-down", "[aria-pressed='true']", "[ar
     }
 }
 
-/* THE TILES (the waves, FM, Unison: WaveButton, FmTowerButton, UnisonButton): caps in the
+/* THE TILES (the waves: WaveButton; FM and Unison had tiles until PR 77): caps in the
    tiles' own colours, their icon, dice and knob as before; the LED sits beside the caption */
 .wave-btn.hw-cap {
     --cap-hi: color-mix(in oklab, var(--tile-1), white 7%);

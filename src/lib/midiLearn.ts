@@ -35,7 +35,6 @@ export const MIDI_KNOBS: Record<string, string> = {
 	'noise.color': 'Noise color',
 	'fm.modFreq': 'FM mod freq',
 	'fm.amount': 'FM amount',
-	'unison.voices': 'Unison voices',
 	'unison.detune': 'Unison detune',
 	'unison.spread': 'Unison spread',
 	'lfo.rate': 'LFO rate',

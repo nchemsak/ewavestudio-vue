@@ -9,12 +9,12 @@
 					<div class="pl-sound-row">
 						<div class="module envelope">
 							<SectionWrap id="pl-envelope" title="Envelope" :modelValue="true">
-								<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
+								<EnvelopeModule classic :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 									v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs" />
 							</SectionWrap>
 						</div>
 						<div class="module pitch-env">
-							<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
+							<PitchEnvModule classic :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
 								v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode"
 							@knob-start="onPitchKnobStart" @knob-end="onScreenKnobEnd" />
 						</div>
@@ -24,7 +24,7 @@
 									<VelSwitch v-model="velocityRouting.cutoff.value" :name="VEL_SWITCHES.cutoff.label" :tip="VEL_SWITCHES.cutoff.tip" :disabled="!filterEnabled"
 									:note="velNote.key === 'cutoff' ? velNote.text : ''" @switched-on="onVelSwitchedOn('cutoff')" />
 								</template>
-								<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
+								<FilterModule classic :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 									v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
 									v-model:envAmount="filterEnvAmount" v-model:envDecayMs="filterEnvDecayMs" :lfoView="lfoView" />
 							</SectionWrap>
@@ -376,33 +376,26 @@
 					</div>
 
 					<div class="sound-stack">
-						<!-- FM: its tile switches it on and off -->
+						<!-- FM and Unison: a ribbon switch, a screen you drag, keys and mini knobs (PR 77) -->
 						<div class="module fm">
-							<SectionWrap id="fm" title="FM" v-model="collapsibleState['fm']">
-								<FMModule :color="'#3F51B5'" :showToggle="false" :lfoView="lfoView" v-model:enabled="fmEnabled"
-									v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
-							</SectionWrap>
+							<FMModule :color="'#3F51B5'" :showToggle="false" :lfoView="lfoView" v-model:enabled="fmEnabled"
+								v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
 						</div>
 
-						<!-- Unison: its tile switches it on and off -->
 						<div class="module unison">
-							<SectionWrap id="unison" title="Unison" v-model="collapsibleState['unison']">
-								<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
-									v-model:detune="detuneCents" v-model:spread="stereoSpread" />
-							</SectionWrap>
+							<UnisonEffect :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
+								v-model:detune="detuneCents" v-model:spread="stereoSpread" />
 						</div>
 					</div>
 				</div>
 
-				<!-- Row 2: Envelope, Pitch and Filter, their knobs on one line -->
+				<!-- Row 2: Envelope, Pitch and Filter, each a screen you drag with mini knobs beside it (PR 77) -->
 				<div class="sound-row sound-row-2">
 					<div class="module envelope">
-						<SectionWrap id="envelope" title="Envelope" v-model="collapsibleState['envelope']">
-							<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
-								v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
-								@attack-knob-start="onEnvKnobStart" @attack-knob-end="onScreenKnobEnd"
-								@decay-knob-start="onEnvKnobStart" @decay-knob-end="onScreenKnobEnd" />
-						</SectionWrap>
+						<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
+							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
+							@attack-knob-start="onEnvKnobStart" @attack-knob-end="onScreenKnobEnd"
+							@decay-knob-start="onEnvKnobStart" @decay-knob-end="onScreenKnobEnd" />
 					</div>
 
 					<div class="module pitch-env">
@@ -412,16 +405,15 @@
 					</div>
 
 					<div class="module filter">
-						<SectionWrap class="filter-card" id="filter" title="Filter" v-model="collapsibleState['filter']">
+						<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
+							v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
+							v-model:envAmount="filterEnvAmount" v-model:envDecayMs="filterEnvDecayMs"
+							:lfoView="lfoView" @knob-start="onFilterKnobStart" @knob-end="onScreenKnobEnd">
 							<template #tools>
 								<VelSwitch v-model="velocityRouting.cutoff.value" :name="VEL_SWITCHES.cutoff.label" :tip="VEL_SWITCHES.cutoff.tip" :disabled="!filterEnabled"
 								:note="velNote.key === 'cutoff' ? velNote.text : ''" @switched-on="onVelSwitchedOn('cutoff')" />
 							</template>
-							<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
-								v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
-								v-model:envAmount="filterEnvAmount" v-model:envDecayMs="filterEnvDecayMs"
-								:lfoView="lfoView" @knob-start="onFilterKnobStart" @knob-end="onScreenKnobEnd" />
-						</SectionWrap>
+						</FilterModule>
 					</div>
 				</div>
 

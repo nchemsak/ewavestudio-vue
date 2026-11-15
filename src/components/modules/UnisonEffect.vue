@@ -1,47 +1,51 @@
 <!-- components/modules/UnisonEffect.vue -->
+<!-- The Unison card (PR 77): a ribbon down its left edge is its name and switch; a screen draws
+     the voices drifting apart (Detune) and where they sit left to right (Spread), and can be
+     dragged: sideways for Detune, up and down for Spread (ShapePad.vue); the number of voices
+     is a row of keys under the screen (a knob until PR 77); Detune and Spread are mini knobs
+     on the right. The phone's Sound page has its own Unison button and Voices knob. -->
 <template>
-	<KnobGroup class="uni-group" v-model="localEnabled" :showHeader="false">
-		<!-- One line: the on/off tile, then the three knobs spread over the rest -->
-		<div class="uni-line">
-		<div class="uni-top">
-			<UnisonButton v-model="localEnabled" :voices="localVoices" :detune="localDetune" :spread="localSpread"
-				label="Unison" showState />
-		</div>
-
-		<div class="pt-knob-row" :class="{ 'is-unison-off': !localEnabled }">
-			<div class="position-relative text-center">
-				<Knob midi-id="unison.voices" v-model="localVoices" size="small" :min="UNISON_VOICES_MIN" :max="maxVoices" :step="1" label="Voices"
-					:color="color" @knobStart="activeKnob = 'voices'" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === 'voices'" class="custom-tooltip">
-					{{ localVoices }}
-				</span>
+	<section class="pt-card sp-unit uni-unit" :class="{ 'is-off': !localEnabled }" aria-label="Unison">
+		<div class="sp-body">
+			<button type="button" class="sp-ribbon" :class="{ 'is-on': localEnabled }" role="switch" :aria-checked="localEnabled" aria-label="Unison"
+				:title="localEnabled ? 'Unison: on' : 'Unison: off'" @click="localEnabled = !localEnabled">
+				<span class="sp-ribbon-led" aria-hidden="true"></span>
+				<span class="sp-ribbon-label">UNISON</span>
+			</button>
+			<div class="sp-face">
+				<div class="sp-screencol">
+					<ShapePad :w="PAD_W" :h="PAD_H" :readout="`${localDetune}¢ · ${localSpread}%`" hint="↔ detune  ↕ spread" :disabled="!localEnabled"
+						@start="activeKnob = 'pad'" @move="onPadMove" @end="activeKnob = null">
+						<path v-for="(d, i) in waves" :key="i" :d="d" class="sp-line sp-voice" />
+						<circle v-for="(x, i) in dots" :key="'d' + i" :cx="x" :cy="PAD_H - 5" r="2.2" class="sp-dot" />
+					</ShapePad>
+					<div class="sp-keys" role="radiogroup" aria-label="Voices">
+						<button v-for="n in voiceChoices" :key="n" type="button" class="sp-key" :class="{ on: localVoices === n }" role="radio"
+							:aria-checked="localVoices === n" @click="localVoices = n">{{ n }} voices</button>
+					</div>
+				</div>
+				<div class="sp-minis">
+					<div class="sp-mini">
+						<Knob midi-id="unison.detune" :value-text="`${localDetune} cents`" v-model="localDetune" hideLabel size="mini" :min="0" :max="100" :step="1" :detents="[UNISON_DETUNE_DEFAULT]" label="Detune" :color="color"
+							@knobStart="activeKnob = 'detune'" @knobEnd="activeKnob = null" />
+						<span>Detune</span>
+					</div>
+					<div class="sp-mini">
+						<Knob midi-id="unison.spread" :value-text="`${localSpread}%`" v-model="localSpread" hideLabel size="mini" :min="0" :max="100" :step="1" label="Spread" :color="color"
+							@knobStart="activeKnob = 'spread'" @knobEnd="activeKnob = null" />
+						<span>Spread</span>
+					</div>
+				</div>
 			</div>
-
-			<div class="position-relative text-center">
-				<Knob midi-id="unison.detune" :value-text="`${localDetune} cents`" v-model="localDetune" size="small" :min="0" :max="100" :step="1" :detents="[UNISON_DETUNE_DEFAULT]" label="Detune" :color="color"
-					@knobStart="activeKnob = 'detune'" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === 'detune'" class="custom-tooltip">
-					{{ localDetune }}¢
-				</span>
-			</div>
-
-			<div class="position-relative text-center">
-				<Knob midi-id="unison.spread" :value-text="`${localSpread}%`" v-model="localSpread" size="small" :min="0" :max="100" :step="1" label="Spread" :color="color"
-					@knobStart="activeKnob = 'spread'" @knobEnd="activeKnob = null" />
-				<span v-if="activeKnob === 'spread'" class="custom-tooltip">
-					{{ localSpread }}%
-				</span>
-			</div>
 		</div>
-		</div>
-	</KnobGroup>
+	</section>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue';
 import Knob from '../Knob.vue';
-import KnobGroup from '../KnobGroup.vue';
-import UnisonButton from '../UnisonButton.vue';
+import ShapePad, { type PadPoint } from '../ShapePad.vue';
+import { toPath, voiceDots, voicePts } from '../../lib/shapeViews';
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../../audio/unison';
 
 const props = withDefaults(
@@ -70,7 +74,7 @@ const emit = defineEmits<{
 	(e: 'update:spread', v: number): void;
 }>();
 
-const activeKnob = ref<null | 'voices' | 'detune' | 'spread'>(null);
+const activeKnob = ref<null | 'pad' | 'detune' | 'spread'>(null);
 
 const localEnabled = ref<boolean>(props.enabled);
 const localVoices = ref<number>(props.voices);
@@ -154,54 +158,18 @@ onBeforeUnmount(() => {
 
 // 2–4 voices (src/audio/unison.ts), 3 at most on a small screen
 const maxVoices = computed(() => (isMobile.value ? 3 : UNISON_VOICES_MAX));
+const voiceChoices = computed(() => Array.from({ length: maxVoices.value - UNISON_VOICES_MIN + 1 }, (_, i) => UNISON_VOICES_MIN + i));
+
+// The screen: a wave per voice (one while unison is off) and a dot for where each sits
+const PAD_W = 200;
+const PAD_H = 60;
+const shown = computed(() => (localEnabled.value ? localVoices.value : 1));
+const waves = computed(() => voicePts(shown.value, localDetune.value, PAD_W, PAD_H).map(toPath));
+const dots = computed(() => voiceDots(shown.value, localSpread.value, PAD_W));
+function onPadMove(p: PadPoint) {
+	localDetune.value = Math.round(Math.max(0, Math.min(1, p.x / PAD_W)) * 100);
+	localSpread.value = Math.round(Math.max(0, Math.min(1, 1 - p.y / PAD_H)) * 100);
+}
 
 </script>
 
-<style scoped>
-.uni-group {
-	padding: 0;
-}
-
-.uni-line {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	width: 100%;
-}
-
-.uni-line>.pt-knob-row {
-	flex: 1 1 auto;
-	justify-content: space-evenly;
-	flex-wrap: nowrap;
-}
-
-/* The tile: small, like the LFO's */
-.uni-top {
-	flex: none;
-	display: flex;
-}
-
-.uni-top :deep(.wave-btn) {
-	--w: 58px;
-	height: 52px;
-	padding: 3px;
-	justify-content: center;
-	gap: 1px;
-}
-
-.uni-top :deep(.wave-svg) {
-	width: 30px;
-	height: 30px;
-}
-
-.uni-top :deep(.wave-label) {
-	font-size: .62rem;
-	text-transform: uppercase;
-}
-
-.is-unison-off :deep(.knob-label),
-.is-unison-off :deep(.knob-readout),
-.is-unison-off :deep(.knob-value) {
-	opacity: 0.7;
-}
-</style>
