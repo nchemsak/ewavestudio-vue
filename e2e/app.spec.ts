@@ -2336,7 +2336,7 @@ test('starting new projects does not leave old keyboard listeners behind', async
 		await chooseFromFileMenu(page, 'New');
 		// The menu closes once the new project has been created
 		await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
-		await expect(page.getByRole('button', { name: 'Generate', exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: /^Generate (melody|arpeggio)$/ })).toBeVisible();
 	}
 	await page.waitForTimeout(500);
 	expect(await listeners()).toBe(start);
@@ -4065,7 +4065,7 @@ test("Melody Maker: no ⋯ menu; Active Pads Only (Melody) and Skip (Arpeggio) a
 	await expect(active).toBeVisible();
 	await expect(active).toHaveAttribute('aria-pressed', 'true');
 	await expect(skip).toBeHidden();
-	await card.getByRole('button', { name: 'Arpeggio' }).click();
+	await card.getByRole('button', { name: 'Arpeggio', exact: true }).click();
 	await expect(skip).toBeVisible();
 	await expect(skip).toHaveAttribute('aria-pressed', 'false');
 	await expect(active).toBeHidden();
@@ -4073,7 +4073,7 @@ test("Melody Maker: no ⋯ menu; Active Pads Only (Melody) and Skip (Arpeggio) a
 
 	// Both are saved with the project, and File → New puts them back
 	await skip.click();
-	await card.getByRole('button', { name: 'Melody' }).click();
+	await card.getByRole('button', { name: 'Melody', exact: true }).click();
 	await active.click();
 	await expect(active).toHaveAttribute('aria-pressed', 'false');
 	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.melody;
@@ -4090,7 +4090,7 @@ test("Melody Maker: no ⋯ menu; Active Pads Only (Melody) and Skip (Arpeggio) a
 	const pitches = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'))
 		.data.instruments.find((i: any) => i.name === 'synth-voice').pitches as number[];
 	const before = await pitches();
-	for (let k = 0; k < 4; k++) await card.getByRole('button', { name: 'Generate', exact: true }).click();
+	for (let k = 0; k < 4; k++) await card.getByRole('button', { name: /^Generate (melody|arpeggio)$/ }).click();
 	const after = await pitches();
 	expect(after.slice(1).some((hz, i) => Math.abs(hz - before[i + 1]) > 0.01)).toBe(true);
 });
@@ -4229,7 +4229,7 @@ test('Melody Maker: a new scale keeps each note on its degree; a project opening
 	// An arpeggio up the C minor scale: C D Eb F G Ab Bb C
 	await page.getByRole('button', { name: 'Arpeggio', exact: true }).click();
 	await chooseOption(page, 'Arp tones', 'Whole scale');
-	await page.getByRole('button', { name: 'Generate', exact: true }).click();
+	await page.getByRole('button', { name: /^Generate (melody|arpeggio)$/ }).click();
 	const minor = (await padNotes(page, on)).map(noteMidi);
 	expect(minor.map((m) => (m - minor[0] + 120) % 12)).toEqual([0, 2, 3, 5, 7, 8, 10, 0]);
 
@@ -4262,7 +4262,7 @@ test('Melody Maker: no dropdowns; steppers with lists, Narrow | Wide, and a scre
 	const card = page.locator('.module.melody');
 	const scale = card.getByRole('group', { name: 'Scale' });
 	const scaleName = scale.getByRole('button', { name: /^Scale:/ });
-	const generate = card.getByRole('button', { name: 'Generate', exact: true });
+	const generate = card.getByRole('button', { name: /^Generate (melody|arpeggio)$/ });
 	const size = async () => { const b = (await card.boundingBox())!; return [b.width, b.height]; };
 	const cardSize = await size();
 
@@ -4411,11 +4411,40 @@ test('Melody Maker: while playing, a playhead crosses the screen and the soundin
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
 });
 
+test('Melody Maker: Generate is the card\'s last line, and the screen says to press it until it has been pressed once', async ({ page }) => {
+	const card = page.locator('.module.melody');
+	const generate = card.getByRole('button', { name: /^Generate (melody|arpeggio)$/ });
+	const hint = card.locator('.mm-hint-lcd');
+	const screen = card.locator('.mm-screen');
+	await expect(hint).toBeVisible();
+	await expect(hint).toContainText('Press Generate');
+	await expect(hint).toContainText('every pad gets A'); // no scale yet
+	await expect(generate).toHaveClass(/is-fresh/);
+
+	// It's the card's last control, under the screen and the makers' settings, the card's width
+	const g = (await generate.boundingBox())!, s = (await screen.boundingBox())!, c = (await card.boundingBox())!;
+	expect(g.y).toBeGreaterThan(s.y + s.height);
+	expect(g.width).toBeGreaterThan(c.width * 0.85);
+
+	// Melody | Arpeggio is in the header, and Generate names what it makes
+	await card.getByRole('group', { name: 'Generate makes' }).getByRole('button', { name: 'Arpeggio', exact: true }).click();
+	await expect(generate).toHaveText('Generate arpeggio');
+	await expect(hint).toContainText('for an arpeggio: Up · 1/16');
+
+	// The hint goes once Generate is pressed, and stays gone after a reload
+	await generate.click();
+	await expect(hint).toHaveCount(0);
+	await expect(generate).not.toHaveClass(/is-fresh/);
+	await page.reload();
+	await expect(card.getByRole('button', { name: /^Generate (melody|arpeggio)$/ })).toBeVisible();
+	await expect(card.locator('.mm-hint-lcd')).toHaveCount(0);
+});
+
 test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its height, the choice is saved', async ({ page }) => {
 	const generate = page.getByRole('button', { name: /^Generate/ });
 	await expect(generate).toHaveCount(1);
-	await expect(generate).toHaveText('Generate');
-	const mode = page.getByRole('group', { name: 'Generate' });
+	await expect(generate).toHaveText('Generate melody'); // it names what it makes (PR 82)
+	const mode = page.getByRole('group', { name: 'Generate makes' });
 	const random = mode.getByRole('button', { name: 'Melody', exact: true }); // "Random" until PR 57
 	const arp = mode.getByRole('button', { name: 'Arpeggio', exact: true });
 	await expect(random).toHaveAttribute('aria-pressed', 'true');
@@ -4425,6 +4454,7 @@ test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its 
 	const height = (await card.boundingBox())!.height;
 
 	await arp.click();
+	await expect(generate).toHaveText('Generate arpeggio');
 	await expect(page.getByRole('button', { name: 'Arp pattern' })).toBeVisible();
 	await expect(page.locator('.mm-mode-note')).toBeHidden();
 	expect((await card.boundingBox())!.height).toBe(height);
