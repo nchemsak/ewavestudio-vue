@@ -1,9 +1,10 @@
 <!-- src/components/RandomWaveTile.vue -->
-<!-- The Waveforms card's Random, as a tile like the eight waves (MOCKUPS: ?waves=a|b). It never
-     stays down: each press rolls the pads' waves again, the dice tumbling. While the pads play
-     a mix, it shows the mix: a small bar per pad in its wave's colour, "Mix · roll again". -->
+<!-- The Waveforms card's Random (PR 83, option B of two mockups): a tall tile in a narrow ninth
+     column beside the eight waves. It never stays down: each press rolls the pads' waves again
+     (from the waves whose dice badge is lit), the dice tumbling. While the pads play a mix, it
+     shows the mix: a small bar per pad in its wave's colour, "Mix / roll again". -->
 <template>
-    <button type="button" class="rw-tile hw-cap" :class="[`rw-${shape}`, { 'is-mixed': mixed }]" :disabled="disabled"
+    <button type="button" class="rw-tile hw-cap" :class="{ 'is-mixed': mixed }" :disabled="disabled"
         :title="title" :aria-label="mixed ? 'Random waves: the pads play a mix, roll again' : 'Random waves'"
         @click="roll">
         <span class="rw-top">
@@ -17,7 +18,7 @@
         </span>
         </span>
         <span class="rw-label">
-            <template v-if="mixed">Mix<span class="rw-sep"> · </span><span class="rw-again">roll again</span></template>
+            <template v-if="mixed">Mix<span class="rw-again">roll again</span></template>
             <template v-else>Random</template>
         </span>
     </button>
@@ -32,11 +33,9 @@ const props = defineProps<{
     mixed: boolean;
     disabled?: boolean;
     title?: string;
-    shape?: 'square' | 'column';
 }>();
 const emit = defineEmits<{ (e: 'roll'): void }>();
 
-const shape = computed(() => props.shape ?? 'square');
 const bars = computed(() => props.waves.map((w) => props.palettes[w]?.[1] ?? '#888'));
 const rolls = ref(0);
 function roll() {
@@ -52,7 +51,7 @@ function roll() {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 8px;
     width: 100%;
     height: 100%;
     padding: 4px;
@@ -100,16 +99,23 @@ function roll() {
     height: 22px;
 }
 
-/* The mix: a bar per pad, in its wave's colour */
+.rw-top {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+/* The mix: a bar per pad, in its wave's colour, two columns of eight */
 .rw-mix {
     display: grid;
-    grid-template-columns: repeat(8, 5px);
-    gap: 2px;
+    grid-template-columns: repeat(2, 7px);
+    gap: 2px 3px;
 }
 
 .rw-mix i {
     display: block;
-    height: 6px;
+    height: 4px;
     border-radius: 1px;
 }
 
@@ -117,54 +123,14 @@ function roll() {
     font-size: .62rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    white-space: nowrap;
     line-height: 1.1;
     text-align: center;
 }
 
 .rw-again {
-    opacity: 0.75;
-}
-
-.rw-top {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-}
-
-/* The square tile with a mix: the dice beside the bars, the words smaller */
-.rw-square.is-mixed .rw-label {
-    font-size: .52rem;
-    letter-spacing: 0.03em;
-}
-
-/* The narrow ninth column: everything stacked, the label on two lines */
-.rw-column {
-    gap: 8px;
-}
-
-.rw-column .rw-top {
-    flex-direction: column;
-    gap: 8px;
-}
-
-.rw-column .rw-mix {
-    grid-template-columns: repeat(2, 7px);
-    gap: 2px 3px;
-}
-
-.rw-column .rw-mix i {
-    height: 4px;
-}
-
-.rw-column .rw-sep {
-    display: none;
-}
-
-.rw-column .rw-again {
     display: block;
     font-size: .5rem;
-    white-space: normal;
+    opacity: 0.75;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -178,6 +178,8 @@ src/components/
                          (and the MIDI learn bar, at the bottom of the screen)
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
   WaveButton.vue, WaveIcon.vue  A wave's big tile (Waveforms panel) and small line icon (pads)
+  RandomWaveTile.vue     The Waveforms card's Random: a tall tile that rolls the pads' waves and
+                         shows their mix (see "Layout" under Conventions)
   VelSwitch.vue          The Filter card's VEL switch: velocity routing (the only one since PR 67)
   PillSwitch.vue         The small on/off pill with an LED in a card's header (VEL, RETRIG)
   ShapePad.vue           A card's screen that you drag (Envelope, Pitch, Filter, FM, Unison), and
@@ -480,8 +482,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     again at each step that's on (`src/lib/lfoPlot.ts`, unit-tested; a 2- or 4-bar rate shows
     its whole cycle, "4 bars · 4 bars shown"). Its readout names the rate, and the target and
     depth ("Pitch 25 cents"), or in amber why the LFO moves nothing ("No Pulse", "FM off":
-    `.lfo-status`). Under it Rate, Depth, the Wave switch and RETRIG (`PillSwitch`, now inside
-    the card) on one line, and a **patch bay** (`.lv-bay`): an "LFO out" socket and the five
+    `.lfo-status`). Under it Rate, Depth, the wave and RETRIG (`PillSwitch`, now inside
+    the card) on one line (the wave: two **keys** with the wave drawn on them, lit in the
+    accent like FM's ratio keys, `.lk-key`, PR 83, option 1 of two mockups; the other lit them
+    in amber with the names; 52 × 36 px, 46 × 26 under 1200 px so the card stays 154 px; a
+    small switch with LEDs before), and a **patch bay** (`.lv-bay`): an "LFO out" socket and the five
     targets' sockets (still `role="radio"` buttons, named as before), with one cable from LFO
     out to the target's, hanging under the sockets between (`cablePath`); a click on a socket
     moves it. One cable, because the LFO has one target; the plugged socket is where the patch
@@ -1422,10 +1427,20 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   and 390 px, in every tab: a stretched card is a flex item, and a flex item with a `z-index`
   is drawn over earlier positioned siblings, which hid the Noise switch (its ribbon) after
   PR 41. The
-  Waveforms panel shows its eight tiles as a 4×2 grid;
-  A tile is lit only while every pad plays its wave (`litWave` in `DrumSequencer.vue`, PR 64);
-  after Random, or a pad's wave changed in its ⋮ menu, the pads play a mix: no tile is lit and
-  Random is (down, its LED lit). The main wave (`selectedWaveform`, for MIDI notes and the
+  Waveforms panel shows its eight tiles as a 4×2 grid, and **Random** as a tall tile in a
+  narrow ninth column beside them (PR 83, option B of two mockups; A was a 3×3 grid, whose
+  tiles came out wider than tall; `RandomWaveTile.vue`, 58 px wide, as tall as both rows). It
+  replaced a long button under the tiles that stayed down while the pads played a mix, so it
+  didn't read as something to press again. Random **never stays down**: each press rolls the
+  pads' waves again (from the waves whose dice badge is lit), and its dice tumbles (still with
+  `prefers-reduced-motion`: no tumble). While the pads play a mix it shows it: a small bar per
+  pad in its wave's colour (`padWaves`, `WAVE_PALETTES`' middle colour; two columns of eight),
+  over "Mix / roll again" (its accessible name says so too). A wave tile is lit only while
+  every pad plays its wave (`litWave` in `DrumSequencer.vue`, PR 64); after Random, or a pad's
+  wave changed in its ⋮ menu, the pads play a mix: no tile is lit. The card is the size it was
+  wherever it's stretched (1200 px and up, and the tablet's Sound tab); in one column (under
+  720 px) it's 40 px shorter, without the long button. The phone's Sound page keeps its own
+  wave buttons. The main wave (`selectedWaveform`, for MIDI notes and the
   one-shot) stays the last tile clicked.
   Pulse Width is a mini knob in the Pulse tile's top-left corner (the dice badge is top-right),
   placed beside the tile's button, not inside it, so turning it doesn't pick the wave; the
@@ -1492,47 +1507,41 @@ what the maintainer turned down: Converge or Up + octave as arpeggio patterns, P
 target, and for now a second oscillator and a second pad lane, on hold below).
 
 The maintainer's brainstorm after PR 73 is done (its three small fixes were PR 74, the LFO
-card PR 75, the Melody Maker PR 76, the plain cards PR 77). Items 1–4 come from the one after
+card PR 75, the Melody Maker PR 76, the plain cards PR 77). Items 1–3 come from the one after
 PR 77 (its first items were PR 78, the stretched keyboard and pedals, PR 79, the theme
-colours, and PR 80, the Melody Maker's screen while playing); items 5 and 6 from earlier ones (its first item, Generate made obvious, was PR 82). No one else uses the app yet, so older projects need no special care: a removed
+colours, and PR 80, the Melody Maker's screen while playing); items 4 and 5 from earlier ones (its first items, Generate made obvious and the Random wave tile, were PRs 82 and 83). No one else uses the app yet, so older projects need no special care: a removed
 setting can simply stop applying.
 
 Redesigns are visual: every control keeps working as it does, and each card keeps its size.
 They are for the desktop first; the phone can keep what suits it. Each starts with a few
 mockups for the maintainer to pick from (built in the app behind a URL switch, photographed
 onto one page, the code kept on the branch without a PR), as the LFO card's, the Melody
-Maker's, the plain cards' and Generate's did. What they settled: a ribbon switch, a small screen that shows what the controls
+Maker's, the plain cards', Generate's and the Random tile's did. What they settled: a ribbon switch, a small screen that shows what the controls
 do, sockets, steppers that open a list for a choice of words, switches for numbers, captions
 only where a control doesn't explain itself, not too many buttons on show, and the action
 button where the eye ends up (Generate, PR 82).
 
-1. **The Random wave tile and the LFO's wave buttons** (mockups first). Random becomes a
-   square tile like the eight waves, with a dice, instead of a long web button; it doesn't stay
-   down: after a roll it shows the mix (small bars of the pads' waves, "Mix · roll again") and
-   tumbles on each press, so it reads as press-again (a 3×3 grid, or a narrow ninth column). The
-   LFO card's Sine / Square switch becomes two bigger keys with the wave drawn on them, like
-   FM's ratio keys, the card the same size.
-2. **Share a project as a link** (off hold; the maintainer's idea after PR 77: send a pattern
+1. **Share a project as a link** (off hold; the maintainer's idea after PR 77: send a pattern
    to someone who doesn't know the site). The project, compressed, in the URL's fragment
    (`#p=…`, never sent to the server, so it works on static hosting; about 1–2 kB); File →
    Share opens the phone's share sheet (`navigator.share`) or copies the link. Opening one
    loads it as an unsaved copy (never over a saved project) and says "Shared pattern: press
    Play" (browsers don't play audio before a tap). Maybe later a "pattern only" link that keeps
    the recipient's sound. JSON stays the file format (a `.ewave` name is optional).
-3. **Drag notes on the Melody Maker's screen** (maybe; the maintainer's call once PR 80 and
+2. **Drag notes on the Melody Maker's screen** (maybe; the maintainer's call once PR 80 and
    PR 82 are in): up or down, snapping to the scale, one undo step, a preview while stopped, using the
    shape cards' drag code. It's a second editor for the pads' pitches, and fiddly on a 110 px
    screen.
-4. **Octave arrows at the edges** (last: the maintainer isn't sure). `octaveShiftAllSkip()`
+3. **Octave arrows at the edges** (last: the maintainer isn't sure). `octaveShiftAllSkip()`
    moves each pad on its own and skips those that would leave 100–2000 Hz, so a pattern near an
    edge gets squashed (its intervals change); it also moves `globalOctaveOffset` when pads were
    skipped. Proposed: all or nothing (if any pad can't move, none does), the arrow greyed out
    with a title saying why; the phone's Octave ↓ / ↑ too; a unit test.
-5. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
+4. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
    changes to come may change the height), centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-6. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+5. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Decided after PR 73 (the maintainer's call, "for now"): the Sound and Pattern presets stay in
@@ -1734,6 +1743,7 @@ Done:
 | 79 | Theme colours: **Dark** has a near-black page of its own and a grey-violet wash (it shared Synthwave's pink ones); the **effect pedals** follow the theme (option A of three mockups): each keeps its own colour, shaded per theme, with its name and captions in dark ink, readable now (white with a glow wasn't); the screen's F-keys are tinted per theme (white in every theme before), FM's and Unison's keys take the caps' colours, and the link under the frame has a colour in Dark and Synthwave. A browser test checks the pedals' names in every theme. |
 | 80 | The Melody Maker's screen while playing: a playhead line crosses it and the note that sounds glows, in step with the pads (only the glow with reduced motion; `usePlayhead.ts`, `RollPlayhead.vue`); each note is drawn as long as it sounds (Attack + Decay at the tempo, cut at the next hit, its tail fading), repeats as their 2–4 hits, stepping up or down for Up / Down (`rollSegments()` in `roll.ts`); the scale's dots on the white keys are bigger, in the accent with a dark ring. |
 | 82 | Melody Maker, part 2 (option A of three mockups): Generate is a full-width accent cap at the card's bottom naming what it makes ("Generate melody" / "Generate arpeggio"), Melody | Arpeggio moved up into the header, the card the same size; until Generate is first pressed in the browser, the screen says "Press Generate" (with what it would make) and the button glows. |
+| 83 | The Waveforms card's Random is a tall tile in a narrow ninth column beside the eight waves (option B of two mockups): it never stays down, its dice tumbles on each press, and while the pads play a mix it shows it (a small bar per pad in its wave's colour, "Mix / roll again"); the LFO card's Sine / Square are two bigger keys with the wave drawn on them, lit in the accent like FM's ratio keys (option 1 of two). Cards keep their size. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

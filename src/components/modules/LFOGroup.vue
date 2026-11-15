@@ -47,25 +47,15 @@
                             </div>
                         </div>
                         <div class="lv-side">
-                            <!-- MOCKUPS (not for main): ?lfokeys=1|2, the wave on two bigger keys -->
-                            <div v-if="keysMock" class="lk-keys" :class="`lk-${keysMock}`" role="radiogroup" aria-label="LFO Waveform">
+                            <!-- The wave: two keys with it drawn on them, lit in the accent as FM's
+                                 ratio keys (PR 83, option 1 of two mockups) -->
+                            <div class="lk-keys" role="radiogroup" aria-label="LFO Waveform">
                                 <button v-for="w in waves" :key="w" type="button" class="lk-key"
                                     :class="{ on: localWaveform === w }" role="radio"
                                     :aria-checked="localWaveform === w ? 'true' : 'false'" :aria-label="waveLong(w)"
                                     :disabled="!localEnabled" @click="setWave(w)" :title="waveLong(w)">
                                     <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
                                         <path :d="wavePath(w)" class="lk-wv" />
-                                    </svg>
-                                    <span v-if="keysMock === '2'" class="lk-name">{{ waveLabel(w) }}</span>
-                                </button>
-                            </div>
-                            <div v-else class="lfo-seg" role="radiogroup" aria-label="LFO Waveform">
-                                <button v-for="w in waves" :key="w" type="button" class="lfo-seg-btn hw-cap hw-led-top"
-                                    :class="{ active: localWaveform === w }" role="radio"
-                                    :aria-checked="localWaveform === w ? 'true' : 'false'" :aria-label="waveLong(w)"
-                                    :disabled="!localEnabled" @click="setWave(w)" :title="waveLong(w)">
-                                    <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
-                                        <path :d="wavePath(w)" class="wv" />
                                     </svg>
                                 </button>
                             </div>
@@ -392,10 +382,6 @@ const cablePath = computed(() => {
     return `M${x0} ${y} C${x0 + 12} ${y + drop}, ${x1 - 12} ${y + drop}, ${x1} ${y}`;
 });
 // THE SCREEN AND THE PATCH BAY END
-
-// MOCKUPS (not for main): ?lfokeys=1 (keys lit in the accent, as FM's) | 2 (lit in the LFO's
-// amber, with the wave's name)
-const keysMock = ((g) => (g === '1' || g === '2' ? g : null))(new URLSearchParams(location.search).get('lfokeys'));
 
 function wavePath(w: Wave | string): string {
     switch (w) {
@@ -825,7 +811,7 @@ svg {
     gap: 10px;
 }
 
-/* MOCKUPS: the wave on two bigger keys, as FM's ratio keys */
+/* The wave on two keys, as FM's ratio keys (PR 83) */
 .lk-keys {
     display: flex;
     gap: 5px;
@@ -877,49 +863,20 @@ svg {
     cursor: default;
 }
 
-.lk-1 .lk-key.on {
+.lk-key.on {
     color: #10131a;
     background: linear-gradient(180deg, hsl(var(--pt-accent) 90% 80%), hsl(var(--pt-accent) 85% 68%));
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 8px hsl(var(--pt-accent) 85% 65% / 0.5);
 }
 
-.lk-2 .lk-key {
-    height: 40px;
-}
-
-.lk-2 .lk-key svg {
-    height: 12px;
-}
-
-.lk-name {
-    font-size: 8px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    line-height: 1;
-}
-
 /* Under 1200 px the card isn't stretched: the keys keep to the old switch's height */
 @media (max-width: 1199px) {
-    .lk-key,
-    .lk-2 .lk-key {
+    .lk-key {
         height: 26px;
         width: 46px;
     }
-
-    .lk-2 .lk-key svg {
-        height: 9px;
-    }
-
-    .lk-name {
-        font-size: 7px;
-    }
 }
 
-.lk-2 .lk-key.on {
-    color: #1a1204;
-    background: linear-gradient(180deg, #ffd66b, #f0a92a);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 8px rgb(255 190 60 / 0.5);
-}
 
 /* The patch bay: a recessed strip of six sockets, their names above them */
 .lv-bay {
