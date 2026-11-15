@@ -377,8 +377,8 @@
 
 					<!-- MOCKUPS (?cards=a|b|c): the plain cards' redesign options (SoundCardsMock.vue) -->
 					<div v-if="cardsMock" class="sound-stack">
-						<SoundCardsMock :variant="cardsMock" part="fm" :m="cardsModel" />
-						<SoundCardsMock :variant="cardsMock" part="unison" :m="cardsModel" />
+						<SoundCardsMock :variant="cardsMock" part="fm" :m="cardsModel" :mid="cardsMid" />
+						<SoundCardsMock :variant="cardsMock" part="unison" :m="cardsModel" :mid="cardsMid" />
 					</div>
 					<div v-else class="sound-stack">
 						<!-- FM: its tile switches it on and off -->
@@ -2336,6 +2336,7 @@ const stereoSpread = ref(UNISON_SPREAD_DEFAULT);  // 0–100 %
 
 // MOCKUPS (?cards=a|b|c): the plain cards' redesign options draw from the real settings
 const cardsMock = new URLSearchParams(location.search).get('cards') || '';
+const cardsMid = new URLSearchParams(location.search).get('mid') || '';
 const cardsModel = reactive({
 	attack: ampEnvAttackMs, decay: ampEnvDecayMs,
 	pitchSemis: pitchEnvSemitones, pitchDecay: pitchEnvDecayMs, pitchMode,

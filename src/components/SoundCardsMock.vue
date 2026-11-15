@@ -100,30 +100,59 @@
             <button v-if="variant === 'b'" type="button" class="scm-power" :class="{ on }" role="switch" :aria-checked="on" :aria-label="part === 'fm' ? 'FM' : 'Unison'" @click="toggleOn">
                 <i></i><span>{{ part === 'fm' ? 'FM' : 'UNISON' }}</span></button>
 
-            <!-- the picture: FM's wave, or the unison's voices drifting apart; in c you drag it -->
-            <div class="scm-window scm-pic" :class="{ 'scm-pad': variant === 'c', dragging: drag === part }"
-                @pointerdown="variant === 'c' && startDrag(part, $event)" @pointermove="moveDrag($event)" @pointerup="endDrag" @pointercancel="endDrag">
-                <svg :viewBox="`0 0 ${PIC_W} ${PIC_H}`" preserveAspectRatio="none" aria-hidden="true">
-                    <template v-if="part === 'fm'"><path :d="fmWave(PIC_W, PIC_H)" class="scm-line" /></template>
-                    <template v-else>
-                        <path v-for="(d, i) in voiceWaves(PIC_W, PIC_H)" :key="i" :d="d" class="scm-line voice" />
-                        <circle v-for="(x, i) in voiceDots(PIC_W)" :key="'d' + i" :cx="x" :cy="PIC_H - 5" r="2.2" class="scm-dot" />
+            <!-- the picture: FM's wave, or the unison's voices drifting apart; in c you drag it.
+                 mid 3: the picture takes the middle too, its choices as keys under it -->
+            <div class="scm-screencol" :class="{ wide: mid === '3' }">
+                <div class="scm-window scm-pic" :class="{ 'scm-pad': variant === 'c', dragging: drag === part }"
+                    @pointerdown="variant === 'c' && startDrag(part, $event)" @pointermove="moveDrag($event)" @pointerup="endDrag" @pointercancel="endDrag">
+                    <svg :viewBox="`0 0 ${PIC_W} ${PIC_H}`" preserveAspectRatio="none" aria-hidden="true">
+                        <path v-if="part === 'fm'" :d="fmWave(PIC_W, PIC_H)" class="scm-line" />
+                        <template v-else>
+                            <path v-for="(d, i) in voiceWaves(PIC_W, PIC_H)" :key="i" :d="d" class="scm-line voice" />
+                            <circle v-for="(x, i) in voiceDots(PIC_W)" :key="'d' + i" :cx="x" :cy="PIC_H - 5" r="2.2" class="scm-dot" />
+                        </template>
+                    </svg>
+                    <span v-if="variant === 'c'" class="scm-drag-hint">{{ part === 'fm' ? '↕ amount' : '↔ detune  ↕ spread' }}</span>
+                </div>
+                <div v-if="mid === '3'" class="scm-keys" role="radiogroup" :aria-label="part === 'fm' ? 'FM ratio' : 'Voices'">
+                    <template v-if="part === 'fm'">
+                        <button v-for="r in RATIOS" :key="r.name" type="button" class="scm-key" :class="{ on: m.fmRatio === r.value }" :disabled="!on" @click="m.fmRatio = r.value">{{ r.name }}</button>
                     </template>
-                </svg>
-                <span v-if="variant === 'c'" class="scm-drag-hint">{{ part === 'fm' ? '↕ amount' : '↔ detune  ↕ spread' }}</span>
+                    <template v-else>
+                        <button v-for="n in [2, 3, 4]" :key="n" type="button" class="scm-key" :class="{ on: m.voices === n }" :disabled="!on" @click="m.voices = n">{{ n }} voices</button>
+                    </template>
+                </div>
             </div>
 
+            <!-- the middle: the ratio (FM) or the voices (Unison), four ways (?mid=) -->
+            <template v-if="mid === '1'">
+                <!-- 1: a caption over square caps that fill the height -->
+                <div class="scm-mid scm-mid1">
+                    <span class="scm-cap">{{ part === 'fm' ? 'Ratio' : 'Voices' }}</span>
+                    <div v-if="part === 'fm'" class="scm-squares">
+                        <button v-for="r in RATIOS" :key="r.name" type="button" class="pt-seg-btn hw-led-top scm-square" :class="{ 'is-active': m.fmRatio === r.value }" :disabled="!on"
+                            @click="m.fmRatio = r.value">{{ r.name }}<small>{{ r.hint }}</small></button>
+                    </div>
+                    <div v-else class="scm-squares three">
+                        <button v-for="n in [2, 3, 4]" :key="n" type="button" class="pt-seg-btn hw-led-top scm-square tall" :class="{ 'is-active': m.voices === n }" :disabled="!on"
+                            @click="m.voices = n"><b>{{ n }}</b><i class="scm-bars"><u v-for="k in n" :key="k"></u></i></button>
+                    </div>
+                </div>
+            </template>
+            <template v-else-if="mid === '2'">
+                <!-- 2: a tall stepper, the choice set large -->
+                <div class="scm-mid scm-tall">
+                    <button type="button" class="hw-cap scm-tall-step" :disabled="!on" @click="part === 'fm' ? stepRatio(-1) : stepVoices(-1)">◂</button>
+                    <span class="scm-tall-name"><small>{{ part === 'fm' ? 'Ratio' : 'Voices' }}</small><b>{{ part === 'fm' ? ratioName : m.voices }}</b><em>{{ part === 'fm' ? ratioLong : 'in unison' }}</em></span>
+                    <button type="button" class="hw-cap scm-tall-step" :disabled="!on" @click="part === 'fm' ? stepRatio(1) : stepVoices(1)">▸</button>
+                </div>
+            </template>
+            <template v-else-if="mid !== '3'">
             <template v-if="part === 'fm'">
                 <div class="scm-stepper" role="group" aria-label="FM ratio">
                     <button type="button" class="hw-cap hw-cap-sm scm-step" :disabled="!on" @click="stepRatio(-1)">◂</button>
                     <span class="scm-step-name">{{ ratioName }}<small>{{ ratioHint }}</small></span>
                     <button type="button" class="hw-cap hw-cap-sm scm-step" :disabled="!on" @click="stepRatio(1)">▸</button>
-                </div>
-                <div class="scm-knobs" :class="{ minis: variant === 'c' }">
-                    <div class="scm-mini"><Knob v-model="K.fmFreq.value" label="Mod Freq" :hideLabel="variant === 'c'" :size="variant === 'c' ? 'mini' : 'small'" :min="1" :max="5000" :step="1" taper="log"
-                            :disabled="!on || m.fmRatio !== null" /><span v-if="variant === 'c'">Freq</span></div>
-                    <div class="scm-mini"><Knob v-model="K.fmIndex.value" label="Amount" :hideLabel="variant === 'c'" :size="variant === 'c' ? 'mini' : 'small'" :min="0" :max="50" :step="0.1" :disabled="!on" />
-                        <span v-if="variant === 'c'">Amount</span></div>
                 </div>
             </template>
             <template v-else>
@@ -134,13 +163,21 @@
                             role="radio" :aria-checked="m.voices === n" @click="m.voices = n">{{ n }}</button>
                     </div>
                 </div>
-                <div class="scm-knobs" :class="{ minis: variant === 'c' }">
-                    <div class="scm-mini"><Knob v-model="K.detune.value" label="Detune" :hideLabel="variant === 'c'" :size="variant === 'c' ? 'mini' : 'small'" :min="0" :max="100" :step="1" :disabled="!on" />
-                        <span v-if="variant === 'c'">Detune</span></div>
-                    <div class="scm-mini"><Knob v-model="K.spread.value" label="Spread" :hideLabel="variant === 'c'" :size="variant === 'c' ? 'mini' : 'small'" :min="0" :max="100" :step="1" :disabled="!on" />
-                        <span v-if="variant === 'c'">Spread</span></div>
-                </div>
             </template>
+            </template>
+
+            <div v-if="part === 'fm'" class="scm-knobs" :class="{ minis: variant === 'c' }">
+                <div class="scm-mini"><Knob v-model="K.fmFreq.value" label="Mod Freq" :hideLabel="variant === 'c'" :size="variant === 'c' ? 'mini' : 'small'" :min="1" :max="5000" :step="1" taper="log"
+                        :disabled="!on || m.fmRatio !== null" /><span v-if="variant === 'c'">Freq</span></div>
+                <div class="scm-mini"><Knob v-model="K.fmIndex.value" label="Amount" :hideLabel="variant === 'c'" :size="variant === 'c' ? 'mini' : 'small'" :min="0" :max="50" :step="0.1" :disabled="!on" />
+                    <span v-if="variant === 'c'">Amount</span></div>
+            </div>
+            <div v-else class="scm-knobs" :class="{ minis: variant === 'c' }">
+                <div class="scm-mini"><Knob v-model="K.detune.value" label="Detune" :hideLabel="variant === 'c'" :size="variant === 'c' ? 'mini' : 'small'" :min="0" :max="100" :step="1" :disabled="!on" />
+                    <span v-if="variant === 'c'">Detune</span></div>
+                <div class="scm-mini"><Knob v-model="K.spread.value" label="Spread" :hideLabel="variant === 'c'" :size="variant === 'c' ? 'mini' : 'small'" :min="0" :max="100" :step="1" :disabled="!on" />
+                    <span v-if="variant === 'c'">Spread</span></div>
+            </div>
         </div>
         <span v-if="variant === 'b'" class="scm-ear"><i></i><i></i></span>
     </div>
@@ -157,7 +194,7 @@ type Model = {
     fmOn: boolean; fmRatio: number | null; fmFreq: number; fmIndex: number;
     uniOn: boolean; voices: number; detune: number; spread: number;
 };
-const props = defineProps<{ variant: string; part: 'shape' | 'fm' | 'unison'; m: Model }>();
+const props = defineProps<{ variant: string; part: 'shape' | 'fm' | 'unison'; m: Model; mid?: string }>();
 const m = props.m;
 
 // The pitch Amount as one two-way knob: right of centre starts above, left below
@@ -298,6 +335,8 @@ const RATIOS: { value: number | null; name: string; hint: string }[] = [
 const ratioAt = computed(() => Math.max(0, RATIOS.findIndex((r) => r.value === m.fmRatio)));
 const ratioName = computed(() => RATIOS[ratioAt.value].name);
 const ratioHint = computed(() => RATIOS[ratioAt.value].hint);
+const ratioLong = computed(() => ({ Lock: '1:1 · same pitch', Metal: '3:2 · a fifth up', Bell: '2:1 · an octave up', Free: 'any pitch, in Hz' } as Record<string, string>)[ratioName.value]);
+function stepVoices(d: number) { m.voices = 2 + ((m.voices - 2 + d + 3) % 3); }
 function stepRatio(d: number) { m.fmRatio = RATIOS[(ratioAt.value + d + RATIOS.length) % RATIOS.length].value; }
 
 // ── c: dragging the pictures ──
@@ -827,6 +866,189 @@ function endDrag() { drag.value = null; }
     letter-spacing: 0.2em;
     font-size: 11px;
     font-weight: 600;
+}
+
+.scm-screencol {
+    flex: none;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+.scm-screencol.wide {
+    flex: 1 1 0;
+}
+
+.scm-screencol .scm-pic,
+.scm-screencol .scm-pic.scm-pad {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.scm-screencol.wide .scm-pic {
+    width: auto;
+}
+
+/* mid 3: the choices as soft keys under the picture, as under the main screen */
+.scm-keys {
+    flex: none;
+    display: flex;
+    gap: 4px;
+}
+
+.scm-key {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 18px;
+    padding: 0 2px;
+    border: 0;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #2b2f3b, #191b23);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    color: #aeb7cc;
+    font: inherit;
+    font-size: 8.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.scm-key.on {
+    color: #10131a;
+    background: linear-gradient(180deg, color-mix(in oklab, var(--lfo-mod, #ffc53d), white 15%), var(--lfo-mod, #ffc53d));
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 8px color-mix(in oklab, var(--lfo-mod, #ffc53d), transparent 50%);
+}
+
+.scm-key:disabled {
+    opacity: 0.45;
+}
+
+/* mid 1: a caption over square caps */
+.scm-mid {
+    flex: 1 1 0;
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+}
+
+.scm-mid1 {
+    flex-direction: column;
+    gap: 5px;
+}
+
+.scm-mid1 .scm-cap {
+    font-size: 0.68rem;
+}
+
+.scm-squares {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+}
+
+.scm-squares.three {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.scm-square {
+    min-height: 0;
+    padding: 2px;
+    gap: 1px;
+    font-size: 0.66rem;
+    line-height: 1.1;
+}
+
+.scm-square small {
+    font-size: 0.52rem;
+    opacity: 0.6;
+}
+
+.scm-square b {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.scm-square:disabled {
+    opacity: 0.45;
+}
+
+/* a voice per bar */
+.scm-bars {
+    display: flex;
+    gap: 2px;
+    align-items: flex-end;
+    height: 10px;
+}
+
+.scm-bars u {
+    width: 3px;
+    height: 100%;
+    border-radius: 1px;
+    background: currentColor;
+    opacity: 0.55;
+}
+
+/* mid 2: a tall stepper */
+.scm-tall {
+    gap: 5px;
+}
+
+.scm-tall-step {
+    flex: none;
+    width: 28px;
+    border: 0;
+    border-radius: 7px;
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+.scm-tall-step:disabled {
+    opacity: 0.4;
+}
+
+.scm-tall-name {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border-radius: 6px;
+    background: #0c1118;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 2px 8px rgba(0, 0, 0, 0.7);
+    color: #cfe0ff;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.scm-tall-name small {
+    font-size: 8px;
+    letter-spacing: 0.16em;
+    opacity: 0.6;
+}
+
+.scm-tall-name b {
+    font-size: 1.25rem;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    color: var(--lfo-mod, #ffc53d);
+}
+
+.scm-tall-name em {
+    font-size: 8.5px;
+    font-style: normal;
+    letter-spacing: 0.06em;
+    opacity: 0.8;
+}
+
+.is-off .scm-tall-name b {
+    color: inherit;
+    opacity: 0.6;
 }
 
 .scm-pic {
