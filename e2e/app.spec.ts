@@ -4372,23 +4372,30 @@ test('Melody Maker: while playing, a playhead crosses the screen and the soundin
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
 	const line = card.locator('.mm-playhead');
 	await expect(line).toHaveCount(1);
-	const xs = new Set<string>();
+	// The line and the glowing note are read in one go (two reads can be many frames apart on a
+	// slow machine, which failed the deploy's checks after PR 80)
+	const look = () => card.evaluate((el) => {
+		const line = el.querySelector('.mm-playhead');
+		const g = el.querySelector('.mm-note.is-playing');
+		return {
+			lx: line ? Number(line.getAttribute('x1')) : null,
+			glow: g ? { x: Number(g.getAttribute('x')), w: Number(g.getAttribute('width')), step: g.getAttribute('data-step')! } : null,
+		};
+	});
+	const xs = new Set<number>();
 	const glowed = new Set<string>();
-	for (let i = 0; i < 80 && glowed.size < 3; i++) {
-		xs.add((await line.getAttribute('x1').catch(() => null)) ?? '');
-		const g = card.locator('.mm-note.is-playing');
-		if (await g.count()) {
-			const [gx, lx] = await Promise.all([box(g.first()), line.getAttribute('x1')]).catch(() => [null, null]) as any;
-			if (gx) {
-				glowed.add(gx.step);
-				// the line is inside the glowing note (a frame may pass between the two reads)
-				expect(Math.abs(Number(lx) - (gx.x + gx.w / 2))).toBeLessThan(gx.w / 2 + 8);
-			}
+	for (let i = 0; i < 200 && glowed.size < 3; i++) {
+		const { lx, glow } = await look();
+		if (lx != null) xs.add(lx);
+		if (lx != null && glow) {
+			glowed.add(glow.step);
+			// the line is inside the glowing note
+			expect(Math.abs(lx - (glow.x + glow.w / 2))).toBeLessThanOrEqual(glow.w / 2 + 2);
 		}
-		await page.waitForTimeout(50);
+		await page.waitForTimeout(40);
 	}
 	expect([...glowed].sort()).toEqual(['0', '4', '8']);
-	expect(xs.size).toBeGreaterThan(10);
+	expect(xs.size).toBeGreaterThan(3); // it moves (few reads on a slow machine)
 	expect(await card.locator('.is-playing').count()).toBeLessThanOrEqual(1);
 
 	// Stop: both gone
