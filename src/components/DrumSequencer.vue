@@ -181,6 +181,10 @@
 							<Knob midi-id="transport.tempo" v-model="tempo" label="Tempo" :min="20" :max="300" :step="1" size="medium"
 								:detents="TEMPO_DETENTS"
 								:useThemeArc="true" @knobStart="activeKnob = 'tempo'" @knobEnd="activeKnob = null" />
+							<!-- Tap tempo (PR 88): in the knob's top-right corner, so nothing moves -->
+							<button type="button" class="tap-btn hw-cap hw-cap-sm" :class="{ 'is-counting': tapCount > 0 && tapCount < 4 }"
+								:aria-label="tapLabel" :title="tapLabel" @pointerdown.prevent="onTap"
+								@keydown.enter.prevent="onTap">TAP</button>
 							<div class="tempo-stepper" role="group" aria-label="Tempo">
 								<button class="stepper-btn hw-cap hw-cap-sm" type="button" title="Tempo −1"
 									@mousedown.prevent="startTempoRepeat(-1)" @touchstart.prevent="startTempoRepeat(-1)"
@@ -482,7 +486,7 @@
 					<SectionWrap id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
 						<PatternTools :steps="steps" :velocities="velocities" :currentTheme="currentTheme" :nudge="humanizeNudge"
 							@update:steps="steps = $event" @update:velocities="velocities = $event"
-							@octave-shift="onPatternOctaveShift" />
+							@octave-shift="onPatternOctaveShift" @move="movePattern" />
 					</SectionWrap>
 				</div>
 
@@ -718,6 +722,8 @@ import { applyPreset, soundKey } from '../lib/presets/presets';
 import { randomPreset } from '../lib/presets/random';
 import { PATTERNS } from '../lib/patterns/library';
 import { applyPattern, patternKey } from '../lib/patterns/patterns';
+import { moveList, MOVED_LANE_FIELDS, type MoveKind } from '../lib/patterns/move';
+import { addTap, tapBpm } from '../lib/tapTempo';
 import { padHue, spectrumColour, spectrumHue } from '../lib/padColour';
 import { randomPattern } from '../lib/patterns/random';
 import {
@@ -2052,6 +2058,19 @@ function isNoteDisabled(semitone, octave) {
 
 function freqToMidi(f) { return Math.round(69 + 12 * Math.log2(f / A4)); }
 
+// Pattern Tools' Move (PR 88): rotate the pattern one step (round the bar's end) or reverse it.
+// Each pad's step, velocity, pitch, wave, repeats and noise move together; one undo step (the
+// undo history records it like any change). The phone's Pads page has the same.
+function movePattern(kind: MoveKind) {
+	const inst = synthInstrument.value as any;
+	if (!inst) return;
+	for (const f of MOVED_LANE_FIELDS) {
+		if (Array.isArray(inst[f])) inst[f] = moveList(inst[f], kind);
+	}
+	noiseMask.value = moveList(noiseMask.value, kind) as boolean[];
+	trackEvent('pattern_move', { kind });
+}
+
 function onPatternOctaveShift(payload: number | { delta: number; onlyActive?: boolean }) {
 	const delta = typeof payload === 'number' ? payload : payload.delta;
 	const onlyActive = typeof payload === 'object' && !!payload.onlyActive;
@@ -2343,6 +2362,22 @@ const MAX_BPM = 300;
 function setTempoClamp(v: number) {
 	// force integers, clamp to range
 	tempo.value = Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(v)));
+}
+
+// Tap tempo (src/lib/tapTempo.ts): four taps on the beat set the tempo, each one after that
+// updates it; a pause of 2 s starts again. On pointerdown, not click, so a tap lands when the
+// finger does.
+const tapTimes = ref<number[]>([]);
+const tapCount = computed(() => tapTimes.value.length);
+const tapLabel = computed(() => {
+	const n = tapCount.value;
+	return n > 0 && n < 4 ? `Tap tempo: ${4 - n} more` : 'Tap tempo: tap four times on the beat';
+});
+function onTap() {
+	tapTimes.value = addTap(tapTimes.value, performance.now());
+	const bpm = tapBpm(tapTimes.value, MIN_BPM, MAX_BPM);
+	if (bpm != null) setTempoClamp(bpm);
+	if (tapTimes.value.length === 4) trackEvent('tap_tempo', { bpm });
 }
 
 function nudgeTempo(delta: number) {
@@ -3353,6 +3388,8 @@ const phoneCtx = reactive({
 	fullLayout: () => setPhoneFull(true),
 	// Every pad an octave up or down (Pattern Tools' octave arrows)
 	octave: (delta: number) => onPatternOctaveShift(delta),
+	// Rotate or reverse the pattern (Pattern Tools' Move)
+	move: (kind: MoveKind) => movePattern(kind),
 	// The menu's Reset: the pads as File → New has them (the Step Sequencer's Reset Pads), and
 	// with `sound` the factory sound too (as File → New, presets' starting point)
 	reset: (sound: boolean) => {
@@ -4510,6 +4547,24 @@ const phoneCtx = reactive({
 	display: inline-flex;
 	flex-direction: column;
 	align-items: center;
+}
+
+.tap-btn {
+	position: absolute;
+	top: 14px;
+	right: -2px;
+	padding: 2px 4px;
+	border-radius: 5px;
+	border: 1px solid transparent;
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	line-height: 1.2;
+}
+
+/* Between the first tap and the fourth: lettering in the notch colour */
+.tap-btn.is-counting {
+	color: var(--knob-detent-on, #5effb0);
 }
 
 .tempo-stepper {

@@ -1463,6 +1463,69 @@ test("the first visit opens a starter beat; File → New stays empty; no drum sa
 	await ctx.close();
 });
 
+test('PR 88: TAP sets the tempo from four taps; Move rotates and reverses the whole pattern, one undo step', async ({ page }) => {
+	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
+	const tap = page.getByRole('button', { name: /^Tap tempo/ });
+	// Three taps change nothing yet; the fourth sets it (about 100 BPM: 600 ms apart, plus each
+	// click's own time; the arithmetic is unit-tested in src/lib/tapTempo.test.ts)
+	for (let i = 0; i < 3; i++) { await tap.click(); await page.waitForTimeout(600); }
+	await expect(tempo).toHaveAttribute('aria-valuenow', '120');
+	await expect(tap).toHaveAccessibleName('Tap tempo: 1 more');
+	await tap.click();
+	const bpm = Number(await tempo.getAttribute('aria-valuenow'));
+	expect(bpm).toBeGreaterThanOrEqual(85);
+	expect(bpm).toBeLessThanOrEqual(101);
+
+	// A pattern whose every per-step list differs from step to step
+	const projectData = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	const base = await projectData();
+	const lane = base.instruments.find((i: any) => i.name === 'synth-voice');
+	const n = lane.steps.length;
+	lane.steps = lane.steps.map((_: any, i: number) => i === 0 || i === 3 || i === 9);
+	lane.velocities = lane.steps.map((_: any, i: number) => 0.3 + i * 0.04);
+	lane.pitches = lane.steps.map((_: any, i: number) => 220 * Math.pow(2, i / 12));
+	lane.waveforms = lane.steps.map((_: any, i: number) => (i === 3 ? 'square' : 'sine'));
+	lane.ratchets = lane.steps.map((_: any, i: number) => (i === 9 ? 3 : 1));
+	lane.repeatNotes = lane.steps.map((_: any, i: number) => (i === 9 ? 'up' : 'same'));
+	base.synth.noise.mask = lane.steps.map((_: any, i: number) => i === 3);
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'Move.json', mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify({ version: 2, projectId: 'move', meta: { name: 'Move' }, data: base })),
+	});
+	await expect(page.getByRole('textbox', { name: 'Project name' })).toHaveValue('Move');
+	// A project's first moments are its starting point for undo
+	await page.waitForTimeout(SETTLED);
+	const loaded = await projectData();
+	const fields = (d: any) => {
+		const l = d.instruments.find((i: any) => i.name === 'synth-voice');
+		return { steps: l.steps, velocities: l.velocities, pitches: l.pitches, waveforms: l.waveforms,
+			ratchets: l.ratchets, repeatNotes: l.repeatNotes, mask: d.synth.noise.mask };
+	};
+	const before = fields(loaded);
+	const rotated = (list: any[], by: number) => list.map((_, i) => list[(i - by + n) % n]);
+	const each = (f: any, fn: (l: any[]) => any[]) => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, fn(v as any[])]));
+
+	// Rotate right: every step one later, the last round to the first; all the lists together
+	await page.getByRole('button', { name: 'Rotate right' }).click();
+	await expect(page.locator('.pad-row .padTEST').nth(1)).toHaveClass(/\bselected\b/);
+	expect(fields(await projectData())).toEqual(each(before, (l) => rotated(l, 1)));
+	// Rotate left twice: one earlier than at first
+	await page.getByRole('button', { name: 'Rotate left' }).click();
+	await page.getByRole('button', { name: 'Rotate left' }).click();
+	expect(fields(await projectData())).toEqual(each(before, (l) => rotated(l, -1)));
+	// Reverse
+	await page.getByRole('button', { name: 'Rotate right' }).click();
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Reverse', exact: true }).click();
+	expect(fields(await projectData())).toEqual(each(before, (l) => [...l].reverse()));
+
+	// One undo step: Undo puts the pattern back the way it was before Reverse
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(page.locator('.pad-row .padTEST').nth(0)).toHaveClass(/\bselected\b/);
+	expect(fields(await projectData())).toEqual(before);
+});
+
 test('the synced delay time follows the TIME knob, the tempo and a loaded project', async ({ page }) => {
 	const projectData = async () =>
 		JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
@@ -2921,7 +2984,7 @@ test('the Pattern Tools, Sounds, Patterns and section captions are readable in e
 			...await page.locator('.preset-box .pt-section-title').all(),
 			...await page.locator('.ds-section-title').all(),
 		];
-		// Step Fills, Humanize, Octave, Active Pads Only, Sounds, Patterns, Sound, Compose
+		// Step Fills, Humanize, Move, Active Pads Only, Sounds, Patterns, Sound, Compose
 		expect(captions).toHaveLength(8);
 		for (const caption of captions) {
 			const name = (await caption.textContent())!.trim();
@@ -4871,6 +4934,18 @@ test.describe('Phone mode', () => {
 			const page_ = page.locator(`section[aria-label="${tab === 'Pads' ? 'Play' : tab}"]`);
 			expect(await page_.evaluate((el) => el.scrollHeight <= el.clientHeight + 1), tab).toBe(true);
 		}
+	});
+
+	test('PR 88: the Pads page rotates and reverses the pattern', async ({ page }) => {
+		await phonePads(page).nth(0).click();
+		await expect(phonePads(page).nth(0)).toHaveAttribute('aria-pressed', 'true');
+		await page.getByRole('button', { name: 'Rotate right' }).click();
+		await expect(phonePads(page).nth(1)).toHaveAttribute('aria-pressed', 'true');
+		await expect(phonePads(page).nth(0)).toHaveAttribute('aria-pressed', 'false');
+		await page.getByRole('button', { name: 'Reverse', exact: true }).click();
+		await expect(phonePads(page).nth(14)).toHaveAttribute('aria-pressed', 'true');
+		await page.getByRole('button', { name: 'Rotate left' }).click();
+		await expect(phonePads(page).nth(13)).toHaveAttribute('aria-pressed', 'true');
 	});
 
 	test('Reset in the menu asks first, then resets the pads (and the sound, if asked); Undo brings them back', async ({ page }) => {
