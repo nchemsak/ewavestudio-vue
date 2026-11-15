@@ -1524,8 +1524,8 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 - The PR that finishes an item also updates this list: move the item to "Done".
 
 Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the maintainer
-changes it as ideas come up). Everything drum-related waits until the maintainer brings the
-drum lanes back.
+changes it as ideas come up; the list now is the one agreed in PR 86). The drums come back as
+the Drums machine (item 17), not as the old sample lanes.
 
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
@@ -1535,12 +1535,29 @@ what the maintainer turned down: Converge or Up + octave as arpeggio patterns, P
 target, and for now a second oscillator and a second pad lane, on hold below).
 
 The maintainer's brainstorm after PR 73 is done (its three small fixes were PR 74, the LFO
-card PR 75, the Melody Maker PR 76, the plain cards PR 77). Items 1 and 2 come from the one after
-PR 77 (its first items were PR 78, the stretched keyboard and pedals, PR 79, the theme
-colours, PR 80, the Melody Maker's screen while playing, and PR 84, share links); items 3 and 4 from earlier ones (its first items, Generate made obvious and the Random wave tile, were PRs 82 and 83). No one else uses the app yet, so older projects need no special care: a removed
+card PR 75, the Melody Maker PR 76, the plain cards PR 77). The brainstorm after PR 77's
+leftovers (dragging notes on the Melody Maker's screen, the octave arrows at the edges) are
+Maybes below (its first items were PR 78, the stretched keyboard and pedals, PR 79, the theme
+colours, PR 80, the Melody Maker's screen while playing, and PR 84, share links; Generate made obvious and the Random wave tile were PRs 82 and 83). No one else uses the app yet, so older projects need no special care: a removed
 setting can simply stop applying.
 PR 85 was a list of the maintainer's own after PR 84 (Sand removed, the Spectrum first, the
-Random tile's dice, the dice badges saved), taken before item 1, which stays next.
+Random tile's dice, the dice badges saved).
+
+**The review after PR 85** (PR 86 records it; no code). Claude built and used the app, read
+around the market, and put 38 ideas with mockups on a page; the maintainer answered each Yes,
+Maybe or No. The list below is the Yes answers in the agreed order; the Maybes and Nos follow
+it. What the review found, and what the answers settled:
+- **The look:** no overhaul. Targeted fixes now (items 3–6), and one layout change later, with
+  the machines (item 16), so the layout changes once.
+- **The first visit** is silent (no step is on) and the glowing Generate gives every pad A
+  (Scale starts at None): item 1, before anything else.
+- **One 16-step bar repeats forever:** patterns A–D and a chain (item 14).
+- **More sequencers are small machines with hard limits** (items 15–18), not copies of today's
+  panel: they share the tempo, the key and scale, the pattern slots and the pedalboard; one is
+  on the pads at a time. Today's synth becomes the **Rhythm** machine and stays the DFAM-style
+  core (see "Design intent").
+- **Money:** nothing is charged for. Launch free and see who comes back (item 13) before any
+  paid route; a plugin or a native app (a new sound engine) was turned down.
 
 Redesigns are visual: every control keeps working as it does, and each card keeps its size.
 They are for the desktop first; the phone can keep what suits it. Each starts with a few
@@ -1551,21 +1568,137 @@ do, sockets, steppers that open a list for a choice of words, switches for numbe
 only where a control doesn't explain itself, not too many buttons on show, and the action
 button where the eye ends up (Generate, PR 82).
 
-1. **Drag notes on the Melody Maker's screen** (maybe; the maintainer's call once PR 80 and
-   PR 82 are in): up or down, snapping to the scale, one undo step, a preview while stopped, using the
-   shape cards' drag code. It's a second editor for the pads' pitches, and fiddly on a 110 px
-   screen.
-2. **Octave arrows at the edges** (last: the maintainer isn't sure). `octaveShiftAllSkip()`
-   moves each pad on its own and skips those that would leave 100–2000 Hz, so a pattern near an
-   edge gets squashed (its intervals change); it also moves `globalOctaveOffset` when pads were
-   skipped. Proposed: all or nothing (if any pad can't move, none does), the arrow greyed out
-   with a title saying why; the phone's Octave ↓ / ↑ too; a unit test.
-3. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
-   changes to come may change the height), centred vertically when it fits: tighten spacing,
-   then scale the frame down to fit short windows (with a floor). Last, so the height is
-   settled; measure at the maintainer's screen and common laptop sizes.
-4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
-   the maintainer wants some maintenance, each as its own PR.
+Finish what's here:
+
+1. **A first visit plays something.** The very first visit in a browser (no saved project to
+   reopen, no share link) opens a starter beat: a built-in sound and a built-in pattern, picked
+   at random. File → New stays empty (the maintainer's call, as before), so the browser test
+   that compares File → New with a fresh page needs a first-visit case. The Melody Maker's
+   Scale starts on Minor, not None, so the first Generate makes a melody. Also stop
+   `loadAllSamples()` downloading the three mp3 files on every visit; the files and the hidden
+   lanes' code stay until the Drums machine (item 17).
+2. **Tap tempo, Rotate and Reverse.** A TAP cap beside the tempo (four taps set it). In Pattern
+   Tools: ◂ ▸ shift the whole pattern one step (round the bar's end), Reverse flips it; steps,
+   velocities, pitches, repeats and the noise mask move together; one undo step; the phone too
+   if there's room.
+3. **Three themes.** Keep Synthwave, Dark and Analog; remove Slate (its button, its name in
+   `THEMES`, its CSS) and the hidden Light theme (its CSS and the `.theme-light` rules). A
+   browser that had either saved opens in Synthwave, as Sand's did (PR 85). First of the visual
+   items, so the later ones are styled and tested three times, not five.
+4. **Themes and MIDI inside the frame; one volume knob.** A gear button in the top bar opens
+   Theme and MIDI (the row above the frame goes; MIDI learn's bar stays at the bottom of the
+   screen); the logo becomes the link back to Ephemeral Wave and the link under the frame goes.
+   The Step Sequencer's Vol knob is hidden while there's one lane (it comes back as each
+   machine's level in the rail, item 16); the LFO's Level mark (PR 62), which is drawn on it,
+   moves to the Volume knob. Mockups first.
+5. **One accent, one job.** The pink-to-cyan gradient on Play only; the accent on what you
+   press to make something (Generate, Save); mint for LEDs and notches and amber for the LFO,
+   as now. The Waveforms card's wash calmed to the other cards' background, so its tiles carry
+   it. Captions' contrast up a step in Synthwave (9–10 px violet on purple is the hardest text
+   on the page). Maybe labels in a plain sans, numbers and readouts staying monospace. Mockups
+   first.
+6. **Fit the window without scrolling** (put off after PR 70; moved up in the review: the panel
+   is 1,356 px tall at 1600 px wide, so the pads scroll away on most laptops), centred
+   vertically when it fits: tighten spacing (the screen's margins, the pedals' footswitches,
+   the gaps between sections), then scale the frame down to fit short windows (with a floor).
+   Measure at the maintainer's screen and common laptop sizes. Checked again when the machines'
+   rail arrives (item 16).
+7. **Record a take.** A REC cap beside Play records what's heard, knob moves included, to a
+   WAV (the output captured without loss, in a worklet), and stops with Stop. Export renders
+   the pattern as set; it can't capture a filter sweep that's performed.
+
+Give it a signature, then show it:
+
+8. **A tape pedal.** A fourth pedal, last in the chain, so the noise layer passes through it
+   too: AGE (hiss, a duller top, soft saturation), WOBBLE (wow and flutter: a very short delay
+   whose time drifts) and a TAPE | VINYL switch (crackle and pops for the hiss). Both engines;
+   its noise from the export's seeded random numbers, so stems still add up; saved, reset by
+   presets, rolled by the Sounds dice sometimes. Four pedals across: mockups first.
+9. **The screen at rest shows the hit.** While stopped, the screen draws one hit of the current
+   sound as a waveform (the export engine renders one in a few milliseconds), with its length
+   and peak, redrawn as a knob turns; so the biggest thing on the page is never blank.
+10. **A Simple view on desktop.** Phone mode's layout (big pads, the Sound and Pattern
+    steppers, four knobs) on a computer, as Simple | Full in the top bar, remembered; the full
+    panel stays as it is.
+11. **Sample a sound.** Record about a second from the microphone; it becomes a wave tile,
+    played at each pad's pitch through the same envelope, filter and pedals. Both engines; kept
+    with the project in IndexedDB, left out of share links (too big). The hidden sample lanes
+    already play recordings.
+12. **Lessons.** A Learn item in the menu: about ten short lessons that light one control at a
+    time ("drag this point left: the hit gets darker"), built on the hint Generate has.
+13. **Launch free and measure; a tip jar.** Mostly the maintainer's: a short video, posts where
+    synth people gather and to the sites that cover free browser instruments. Claude's part: a
+    Support link in the gear menu, an analytics event for a visitor who comes back within a
+    week, and a first free pack of one-shots made with the app. Nothing is charged for.
+
+Grow into a small groovebox:
+
+14. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
+    holds the steps, notes, velocities and repeats; the sound is shared. A slot clicked while
+    playing takes over at the next bar (the bar queue, with its ghost). Copy A to B. Under the
+    slots, a chain of up to eight cells plays them in order, and Export audio can render the
+    chain. No timeline. Saved so that a pattern is a list of tracks from the start, even with
+    one track, and the machines need no second change to saved projects.
+15. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
+    that builds a note, used by the live engine and the export engine (today two engines kept
+    in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
+    on the output (dropped after PR 30 for one voice; four machines summed need it).
+16. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
+    name, mute, level and a tiny row of its steps); the pads show the chosen machine; the Sound
+    section becomes the chosen machine's panel; a send to the pedals per machine; a stem per
+    machine in the export. Bass: one note at a time, 30–250 Hz, saw or square with a sub, one
+    filter with its envelope, Accent per step, about six knobs (Cutoff, Reso, Env, Decay, Sub,
+    Drive), following the key. Decide Slide and Tie (a Maybe below) when it starts. Mockups
+    first; the phone gets a way to choose the machine.
+17. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
+    Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
+    drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
+    light work for a phone. It replaces the hidden sample lanes: their playback code is reused,
+    the rest and the three mp3 files go (see "Dead code").
+18. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
+    touch plates, one slow filter, joystick and short sequencer are worth borrowing; its
+    per-voice knobs and microtonal tuning are not). Six plates, one per note of the key's
+    chord; a touched plate latches a small swarm of detuned oscillators, fading in over a bar
+    or more; an X/Y pad (the filter one way, the swarm's spread the other); Attack and Release
+    in bars; no steps: its sequencer counts bars, a chord per bar for 4 or 8 bars, across the
+    pattern chain; straight to the reverb.
+19. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+    the maintainer wants some maintenance, each as its own PR.
+
+Maybe (the maintainer's answer in the review, or earlier; ask before starting one):
+- **Kit export:** in Export audio, every lit pad as its own one-shot, and sixteen rolls of the
+  Sounds dice as sixteen one-shots.
+- **Slide and Tie per step** (a pad's ⋮ menu): Slide glides into the next note, Tie holds a
+  note through the next step. The Acid preset and the Bass machine want them.
+- **Last step:** a pattern length of 1–16 (a marker dragged along the pads); 12 steps is 3/4.
+- **Photo → beat:** a photo's sixteen columns become the pads (colour → note, by the pads' own
+  colour scale; brightness → velocity; the darkest columns off; snapped to the key), and maybe
+  the sound too. All in the browser.
+- **Word seed:** a word typed seeds both dice, so the same word always gives the same sound and
+  pattern; maybe four sliders that steer the roll (dark–bright, soft–hard, sparse–busy,
+  dry–wet).
+- **Evolve:** at each bar line one small thing changes (a note to its neighbour in the scale, a
+  velocity, a hit a step along); Keep writes what's heard into the pattern, Back returns.
+- **A wave that talks** ("Voice"): the saw through three vowel filters, a mini knob sweeping
+  A-E-I-O-U, an LFO target.
+- **Orbit:** the row of notes repeats every 5, 6 or 7 steps while the rhythm stays at 16.
+- **Tilt and shake** on the phone: tilt to sweep Tone, shake to roll the dice.
+- **Google Play** (on hold below), once the launch shows phone use.
+- **Drag notes on the Melody Maker's screen** (from the brainstorm after PR 77): up or down,
+  snapping to the scale, one undo step, a preview while stopped, using the shape cards' drag
+  code. It's a second editor for the pads' pitches, and fiddly on a 110 px screen.
+- **Octave arrows at the edges** (the maintainer isn't sure). `octaveShiftAllSkip()` moves each
+  pad on its own and skips those that would leave 100–2000 Hz, so a pattern near an edge gets
+  squashed (its intervals change); it also moves `globalOctaveOffset` when pads were skipped.
+  Proposed: all or nothing (if any pad can't move, none does), the arrow greyed out with a
+  title saying why; the phone's Octave ↓ / ↑ too; a unit test.
+
+Turned down in the review after PR 85 (the maintainer's No): drawing a wave (a ninth tile whose
+cycle is drawn by hand); a slicer (a guitar or other live input chopped by the pattern); Rain
+(drops falling on the pads, a way to play Drift); describing a beat to an AI (it would need a
+paid server); a paid Pro unlock; a native app or a plugin (see "Not now"). Claude also advised
+against, and nobody asked for: a full visual overhaul, an arranger with a timeline, ads, a
+subscription, an AI model running in the browser, a webcam controller.
 
 Decided after PR 73 (the maintainer's call, "for now"): the Sound and Pattern presets stay in
 the transport card, and Step Fills and Humanize in Pattern Tools; they aren't gathered in one
@@ -1616,9 +1749,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   interval (a fifth, an octave, detuned) and level, maybe hard sync or VCO 1 → 2 FM; a card,
   both engines, presets, the dice, saving. It must sound unlike the FM card's modulator, which
   is already a second oscillator.
-- **A second 16-pad lane** (put off after PR 52): bass, ambient or drums layered with the synth
-  lane. It makes the app a groovebox: sound settings per lane, the scheduler, the layout,
-  exports and phone mode. The hidden drum lanes' code is the natural start.
+- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 15–18.)
 - **Patch cables** (put off after PR 49: the maintainer wants to tweak the layout more first):
   animated cables from the LFO to what it moves (Cutoff, the Pulse tile, the pads), swaying a
   little, never over a control, still with `prefers-reduced-motion`. They depend on where
@@ -1653,8 +1784,9 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
   ticks, 24 a quarter note, which jitter); MIDI out would send the pattern's notes to another
   synth, timed against the audio clock.
-- **Several patterns (A/B/C/D) chained into a song.**
-- **32 steps, or per-lane lengths** (the export code's types already allow 32).
+- (Several patterns chained into a song: planned now, item 14.)
+- **32 steps, or per-lane lengths** (the export code's types already allow 32; "Last step", a
+  Maybe above, is the smaller version).
 - **Per-step parameter locks** (for example a different filter cutoff on each step). Each
   note is built from scratch, so per-note settings (FM, unison, filter, envelopes, noise) can
   vary per step. Delay and reverb are shared by every note, so per step they become send
@@ -1666,13 +1798,11 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   samples, which caps the pitch around the F above middle C; AudioWorklets also run in the
   `OfflineAudioContext` used for export), metallic (several square waves at odd ratios, as the
   808 makes cymbals and cowbell) and struck (a click ringing tuned resonant filters).
-- Drum lanes through drive, delay and reverb, with per-lane pitch, decay and pan.
-- Store custom samples in the browser, and load them by drag-and-drop.
-- Drum kits in the preset library, and drum lanes played by MIDI notes.
-- **WAV export renders only the synth lane.**
-- **Drum sample paths depend on the trailing slash.** They are relative to the page
-  (`audio/kick.mp3`), so they break if `/studio2` is opened without its trailing slash and the
-  server doesn't redirect.
+- The old drum-lane items (lanes through the pedals with pitch, decay and pan; custom samples
+  stored in the browser; drum kits; the export rendering only the synth lane; the sample paths
+  that depend on the trailing slash) are overtaken by the Drums machine (item 17), a send and a
+  stem per machine (item 16) and Sample a sound (item 11). Still on hold from them: samples
+  loaded by drag-and-drop, and drum slots played by MIDI notes.
 - **Shared session ("jam"):** several people on one URL, for example one phone playing the
   drum lanes and another the synth. It needs a realtime relay between devices; the site is
   static files on shared hosting, so that means a third-party service (not decided yet).
@@ -1768,6 +1898,7 @@ Done:
 | 82 | Melody Maker, part 2 (option A of three mockups): Generate is a full-width accent cap at the card's bottom naming what it makes ("Generate melody" / "Generate arpeggio"), Melody | Arpeggio moved up into the header, the card the same size; until Generate is first pressed in the browser, the screen says "Press Generate" (with what it would make) and the button glows. |
 | 84 | Share a project as a link: File → Share link… packs the project (unsaved changes included, without the theme) into the link's `#p=…` fragment, deflated, about 1.2 kB (`src/lib/storage/share.ts`); the phone's share sheet, else copied. Opening one loads it as an unsaved copy, never over a saved project and not in File → Open until saved, and says "Shared pattern: press Play"; a link pasted into an open page asks first if there are unsaved changes; a damaged link says so. |
 | 83 | The Waveforms card's Random is a tall tile in a narrow ninth column beside the eight waves (option B of two mockups): it never stays down, its dice tumbles on each press, and while the pads play a mix it shows it (a small bar per pad in its wave's colour, "Mix / roll again"); the LFO card's Sine / Square are two bigger keys with the wave drawn on them, lit in the accent like FM's ratio keys (option 1 of two). Cards keep their size. |
+| 86 | The plan after the review following PR 85 (no code): Claude reviewed the app as a whole (look, missing sequencer basics, strange ideas, patterns, more sequencers, money) as 38 ideas with mockups; the maintainer's Yes answers are the new list in order (a first visit that plays, tap tempo and rotate, three themes, chrome inside the frame, one accent, fit the window, record a take, a tape pedal, the hit on the idle screen, a Simple view, sample a sound, lessons, launch; then patterns A–D and a chain, and the Bass, Drums and Drift machines), the Maybes and Nos recorded under it. |
 | 85 | The maintainer's list after PR 84: the **Sand** theme removed (a browser that had it opens in Synthwave); the screen opens on the **Spectrum** (F2) instead of the Scope; the Random tile's dice tumbles properly (a hop and quarter turns, a new face each turn, landing on another face, one size); and the wave tiles' dice badges (which waves Random picks from) are saved with the project, so File → New and a sound preset light them all again and an opened project brings its own (they carried over before). |
 
 ## Testing a PR
