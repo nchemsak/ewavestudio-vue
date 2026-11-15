@@ -781,7 +781,7 @@ const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 
 const melodyUi = reactive<MelodyUi>({
 	keyRoot: 'A',
-	keyScale: 'none',
+	keyScale: 'naturalMinor', // so the first Generate makes a melody (None gave every pad the key)
 	rangePreset: 'wide',
 	arpPattern: 'up',
 	arpRate: '1/16',
@@ -1586,7 +1586,6 @@ function startEnvViz() {
 }
 
 onMounted(() => {
-	loadAllSamples();
 
 	window.addEventListener('mouseup', handleMouseUp);
 
@@ -3091,6 +3090,15 @@ function handleMouseUp() {
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+// The hidden drum lanes' samples (public/audio/*.mp3) are fetched only once one of those lanes
+// has a step on (an older project), not on every visit: their UI is hidden, so normally none has.
+let samplesRequested = false;
+watch(() => instruments.value.some(i => i.type !== 'synth' && !i.isCustom && i.steps?.some(Boolean)), (needed) => {
+	if (!needed || samplesRequested) return;
+	samplesRequested = true;
+	loadAllSamples();
+}, { immediate: true });
+
 async function loadAllSamples() {
 	for (const instrument of instruments.value) {
 		if (instrument.type === 'synth' || instrument.isCustom) continue;
@@ -3156,6 +3164,7 @@ const { project } = useProjectSync({
 	buildSnapshot: () => buildSnapshot(projectState),
 	applySnapshot: (s) => applySnapshot(projectState, s),
 	resetUiToFactoryDefaults,
+	startFirstVisit,
 });
 
 // Undo/redo of settings changes (Ctrl/Cmd+Z and the buttons in ProjectControls); see
@@ -3195,12 +3204,12 @@ const activePresetId = computed<string | null>(() => {
 	return PRESETS.find(p => presetKeys[p.id] === key)?.id ?? null;
 });
 
-async function choosePreset(id: string) {
+async function choosePreset(id: string, track = true) {
 	const preset = PRESETS.find(p => p.id === id);
 	if (!preset) return;
 	applyPreset(projectState, preset);
 	choosingPreset.value = id;
-	trackEvent('preset_select', { preset: id });
+	if (track) trackEvent('preset_select', { preset: id });
 	// Let the panels follow (props, their watchers and what they emit back), as undo does
 	await nextTick();
 	await nextTick();
@@ -3230,10 +3239,10 @@ const activePatternId = computed<string | null>(() => {
 
 // A pattern changes at once, playing or not (the maintainer's call after PR 55: a key waits
 // for the bar, a pattern doesn't)
-async function choosePattern(id: string) {
+async function choosePattern(id: string, track = true) {
 	const pattern = PATTERNS.find(p => p.id === id);
 	if (!pattern) return;
-	trackEvent('pattern_select', { pattern: id });
+	if (track) trackEvent('pattern_select', { pattern: id });
 	applyPattern(projectState, pattern, { min: MIN_PAD_HZ, max: MAX_PAD_HZ });
 	choosingPattern.value = id;
 	await nextTick();
@@ -3248,6 +3257,17 @@ async function choosePattern(id: string) {
 function rollRandomPattern() {
 	applyPattern(projectState, randomPattern(), { min: MIN_PAD_HZ, max: MAX_PAD_HZ });
 	trackEvent('pattern_random');
+}
+
+// The very first visit in this browser (useProjectSync) opens a starter beat, so the first
+// Play makes a sound: a built-in sound and a built-in pattern, picked at random, their buttons
+// lit as if clicked. File → New stays empty (the maintainer's call).
+async function startFirstVisit() {
+	const pick = <T,>(list: readonly T[]) => list[Math.floor(Math.random() * list.length)];
+	const preset = pick(PRESETS), pattern = pick(PATTERNS);
+	await choosePreset(preset.id, false);
+	await choosePattern(pattern.id, false);
+	trackEvent('first_visit', { preset: preset.id, pattern: pattern.id });
 }
 
 // BAR QUEUE START

@@ -196,6 +196,9 @@ test.beforeEach(async ({ page }) => {
 	page.on('response', (r) => { if (r.status() >= 400) problems.push(`${r.status()} ${r.url()}`); });
 	page.on('requestfailed', (r) => problems.push(`failed: ${r.url()}`));
 	await page.addInitScript(instrument);
+	// Every test but the first visit's starts from empty pads and the factory sound: the very
+	// first visit in a browser opens a starter beat (useProjectSync's startFirstVisit)
+	await page.addInitScript(() => localStorage.setItem('ewave-studio2:visited', '1'));
 	await page.goto('./');
 	await expect(pads(page)).toHaveCount(16);
 });
@@ -1401,6 +1404,63 @@ test('File → New gives the same settings as a freshly opened page', async ({ p
 	expect(fresh.fx.delay).toMatchObject({ division: '1/8.', time: 0.375, toneHz: 5000 });
 	const settings = ({ ui, ...rest }: any) => rest;
 	expect(settings(afterNew)).toEqual(settings(fresh));
+});
+
+test("the first visit opens a starter beat; File → New stays empty; no drum samples are fetched", async ({ page, browser }) => {
+	const projectData = async (p: Page) =>
+		JSON.parse((await downloadFromFileMenu(p, 'Export file')).toString('utf8')).data;
+	const settings = ({ ui, ...rest }: any) => rest;
+	const synthLane = (d: any) => d.instruments.find((i: any) => i.name === 'synth-voice');
+	// A visit that isn't the first (every other test's): empty pads, the factory sound, Minor
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(0);
+	const factory = await projectData(page);
+	expect(factory.melody.keyScale).toBe('naturalMinor');
+	await expect(page.getByRole('button', { name: 'Scale: Minor' }).first()).toBeVisible();
+
+	// A browser that has never opened the app (a context of its own, without the test's
+	// 'visited' flag)
+	const ctx = await browser.newContext({
+		baseURL: 'http://localhost:4173/studio2/', viewport: { width: 1600, height: 1200 }, serviceWorkers: 'block',
+	});
+	const first = await ctx.newPage();
+	const requested: string[] = [];
+	first.on('request', (r) => requested.push(r.url()));
+	first.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
+	await first.route(/googletagmanager\.com/, (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
+	await first.addInitScript(instrument);
+	await first.goto('./');
+	await expect(pads(first)).toHaveCount(16);
+
+	// A built-in sound and a built-in pattern, their buttons lit
+	await expect(soundsBox(first).getByRole('button', { pressed: true })).toHaveCount(1);
+	await expect(patternsBox(first).getByRole('button', { pressed: true })).toHaveCount(1);
+	const sound = (await soundsBox(first).getByRole('button', { pressed: true }).textContent())!.trim();
+	const pattern = (await patternsBox(first).getByRole('button', { pressed: true }).textContent())!.trim();
+	expect(PRESETS.map((p) => p.label)).toContain(sound);
+	expect(PATTERNS.map((p) => p.label)).toContain(pattern);
+	expect(await first.locator('.pad-row .padTEST.selected').count()).toBeGreaterThan(0);
+	const starter = await projectData(first);
+	expect(starter.melody.keyScale).toBe('naturalMinor');
+
+	// Play plays it
+	await first.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect.poll(() => notesPlayed(first)).toBeGreaterThan(0);
+	await first.getByRole('button', { name: 'Stop', exact: true }).click();
+
+	// A reload is no longer a first visit: the same project comes back, no new roll
+	await first.reload();
+	await expect(pads(first)).toHaveCount(16);
+	expect(synthLane(await projectData(first))).toEqual(synthLane(starter));
+
+	// File → New stays empty: the same settings as a page that isn't the first visit
+	await chooseFromFileMenu(first, 'New');
+	await expect(first.getByRole('menuitem', { name: 'New' })).toBeHidden();
+	await expect(first.locator('.pad-row .padTEST.selected')).toHaveCount(0);
+	expect(settings(await projectData(first))).toEqual(settings(factory));
+
+	// The hidden drum lanes' samples weren't downloaded
+	expect(requested.filter((u) => /\.mp3(\?|$)/.test(u))).toEqual([]);
+	await ctx.close();
 });
 
 test('the synced delay time follows the TIME knob, the tempo and a loaded project', async ({ page }) => {
@@ -3575,8 +3635,8 @@ test("a pad's repeats can step up or down the key's chord, live, saved and in th
 	await expect(page.locator('.pad-row .ratchet-badge').first()).toHaveText('×4↑');
 	await expect(pads(page).first()).toHaveAccessibleName('Step 1, A3, 4 hits up the chord');
 
-	// Live: each hit's oscillator starts on the next note of the chord (key A, no scale: major,
-	// A C# E), from the pad's A3
+	// Live: each hit's oscillator starts on the next note of the chord (A minor, the starting
+	// key and scale: A C E), from the pad's A3
 	await page.evaluate(() => {
 		const w = window as any;
 		w.__oscFreqs = [];
@@ -3601,14 +3661,14 @@ test("a pad's repeats can step up or down the key's chord, live, saved and in th
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
 	const hits = await page.evaluate(() => ((window as any).__oscFreqs as { when: number; hz: number }[])
 		.sort((a, b) => a.when - b.when).slice(0, 4).map((h) => Math.round(69 + 12 * Math.log2(h.hz / 440))));
-	expect(hits).toEqual([57, 61, 64, 69]);
+	expect(hits).toEqual([57, 60, 64, 69]);
 
 	// The WAV export's engine plays them too (its oscillators start in an offline context)
 	await page.evaluate(() => { (window as any).__oscFreqs = []; });
 	await exportWav(page);
 	const exported = await page.evaluate(() => ((window as any).__oscFreqs as { when: number; hz: number }[])
 		.sort((a, b) => a.when - b.when).slice(0, 4).map((h) => Math.round(69 + 12 * Math.log2(h.hz / 440))));
-	expect(exported).toEqual([57, 61, 64, 69]);
+	expect(exported).toEqual([57, 60, 64, 69]);
 
 	// Saved with the project
 	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
@@ -3625,7 +3685,7 @@ test("a pad's repeats can step up or down the key's chord, live, saved and in th
 		if (status === 0xff) { at++; const len = vlq(); at += len; }
 		else { if ((status & 0xf0) === 0x90) ons.push(midi[at]); at += 2; }
 	}
-	expect(ons).toEqual([57, 61, 64, 69]);
+	expect(ons).toEqual([57, 60, 64, 69]);
 
 	// A pattern sets its own repeats, playing the pad's note
 	await patternsBox(page).getByRole('button', { name: 'Rolls', exact: true }).click();
@@ -3655,7 +3715,7 @@ test('Export audio: a loop is exactly N bars, with the echoes from its end folde
 
 	// A loop, normalized (the defaults): exactly 2 bars, the last echoes heard at its start
 	const loop = await exportAudio(page, { bars: 2, ending: 'Loop', mix: true, stems: false, midi: false, oneShot: false, normalize: true });
-	expect(loop.name).toBe('Loop Test_80bpm_2bars_mix.wav');
+	expect(loop.name).toBe('Loop Test_80bpm_Amin_2bars_mix.wav');
 	const l = wavSamples(loop.bytes);
 	expect(l.frames).toBe(Math.round(2 * 4 * (60 / 80) * l.rate));
 	expect(wavWindow(loop.bytes, 0, 2).peak).toBeGreaterThan(0.02);
@@ -3663,7 +3723,7 @@ test('Export audio: a loop is exactly N bars, with the echoes from its end folde
 
 	// With the tail: a clean start, and the echoes ring on past the 2 bars
 	const tail = await exportAudio(page, { ending: 'With tail' });
-	expect(tail.name).toBe('Loop Test_80bpm_2bars-tail_mix.wav');
+	expect(tail.name).toBe('Loop Test_80bpm_Amin_2bars-tail_mix.wav');
 	const t = wavSamples(tail.bytes);
 	expect(t.frames).toBeGreaterThan(l.frames);
 	expect(wavWindow(tail.bytes, 0, 2).peak).toBe(0);
@@ -3685,19 +3745,19 @@ test('Export audio: effects stems add up to the mix; a MIDI file and a one-shot 
 	const zip = await exportAudio(page, {
 		bars: 1, ending: 'Loop', mix: true, stems: true, midi: true, oneShot: true, oneShotNote: 'A2 (110 Hz)', normalize: true,
 	});
-	expect(zip.name).toBe('Stems_80bpm_1bar.zip');
+	expect(zip.name).toBe('Stems_80bpm_Amin_1bar.zip');
 	const files = unzip(zip.bytes);
 	expect(Object.keys(files).sort()).toEqual([
-		'Stems_80bpm_1bar.mid',
-		'Stems_80bpm_1bar_delay.wav', 'Stems_80bpm_1bar_dry.wav', 'Stems_80bpm_1bar_mix.wav',
-		'Stems_80bpm_1bar_noise.wav', 'Stems_80bpm_1bar_reverb.wav',
+		'Stems_80bpm_Amin_1bar.mid',
+		'Stems_80bpm_Amin_1bar_delay.wav', 'Stems_80bpm_Amin_1bar_dry.wav', 'Stems_80bpm_Amin_1bar_mix.wav',
+		'Stems_80bpm_Amin_1bar_noise.wav', 'Stems_80bpm_Amin_1bar_reverb.wav',
 		'Stems_oneshot_A2.wav',
 	]);
 
 	// The stems add up to the mix, sample for sample, in both channels
 	for (const ch of [0, 1]) {
-		const mix = wavSamples(files['Stems_80bpm_1bar_mix.wav'], ch).samples;
-		const stems = ['dry', 'delay', 'reverb', 'noise'].map((p) => wavSamples(files[`Stems_80bpm_1bar_${p}.wav`], ch).samples);
+		const mix = wavSamples(files['Stems_80bpm_Amin_1bar_mix.wav'], ch).samples;
+		const stems = ['dry', 'delay', 'reverb', 'noise'].map((p) => wavSamples(files[`Stems_80bpm_Amin_1bar_${p}.wav`], ch).samples);
 		let worst = 0, loudest = 0;
 		for (let i = 0; i < mix.length; i++) {
 			const sum = stems.reduce((a, s) => a + s[i], 0);
@@ -3710,7 +3770,7 @@ test('Export audio: effects stems add up to the mix; a MIDI file and a one-shot 
 	}
 
 	// The MIDI file: 4 notes at A3 (MIDI 57) in a bar at 80 BPM
-	const midi = files['Stems_80bpm_1bar.mid'];
+	const midi = files['Stems_80bpm_Amin_1bar.mid'];
 	expect(midi.subarray(0, 4).toString('latin1')).toBe('MThd');
 	const noteOns = [...midi.subarray(22)].flatMap((b, i, a) => (b === 0x90 ? [a[i + 1]] : []));
 	expect(noteOns).toEqual([57, 57, 57, 57]);
@@ -4157,7 +4217,8 @@ async function chooseRate(page: Page, rate: string) {
 
 async function chooseOption(page: Page, select: string, option: string) {
 	await page.getByRole('button', { name: new RegExp(`^${select}:`) }).click(); // "Scale: Minor"
-	await page.getByRole('option', { name: option, exact: true }).click();
+	// The chosen one reads "● Minor"
+	await page.getByRole('option', { name: new RegExp(`^(● )?${option}$`) }).click();
 }
 
 test("Melody Maker: no ⋯ menu; Active Pads Only (Melody) and Skip (Arpeggio) are toggles on the card, saved", async ({ page }) => {
@@ -4376,7 +4437,11 @@ test('Melody Maker: no dropdowns; steppers with lists, Narrow | Wide, and a scre
 	await expect(card.locator('select, .pt-select, .pt-selectbtn')).toHaveCount(0);
 	await expect(card.locator('.mm-cap')).toHaveText(['Scale', 'Octaves']);
 
-	// The Scale stepper: its arrows step (round the ends), and the scale's notes light on the keys
+	// The Scale stepper: its arrows step (round the ends), and the scale's notes light on the keys.
+	// It starts on Minor (PR 87)
+	await expect(scaleName).toHaveText(/Minor/);
+	await expect(card.locator('.mm-kb .in-scale')).toHaveCount(7);
+	await chooseOption(page, 'Scale', 'None');
 	await expect(scaleName).toHaveText(/None/);
 	await expect(card.locator('.mm-kb .in-scale')).toHaveCount(0);
 	await scale.getByRole('button', { name: 'Next' }).click();
@@ -4524,7 +4589,9 @@ test('Melody Maker: Generate is the card\'s last line, and the screen says to pr
 	const screen = card.locator('.mm-screen');
 	await expect(hint).toBeVisible();
 	await expect(hint).toContainText('Press Generate');
-	await expect(hint).toContainText('every pad gets A'); // no scale yet
+	await expect(hint).toContainText('for a melody in A Minor'); // the starting scale (PR 87)
+	await chooseOption(page, 'Scale', 'None');
+	await expect(hint).toContainText('every pad gets A'); // no scale
 	await expect(generate).toHaveClass(/is-fresh/);
 
 	// It's the card's last control, under the screen and the makers' settings, the card's width
@@ -4555,6 +4622,7 @@ test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its 
 	const arp = mode.getByRole('button', { name: 'Arpeggio', exact: true });
 	await expect(random).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.getByRole('button', { name: 'Arp pattern' })).toBeHidden();
+	await chooseOption(page, 'Scale', 'None');
 	await expect(page.locator('.mm-mode-note')).toContainText('No scale chosen: every pad gets A');
 	const card = page.locator('.module.melody');
 	const height = (await card.boundingBox())!.height;
@@ -4845,10 +4913,9 @@ test.describe('Phone mode', () => {
 	});
 
 	test('holding a pad picks its note from the key, its velocity and repeats', async ({ page }) => {
-		// A minor: the picker offers only its notes
+		// A minor (the starting key and scale): the picker offers only its notes
 		await page.getByRole('tab', { name: 'Key' }).click();
-		await page.getByRole('button', { name: 'Scale' }).click();
-		await page.getByRole('option', { name: 'Minor', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Scale: Minor' })).toBeVisible();
 		await page.getByRole('tab', { name: 'Pads' }).click();
 
 		await holdPad(page, 2);
