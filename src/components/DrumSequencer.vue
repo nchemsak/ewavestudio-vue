@@ -3698,10 +3698,12 @@ const phoneCtx = reactive({
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
-	/* Effects tab: the pedals at a size that suits them, centred */
+	/* Effects tab: the pedals at their desktop size (118 × 239 at 1600 px), centred: wider,
+	   they looked stretched (190 px) */
 	.module.fx .fx-pair {
-		grid-template-columns: repeat(3, minmax(0, 190px));
+		grid-template-columns: repeat(3, minmax(0, 120px));
 		justify-content: center;
+		column-gap: 28px;
 	}
 
 	/* The transport: Sounds and Patterns on a row of their own under the knobs */
@@ -3770,9 +3772,11 @@ const phoneCtx = reactive({
 		grid-column: 1 / -1;
 	}
 
-	/* Effects tab: the pedals one under another, as before */
+	/* Effects tab: the pedals one under another (three across they'd be 105 px wide, and their
+	   labels run into the knobs), at their desktop size, centred */
 	.module.fx .fx-pair {
-		grid-template-columns: minmax(0, 1fr);
+		grid-template-columns: minmax(0, 120px);
+		row-gap: 16px;
 	}
 
 	.ds-tab {
@@ -3877,14 +3881,6 @@ const phoneCtx = reactive({
 	align-items: start;
 	column-gap: 28px;
 	height: 100%;
-}
-
-/* Each pedal fills its column (under 720 px the pedals make themselves half wide, for the
-   desktop's one-column layout) */
-.pl-fx :deep(.delay-pedal),
-.pl-fx :deep(.drive-pedal),
-.pl-fx :deep(.reverb-pedal) {
-	width: 100%;
 }
 
 .pl-melody {

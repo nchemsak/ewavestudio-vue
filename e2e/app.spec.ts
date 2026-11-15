@@ -1535,7 +1535,7 @@ test('laid out like hardware: Sound in rows beside Compose, ending on one line; 
 	}
 
 	// Tablets and phones: Sound, Effects and Compose as tabs under the steps
-	for (const width of [1024, 390]) {
+	for (const width of [1024, 820, 390]) {
 		await page.setViewportSize({ width, height: 900 });
 		const at = `${width} px`;
 		const tab = (name: string) => page.getByRole('tab', { name, exact: true });
@@ -1548,6 +1548,16 @@ test('laid out like hardware: Sound in rows beside Compose, ending on one line; 
 		await expect(page.locator('.module.fx'), at).toBeVisible();
 		await expect(page.locator('.module.generators'), at).toBeHidden();
 		await expect(page.locator('.module.noise'), at).toBeHidden();
+		// The pedals keep their desktop size (118 × 239 at 1600 px), centred: stretched, they were
+		// 190 px wide on a tablet and 168 on a phone. Three across from 720 px, one column below
+		const pedals = await page.locator('.ds-grid .module.fx .fx-pair > *').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+		const fx = await rect('.ds-grid .module.fx .fx-pair');
+		expect(pedals, at).toHaveLength(3);
+		for (const p of pedals) expect(p.width, `${at}: a pedal's width`).toBeLessThanOrEqual(121);
+		if (width >= 720) expect(new Set(pedals.map((p) => Math.round(p.y))).size, `${at}: pedals on one row`).toBe(1);
+		else expect(new Set(pedals.map((p) => Math.round(p.x))).size, `${at}: pedals in one column`).toBe(1);
+		const sideL = pedals[0].x - fx.left, sideR = fx.right - (pedals[2].x + pedals[2].width);
+		expect(Math.abs(sideL - sideR), `${at}: pedals centred`).toBeLessThanOrEqual(2);
 		// The arrow keys move between the tabs
 		await page.keyboard.press('ArrowRight');
 		await expect(tab('Compose')).toBeFocused();
@@ -1555,6 +1565,11 @@ test('laid out like hardware: Sound in rows beside Compose, ending on one line; 
 		await expect(page.locator('.module.melody'), at).toBeVisible();
 		await expect(page.locator('.module.pattern-tools'), at).toBeVisible();
 		await expect(page.locator('.ds-sound'), at).toBeHidden();
+		// The Melody Maker's white keys keep about the desktop's shape (51 × 88 px): 67 px wide
+		// on a 1024 px tablet before
+		const key = await rect('.ds-grid .mm-kb .kb-white');
+		expect(key.right - key.left, `${at}: a white key's width`).toBeLessThanOrEqual(58);
+		expect(key.height, `${at}: a white key's height`).toBe(88);
 		expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), `${at}: no sideways scroll`).toBe(false);
 		await tab('Sound').click();
 		// The LFO card is no taller than before its redesign (PR 75: its knobs beside the screen)
