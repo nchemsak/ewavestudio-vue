@@ -257,7 +257,7 @@ const SCALE_LABELS: Record<string, string> = {
 
 const keyRoot = ref<RootNote>(props.initialKeyRoot ?? 'A');
 type KeyScale = 'none' | keyof typeof SCALES;
-const keyScale = ref<KeyScale>(props.initialKeyScale ?? 'none');
+const keyScale = ref<KeyScale>(props.initialKeyScale ?? 'naturalMinor');
 
 const NATURALS: Array<{
     n: Extract<RootNote, 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B'>;

@@ -10,7 +10,9 @@
 // - the last opened project is remembered and reopened when the page loads, unless the page
 //   was opened from a share link (`#p=…`, src/lib/storage/share.ts): then that project opens,
 //   as an unsaved copy (project.openShared()), and so does a share link pasted into the
-//   address bar of an open page (hashchange; asking first if there are unsaved changes).
+//   address bar of an open page (hashchange; asking first if there are unsaved changes);
+// - the very first visit in a browser (no last project, no share link, never opened before:
+//   the 'visited' flag) opens a starter beat (opts.startFirstVisit) instead of empty pads.
 // Saving to IndexedDB happens only in ProjectControls, on an explicit Save.
 //
 // Call once, from DrumSequencer's setup: it registers watchers and a mount hook.
@@ -44,8 +46,11 @@ export function useProjectSync(opts: {
 	applySnapshot: (s: any) => void;
 	// Factory defaults for File -> New, including UI-only parts such as closing menus
 	resetUiToFactoryDefaults: () => void;
+	// The very first visit in this browser: set up the starter beat (a sound and a pattern),
+	// before the first project is made from the settings
+	startFirstVisit?: () => void | Promise<void>;
 }) {
-	const { settings, buildSnapshot, applySnapshot, resetUiToFactoryDefaults } = opts;
+	const { settings, buildSnapshot, applySnapshot, resetUiToFactoryDefaults, startFirstVisit } = opts;
 
 	const project = useProjectStore();
 
@@ -166,6 +171,10 @@ export function useProjectSync(opts: {
 		const shareCode = takeShareCode();
 		let opened = !!shareCode && await openShareCode(shareCode);
 		const lastId = opened ? null : localStorage.getItem(storageKey('lastProjectId'));
+		// The first visit: nothing to reopen, and this browser has never opened the app (a
+		// browser from before the flag has a last project). File → New stays empty.
+		const firstVisit = !shareCode && !lastId && !localStorage.getItem(storageKey('visited'));
+		localStorage.setItem(storageKey('visited'), '1');
 		let broken: BrokenProjectError | null = null;
 		if (lastId) {
 			try {
@@ -177,6 +186,7 @@ export function useProjectSync(opts: {
 			}
 		}
 		if (!opened) {
+			if (firstVisit) await startFirstVisit?.();
 			await project.newProject('Untitled', buildSnapshot());
 		}
 		if (broken) {
