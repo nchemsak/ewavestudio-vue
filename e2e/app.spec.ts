@@ -1096,9 +1096,10 @@ test("unison voices' waves, rebuilt from the spec's series, are the browser's ow
 
 test('unison: 2–4 voices, wide from the start of a hit, as loud; a 1-voice project opens with it off', async ({ page }) => {
 	await turnOnPads(page, [0]);
-	const voices = page.locator('.module.unison').getByRole('slider', { name: 'Voices' });
-	await expect(voices).toHaveAttribute('aria-valuemin', '2');
-	await expect(voices).toHaveAttribute('aria-valuemax', '4');
+	// Voices: keys under the card's screen (a knob until PR 77)
+	const voices = page.locator('.module.unison').getByRole('radiogroup', { name: 'Voices' }).getByRole('radio');
+	await expect(voices).toHaveText(['2 voices', '3 voices', '4 voices']);
+	const chosen = page.locator('.module.unison').getByRole('radio', { checked: true });
 
 	// An exported hit: how wide its first 50 ms are (side/mid), and how loud (both channels)
 	const hit = async (id: string, spread: number) => {
@@ -1132,12 +1133,99 @@ test('unison: 2–4 voices, wide from the start of a hit, as loud; a 1-voice pro
 
 	// A project saved with one voice (which sounded as unison off) opens with it off
 	await importChanged(page, 'uni-1', (d) => Object.assign(d.synth.unison, { enabled: true, voices: 1 }));
-	await expect(page.getByRole('switch', { name: 'Unison' })).toHaveText('Off');
-	await expect(voices).toHaveAttribute('aria-valuenow', '3');
+	await expect(page.getByRole('switch', { name: 'Unison' })).toHaveAttribute('aria-checked', 'false');
+	await expect(chosen).toHaveText('3 voices');
 	// and one with 6 as 4
 	await importChanged(page, 'uni-6', (d) => Object.assign(d.synth.unison, { enabled: true, voices: 6 }));
-	await expect(page.getByRole('switch', { name: 'Unison' })).toHaveText('On');
-	await expect(voices).toHaveAttribute('aria-valuenow', '4');
+	await expect(page.getByRole('switch', { name: 'Unison' })).toHaveAttribute('aria-checked', 'true');
+	await expect(chosen).toHaveText('4 voices');
+});
+
+// The cards' screens (PR 77, ShapePad.vue): press at a point of one, as fractions of its box, and
+// drag to another
+async function dragPad(page: Page, pad: Locator, from: [number, number], to: [number, number]) {
+	await pad.scrollIntoViewIfNeeded();
+	const b = (await pad.boundingBox())!;
+	await page.mouse.move(b.x + b.width * from[0], b.y + b.height * from[1]);
+	await page.mouse.down();
+	await page.mouse.move(b.x + b.width * to[0], b.y + b.height * to[1], { steps: 6 });
+	await page.mouse.up();
+}
+
+test('Envelope, Pitch, Filter, FM and Unison: dragging a card\'s screen changes its settings, one undo step a drag; keys pick the ratio and the voices', async ({ page }) => {
+	const knob = (card: string, name: string) => page.locator(`.module.${card}`).getByRole('slider', { name, exact: true });
+	const pad = (card: string) => page.locator(`.module.${card} .sp-pad`);
+	const text = (l: Locator) => l.getAttribute('aria-valuetext');
+	const ms = async (l: Locator) => parseInt((await text(l))!, 10);
+
+	// Envelope: the peak sideways is Attack, the end point sideways is Decay
+	const attack = knob('envelope', 'Attack'), decay = knob('envelope', 'Decay');
+	expect([await ms(attack), await ms(decay)]).toEqual([20, 400]);
+	await dragPad(page, pad('envelope'), [0.1, 0.1], [0.2, 0.3]);
+	expect(await ms(attack)).toBeGreaterThan(60);
+	expect(await ms(decay)).toBe(400);
+	await dragPad(page, pad('envelope'), [0.5, 0.8], [0.9, 0.8]);
+	expect(await ms(decay)).toBeGreaterThan(1200);
+	await expect(page.locator('.module.envelope .sp-title small')).toHaveText(`${await ms(attack)} ms · ${await ms(decay)} ms`);
+
+	// Pitch: the start up or down is Amount (above the middle: drops into the note), the settle
+	// point sideways is Decay
+	const amount = knob('pitch-env', 'Amount');
+	await expect(amount).toHaveAttribute('aria-valuenow', '0');
+	await dragPad(page, pad('pitch-env'), [0.06, 0.5], [0.06, 0.25]);
+	expect(Number(await amount.getAttribute('aria-valuenow'))).toBeGreaterThan(15);
+	expect(await text(amount)).toContain('above');
+	await dragPad(page, pad('pitch-env'), [0.06, 0.25], [0.06, 0.8]);
+	expect(Number(await amount.getAttribute('aria-valuenow'))).toBeLessThan(-15);
+	const pitchDecay = knob('pitch-env', 'Decay');
+	const before = await ms(pitchDecay);
+	await dragPad(page, pad('pitch-env'), [0.4, 0.5], [0.8, 0.5]);
+	expect(await ms(pitchDecay)).toBeGreaterThan(before * 2);
+
+	// Filter: sideways is Cutoff, up is Resonance; one drag is one undo step for both
+	const cutoff = knob('filter', 'Cutoff'), reso = knob('filter', 'Resonance');
+	await page.waitForTimeout(SETTLED);
+	await dragPad(page, pad('filter'), [0.8, 0.42], [0.5, 0.1]);
+	const hz = parseInt((await text(cutoff))!, 10);
+	expect(hz).toBeGreaterThan(400);
+	expect(hz).toBeLessThan(900); // the middle of 20 Hz–20 kHz on a log axis is 632 Hz
+	expect(parseFloat((await text(reso))!.slice(2))).toBeGreaterThan(5);
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(cutoff).toHaveAttribute('aria-valuetext', '5000 Hz');
+	await expect(reso).toHaveAttribute('aria-valuetext', 'Q 0.5');
+
+	// FM: the ribbon switches it on; up and down on the screen is Amount; the keys pick the ratio
+	const fm = page.getByRole('switch', { name: 'FM' });
+	const fmAmount = knob('fm', 'Amount');
+	const flat = await page.locator('.module.fm .sp-line').getAttribute('d');
+	await fm.click();
+	await expect(fm).toHaveAttribute('aria-checked', 'true');
+	expect(await page.locator('.module.fm .sp-line').getAttribute('d'), 'the wave bends once FM is on').not.toBe(flat);
+	await dragPad(page, pad('fm'), [0.5, 0.5], [0.5, 0.2]);
+	expect(Number(await fmAmount.getAttribute('aria-valuenow'))).toBeCloseTo(40, 0);
+	const ratios = page.getByRole('group', { name: 'FM Ratio Presets' });
+	await expect(ratios.getByRole('button')).toHaveText(['Lock', 'Metal', 'Bell', 'Free']);
+	const freq = knob('fm', 'Mod Freq');
+	await expect(freq).toHaveAttribute('aria-disabled', 'true');
+	await ratios.getByRole('button', { name: 'Free' }).click();
+	await expect(ratios.getByRole('button', { name: 'Free' })).toHaveAttribute('aria-pressed', 'true');
+	await expect(freq).not.toHaveAttribute('aria-disabled', 'true');
+
+	// Unison: sideways is Detune, up is Spread; the keys pick the voices, a wave drawn for each
+	const unison = page.getByRole('switch', { name: 'Unison' });
+	await unison.click();
+	await dragPad(page, pad('unison'), [0.2, 0.5], [0.5, 0.75]);
+	await expect(knob('unison', 'Detune')).toHaveAttribute('aria-valuenow', '50');
+	await expect(knob('unison', 'Spread')).toHaveAttribute('aria-valuenow', '25');
+	await expect(page.locator('.module.unison .sp-voice')).toHaveCount(3);
+	await page.locator('.module.unison').getByRole('radio', { name: '4 voices' }).click();
+	await expect(page.locator('.module.unison .sp-voice')).toHaveCount(4);
+	await unison.click();
+	await expect(page.locator('.module.unison .sp-voice')).toHaveCount(1);
+	// Off, its screen doesn't take a drag
+	await dragPad(page, pad('unison'), [0.2, 0.5], [0.9, 0.1]);
+	await expect(knob('unison', 'Detune')).toHaveAttribute('aria-valuenow', '50');
 });
 
 test('the bit crusher changes the driven sound, live and in the export, without clipping', async ({ page }) => {
@@ -1413,15 +1501,18 @@ test('laid out like hardware: Sound in rows beside Compose, ending on one line; 
 			const bottoms = await page.locator(`${row} > *`).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().bottom)));
 			expect(Math.max(...bottoms) - Math.min(...bottoms), `${at}: ${row} cells end level`).toBeLessThanOrEqual(1);
 		}
-		// Envelope, Pitch and Filter: their eight knobs on one line
-		const knobTops = await page.locator('.sound-row-2 .knob-wrapper').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
-		expect(knobTops, at).toHaveLength(8);
-		expect(Math.max(...knobTops) - Math.min(...knobTops), `${at}: one line of knobs`).toBeLessThanOrEqual(1);
-		// FM and Unison: cards of their own, the tile saying Off or On
-		await expect(page.locator('.module.fm .pt-title')).toHaveText('FM');
-		await expect(page.locator('.module.unison .pt-title')).toHaveText('Unison');
-		await expect(page.getByRole('switch', { name: 'FM' })).toHaveText('Off');
-		await expect(page.getByRole('switch', { name: 'Unison' })).toHaveText('Off');
+		// Envelope, Pitch and Filter (PR 77): three screens on one line, as tall as each other,
+		// their eight mini knobs beside them; each card the height it was before (115 px)
+		const pads = await page.locator('.sound-row-2 .sp-pad').evaluateAll((els) => els.map((e) => { const b = e.getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; }));
+		expect(pads, at).toHaveLength(3);
+		expect(new Set(pads.map((p) => p.join())).size, `${at}: the screens on one line`).toBe(1);
+		await expect(page.locator('.sound-row-2 .knob-wrapper'), at).toHaveCount(8);
+		// FM and Unison: cards of their own, a ribbon as the switch, off at first
+		await expect(page.getByRole('switch', { name: 'FM' })).toHaveAttribute('aria-checked', 'false');
+		await expect(page.getByRole('switch', { name: 'Unison' })).toHaveAttribute('aria-checked', 'false');
+		for (const card of ['.module.envelope', '.module.pitch-env', '.module.filter', '.module.fm', '.module.unison']) {
+			expect(Math.abs((await rect(card)).height - 115), `${at}: ${card}'s height`).toBeLessThanOrEqual(1);
+		}
 		// The LFO's knobs, Wave switch and RETRIG stay on one line, and the card and Noise above
 		// it are the size they were before the card's redesign (PR 75)
 		expect((await rect('.module.mod .lfo-row')).height, `${at}: LFO one row`).toBeLessThan(80);
@@ -2728,11 +2819,11 @@ test('the Sand theme: its button sits beside Dark and Synthwave, is remembered, 
 
 test("Sand: the tiles are dark caps with light lettering, and the LFO's screen has dark ink", async ({ page }) => {
 	await page.getByRole('button', { name: 'Sand', exact: true }).click();
-	for (const tile of [page.getByRole('radio', { name: 'Sine' }).first(), page.getByRole('switch', { name: 'FM' })]) {
-		await tile.scrollIntoViewIfNeeded();
-		const label = tile.locator('.wave-label').first();
-		expect(await textContrast(page, label), await label.textContent() ?? '').toBeGreaterThanOrEqual(4.5);
-	}
+	const tile = page.getByRole('radio', { name: 'Sine' }).first();
+	await tile.scrollIntoViewIfNeeded();
+	expect(await textContrast(page, tile.locator('.wave-label').first()), 'Sine').toBeGreaterThanOrEqual(4.5);
+	// The cards' screens (PR 77): dark ink on the green-grey LCD, as the LFO's
+	expect(await textContrast(page, page.locator('.module.filter .sp-title small')), "Filter's screen").toBeGreaterThanOrEqual(4.5);
 	// The LFO card's screen (PR 75; its power tile is gone): a green-grey LCD, dark ink
 	const read = page.locator('.module.mod .lv-read--l');
 	await read.scrollIntoViewIfNeeded();
@@ -2820,16 +2911,13 @@ test('hardware buttons: a push button sinks and springs back; a chosen option an
 	await settle();
 	expect(await capState(vel)).toMatchObject({ down: 0, led: velOff.led });
 
-	// A tile (FM): a cap too, its LED beside its caption, and it keeps its icon
+	// FM's switch is a ribbon since PR 77 (as Noise's and the LFO's), not a cap: its LED lights
 	const fm = page.getByRole('switch', { name: 'FM' });
-	const fmOff = await capState(fm, '.wave-label');
-	expect(fmOff.down).toBe(0);
+	const ribbonLed = () => fm.locator('.sp-ribbon-led').evaluate((el) => getComputedStyle(el).backgroundColor);
+	expect(await ribbonLed()).not.toBe(lit);
 	await fm.click();
-	await page.mouse.move(0, 0);
-	await settle();
-	expect(await capState(fm, '.wave-label')).toMatchObject({ down: 2, led: lit, size: fmOff.size });
-	await expect(fm.locator('svg.wave-svg')).toBeVisible();
-	await expect(fm.locator('.wave-label')).toHaveText('On');
+	await expect(fm).toHaveAttribute('aria-checked', 'true');
+	expect(await ribbonLed()).toBe(lit);
 
 	// The chosen wave is down; its dice is still there. Play stays down while playing.
 	const saw = page.getByRole('radio', { name: 'Saw' }).first();
@@ -3558,7 +3646,7 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 
 	await learn.click();
 	await expect(learn).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(32);
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(31);
 	await cutoff.click();
 	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
 	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');
@@ -3584,7 +3672,8 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 	// its value as a drag would, and lets go once the controller knob rests.
 	await turn(21, 0);
 	await expect(cutoff).toHaveAttribute('aria-valuenow', '100');
-	await expect(page.locator('.custom-tooltip', { hasText: '100 Hz' })).toBeVisible();
+	// The card's screen reads the value (PR 77; a tooltip over the knob before)
+	await expect(page.locator('.module.filter .sp-title small')).toContainText('100 Hz');
 	await expect(page.locator('.custom-tooltip')).toHaveCount(0, { timeout: 2000 });
 	await turn(22, 127); // channel 1: not the knob linked on channel 3
 	await expect(pitchDecay).toHaveAttribute('aria-valuenow', '102');

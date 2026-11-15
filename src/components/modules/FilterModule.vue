@@ -1,9 +1,15 @@
+<!-- components/modules/FilterModule.vue -->
+<!-- The Filter card (PR 77): a screen that draws the filter's response and can be dragged (the
+     point sideways for Cutoff, up and down for Resonance; ShapePad.vue), dashed where the
+     filter's envelope starts each note, with a mini knob for each of the four settings and
+     the VEL switch (the `tools` slot) beside it. `classic` is the card as it was, four knobs,
+     which the phone's Sound page keeps (inside its own SectionWrap). -->
 <template>
-    <div class="pt-subblock">
+    <div v-if="classic" class="pt-subblock">
         <div class="pt-knob-row">
             <!-- Cutoff -->
             <div class="position-relative text-center">
-                <Knob midi-id="filter.cutoff" :value-text="`${Math.round(localCutoff)} Hz`" v-model="localCutoff" label="Cutoff" size="small" :min="minCutoff" :max="maxCutoff"
+                <Knob :value-text="`${Math.round(localCutoff)} Hz`" v-model="localCutoff" label="Cutoff" size="small" :min="minCutoff" :max="maxCutoff"
                     :step="cutoffStep" :disabled="!localEnabled" :color="color"
                     :modValue="lfoView?.cutoff ?? null" :modRange="lfoView?.cutoffRange ?? null"
                     @knobStart="onKnobStart('cutoff')" @knobEnd="onKnobEnd" />
@@ -14,7 +20,7 @@
 
             <!-- Resonance -->
             <div class="position-relative text-center">
-                <Knob midi-id="filter.resonance" :value-text="`Q ${localResonance.toFixed(1)}`" v-model="localResonance" label="Resonance" size="small" :min="minResonance" :max="maxResonance"
+                <Knob :value-text="`Q ${localResonance.toFixed(1)}`" v-model="localResonance" label="Resonance" size="small" :min="minResonance" :max="maxResonance"
                     :step="resonanceStep" :disabled="!localEnabled" :color="color" @knobStart="onKnobStart('res')"
                     @knobEnd="onKnobEnd" />
                 <span v-if="activeKnob === 'res'" class="custom-tooltip">
@@ -28,26 +34,74 @@
             <!-- Filter envelope: how far the cutoff jumps at each note (octaves, either way), and
                  how fast it comes back -->
             <div class="position-relative text-center">
-                <Knob midi-id="filter.envAmount" v-model="envAmountModel" bipolar label="Env Amt" size="small" :min="-ENV_OCTAVES" :max="ENV_OCTAVES"
+                <Knob v-model="envAmountModel" bipolar label="Env Amt" size="small" :min="-ENV_OCTAVES" :max="ENV_OCTAVES"
                     :step="0.1" :value-text="envAmountText" :disabled="!localEnabled" :color="color"
                     @knobStart="onKnobStart('envAmt')" @knobEnd="onKnobEnd" />
                 <span v-if="activeKnob === 'envAmt'" class="custom-tooltip">{{ envAmountTip }}</span>
             </div>
 
             <div class="position-relative text-center">
-                <Knob midi-id="filter.envDecay" v-model="envDecayModel" label="Decay" size="small" :min="5" :max="2000" :step="1" taper="log"
+                <Knob v-model="envDecayModel" label="Decay" size="small" :min="5" :max="2000" :step="1" taper="log"
                     :value-text="`${Math.round(envDecayMs)} ms`" :disabled="!localEnabled" :color="color"
                     @knobStart="onKnobStart('envDecay')" @knobEnd="onKnobEnd" />
                 <span v-if="activeKnob === 'envDecay'" class="custom-tooltip">{{ Math.round(envDecayMs) }} ms</span>
             </div>
         </div>
     </div>
+
+    <section v-else class="pt-card sp-card filter-card" aria-label="Filter">
+        <div class="sp-body">
+            <ShapePad :w="PAD_W" :h="PAD_H" title="Filter" :readout="`${Math.round(localCutoff)} Hz · Q ${localResonance.toFixed(1)}`"
+                :handles="handles" active="cutoff" :disabled="!localEnabled" @start="onKnobStart('cutoff')" @move="onPadMove" @end="onKnobEnd">
+                <!-- The LFO's swing of the cutoff, and where it has it now -->
+                <rect v-if="lfoSpan" :x="lfoSpan[0]" y="0" :width="lfoSpan[1] - lfoSpan[0]" :height="PAD_H" class="sp-lfo-range" />
+                <path v-if="ghost" :d="ghost" class="sp-ghost" />
+                <path :d="shape" class="sp-line sp-fill" />
+                <line v-if="lfoX !== null" :x1="lfoX" :x2="lfoX" y1="0" :y2="PAD_H" class="sp-lfo" />
+            </ShapePad>
+            <div class="sp-minis four">
+                <div class="sp-mini">
+                    <Knob midi-id="filter.cutoff" :value-text="`${Math.round(localCutoff)} Hz`" v-model="localCutoff" label="Cutoff" hideLabel size="mini" :min="minCutoff" :max="maxCutoff"
+                        :step="cutoffStep" :disabled="!localEnabled" :color="color"
+                        :modValue="lfoView?.cutoff ?? null" :modRange="lfoView?.cutoffRange ?? null"
+                        @knobStart="onKnobStart('cutoff')" @knobEnd="onKnobEnd" />
+                    <span>Cutoff</span>
+                </div>
+                <div class="sp-mini">
+                    <Knob midi-id="filter.resonance" :value-text="`Q ${localResonance.toFixed(1)}`" v-model="localResonance" label="Resonance" hideLabel size="mini" :min="minResonance" :max="maxResonance"
+                        :step="resonanceStep" :disabled="!localEnabled" :color="color" @knobStart="onKnobStart('res')"
+                        @knobEnd="onKnobEnd" />
+                    <span>Reso</span>
+                </div>
+                <!-- The filter's envelope: how far the cutoff jumps at each note (octaves, either
+                     way), and how fast it comes back; the dashed curve on the screen -->
+                <div class="sp-mini">
+                    <Knob midi-id="filter.envAmount" v-model="envAmountModel" bipolar label="Env Amt" hideLabel size="mini" :min="-ENV_OCTAVES" :max="ENV_OCTAVES"
+                        :step="0.1" :value-text="envAmountText" :disabled="!localEnabled" :color="color"
+                        @knobStart="onKnobStart('envAmt')" @knobEnd="onKnobEnd" />
+                    <span>Env Amt</span>
+                    <span v-if="activeKnob === 'envAmt'" class="custom-tooltip">{{ envAmountTip }}</span>
+                </div>
+                <div class="sp-mini">
+                    <Knob midi-id="filter.envDecay" v-model="envDecayModel" label="Decay" hideLabel size="mini" :min="5" :max="2000" :step="1" taper="log"
+                        :value-text="`${Math.round(envDecayMs)} ms`" :disabled="!localEnabled" :color="color"
+                        @knobStart="onKnobStart('envDecay')" @knobEnd="onKnobEnd" />
+                    <span>Decay</span>
+                    <span v-if="activeKnob === 'envDecay'" class="custom-tooltip">{{ Math.round(envDecayMs) }} ms</span>
+                </div>
+                <!-- The VEL switch (DrumSequencer's) -->
+                <div class="sp-wide"><slot name="tools" /></div>
+            </div>
+        </div>
+    </section>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import type { LfoView } from '../../lib/lfoVisual';
+import ShapePad, { type PadPoint } from '../ShapePad.vue';
+import { filterPts, filterY, freqX, toPath, xFreq, yResonance } from '../../lib/shapeViews';
 
 const props = withDefaults(
     defineProps<{
@@ -68,6 +122,7 @@ const props = withDefaults(
         // The LFO visualizer: when the LFO moves the cutoff, a dot on the Cutoff knob shows where
         // it has it now, over an arc for its whole swing (the knob itself stays where it's set)
         lfoView?: LfoView | null;
+        classic?: boolean;
     }>(),
     {
         title: 'Filter',
@@ -78,7 +133,8 @@ const props = withDefaults(
         cutoffStep: 1,
         minResonance: 0.1,
         maxResonance: 20,
-        resonanceStep: 0.1
+        resonanceStep: 0.1,
+        classic: false
     }
 );
 
@@ -164,6 +220,29 @@ function onKnobEnd() {
     activeKnob.value = null;
     emit('knob-end');
 }
+
+// The screen: the response curve (closed along the bottom, so it can be filled), dashed where
+// the envelope starts each note's cutoff, and one grip at the cutoff
+const PAD_W = 250;
+const PAD_H = 88;
+const shape = computed(() => toPath([[0, PAD_H + 4], ...filterPts(localCutoff.value, localResonance.value, PAD_W, PAD_H), [PAD_W, PAD_H + 4]]));
+const ghost = computed(() => {
+    if (Math.abs(envAmount.value) < 0.05) return '';
+    return toPath(filterPts(Math.min(20000, Math.max(20, localCutoff.value * Math.pow(2, envAmount.value))), localResonance.value, PAD_W, PAD_H));
+});
+const handles = computed(() => [
+    { id: 'cutoff', x: freqX(localCutoff.value, PAD_W), y: filterY(localCutoff.value, localCutoff.value, localResonance.value, PAD_H) },
+]);
+function onPadMove(p: PadPoint) {
+    localCutoff.value = Math.round(Math.max(props.minCutoff, Math.min(props.maxCutoff, xFreq(p.x, PAD_W))));
+    localResonance.value = Math.round(yResonance(p.y, PAD_H, props.minResonance, props.maxResonance) * 10) / 10;
+}
+// The LFO on the cutoff (the visualizer's view): its swing as a band, where it is now as a line
+const lfoSpan = computed(() => {
+    const r = props.lfoView?.cutoffRange;
+    return r && localEnabled.value ? [freqX(r[0], PAD_W), freqX(r[1], PAD_W)] : null;
+});
+const lfoX = computed(() => (props.lfoView?.cutoff != null && localEnabled.value ? freqX(props.lfoView.cutoff, PAD_W) : null));
 </script>
 
 <style scoped>

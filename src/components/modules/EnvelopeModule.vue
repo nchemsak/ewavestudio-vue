@@ -1,18 +1,20 @@
+<!-- components/modules/EnvelopeModule.vue -->
+<!-- The Envelope card (PR 77): a screen that draws the amp envelope and can be dragged (the
+     peak sideways for Attack, the end point for Decay; ShapePad.vue), with a mini knob for
+     each beside it. `classic` is the card as it was, two knobs, which the phone's Sound page
+     keeps (inside its own SectionWrap). -->
 <template>
-	<div class="pt-subblock">
+	<div v-if="classic" class="pt-subblock">
 		<div class="pt-knob-row">
-			<!-- Attack -->
 			<div class="position-relative text-center">
-				<Knob midi-id="env.attack" :value-text="`${Math.round(attackMsLocal)} ms`" v-model="attackNorm" label="Attack" size="small" :min="0" :max="100" :step="1"
+				<Knob :value-text="`${Math.round(attackMsLocal)} ms`" v-model="attackNorm" label="Attack" size="small" :min="0" :max="100" :step="1"
 					:disabled="!localEnabled" :color="color" @knobStart="onAttackStart" @knobEnd="onAttackEnd" />
 				<span v-if="activeKnob === 'attack'" class="custom-tooltip">
 					{{ Math.round(attackMsLocal) }} ms
 				</span>
 			</div>
-
-			<!-- Decay -->
 			<div class="position-relative text-center">
-				<Knob midi-id="env.decay" :value-text="`${Math.round(decayMsLocal)} ms`" v-model="decayNorm" label="Decay" size="small" :min="0" :max="100" :step="1"
+				<Knob :value-text="`${Math.round(decayMsLocal)} ms`" v-model="decayNorm" label="Decay" size="small" :min="0" :max="100" :step="1"
 					:disabled="!localEnabled" :color="color" @knobStart="onDecayStart" @knobEnd="onDecayEnd" />
 				<span v-if="activeKnob === 'decay'" class="custom-tooltip">
 					{{ Math.round(decayMsLocal) }} ms
@@ -20,11 +22,34 @@
 			</div>
 		</div>
 	</div>
+
+	<section v-else class="pt-card sp-card" aria-label="Envelope">
+		<div class="sp-body">
+			<ShapePad :w="PAD_W" :h="PAD_H" title="Envelope" titleRight :readout="`${Math.round(attackMsLocal)} ms · ${Math.round(decayMsLocal)} ms`"
+				:handles="handles" :active="grip" :disabled="!localEnabled" @start="onPadStart" @move="onPadMove" @end="onPadEnd">
+				<path :d="shape" class="sp-line sp-fill" />
+			</ShapePad>
+			<div class="sp-minis">
+				<div class="sp-mini">
+					<Knob midi-id="env.attack" :value-text="`${Math.round(attackMsLocal)} ms`" v-model="attackNorm" label="Attack" hideLabel size="mini" :min="0" :max="100" :step="1"
+						:disabled="!localEnabled" :color="color" @knobStart="onAttackStart" @knobEnd="onAttackEnd" />
+					<span>Attack</span>
+				</div>
+				<div class="sp-mini">
+					<Knob midi-id="env.decay" :value-text="`${Math.round(decayMsLocal)} ms`" v-model="decayNorm" label="Decay" hideLabel size="mini" :min="0" :max="100" :step="1"
+						:disabled="!localEnabled" :color="color" @knobStart="onDecayStart" @knobEnd="onDecayEnd" />
+					<span>Decay</span>
+				</div>
+			</div>
+		</div>
+	</section>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Knob from '../Knob.vue';
+import ShapePad, { nearestHandle, type PadPoint } from '../ShapePad.vue';
+import { ENV_MAX_MS, ENV_TOP, envelopePts, timeX, toPath, xTime } from '../../lib/shapeViews';
 
 const props = withDefaults(
 	defineProps<{
@@ -40,6 +65,7 @@ const props = withDefaults(
 		decayMaxMs?: number;
 		attackLog?: boolean;
 		decayLog?: boolean;
+		classic?: boolean;
 	}>(),
 	{
 		title: 'Envelope',
@@ -50,7 +76,8 @@ const props = withDefaults(
 		decayMinMs: 50,
 		decayMaxMs: 2000,
 		attackLog: true,
-		decayLog: false
+		decayLog: false,
+		classic: false
 	}
 );
 
@@ -141,6 +168,28 @@ function onDecayStart() {
 function onDecayEnd() {
 	activeKnob.value = null;
 	emit('decay-knob-end');
+}
+
+// The screen: the envelope's shape, and its two grips
+const PAD_W = 110;
+const PAD_H = 88;
+const shape = computed(() => toPath(envelopePts(attackMsLocal.value, decayMsLocal.value, PAD_W, PAD_H)));
+const handles = computed(() => [
+	{ id: 'attack', x: timeX(attackMsLocal.value, PAD_W, ENV_MAX_MS), y: ENV_TOP },
+	{ id: 'decay', x: timeX(attackMsLocal.value + decayMsLocal.value, PAD_W, ENV_MAX_MS), y: PAD_H - 14 },
+]);
+const grip = ref('');
+function onPadStart(p: PadPoint) {
+	grip.value = nearestHandle(handles.value, p);
+	if (grip.value === 'attack') onAttackStart(); else onDecayStart();
+}
+function onPadMove(p: PadPoint) {
+	const ms = xTime(p.x, PAD_W, ENV_MAX_MS);
+	if (grip.value === 'attack') attackNorm.value = msToNorm(Math.round(ms), props.attackMinMs, props.attackMaxMs, props.attackLog);
+	else decayNorm.value = msToNorm(Math.round(ms - attackMsLocal.value), props.decayMinMs, props.decayMaxMs, props.decayLog);
+}
+function onPadEnd() {
+	if (grip.value === 'attack') onAttackEnd(); else onDecayEnd();
 }
 
 // helpers
