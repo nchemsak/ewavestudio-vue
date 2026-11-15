@@ -22,7 +22,7 @@ export type KeyRoot = 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 
 // The synth's waveforms (src/audio/waves.ts): the oscillator's own four, the pulse and three
 // harmonic shapes. Saved projects may hold any name; an unknown one plays as a sine.
 import type { Wave } from '../../audio/waves';
-import { PULSE_WIDTH_DEFAULT, foldPulseWidth } from '../../audio/waves';
+import { PULSE_WIDTH_DEFAULT, WAVE_IDS, foldPulseWidth } from '../../audio/waves';
 import { VELOCITY_DESTINATIONS, VELOCITY_SWITCHED } from '../../audio/velocity';
 import { clampRatchet, clampRepeatNotes } from '../../audio/ratchet';
 import { arpRateFrom, type ArpRate } from '../melody/arp';
@@ -113,6 +113,8 @@ export type ProjectState = {
 			mode: Ref<'up' | 'down' | 'random'>;
 		};
 		pulse: { width: Ref<number> }; // the pulse wave's width, % (5–50; 50 is the square)
+		// The waves the Waveforms card's Random picks from (the tiles' dice badges); all by default
+		randomWaves: Ref<Wave[]>;
 		// Velocity routing amounts, % −100..100 (src/audio/velocity.ts; 0 = off)
 		velocity: { decay: Ref<number>; cutoff: Ref<number>; pitchEnv: Ref<number>; noise: Ref<number> };
 		tuning: {
@@ -195,6 +197,7 @@ function byName(st: ProjectState) {
 		pitchEnvDecayMs: sy.pitchEnv.decayMs,
 		pitchMode: sy.pitchEnv.mode,
 		pulseWidth: sy.pulse.width,
+		randomWaves: sy.randomWaves,
 		velocityRouting: sy.velocity,
 		selectedKeyRoot: sy.tuning.selectedKeyRoot,
 		globalOctaveOffset: sy.tuning.globalOctaveOffset,
@@ -238,7 +241,7 @@ export function buildSnapshot(st: ProjectState) {
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoDepths, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, randomWaves, velocityRouting,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
@@ -315,6 +318,7 @@ export function buildSnapshot(st: ProjectState) {
 				mode: pitchMode.value
 			},
 			pulse: { width: pulseWidth.value },
+			randomWaves: [...randomWaves.value],
 			velocity: {
 				decay: velocityRouting.decay.value,
 				cutoff: velocityRouting.cutoff.value,
@@ -406,7 +410,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoDepths, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, randomWaves, velocityRouting,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
@@ -532,6 +536,13 @@ export function applySnapshot(st: ProjectState, s: any) {
 	} else if (!syn.pulse && syn.envelope) {
 		// A whole project saved before the pulse wave: the default width (a square)
 		pulseWidth.value = PULSE_WIDTH_DEFAULT;
+	}
+	if (Array.isArray(syn.randomWaves)) {
+		// Known waves only, in the tiles' order; none lit is allowed (Random then picks from all)
+		randomWaves.value = WAVE_IDS.filter((w) => syn.randomWaves.includes(w));
+	} else if (syn.envelope) {
+		// A whole project saved before the pool was saved (PR 85): every wave, as a fresh page
+		randomWaves.value = [...WAVE_IDS];
 	}
 	if (syn.velocity && typeof syn.velocity === 'object') {
 		for (const k of VELOCITY_DESTINATIONS) {
@@ -736,7 +747,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread,
 		lfoEnabled, lfoRate, lfoDepth, lfoDepths, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, velocityRouting,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, randomWaves, velocityRouting,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone,
@@ -784,6 +795,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 	pitchEnvDecayMs.value = 300;
 	pitchMode.value = 'up';
 	pulseWidth.value = PULSE_WIDTH_DEFAULT;
+	randomWaves.value = [...WAVE_IDS];
 	for (const k of VELOCITY_DESTINATIONS) velocityRouting[k].value = 0;
 
 	// FX: Delay

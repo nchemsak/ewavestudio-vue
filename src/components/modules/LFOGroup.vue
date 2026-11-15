@@ -681,8 +681,7 @@ svg {
     --lfo-lcd-ink: #bfe6e0;
 }
 
-/* Sand's screen is a green-grey LCD with dark ink; Light's is pale grey */
-.theme-sand .lv-screen,
+/* Light's screen: a green-grey LCD with dark ink */
 .theme-light .lv-screen {
     --lfo-lcd-bg: #a9b29a;
     --lfo-lcd-ink: #1d2419;
@@ -695,7 +694,6 @@ svg {
 }
 
 /* Dark ink on a pale screen: full strength and a little heavier, to stay readable at 9 px */
-.theme-sand .lv-read,
 .theme-light .lv-read {
     opacity: 1;
     font-weight: 600;
@@ -744,7 +742,6 @@ svg {
     filter: drop-shadow(0 0 3px color-mix(in oklab, var(--lfo-mod), transparent 40%));
 }
 
-.theme-sand .lv-wave,
 .theme-light .lv-wave {
     stroke: #7a3d00;
     filter: none;
@@ -793,7 +790,6 @@ svg {
     opacity: 1;
 }
 
-.theme-sand .lv-read.idle,
 .theme-light .lv-read.idle {
     color: #7a3d00;
     font-weight: 700;
@@ -890,7 +886,6 @@ svg {
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
-.theme-sand .lv-bay,
 .theme-light .lv-bay {
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.09));
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(0, 0, 0, 0.08);

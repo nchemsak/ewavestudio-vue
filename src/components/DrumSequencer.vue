@@ -1114,8 +1114,9 @@ function midiToNamePref(m: number, mode: AccidentalMode = accidentalMode.value) 
 // nac Screen BEGIN
 
 const lcdText = ref('HARP  2');
-const activeFKey = ref<number>(1);
-const lcdView = ref<'text' | 'scope' | 'spectrum' | 'spec' | 'tuner' | 'env' | 'filter'>('scope');
+// The screen opens on the Spectrum (F2), the maintainer's call after PR 84 (it was the Scope)
+const activeFKey = ref<number>(2);
+const lcdView = ref<'text' | 'scope' | 'spectrum' | 'spec' | 'tuner' | 'env' | 'filter'>('spectrum');
 // What the envelope view puts first: the amp envelope (Attack, Decay) or the pitch sweep (the
 // Pitch card's knobs), whichever was turned to show it
 const envFocus = ref<'amp' | 'pitch'>('amp');
@@ -1705,19 +1706,19 @@ const WAVE_TILES = WAVE_IDS.map(value => ({
 	value, label: WAVE_LABELS[value].toUpperCase(), palette: WAVE_PALETTES[value],
 }));
 
-const randomPool = reactive<Record<Wave, boolean>>(
-	Object.fromEntries(WAVE_IDS.map(w => [w, true])) as Record<Wave, boolean>
+// The waves Random picks from (the tiles' dice badges). Saved with the project since PR 85
+// (synth.randomWaves), so File → New, a sound preset and opening a project set it; before, it
+// was the page's own and carried over from project to project.
+const randomWaves = ref<Wave[]>([...WAVE_IDS]);
+const randomPool = computed<Record<Wave, boolean>>(() =>
+	Object.fromEntries(WAVE_IDS.map(w => [w, randomWaves.value.includes(w)])) as Record<Wave, boolean>
 );
 
-const randomPoolArray = computed<Wave[]>(() => WAVE_IDS.filter(w => randomPool[w]));
+const randomPoolArray = computed<Wave[]>(() => WAVE_IDS.filter(w => randomPool.value[w]));
 
 function onToggleRandom(w: Wave, next: boolean, only = false) {
-	if (only) {
-		WAVE_IDS.forEach(k => randomPool[k] = false);
-		randomPool[w] = true;
-	} else {
-		randomPool[w] = next;
-	}
+	if (only) randomWaves.value = [w];
+	else randomWaves.value = WAVE_IDS.filter(k => (k === w ? next : randomPool.value[k]));
 }
 
 const randomTooltip = computed(() =>
@@ -2614,6 +2615,7 @@ const projectState: ProjectState = {
 		fm: { enabled: fmEnabled, modFreq: fmModFreq, index: fmIndex, ratio: fmRatio },
 		pitchEnv: { enabled: pitchEnvEnabled, semitones: pitchEnvSemitones, decayMs: pitchEnvDecayMs, mode: pitchMode },
 		pulse: { width: pulseWidth },
+		randomWaves,
 		velocity: velocityRouting,
 		tuning: { selectedKeyRoot, globalOctaveOffset, currentDefaultHz },
 	},

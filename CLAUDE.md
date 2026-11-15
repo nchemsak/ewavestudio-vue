@@ -249,7 +249,7 @@ src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/e
                          links, see "Share links")
 src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) + v1→v2
                          migration (CURRENT_VERSION = 2)
-src/composables/useTheme.ts      synthwave | dark | sand | analog | slate | light theme, in localStorage
+src/composables/useTheme.ts      synthwave | dark | analog | slate | light theme, in localStorage
 src/composables/useMidiInput.ts  Web MIDI note input (see "MIDI")
 src/composables/useMidiLearn.ts  MIDI learn mode and the controller's links (see "MIDI learn")
 src/composables/usePwa.ts  Installing the app, offline use and updates, the page's side
@@ -539,7 +539,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Time runs on a square-root scale (`timeX()`), so a 20 ms attack shows beside a 2 s decay.
   `src/lib/shapeViews.ts` has the curves and the drag's inverse maps (unit-tested).
 - Colours: the screens are each theme's screen colours (as the LFO card's), the curves in the
-  accent (dark ink on Sand's and Light's pale screens), not amber: amber stays the LFO's. When
+  accent (dark ink on Light's pale screen), not amber: amber stays the LFO's. When
   the LFO moves the cutoff, the Filter screen shows its swing as an amber band and where it is
   now as an amber line; on FM's Amount, the wave as the LFO has it now in amber (from
   `lfoView`; the mini knobs keep their dot and arc).
@@ -622,7 +622,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 ### LFO visualizer
 - While the LFO moves something, its movement is drawn on the control it moves, in amber
   (`--lfo-mod`, darker in the light themes; the dark themes' knob arcs are blue to purple or
-  pink, Sand's teal to orange),
+  pink),
   without turning that control, so it can still be turned while the LFO runs:
   - Filter: an amber dot on the Cutoff knob's ring at the cutoff the LFO has now, over a faint
     outer arc for its whole swing (`Knob.vue`'s `modValue` and `modRange`). The swing is the
@@ -657,7 +657,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### The screen's views
 - PR 70: **F1 Scope, F2 Spectrum, F3 Spectrogram, F4 Tuner** (`Screen.vue`'s F-keys, 1–4 on the
-  keyboard, `handleFKey()`); the Envelope view lost F4 and, like the filter view, shows only
+  keyboard, `handleFKey()`); the screen opens on the **Spectrum** (PR 85, the maintainer's
+  call; it was the Scope); the Envelope view lost F4 and, like the filter view, shows only
   while its knobs are turned. Its canvases keep their order (`.nac-screen__lcd canvas`: scope,
   spectrogram, tuner, envelope, filter, then the spectrum, added last so the others' places
   stay).
@@ -771,7 +772,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     has none and the readout says "shuffled on Generate"). Readouts: the key and scale, and
     the pool ("A2–G6 • 30 notes") or the pattern and rate.
   - **While playing** (PR 80): a line crosses the screen where the bar is, and the hit it's in
-    glows (a white outline and a glow in its colour; dark ink on Sand's and Light's screens).
+    glows (a white outline and a glow in its colour; dark ink on Light's screen).
     `usePlayhead.ts` reads the engine's `barPosition()` every frame into one reactive object,
     `playView`, which `DrumSequencer` passes down and never reads (as `lfoView`); only
     `RollPlayhead.vue` (the line) redraws every frame, and `playingHit` (a computed in
@@ -1300,18 +1301,14 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Indentation is mostly tabs in `DrumSequencer.vue` and 4 spaces elsewhere. Match the
   surrounding file.
 - Large files are split into sections with `// X START` / `// X END` banner comments. Keep them.
-- Styling: Bootstrap 5 + custom SCSS in `src/assets/styles/`. There are six themes, selected
+- Styling: Bootstrap 5 + custom SCSS in `src/assets/styles/`. There are five themes, selected
   by a `theme-*` class on `<html>` (`useTheme.ts`, `THEMES`): **Synthwave** (the default),
-  **Dark**, **Analog** and **Slate**, and two light ones, **Sand** and **Light**. Five have a
-  button (Dark, Synthwave, Sand, Analog, Slate); the maintainer may cut some once they've used
-  them (PR 44). Keep the current look and feel unless a change is requested.
-  - **Sand** (PR 43, replacing Light as the third button: the maintainer found its white harsh
-    on the eyes): matte warm greys instead of white, dark knob caps as on a hardware panel, a
-    teal-to-orange knob arc, an orange accent, a green-grey reflective LCD with dark ink in a
-    dark bezel, softer pad colours (still one per note), a taupe page and an apricot wash.
-    Its tiles (the waves, FM, Unison, the LFO's switch) are dark caps with light lettering
-    (PR 44: their pastel icons, made for dark tiles, vanished on light ones), and since PR 63
-    so are all its buttons (see "Buttons").
+  **Dark**, **Analog** and **Slate**, and a light one, **Light**. Four have a button (Dark,
+  Synthwave, Analog, Slate); the maintainer may cut some once they've used them (PR 44). Keep
+  the current look and feel unless a change is requested.
+  - **Sand** (PR 43–44, a matte warm-grey light theme) was removed in PR 85 (the maintainer
+    didn't like it): its button, its name in `THEMES` and all its CSS. A browser that had it
+    saved opens in Synthwave. It's in git history.
   - **Analog** (PR 44): a warm dark panel, charcoal with cream lettering and amber accents,
     an amber-to-orange knob arc (so the LFO's marks are cyan there), an amber monochrome
     screen, a wood-brown page and a copper wash.
@@ -1324,7 +1321,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   - **The effect pedals** (PR 79, option A of three mockups: B was the pedals in the theme's
     hues, C dark enclosures with a coloured band): each keeps its own colour (an orange delay,
     a yellow overdrive, a stone reverb), shaded per theme in `_themes.scss` (Synthwave coral
-    and lavender, Analog burnt orange and cream, Slate dusty, Sand matte), with its name and
+    and lavender, Analog burnt orange and cream, Slate dusty), with its name and
     captions in dark ink (white with a glow was hard to read). The pedals read
     `--pedal-hi` / `--pedal-lo` (body), `--pedal-foot-hi` / `-lo` (the name's half; unset, the
     body's), `--pedal-ink`, `--pedal-ink-off` (captions while off), `--pedal-name`,
@@ -1344,13 +1341,12 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     `--pt-noise-on` (the NOISE switch when on), `--pt-surface-3` (the NOISE switch when off;
     unset in the dark themes, which use the fallback), `--pt-menu-caption` (captions in the ⋯
     menus). A new theme needs a button, its name in `THEMES`, a `$themes` entry, and the
-    blocks above; a light one also joins the `.theme-light, .theme-sand` rules (dark text on
+    blocks above; a light one also joins the `.theme-light` rules (dark text on
     a chosen segment button and on titles, the pads' multiplied note colour).
-  - In a scoped `<style>`, write `.theme-sand .x` (Vue scopes the last part only, so the class
-    on `<html>` still matches); `:global(.theme-sand) .x` drops the `.x`.
-  - Browser tests check that those panels' captions and the pedals' names are readable in every theme, that
-    Sand's own trouble spots are (the MIDI caption, NOISE switch, chosen key, ⋯ menu, link,
-    its tiles' lettering), and that each button applies and remembers its theme.
+  - In a scoped `<style>`, write `.theme-light .x` (Vue scopes the last part only, so the class
+    on `<html>` still matches); `:global(.theme-light) .x` drops the `.x`.
+  - Browser tests check that those panels' captions and the pedals' names are readable in every theme, and
+    that each button applies and remembers its theme.
 - Buttons (PR 63, "soft caps", option A of three mockups): every button is one of three
   hardware kinds, and their look is in one place, `src/assets/styles/_hardware.scss`.
   - A **push button** is a raised cap that sinks while pressed and springs back: every
@@ -1378,7 +1374,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     background, border colour, box-shadow or transform of its own. Padding for an LED comes
     out of the cap's own padding.
   - The caps' colours are per theme (`--cap-hi`, `--cap-lo`, `--cap-edge`, `--cap-ink`; the
-    LED's `--hw-led`, `--hw-led-off`): dark caps in every theme with a button, Sand included.
+    LED's `--hw-led`, `--hw-led-off`): dark caps in every theme with a button.
     Clear and Reset have red lettering (`pt-danger`).
   - Not caps, on purpose (the maintainer's call): the pedals' CRUSH and PING PONG switches and
     footswitches. Also left as they were: the screen's F-keys, the piano keys, the NOISE
@@ -1456,8 +1452,16 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   tiles came out wider than tall; `RandomWaveTile.vue`, 58 px wide, as tall as both rows). It
   replaced a long button under the tiles that stayed down while the pads played a mix, so it
   didn't read as something to press again. Random **never stays down**: each press rolls the
-  pads' waves again (from the waves whose dice badge is lit), and its dice tumbles (still with
-  `prefers-reduced-motion`: no tumble). While the pads play a mix it shows it: a small bar per
+  pads' waves again (from the waves whose dice badge is lit), and its dice tumbles: it hops
+  and turns a quarter at a time, showing a new face each turn, and lands on a face other than
+  the one it started from (PR 85; before, it spun a whole turn round a point off its centre,
+  its face never changing, and shrank mid-roll on the first press; it's 26 px either way
+  now). With `prefers-reduced-motion` no tumble, only the new face. **Which waves the dice
+  badges pick from is saved with the project** (PR 85; `synth.randomWaves`, the waves in the
+  tiles' order; before, the page kept it, so it carried over to File → New and every project
+  opened): File → New and a sound preset (`resetSoundToFactoryDefaults()`) light every badge,
+  a project saved before it opens with all, and `soundKey()` leaves it out (a badge isn't
+  part of the sound, so it doesn't unlight a preset). A badge clicked is an undo step. While the pads play a mix it shows it: a small bar per
   pad in its wave's colour (`padWaves`, `WAVE_PALETTES`' middle colour; two columns of eight),
   over "Mix / roll again" (its accessible name says so too). A wave tile is lit only while
   every pad plays its wave (`litWave` in `DrumSequencer.vue`, PR 64); after Random, or a pad's
@@ -1535,6 +1539,8 @@ card PR 75, the Melody Maker PR 76, the plain cards PR 77). Items 1 and 2 come f
 PR 77 (its first items were PR 78, the stretched keyboard and pedals, PR 79, the theme
 colours, PR 80, the Melody Maker's screen while playing, and PR 84, share links); items 3 and 4 from earlier ones (its first items, Generate made obvious and the Random wave tile, were PRs 82 and 83). No one else uses the app yet, so older projects need no special care: a removed
 setting can simply stop applying.
+PR 85 was a list of the maintainer's own after PR 84 (Sand removed, the Spectrum first, the
+Random tile's dice, the dice badges saved), taken before item 1, which stays next.
 
 Redesigns are visual: every control keeps working as it does, and each card keeps its size.
 They are for the desktop first; the phone can keep what suits it. Each starts with a few
@@ -1762,6 +1768,7 @@ Done:
 | 82 | Melody Maker, part 2 (option A of three mockups): Generate is a full-width accent cap at the card's bottom naming what it makes ("Generate melody" / "Generate arpeggio"), Melody | Arpeggio moved up into the header, the card the same size; until Generate is first pressed in the browser, the screen says "Press Generate" (with what it would make) and the button glows. |
 | 84 | Share a project as a link: File → Share link… packs the project (unsaved changes included, without the theme) into the link's `#p=…` fragment, deflated, about 1.2 kB (`src/lib/storage/share.ts`); the phone's share sheet, else copied. Opening one loads it as an unsaved copy, never over a saved project and not in File → Open until saved, and says "Shared pattern: press Play"; a link pasted into an open page asks first if there are unsaved changes; a damaged link says so. |
 | 83 | The Waveforms card's Random is a tall tile in a narrow ninth column beside the eight waves (option B of two mockups): it never stays down, its dice tumbles on each press, and while the pads play a mix it shows it (a small bar per pad in its wave's colour, "Mix / roll again"); the LFO card's Sine / Square are two bigger keys with the wave drawn on them, lit in the accent like FM's ratio keys (option 1 of two). Cards keep their size. |
+| 85 | The maintainer's list after PR 84: the **Sand** theme removed (a browser that had it opens in Synthwave); the screen opens on the **Spectrum** (F2) instead of the Scope; the Random tile's dice tumbles properly (a hop and quarter turns, a new face each turn, landing on another face, one size); and the wave tiles' dice badges (which waves Random picks from) are saved with the project, so File → New and a sound preset light them all again and an opened project brings its own (they carried over before). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -34,18 +34,6 @@ $themes: (
         accent2: 190,
         accent3: 260,
         chevron: #ffd6ff),
-    /* Sand: a soft, matte light theme. Warm greys instead of white (the Light theme's white
-       was harsh on the eyes), dark knob caps as on a hardware panel, an orange accent */
-    sand: (bg: #c9c4ba,
-        panel: #e3dfd7,
-        text: #2d2a26,
-        muted: #57524b,
-        surface1: #e8e4dd,
-        surface2: #dbd6cd,
-        accent: 18,
-        accent2: 186,
-        accent3: 40,
-        chevron: #4a453e),
     /* Analog: a warm dark hardware panel, charcoal with cream lettering and amber accents, an
        amber monochrome screen, the page behind like a wooden case */
     analog: (bg: #141210,
@@ -112,14 +100,6 @@ $themes: (
             --pt-btn-glow: hsl(var(--pt-accent) 90% 55% / 0.32);
         }
 
-        @if $name ==sand {
-            --pt-tile-1: #{color.mix(#000, map.get($t, surface1), 3%)};
-            --pt-tile-2: #{color.mix(#000, map.get($t, surface2), 4%)};
-            /* a muted ring: the full-strength accent glares on warm grey */
-            --pt-btn-border: hsl(var(--pt-accent) 58% 48%);
-            --pt-btn-glow: hsl(var(--pt-accent) 80% 50% / 0.22);
-        }
-
         @if $name ==analog {
             --pt-tile-1: #24211d;
             --pt-tile-2: #1b1916;
@@ -174,7 +154,7 @@ $base: map.get($themes, synthwave);
     --pt-tile-2: #{color.mix(#000, map.get($base, surface2), 16%)};
 
     /* The app's colour wash: the Waveforms card and the Melody Maker's chosen key; and the
-       page behind the frame (--pt-page). Pink to violet, except in Sand */
+       page behind the frame (--pt-page). Pink to violet unless a theme sets its own */
     --pt-wash: radial-gradient(circle at center, #d9a0c3 0%, #9b8cb4 75%, #736c92 100%);
     --pt-page: var(--pt-wash);
     /* The Noise card's switch (its NOISE ribbon) when on */
@@ -238,20 +218,6 @@ $base: map.get($themes, synthwave);
     --pt-surface-3: #dfe3ea;
 }
 
-.theme-sand {
-    color-scheme: light;
-    --pt-header-fg: #2d2a26;
-    --pt-text-strong: #2d2a26;
-    --pt-hairline: rgba(45, 42, 38, 0.14);
-    --pt-inset: rgba(45, 42, 38, 0.07);
-    --pt-wash: radial-gradient(circle at center, #e9c3a4 0%, #d3a68e 70%, #b98f7e 100%);
-    --pt-page: radial-gradient(circle at center, #bdb7ac 0%, #a49e93 70%, #918b81 100%);
-    --pt-noise-on: hsl(18 62% 48%);
-    --pt-menu-caption: var(--pt-muted);
-    --pt-wash-ink: #2d2a26;
-    --pt-surface-3: #d6d0c6;
-}
-
 /* The effect pedals (PR 79, option A of three mockups): each keeps its own colour (an orange
    delay, a yellow overdrive, a stone reverb), shaded for the theme, with its name engraved in
    dark ink (white with a glow was hard to read). The pedals read --pedal-hi / --pedal-lo (the
@@ -279,12 +245,6 @@ $base: map.get($themes, synthwave);
     .reverb-pedal { --pedal-hi: #aaa59c; --pedal-lo: #817a6e; }
 }
 
-.theme-sand {
-    .delay-pedal { --pedal-hi: #e2ab84; --pedal-lo: #cf8d63; }
-    .drive-pedal { --pedal-hi: #e4d293; --pedal-lo: #cdb469; }
-    .reverb-pedal { --pedal-hi: #cfc8b8; --pedal-lo: #ada28c; }
-}
-
 .theme-analog {
     .delay-pedal { --pedal-hi: #cc7840; --pedal-lo: #a8592a; }
     .drive-pedal { --pedal-hi: #e0bb5e; --pedal-lo: #c49b3a; }
@@ -295,24 +255,6 @@ $base: map.get($themes, synthwave);
     .delay-pedal { --pedal-hi: #cc9f80; --pedal-lo: #aa7f62; }
     .drive-pedal { --pedal-hi: #cbc08a; --pedal-lo: #aa9c62; }
     .reverb-pedal { --pedal-hi: #a6b9c3; --pedal-lo: #8297a3; }
-}
-
-/* Text outside the cards (the MIDI toolbar's caption; body's own is light grey) and the link
-   under the frame, on Sand's warm grey page */
-.theme-sand body {
-    color: var(--pt-text);
-}
-
-.theme-sand a.return {
-    color: #3b1a0b;
-}
-
-/* Sand's tiles (the waves, FM, Unison, the LFO's switch) are dark caps with light lettering,
-   like its knobs: their pastel icons were made for dark tiles and vanished on light ones */
-html.theme-sand .wave-btn {
-    --tile-1: #3b3733;
-    --tile-2: #2b2825;
-    color: #efe9df;
 }
 
 .theme-synthwave a.return {
@@ -969,12 +911,7 @@ html.theme-sand .wave-btn {
 .theme-light .toggle-header:hover .group-title,
 .theme-light .toggle-header:focus-visible .group-title,
 .theme-light .toggle-header.is-active .group-title,
-.theme-light .toggle-header.is-active:hover .group-title,
-.theme-sand .toggle-header .group-title,
-.theme-sand .toggle-header:hover .group-title,
-.theme-sand .toggle-header:focus-visible .group-title,
-.theme-sand .toggle-header.is-active .group-title,
-.theme-sand .toggle-header.is-active:hover .group-title {
+.theme-light .toggle-header.is-active:hover .group-title {
     color: var(--pt-text-strong, #1f2328) !important;
 }
 
@@ -986,9 +923,7 @@ html.theme-sand .wave-btn {
 }
 
 .theme-light .toggle-header .pt-title,
-.theme-light .toggle-header:hover .pt-title,
-.theme-sand .toggle-header .pt-title,
-.theme-sand .toggle-header:hover .pt-title {
+.theme-light .toggle-header:hover .pt-title {
     color: var(--pt-text-strong, #1f2328) !important;
 }
 
@@ -1020,8 +955,7 @@ html.theme-sand .wave-btn {
     color: var(--pt-text-strong);
 }
 
-.theme-light .pt-title,
-.theme-sand .pt-title {
+.theme-light .pt-title {
     color: var(--pt-text-strong, #1f2328) !important;
 }
 
@@ -1086,17 +1020,8 @@ html.theme-sand .wave-btn {
     --pad-wash-lit: 52%;
 }
 
-/* Sand's pads: softer colours, still one per note */
-.theme-sand {
-    --pad-wash-base: .28;
-    --pad-wash-scale: .55;
-    --pad-wash-sat: 52%;
-    --pad-wash-lit: 58%;
-}
-
 /* Pads on a light theme: a light tile, the note's colour multiplied in */
-.theme-light,
-.theme-sand {
+.theme-light {
 
     .padTEST {
         background:

@@ -451,7 +451,6 @@ function hzText(hz: number) {
 	-webkit-touch-callout: none;
 }
 
-.theme-sand .phone-layout,
 .theme-light .phone-layout {
 	--pp-sat: 52%;
 	--pp-lit: 50%;
@@ -500,29 +499,23 @@ function hzText(hz: number) {
 	box-shadow: 0 0 0 1.5px #fff;
 }
 
-.theme-sand .pl-mp,
 .theme-light .pl-mp {
 	background: rgba(0, 0, 0, .14);
 }
 
-.theme-sand .pl-mp.beat,
 .theme-light .pl-mp.beat {
 	background: rgba(0, 0, 0, .28);
 }
 
-.theme-sand .pl-mp.on,
 .theme-light .pl-mp.on {
 	background: hsl(var(--h) var(--pp-sat, 70%) var(--pp-lit, 45%));
 }
 
-.theme-sand .pl-mp.now,
 .theme-light .pl-mp.now {
 	box-shadow: 0 0 0 1.5px #1c2317;
 }
 
 /* The mini scope and pads: each theme's screen colours (Screen.vue's are its own) */
-.theme-sand .pl-minipads { background: #a9b29a; }
-.theme-sand .pl-scope { background: #a9b29a; color: #1c2317; }
 .theme-light .pl-minipads { background: #cdd2d5; }
 .theme-light .pl-scope { background: #cdd2d5; color: #1f2937; }
 .theme-analog .pl-minipads { background: #1a1208; }

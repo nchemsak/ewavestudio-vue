@@ -279,6 +279,9 @@ test('the built page has the Google Analytics tag (stubbed out here)', async ({ 
 });
 
 test('number keys 1–4 switch the screen view, except while typing', async ({ page }) => {
+	// The screen opens on the Spectrum (PR 85; it was the Scope)
+	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
+	await expect(page.locator('.nac-screen__lcd canvas').nth(5)).toBeVisible();
 	await page.locator('body').click({ position: { x: 5, y: 5 } });
 	// F1 Scope, F2 Spectrum, F3 Spectrogram, F4 Tuner (PR 70: the Envelope view has no key)
 	for (const [key, title] of [['2', 'Spectrum'], ['3', 'Spectrogram'], ['4', 'Tuner'], ['1', 'Oscilloscope']]) {
@@ -417,13 +420,13 @@ test('knobs work from the keyboard, and turning Attack shows the envelope until 
 	const attack = page.getByRole('slider', { name: 'Attack' });
 	const envCanvas = page.locator('.nac-screen__lcd canvas').nth(3);
 	await attack.focus();
-	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope'); // focus alone changes nothing
+	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum'); // focus alone changes nothing
 	await page.keyboard.press('ArrowUp');
 	await expect(envCanvas).toBeVisible();
 	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
 	await expect(attack).toHaveAttribute('aria-valuetext', /^\d+ ms$/);
 	await page.keyboard.press('Tab');
-	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
+	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
 });
 
 test('turning Cutoff or Resonance shows the filter curve until the knob is let go', async ({ page }) => {
@@ -431,7 +434,7 @@ test('turning Cutoff or Resonance shows the filter curve until the knob is let g
 	const cutoff = page.getByRole('slider', { name: 'Cutoff', exact: true });
 	const resonance = page.getByRole('slider', { name: 'Resonance', exact: true });
 	const picture = () => filterCanvas.evaluate((c: HTMLCanvasElement) => c.toDataURL());
-	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
+	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
 	await expect(filterCanvas).toBeHidden();
 
 	// No F-key of its own: none is lit while it shows
@@ -454,7 +457,7 @@ test('turning Cutoff or Resonance shows the filter curve until the knob is let g
 	// Let go: back to the view it was on
 	await page.keyboard.press('Tab');
 	await expect(filterCanvas).toBeHidden();
-	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
+	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
 
 	// Picking another view while turning keeps that view afterwards
 	await cutoff.focus();
@@ -2848,7 +2851,7 @@ async function textContrast(page: Page, text: ReturnType<Page['locator']>) {
 test('the Pattern Tools, Sounds, Patterns and section captions are readable in every theme', async ({ page }) => {
 	// The Light theme has no button at the moment (ThemeToggle.vue), but a saved choice still
 	// applies it
-	for (const theme of ['synthwave', 'dark', 'sand', 'analog', 'slate', 'light']) {
+	for (const theme of ['synthwave', 'dark', 'analog', 'slate', 'light']) {
 		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), theme);
 		await page.reload();
 		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${theme}`));
@@ -2869,7 +2872,7 @@ test('the Pattern Tools, Sounds, Patterns and section captions are readable in e
 
 test('PR 79: the pedals and the screen\'s keys follow the theme, the pedals\' names readable; Dark has a dark page', async ({ page }) => {
 	const looks: Record<string, string[]> = {};
-	for (const theme of ['synthwave', 'dark', 'sand', 'analog', 'slate']) {
+	for (const theme of ['synthwave', 'dark', 'analog', 'slate']) {
 		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), theme);
 		await page.reload();
 		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${theme}`));
@@ -2891,71 +2894,21 @@ test('PR 79: the pedals and the screen\'s keys follow the theme, the pedals\' na
 	}
 	// The delay pedal and the screen's keys differ in every theme (they were the same in all);
 	// the FM and Unison keys take the caps' colours (Synthwave's and Dark's differ)
-	for (const i of [0, 1, 3]) expect(new Set(Object.values(looks).map((l) => l[i])).size, `part ${i}`).toBe(5);
+	for (const i of [0, 1, 3]) expect(new Set(Object.values(looks).map((l) => l[i])).size, `part ${i}`).toBe(4);
 	expect(looks.synthwave[2]).not.toBe(looks.dark[2]);
 	// Dark's page is dark (it was Synthwave's pink wash): its brightest stop is near black
 	const stops = [...looks.dark[3].matchAll(/rgb\((\d+), (\d+), (\d+)\)/g)].map((m) => Math.max(+m[1], +m[2], +m[3]));
 	expect(Math.max(...stops)).toBeLessThan(48);
 });
 
-test('the Sand theme: its button sits beside Dark and Synthwave, is remembered, and its text is readable', async ({ page }) => {
+test('PR 85: the Sand theme is gone; a browser that had it opens in Synthwave', async ({ page }) => {
 	const themes = page.getByRole('group', { name: 'Theme' }).getByRole('button');
-	await expect(themes).toHaveText(['Dark', 'Synthwave', 'Sand', 'Analog', 'Slate']);
-	const sand = page.getByRole('button', { name: 'Sand', exact: true });
-	await expect(sand).toHaveAttribute('aria-pressed', 'false');
-	await sand.click();
-	await expect(sand).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('html')).toHaveClass(/theme-sand/);
-	await expect(page.locator('html')).not.toHaveClass(/theme-synthwave/);
-	expect(await page.evaluate(() => localStorage.getItem('ewave-studio2:ui-theme'))).toBe('sand');
-	// Its own colours: a warm grey page, a light screen, the Waveforms card's wash
-	const bodyBg = await page.evaluate(() => getComputedStyle(document.body).backgroundImage);
-	expect(bodyBg).toContain('rgb(189, 183, 172)');
-	expect(await page.locator('.generators .pt-card').evaluate((el) => getComputedStyle(el).backgroundImage))
-		.toContain('rgb(233, 195, 164)');
-
-	// Kept after a reload
+	await expect(themes).toHaveText(['Dark', 'Synthwave', 'Analog', 'Slate']);
+	await page.evaluate(() => localStorage.setItem('ewave-studio2:ui-theme', 'sand'));
 	await page.reload();
-	await expect(page.locator('html')).toHaveClass(/theme-sand/);
-	await expect(page.getByRole('button', { name: 'Sand', exact: true })).toHaveAttribute('aria-pressed', 'true');
-
-	// Text that was drawn light-on-light: the MIDI toolbar's caption, the NOISE switch when off,
-	// the Melody Maker's chosen key, the ⋯ menu's captions, the link under the frame
-	const midi = page.locator('.midi-label');
-	const noise = page.locator('.noise-ribbon-label');
-	await expect(page.getByRole('button', { name: 'Toggle noise' })).toHaveAttribute('aria-pressed', 'false');
-	const key = page.locator('.kb-white.is-active .wlabel');
-	const link = page.getByRole('link', { name: 'Return to Ephemeral Wave' });
-	for (const [name, text] of [['MIDI Controller', midi], ['NOISE', noise], ['chosen key', key], ['link', link]] as const) {
-		await text.scrollIntoViewIfNeeded();
-		expect(await textContrast(page, text), name).toBeGreaterThanOrEqual(4.5);
-	}
-	await page.evaluate(() => window.scrollTo(0, 0));
-	await page.getByRole('button', { name: 'Advanced options' }).first().click();
-	for (const text of [page.locator('.mm-menu-title').first(), page.locator('.mm-reset').first()]) {
-		await expect(text).toBeVisible();
-		expect(await textContrast(page, text), (await text.textContent())!.trim()).toBeGreaterThanOrEqual(4.5);
-	}
-	await page.keyboard.press('Escape');
-
-	// Back to Synthwave: nothing of Sand is left
-	await page.getByRole('button', { name: 'Synthwave', exact: true }).click();
 	await expect(page.locator('html')).toHaveClass(/theme-synthwave/);
 	await expect(page.locator('html')).not.toHaveClass(/theme-sand/);
-	expect(await page.evaluate(() => getComputedStyle(document.body).backgroundImage)).toContain('rgb(217, 160, 195)');
-});
-
-test("Sand: the tiles are dark caps with light lettering, and the LFO's screen has dark ink", async ({ page }) => {
-	await page.getByRole('button', { name: 'Sand', exact: true }).click();
-	const tile = page.getByRole('radio', { name: 'Sine' }).first();
-	await tile.scrollIntoViewIfNeeded();
-	expect(await textContrast(page, tile.locator('.wave-label').first()), 'Sine').toBeGreaterThanOrEqual(4.5);
-	// The cards' screens (PR 77): dark ink on the green-grey LCD, as the LFO's
-	expect(await textContrast(page, page.locator('.module.filter .sp-title small')), "Filter's screen").toBeGreaterThanOrEqual(4.5);
-	// The LFO card's screen (PR 75; its power tile is gone): a green-grey LCD, dark ink
-	const read = page.locator('.module.mod .lv-read--l');
-	await read.scrollIntoViewIfNeeded();
-	expect(await textContrast(page, read), 'LFO screen').toBeGreaterThanOrEqual(4.5);
+	await expect(page.getByRole('button', { name: 'Synthwave', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('Analog and Slate: their buttons apply their own colours, and are remembered', async ({ page }) => {
@@ -3434,6 +3387,12 @@ test('the wave tiles light the wave every pad plays; the Random tile never stays
 	await expect(random).toHaveAccessibleName(/roll again/);
 	await expect(bars).toHaveCount(16);
 	await expect(random.locator('.rw-dice')).toHaveClass(/tumble/);
+	// PR 85: it hops and tumbles, its face changing, and lands on another face, the same size
+	await expect(random.locator('.rw-dice')).not.toHaveClass(/tumble/);
+	const pips = random.locator('.rw-dice circle');
+	const landed = await pips.count();
+	expect(landed).not.toBe(5);
+	expect((await random.locator('.rw-dice').boundingBox())!.width).toBeCloseTo(26, 0);
 	// Each bar in its pad's wave's colour: more than one colour
 	const colours = new Set(await bars.evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor)));
 	expect(colours.size).toBeGreaterThan(1);
@@ -3450,6 +3409,39 @@ test('the wave tiles light the wave every pad plays; the Random tile never stays
 	await page.keyboard.press('Escape');
 	await expect(lit).toHaveCount(0);
 	await expect(bars).toHaveCount(16);
+});
+
+test('PR 85: the waves Random picks from are saved with the project; File → New and a sound preset pick all again', async ({ page }) => {
+	const badge = (wave: string) => page.locator(`.ds-grid .wave-row .dice-badge[aria-label$="${wave} from Random"]`);
+	const included = async () => page.locator('.ds-grid .wave-row .dice-badge[aria-checked="true"]').count();
+	await expect.poll(included).toBe(8);
+	await badge('GLASS').click();
+	await badge('ORGAN').click();
+	await expect.poll(included).toBe(6);
+	await expect(page.getByRole('button', { name: /^Random waves/ })).toHaveAttribute('title', /Random from: Sine, Triangle, Saw, Square, Pulse, Hollow$/);
+
+	// Saved with the project, and back when it's opened
+	const exported = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	expect(exported.data.synth.randomWaves).toEqual(['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'hollow']);
+
+	// File → New: every wave again (it carried over before)
+	await chooseFromFileMenu(page, 'New');
+	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
+	await expect.poll(included).toBe(8);
+
+	// Opening the project brings its own back
+	exported.projectId = 'pool-test';
+	exported.meta = { ...exported.meta, name: 'pool-test' };
+	exported.data.meta = { ...exported.data.meta, name: 'pool-test' };
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'pool-test.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)),
+	});
+	await expect(page.getByRole('textbox', { name: 'Project name' })).toHaveValue('pool-test');
+	await expect.poll(included).toBe(6);
+
+	// A sound preset sets the whole sound: every wave again
+	await page.getByRole('button', { name: 'Kick', exact: true }).click();
+	await expect.poll(included).toBe(8);
 });
 
 test("the LFO's wave is two keys with the wave drawn on them, the chosen one lit", async ({ page }) => {
@@ -4999,7 +4991,7 @@ test.describe('Phone mode', () => {
 		await page.getByRole('button', { name: 'Menu' }).click();
 		const menu = page.getByRole('dialog', { name: 'Menu' });
 		await expect(menu.getByRole('button', { name: 'File ▾' })).toBeVisible();
-		await expect(menu.getByRole('button', { name: 'Sand', exact: true })).toBeVisible();
+		await expect(menu.getByRole('button', { name: 'Slate', exact: true })).toBeVisible();
 		// The File menu opens there without scrolling, and works (Export audio… opens its dialog
 		// over the phone layout)
 		await menu.getByRole('button', { name: 'File ▾' }).click();
