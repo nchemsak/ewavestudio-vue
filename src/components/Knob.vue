@@ -485,7 +485,7 @@ function onPress(e, isTouch = false) {
 .drive-pedal .knob-label,
 .reverb-pedal .knob-label,
 .delay-pedal .knob-label {
-	color: black;
+	color: var(--pedal-ink, black);
 	font-weight: bold;
 }
 

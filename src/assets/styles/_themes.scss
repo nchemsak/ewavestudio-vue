@@ -209,6 +209,13 @@ $base: map.get($themes, synthwave);
     --pt-menu-caption: #b3a892;
 }
 
+/* Dark: truly dark, a near-black page and a cool grey-violet wash (it shared Synthwave's pink
+   to violet ones until PR 79) */
+.theme-dark {
+    --pt-wash: radial-gradient(circle at center, #9a9cb8 0%, #6d6f8c 72%, #55576f 100%);
+    --pt-page: radial-gradient(circle at center, #23252c 0%, #16181d 62%, #0b0c0f 100%);
+}
+
 .theme-slate {
     --pt-header-fg: #eceff4;
     --pt-text-strong: #f2f4f8;

@@ -76,7 +76,7 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>();
     font-weight: bold;
     line-height: 1;
     min-height: 2em; /* two lines, so a one-word switch sits as high as PING PONG */
-    color: black;
+    color: var(--pedal-ink, black);
     text-align: center;
     display: flex;
     flex-direction: column;
@@ -87,7 +87,7 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>();
 }
 
 .pedal-switch:disabled .ps-label {
-    color: #666;
+    color: var(--pedal-ink-off, #666);
 }
 
 .pedal-switch:disabled .ps-lever {

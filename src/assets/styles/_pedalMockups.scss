@@ -1,0 +1,100 @@
+/* MOCKUPS (not for main): three ways for the effect pedals to follow the theme, picked with
+   ?pedals=a|b|c in the URL (main.ts puts pedals-a/b/c on <html>). The components read
+   --pedal-hi/-lo (body), --pedal-foot-hi/-lo (the label's half), --pedal-ink (knob and switch
+   captions), --pedal-ink-off, --pedal-name and --pedal-name-shadow (the pedal's name), and
+   --pedal-switch-hi/-lo (the footswitch). */
+
+/* A: each pedal keeps its own colour (orange delay, yellow overdrive, stone reverb), tuned to
+   the theme; the name engraved in dark ink, readable */
+html.pedals-a {
+    .delay-pedal,
+    .drive-pedal,
+    .reverb-pedal {
+        --pedal-ink: rgba(0, 0, 0, 0.82);
+        --pedal-ink-off: rgba(0, 0, 0, 0.45);
+        --pedal-name: rgba(0, 0, 0, 0.74);
+        --pedal-name-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    }
+
+    &.theme-synthwave {
+        .delay-pedal { --pedal-hi: #ff9a72; --pedal-lo: #ff6f86; }
+        .drive-pedal { --pedal-hi: #ffe27a; --pedal-lo: #f5b847; }
+        .reverb-pedal { --pedal-hi: #cbbcf2; --pedal-lo: #9d88d8; }
+    }
+
+    &.theme-dark {
+        .delay-pedal { --pedal-hi: #d48a52; --pedal-lo: #b0673a; }
+        .drive-pedal { --pedal-hi: #d3be6a; --pedal-lo: #b39538; }
+        .reverb-pedal { --pedal-hi: #aaa59c; --pedal-lo: #817a6e; }
+    }
+
+    &.theme-sand {
+        .delay-pedal { --pedal-hi: #e2ab84; --pedal-lo: #cf8d63; }
+        .drive-pedal { --pedal-hi: #e4d293; --pedal-lo: #cdb469; }
+        .reverb-pedal { --pedal-hi: #cfc8b8; --pedal-lo: #ada28c; }
+    }
+
+    &.theme-analog {
+        .delay-pedal { --pedal-hi: #cc7840; --pedal-lo: #a8592a; }
+        .drive-pedal { --pedal-hi: #dcb455; --pedal-lo: #b98f30; }
+        .reverb-pedal { --pedal-hi: #e8dec7; --pedal-lo: #c8b996; }
+    }
+
+    &.theme-slate {
+        .delay-pedal { --pedal-hi: #cc9f80; --pedal-lo: #aa7f62; }
+        .drive-pedal { --pedal-hi: #cbc08a; --pedal-lo: #aa9c62; }
+        .reverb-pedal { --pedal-hi: #a6b9c3; --pedal-lo: #8297a3; }
+    }
+}
+
+/* B: the pedals in the theme's own hues (delay the second accent, overdrive the accent,
+   reverb the third), mid-dark, with light lettering: any theme gets a matching set */
+html.pedals-b {
+    .delay-pedal,
+    .drive-pedal,
+    .reverb-pedal {
+        --pedal-ink: rgba(255, 255, 255, 0.9);
+        --pedal-ink-off: rgba(255, 255, 255, 0.45);
+        --pedal-name: #fff;
+        --pedal-name-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+    }
+
+    .delay-pedal { --pedal-hi: hsl(var(--pt-accent-2) 52% 45%); --pedal-lo: hsl(var(--pt-accent-2) 56% 34%); }
+    .drive-pedal { --pedal-hi: hsl(var(--pt-accent) 50% 47%); --pedal-lo: hsl(var(--pt-accent) 54% 35%); }
+    .reverb-pedal { --pedal-hi: hsl(var(--pt-accent-3) 38% 45%); --pedal-lo: hsl(var(--pt-accent-3) 42% 34%); }
+}
+
+/* C: dark enclosures in the theme's panel colour, like the app's caps, with light lettering;
+   the pedal's own colour (orange, yellow, stone) as the band its name and footswitch sit on */
+html.pedals-c {
+    .delay-pedal,
+    .drive-pedal,
+    .reverb-pedal {
+        --pedal-hi: #2f3138;
+        --pedal-lo: #22242a;
+        --pedal-ink: rgba(255, 255, 255, 0.86);
+        --pedal-ink-off: rgba(255, 255, 255, 0.4);
+        --pedal-name: rgba(0, 0, 0, 0.78);
+        --pedal-name-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    }
+
+    &.theme-synthwave {
+        .delay-pedal, .drive-pedal, .reverb-pedal { --pedal-hi: #3a2660; --pedal-lo: #25173f; }
+    }
+
+    &.theme-sand {
+        .delay-pedal, .drive-pedal, .reverb-pedal { --pedal-hi: #3b3733; --pedal-lo: #2b2825; }
+    }
+
+    &.theme-analog {
+        .delay-pedal, .drive-pedal, .reverb-pedal { --pedal-hi: #38332d; --pedal-lo: #26221d; }
+    }
+
+    &.theme-slate {
+        .delay-pedal, .drive-pedal, .reverb-pedal { --pedal-hi: #444c5a; --pedal-lo: #313744; }
+    }
+
+    .delay-pedal { --pedal-foot-hi: #ffc069; --pedal-foot-lo: #ffa263; }
+    .drive-pedal { --pedal-foot-hi: #f1df8f; --pedal-foot-lo: #ebbd54; }
+    .reverb-pedal { --pedal-foot-hi: #ccc5b4; --pedal-foot-lo: #a39277; }
+}
