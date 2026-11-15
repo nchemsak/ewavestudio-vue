@@ -6,7 +6,7 @@
      Melody | Arpeggio and the chosen one's settings. Generate itself is in the card's header
      (DrumSequencer's SectionWrap tools; `generate` is exposed). -->
 <template>
-    <div class="melody-maker mm-skin" :class="props.currentTheme">
+    <div class="melody-maker mm-skin" :class="[props.currentTheme, props.genMock ? `gen-${props.genMock}` : '']">
         <section class="pt-section mm-card">
             <div class="mm-kb-wrap">
                 <div class="mm-field">
@@ -82,16 +82,34 @@
                 </svg>
                 <span class="mm-read mm-read--l" aria-hidden="true">{{ keyRoot }} {{ scaleShort }}</span>
                 <span class="mm-read mm-read--r" aria-hidden="true">{{ screenNote }}</span>
+                <!-- MOCKUPS: before the first Generate, the screen says what to press -->
+                <div v-if="showHint" class="mm-hint-lcd" :class="{ 'is-up': props.genMock === 'b' }" aria-hidden="true">
+                    <span class="mm-hint-box">
+                        <span class="mm-hint-main">Press <b>Generate</b></span>
+                        <span class="mm-hint-sub">{{ hintWhat }}</span>
+                    </span>
+                    <span class="mm-hint-arrow mm-hint-arrow--one">{{ props.genMock === 'b' ? '↗' : '↓' }}</span>
+                    <span class="mm-hint-arrow mm-hint-arrow--wide">{{ props.genMock === 'b' ? '↗' : '↙' }}</span>
+                </div>
             </div>
 
             <!-- What Generate makes: random notes, or an arpeggio. Both panels sit in the same
                  place, the one not chosen hidden, so the card is as tall in both modes. -->
             <div class="mm-group">
+                <div v-if="props.genMock !== 'a'" class="mm-mode-row">
                 <div class="pt-seg pt-seg-sm mm-mode" role="group" aria-label="Generate">
                     <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'random' }"
                         :aria-pressed="mode === 'random'" @click="mode = 'random'">Melody</button>
                     <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'arp' }"
                         :aria-pressed="mode === 'arp'" @click="mode = 'arp'">Arpeggio</button>
+                </div>
+                <!-- MOCKUP C: Generate beside the switch, at the card's bottom -->
+                <button v-if="props.genMock === 'c'" type="button" class="mm-gen-accent mm-gen-c hw-cap" :class="{ 'is-fresh': showHint }"
+                    @click="generate()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+                        <circle cx="8" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="16" cy="16" r="1.6" /></svg>
+                    <span>Generate</span>
+                </button>
                 </div>
 
                 <div class="mm-mode-body">
@@ -149,6 +167,14 @@
                         </div>
                     </div>
                 </div>
+                <!-- MOCKUP A: a full-width bar at the card's bottom (Melody | Arpeggio went to
+                     the header) -->
+                <button v-if="props.genMock === 'a'" type="button" class="mm-gen-accent mm-gen-bar hw-cap" :class="{ 'is-fresh': showHint }"
+                    @click="generate()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+                        <circle cx="8" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="16" cy="16" r="1.6" /></svg>
+                    <span>{{ genWord }}</span>
+                </button>
             </div>
         </section>
     </div>
@@ -159,6 +185,7 @@ import { ref, computed, watch, defineExpose, onMounted, onBeforeUnmount, useId }
 import { padHue } from '../lib/padColour';
 import { rollY, rootOctavesHz, rollNotes, ghostNotes, rollSegments, soundingKey, type RollNote } from '../lib/melody/roll';
 import RollPlayhead from './RollPlayhead.vue';
+import { storageKey } from '../lib/storage/namespace';
 import type { PlayView } from '../composables/usePlayhead';
 import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
 import { arpSlots, arpSequence, arpRateFrom, type ArpRate } from '../lib/melody/arp';
@@ -206,6 +233,9 @@ const props = defineProps<{
     // Where the bar is while playing (usePlayhead.ts). Only RollPlayhead and `playingHit`
     // read it, so the card doesn't redraw every frame.
     playView?: PlayView | null;
+    // MOCKUPS (not for main): ?gen=a|b|c, three ways to make Generate obvious; the desktop's
+    // card only
+    genMock?: 'a' | 'b' | 'c' | null;
 }>();
 
 /*  Defaults  */
@@ -552,7 +582,28 @@ watch(() => props.initialMode, (v) => { if (v) mode.value = v; });
 const randomNote = computed(() => (keyScale.value === 'none'
     ? `No scale chosen: every pad gets ${keyRoot.value}, in the range's octaves. Pick a scale for a melody.`
     : 'Random notes from the scale and range above; the first pad that\'s on gets the key.'));
+// MOCKUPS: until Generate is first pressed (remembered in this browser), the screen says to
+// press it, and the button glows
+const GEN_SEEN_KEY = storageKey('mm-generated');
+function readSeen() {
+    try { return localStorage.getItem(GEN_SEEN_KEY) === '1'; } catch { return false; }
+}
+const generatedOnce = ref(readSeen());
+function noteGenerated() {
+    if (generatedOnce.value) return;
+    generatedOnce.value = true;
+    try { localStorage.setItem(GEN_SEEN_KEY, '1'); } catch { /* private window */ }
+}
+const showHint = computed(() => !!props.genMock && !generatedOnce.value);
+const genWord = computed(() => (mode.value === 'arp' ? 'Generate arpeggio' : 'Generate melody'));
+const hintWhat = computed(() => {
+    if (mode.value === 'arp') return `for an arpeggio: ${patternLabel.value} · ${arpRate.value}`;
+    if (keyScale.value === 'none') return `every pad gets ${keyRoot.value}: pick a Scale for a melody`;
+    return `for a melody in ${keyRoot.value} ${SCALE_CHOICES.find((o) => o.value === keyScale.value)?.long ?? scaleShort.value}`;
+});
+
 function generate() {
+    noteGenerated();
     if (mode.value === 'arp') bakeArp();
     else smartGenerate();
 }
@@ -1028,7 +1079,7 @@ function setUi(u: Partial<UiSnapshot>) {
     if (u.mode) mode.value = u.mode;
 }
 
-defineExpose({ getUi, setUi, generate });
+defineExpose({ getUi, setUi, generate, generatedOnce });
 </script>
 
 <style scoped>
@@ -1809,4 +1860,182 @@ defineExpose({ getUi, setUi, generate });
     white-space: nowrap;
 }
 /* THE CARD END */
+/* MOCKUPS (not for main): ?gen=a|b|c */
+/* An accent cap, as Play and Save */
+.mm-gen-accent {
+    --cap-hi: hsl(var(--pt-accent) 78% 58%);
+    --cap-lo: hsl(var(--pt-accent-2, var(--pt-accent)) 72% 46%);
+    --cap-edge: color-mix(in oklab, var(--cap-lo), black 60%);
+    --cap-ink: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 0;
+    border-radius: 8px;
+    font: inherit;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 0 rgb(0 0 0 / 0.35);
+}
+
+.mm-gen-accent svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+}
+
+.mm-gen-accent svg rect {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7px;
+}
+
+.mm-gen-accent svg circle {
+    fill: currentColor;
+}
+
+/* Until it's first pressed, it glows */
+.mm-gen-accent.is-fresh {
+    animation: mm-gen-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes mm-gen-glow {
+    0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+    50% { filter: drop-shadow(0 0 7px hsl(var(--pt-accent) 90% 62% / 0.85)); }
+}
+
+/* A: the bar, where the Melody | Arpeggio switch was */
+.mm-gen-bar {
+    width: 100%;
+    height: 34px;
+    font-size: 0.86rem;
+}
+
+/* Under 1200 px the card isn't stretched: the bar is as tall as the switch it replaces */
+@media (max-width: 1199px) {
+    .mm-gen-bar {
+        height: 28px;
+    }
+}
+
+/* C: the switch and Generate on one line, at the card's bottom */
+.mm-mode-row {
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+}
+
+.mm-mode-row .mm-mode {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.gen-c .mm-mode-row {
+    order: 2;
+}
+
+.mm-gen-c {
+    flex: 0 0 auto;
+    padding: 0 16px;
+    font-size: 0.8rem;
+}
+
+/* The hint on the screen */
+.mm-hint-lcd {
+    position: absolute;
+    inset: 18px 10px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--mm-lcd-ink);
+    text-align: center;
+    pointer-events: none;
+}
+
+.mm-hint-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 12px;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--mm-lcd-bg) 88%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--mm-lcd-ink) 25%, transparent);
+}
+
+.mm-hint-arrow--wide {
+    display: none;
+}
+
+/* The wide card: Generate is below and to the left of the screen */
+@container melody (min-width: 640px) {
+    .mm-hint-arrow--one {
+        display: none;
+    }
+
+    .mm-hint-arrow--wide {
+        display: inline;
+    }
+
+    .mm-hint-lcd:not(.is-up) {
+        align-items: flex-start;
+        justify-content: flex-end;
+    }
+}
+
+.mm-hint-main {
+    font-size: 15px;
+    letter-spacing: 0.04em;
+}
+
+.mm-hint-main b {
+    color: hsl(var(--pt-accent) 90% 70%);
+}
+
+.theme-sand .mm-hint-main b,
+.theme-light .mm-hint-main b {
+    color: inherit;
+}
+
+.mm-hint-sub {
+    font-size: 10px;
+    opacity: 0.75;
+    letter-spacing: 0.04em;
+}
+
+.mm-hint-arrow {
+    order: 3;
+    font-size: 18px;
+    line-height: 1;
+    animation: mm-hint-bob 1.2s ease-in-out infinite;
+}
+
+.mm-hint-lcd.is-up {
+    align-items: flex-end;
+    text-align: right;
+    justify-content: flex-start;
+}
+
+.mm-hint-lcd.is-up .mm-hint-arrow {
+    order: -1;
+    animation-name: mm-hint-bob-up;
+}
+
+@keyframes mm-hint-bob {
+    50% { transform: translateY(3px); }
+}
+
+@keyframes mm-hint-bob-up {
+    50% { transform: translate(2px, -2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mm-hint-arrow,
+    .mm-gen-accent.is-fresh {
+        animation: none;
+    }
+}
 </style>

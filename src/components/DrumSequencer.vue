@@ -500,19 +500,29 @@
 					<SectionWrap id="melody" title="Melody Maker" v-model="collapsibleState['melody']">
 							<!-- Generate (PR 76): in the header, not under the card; the dice the preset boxes use -->
 							<template #tools>
-								<button type="button" class="mm-generate hw-cap" title="Make a melody or an arpeggio, whichever is chosen below"
+								<!-- MOCKUP A: Melody | Arpeggio up here, Generate a bar at the card's bottom -->
+								<div v-if="genMock === 'a'" class="pt-seg pt-seg-sm mm-head-mode" role="group" aria-label="Generate">
+									<button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': melodyUi.mode !== 'arp' }"
+										:aria-pressed="melodyUi.mode !== 'arp'" @click="melodyUi.mode = 'random'">Melody</button>
+									<button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': melodyUi.mode === 'arp' }"
+										:aria-pressed="melodyUi.mode === 'arp'" @click="melodyUi.mode = 'arp'">Arpeggio</button>
+								</div>
+								<button v-else-if="genMock !== 'c'" type="button" class="mm-generate hw-cap"
+									:class="{ 'mm-generate--big': genMock === 'b', 'is-fresh': genMock === 'b' && !melodyRef?.generatedOnce }"
+									title="Make a melody or an arpeggio, whichever is chosen below"
 									@click="melodyRef?.generate?.()">
 									<svg viewBox="0 0 24 24" aria-hidden="true">
 										<rect x="3.5" y="3.5" width="17" height="17" rx="4" />
 										<circle cx="8" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="16" cy="16" r="1.6" />
 									</svg>
-									<span>Generate</span>
+									<span>{{ genMock === 'b' ? (melodyUi.mode === 'arp' ? 'Generate arpeggio' : 'Generate melody') : 'Generate' }}</span>
 								</button>
+								<span v-else class="mm-head-spacer" aria-hidden="true"></span>
 							</template>
 						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
 							:ratchets="synthInstrument?.ratchets" :repeat-notes="synthInstrument?.repeatNotes" :repeat-chord="repeatChord"
-							:swing="swing" :note-steps="noteSteps" :playView="playView"
+							:swing="swing" :note-steps="noteSteps" :playView="playView" :gen-mock="genMock"
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
@@ -787,7 +797,10 @@ const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 	getUi?: () => any;
 	setUi?: (u: any) => void;
 	generate?: () => void;
+	generatedOnce?: boolean;
 }) | null>(null);
+// MOCKUPS (not for main): ?gen=a|b|c, three ways to make the Melody Maker's Generate obvious
+const genMock = ((g) => (g === 'a' || g === 'b' || g === 'c' ? g : null))(new URLSearchParams(location.search).get('gen'));
 // The phone's Key page has a Melody Maker of its own
 const melodyPhoneRef = ref<{ generate?: () => void } | null>(null);
 
@@ -4069,6 +4082,55 @@ const phoneCtx = reactive({
 
 .mm-generate svg circle {
 	fill: currentColor;
+}
+
+/* MOCKUP B: Generate bigger, in the accent's colours, naming what it makes */
+.mm-generate--big {
+	--cap-hi: hsl(var(--pt-accent) 78% 58%);
+	--cap-lo: hsl(var(--pt-accent-2, var(--pt-accent)) 72% 46%);
+	--cap-edge: color-mix(in oklab, var(--cap-lo), black 60%);
+	--cap-ink: #fff;
+	padding: 0 14px;
+	font-size: 0.8rem;
+	font-weight: 700;
+	text-shadow: 0 1px 0 rgb(0 0 0 / 0.35);
+}
+
+.mm-generate--big svg {
+	width: 19px;
+	height: 19px;
+}
+
+.mm-generate.is-fresh {
+	animation: mm-gen-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes mm-gen-glow {
+	0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+	50% { filter: drop-shadow(0 0 7px hsl(var(--pt-accent) 90% 62% / 0.85)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.mm-generate.is-fresh {
+		animation: none;
+	}
+}
+
+/* MOCKUP C: the header keeps its height without a button */
+.mm-head-spacer {
+	display: block;
+	height: 28px;
+}
+
+/* MOCKUP A: Melody | Arpeggio in the header */
+.mm-head-mode {
+	display: flex;
+	width: 190px;
+}
+
+.mm-head-mode .pt-seg-btn {
+	flex: 1 1 0;
+	font-size: 0.72rem;
 }
 
 .noise-ribbon {
