@@ -375,7 +375,12 @@
 						</SectionWrap>
 					</div>
 
-					<div class="sound-stack">
+					<!-- MOCKUPS (?cards=a|b|c): the plain cards' redesign options (SoundCardsMock.vue) -->
+					<div v-if="cardsMock" class="sound-stack">
+						<SoundCardsMock :variant="cardsMock" part="fm" :m="cardsModel" />
+						<SoundCardsMock :variant="cardsMock" part="unison" :m="cardsModel" />
+					</div>
+					<div v-else class="sound-stack">
 						<!-- FM: its tile switches it on and off -->
 						<div class="module fm">
 							<SectionWrap id="fm" title="FM" v-model="collapsibleState['fm']">
@@ -394,8 +399,11 @@
 					</div>
 				</div>
 
+				<div v-if="cardsMock" class="sound-row-mock">
+					<SoundCardsMock :variant="cardsMock" part="shape" :m="cardsModel" />
+				</div>
 				<!-- Row 2: Envelope, Pitch and Filter, their knobs on one line -->
-				<div class="sound-row sound-row-2">
+				<div v-else class="sound-row sound-row-2">
 					<div class="module envelope">
 						<SectionWrap id="envelope" title="Envelope" v-model="collapsibleState['envelope']">
 							<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
@@ -668,6 +676,7 @@ import { shortestInterval, transposePitches, remapScale, nearestRootHz, patternC
 import DriveEffect from './modules/DriveEffect.vue';
 import UnisonEffect from './modules/UnisonEffect.vue';
 import LFOGroup from './modules/LFOGroup.vue';
+import SoundCardsMock from './SoundCardsMock.vue';
 import nacScreen from './Screen.vue';
 import { startFilterView } from './filterView';
 import { startSpectrumView } from './spectrumView';
@@ -2325,6 +2334,16 @@ const unisonVoices = ref(UNISON_VOICES_DEFAULT);   // 2–4
 const detuneCents = ref(UNISON_DETUNE_DEFAULT);  // 0–100 cents per step
 const stereoSpread = ref(UNISON_SPREAD_DEFAULT);  // 0–100 %
 
+// MOCKUPS (?cards=a|b|c): the plain cards' redesign options draw from the real settings
+const cardsMock = new URLSearchParams(location.search).get('cards') || '';
+const cardsModel = reactive({
+	attack: ampEnvAttackMs, decay: ampEnvDecayMs,
+	pitchSemis: pitchEnvSemitones, pitchDecay: pitchEnvDecayMs, pitchMode,
+	cutoff: filterCutoff, resonance: filterResonance, envAmt: filterEnvAmount, envDecay: filterEnvDecayMs, vel: velocityRouting.cutoff,
+	fmOn: fmEnabled, fmRatio, fmFreq: fmModFreq, fmIndex,
+	uniOn: unisonEnabled, voices: unisonVoices, detune: detuneCents, spread: stereoSpread,
+});
+
 watch(unisonVoices, (v) => {
 	const cap = unisonMaxVoices.value;
 	let clamped = v;
@@ -3567,6 +3586,10 @@ const phoneCtx = reactive({
 
 .sound-row-1 {
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr);
+}
+
+.sound-row-mock {
+	display: block;
 }
 
 .sound-row-2 {
