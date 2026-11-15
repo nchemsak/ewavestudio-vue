@@ -187,8 +187,16 @@ const fkeyDefs = computed(() => {
     --fkey-ico: #2d2a26;
 }
 
+/* Dark: the default screen, with grey keys */
+.theme-dark .nac-screen {
+    --fkey-hi: #d7dbe2;
+    --fkey-lo: #bfc4cd;
+}
+
 /* Analog: an amber monochrome screen */
 .theme-analog .nac-screen {
+    --fkey-hi: #eadfc6;
+    --fkey-lo: #cfc09e;
     --nac-bezel-bg: #0f0e0c;
     --nac-bezel-rim: rgba(255, 220, 160, .06);
     --nac-lcd-bg: #1a1208;
@@ -206,6 +214,8 @@ const fkeyDefs = computed(() => {
 
 /* Slate: a deep blue-green screen */
 .theme-slate .nac-screen {
+    --fkey-hi: #dde4ec;
+    --fkey-lo: #c3cdd8;
     --nac-bezel-bg: #222731;
     --nac-bezel-rim: rgba(255, 255, 255, .06);
     --nac-lcd-bg: #16222a;
@@ -218,6 +228,8 @@ const fkeyDefs = computed(() => {
 }
 
 .theme-synthwave .nac-screen {
+    --fkey-hi: #ece4fa;
+    --fkey-lo: #d6caee;
     --nac-bezel-bg: #160b2e;
     --nac-bezel-rim: rgba(255, 255, 255, .08);
     --nac-lcd-bg: #2a0f52;
@@ -311,7 +323,8 @@ const fkeyDefs = computed(() => {
     position: relative;
     height: 1.1rem;
     border-radius: .25rem;
-    background: linear-gradient(180deg, #f3f5f7, #e6eaef);
+    /* light keys, tinted per theme (PR 79: they were white in every theme) */
+    background: linear-gradient(180deg, var(--fkey-hi, #f3f5f7), var(--fkey-lo, #e6eaef));
     border: 1px solid color-mix(in oklab, #000 12%, transparent);
     box-shadow:
         0 .12rem .25rem rgba(0, 0, 0, .25),
@@ -327,14 +340,14 @@ const fkeyDefs = computed(() => {
     place-items: center;
     line-height: 0;
     height: 100%;
-    color: black;
+    color: var(--fkey-ico);
 
 }
 
 .fkey .ico svg {
     width: 18px;
     height: 18px;
-    color: black;
+    color: var(--fkey-ico);
     opacity: .95;
     transform: translateY(-1px);
 }

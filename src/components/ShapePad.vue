@@ -428,9 +428,10 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
     padding: 0 2px;
     border: 0;
     border-radius: 4px;
-    background: linear-gradient(180deg, #2b2f3b, #191b23);
+    /* the caps' colours, per theme (PR 79; they were Dark's in every theme) */
+    background: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    color: #aeb7cc;
+    color: color-mix(in oklab, var(--cap-ink) 72%, transparent);
     font: inherit;
     font-size: 8.5px;
     letter-spacing: 0.08em;
