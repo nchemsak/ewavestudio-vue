@@ -261,7 +261,7 @@ $base: map.get($themes, synthwave);
 .delay-pedal,
 .drive-pedal,
 .reverb-pedal {
-    --pedal-ink: rgba(0, 0, 0, 0.82);
+    --pedal-ink: rgba(0, 0, 0, 0.9);
     --pedal-ink-off: rgba(0, 0, 0, 0.5);
     --pedal-name: rgba(0, 0, 0, 0.86);
     --pedal-name-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
@@ -287,7 +287,7 @@ $base: map.get($themes, synthwave);
 
 .theme-analog {
     .delay-pedal { --pedal-hi: #cc7840; --pedal-lo: #a8592a; }
-    .drive-pedal { --pedal-hi: #dcb455; --pedal-lo: #b98f30; }
+    .drive-pedal { --pedal-hi: #e0bb5e; --pedal-lo: #c49b3a; }
     .reverb-pedal { --pedal-hi: #e8dec7; --pedal-lo: #c8b996; }
 }
 
