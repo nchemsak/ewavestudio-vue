@@ -369,10 +369,4 @@ watch(
     color: white;
 }
 
-
-@media (max-width: 720px) {
-    .delay-pedal {
-        width: 50%;
-    }
-}
 </style>

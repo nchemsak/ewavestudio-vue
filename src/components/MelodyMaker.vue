@@ -991,11 +991,13 @@ defineExpose({ getUi, setUi, generate });
 }
 
 /* A wide card (a tablet's Compose tab): the keyboard, Scale, Range and the makers on the left,
-   the screen beside them */
+   the screen beside them. The left column stops at 400 px, so the keys keep about the
+   desktop's shape (51 × 88 px there; 67 px wide on a 1024 px tablet before), and the screen
+   takes the rest */
 @container melody (min-width: 640px) {
     .melody-maker>.mm-card {
         display: grid;
-        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+        grid-template-columns: minmax(0, min(400px, calc((100% - 24px) * 0.535))) minmax(0, 1fr);
         grid-template-rows: auto auto 1fr;
         grid-template-areas: "kb screen" "scale screen" "group screen";
         column-gap: 24px;
@@ -1186,6 +1188,16 @@ defineExpose({ getUi, setUi, generate });
 
 .mm-kb-wrap {
     margin-bottom: 8px;
+}
+
+/* A one-column card wider than the desktop's (a narrow window): the keyboard stays near the
+   desktop's shape, centred, instead of stretching across */
+@container melody (max-width: 639.98px) {
+    .mm-kb-wrap {
+        width: 100%;
+        max-width: 420px;
+        margin-inline: auto;
+    }
 }
 
 .mm-kb :where(.pt-seg-btn) {
