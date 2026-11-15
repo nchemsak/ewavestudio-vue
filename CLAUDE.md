@@ -162,8 +162,9 @@ src/components/
                          its Sound, FX and Key pages are DrumSequencer's slots
   LfoBendMark.vue        The LFO's pitch bend drawn on a lit pad (see "LFO visualizer")
   RollPlayhead.vue       The Melody Maker screen's playhead line (it alone redraws every frame)
-  MelodyMaker.vue        Key, scale and range, a screen, Melody or Arpeggio (Generate is in its
-                         card's header); a key or scale picked moves the pattern (see "Melody Maker")
+  MelodyMaker.vue        Key, scale and range, a screen, the makers' settings and Generate (the
+                         card's last line); a key or scale picked moves the pattern (see "Melody Maker")
+  MelodyModeSwitch.vue   Melody | Arpeggio, in the Melody Maker card's header (desktop and phone)
   PatternTools.vue       Synth-lane tools: step fills (all, every 2/4, invert, random, clear),
                          velocity shapes ("Humanize") and octave shift (with the Active Pads
                          Only toggle)
@@ -252,6 +253,7 @@ src/composables/usePhoneMode.ts  When phone mode is on (a phone held sideways), 
 src/composables/useProjectSync.ts  Keeps the settings and the project store in step (see "Saving")
 src/composables/useUndoHistory.ts  When to record an undo step, and applying undo/redo
 src/composables/useLfoVisual.ts  The LFO visualizer's frame clock
+src/composables/useFirstGenerate.ts  Whether Generate has been pressed in this browser (the hint)
 src/composables/usePlayhead.ts  The Melody Maker screen's playhead: where the bar is, each frame
 src/assets/styles/       _bootstrap-custom.scss (the Bootstrap parts in use, then main.scss),
                          and all global SCSS (themes are in _themes.scss, the buttons' look in
@@ -727,9 +729,20 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - **The card** (PR 76; option E2 after four rounds of mockups, the same size as before and as
   tall in both modes; **no dropdowns**: the maintainer found a card of switches for every
   choice "chaotic", so words went on steppers and only numbers stayed switches):
-  - **Generate** is in the card's header, top right (DrumSequencer's `SectionWrap` tools; a
-    dark cap with the preset boxes' dice and the word; `generate` is exposed). The wide
-    gradient button at the card's bottom is gone.
+  - **Generate** (PR 82, option A of three mockups: a bigger header cap and Generate beside
+    the switch were the others) is the card's last line, the card's width, a cap in the
+    accent's colours (as Play and Save) with the preset boxes' dice, naming what it makes:
+    "Generate melody" or "Generate arpeggio" (`.mm-gen-bar`; 34 px tall, 28 under 1200 px,
+    as tall as the switch row it replaced). From PR 76 to 81 it was a small dark cap in the
+    header, which a newcomer didn't see as the button to press. **Melody | Arpeggio** moved
+    up into the header in its place (`MelodyModeSwitch.vue`, a group named "Generate makes",
+    setting `melodyUi.mode`, which the card follows through `initialMode`). So the card is
+    the size it was. Until Generate is first pressed in this browser
+    (`useFirstGenerate.ts`, `localStorage` `mm-generated`, one flag for the desktop's and the
+    phone's card), the screen says "Press Generate" with what it would make ("for a melody in
+    A Minor", "for an arpeggio: Up · 1/16"), over a backdrop, with an arrow to the button (↓,
+    ↙ on a wide card), and the button glows (`.is-fresh`; neither moves with
+    `prefers-reduced-motion`). The phone's Key page has the same card and header.
   - The **keyboard** as before, with the scale's notes lit on the keys (`inScale()`).
   - **Scale** is a **stepper**: ◂ and ▸ go to the neighbouring scale (round the ends), and a
     click on the name (a small window with a ▾) opens the whole list with full names, as the
@@ -770,9 +783,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     a repeat's hits are); the screen cuts so notes don't overlap.
   - The **scale's dots** on the white keys are 9 px in the accent with a dark ring (PR 80:
     the LED's pale green, 6 px, hardly showed on white); the black keys keep the LED dot.
-  - **Melody | Arpeggio**, then the chosen one's panel, both in one grid cell so the card
-    never changes height: Melody's Active Pads Only and its note; the arpeggio's Pattern and
-    Tones steppers over Rate (1/8 | 1/16), Octaves (1 | 2 | 3) and Skip.
+  - The chosen maker's panel (Melody | Arpeggio is in the header), both in one grid cell so
+    the card never changes height: Melody's Active Pads Only and its note; the arpeggio's
+    Pattern and Tones steppers over Rate (1/8 | 1/16), Octaves (1 | 2 | 3) and Skip. Then
+    Generate.
   - **Captions** only where the control doesn't explain itself: Key, Scale, Octaves. Range,
     Rate, Pattern and Tones have none (their names are tooltips and accessible names), so the
     tones name themselves: Chord, 7th chord, Whole scale.
@@ -799,7 +813,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   A project or an undo step brings its own pads and key together (`synth.tuning`). A key click
   is one undo step, pads and key together. (Before PR 39, a key change moved only the pads that
   were off and still on the old default note.)
-- One Generate button (in the card's header since PR 76): a Melody / Arpeggio switch (`mode`, saved as `random` or `arp`; the
+- One Generate button (the card's last line since PR 82): a Melody / Arpeggio switch (in the
+  card's header since PR 82) (`mode`, saved as `random` or `arp`; the
   Melody button read "Random" until PR 57, which clashed with the arpeggio's Random order).
   Melody keeps its old behaviour (random notes from the scale and range on the pads that are
   on, with "Active Pads Only", the first one gets the key; with no scale, the key's note in the
@@ -1224,7 +1239,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   reloaded (`beforeunload`). A project made with File → New counts as unsaved until it's saved.
 - `localStorage` keys (all prefixed): `lastProjectId` (reopened on load), `reset-ui-next`
   (one-shot flag that ProjectControls sets to reset the UI on New Project), `seqOpen`, `ui-theme`,
-  `midi-map` (MIDI learn's links, see "MIDI learn").
+  `midi-map` (MIDI learn's links, see "MIDI learn"), `mm-generated` (Generate has been
+  pressed: no more hint, see "Melody Maker").
 - `instruments[]` still contains the hidden kick, snare and hihat lanes (normally with no
   steps on). Keep them so saved projects stay compatible.
 - Melody Maker settings (key, scale, range, what Generate makes (`mode`: `random` or `arp`;
@@ -1476,51 +1492,47 @@ what the maintainer turned down: Converge or Up + octave as arpeggio patterns, P
 target, and for now a second oscillator and a second pad lane, on hold below).
 
 The maintainer's brainstorm after PR 73 is done (its three small fixes were PR 74, the LFO
-card PR 75, the Melody Maker PR 76, the plain cards PR 77). Items 1–5 come from the one after
+card PR 75, the Melody Maker PR 76, the plain cards PR 77). Items 1–4 come from the one after
 PR 77 (its first items were PR 78, the stretched keyboard and pedals, PR 79, the theme
-colours, and PR 80, the Melody Maker's screen while playing); items 6 and 7 from earlier ones. No one else uses the app yet, so older projects need no special care: a removed
+colours, and PR 80, the Melody Maker's screen while playing); items 5 and 6 from earlier ones (its first item, Generate made obvious, was PR 82). No one else uses the app yet, so older projects need no special care: a removed
 setting can simply stop applying.
 
 Redesigns are visual: every control keeps working as it does, and each card keeps its size.
 They are for the desktop first; the phone can keep what suits it. Each starts with a few
 mockups for the maintainer to pick from (built in the app behind a URL switch, photographed
 onto one page, the code kept on the branch without a PR), as the LFO card's, the Melody
-Maker's and the plain cards' did. What they settled: a ribbon switch, a small screen that shows what the controls
+Maker's, the plain cards' and Generate's did. What they settled: a ribbon switch, a small screen that shows what the controls
 do, sockets, steppers that open a list for a choice of words, switches for numbers, captions
-only where a control doesn't explain itself, and not too many buttons on show.
+only where a control doesn't explain itself, not too many buttons on show, and the action
+button where the eye ends up (Generate, PR 82).
 
-1. **Melody Maker, part 2: Generate made obvious.** A newcomer doesn't see that it's the button
-   to press. Likely a full-width accent cap at the card's bottom ("Generate melody" /
-   "Generate arpeggio", with the dice), the toggles moved up to make room, and a hint on the
-   screen before the first use; mockups first (a bottom bar, or a bigger header cap). The card
-   keeps its size.
-2. **The Random wave tile and the LFO's wave buttons** (mockups first). Random becomes a
+1. **The Random wave tile and the LFO's wave buttons** (mockups first). Random becomes a
    square tile like the eight waves, with a dice, instead of a long web button; it doesn't stay
    down: after a roll it shows the mix (small bars of the pads' waves, "Mix · roll again") and
    tumbles on each press, so it reads as press-again (a 3×3 grid, or a narrow ninth column). The
    LFO card's Sine / Square switch becomes two bigger keys with the wave drawn on them, like
    FM's ratio keys, the card the same size.
-3. **Share a project as a link** (off hold; the maintainer's idea after PR 77: send a pattern
+2. **Share a project as a link** (off hold; the maintainer's idea after PR 77: send a pattern
    to someone who doesn't know the site). The project, compressed, in the URL's fragment
    (`#p=…`, never sent to the server, so it works on static hosting; about 1–2 kB); File →
    Share opens the phone's share sheet (`navigator.share`) or copies the link. Opening one
    loads it as an unsaved copy (never over a saved project) and says "Shared pattern: press
    Play" (browsers don't play audio before a tap). Maybe later a "pattern only" link that keeps
    the recipient's sound. JSON stays the file format (a `.ewave` name is optional).
-4. **Drag notes on the Melody Maker's screen** (maybe; the maintainer's call once PR 80 and
-   item 1 are in): up or down, snapping to the scale, one undo step, a preview while stopped, using the
+3. **Drag notes on the Melody Maker's screen** (maybe; the maintainer's call once PR 80 and
+   PR 82 are in): up or down, snapping to the scale, one undo step, a preview while stopped, using the
    shape cards' drag code. It's a second editor for the pads' pitches, and fiddly on a 110 px
    screen.
-5. **Octave arrows at the edges** (last: the maintainer isn't sure). `octaveShiftAllSkip()`
+4. **Octave arrows at the edges** (last: the maintainer isn't sure). `octaveShiftAllSkip()`
    moves each pad on its own and skips those that would leave 100–2000 Hz, so a pattern near an
    edge gets squashed (its intervals change); it also moves `globalOctaveOffset` when pads were
    skipped. Proposed: all or nothing (if any pad can't move, none does), the arrow greyed out
    with a title saying why; the phone's Octave ↓ / ↑ too; a unit test.
-6. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
+5. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
    changes to come may change the height), centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-7. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+6. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Decided after PR 73 (the maintainer's call, "for now"): the Sound and Pattern presets stay in
@@ -1721,6 +1733,7 @@ Done:
 | 78 | The Melody Maker's keyboard and the effect pedals no longer stretch in the tabbed layout (under 1200 px): the pedals keep their desktop size (120 px wide; they were 190 on a tablet, 168 on a phone), three across and centred, one under another under 720 px (three across they'd be 105 px and their labels collide); the wide Melody Maker card's left column stops at 400 px, so the white keys stay near the desktop's 51 px (67 before at 1024 px), and a one-column card keeps its keyboard at most 420 px, centred. Plan: the maintainer's brainstorm after PR 77. |
 | 79 | Theme colours: **Dark** has a near-black page of its own and a grey-violet wash (it shared Synthwave's pink ones); the **effect pedals** follow the theme (option A of three mockups): each keeps its own colour, shaded per theme, with its name and captions in dark ink, readable now (white with a glow wasn't); the screen's F-keys are tinted per theme (white in every theme before), FM's and Unison's keys take the caps' colours, and the link under the frame has a colour in Dark and Synthwave. A browser test checks the pedals' names in every theme. |
 | 80 | The Melody Maker's screen while playing: a playhead line crosses it and the note that sounds glows, in step with the pads (only the glow with reduced motion; `usePlayhead.ts`, `RollPlayhead.vue`); each note is drawn as long as it sounds (Attack + Decay at the tempo, cut at the next hit, its tail fading), repeats as their 2–4 hits, stepping up or down for Up / Down (`rollSegments()` in `roll.ts`); the scale's dots on the white keys are bigger, in the accent with a dark ring. |
+| 82 | Melody Maker, part 2 (option A of three mockups): Generate is a full-width accent cap at the card's bottom naming what it makes ("Generate melody" / "Generate arpeggio"), Melody | Arpeggio moved up into the header, the card the same size; until Generate is first pressed in the browser, the screen says "Press Generate" (with what it would make) and the button glows. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

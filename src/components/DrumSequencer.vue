@@ -101,18 +101,11 @@
 			<template #key>
 				<div class="module melody pl-melody">
 					<SectionWrap id="pl-melody" title="Melody Maker" :modelValue="true">
-						<!-- Generate (PR 76): in the header, not under the card; the dice the preset boxes use -->
+						<!-- What Generate makes; Generate is the card's last line (PR 82) -->
 						<template #tools>
-							<button type="button" class="mm-generate hw-cap" title="Make a melody or an arpeggio, whichever is chosen below"
-								@click="melodyPhoneRef?.generate?.()">
-								<svg viewBox="0 0 24 24" aria-hidden="true">
-									<rect x="3.5" y="3.5" width="17" height="17" rx="4" />
-									<circle cx="8" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="16" cy="16" r="1.6" />
-								</svg>
-								<span>Generate</span>
-							</button>
+							<MelodyModeSwitch v-model="melodyUi.mode" />
 						</template>
-						<MelodyMaker :key="`pl-melody-${resetNonce}`" ref="melodyPhoneRef" :frequencies="padFrequencies"
+						<MelodyMaker :key="`pl-melody-${resetNonce}`" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
 							:ratchets="synthInstrument?.ratchets" :repeat-notes="synthInstrument?.repeatNotes" :repeat-chord="repeatChord"
 							:swing="swing" :note-steps="noteSteps" :playView="playView"
@@ -498,16 +491,9 @@
 				<div class="module melody">
 					<!-- Its options are on the card since PR 68 (no ⋯ menu) -->
 					<SectionWrap id="melody" title="Melody Maker" v-model="collapsibleState['melody']">
-							<!-- Generate (PR 76): in the header, not under the card; the dice the preset boxes use -->
+							<!-- What Generate makes; Generate is the card's last line (PR 82) -->
 							<template #tools>
-								<button type="button" class="mm-generate hw-cap" title="Make a melody or an arpeggio, whichever is chosen below"
-									@click="melodyRef?.generate?.()">
-									<svg viewBox="0 0 24 24" aria-hidden="true">
-										<rect x="3.5" y="3.5" width="17" height="17" rx="4" />
-										<circle cx="8" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="16" cy="16" r="1.6" />
-									</svg>
-									<span>Generate</span>
-								</button>
+								<MelodyModeSwitch v-model="melodyUi.mode" />
 							</template>
 						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
@@ -687,6 +673,7 @@ import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type Repea
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
 import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
 import MelodyMaker from './MelodyMaker.vue';
+import MelodyModeSwitch from './MelodyModeSwitch.vue';
 import MidiToolbar from './MidiToolbar.vue';
 import { useMidiInput } from '../composables/useMidiInput';
 import { useMidiLearn } from '../composables/useMidiLearn';
@@ -789,7 +776,6 @@ const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 	generate?: () => void;
 }) | null>(null);
 // The phone's Key page has a Melody Maker of its own
-const melodyPhoneRef = ref<{ generate?: () => void } | null>(null);
 
 const melodyUi = reactive<MelodyUi>({
 	keyRoot: 'A',
@@ -4037,38 +4023,6 @@ const phoneCtx = reactive({
 		flex: 1 1 154px;
 		min-height: 0;
 	}
-}
-
-/* The Melody Maker's Generate, in its card's header: a dark cap like File, with the dice the
-   preset boxes use (it's the same idea: make one for me) */
-.mm-generate {
-	flex: none;
-	display: inline-flex;
-	align-items: center;
-	gap: 7px;
-	height: 28px;
-	padding: 0 11px;
-	border: 0;
-	border-radius: 8px;
-	font: inherit;
-	font-size: 0.74rem;
-	font-weight: 600;
-}
-
-.mm-generate svg {
-	flex: none;
-	width: 17px;
-	height: 17px;
-}
-
-.mm-generate svg rect {
-	fill: none;
-	stroke: currentColor;
-	stroke-width: 1.6px;
-}
-
-.mm-generate svg circle {
-	fill: currentColor;
 }
 
 .noise-ribbon {

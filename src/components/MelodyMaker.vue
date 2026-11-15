@@ -82,18 +82,22 @@
                 </svg>
                 <span class="mm-read mm-read--l" aria-hidden="true">{{ keyRoot }} {{ scaleShort }}</span>
                 <span class="mm-read mm-read--r" aria-hidden="true">{{ screenNote }}</span>
+                <!-- Until Generate is first pressed (in this browser), the screen says to press it -->
+                <div v-if="showHint" class="mm-hint-lcd" aria-hidden="true">
+                    <span class="mm-hint-box">
+                        <span class="mm-hint-main">Press <b>Generate</b></span>
+                        <span class="mm-hint-sub">{{ hintWhat }}</span>
+                    </span>
+                    <span class="mm-hint-arrow mm-hint-arrow--one">↓</span>
+                    <span class="mm-hint-arrow mm-hint-arrow--wide">↙</span>
+                </div>
             </div>
 
-            <!-- What Generate makes: random notes, or an arpeggio. Both panels sit in the same
-                 place, the one not chosen hidden, so the card is as tall in both modes. -->
+            <!-- The settings of what Generate makes (Melody | Arpeggio is in the card's header,
+                 MelodyModeSwitch): both panels sit in the same place, the one not chosen
+                 hidden, so the card is as tall in both modes. Then Generate, the width of the
+                 card (PR 82). -->
             <div class="mm-group">
-                <div class="pt-seg pt-seg-sm mm-mode" role="group" aria-label="Generate">
-                    <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'random' }"
-                        :aria-pressed="mode === 'random'" @click="mode = 'random'">Melody</button>
-                    <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': mode === 'arp' }"
-                        :aria-pressed="mode === 'arp'" @click="mode = 'arp'">Arpeggio</button>
-                </div>
-
                 <div class="mm-mode-body">
                     <!-- Melody: which pads it fills -->
                     <div class="mm-mode-panel" :class="{ 'is-hidden': mode !== 'random' }">
@@ -149,6 +153,13 @@
                         </div>
                     </div>
                 </div>
+                <button type="button" class="mm-gen-bar hw-cap" :class="{ 'is-fresh': showHint }"
+                    :title="mode === 'arp' ? 'Write an arpeggio on the pads (Ctrl+Z takes it back)' : 'Give the pads random notes from the scale (Ctrl+Z takes it back)'"
+                    @click="generate()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+                        <circle cx="8" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="16" cy="16" r="1.6" /></svg>
+                    <span>{{ genWord }}</span>
+                </button>
             </div>
         </section>
     </div>
@@ -159,6 +170,7 @@ import { ref, computed, watch, defineExpose, onMounted, onBeforeUnmount, useId }
 import { padHue } from '../lib/padColour';
 import { rollY, rootOctavesHz, rollNotes, ghostNotes, rollSegments, soundingKey, type RollNote } from '../lib/melody/roll';
 import RollPlayhead from './RollPlayhead.vue';
+import { generatedOnce, noteGenerated } from '../composables/useFirstGenerate';
 import type { PlayView } from '../composables/usePlayhead';
 import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
 import { arpSlots, arpSequence, arpRateFrom, type ArpRate } from '../lib/melody/arp';
@@ -552,7 +564,18 @@ watch(() => props.initialMode, (v) => { if (v) mode.value = v; });
 const randomNote = computed(() => (keyScale.value === 'none'
     ? `No scale chosen: every pad gets ${keyRoot.value}, in the range's octaves. Pick a scale for a melody.`
     : 'Random notes from the scale and range above; the first pad that\'s on gets the key.'));
+// Until Generate is first pressed (remembered in this browser, useFirstGenerate.ts), the
+// screen says to press it and the bar glows
+const showHint = computed(() => !generatedOnce.value);
+const genWord = computed(() => (mode.value === 'arp' ? 'Generate arpeggio' : 'Generate melody'));
+const hintWhat = computed(() => {
+    if (mode.value === 'arp') return `for an arpeggio: ${patternLabel.value} · ${arpRate.value}`;
+    if (keyScale.value === 'none') return `every pad gets ${keyRoot.value}: pick a Scale for a melody`;
+    return `for a melody in ${keyRoot.value} ${SCALE_CHOICES.find((o) => o.value === keyScale.value)?.long ?? scaleShort.value}`;
+});
+
 function generate() {
+    noteGenerated();
     if (mode.value === 'arp') bakeArp();
     else smartGenerate();
 }
@@ -1144,15 +1167,6 @@ defineExpose({ getUi, setUi, generate });
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
-}
-
-.mm-mode {
-    display: flex;
-    margin-bottom: 10px;
-}
-
-.mm-mode .pt-seg-btn {
-    flex: 1 1 0;
 }
 
 /* Melody's note and the arpeggio's settings share one place: as tall as the taller, the one
@@ -1790,10 +1804,6 @@ defineExpose({ getUi, setUi, generate });
     padding-top: 10px;
 }
 
-.mm-card .mm-mode {
-    margin-bottom: 0;
-}
-
 .mm-card .mm-mode-panel {
     min-width: 0;
     justify-content: flex-start;
@@ -1809,4 +1819,143 @@ defineExpose({ getUi, setUi, generate });
     white-space: nowrap;
 }
 /* THE CARD END */
+/* GENERATE (PR 82) START */
+/* Generate: the card's last line, a cap in the accent's colours (as Play and Save), naming
+   what it makes */
+.mm-gen-bar {
+    --cap-hi: hsl(var(--pt-accent) 78% 58%);
+    --cap-lo: hsl(var(--pt-accent-2, var(--pt-accent)) 72% 46%);
+    --cap-edge: color-mix(in oklab, var(--cap-lo), black 60%);
+    --cap-ink: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 34px;
+    border: 0;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 0 rgb(0 0 0 / 0.35);
+}
+
+.mm-gen-bar svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+}
+
+.mm-gen-bar svg rect {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7px;
+}
+
+.mm-gen-bar svg circle {
+    fill: currentColor;
+}
+
+/* Until it's first pressed, it glows */
+.mm-gen-bar.is-fresh {
+    animation: mm-gen-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes mm-gen-glow {
+    0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+    50% { filter: drop-shadow(0 0 7px hsl(var(--pt-accent) 90% 62% / 0.85)); }
+}
+
+/* Under 1200 px the card isn't stretched: the bar is as tall as the switch it replaces */
+@media (max-width: 1199px) {
+    .mm-gen-bar {
+        height: 28px;
+    }
+}
+
+/* The hint on the screen */
+.mm-hint-lcd {
+    position: absolute;
+    inset: 18px 10px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--mm-lcd-ink);
+    text-align: center;
+    pointer-events: none;
+}
+
+.mm-hint-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 12px;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--mm-lcd-bg) 88%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--mm-lcd-ink) 25%, transparent);
+}
+
+.mm-hint-arrow--wide {
+    display: none;
+}
+
+/* The wide card: Generate is below and to the left of the screen */
+@container melody (min-width: 640px) {
+    .mm-hint-arrow--one {
+        display: none;
+    }
+
+    .mm-hint-arrow--wide {
+        display: inline;
+    }
+
+    .mm-hint-lcd {
+        align-items: flex-start;
+        justify-content: flex-end;
+    }
+}
+
+.mm-hint-main {
+    font-size: 15px;
+    letter-spacing: 0.04em;
+}
+
+.mm-hint-main b {
+    color: hsl(var(--pt-accent) 90% 70%);
+}
+
+.theme-sand .mm-hint-main b,
+.theme-light .mm-hint-main b {
+    color: inherit;
+}
+
+.mm-hint-sub {
+    font-size: 10px;
+    opacity: 0.75;
+    letter-spacing: 0.04em;
+}
+
+.mm-hint-arrow {
+    order: 3;
+    font-size: 18px;
+    line-height: 1;
+    animation: mm-hint-bob 1.2s ease-in-out infinite;
+}
+
+@keyframes mm-hint-bob {
+    50% { transform: translateY(3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mm-hint-arrow,
+    .mm-gen-bar.is-fresh {
+        animation: none;
+    }
+}
+/* GENERATE END */
 </style>
