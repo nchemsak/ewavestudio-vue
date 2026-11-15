@@ -25,6 +25,9 @@ type ProjectSnapshot = {
 // useProjectSync copies settings changes into `data` once they settle; this hook copies a
 // pending change at once. Kept outside the state: it's a function, not project data.
 let flushHook: (() => void) | null = null;
+// ProjectControls' unsaved-changes check (its status dot), for whatever would replace the open
+// project without going through it (a share link pasted into the address bar)
+let unsavedCheck: (() => boolean) | null = null;
 
 export const useProjectStore = defineStore('project', {
     state: () => ({
@@ -36,6 +39,10 @@ export const useProjectStore = defineStore('project', {
         // watches projectId for a new project (the undo history, a key waiting for the bar)
         // carries on while projectId === continuedId (isContinued). Not project data.
         continuedId: '' as string,
+        // The open project came from a share link (openShared()) and hasn't been saved in this
+        // browser: it has no record in IndexedDB until Save. Cleared by save, Save as…, opening
+        // and creating a project.
+        fromLink: false as boolean,
     }),
     getters: {
         // The open project is the work that was open before, saved under a new name (Save as…)
@@ -44,6 +51,7 @@ export const useProjectStore = defineStore('project', {
     actions: {
         async newProject(name = 'Untitled', initialData: any = {}): Promise<void> {
             this.continuedId = '';
+            this.fromLink = false;
             this.projectId = genId();
             this.name = name;
             // store a plain, cloneable snapshot
@@ -69,6 +77,7 @@ export const useProjectStore = defineStore('project', {
             if (!snap) return false;
 
             this.continuedId = ''; // opened, even if it's the one Save as… just wrote
+            this.fromLink = false;
             this.projectId = snap.projectId;
             // Support both meta.name and legacy top-level name
             this.name = snap.meta?.name ?? snap.name ?? 'Untitled';
@@ -79,9 +88,32 @@ export const useProjectStore = defineStore('project', {
             return true;
         },
 
+        // A project from a share link (src/lib/storage/share.ts), opened as an unsaved copy: a
+        // new id, nothing written to IndexedDB (so it can't replace a saved project, and isn't in
+        // File → Open) until it's saved.
+        openShared(name: string, data: any): void {
+            this.continuedId = '';
+            this.fromLink = true;
+            this.projectId = genId();
+            this.name = name;
+            this.data = toSerializable(data);
+            this.loaded = true;
+        },
+
         // Set by useProjectSync (null to remove)
         setFlushHook(fn: (() => void) | null) {
             flushHook = fn;
+        },
+
+        // Set by ProjectControls (null to remove)
+        setUnsavedCheck(fn: (() => boolean) | null) {
+            unsavedCheck = fn;
+        },
+
+        // Whether the open project has changes that aren't saved (the status dot)
+        hasUnsavedChanges(): boolean {
+            this.flushPending();
+            return unsavedCheck ? unsavedCheck() : false;
         },
 
         // Make `data` include a settings change that hasn't settled yet. Call before reading
@@ -105,6 +137,7 @@ export const useProjectStore = defineStore('project', {
             };
 
             await saveProject(record);
+            this.fromLink = false;
         },
 
         // File → Save as…: the settings as they are now (unsaved changes included) become a
@@ -115,6 +148,7 @@ export const useProjectStore = defineStore('project', {
             this.flushPending();
             const id = replaceId ?? genId();
             this.continuedId = id;
+            this.fromLink = false;
             this.projectId = id;
             this.name = name;
             this.loaded = true;
