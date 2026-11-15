@@ -934,6 +934,17 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		startTime = audioCtx.currentTime;
 	}
 
+	// Where the bar is now, in steps from its start (2.5: halfway through the third step), or
+	// null while stopped: the Melody Maker's playhead. `leadS` looks that far ahead of the
+	// audio clock; the pads light when their step is scheduled, up to SCHEDULE_AHEAD_S early.
+	function barPosition(leadS = 0): number | null {
+		if (!isPlaying.value) return null;
+		const stepDuration = 60 / tempo.value / 4;
+		const len = stepLength.value;
+		const pos = stepIndex - (startTime - (audioCtx.currentTime + leadS)) / stepDuration;
+		return ((pos % len) + len) % len;
+	}
+
 	function schedule() {
 		const now = audioCtx.currentTime;
 		const stepDuration = 60 / tempo.value / 4;
@@ -1033,6 +1044,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		startLfoIfNeeded,
 		lfoNow,
 		soundingRecently,
+		barPosition,
 		togglePlay,
 		hardStopSequencer,
 		loadSample,

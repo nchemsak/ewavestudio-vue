@@ -4335,6 +4335,75 @@ test('Melody Maker: no dropdowns; steppers with lists, Narrow | Wide, and a scre
 	expect(await size()).toEqual(cardSize);
 });
 
+// PR 80: the screen while playing. Each hit is drawn as long as it sounds, repeats as their
+// hits; a line shows where the bar is and the hit it's in glows; with reduced motion only the glow.
+test('Melody Maker: while playing, a playhead crosses the screen and the sounding note glows; notes are as long as they sound', async ({ page }) => {
+	const card = page.locator('.module.melody');
+	await importChanged(page, 'playhead', (data) => {
+		const lane = data.instruments.find((i: any) => i.name === 'synth-voice');
+		lane.steps = lane.steps.map((_: boolean, i: number) => [0, 4, 8].includes(i));
+		lane.ratchets = lane.steps.map((_: boolean, i: number) => (i === 4 ? 3 : 1));
+		lane.repeatNotes = lane.steps.map((_: boolean, i: number) => (i === 4 ? 'up' : 'same'));
+		data.transport.tempo = 60; // a step is 250 ms; a note (20 + 400 ms) lasts 1.68 steps
+		data.melody.keyScale = 'naturalMinor';
+	});
+	const notes = card.locator('.mm-note');
+	const box = (n: Locator) => n.evaluate((el) => ({ x: +el.getAttribute('x')!, y: +el.getAttribute('y')!, w: +el.getAttribute('width')!, step: el.getAttribute('data-step') }));
+
+	// Stopped: step 1's note, step 5's three hits climbing the chord, step 9's note; no line, no glow
+	await expect(notes).toHaveCount(5);
+	const drawn = await Promise.all([0, 1, 2, 3, 4].map((i) => box(notes.nth(i))));
+	expect(drawn.map((d) => d.step)).toEqual(['0', '4', '4', '4', '8']);
+	expect(drawn[0].w).toBeCloseTo(1.68 * 22 - 2, 0); // Attack + Decay at the tempo
+	expect(drawn[1].w).toBeLessThan(8); // a third of a step, cut by the next hit
+	expect(drawn[2].x - drawn[1].x).toBeCloseTo(22 / 3, 1);
+	expect(drawn[2].y).toBeLessThan(drawn[1].y); // Up: each hit higher
+	expect(drawn[3].y).toBeLessThan(drawn[2].y);
+	expect(drawn[3].w).toBeCloseTo(1.68 * 22 - 2, 0); // the last hit rings out
+	await expect(card.locator('.mm-playhead')).toHaveCount(0);
+	await expect(card.locator('.is-playing')).toHaveCount(0);
+
+	// The scale's notes on the white keys: a bigger dot than the black keys' LED
+	const dot = (key: string) => card.getByRole('radio', { name: key, exact: true }).evaluate((el) => getComputedStyle(el, '::before').width);
+	expect(await dot('C')).toBe('9px');
+	expect(await dot('C#')).not.toBe('9px'); // not in A minor: no dot
+
+	// Playing: the line moves, and the note it's in glows (each of the three steps in turn)
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	const line = card.locator('.mm-playhead');
+	await expect(line).toHaveCount(1);
+	const xs = new Set<string>();
+	const glowed = new Set<string>();
+	for (let i = 0; i < 80 && glowed.size < 3; i++) {
+		xs.add((await line.getAttribute('x1').catch(() => null)) ?? '');
+		const g = card.locator('.mm-note.is-playing');
+		if (await g.count()) {
+			const [gx, lx] = await Promise.all([box(g.first()), line.getAttribute('x1')]).catch(() => [null, null]) as any;
+			if (gx) {
+				glowed.add(gx.step);
+				// the line is inside the glowing note (a frame may pass between the two reads)
+				expect(Math.abs(Number(lx) - (gx.x + gx.w / 2))).toBeLessThan(gx.w / 2 + 8);
+			}
+		}
+		await page.waitForTimeout(50);
+	}
+	expect([...glowed].sort()).toEqual(['0', '4', '8']);
+	expect(xs.size).toBeGreaterThan(10);
+	expect(await card.locator('.is-playing').count()).toBeLessThanOrEqual(1);
+
+	// Stop: both gone
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await expect(line).toHaveCount(0);
+	await expect(card.locator('.is-playing')).toHaveCount(0);
+
+	// prefers-reduced-motion: no moving line, the note still glows
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect(card.locator('.mm-note.is-playing')).toHaveCount(1);
+	await expect(line).toHaveCount(0);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+});
+
 test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its height, the choice is saved', async ({ page }) => {
 	const generate = page.getByRole('button', { name: /^Generate/ });
 	await expect(generate).toHaveCount(1);
