@@ -357,14 +357,12 @@
 											<span v-if="pulseWidthTip" class="custom-tooltip">Width {{ pulseWidth }}%</span>
 										</div>
 									</div>
-								</div>
-								<div class="pt-btn-group wave-random">
-									<button class="pt-btn pt-btn-sm hw-led-mini" :disabled="!randomPoolArray.length"
-										:aria-pressed="wavesMixed ? 'true' : 'false'"
-										:title="wavesMixed ? `The pads play a mix of waves. ${randomTooltip}` : randomTooltip"
-										@click="applyRandomWaves()">
-										Random
-									</button>
+									<!-- Random (PR 83, option B of two mockups): a tall tile in a narrow ninth
+										 column. It never stays down; while the pads play a mix it shows it -->
+									<div class="wave-cell rw-cell">
+										<RandomWaveTile :waves="padWaves" :palettes="WAVE_PALETTES" :mixed="wavesMixed"
+											:disabled="!randomPoolArray.length" :title="randomTooltip" @roll="applyRandomWaves()" />
+									</div>
 								</div>
 							</div>
 						</SectionWrap>
@@ -673,6 +671,7 @@ import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type Repea
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
 import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
 import MelodyMaker from './MelodyMaker.vue';
+import RandomWaveTile from './RandomWaveTile.vue';
 import MelodyModeSwitch from './MelodyModeSwitch.vue';
 import MidiToolbar from './MidiToolbar.vue';
 import { useMidiInput } from '../composables/useMidiInput';
@@ -1769,6 +1768,12 @@ const litWave = computed<Wave | null>(() => {
 	return first ?? fallback;
 });
 const wavesMixed = computed(() => litWave.value === null);
+// Each pad's wave, which the Random tile shows while they play a mix
+const padWaves = computed<Wave[]>(() => {
+	const inst = synthInstrument.value as any;
+	const fallback = selectedWaveform.value as Wave;
+	return Array.from({ length: stepLength.value }, (_, i) => (inst?.waveforms?.[i] ?? fallback) as Wave);
+});
 
 function applyRandomWaves() {
 	const inst = synthInstrument.value as any;
@@ -3955,10 +3960,6 @@ const phoneCtx = reactive({
 	margin: 10px 0 12px;
 }
 
-.osc-panel .pt-btn-group {
-	margin-top: 6px;
-}
-
 .noise-inline {
 	display: flex;
 	align-items: center;
@@ -4201,6 +4202,17 @@ const phoneCtx = reactive({
 	right: 3px;
 	width: 18px;
 	height: 18px;
+}
+
+/* Random (PR 83): a narrow ninth column beside the 4×2 tiles, as tall as both rows */
+.wave-row {
+	grid-template-columns: repeat(4, minmax(0, 1fr)) 58px;
+}
+
+.wave-row .rw-cell {
+	grid-column: 5;
+	grid-row: 1 / span 2;
+	align-self: stretch;
 }
 
 .wave-row :deep(.dice-badge svg) {
@@ -4621,9 +4633,6 @@ const phoneCtx = reactive({
 	}
 }
 
-.generators .pt-btn {
-	width: 100%;
-}
 
 
 </style>

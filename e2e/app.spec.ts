@@ -3327,34 +3327,66 @@ test("a pad's settings: its ⋮ closes them, they stay on screen, and a key play
 	}
 });
 
-test('the wave tiles light the wave every pad plays, and Random while the pads play a mix', async ({ page }) => {
+test('the wave tiles light the wave every pad plays; the Random tile never stays down, and shows the mix', async ({ page }) => {
 	const tile = (name: string) => page.getByRole('radio', { name, exact: true });
-	const random = page.locator('.wave-random button');
+	const random = page.getByRole('button', { name: /^Random waves/ });
 	const lit = page.locator('.wave-row [role="radio"][aria-checked="true"]');
+	const bars = random.locator('.rw-mix i');
 	await expect(tile('SINE')).toHaveAttribute('aria-checked', 'true');
-	await expect(random).toHaveAttribute('aria-pressed', 'false');
+	await expect(random).not.toHaveAttribute('aria-pressed');
+	await expect(bars).toHaveCount(0);
 
-	// Saw, then Random: no tile stays lit (the pads play a mix), Random is
+	// The tile is a narrow ninth column, as tall as the two rows of waves (PR 83)
+	const r = (await random.boundingBox())!, sine = (await tile('SINE').boundingBox())!, glass = (await tile('GLASS').boundingBox())!;
+	expect(r.x).toBeGreaterThan(glass.x + glass.width);
+	expect(r.width).toBeLessThan(sine.width);
+	expect(r.height).toBeGreaterThan(glass.y + glass.height - sine.y - 4);
+
+	// Saw, then Random: no tile stays lit (the pads play a mix), and the tile shows it
 	await tile('SAW').click();
 	await expect(tile('SAW')).toHaveAttribute('aria-checked', 'true');
 	// Random from all eight waves (a seeded roll, so it is surely a mix)
 	await page.evaluate(() => { let x = 7; Math.random = () => ((x = (x * 16807) % 2147483647) / 2147483647); });
 	await random.click();
 	await expect(lit).toHaveCount(0);
-	await expect(random).toHaveAttribute('aria-pressed', 'true');
+	await expect(random).toHaveAccessibleName(/roll again/);
+	await expect(bars).toHaveCount(16);
+	await expect(random.locator('.rw-dice')).toHaveClass(/tumble/);
+	// Each bar in its pad's wave's colour: more than one colour
+	const colours = new Set(await bars.evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor)));
+	expect(colours.size).toBeGreaterThan(1);
 
-	// A tile again: every pad plays it, it lights and Random doesn't
+	// A tile again: every pad plays it, it lights, and the mix is gone
 	await tile('SQUARE').click();
 	await expect(lit).toHaveCount(1);
 	await expect(tile('SQUARE')).toHaveAttribute('aria-checked', 'true');
-	await expect(random).toHaveAttribute('aria-pressed', 'false');
+	await expect(bars).toHaveCount(0);
 
 	// One pad's wave changed in its ⋮ menu: a mix too
 	await page.locator('.pad-settings-dot').nth(3).click();
 	await page.locator('.pad-popover').getByRole('button', { name: 'Glass', exact: true }).click();
 	await page.keyboard.press('Escape');
 	await expect(lit).toHaveCount(0);
-	await expect(random).toHaveAttribute('aria-pressed', 'true');
+	await expect(bars).toHaveCount(16);
+});
+
+test("the LFO's wave is two keys with the wave drawn on them, the chosen one lit", async ({ page }) => {
+	const keys = page.getByRole('radiogroup', { name: 'LFO Waveform' }).first();
+	const sine = keys.getByRole('radio', { name: 'Sine', exact: true });
+	const square = keys.getByRole('radio', { name: 'Square', exact: true });
+	const ribbon = page.getByRole('switch', { name: /LFO/ }).first();
+	if ((await ribbon.getAttribute('aria-checked')) !== 'true') await ribbon.click();
+	await expect(sine).toHaveAttribute('aria-checked', 'true');
+	await expect(sine.locator('svg path')).toHaveCount(1);
+	const bg = (el) => el.evaluate((e) => getComputedStyle(e).backgroundImage);
+	const before = { sine: await bg(sine), square: await bg(square) };
+	expect(before.sine).not.toBe(before.square);
+	await square.click();
+	await expect(square).toHaveAttribute('aria-checked', 'true');
+	await expect(sine).toHaveAttribute('aria-checked', 'false');
+	expect(await bg(square)).toBe(before.sine);
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.synth.lfo;
+	expect(saved.waveform).toBe('square');
 });
 
 test("a pad's noise reads Off while the Noise card is off; turning it on turns the card on for that pad only", async ({ page }) => {
