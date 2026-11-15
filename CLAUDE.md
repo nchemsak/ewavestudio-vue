@@ -1248,9 +1248,22 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     screen, a wood-brown page and a copper wash.
   - **Slate** (PR 44): a mid-tone blue-grey between Dark and a light theme, teal accents, a
     teal-to-blue arc, a deep blue-green screen and a blue-grey page.
+  - **Dark** (its own page since PR 79): a near-black page and a cool grey-violet wash; until
+    then it shared Synthwave's pink-to-violet ones, so it wasn't really dark.
   - **Light**: its button is commented out in `ThemeToggle.vue`, so only a choice saved before
-    that applies it; it still has rough spots (for example the effect pedals' names are hard
-    to read, as in every theme).
+    that applies it; it still has rough spots. Its pedals keep their first colours.
+  - **The effect pedals** (PR 79, option A of three mockups: B was the pedals in the theme's
+    hues, C dark enclosures with a coloured band): each keeps its own colour (an orange delay,
+    a yellow overdrive, a stone reverb), shaded per theme in `_themes.scss` (Synthwave coral
+    and lavender, Analog burnt orange and cream, Slate dusty, Sand matte), with its name and
+    captions in dark ink (white with a glow was hard to read). The pedals read
+    `--pedal-hi` / `--pedal-lo` (body), `--pedal-foot-hi` / `-lo` (the name's half; unset, the
+    body's), `--pedal-ink`, `--pedal-ink-off` (captions while off), `--pedal-name`,
+    `--pedal-name-shadow` and `--pedal-switch-hi` / `-lo` (the footswitch); the fallbacks are
+    the first colours. The screen's F-keys are light keys tinted per theme (`--fkey-hi`,
+    `--fkey-lo`, `--fkey-ico` in `Screen.vue`; white in every theme before), and FM's and
+    Unison's keys take the caps' colours. Fixed on purpose: the pads' note colours, the LFO's
+    amber, the Noise card's Color swatch, the footswitches and sockets.
   - Theme colors are CSS variables set per theme in `_themes.scss` (the `$themes` map, plus
     per-theme blocks; the knobs' and pads' in `_drumSequencer.scss`, the screen's in
     `Screen.vue`); use them rather than a fixed color that only suits the dark themes. For
@@ -1266,7 +1279,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     a chosen segment button and on titles, the pads' multiplied note colour).
   - In a scoped `<style>`, write `.theme-sand .x` (Vue scopes the last part only, so the class
     on `<html>` still matches); `:global(.theme-sand) .x` drops the `.x`.
-  - Browser tests check that those panels' captions are readable in every theme, that
+  - Browser tests check that those panels' captions and the pedals' names are readable in every theme, that
     Sand's own trouble spots are (the MIDI caption, NOISE switch, chosen key, ⋯ menu, link,
     its tiles' lettering), and that each button applies and remembers its theme.
 - Buttons (PR 63, "soft caps", option A of three mockups): every button is one of three
@@ -1439,9 +1452,9 @@ what the maintainer turned down: Converge or Up + octave as arpeggio patterns, P
 target, and for now a second oscillator and a second pad lane, on hold below).
 
 The maintainer's brainstorm after PR 73 is done (its three small fixes were PR 74, the LFO
-card PR 75, the Melody Maker PR 76, the plain cards PR 77). Items 1–7 come from the one after
-PR 77 (its first item, the stretched keyboard and pedals, was PR 78); items 8 and 9 from
-earlier ones. No one else uses the app yet, so older projects need no special care: a removed
+card PR 75, the Melody Maker PR 76, the plain cards PR 77). Items 1–6 come from the one after
+PR 77 (its first items were PR 78, the stretched keyboard and pedals, and PR 79, the theme
+colours); items 7 and 8 from earlier ones. No one else uses the app yet, so older projects need no special care: a removed
 setting can simply stop applying.
 
 Redesigns are visual: every control keeps working as it does, and each card keeps its size.
@@ -1452,53 +1465,45 @@ Maker's and the plain cards' did. What they settled: a ribbon switch, a small sc
 do, sockets, steppers that open a list for a choice of words, switches for numbers, captions
 only where a control doesn't explain itself, and not too many buttons on show.
 
-1. **Theme colours.** Dark gets a page of its own, near black with a faint grey panel and an
-   accent that isn't pink (it shares Synthwave's wash now). The effect pedals follow the theme
-   (28 fixed colours in the three pedal files today): theme variables for their bodies and
-   lettering, each pedal keeping a colour of its own, tinted per theme, and their names made
-   readable (a known problem in every theme). Then a sweep of the other fixed colours in
-   `.vue` and `.scss` files: follow the theme, or fixed on purpose (the pads' note colours, the
-   LFO's amber). The captions-readable browser test extended to the pedals. Mockups for the
-   pedals' colours.
-2. **Melody Maker, part 1: the screen while playing.** A playhead line across the screen and
+1. **Melody Maker, part 1: the screen while playing.** A playhead line across the screen and
    the playing note glowing, in step with the pads (passed down like `lfoView`, so
    DrumSequencer doesn't re-render every frame; the glow only with `prefers-reduced-motion`).
    Each note drawn as long as it sounds: Attack + Decay at the tempo, cut at the next hit (as
    the voice is), its tail fading. Repeats drawn as 2–4 segments, stepping up or down for
    Up / Down. The scale's dots on the keys made distinct on the white keys too (the accent, or
    a dark dot with a ring on white keys, a little bigger).
-3. **Melody Maker, part 2: Generate made obvious.** A newcomer doesn't see that it's the button
+2. **Melody Maker, part 2: Generate made obvious.** A newcomer doesn't see that it's the button
    to press. Likely a full-width accent cap at the card's bottom ("Generate melody" /
    "Generate arpeggio", with the dice), the toggles moved up to make room, and a hint on the
    screen before the first use; mockups first (a bottom bar, or a bigger header cap). The card
    keeps its size.
-4. **The Random wave tile and the LFO's wave buttons** (mockups first). Random becomes a
+3. **The Random wave tile and the LFO's wave buttons** (mockups first). Random becomes a
    square tile like the eight waves, with a dice, instead of a long web button; it doesn't stay
    down: after a roll it shows the mix (small bars of the pads' waves, "Mix · roll again") and
    tumbles on each press, so it reads as press-again (a 3×3 grid, or a narrow ninth column). The
    LFO card's Sine / Square switch becomes two bigger keys with the wave drawn on them, like
    FM's ratio keys, the card the same size.
-5. **Share a project as a link** (off hold; the maintainer's idea after PR 77: send a pattern
+4. **Share a project as a link** (off hold; the maintainer's idea after PR 77: send a pattern
    to someone who doesn't know the site). The project, compressed, in the URL's fragment
    (`#p=…`, never sent to the server, so it works on static hosting; about 1–2 kB); File →
    Share opens the phone's share sheet (`navigator.share`) or copies the link. Opening one
    loads it as an unsaved copy (never over a saved project) and says "Shared pattern: press
    Play" (browsers don't play audio before a tap). Maybe later a "pattern only" link that keeps
    the recipient's sound. JSON stays the file format (a `.ewave` name is optional).
-6. **Drag notes on the Melody Maker's screen** (maybe; the maintainer's call once 2 and 3 are
+5. **Drag notes on the Melody Maker's screen** (maybe; the maintainer's call once 1 and 2 are
    in): up or down, snapping to the scale, one undo step, a preview while stopped, using the
    shape cards' drag code. It's a second editor for the pads' pitches, and fiddly on a 110 px
    screen.
-7. **Octave arrows at the edges** (last: the maintainer isn't sure). `octaveShiftAllSkip()`
+6. **Octave arrows at the edges** (last: the maintainer isn't sure). `octaveShiftAllSkip()`
    moves each pad on its own and skips those that would leave 100–2000 Hz, so a pattern near an
    edge gets squashed (its intervals change); it also moves `globalOctaveOffset` when pads were
    skipped. Proposed: all or nothing (if any pad can't move, none does), the arrow greyed out
    with a title saying why; the phone's Octave ↓ / ↑ too; a unit test.
-8. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
+7. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
    changes to come may change the height), centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-9. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+8. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Decided after PR 73 (the maintainer's call, "for now"): the Sound and Pattern presets stay in
@@ -1697,6 +1702,7 @@ Done:
 | 76 | The Melody Maker redesigned (option E2 after four rounds of mockups), the same size and as tall in both modes, with no dropdowns: Generate in the card's header (a dark cap with the preset boxes' dice); the scale's notes lit on the keyboard; Scale, Pattern and Tones on steppers whose name opens the list; Range as Narrow | Wide (Low and High open as Narrow); a screen that draws the pattern and what Generate would do (a melody's band of notes, an arpeggio as outlines; `src/lib/melody/roll.ts`); captions only on Key, Scale and Octaves. |
 | 77 | The plain cards redesigned (option C of three mockups, "touch the shape"), each the size it was: Envelope, Pitch, Filter, FM and Unison are screens that draw what the card does and can be dragged (the envelope's peak and end, the sweep's start and settle point, the filter's point for Cutoff and Resonance, FM's Amount, Unison's Detune and Spread), with a mini knob for every setting beside them; FM and Unison have a ribbon switch, and their ratio and voices are keys under the screen (`ShapePad.vue`, `src/lib/shapeViews.ts`). The phone keeps the cards as they were. |
 | 78 | The Melody Maker's keyboard and the effect pedals no longer stretch in the tabbed layout (under 1200 px): the pedals keep their desktop size (120 px wide; they were 190 on a tablet, 168 on a phone), three across and centred, one under another under 720 px (three across they'd be 105 px and their labels collide); the wide Melody Maker card's left column stops at 400 px, so the white keys stay near the desktop's 51 px (67 before at 1024 px), and a one-column card keeps its keyboard at most 420 px, centred. Plan: the maintainer's brainstorm after PR 77. |
+| 79 | Theme colours: **Dark** has a near-black page of its own and a grey-violet wash (it shared Synthwave's pink ones); the **effect pedals** follow the theme (option A of three mockups): each keeps its own colour, shaded per theme, with its name and captions in dark ink, readable now (white with a glow wasn't); the screen's F-keys are tinted per theme (white in every theme before), FM's and Unison's keys take the caps' colours, and the link under the frame has a colour in Dark and Synthwave. A browser test checks the pedals' names in every theme. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

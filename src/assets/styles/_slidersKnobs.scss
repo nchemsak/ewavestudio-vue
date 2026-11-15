@@ -367,7 +367,8 @@ input[type="range"]::-webkit-slider-thumb {
 .knob-stack.disabled .knob-label,
 .knob-wrapper.disabled .knob-label,
 .knob-wrapper[aria-disabled="true"] .knob-label {
-    color: #666;
+    /* on a pedal, its own ink dimmed (PR 79: grey was faint on the darker pedals) */
+    color: var(--pedal-ink-off, #666);
 }
 
 .knob-wrapper.disabled .dial-grip,

@@ -237,7 +237,7 @@ watch(
     position: relative;
     border-radius: 8px 8px 0 0;
     padding: 12px 0px 10px;
-    background: linear-gradient(#ffc069, #ffa263);
+    background: linear-gradient(var(--pedal-hi, #ffc069), var(--pedal-lo, #ffa263));
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.35),
         0 1px 0 rgba(0, 0, 0, 0.35);
@@ -313,14 +313,14 @@ watch(
 .panel-seam {
     height: 25px;
     border-radius: 2px;
-    background: linear-gradient(#ffc069, #ffa263);
+    background: linear-gradient(var(--pedal-hi, #ffc069), var(--pedal-lo, #ffa263));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .panel-bottom {
     border-radius: 8px;
     padding: 8px;
-    background: linear-gradient(#ffc069, #ffa263);
+    background: linear-gradient(var(--pedal-foot-hi, var(--pedal-hi, #ffc069)), var(--pedal-foot-lo, var(--pedal-lo, #ffa263)));
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.3),
         0 1px 0 rgba(0, 0, 0, 0.35);
@@ -332,7 +332,7 @@ watch(
     height: 75px;
     border: 0;
     border-radius: 8px;
-    background: linear-gradient(#3f3c3f, #2d2b2f);
+    background: linear-gradient(var(--pedal-switch-hi, #3f3c3f), var(--pedal-switch-lo, #2d2b2f));
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.06),
         inset 0 -10px 16px rgba(0, 0, 0, 0.35);
@@ -365,8 +365,8 @@ watch(
     text-align: center;
     line-height: 1;
     padding-bottom: 8px;
-    text-shadow: 0px 0px 8px black;
-    color: white;
+    text-shadow: var(--pedal-name-shadow, 0px 0px 8px black);
+    color: var(--pedal-name, white);
 }
 
 </style>

@@ -2785,6 +2785,37 @@ test('the Pattern Tools, Sounds, Patterns and section captions are readable in e
 	}
 });
 
+test('PR 79: the pedals and the screen\'s keys follow the theme, the pedals\' names readable; Dark has a dark page', async ({ page }) => {
+	const looks: Record<string, string[]> = {};
+	for (const theme of ['synthwave', 'dark', 'sand', 'analog', 'slate']) {
+		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), theme);
+		await page.reload();
+		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${theme}`));
+		// Each pedal's name, and its knobs' captions while it's on (the overdrive switched on)
+		await page.locator('.ds-grid .drive-pedal .footswitch').click();
+		for (const pedal of ['delay', 'drive', 'reverb']) {
+			const name = page.locator(`.ds-grid .${pedal}-pedal .effect-label`);
+			await name.scrollIntoViewIfNeeded();
+			expect(await textContrast(page, name), `${theme}: ${pedal}'s name`).toBeGreaterThanOrEqual(4.5);
+		}
+		const drive = page.locator('.ds-grid .drive-pedal .drive .knob-label');
+		expect(await textContrast(page, drive), `${theme}: DRIVE`).toBeGreaterThanOrEqual(4.5);
+		looks[theme] = await page.evaluate(() => [
+			getComputedStyle(document.querySelector('.ds-grid .delay-pedal .panel-top')!).backgroundImage,
+			getComputedStyle(document.querySelector('.fkey')!).backgroundImage,
+			getComputedStyle(document.querySelector('.sp-key:not(.on)')!).backgroundImage,
+			getComputedStyle(document.body).backgroundImage,
+		]);
+	}
+	// The delay pedal and the screen's keys differ in every theme (they were the same in all);
+	// the FM and Unison keys take the caps' colours (Synthwave's and Dark's differ)
+	for (const i of [0, 1, 3]) expect(new Set(Object.values(looks).map((l) => l[i])).size, `part ${i}`).toBe(5);
+	expect(looks.synthwave[2]).not.toBe(looks.dark[2]);
+	// Dark's page is dark (it was Synthwave's pink wash): its brightest stop is near black
+	const stops = [...looks.dark[3].matchAll(/rgb\((\d+), (\d+), (\d+)\)/g)].map((m) => Math.max(+m[1], +m[2], +m[3]));
+	expect(Math.max(...stops)).toBeLessThan(48);
+});
+
 test('the Sand theme: its button sits beside Dark and Synthwave, is remembered, and its text is readable', async ({ page }) => {
 	const themes = page.getByRole('group', { name: 'Theme' }).getByRole('button');
 	await expect(themes).toHaveText(['Dark', 'Synthwave', 'Sand', 'Analog', 'Slate']);
