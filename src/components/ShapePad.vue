@@ -105,7 +105,6 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
     --sp-ink: #bfe6e0;
 }
 
-.theme-sand .sp-pad,
 .theme-light .sp-pad {
     --sp-bg: #a9b29a;
     --sp-ink: #1d2419;
@@ -245,7 +244,6 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
     opacity: 0.85;
 }
 
-.theme-sand .sp-title small,
 .theme-light .sp-title small {
     opacity: 1;
     font-weight: 600;

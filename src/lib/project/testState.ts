@@ -61,6 +61,7 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 			fm: { enabled: ref(true), modFreq: ref(1), index: ref(1), ratio: ref(null) },
 			pitchEnv: { enabled: ref(false), semitones: ref(5), decayMs: ref(1), mode: ref('down') },
 			pulse: { width: ref(7) },
+			randomWaves: ref(['glass']),
 			velocity: { decay: ref(1), cutoff: ref(2), pitchEnv: ref(3), noise: ref(4) },
 			tuning: {
 				selectedKeyRoot,
@@ -122,6 +123,7 @@ export function changeEverything(st: ProjectState) {
 	s.fm.enabled.value = true; s.fm.modFreq.value = 440; s.fm.index.value = 9; s.fm.ratio.value = 2;
 	s.pitchEnv.enabled.value = false; s.pitchEnv.semitones.value = 12; s.pitchEnv.decayMs.value = 50; s.pitchEnv.mode.value = 'random';
 	s.pulse.width.value = 25;
+	s.randomWaves.value = ['triangle', 'pulse'];
 	// Only the cutoff has a VEL switch (PR 67): the others load as 0 whatever is saved
 	s.velocity.cutoff.value = -40;
 	s.tuning.selectedKeyRoot.value = 'Eb'; s.tuning.globalOctaveOffset.value = -1;

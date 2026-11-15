@@ -26,6 +26,7 @@ describe('factory defaults (File → New)', () => {
 			fm: { enabled: false, modFreq: 200, index: 4, ratio: 1 },
 			pitchEnv: { enabled: true, semitones: 0, decayMs: 300, mode: 'up' },
 			pulse: { width: 50 },
+			randomWaves: ['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'organ', 'hollow', 'glass'],
 			velocity: { decay: 0, cutoff: 0, pitchEnv: 0, noise: 0 },
 			tuning: { selectedKeyRoot: 'A', globalOctaveOffset: 0 },
 		});
@@ -206,6 +207,20 @@ describe('saving and loading a project', () => {
 		}
 		applySnapshot(st, { selectedWaveform: 'glass' });
 		expect(st.selectedWaveform.value).toBe('glass');
+	});
+
+	it('saves which waves Random picks from, and gives projects saved before every wave', () => {
+		const st = fresh();
+		changeEverything(st);
+		expect(asSaved(st).synth.randomWaves).toEqual(['triangle', 'pulse']);
+		// Unknown names dropped, the tiles' order kept; none lit is allowed
+		applySnapshot(st, { synth: { randomWaves: ['glass', 'kazoo', 'sine'] } });
+		expect(st.synth.randomWaves.value).toEqual(['sine', 'glass']);
+		applySnapshot(st, { synth: { randomWaves: [] } });
+		expect(st.synth.randomWaves.value).toEqual([]);
+		// A whole project from before PR 85: every wave (it carried over from the last project)
+		applySnapshot(st, { synth: { envelope: { enabled: true, attackMs: 20, decayMs: 400 } } });
+		expect(st.synth.randomWaves.value).toHaveLength(8);
 	});
 
 	it('gives projects saved before the filter envelope none', () => {

@@ -82,7 +82,8 @@ export function applyPreset(st: ProjectState, preset: SynthPreset) {
 // PresetSynth), and the synced delay time, so a tempo change doesn't count as a new sound.
 export function soundKey(s: any): string {
 	if (!s?.synth || !s?.fx) return '';
-	const { tuning, noise, ...synth } = s.synth;
+	// randomWaves (the dice badges) only says what Random picks from: not part of the sound
+	const { tuning, noise, randomWaves, ...synth } = s.synth;
 	const { mask, type, ...noiseRest } = noise ?? {};
 	const { time, ...delay } = s.fx.delay ?? {};
 	const lane = Array.isArray(s.instruments) ? s.instruments.find((i: any) => i?.name === 'synth-voice') : null;

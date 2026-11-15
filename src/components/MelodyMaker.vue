@@ -1447,8 +1447,7 @@ defineExpose({ getUi, setUi, generate });
     color: hsl(var(--pt-accent) 85% 65%);
 }
 
-.theme-light .mm-queued-note,
-.theme-sand .mm-queued-note {
+.theme-light .mm-queued-note {
     color: hsl(var(--pt-accent) 80% 32%);
 }
 
@@ -1486,11 +1485,6 @@ defineExpose({ getUi, setUi, generate });
 .theme-slate .mm-card {
     --mm-lcd-bg: #0b181d;
     --mm-lcd-ink: #bfe6e0;
-}
-
-.theme-sand .mm-card {
-    --mm-lcd-bg: #a9b29a;
-    --mm-lcd-ink: #1d2419;
 }
 
 .theme-light .mm-card {
@@ -1598,7 +1592,6 @@ defineExpose({ getUi, setUi, generate });
     box-shadow: inset 0 0 0 1px hsl(var(--pt-accent) 80% 65% / 0.7), inset 0 1px 5px rgba(0, 0, 0, 0.7);
 }
 
-.theme-sand .mm-step-name,
 .theme-light .mm-step-name {
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 1px 4px rgba(0, 0, 0, 0.3);
     font-weight: 600;
@@ -1699,7 +1692,6 @@ defineExpose({ getUi, setUi, generate });
     }
 }
 
-.theme-sand .mm-screen,
 .theme-light .mm-screen {
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 0, 0, 0.45);
 }
@@ -1730,7 +1722,6 @@ defineExpose({ getUi, setUi, generate });
     fill-opacity: 0.13;
 }
 
-.theme-sand .mm-band,
 .theme-light .mm-band {
     fill: #1d2419;
     fill-opacity: 0.12;
@@ -1755,14 +1746,11 @@ defineExpose({ getUi, setUi, generate });
     filter: brightness(1.3) drop-shadow(0 0 3px currentColor);
 }
 
-.theme-sand .mm-note,
 .theme-light .mm-note,
-.theme-sand .mm-tail,
 .theme-light .mm-tail {
     filter: brightness(0.62) saturate(1.4);
 }
 
-.theme-sand .is-playing,
 .theme-light .is-playing {
     stroke: var(--mm-lcd-ink);
     stroke-width: 1.5;
@@ -1781,7 +1769,6 @@ defineExpose({ getUi, setUi, generate });
     white-space: nowrap;
 }
 
-.theme-sand .mm-read,
 .theme-light .mm-read {
     opacity: 1;
     font-weight: 600;
@@ -1929,7 +1916,6 @@ defineExpose({ getUi, setUi, generate });
     color: hsl(var(--pt-accent) 90% 70%);
 }
 
-.theme-sand .mm-hint-main b,
 .theme-light .mm-hint-main b {
     color: inherit;
 }

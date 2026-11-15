@@ -8,10 +8,10 @@
         :title="title" :aria-label="mixed ? 'Random waves: the pads play a mix, roll again' : 'Random waves'"
         @click="roll">
         <span class="rw-top">
-        <svg :key="rolls" class="rw-dice" :class="{ tumble: rolls > 0 }" viewBox="0 0 24 24" aria-hidden="true">
+        <svg class="rw-dice" :class="{ tumble }" viewBox="0 0 24 24" aria-hidden="true"
+            @animationend="tumble = false">
             <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
-            <circle cx="8" cy="8" r="1.6" /><circle cx="16" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" />
-            <circle cx="8" cy="16" r="1.6" /><circle cx="16" cy="16" r="1.6" />
+            <circle v-for="([cx, cy], i) in PIPS[face - 1]" :key="i" :cx="cx" :cy="cy" r="1.6" />
         </svg>
         <span v-if="mixed" class="rw-mix" aria-hidden="true">
             <i v-for="(c, i) in bars" :key="i" :style="{ background: c }" />
@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 
 const props = defineProps<{
     waves: string[]; // each pad's wave
@@ -37,11 +37,57 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'roll'): void }>();
 
 const bars = computed(() => props.waves.map((w) => props.palettes[w]?.[1] ?? '#888'));
-const rolls = ref(0);
-function roll() {
-    rolls.value++;
-    emit('roll');
+// The dice's faces, pips as [cx, cy]
+const L = 8, M = 12, R = 16;
+const PIPS: [number, number][][] = [
+    [[M, M]],
+    [[L, L], [R, R]],
+    [[L, L], [M, M], [R, R]],
+    [[L, L], [R, L], [L, R], [R, R]],
+    [[L, L], [R, L], [M, M], [L, R], [R, R]],
+    [[L, L], [R, L], [L, M], [R, M], [L, R], [R, R]],
+];
+
+// A roll: the dice hops and tumbles a quarter turn at a time (each turn lands on a side, as a
+// die does), showing a new face every turn, and lands on a face other than the one it showed.
+// Until PR 85 it spun a whole turn round a point off its centre, its face never changing.
+const face = ref(5);
+const tumble = ref(false);
+let faceTimer: ReturnType<typeof setInterval> | null = null;
+const TURNS = 4; // quarter turns in the animation (rw-tumble), one face each
+const TURN_MS = 120;
+
+// A face other than these
+function otherFace(...not: number[]) {
+    const faces = [1, 2, 3, 4, 5, 6].filter((f) => !not.includes(f));
+    return faces[Math.floor(Math.random() * faces.length)];
 }
+
+function roll() {
+    emit('roll');
+    if (faceTimer) clearInterval(faceTimer);
+    tumble.value = false;
+    // Restart the animation even mid-roll (the class comes off for a frame)
+    requestAnimationFrame(() => {
+        tumble.value = true;
+    });
+    const start = face.value;
+    let turns = 1;
+    face.value = otherFace(start);
+    faceTimer = setInterval(() => {
+        turns++;
+        // The last turn lands on a face other than the one the roll started from
+        face.value = turns === TURNS ? otherFace(face.value, start) : otherFace(face.value);
+        if (turns === TURNS) {
+            clearInterval(faceTimer!);
+            faceTimer = null;
+        }
+    }, TURN_MS);
+}
+
+onBeforeUnmount(() => {
+    if (faceTimer) clearInterval(faceTimer);
+});
 </script>
 
 <style scoped>
@@ -67,9 +113,11 @@ function roll() {
     cursor: default;
 }
 
+/* The same size whether or not the pads play a mix (it shrank from 30 to 22 px mid-roll on
+   the first press until PR 85) */
 .rw-dice {
-    width: 30px;
-    height: 30px;
+    width: 26px;
+    height: 26px;
     flex: none;
 }
 
@@ -83,21 +131,25 @@ function roll() {
     fill: currentColor;
 }
 
+.rw-dice {
+    transform-origin: 50% 50%;
+}
+
+/* A hop with four quarter turns, the hop applied before the turn (so it goes straight up, not
+   round in a circle), slowing as it lands, with a little squash on landing */
 .rw-dice.tumble {
-    animation: rw-tumble 0.55s cubic-bezier(.3, .7, .4, 1);
+    animation: rw-tumble 0.5s linear;
 }
 
 @keyframes rw-tumble {
-    0% { transform: rotate(0) translateY(0) scale(1); }
-    35% { transform: rotate(200deg) translateY(-6px) scale(0.9); }
-    70% { transform: rotate(330deg) translateY(1px) scale(1.05); }
-    100% { transform: rotate(360deg) translateY(0) scale(1); }
+    0% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-7px) rotate(90deg); }
+    50% { transform: translateY(-8px) rotate(180deg); }
+    75% { transform: translateY(-4px) rotate(270deg); }
+    90% { transform: translateY(0) rotate(352deg) scale(1.06, 0.92); }
+    100% { transform: translateY(0) rotate(360deg) scale(1); }
 }
 
-.is-mixed .rw-dice {
-    width: 22px;
-    height: 22px;
-}
 
 .rw-top {
     display: flex;
