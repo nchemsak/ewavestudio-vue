@@ -30,12 +30,24 @@
 				</div>
 			</section>
 
-			<!-- Octave -->
+			<!-- Move (PR 88; Octave until then): the octave arrows, then rotate one step either way
+				 (round the bar's end) and reverse; each pad's note, velocity, wave, repeats and noise
+				 move with it (src/lib/patterns/move.ts) -->
 			<section class="pt-section">
-				<div class="pt-section-title">Octave</div>
-				<div class="pt-btn-group pt-btn-octave" role="group" aria-label="Octave">
-					<button class="pt-btn octave-btn" aria-label="Octave up" @click="shiftOctave(+1)">↑</button>
-					<button class="pt-btn octave-btn" aria-label="Octave down" @click="shiftOctave(-1)">↓</button>
+				<div class="pt-section-title">Move</div>
+				<div class="pt-btn-group pt-btn-move" role="group" aria-label="Octave">
+					<button class="pt-btn move-btn" aria-label="Octave up" title="Octave up" @click="shiftOctave(+1)">↑</button>
+					<button class="pt-btn move-btn" aria-label="Octave down" title="Octave down" @click="shiftOctave(-1)">↓</button>
+				</div>
+				<div class="pt-btn-group pt-btn-move pt-btn-move-3" role="group" aria-label="Rotate and reverse">
+					<button class="pt-btn move-btn" aria-label="Rotate left"
+						title="Rotate left: every step one earlier, the first comes round to the end"
+						@click="emit('move', 'left')">◂</button>
+					<button class="pt-btn move-btn" aria-label="Reverse" title="Reverse: the pattern backwards"
+						@click="emit('move', 'reverse')">⇄</button>
+					<button class="pt-btn move-btn" aria-label="Rotate right"
+						title="Rotate right: every step one later, the last comes round to the start"
+						@click="emit('move', 'right')">▸</button>
 				</div>
 				<!-- A toggle (a cap with an LED, _hardware.scss), not a web checkbox (PR 67): the
 					 octave arrows move only the pads that are on while it's lit -->
@@ -78,6 +90,7 @@ const emit = defineEmits<{
 	(e: 'update:steps', v: boolean[]): void;
 	(e: 'update:velocities', v: number[]): void;
 	(e: 'octave-shift', payload: number | { delta: number; onlyActive?: boolean }): void;
+	(e: 'move', kind: 'left' | 'right' | 'reverse'): void;
 }>();
 
 // tuning helpers 
@@ -191,19 +204,28 @@ const shapeReset = () => applyShape('reset');
 	white-space: nowrap;
 }
 
-/* Octave: up, then down, side by side */
-.pt-btn-octave {
+/* Move: the octave arrows on one row, rotate and reverse on the next */
+.pt-btn-move {
 	display: flex;
 	flex-wrap: nowrap;
 	justify-content: center;
-	gap: 8px;
+	gap: 6px;
 }
 
-.octave-btn {
-	width: 42px;
-	height: 44px;
+.pt-btn-move + .pt-btn-move {
+	margin-top: 6px;
+}
+
+/* Two rows as tall as the big octave arrows were (44 px), so the card keeps its size */
+.move-btn {
+	width: 34px;
+	height: 19px;
 	padding: 0;
-	font-size: 22px;
+	font-size: 14px;
+}
+
+.pt-btn-move-3 .move-btn {
+	font-size: 16px;
 }
 
 .pt-inline {
