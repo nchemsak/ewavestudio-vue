@@ -339,7 +339,7 @@
 					<div class="module generators">
 						<SectionWrap id="generators" title="" v-model="collapsibleState['generators']">
 							<div class="gen-panel osc-panel">
-								<div class="wave-row" role="radiogroup" aria-label="Waveforms">
+								<div class="wave-row" :class="wavesMock ? `waves-${wavesMock}` : ''" role="radiogroup" aria-label="Waveforms">
 									<div v-for="t in WAVE_TILES" :key="t.value" class="wave-cell">
 										<WaveButton :modelValue="litWave" :value="t.value" :label="t.label"
 											:palette="t.palette" :pulseWidth="pulseWidth"
@@ -357,8 +357,14 @@
 											<span v-if="pulseWidthTip" class="custom-tooltip">Width {{ pulseWidth }}%</span>
 										</div>
 									</div>
+									<!-- MOCKUPS (not for main): ?waves=a|b, Random as a tile -->
+									<div v-if="wavesMock" class="wave-cell rw-cell">
+										<RandomWaveTile :waves="padWaves" :palettes="WAVE_PALETTES" :mixed="wavesMixed"
+											:disabled="!randomPoolArray.length" :shape="wavesMock === 'b' ? 'column' : 'square'"
+											:title="randomTooltip" @roll="applyRandomWaves()" />
+									</div>
 								</div>
-								<div class="pt-btn-group wave-random">
+								<div v-if="!wavesMock" class="pt-btn-group wave-random">
 									<button class="pt-btn pt-btn-sm hw-led-mini" :disabled="!randomPoolArray.length"
 										:aria-pressed="wavesMixed ? 'true' : 'false'"
 										:title="wavesMixed ? `The pads play a mix of waves. ${randomTooltip}` : randomTooltip"
@@ -673,6 +679,7 @@ import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type Repea
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
 import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
 import MelodyMaker from './MelodyMaker.vue';
+import RandomWaveTile from './RandomWaveTile.vue';
 import MelodyModeSwitch from './MelodyModeSwitch.vue';
 import MidiToolbar from './MidiToolbar.vue';
 import { useMidiInput } from '../composables/useMidiInput';
@@ -1769,6 +1776,13 @@ const litWave = computed<Wave | null>(() => {
 	return first ?? fallback;
 });
 const wavesMixed = computed(() => litWave.value === null);
+// MOCKUPS (not for main): ?waves=a (a 3×3 grid) | b (a narrow ninth column): Random as a tile
+const wavesMock = ((g) => (g === 'a' || g === 'b' ? g : null))(new URLSearchParams(location.search).get('waves'));
+const padWaves = computed<Wave[]>(() => {
+	const inst = synthInstrument.value as any;
+	const fallback = selectedWaveform.value as Wave;
+	return Array.from({ length: stepLength.value }, (_, i) => (inst?.waveforms?.[i] ?? fallback) as Wave);
+});
 
 function applyRandomWaves() {
 	const inst = synthInstrument.value as any;
@@ -4201,6 +4215,41 @@ const phoneCtx = reactive({
 	right: 3px;
 	width: 18px;
 	height: 18px;
+}
+
+/* MOCKUP A: a 3×3 grid, Random the ninth tile; the tiles shorter, so the card keeps its size */
+.wave-row.waves-a {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 6px 8px;
+}
+
+.waves-a :deep(.wave-btn) {
+	max-width: 96px;
+	padding: 2px 4px 3px;
+}
+
+.waves-a :deep(.wave-svg) {
+	width: 30px;
+	height: 30px;
+}
+
+.waves-a .wave-cell {
+	max-width: 96px;
+}
+
+/* MOCKUP B: a narrow ninth column beside the 4×2 tiles, as tall as both rows */
+.wave-row.waves-b {
+	grid-template-columns: repeat(4, minmax(0, 1fr)) 58px;
+}
+
+.waves-b .rw-cell {
+	grid-column: 5;
+	grid-row: 1 / span 2;
+	align-self: stretch;
+}
+
+.rw-cell {
+	align-self: stretch;
 }
 
 .wave-row :deep(.dice-badge svg) {

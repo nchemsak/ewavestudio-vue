@@ -47,7 +47,19 @@
                             </div>
                         </div>
                         <div class="lv-side">
-                            <div class="lfo-seg" role="radiogroup" aria-label="LFO Waveform">
+                            <!-- MOCKUPS (not for main): ?lfokeys=1|2, the wave on two bigger keys -->
+                            <div v-if="keysMock" class="lk-keys" :class="`lk-${keysMock}`" role="radiogroup" aria-label="LFO Waveform">
+                                <button v-for="w in waves" :key="w" type="button" class="lk-key"
+                                    :class="{ on: localWaveform === w }" role="radio"
+                                    :aria-checked="localWaveform === w ? 'true' : 'false'" :aria-label="waveLong(w)"
+                                    :disabled="!localEnabled" @click="setWave(w)" :title="waveLong(w)">
+                                    <svg viewBox="0 0 100 32" focusable="false" aria-hidden="true">
+                                        <path :d="wavePath(w)" class="lk-wv" />
+                                    </svg>
+                                    <span v-if="keysMock === '2'" class="lk-name">{{ waveLabel(w) }}</span>
+                                </button>
+                            </div>
+                            <div v-else class="lfo-seg" role="radiogroup" aria-label="LFO Waveform">
                                 <button v-for="w in waves" :key="w" type="button" class="lfo-seg-btn hw-cap hw-led-top"
                                     :class="{ active: localWaveform === w }" role="radio"
                                     :aria-checked="localWaveform === w ? 'true' : 'false'" :aria-label="waveLong(w)"
@@ -380,6 +392,10 @@ const cablePath = computed(() => {
     return `M${x0} ${y} C${x0 + 12} ${y + drop}, ${x1 - 12} ${y + drop}, ${x1} ${y}`;
 });
 // THE SCREEN AND THE PATCH BAY END
+
+// MOCKUPS (not for main): ?lfokeys=1 (keys lit in the accent, as FM's) | 2 (lit in the LFO's
+// amber, with the wave's name)
+const keysMock = ((g) => (g === '1' || g === '2' ? g : null))(new URLSearchParams(location.search).get('lfokeys'));
 
 function wavePath(w: Wave | string): string {
     switch (w) {
@@ -807,6 +823,102 @@ svg {
     display: flex;
     align-items: center;
     gap: 10px;
+}
+
+/* MOCKUPS: the wave on two bigger keys, as FM's ratio keys */
+.lk-keys {
+    display: flex;
+    gap: 5px;
+}
+
+.lk-key {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: 52px;
+    height: 36px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 6px;
+    background: linear-gradient(180deg, var(--cap-hi), var(--cap-lo));
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    color: color-mix(in oklab, var(--cap-ink) 72%, transparent);
+    font: inherit;
+    cursor: pointer;
+}
+
+.lk-key svg {
+    width: 38px;
+    height: 14px;
+}
+
+.lk-wv {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+}
+
+.lk-key:hover:not(:disabled) {
+    filter: brightness(1.15);
+}
+
+.lk-key:focus-visible {
+    outline: 2px solid hsl(var(--pt-accent) 80% 62%);
+    outline-offset: 1px;
+}
+
+.lk-key:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.lk-1 .lk-key.on {
+    color: #10131a;
+    background: linear-gradient(180deg, hsl(var(--pt-accent) 90% 80%), hsl(var(--pt-accent) 85% 68%));
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 8px hsl(var(--pt-accent) 85% 65% / 0.5);
+}
+
+.lk-2 .lk-key {
+    height: 40px;
+}
+
+.lk-2 .lk-key svg {
+    height: 12px;
+}
+
+.lk-name {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    line-height: 1;
+}
+
+/* Under 1200 px the card isn't stretched: the keys keep to the old switch's height */
+@media (max-width: 1199px) {
+    .lk-key,
+    .lk-2 .lk-key {
+        height: 26px;
+        width: 46px;
+    }
+
+    .lk-2 .lk-key svg {
+        height: 9px;
+    }
+
+    .lk-name {
+        font-size: 7px;
+    }
+}
+
+.lk-2 .lk-key.on {
+    color: #1a1204;
+    background: linear-gradient(180deg, #ffd66b, #f0a92a);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 8px rgb(255 190 60 / 0.5);
 }
 
 /* The patch bay: a recessed strip of six sockets, their names above them */
