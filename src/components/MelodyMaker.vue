@@ -65,8 +65,20 @@
                     <line v-for="y in roll.rows" :key="'r' + y" x1="0" :x2="ROLL_W" :y1="y" :y2="y" class="mm-rowline" />
                     <line v-for="b in [4, 8, 12]" :key="'b' + b" :x1="b * ROLL_W / 16" :x2="b * ROLL_W / 16" y1="0" :y2="ROLL_H" class="mm-beat" />
                     <rect v-for="n in roll.ghost" :key="'g' + n.i" :x="n.x + 1.5" :y="n.y - 2.5" :width="ROLL_W / 16 - 3" height="5" rx="1" class="mm-ghost" />
-                    <rect v-for="n in roll.notes" :key="'n' + n.i" :x="n.x + 1.5" :y="n.y - 2.5" :width="ROLL_W / 16 - 3" height="5" rx="1"
-                        class="mm-note" :style="{ fill: n.colour }" />
+                    <!-- Each hit as long as it sounds, fading as its envelope does; the one the
+                         playhead is in glows. A note ringing past the bar's end carries on from
+                         its start (mm-tail). -->
+                    <defs>
+                        <linearGradient v-for="n in roll.notes" :key="'f' + n.key" :id="`${uid}-${n.key}`" gradientUnits="userSpaceOnUse"
+                            :x1="n.fx1" :x2="n.fx2" y1="0" y2="0">
+                            <stop offset="0" :stop-color="n.colour" />
+                            <stop offset="1" :stop-color="n.colour" stop-opacity="0.22" />
+                        </linearGradient>
+                    </defs>
+                    <rect v-for="n in roll.notes" :key="'n' + n.key" :x="n.x" :y="n.y - 2.5" :width="n.w" height="5" rx="1"
+                        :class="[n.wrapped ? 'mm-tail' : 'mm-note', { 'is-playing': n.hit === playingHit }]"
+                        :fill="`url(#${uid}-${n.key})`" :style="{ color: n.colour }" :data-step="n.i" />
+                    <RollPlayhead :view="playView" :width="ROLL_W" :height="ROLL_H" />
                 </svg>
                 <span class="mm-read mm-read--l" aria-hidden="true">{{ keyRoot }} {{ scaleShort }}</span>
                 <span class="mm-read mm-read--r" aria-hidden="true">{{ screenNote }}</span>
@@ -143,9 +155,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, defineExpose, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, defineExpose, onMounted, onBeforeUnmount, useId } from 'vue';
 import { padHue } from '../lib/padColour';
-import { rollY, rootOctavesHz, rollNotes, ghostNotes, type RollNote } from '../lib/melody/roll';
+import { rollY, rootOctavesHz, rollNotes, ghostNotes, rollSegments, soundingKey, type RollNote } from '../lib/melody/roll';
+import RollPlayhead from './RollPlayhead.vue';
+import type { PlayView } from '../composables/usePlayhead';
 import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
 import { arpSlots, arpSequence, arpRateFrom, type ArpRate } from '../lib/melody/arp';
 
@@ -182,6 +196,16 @@ const props = defineProps<{
     initialMode?: 'random' | 'arp';
     // A key clicked while playing waits for the next bar (DrumSequencer's BAR QUEUE) and blinks
     queuedKey?: string | null;
+    // What the screen needs to draw each note as long as it sounds (PR 80): the steps' repeats
+    // and their notes, the key's chord, swing (0–0.5), and a note's length in steps
+    ratchets?: number[];
+    repeatNotes?: string[];
+    repeatChord?: readonly number[];
+    swing?: number;
+    noteSteps?: number;
+    // Where the bar is while playing (usePlayhead.ts). Only RollPlayhead and `playingHit`
+    // read it, so the card doesn't redraw every frame.
+    playView?: PlayView | null;
 }>();
 
 /*  Defaults  */
@@ -355,11 +379,42 @@ function inScale(note: string) {
 // every Generate, so it has none)
 const ROLL_W = 352;
 const ROLL_H = 120;
+const uid = useId(); // the notes' gradients need ids no other Melody Maker has (the phone's)
+// While playing (PR 80; roll.ts): each hit as long as it sounds (Attack + Decay at the tempo,
+// cut where the next begins; repeats as their 2–4 hits, climbing or falling for Up / Down),
+// and the hit the playhead is in, which glows
+const segments = computed(() => rollSegments({
+    freqs: props.frequencies ?? [],
+    steps: props.steps ?? [],
+    ratchets: props.ratchets,
+    repeatNotes: props.repeatNotes,
+    chord: props.repeatChord,
+    swing: props.swing,
+    noteSteps: props.noteSteps ?? 1,
+    range: { min: props.minFreq ?? 100, max: props.maxFreq ?? 2000 },
+}));
+// It reads the playhead every frame, but only changes (and redraws the card) from hit to hit
+const playingHit = computed(() => soundingKey(segments.value, props.playView?.pos ?? null));
 const roll = computed(() => {
     const lo = props.minFreq ?? 100, hi = props.maxFreq ?? 2000;
     const y = (hz: number) => rollY(hz, lo, hi, ROLL_H);
-    const place = (notes: RollNote[]) => notes.map((n) => ({ i: n.i, x: (n.i * ROLL_W) / 16, y: y(n.hz), colour: `hsl(${padHue(n.hz)} 90% 62%)` }));
+    const U = ROLL_W / 16;
+    const swungX = (i: number) => (i + (i % 2 === 1 ? props.swing ?? 0 : 0)) * U; // a swung step starts late
+    const place = (notes: RollNote[]) => notes.map((n) => ({ i: n.i, x: swungX(n.i), y: y(n.hz) }));
     const now = rollNotes(props.frequencies ?? [], props.steps ?? []);
+    // Each hit, and again a bar earlier if it rings past the bar's end
+    const notes = segments.value.flatMap((s) => (s.end > 16 ? [0, 16] : [0]).map((shift) => ({
+        key: `${s.i}:${s.k}${shift ? 'w' : ''}`,
+        hit: `${s.i}:${s.k}`,
+        i: s.i,
+        wrapped: shift > 0,
+        x: (s.start - shift) * U + 1,
+        w: Math.max(2, (s.end - s.start) * U - 2),
+        y: y(s.hz),
+        fx1: (s.start - shift) * U,
+        fx2: (s.fadeEnd - shift) * U,
+        colour: `hsl(${padHue(s.hz)} 90% 62%)`,
+    })));
 
     let band: { y: number; h: number } | null = null;
     let ghost: RollNote[] = [];
@@ -376,7 +431,8 @@ const roll = computed(() => {
     }
     return {
         rows: rootOctavesHz(NOTE_TO_SEMITONE[keyRoot.value] ?? 0, lo, hi).map(y),
-        notes: place(now),
+        notes,
+        on: now.length,
         ghost: place(ghost),
         band,
     };
@@ -385,7 +441,7 @@ const screenNote = computed(() => (mode.value === 'arp'
     ? `${patternLabel.value} · ${arpRate.value}${arpPattern.value === 'random' ? ' · shuffled on Generate' : ''}`
     : poolSummary.value));
 const screenLabel = computed(() => {
-    const on = roll.value.notes.length;
+    const on = roll.value.on;
     const what = mode.value === 'arp'
         ? (roll.value.ghost.length ? `Generate would write an arpeggio: ${patternLabel.value}, ${arpRate.value}` : `Arpeggio: ${patternLabel.value}, ${arpRate.value}`)
         : `A melody would use ${poolSummary.value}`;
@@ -1447,8 +1503,15 @@ defineExpose({ getUi, setUi, generate });
     pointer-events: none;
 }
 
+/* On a white key the LED's pale green hardly showed: a bigger dot in the accent, ringed dark
+   (PR 80) */
 .kb-white.in-scale::before {
-    bottom: 24px;
+    bottom: 23px;
+    width: 9px;
+    height: 9px;
+    margin-left: -4.5px;
+    background: hsl(var(--pt-accent) 85% 48%);
+    box-shadow: 0 0 0 1.5px #14161f, 0 1px 2px 1.5px rgb(0 0 0 / 0.35);
 }
 
 .kb-black.in-scale::before {
@@ -1669,9 +1732,27 @@ defineExpose({ getUi, setUi, generate });
     vector-effect: non-scaling-stroke;
 }
 
+/* The hit that's sounding */
+.mm-note.is-playing,
+.mm-tail.is-playing {
+    stroke: #fff;
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+    filter: brightness(1.3) drop-shadow(0 0 3px currentColor);
+}
+
 .theme-sand .mm-note,
-.theme-light .mm-note {
+.theme-light .mm-note,
+.theme-sand .mm-tail,
+.theme-light .mm-tail {
     filter: brightness(0.62) saturate(1.4);
+}
+
+.theme-sand .is-playing,
+.theme-light .is-playing {
+    stroke: var(--mm-lcd-ink);
+    stroke-width: 1.5;
+    filter: brightness(0.5) saturate(1.8);
 }
 
 .mm-read {

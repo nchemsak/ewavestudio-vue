@@ -114,6 +114,8 @@
 						</template>
 						<MelodyMaker :key="`pl-melody-${resetNonce}`" ref="melodyPhoneRef" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
+							:ratchets="synthInstrument?.ratchets" :repeat-notes="synthInstrument?.repeatNotes" :repeat-chord="repeatChord"
+							:swing="swing" :note-steps="noteSteps" :playView="playView"
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
@@ -509,6 +511,8 @@
 							</template>
 						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
+							:ratchets="synthInstrument?.ratchets" :repeat-notes="synthInstrument?.repeatNotes" :repeat-chord="repeatChord"
+							:swing="swing" :note-steps="noteSteps" :playView="playView"
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
@@ -713,6 +717,7 @@ import ReverbEffect from './modules/ReverbEffect.vue';
 // Live sound engine
 import { useLiveEngine } from '../audio/liveEngine';
 import { useLfoVisual } from '../composables/useLfoVisual';
+import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
 import ExportDialog from './ExportDialog.vue';
 import { buildExportFiles, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from '../audio/export/exportFiles';
@@ -2660,6 +2665,7 @@ const {
 	loadSample,
 	lfoNow,
 	soundingRecently,
+	barPosition,
 } = useLiveEngine({
 	transport: projectState.transport,
 	pattern: { lanes: instruments, stepLength, selectedWaveform, noiseMask, repeatChord },
@@ -2715,6 +2721,22 @@ const lfoView: LfoView = reactive({
 });
 
 // LFO visualizer END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// MELODY MAKER'S PLAYHEAD START
+
+// While playing, the Melody Maker's screen draws a line where the bar is and lights the note
+// that sounds (PR 80). `playView` is passed down as one object, like `lfoView`: don't read its
+// fields here. `noteSteps` is how long a note sounds, in steps at the tempo: Attack + Decay
+// (the engine's naturalEnd), or Decay alone with the envelope off (its gate).
+const playView = usePlayhead({ barPosition, isPlaying });
+const noteSteps = computed(() => {
+	const ms = envelopeEnabled.value ? ampEnvAttackMs.value + ampEnvDecayMs.value : ampEnvDecayMs.value;
+	return (ms / 1000) / (60 / tempo.value / 4);
+});
+
+// MELODY MAKER'S PLAYHEAD END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
