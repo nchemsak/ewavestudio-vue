@@ -627,6 +627,88 @@ test('File → Save as… saves a copy under a new name, leaves the original, an
 	await expect(selected).toHaveCount(3);
 });
 
+test('File → Share link… copies a link that opens the project as an unsaved copy', async ({ page }) => {
+	// The clipboard, recorded
+	await page.evaluate(() => {
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: { writeText: async (t: string) => { (window as any).__copied = t; } },
+		});
+	});
+	const name = page.getByRole('textbox', { name: 'Project name' });
+	const selected = (p: Page) => p.locator('.pad-row .padTEST.selected');
+
+	// "Beat", saved with three steps at 100 BPM; a fourth step not saved
+	await turnOnPads(page, [0, 4, 9]);
+	await setTempo(page, 100);
+	await name.fill('Beat');
+	await name.press('Enter');
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('Control+s');
+	await expect(page.locator('.pc-primary')).toHaveText('Saved');
+	await turnOnPads(page, [12]);
+
+	await chooseFromFileMenu(page, 'Share link…');
+	await expect(page.locator('.pc-toast')).toContainText('Link copied');
+	const url = await page.evaluate(() => (window as any).__copied as string);
+	expect(url).toMatch(/\/studio2\/#p=z[A-Za-z0-9_-]+$/);
+	expect(url.length).toBeLessThan(2200);
+
+	// Opened in another tab of this browser: the project as shared (unsaved step included),
+	// unsaved here, saying to press Play; the link leaves the address bar
+	const other = await page.context().newPage();
+	await other.addInitScript(instrument);
+	await other.route(/googletagmanager\.com/, (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
+	await other.goto(url);
+	await expect(selected(other)).toHaveCount(4);
+	await expect(other.getByRole('slider', { name: 'Tempo', exact: true })).toHaveAttribute('aria-valuenow', '100');
+	await expect(other.getByRole('textbox', { name: 'Project name' })).toHaveValue('Beat');
+	await expect(other.locator('.pc-primary')).toHaveText('Save');
+	const notice = other.getByRole('region', { name: 'Shared project' });
+	await expect(notice).toContainText('Shared pattern: Beat. Press Play');
+	expect(new URL(other.url()).hash).toBe('');
+
+	// Its Play plays, and the notice goes
+	await notice.getByRole('button', { name: '▶ Play' }).click();
+	await expect(notice).toBeHidden();
+	await expect.poll(() => notesPlayed(other)).toBeGreaterThan(0);
+	await other.getByRole('button', { name: 'Stop', exact: true }).click();
+
+	// Nothing was written over the saved "Beat": a reload (no link now) reopens it, three steps
+	await other.reload();
+	await expect(selected(other)).toHaveCount(3);
+	await expect(other.locator('.pc-primary')).toHaveText('Saved');
+	await expect(other.getByRole('region', { name: 'Shared project' })).toBeHidden();
+
+	// A link pasted into an open page with unsaved changes asks first; declined, nothing changes
+	await turnOnPads(other, [15]);
+	const asked: string[] = [];
+	let accept = false;
+	other.on('dialog', async (d) => { asked.push(d.message()); accept ? await d.accept() : await d.dismiss(); });
+	const hash = new URL(url).hash;
+	await other.evaluate((h) => { location.hash = h; }, hash);
+	await expect.poll(() => asked.length).toBe(1);
+	expect(asked[0]).toContain('Open the shared project?');
+	await expect(selected(other)).toHaveCount(4);
+	expect(new URL(other.url()).hash).toBe('');
+	accept = true;
+	await other.evaluate((h) => { location.hash = h; }, hash);
+	await expect(other.getByRole('region', { name: 'Shared project' })).toBeVisible();
+	await expect(selected(other)).toHaveCount(4);
+	await expect(pads(other).nth(15)).not.toHaveClass(/selected/);
+
+	// Saving the copy makes it a project of this browser's
+	await other.locator('.pc-primary').click();
+	await expect(other.locator('.pc-primary')).toHaveText('Saved');
+
+	// A link cut short says so, and the last project opens instead
+	await other.goto(url.slice(0, url.length - 200));
+	await expect.poll(() => asked.length).toBe(3);
+	expect(asked[2]).toContain('This share link couldn’t be opened');
+	await expect(selected(other)).toHaveCount(4);
+	await other.close();
+});
+
 test('exports a WAV file with sound in it, and a project file that imports again', async ({ page }) => {
 	await turnOnPads(page, [0, 3, 6, 10]);
 	const name = page.getByRole('textbox', { name: 'Project name' });

@@ -72,6 +72,13 @@
                         Import file
                     </button>
 
+                    <!-- The project packed into a link (src/lib/storage/share.ts): the share sheet
+                         on a phone, else copied -->
+                    <button class="pc-menu-row" role="menuitem" @click="shareLink" :disabled="!store.loaded"
+                        title="A link that opens this project, for someone else or another device">
+                        Share link…
+                    </button>
+
                     <button class="pc-menu-row" role="menuitem" @click="exportAudioFromMenu"
                         :disabled="!store.loaded || props.exporting" :aria-busy="props.exporting ? 'true' : 'false'">
                         <span v-if="props.exporting">Exporting…</span>
@@ -116,6 +123,9 @@
             </div>
 
             <input ref="fileInput" type="file" accept="application/json" class="pc-hidden" @change="onImport" />
+
+            <!-- Share link's result: "Link copied" (no other notice: a share sheet speaks for itself) -->
+            <div v-if="shareToast" class="pc-toast" role="status">{{ shareToast }}</div>
         </div>
 
         <div class="pc-center">
@@ -154,6 +164,7 @@ import {
     brokenProjectMessage
 } from '../lib/storage/projects';
 import { buildExportFile, downloadJson, importJson } from '../lib/storage/exportImport';
+import { buildSharePayload, encodeShare, shareUrl } from '../lib/storage/share';
 import { storageKey } from '../lib/storage/namespace';
 import { usePwa } from '../composables/usePwa';
 import { usePhoneMode } from '../composables/usePhoneMode';
@@ -385,6 +396,8 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
     e.returnValue = ''; // older browsers only show the prompt when this is set
 }
 onMounted(() => window.addEventListener('beforeunload', onBeforeUnload));
+store.setUnsavedCheck(() => dirty.value);
+onUnmounted(() => store.setUnsavedCheck(null));
 onUnmounted(() => window.removeEventListener('beforeunload', onBeforeUnload));
 
 
@@ -480,7 +493,8 @@ onMounted(() => {
         nextTick(() => {
             lastSavedHash.value = hashOf(store.data);
             lastSavedName.value = store.name || '';
-            isNewUnsaved.value = !store.name;
+            // A share link's copy is unsaved until it's saved, name or not
+            isNewUnsaved.value = !store.name || store.fromLink;
         });
     });
 });
@@ -492,6 +506,50 @@ function exportJson() {
     closeAllMenus(); // as every other File item does: the menu doesn't stay open over the page
 }
 function triggerImport() { fileInput.value?.click(); }
+
+// SHARE LINK START
+// File → Share link…: the project as it is now (unsaved changes included), packed into the
+// link's fragment (src/lib/storage/share.ts). A touch device gets its share sheet
+// (navigator.share); a computer gets the link copied (Windows' and macOS' share sheets suit a
+// link less than the clipboard does), and if that's refused, a box to copy it from.
+// Opening a link: useProjectSync.
+const shareToast = ref('');
+let shareToastTimer: ReturnType<typeof setTimeout> | null = null;
+function showShareToast(msg: string) {
+    shareToast.value = msg;
+    if (shareToastTimer) clearTimeout(shareToastTimer);
+    shareToastTimer = setTimeout(() => { shareToast.value = ''; }, 3000);
+}
+onUnmounted(() => { if (shareToastTimer) clearTimeout(shareToastTimer); });
+
+async function shareLink() {
+    if (!store.loaded) return;
+    closeAllMenus();
+    store.flushPending();
+    const name = (store.name || '').trim();
+    const url = shareUrl(window.location.href, await encodeShare(buildSharePayload(name, store.data)));
+    const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    const nav: any = navigator;
+    if (touch && typeof nav.share === 'function') {
+        try {
+            await nav.share({ title: name || 'Ephemeral Wave pattern', url });
+            trackEvent('share_link', { method: 'share', length: url.length });
+            return;
+        } catch (err: any) {
+            if (err?.name === 'AbortError') return; // closed the share sheet
+            // else copy it instead
+        }
+    }
+    try {
+        await navigator.clipboard.writeText(url);
+        showShareToast('Link copied: it opens this project as it is now');
+        trackEvent('share_link', { method: 'copy', length: url.length });
+    } catch {
+        window.prompt('Copy this link:', url);
+        trackEvent('share_link', { method: 'prompt', length: url.length });
+    }
+}
+// SHARE LINK END
 async function onImport(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -574,6 +632,26 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     border: 1px solid var(--pc-surface-1);
     background: var(--pc-surface-2);
     color: var(--pc-text);
+}
+
+/* "Link copied", at the bottom of the window */
+.pc-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 1060;
+    max-width: calc(100vw - 32px);
+    padding: 8px 14px;
+    border: 1px solid transparent;
+    border-radius: var(--pt-radius-sm, 8px);
+    background:
+        linear-gradient(145deg, var(--pt-panel), var(--pt-surface-2)) padding-box,
+        linear-gradient(90deg, hsl(var(--pt-accent) 84% 64% / 0.95), hsl(calc(var(--pt-accent) + 10) 84% 64% / 0.95)) border-box;
+    box-shadow: 0 8px 28px rgb(0 0 0 / 0.45);
+    color: var(--pt-text);
+    font-size: 0.85rem;
+    pointer-events: none;
 }
 
 /* File, Undo, Redo and Save are caps (_hardware.scss) */

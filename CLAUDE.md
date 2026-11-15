@@ -13,7 +13,7 @@ input, and MIDI learn (a controller's knobs turn the app's); a melody maker (ran
 arpeggio in a key and scale; a new key or scale moves the pattern with it); a screen with an oscilloscope, spectrum,
 spectrogram and tuner, and envelope and filter views while their knobs are turned; six built-in sounds that set the sound (not the pattern) and six built-in patterns
 that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
-saved in IndexedDB with JSON import and export; undo/redo; it installs as an app that
+saved in IndexedDB with JSON import and export, and share links (the project in the URL); undo/redo; it installs as an app that
 works offline (a PWA); and a phone held sideways gets a layout of its own (phone mode).
 Earlier versions also had sample drum lanes (kick, snare, hihat and user-loaded samples).
 Their UI is commented out and they are no longer part of the app, but some of their code
@@ -169,8 +169,9 @@ src/components/
                          velocity shapes ("Humanize") and octave shift (with the Active Pads
                          Only toggle)
   ProjectControls.vue    The top bar: the logo (its `brand` slot), File menu (new, open, Save as…,
-                         delete, import/export JSON, Export audio…), the name box (rename),
-                         Save, Undo/Redo buttons
+                         delete, import/export JSON, Share link…, Export audio…), the name box
+                         (rename), Save, Undo/Redo buttons
+  ShareNotice.vue        "Shared pattern: press Play", once a share link's project has opened
   ExportDialog.vue       The Export audio dialog (see "Export audio")
   PresetButtons.vue      A box of preset buttons and a dice, used twice in the transport card:
                          Sounds and Patterns (see "Sounds and Patterns")
@@ -244,7 +245,8 @@ src/lib/knobDetents.ts   Knob notches: the drag's travel with a hold at each, an
 src/lib/midiLearn.ts     MIDI learn's bookkeeping (pure): the learnable knobs (MIDI_KNOBS) and
                          which controller knob drives which
 src/lib/storage/         IndexedDB via `idb` (db.ts, projects.ts), JSON import/export,
-                         namespace.ts (storage names, one set per site folder)
+                         namespace.ts (storage names, one set per site folder), share.ts (share
+                         links, see "Share links")
 src/lib/schema/projectSchema.ts  Project file check (hand-written, no library) + v1→v2
                          migration (CURRENT_VERSION = 2)
 src/composables/useTheme.ts      synthwave | dark | sand | analog | slate | light theme, in localStorage
@@ -1235,6 +1237,28 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `isContinued`, which `useUndoHistory` and the bar queue check; opening or creating a
   project clears it), and a key waiting for the bar still comes. File → New with Shift held
   (an older, hidden way to copy) still makes an unnamed copy.
+- **Share links** (PR 84; `src/lib/storage/share.ts`, unit-tested): File → **Share link…**
+  packs the project as it is now (unsaved changes included) into the link's fragment,
+  `/studio2/#p=<code>`, which is never sent to the server, so it works on static hosting. The
+  code is the export file's shape (`{ version, meta: { name }, data }`, without the project id
+  and `ui`, so the theme and open panels stay the recipient's), as JSON, deflated
+  (`CompressionStream('deflate-raw')`) and in base64url, its first letter `z` (or `j`, plain
+  JSON, where a browser has no CompressionStream): about 1.2 kB for a factory project. A touch
+  device gets its share sheet (`navigator.share`); a computer gets the link copied ("Link
+  copied" at the bottom), or a box to copy it from if the clipboard is refused.
+  Opening one (`SHARE LINK` section of `useProjectSync.ts`): at startup, instead of the last
+  project, the link's project opens as an **unsaved copy** (`projectStore.openShared()`: a new
+  id, `fromLink`, nothing written to IndexedDB until Save, so it never replaces a saved project
+  and isn't in File → Open; `lastProjectId` isn't set to it until it's saved, so a reload
+  brings back the project from before), checked by `validateAndMigrate()` as an import is. The
+  fragment is taken out of the address bar once read (`history.replaceState`), so a reload
+  doesn't open the link again over the work since. `ShareNotice.vue` says "Shared pattern:
+  Name. Press Play" (browsers don't play audio before a tap; its Play is that tap) until
+  playing starts or ✕. A link pasted into an open page (`hashchange`) asks first when there
+  are unsaved changes (`projectStore.hasUnsavedChanges()`, ProjectControls' dot). A damaged or
+  cut-short link says so and the last project opens. A browser test covers it. Not built yet:
+  a "pattern only" link that keeps the recipient's sound. JSON stays the file format.
+  Analytics: `share_link` (`method`: share, copy or prompt) and `share_open`.
 - A saved project that fails the project check (damaged, or unreadable by this version) is
   never opened: `loadProject()` throws a `BrokenProjectError` (with the project's name). At
   startup, `useProjectSync.ts` then starts a new project and says so in an alert; from
@@ -1507,9 +1531,9 @@ what the maintainer turned down: Converge or Up + octave as arpeggio patterns, P
 target, and for now a second oscillator and a second pad lane, on hold below).
 
 The maintainer's brainstorm after PR 73 is done (its three small fixes were PR 74, the LFO
-card PR 75, the Melody Maker PR 76, the plain cards PR 77). Items 1–3 come from the one after
+card PR 75, the Melody Maker PR 76, the plain cards PR 77). Items 1 and 2 come from the one after
 PR 77 (its first items were PR 78, the stretched keyboard and pedals, PR 79, the theme
-colours, and PR 80, the Melody Maker's screen while playing); items 4 and 5 from earlier ones (its first items, Generate made obvious and the Random wave tile, were PRs 82 and 83). No one else uses the app yet, so older projects need no special care: a removed
+colours, PR 80, the Melody Maker's screen while playing, and PR 84, share links); items 3 and 4 from earlier ones (its first items, Generate made obvious and the Random wave tile, were PRs 82 and 83). No one else uses the app yet, so older projects need no special care: a removed
 setting can simply stop applying.
 
 Redesigns are visual: every control keeps working as it does, and each card keeps its size.
@@ -1521,27 +1545,20 @@ do, sockets, steppers that open a list for a choice of words, switches for numbe
 only where a control doesn't explain itself, not too many buttons on show, and the action
 button where the eye ends up (Generate, PR 82).
 
-1. **Share a project as a link** (off hold; the maintainer's idea after PR 77: send a pattern
-   to someone who doesn't know the site). The project, compressed, in the URL's fragment
-   (`#p=…`, never sent to the server, so it works on static hosting; about 1–2 kB); File →
-   Share opens the phone's share sheet (`navigator.share`) or copies the link. Opening one
-   loads it as an unsaved copy (never over a saved project) and says "Shared pattern: press
-   Play" (browsers don't play audio before a tap). Maybe later a "pattern only" link that keeps
-   the recipient's sound. JSON stays the file format (a `.ewave` name is optional).
-2. **Drag notes on the Melody Maker's screen** (maybe; the maintainer's call once PR 80 and
+1. **Drag notes on the Melody Maker's screen** (maybe; the maintainer's call once PR 80 and
    PR 82 are in): up or down, snapping to the scale, one undo step, a preview while stopped, using the
    shape cards' drag code. It's a second editor for the pads' pitches, and fiddly on a 110 px
    screen.
-3. **Octave arrows at the edges** (last: the maintainer isn't sure). `octaveShiftAllSkip()`
+2. **Octave arrows at the edges** (last: the maintainer isn't sure). `octaveShiftAllSkip()`
    moves each pad on its own and skips those that would leave 100–2000 Hz, so a pattern near an
    edge gets squashed (its intervals change); it also moves `globalOctaveOffset` when pads were
    skipped. Proposed: all or nothing (if any pad can't move, none does), the arrow greyed out
    with a title saying why; the phone's Octave ↓ / ↑ too; a unit test.
-4. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
+3. **Fit the window without scrolling** (put off after PR 70, the maintainer's call: visual
    changes to come may change the height), centred vertically when it fits: tighten spacing,
    then scale the frame down to fit short windows (with a floor). Last, so the height is
    settled; measure at the maintainer's screen and common laptop sizes.
-5. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+4. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
    the maintainer wants some maintenance, each as its own PR.
 
 Decided after PR 73 (the maintainer's call, "for now"): the Sound and Pattern presets stay in
@@ -1743,6 +1760,7 @@ Done:
 | 79 | Theme colours: **Dark** has a near-black page of its own and a grey-violet wash (it shared Synthwave's pink ones); the **effect pedals** follow the theme (option A of three mockups): each keeps its own colour, shaded per theme, with its name and captions in dark ink, readable now (white with a glow wasn't); the screen's F-keys are tinted per theme (white in every theme before), FM's and Unison's keys take the caps' colours, and the link under the frame has a colour in Dark and Synthwave. A browser test checks the pedals' names in every theme. |
 | 80 | The Melody Maker's screen while playing: a playhead line crosses it and the note that sounds glows, in step with the pads (only the glow with reduced motion; `usePlayhead.ts`, `RollPlayhead.vue`); each note is drawn as long as it sounds (Attack + Decay at the tempo, cut at the next hit, its tail fading), repeats as their 2–4 hits, stepping up or down for Up / Down (`rollSegments()` in `roll.ts`); the scale's dots on the white keys are bigger, in the accent with a dark ring. |
 | 82 | Melody Maker, part 2 (option A of three mockups): Generate is a full-width accent cap at the card's bottom naming what it makes ("Generate melody" / "Generate arpeggio"), Melody | Arpeggio moved up into the header, the card the same size; until Generate is first pressed in the browser, the screen says "Press Generate" (with what it would make) and the button glows. |
+| 84 | Share a project as a link: File → Share link… packs the project (unsaved changes included, without the theme) into the link's `#p=…` fragment, deflated, about 1.2 kB (`src/lib/storage/share.ts`); the phone's share sheet, else copied. Opening one loads it as an unsaved copy, never over a saved project and not in File → Open until saved, and says "Shared pattern: press Play"; a link pasted into an open page asks first if there are unsaved changes; a damaged link says so. |
 | 83 | The Waveforms card's Random is a tall tile in a narrow ninth column beside the eight waves (option B of two mockups): it never stays down, its dice tumbles on each press, and while the pads play a mix it shows it (a small bar per pad in its wave's colour, "Mix / roll again"); the LFO card's Sine / Square are two bigger keys with the wave drawn on them, lit in the accent like FM's ratio keys (option 1 of two). Cards keep their size. |
 
 ## Testing a PR

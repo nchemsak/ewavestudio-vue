@@ -33,7 +33,7 @@ https://www.ephemeralwave.com/studio/ and is never changed.
 - Oscilloscope, spectrogram, tuner and envelope views
 - Play it from a MIDI keyboard, and turn its knobs with a MIDI controller's (MIDI learn; Web
   MIDI: Chrome, Edge and other Chromium browsers)
-- Projects saved in the browser, with undo/redo and JSON import and export
+- Projects saved in the browser, with undo/redo, JSON import and export, and share links (the project packed into the link)
 - Export audio for a DAW: seamless loops of 1–8 bars (or with the tail), effects stems (dry,
   delay, reverb, noise) that add up to the mix, a MIDI file of the pattern, and a one-shot of
   the sound at any note, as one .zip

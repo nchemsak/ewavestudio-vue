@@ -626,6 +626,8 @@
 				</div>
 			</section> -->
 		</div>
+		<!-- A share link's project just opened: press Play (ShareNotice.vue) -->
+		<ShareNotice :playing="isPlaying" @play="onSharePlay" />
 		<!-- File → Export audio… (src/audio/export/exportFiles.ts makes the files) -->
 		<ExportDialog :open="exportOpen" :options="exportOptions" :notes="oneShotNotes" :bpm="tempo"
 			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
@@ -706,6 +708,7 @@ import { useLfoVisual } from '../composables/useLfoVisual';
 import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
 import ExportDialog from './ExportDialog.vue';
+import ShareNotice from './ShareNotice.vue';
 import { buildExportFiles, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from '../audio/export/exportFiles';
 import { midiNoteOf, midiToHz, notesInRange } from '../lib/export/midi';
 import { exportNames, keyLabel } from '../lib/export/names';
@@ -2955,6 +2958,10 @@ function onPlayClick() {
 
 	if (isPlaying.value) runQueued(); // stopping: what was waiting for the bar happens now
 	togglePlay();
+}
+// The share notice's Play: the tap that lets audio start (only starts, never stops)
+function onSharePlay() {
+	if (!isPlaying.value) onPlayClick();
 }
 // GOOGLE ANALYTICS END
 // EXPORT AUDIO START
