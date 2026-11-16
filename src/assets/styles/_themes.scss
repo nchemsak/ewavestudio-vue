@@ -168,7 +168,7 @@ $base: map.get($themes, synthwave);
 .reverb-pedal,
 .tape-pedal {
     --pedal-ink: rgba(0, 0, 0, 0.9);
-    --pedal-ink-off: rgba(0, 0, 0, 0.74); /* PR 93: 0.5 measured 1.2–1.9 : 1 on the pedals */
+    --pedal-ink-off: rgba(0, 0, 0, 0.8); /* PR 93: 0.5 measured 1.2–1.9 : 1 on the pedals */
     --pedal-name: rgba(0, 0, 0, 0.86);
     --pedal-name-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
@@ -188,7 +188,10 @@ $base: map.get($themes, synthwave);
 }
 
 .theme-analog {
-    .delay-pedal { --pedal-hi: #cc7840; --pedal-lo: #a8592a; }
+    /* the darkest pedal: a lighter burnt orange and darker off ink, so its captions stay readable
+       (PR 93; it was #cc7840 / #a8592a, and with 0.74 off ink measured 2.7 : 1 on the Checks'
+       machine) */
+    .delay-pedal { --pedal-hi: #d6894f; --pedal-lo: #b8693a; --pedal-ink-off: rgba(0, 0, 0, 0.86); }
     .drive-pedal { --pedal-hi: #e0bb5e; --pedal-lo: #c49b3a; }
     .reverb-pedal { --pedal-hi: #e8dec7; --pedal-lo: #c8b996; }
     .tape-pedal { --pedal-hi: #b3ad72; --pedal-lo: #8d8748; }
