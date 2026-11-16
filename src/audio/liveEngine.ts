@@ -160,8 +160,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	tapeNoiseGate.gain.value = 0;
 	tape.noise.connect(tapeNoiseGate).connect(tapeThrough);
 	let tapeNoiseStarted = false;
-	const TAPE_NOISE_HOLD_S = 1;   // how long the noise stays after the sound
-	const TAPE_NOISE_FADE_S = 0.4; // then it fades (a time constant)
+	const TAPE_NOISE_HOLD_S = 1;    // how long the noise stays after the sound
+	const TAPE_NOISE_FADE_S = 0.25; // then it fades (a time constant),
+	const TAPE_NOISE_GONE_S = 2;    // and is gone this long after the hold
 
 	function applyTapeEnabled(now = false) {
 		const on = s.tape.enabled.value;
@@ -189,7 +190,10 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const g = tapeNoiseGate.gain;
 		g.cancelScheduledValues(from);
 		g.setTargetAtTime(1, from, 0.02);
-		if (until !== undefined) g.setTargetAtTime(0, until + TAPE_NOISE_HOLD_S, TAPE_NOISE_FADE_S);
+		if (until !== undefined) {
+			g.setTargetAtTime(0, until + TAPE_NOISE_HOLD_S, TAPE_NOISE_FADE_S);
+			g.setValueAtTime(0, until + TAPE_NOISE_HOLD_S + TAPE_NOISE_GONE_S);
+		}
 	}
 	watch(isPlaying, (playing) => {
 		const t = audioCtx.currentTime;

@@ -88,7 +88,8 @@ export function tapeSettings(age: number, wobble: number, mode: TapeMode | strin
 		hissGain: vinyl ? hiss * VINYL_SURFACE : hiss,
 		crackleGain: vinyl ? TAPE_CRACKLE_MAX * a ** 1.5 : 0,
 		wobble: parts,
-		baseDelay: WOBBLE_FLOOR_S + parts.reduce((sum, p) => sum + p.seconds, 0),
+		// At rest in the middle of its swing; with no wobble there is no delay at all
+		baseDelay: w > 0 ? WOBBLE_FLOOR_S + parts.reduce((sum, p) => sum + p.seconds, 0) : 0,
 	};
 }
 
@@ -186,7 +187,7 @@ export function createTape(ctx: BaseAudioContext): Tape {
 
 	const dull = ctx.createBiquadFilter();
 	dull.type = 'lowpass';
-	dull.Q.value = 0.6;
+	dull.Q.value = Math.SQRT1_2; // flat up to the cutoff, so AGE at 0 takes next to nothing away
 
 	const wow = ctx.createDelay(0.1);
 	const sines: { osc: OscillatorNode; depth: GainNode }[] = [];

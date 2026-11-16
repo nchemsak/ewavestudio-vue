@@ -17,7 +17,7 @@ describe('tapeSettings', () => {
 			expect(s.crackleGain).toBe(0);
 			expect(s.wobble).toHaveLength(WOBBLE_VOICES);
 			for (const p of s.wobble) expect(p.seconds).toBe(0);
-			expect(s.baseDelay).toBeLessThan(0.001);
+			expect(s.baseDelay).toBe(0);
 		}
 	});
 
