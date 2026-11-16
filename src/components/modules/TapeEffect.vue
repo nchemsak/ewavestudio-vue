@@ -71,7 +71,7 @@ const props = withDefaults(
         wobble?: number;   // 0..1
         mode?: TapeMode;
         playing?: boolean; // the reels turn while the sequencer plays
-        layout?: 'pedal' | 'deck'; // a stomp box like the others, or a low, wide deck
+        layout?: 'pedal' | 'deck'; // a stomp box (the phone's FX page) or a low, wide deck (the desktop's Effects card)
         color?: string;
     }>(),
     { age: TAPE_DEFAULTS.age, wobble: TAPE_DEFAULTS.wobble, mode: TAPE_DEFAULTS.mode, playing: false, layout: 'pedal', color: '#4DB6AC' }
@@ -455,7 +455,7 @@ watch(() => props.mode, (v) => { localMode.value = clampTapeMode(v); });
     display: none;
 }
 
-/* The deck: the same controls on one low, wide unit (mockup C) */
+/* The deck: the same controls on one low, wide unit, under the desktop's three pedals */
 .tape-pedal.is-deck {
     grid-template-rows: none;
     grid-template-columns: auto auto minmax(0, 1fr);

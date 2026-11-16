@@ -155,7 +155,7 @@
 			 screen beside them; under them Sound (three rows, each filled edge to edge) and Compose,
 			 ending on one line. Under 1200 px, Sound, Effects and Compose are tabs under the steps
 			 (data-tab says which one shows). -->
-		<div v-show="!phoneActive" class="ds-grid" :class="`tape-${tapeMock}`" :data-tab="activeTab">
+		<div v-show="!phoneActive" class="ds-grid" :data-tab="activeTab">
 
 			<!-- Visualizer Screen -->
 			<aside class="pt-card ds-visualizer">
@@ -474,9 +474,10 @@
 									v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 								<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 									v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone" />
-								<!-- The tape pedal, last in the chain (mockups: ?tape=a, b or c) -->
+								<!-- The tape pedal, last in the chain: a low deck under the three pedals
+								     (option C of three mockups; the phone's FX page has it as a pedal) -->
 								<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
-									v-model:mode="tapeMode" :playing="isPlaying" :layout="tapeMock === 'c' ? 'deck' : 'pedal'" />
+									v-model:mode="tapeMode" :playing="isPlaying" layout="deck" />
 							</div>
 						</SectionWrap>
 					</div>
@@ -2343,14 +2344,6 @@ const tapeAge = ref(TAPE_DEFAULTS.age);       // 0..1: saturation, a duller top,
 const tapeWobble = ref(TAPE_DEFAULTS.wobble); // 0..1: wow and flutter
 const tapeMode = ref<TapeMode>(TAPE_DEFAULTS.mode); // 'tape' | 'vinyl'
 
-// MOCKUP SWITCH (to be removed once a layout is picked): how the fourth pedal fits the Effects
-// card. ?tape=a: four slimmer pedals in the card as it is; b: the card a little wider, Noise
-// and the LFO a little narrower; c (the default): the tape as a low deck under three shorter pedals.
-const tapeMock = (() => {
-	const m = new URLSearchParams(window.location.search).get('tape');
-	return m === 'a' || m === 'b' ? m : 'c';
-})();
-
 // Tape END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -3813,16 +3806,12 @@ const phoneCtx = reactive({
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
-	/* Effects tab: the pedals at their desktop size (118 × 239 at 1600 px), centred: wider,
-	   they looked stretched (190 px) */
+	/* Effects tab: the pedals at their desktop size (118 px wide at 1600 px), centred, the tape
+	   deck under them as wide as the three: wider, they looked stretched (190 px) */
 	.module.fx .fx-pair {
-		grid-template-columns: repeat(4, minmax(0, 120px));
+		grid-template-columns: repeat(3, minmax(0, 120px));
 		justify-content: center;
 		column-gap: 28px;
-	}
-
-	.tape-c .module.fx .fx-pair {
-		grid-template-columns: repeat(3, minmax(0, 120px));
 	}
 
 	/* The transport: Sounds and Patterns on a row of their own under the knobs */
@@ -3891,16 +3880,11 @@ const phoneCtx = reactive({
 		grid-column: 1 / -1;
 	}
 
-	/* Effects tab: the pedals one under another (three across they'd be 105 px wide, and their
-	   labels run into the knobs), at their desktop size, centred */
+	/* Effects tab: the three pedals still across (about 110 px each), the deck under them */
 	.module.fx .fx-pair {
-		grid-template-columns: repeat(2, minmax(0, 120px));
-		row-gap: 16px;
-	}
-
-	.tape-c .module.fx .fx-pair {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		column-gap: 8px;
+		row-gap: 16px;
 	}
 
 	.ds-tab {
@@ -4751,103 +4735,50 @@ const phoneCtx = reactive({
 
 .fx-pair {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 12px;
 	align-items: start;
 }
 
-@media (max-width: 720px) {
-	.fx-pair {
-		grid-template-columns: 1fr;
-	}
-}
-
-/* MOCKUPS START (?tape=a, b or c; to be removed once one is picked) */
-
-/* A and B: four pedals across. In A they are 87 px wide: a pedal's TONE knob moves a little
-   left and its CRUSH or PING PONG switch to the edge, and the names are a size smaller */
-
-.tape-a .fx-pair {
-	gap: 10px;
-}
-
-.tape-a .fx-pair :deep(.delay-pedal .knob-cell.tone),
-.tape-a .fx-pair :deep(.drive-pedal .knob-cell.tone) {
-	justify-self: start;
-	margin-left: 20%;
-}
-
-.tape-a .fx-pair :deep(.pedal-switch) {
-	right: -1px;
-}
-
-/* ... and TONE's caption goes under its knob: above it, it ran into the other two */
-.tape-a .fx-pair :deep(.knob-cell.tone .knob-label) {
-	top: auto;
-	bottom: -10px;
-}
-
-.tape-a .fx-pair :deep(.effect-label) {
-	font-size: 0.82rem;
-	line-height: 1rem;
-	letter-spacing: -0.02em;
-}
-
-.tape-b .fx-pair :deep(.effect-label) {
-	font-size: 0.95rem;
-	line-height: 1rem;
-}
-
-/* B: the Effects card takes a little of Noise's and the LFO's width */
-@media (min-width: 1200px) {
-	.tape-b .sound-row-3 {
-		grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
-	}
-}
-
-/* C: three shorter pedals over the deck */
-.tape-c .fx-pair {
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.tape-c .fx-pair> :last-child {
+/* Effects (option C of three mockups): delay, overdrive and reverb across, with short
+   footswitches (a bar, 75 px tall before), and the tape deck under them, as wide as the three
+   (TapeEffect's `deck` layout). The phone's FX page (.pl-fx) keeps four tall pedals. */
+.module.fx .fx-pair> :last-child {
 	grid-column: 1 / -1;
 }
 
-.tape-c .fx-pair :deep(.footswitch) {
+.module.fx .fx-pair :deep(.knob-group) {
+	padding: 0;
+}
+
+.module.fx .fx-pair :deep(.footswitch) {
 	height: 19px;
 }
 
-.tape-c .fx-pair :deep(.tape-pedal .footswitch) {
+.module.fx .fx-pair :deep(.tape-pedal .footswitch) {
 	height: 26px;
 }
 
-.tape-c .fx-pair :deep(.footswitch::before) {
+.module.fx .fx-pair :deep(.footswitch::before) {
 	inset: 4px;
 	border-radius: 4px;
 }
 
-.tape-c .fx-pair :deep(.panel-seam) {
+.module.fx .fx-pair :deep(.panel-seam) {
 	height: 8px;
 }
 
-.tape-c .fx-pair :deep(.tape-pedal .panel-seam) {
+.module.fx .fx-pair :deep(.tape-pedal .panel-seam) {
 	height: auto;
-}
-
-.tape-c .fx-pair :deep(.knob-group) {
-	padding: 0;
 }
 
 /* The short foot keeps the pedal's lighter shade behind its name, so the name reads as well
    as it did on the tall one */
-.tape-c .fx-pair :deep(.delay-pedal .panel-bottom),
-.tape-c .fx-pair :deep(.drive-pedal .panel-bottom),
-.tape-c .fx-pair :deep(.reverb-pedal .panel-bottom) {
+.module.fx .fx-pair :deep(.delay-pedal .panel-bottom),
+.module.fx .fx-pair :deep(.drive-pedal .panel-bottom),
+.module.fx .fx-pair :deep(.reverb-pedal .panel-bottom) {
 	background: linear-gradient(var(--pedal-foot-hi, var(--pedal-hi)) 50%, var(--pedal-foot-lo, var(--pedal-lo)));
 }
-
-/* MOCKUPS END */
 
 
 
