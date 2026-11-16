@@ -15,12 +15,12 @@ export type Mappings = Record<CcKey, string>;
 
 // The knobs that can be learned: each <Knob> with a `midi-id` from this list, and what the
 // learn bar calls it. The ids are saved with the mappings, so don't rename them. The knobs in
-// pop-ups (a pad's Fine) aren't here: they'd only follow while open.
+// pop-ups (a pad's Fine) aren't here: they'd only follow while open. 'synth.volume' (the Step
+// Sequencer's Vol) left with its knob in PR 92; a link saved to it is dropped on load.
 export const MIDI_KNOBS: Record<string, string> = {
 	'transport.volume': 'Volume',
 	'transport.tempo': 'Tempo',
 	'transport.swing': 'Swing',
-	'synth.volume': 'Step Sequencer volume',
 	'pulse.width': 'Pulse width',
 	'env.attack': 'Attack',
 	'env.decay': 'Decay',

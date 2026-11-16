@@ -1,37 +1,34 @@
-<!-- MOCKUP (plan item 1): the top bar's settings button and its panel.
-     kind="gear": a gear that opens Theme, MIDI and the link back to the main site.
-     kind="midi": a MIDI cap with an LED (lit once a controller is chosen) that opens MIDI only.
-     The panel stays mounted while closed (v-show): MidiToolbar ends MIDI learn when unmounted. -->
+<!-- src/components/SettingsMenu.vue -->
+<!-- The top bar's gear (PR 92, option A of three mockups): it opens Theme and MIDI, which were in
+     a row above the frame. An LED on the gear shows a MIDI controller is chosen. Under 576 px,
+     where the logo (the link back to the main site) is hidden, the panel has that link instead.
+     The panel stays mounted while closed (v-show): MidiToolbar ends MIDI learn when it's
+     unmounted, and learn mode closes the panel so the knobs can be clicked. -->
 <template>
     <div class="sm" ref="wrap">
-        <button v-if="kind === 'gear'" type="button" class="sm-btn hw-cap" :class="{ 'hw-down': open }"
-            aria-label="Settings" title="Settings: theme, MIDI" aria-haspopup="dialog" :aria-expanded="open" @click="open = !open">
+        <button type="button" class="sm-btn hw-cap" :class="{ 'hw-down': open }" aria-label="Settings"
+            title="Theme and MIDI" aria-haspopup="dialog" :aria-expanded="open ? 'true' : 'false'" @click="open = !open">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                 <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
                 <circle cx="12" cy="12" r="3" />
             </svg>
             <span v-if="midi?.selectedId" class="sm-dot" aria-hidden="true"></span>
         </button>
-        <button v-else type="button" class="sm-btn sm-midi hw-cap hw-led-left" :class="{ 'hw-down': open, on: !!midi?.selectedId }"
-            title="MIDI controller" aria-haspopup="dialog" :aria-expanded="open" @click="open = !open">MIDI</button>
 
-        <div v-show="open" class="sm-panel" :class="`sm-${align}`" role="dialog" :aria-label="kind === 'gear' ? 'Settings' : 'MIDI'">
-            <template v-if="kind === 'gear'">
-                <div class="sm-cap">Theme</div>
-                <ThemeToggle />
-                <div class="sm-rule"></div>
+        <div v-show="open" class="sm-panel" role="dialog" aria-label="Settings">
+            <div class="sm-cap">Theme</div>
+            <ThemeToggle />
+            <div class="sm-rule"></div>
+            <MidiToolbar v-if="midi?.supported" :midi="midi" />
+            <template v-else>
+                <div class="sm-cap">MIDI Controller</div>
+                <div class="sm-note">This browser has no Web MIDI (Chrome and Edge have it).</div>
             </template>
-            <div class="sm-midi-box">
-                <MidiToolbar v-if="midi?.supported" :midi="midi" />
-                <template v-else>
-                    <div class="sm-cap">MIDI Controller</div>
-                    <div class="sm-note">This browser has no Web MIDI (Chrome and Edge do).</div>
-                </template>
+            <div class="sm-home">
+                <div class="sm-rule"></div>
+                <a class="sm-link" href="/" :target="pwa.state.standalone ? '_blank' : undefined"
+                    :rel="pwa.state.standalone ? 'noopener' : undefined">Return to Ephemeral Wave</a>
             </div>
-            <template v-if="kind === 'gear'">
-                <div class="sm-rule"></div>
-                <a class="sm-link" href="/">Ephemeral Wave ↗<span>the main site</span></a>
-            </template>
         </div>
     </div>
 </template>
@@ -40,23 +37,35 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 import ThemeToggle from './ThemeToggle.vue';
 import MidiToolbar from './MidiToolbar.vue';
+import type { MidiInput } from '../composables/useMidiInput';
 import { useMidiLearn } from '../composables/useMidiLearn';
+import { usePwa } from '../composables/usePwa';
 
-withDefaults(defineProps<{ midi?: any; kind?: 'gear' | 'midi'; align?: 'left' | 'right' }>(), { kind: 'gear', align: 'right' });
+defineProps<{ midi?: MidiInput }>();
 
+const pwa = usePwa();
 const open = ref(false);
 const wrap = ref<HTMLElement | null>(null);
 
-// Learn mode needs the panel: close, so the knobs can be clicked
+// Learn mode works on the knobs under the panel: close it
 const learn = useMidiLearn();
 watch(() => learn.state.learning, (on) => { if (on) open.value = false; });
 
+// A click outside or Esc closes it
 function onDown(e: Event) {
     if (open.value && wrap.value && !wrap.value.contains(e.target as Node)) open.value = false;
 }
-function onKey(e: KeyboardEvent) { if (e.key === 'Escape') open.value = false; }
-onMounted(() => { document.addEventListener('pointerdown', onDown, true); window.addEventListener('keydown', onKey); });
-onUnmounted(() => { document.removeEventListener('pointerdown', onDown, true); window.removeEventListener('keydown', onKey); });
+function onKey(e: KeyboardEvent) {
+    if (e.key === 'Escape' && open.value) open.value = false;
+}
+onMounted(() => {
+    document.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey);
+});
+onUnmounted(() => {
+    document.removeEventListener('pointerdown', onDown, true);
+    window.removeEventListener('keydown', onKey);
+});
 </script>
 
 <style scoped>
@@ -65,6 +74,7 @@ onUnmounted(() => { document.removeEventListener('pointerdown', onDown, true); w
     display: inline-flex;
 }
 
+/* A cap (_hardware.scss), as tall as Undo and Redo */
 .sm-btn {
     position: relative;
     display: inline-flex;
@@ -83,13 +93,7 @@ onUnmounted(() => { document.removeEventListener('pointerdown', onDown, true); w
     stroke-linejoin: round;
 }
 
-.sm-midi {
-    font-size: .8rem;
-    letter-spacing: .08em;
-    padding: .35rem .6rem .35rem 1.35rem;
-}
-
-/* A controller is chosen: a small LED on the gear */
+/* A controller is chosen: the LEDs' colour */
 .sm-dot {
     position: absolute;
     top: 3px;
@@ -104,8 +108,10 @@ onUnmounted(() => { document.removeEventListener('pointerdown', onDown, true); w
 .sm-panel {
     position: absolute;
     top: calc(100% + 6px);
+    right: 0;
     z-index: 1001;
     width: 268px;
+    max-width: calc(100vw - 24px);
     padding: 12px;
     border: 1px solid var(--pt-hairline, #2b2f3b);
     border-radius: .5rem;
@@ -115,9 +121,8 @@ onUnmounted(() => { document.removeEventListener('pointerdown', onDown, true); w
     text-align: left;
 }
 
-.sm-right { right: 0; }
-.sm-left { left: 0; }
-
+/* Captions: Theme, and MidiToolbar's "MIDI Controller" (which it hides in narrow windows when
+   it stands in a row; here it has a line of its own) */
 .sm-cap,
 .sm-panel :deep(.midi-label) {
     display: block;
@@ -168,25 +173,27 @@ onUnmounted(() => { document.removeEventListener('pointerdown', onDown, true); w
     opacity: .8;
 }
 
+/* The link back to the main site: only where the logo is hidden */
+.sm-home {
+    display: none;
+}
+
 .sm-link {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
     color: var(--pt-text);
-    text-decoration: none;
     font-size: .85rem;
 }
 
-.sm-link span {
-    font-size: .72rem;
-    opacity: .65;
-}
-
-.sm-link:hover {
-    text-decoration: underline;
-}
-
 @media (max-width: 575.98px) {
-    .sm-right { right: -8px; }
+    .sm-home {
+        display: block;
+    }
+
+    .sm-panel {
+        right: -8px;
+    }
+
+    .sm-btn {
+        padding: .3rem .35rem;
+    }
 }
 </style>

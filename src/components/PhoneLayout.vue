@@ -1063,7 +1063,7 @@ function hzText(hz: number) {
 	min-width: 0;
 }
 
-.pl-menu :deep(.topbar-logo) {
+.pl-menu :deep(.topbar-home) {
 	display: none;
 }
 

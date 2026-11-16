@@ -143,21 +143,18 @@
 			<section class="pt-card ds-topbar">
 				<ProjectControls :exporting="isExporting" :can-undo="canUndo" :can-redo="canRedo"
 					@export-audio="openExportDialog" @undo="undo" @redo="redo">
+					<!-- The logo is the link back to the main site (PR 92; it was a link under the frame).
+						 In the installed app it opens in the browser, not in the app's window. -->
 					<template #brand>
-						<a v-if="CHROME" class="topbar-home" href="/" title="Return to Ephemeral Wave">
-							<img class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave: back to the main site">
+						<a class="topbar-home" href="/" title="Return to Ephemeral Wave"
+							:target="pwa.state.standalone ? '_blank' : undefined"
+							:rel="pwa.state.standalone ? 'noopener' : undefined">
+							<img class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave: return to the main site">
 						</a>
-						<img v-else class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave">
 					</template>
-					<!-- MOCKUP (plan item 1): Theme and MIDI in the top bar -->
-					<template v-if="CHROME === 'b' && !phoneActive" #tools-left>
-						<SettingsMenu :midi="midi" align="left" />
-					</template>
-					<template v-if="CHROME === 'c' && !phoneActive" #tools-before-save>
-						<ThemeSwatches class="topbar-swatches" />
-						<SettingsMenu :midi="midi" kind="midi" />
-					</template>
-					<template v-if="CHROME === 'a' && !phoneActive" #tools-right>
+					<!-- The gear: Theme and MIDI (SettingsMenu.vue; PR 92, option A of three mockups).
+						 Not in phone mode, where themes are in the ☰ menu and MIDI isn't offered. -->
+					<template v-if="!phoneActive" #tools-right>
 						<SettingsMenu :midi="midi" />
 					</template>
 				</ProjectControls>
@@ -185,7 +182,8 @@
 					<div class="transport-knobs">
 						<!-- Volume -->
 						<div class="position-relative text-center knob-wrap">
-							<LfoModKnob :lfoView="CHROME ? lfoView : null" valueKey="level" rangeKey="levelRange" midi-id="transport.volume" v-model="volume" label="Volume" :value-text="`${Math.round(volume * 100)}%`" :min="0" :max="1" :step="0.01" size="medium"
+							<!-- The LFO's Level target shows on it (a dot and an arc; LfoModKnob reads the view) -->
+							<LfoModKnob :lfoView="lfoView" valueKey="level" rangeKey="levelRange" midi-id="transport.volume" v-model="volume" label="Volume" :value-text="`${Math.round(volume * 100)}%`" :min="0" :max="1" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(volume * 100)}%`">
 								{{ Math.round(volume * 100) }}%
@@ -253,18 +251,8 @@
 							</span>
 							<span class="visually-hidden">{{ isPlaying ? 'Stop' : 'Play' }}</span>
 						</button>
-
-						<!-- MIDI fallback lives in the right cluster -->
-						<MidiToolbar v-if="midi.supported && !hasMidiTarget && !CHROME" :midi="midi" />
 					</div>
 				</div>
-
-				<!-- MIDI toolbar Teleport stays outside; only used when a slot exists -->
-				<template v-if="midi.supported && hasMidiTarget">
-					<Teleport to="#midi-toolbar-slot">
-						<MidiToolbar :midi="midi" />
-					</Teleport>
-				</template>
 			</section>
 
 			<!-- Step Sequencer -->
@@ -276,15 +264,9 @@
 							:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
 						<h2 class="pt-title">Step Sequencer</h2>
 
-						<!-- The LFO's Level target shows on it (a dot and an arc; LfoModKnob reads the view) -->
-						<LfoModKnob v-if="!CHROME" :lfoView="lfoView" valueKey="level" rangeKey="levelRange"
-							midi-id="synth.volume" v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
-							label="Vol" aria-label="Synth volume"
-							:value-text="`${Math.round(synthInstrument.channelVolume * 100)}%`" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
-							@knobEnd="activeKnob = null" />
-						<span v-if="activeKnob === `vol-${synthInstrument.name}`" class="custom-tooltip">
-							{{ Math.round(synthInstrument.channelVolume * 100) }}%
-						</span>
+						<!-- No Vol knob while there's one lane (PR 92): the Volume knob is enough. The lane's
+							 volume (channelVolume) is still saved and played; it comes back as each
+							 machine's level in the machines' rail. -->
 
 						<!-- The Repeats brush: pick ×2–×4, then click or drag across pads to give them that
 						     many quick hits (a pad that has them already goes back to one). It stays
@@ -693,8 +675,7 @@ import VelSwitch from './VelSwitch.vue';
 import PillSwitch from './PillSwitch.vue';
 import LfoModKnob from './LfoModKnob.vue';
 import SettingsMenu from './SettingsMenu.vue';
-import ThemeSwatches from './ThemeSwatches.vue';
-import { CHROME } from '../lib/mockChrome';
+import { usePwa } from '../composables/usePwa';
 import { LFO_DEPTH_MAX, LFO_DEFAULT_DEPTH, type LfoTarget } from '../audio/lfo';
 import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
@@ -702,7 +683,6 @@ import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_L
 import MelodyMaker from './MelodyMaker.vue';
 import RandomWaveTile from './RandomWaveTile.vue';
 import MelodyModeSwitch from './MelodyModeSwitch.vue';
-import MidiToolbar from './MidiToolbar.vue';
 import { useMidiInput } from '../composables/useMidiInput';
 import { useMidiLearn } from '../composables/useMidiLearn';
 
@@ -2791,12 +2771,12 @@ const lfoView: LfoView = reactive({
 		? lfoFmAmountAt(fmIndex.value, lfoDepth.value, lfoPos.value) : null)),
 	fmAmountRange: computed(() => (lfoAt('fm') && fmInUse.value ? lfoFmAmountRange(fmIndex.value, lfoDepth.value) : null)),
 	level: computed(() => (lfoAt('amp') && lfoPos.value != null
-		? lfoLevelAt(levelKnob(), lfoDepth.value, lfoPos.value) : null)),
-	levelRange: computed(() => (lfoAt('amp') ? lfoLevelRange(levelKnob(), lfoDepth.value) : null)),
+		? lfoLevelAt(volume.value, lfoDepth.value, lfoPos.value) : null)),
+	levelRange: computed(() => (lfoAt('amp') ? lfoLevelRange(volume.value, lfoDepth.value) : null)),
 });
 
-// MOCKUP (plan item 1): the Level mark is on the Volume knob once Vol is hidden
-function levelKnob() { return CHROME ? volume.value : (synthInstrument.value?.channelVolume ?? 1); }
+// The installed app opens the main site in the browser (the logo's link)
+const pwa = usePwa();
 
 // LFO visualizer END
 
@@ -2849,16 +2829,6 @@ const midi = useMidiInput({
 			});
 		};
 	},
-});
-
-// The toolbar goes into App.vue's #midi-toolbar-slot when there is one, else into the
-// transport row
-const hasMidiTarget = ref(false);
-
-onMounted(() => {
-	if (typeof window !== 'undefined') {
-		hasMidiTarget.value = !!document.querySelector('#midi-toolbar-slot');
-	}
 });
 
 // Web MIDI (live keyboard input) END
@@ -3538,6 +3508,7 @@ const phoneCtx = reactive({
 	border-radius: 4px;
 }
 
+/* The logo's link back to the main site */
 .topbar-home {
 	display: block;
 	border-radius: 6px;
@@ -3548,13 +3519,9 @@ const phoneCtx = reactive({
 	filter: brightness(1.25);
 }
 
-.topbar-swatches {
-	margin-right: 4px;
-}
-
-/* Phones: the project name needs the room (phone mode, planned, will place the logo) */
+/* Narrow windows: the project name needs the room (the gear's panel has the link instead) */
 @media (max-width: 575.98px) {
-	.topbar-logo {
+	.topbar-home {
 		display: none;
 	}
 }

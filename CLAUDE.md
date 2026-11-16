@@ -134,9 +134,10 @@ Notes:
   (`build-plugins/googleAnalytics.js`, a Vite plugin with `apply: 'build'`), so `npm run dev`
   sends no analytics events. The deployed site, `npm run preview` and the browser tests (which
   stub it out) have it.
-- The "Return to Ephemeral Wave" link points to `/`, the main site, which is not part of this
-  repo. In the installed app it opens in the browser (`target="_blank"`), not in the app's
-  window.
+- The logo at the top bar's left end is the link back to `/`, the main site, which is not part
+  of this repo (PR 92; until then a "Return to Ephemeral Wave" link under the frame). Under
+  576 px, where the logo is hidden, the gear's panel has that link. In the installed app it
+  opens in the browser (`target="_blank"`), not in the app's window.
 
 ## Architecture
 
@@ -147,7 +148,7 @@ build-plugins/serviceWorker.js  Vite plugin: writes dist/sw.js (builds only), th
                          (serviceWorkerSource.js) with the build's files and checksums; see
                          "Install as an app"
 src/main.ts              createApp + Pinia, imports the global SCSS (Bootstrap + theme)
-src/App.vue              Toolbar (ThemeToggle, #midi-toolbar-slot) + <DrumSequencer/> +
+src/App.vue              The frame: <DrumSequencer/> +
                          <PwaNotice/> (the "new version" notice)
 src/components/
   DrumSequencer.vue      ~3900 lines; holds nearly all app state (as refs) and the screen
@@ -175,6 +176,9 @@ src/components/
   ExportDialog.vue       The Export audio dialog (see "Export audio")
   PresetButtons.vue      A box of preset buttons and a dice, used twice in the transport card:
                          Sounds and Patterns (see "Sounds and Patterns")
+  SettingsMenu.vue       The top bar's gear: Theme and MIDI (see "MIDI"), and the link home
+                         under 576 px
+  ThemeToggle.vue        The three theme buttons, lightest to darkest (in the gear)
   MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list and Learn
                          (and the MIDI learn bar, at the bottom of the screen)
   Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
@@ -187,7 +191,7 @@ src/components/
                          those cards' shared styles (see "The shape cards")
   filterView.ts          The screen's filter view (drawing loop and its pure helpers)
   spectrumView.ts        The screen's Spectrum view, F2 (drawing loop and its pure helpers)
-  LfoModKnob.vue         A Knob that draws the LFO visualizer's dot and arc itself (the Vol knob)
+  LfoModKnob.vue         A Knob that draws the LFO visualizer's dot and arc itself (the Volume knob)
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
 src/audio/
   liveEngine.ts          The live sound engine (`useLiveEngine`), see "Audio engine (live)"
@@ -375,7 +379,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   usual. Saved per step as the synth lane's `ratchets` (1–4; projects saved before get 1s,
   other values are clamped by `clampRatchet()`); Reset Pads, the ⋯ menu's Clear Repeats and
   File → New put them back to 1.
-  The **Repeats brush** (PR 50; `×2 ×3 ×4` beside Vol in the Step Sequencer header,
+  The **Repeats brush** (PR 50; `×2 ×3 ×4` beside the title in the Step Sequencer header,
   `repeatBrush` in `DrumSequencer.vue`, not saved): while one is lit, a click or a drag across
   pads (`SynthStepGrid.vue`'s `paintRepeats()`, like painting steps) gives them that many hits
   and turns them on; a pad that has the brush's count already goes back to one (the first pad
@@ -632,7 +636,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   sound setting: presets and File → New reset it (`resetSoundToFactoryDefaults`), and the
   Sounds dice turns it on in a quarter of its rolls (age 0.15–0.7, wobble 0.1–0.6, vinyl in
   30 % of them; drawn last, so every roll from before the pedal is the same sound). AGE and
-  WOBBLE are MIDI-learnable (`tape.age`, `tape.wobble`; 33 learnable knobs).
+  WOBBLE are MIDI-learnable (`tape.age`, `tape.wobble`; 33 learnable knobs then, 32 since PR 92).
 - **AGE** (`tapeSettings()`): soft saturation (k from 0 to 3; a makeup gain keeps a level of
   0.4 where it was, so quieter sounds come up and louder ones are squeezed), a duller top (a
   12 dB/octave low-pass from 20 kHz down to 3.2 kHz, flat below its cutoff) and the tape's own
@@ -718,10 +722,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     `lfoView`); only while FM is on (with it off, the LFO moves nothing). Since PR 77 the
     Cutoff and Amount knobs are mini knobs, so the Filter and FM screens show it too (see
     "The shape cards").
-  - Level (PR 62): a dot and an arc on the Step Sequencer's Vol knob, from full down to
-    (100 − Depth) % of it. Not on the pads (the maintainer agreed): a lit pad's fill height is
-    its velocity, so a level shown there would look like the velocities moving. The Vol knob
-    is in DrumSequencer's own template, so it's an `LfoModKnob` (a `Knob` that reads the view
+  - Level (PR 62): a dot and an arc on the transport's Volume knob (the Step Sequencer's Vol
+    until PR 92 hid it), from full down to (100 − Depth) % of it. Not on the pads (the
+    maintainer agreed): a lit pad's fill height is its velocity, so a level shown there would
+    look like the velocities moving. The Volume knob is in DrumSequencer's own template, so it's an `LfoModKnob` (a `Knob` that reads the view
     itself; DrumSequencer must never read `lfoView`'s fields, see below). No meter on the LFO
     tile (the maintainer's call).
 - The ranges (arc, ghost, track) show whenever the LFO is on with depth above 0 on that
@@ -732,7 +736,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   while the LFO is off or at depth 0. `src/lib/lfoVisual.ts` turns the position into what each
   indicator shows, with the engines' own limits (unit-tested against them).
 - `DrumSequencer.vue` passes one reactive object, `lfoView` (type `LfoView`), down to
-  `FilterModule`, `FMModule`, the Pulse tile's `WaveButton`, the Vol knob's `LfoModKnob` and
+  `FilterModule`, `FMModule`, the Pulse tile's `WaveButton`, the Volume knob's `LfoModKnob` and
   `SynthStepGrid`. Only components that read
   its fields redraw every frame; `DrumSequencer` itself must never read them in its template,
   or its whole template would re-render 60 times a second.
@@ -779,9 +783,14 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `DrumSequencer.vue` calls `useMidiInput({ audioCtx, noteToPlay, onControlChange })`, and
   `noteToPlay(note, velocity)` returns what to play, or `null` to ignore the note (a muted
   synth lane), before audio is woken. Control changes go to MIDI learn (below).
-- Opt-in through an "Enable MIDI" button. `MidiToolbar.vue` (button, then the input list) is
-  teleported into `#midi-toolbar-slot` in `App.vue`, or shown in the transport row if there
-  is no slot. At 768 px wide or less, `App.vue` hides its toolbar, MIDI controls included.
+- Opt-in through an "Enable MIDI" button. `MidiToolbar.vue` (button, then the input list and
+  Learn) is in the top bar's **gear** (`SettingsMenu.vue`, PR 92, option A of three mockups:
+  B was the gear beside File, C theme swatches and a MIDI cap in the bar; the gear's panel has
+  Theme over MIDI). Until PR 92 they were a row above the frame (`App.vue`), hidden at 768 px
+  and less; now MIDI is offered at every width but in phone mode (the gear isn't there). An
+  LED on the gear shows a controller is chosen. A click outside or Esc closes the panel, and
+  Learn closes it so the knobs under it can be armed. The panel stays mounted while closed
+  (`v-show`), since `MidiToolbar` ends learn mode when it's unmounted.
 - Only note-on and control change (CC) messages are handled. Each note-on plays
   `playSynthNote()` with the global waveform and current synth settings, scaled by velocity
   and the synth channel volume. Note-off, pitch bend and MIDI clock are ignored, and so are
@@ -792,7 +801,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### MIDI learn
 - A controller's knobs turn the app's knobs. Learn (in the MIDI toolbar, once an input is
-  chosen) starts learn mode: the 33 learnable knobs (32 until PR 77 made Unison's Voices keys; the tape pedal's two since) get a dashed outline and a badge ("CC 21",
+  chosen) starts learn mode: the 32 learnable knobs (31 after PR 77 made Unison's Voices keys, 33 with the tape pedal's two, 32 since PR 92 hid the Step Sequencer's Vol, whose `synth.volume` links are dropped on load) get a dashed outline and a badge ("CC 21",
   or "CC 7 ch 3" off channel 1) for the controller knob they follow, and a bar at the bottom of
   the screen says what to do (with Clear all and Done; a spacer under the page lets the last
   knobs scroll clear of it). Click a knob (or Enter on it) to arm it, then turn a controller
@@ -1100,7 +1109,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   at the bottom while a phone's address bar slides away (PR 47).
   A page can't turn itself; Android's installed app could (the manifest's `orientation`, not
   set yet: it would turn tablets too).
-- `App.vue` hides its toolbar (themes, MIDI) and the return link in phone mode.
+- The top bar's gear (themes, MIDI) isn't in phone mode: the ☰ menu has the theme buttons, and
+  MIDI isn't offered.
 - Browser tests run on an emulated iPhone (844 × 390, touch) in landscape and portrait: the
   layout, tap and hold, steppers, the knobs, swipes, the menu and its File menu, Full layout
   and back, the upright hint, the tiny pads, Swing, Humanize and the Mod page (and the top
@@ -1532,8 +1542,12 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Layout (PR 41, "C1", picked from mockups): one piece of hardware that fills its frame, the
   `LAYOUT` sections of `DrumSequencer.vue`'s template and styles (a CSS grid, `.ds-grid`).
   The frame fills the window less a 16 px margin, up to 1320 px (`.app-frame` in `App.vue`),
-  instead of Bootstrap's container steps. The logo sits at the top bar's left end
-  (ProjectControls' `brand` slot; hidden under 576 px, where the project name needs the room).
+  instead of Bootstrap's container steps, with 16 px above and below (PR 92: nothing sits
+  outside it any more). The logo sits at the top bar's left end (ProjectControls' `brand`
+  slot; the link home; hidden under 576 px, where the project name needs the room), the gear
+  at its right end, after Save and its dot (the `tools-right` slot). The Step Sequencer has
+  no Vol knob while there's one lane (PR 92): the lane's `channelVolume` is still saved and
+  played (a project's is kept, File → New's is 0.5), and comes back as each machine's level.
   From 1200 px: the transport and the Step Sequencer on the left two thirds, the screen beside
   them as tall as both; under them two recessed sections, **Sound** (two thirds) and
   **Compose** (Pattern Tools, Melody Maker), which end on one line (Sound's last row and Melody
@@ -1640,7 +1654,7 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 
 Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the maintainer
 changes it as ideas come up; the list now is the one agreed in PR 86). The drums come back as
-the Drums machine (item 13), not as the old sample lanes.
+the Drums machine (item 12), not as the old sample lanes.
 
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
@@ -1662,16 +1676,16 @@ Random tile's dice, the dice badges saved).
 around the market, and put 38 ideas with mockups on a page; the maintainer answered each Yes,
 Maybe or No. The list below is the Yes answers in the agreed order; the Maybes and Nos follow
 it. What the review found, and what the answers settled:
-- **The look:** no overhaul. Targeted fixes now (PR 89, then items 1–3), and one layout change later, with
-  the machines (item 12), so the layout changes once.
+- **The look:** no overhaul. Targeted fixes now (PRs 89 and 92, then items 0–1), and one layout change later, with
+  the machines (item 11), so the layout changes once.
 - **The first visit** is silent (no step is on) and the glowing Generate gives every pad A
   (Scale starts at None): PR 87, before anything else.
-- **One 16-step bar repeats forever:** patterns A–D and a chain (item 10).
-- **More sequencers are small machines with hard limits** (items 11–14), not copies of today's
+- **One 16-step bar repeats forever:** patterns A–D and a chain (item 9).
+- **More sequencers are small machines with hard limits** (items 10–13), not copies of today's
   panel: they share the tempo, the key and scale, the pattern slots and the pedalboard; one is
   on the pads at a time. Today's synth becomes the **Rhythm** machine and stays the DFAM-style
   core (see "Design intent").
-- **Money:** nothing is charged for. Launch free and see who comes back (item 9) before any
+- **Money:** nothing is charged for. Launch free and see who comes back (item 8) before any
   paid route; a plugin or a native app (a new sound engine) was turned down.
 
 Redesigns are visual: every control keeps working as it does, and each card keeps its size.
@@ -1685,79 +1699,73 @@ button where the eye ends up (Generate, PR 82).
 
 Finish what's here:
 
-1. **Themes and MIDI inside the frame; one volume knob.** A gear button in the top bar opens
-   Theme and MIDI (the row above the frame goes; MIDI learn's bar stays at the bottom of the
-   screen); the logo becomes the link back to Ephemeral Wave and the link under the frame goes.
-   The Step Sequencer's Vol knob is hidden while there's one lane (it comes back as each
-   machine's level in the rail, item 12); the LFO's Level mark (PR 62), which is drawn on it,
-   moves to the Volume knob. Mockups first.
-2. **One accent, one job.** The pink-to-cyan gradient on Play only; the accent on what you
+1. **One accent, one job.** The pink-to-cyan gradient on Play only; the accent on what you
    press to make something (Generate, Save); mint for LEDs and notches and amber for the LFO,
    as now. The Waveforms card's wash calmed to the other cards' background, so its tiles carry
    it. Captions' contrast up a step in Synthwave (9–10 px violet on purple is the hardest text
    on the page). Maybe labels in a plain sans, numbers and readouts staying monospace. Mockups
    first.
-3. **Fit the window without scrolling** (put off after PR 70; moved up in the review: the panel
+2. **Fit the window without scrolling** (put off after PR 70; moved up in the review: the panel
    is 1,356 px tall at 1600 px wide, so the pads scroll away on most laptops), centred
    vertically when it fits: tighten spacing (the screen's margins, the gaps between sections;
    the desktop's pedals got short footswitches in PR 90), then scale the frame down to fit short windows (with a floor).
    Measure at the maintainer's screen and common laptop sizes. Checked again when the machines'
-   rail arrives (item 12).
-4. **Record a take.** A REC cap beside Play records what's heard, knob moves included, to a
+   rail arrives (item 11).
+3. **Record a take.** A REC cap beside Play records what's heard, knob moves included, to a
    WAV (the output captured without loss, in a worklet), and stops with Stop. Export renders
    the pattern as set; it can't capture a filter sweep that's performed.
 
 Show it (its signature, the tape pedal, was PR 90):
 
-5. **The screen at rest shows the hit.** While stopped, the screen draws one hit of the current
+4. **The screen at rest shows the hit.** While stopped, the screen draws one hit of the current
    sound as a waveform (the export engine renders one in a few milliseconds), with its length
    and peak, redrawn as a knob turns; so the biggest thing on the page is never blank.
-6. **A Simple view on desktop.** Phone mode's layout (big pads, the Sound and Pattern
+5. **A Simple view on desktop.** Phone mode's layout (big pads, the Sound and Pattern
    steppers, four knobs) on a computer, as Simple | Full in the top bar, remembered; the full
    panel stays as it is.
-7. **Sample a sound.** Record about a second from the microphone; it becomes a wave tile,
+6. **Sample a sound.** Record about a second from the microphone; it becomes a wave tile,
    played at each pad's pitch through the same envelope, filter and pedals. Both engines; kept
    with the project in IndexedDB, left out of share links (too big). The hidden sample lanes
    already play recordings.
-8. **Lessons.** A Learn item in the menu: about ten short lessons that light one control at a
+7. **Lessons.** A Learn item in the menu: about ten short lessons that light one control at a
    time ("drag this point left: the hit gets darker"), built on the hint Generate has.
-9. **Launch free and measure; a tip jar.** Mostly the maintainer's: a short video, posts where
+8. **Launch free and measure; a tip jar.** Mostly the maintainer's: a short video, posts where
    synth people gather and to the sites that cover free browser instruments. Claude's part: a
    Support link in the gear menu, an analytics event for a visitor who comes back within a
    week, and a first free pack of one-shots made with the app. Nothing is charged for.
 
 Grow into a small groovebox:
 
-10. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
+9. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
     holds the steps, notes, velocities and repeats; the sound is shared. A slot clicked while
     playing takes over at the next bar (the bar queue, with its ghost). Copy A to B. Under the
     slots, a chain of up to eight cells plays them in order, and Export audio can render the
     chain. No timeline. Saved so that a pattern is a list of tracks from the start, even with
     one track, and the machines need no second change to saved projects.
-11. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
+10. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
     that builds a note, used by the live engine and the export engine (today two engines kept
     in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
     on the output (dropped after PR 30 for one voice; four machines summed need it).
-12. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
+11. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
     name, mute, level and a tiny row of its steps); the pads show the chosen machine; the Sound
     section becomes the chosen machine's panel; a send to the pedals per machine; a stem per
     machine in the export. Bass: one note at a time, 30–250 Hz, saw or square with a sub, one
     filter with its envelope, Accent per step, about six knobs (Cutoff, Reso, Env, Decay, Sub,
     Drive), following the key. Decide Slide and Tie (a Maybe below) when it starts. Mockups
     first; the phone gets a way to choose the machine.
-13. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
+12. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
     Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
     drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
     light work for a phone. It replaces the hidden sample lanes: their playback code is reused,
     the rest and the three mp3 files go (see "Dead code").
-14. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
+13. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
     touch plates, one slow filter, joystick and short sequencer are worth borrowing; its
     per-voice knobs and microtonal tuning are not). Six plates, one per note of the key's
     chord; a touched plate latches a small swarm of detuned oscillators, fading in over a bar
     or more; an X/Y pad (the filter one way, the swarm's spread the other); Attack and Release
     in bars; no steps: its sequencer counts bars, a chord per bar for 4 or 8 bars, across the
     pattern chain; straight to the reverb.
-15. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+14. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
     the maintainer wants some maintenance, each as its own PR.
 
 Maybe (the maintainer's answer in the review, or earlier; ask before starting one):
@@ -1846,7 +1854,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   interval (a fifth, an octave, detuned) and level, maybe hard sync or VCO 1 → 2 FM; a card,
   both engines, presets, the dice, saving. It must sound unlike the FM card's modulator, which
   is already a second oscillator.
-- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 11–14.)
+- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 10–13.)
 - **Patch cables** (put off after PR 49: the maintainer wants to tweak the layout more first):
   animated cables from the LFO to what it moves (Cutoff, the Pulse tile, the pads), swaying a
   little, never over a control, still with `prefers-reduced-motion`. They depend on where
@@ -1881,7 +1889,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
   ticks, 24 a quarter note, which jitter); MIDI out would send the pattern's notes to another
   synth, timed against the audio clock.
-- (Several patterns chained into a song: planned now, item 10.)
+- (Several patterns chained into a song: planned now, item 9.)
 - **32 steps, or per-lane lengths** (the export code's types already allow 32; "Last step", a
   Maybe above, is the smaller version).
 - **Per-step parameter locks** (for example a different filter cutoff on each step). Each
@@ -1897,8 +1905,8 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   808 makes cymbals and cowbell) and struck (a click ringing tuned resonant filters).
 - The old drum-lane items (lanes through the pedals with pitch, decay and pan; custom samples
   stored in the browser; drum kits; the export rendering only the synth lane; the sample paths
-  that depend on the trailing slash) are overtaken by the Drums machine (item 13), a send and a
-  stem per machine (item 12) and Sample a sound (item 7). Still on hold from them: samples
+  that depend on the trailing slash) are overtaken by the Drums machine (item 12), a send and a
+  stem per machine (item 11) and Sample a sound (item 6). Still on hold from them: samples
   loaded by drag-and-drop, and drum slots played by MIDI notes.
 - **Shared session ("jam"):** several people on one URL, for example one phone playing the
   drum lanes and another the synth. It needs a realtime relay between devices; the site is
@@ -2002,6 +2010,7 @@ Done:
 | 85 | The maintainer's list after PR 84: the **Sand** theme removed (a browser that had it opens in Synthwave); the screen opens on the **Spectrum** (F2) instead of the Scope; the Random tile's dice tumbles properly (a hop and quarter turns, a new face each turn, landing on another face, one size); and the wave tiles' dice badges (which waves Random picks from) are saved with the project, so File → New and a sound preset light them all again and an opened project brings its own (they carried over before). |
 | 90 | A tape pedal, last in the chain (`src/audio/tape.ts`, both engines; the noise layer goes through it too): AGE (soft saturation, a duller top, the tape's own noise), WOBBLE (wow and flutter from a short delay whose time drifts) and TAPE \| VINYL (hiss, or crackle and pops, and how the pitch sways). The saturation is a gain that follows the whole mix, so the export's stems still add up; the tape's noise is a stem of its own, a loop's wobble fits the bars, and a one-shot ends where the hit fades under the hiss. Saved (older projects: off), reset by presets, rolled by the Sounds dice, AGE and WOBBLE MIDI-learnable. On the desktop it's a deck under the three pedals, whose footswitches became short bars (option C of three mockups); the phone has four pedals. |
 | 91 | Fix: PR 90's deploy failed on its tape stems test, which passed on the PR. On a busy machine Chrome stopped processing the export's delay, reverb or tape path at moments that varied from render to render, cutting echoes from one stem or the mix and not the others. A silent source now keeps them running to the end of every export render (`keepAlive` in `scheduleStepSequencer.ts`); with a CPU core kept busy the test failed 5 times in 10 before and never in 10 after. |
+| 92 | Theme and MIDI inside the frame (option A of three mockups): a gear at the top bar's right end opens Theme (Synthwave, Analog, Dark: lightest to darkest) and MIDI (`SettingsMenu.vue`), with an LED once a controller is chosen; the row above the frame and the link under it are gone, and the logo is the link back to Ephemeral Wave (in the gear's panel under 576 px, where the logo is hidden). One volume knob: the Step Sequencer's Vol is hidden (its value still plays), no longer MIDI-learnable, and the LFO's Level mark is on the Volume knob. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

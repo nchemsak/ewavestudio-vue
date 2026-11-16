@@ -756,6 +756,12 @@ test('exports a WAV file with sound in it, and a project file that imports again
 
 // --- Second batch of fixes -----------------------------------------------------------------
 
+// The top bar's gear (PR 92): Theme and MIDI
+async function openSettings(page: Page) {
+	const gear = page.getByRole('button', { name: 'Settings', exact: true });
+	if ((await gear.getAttribute('aria-expanded')) !== 'true') await gear.click();
+}
+
 async function chooseFromFileMenu(page: Page, item: string) {
 	if (!(await page.getByRole('menuitem', { name: item }).isVisible())) {
 		await page.getByRole('button', { name: 'File ▾' }).click();
@@ -927,6 +933,7 @@ test('MIDI notes wake the audio engine, even before Play has been pressed', asyn
 	// Visitors' browsers keep audio suspended until the page is clicked. The test browser
 	// allows audio up front, so suspend it to start from what visitors get.
 	await page.evaluate(() => (window as any).__ctx.suspend());
+	await openSettings(page);
 	await page.getByRole('button', { name: 'Enable MIDI' }).click();
 	await expect.poll(audioState).toBe('running');
 	await page.locator('#midi-input-select').selectOption('test-keyboard');
@@ -2186,9 +2193,9 @@ test('the LFO visualizer shows what the LFO moves, without turning the knob', as
 	await expect(page.getByRole('slider', { name: 'Pulse Width', exact: true })).toHaveAttribute('aria-valuenow', '50');
 	await stop.click();
 
-	// Level: on the Step Sequencer's Vol knob, an arc from full down to the quietest, and a dot
-	// that moves with the LFO while it plays; Vol stays where it was set
-	const vol = page.getByRole('slider', { name: 'Synth volume' });
+	// Level: on the Volume knob (the Step Sequencer's Vol until PR 92), an arc from full down to
+	// the quietest, and a dot that moves with the LFO while it plays; Volume stays where it was set
+	const vol = page.getByRole('slider', { name: 'Volume', exact: true });
 	const volNow = await vol.getAttribute('aria-valuenow');
 	await target('Level').click();
 	await setDepth();
@@ -3288,13 +3295,16 @@ test('PR 79: the pedals and the screen\'s keys follow the theme, the pedals\' na
 });
 
 test('PR 89: three themes; a browser that had Sand, Slate or Light saved opens in Synthwave', async ({ page }) => {
+	await openSettings(page);
 	const themes = page.getByRole('group', { name: 'Theme' }).getByRole('button');
-	await expect(themes).toHaveText(['Dark', 'Synthwave', 'Analog']);
+	// Lightest to darkest since PR 92
+	await expect(themes).toHaveText(['Synthwave', 'Analog', 'Dark']);
 	for (const gone of ['sand', 'slate', 'light']) {
 		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), gone);
 		await page.reload();
 		await expect(page.locator('html')).toHaveClass(/theme-synthwave/);
 		await expect(page.locator('html')).not.toHaveClass(new RegExp(`theme-${gone}`));
+		await openSettings(page);
 		await expect(page.getByRole('button', { name: 'Synthwave', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	}
 	// None of their rules is left in the built CSS
@@ -3302,6 +3312,76 @@ test('PR 89: three themes; a browser that had Sand, Slate or Light saved opens i
 		try { return [...sh.cssRules].map((r) => r.cssText); } catch { return []; }
 	}).join('\n'));
 	expect(css).not.toMatch(/theme-(sand|slate|light)\b/);
+});
+
+test('PR 92: Theme and MIDI in the top bar\'s gear; the logo links home; one volume knob', async ({ page }) => {
+	// No row above the frame, no link under it: the logo is the link back to the main site
+	await expect(page.locator('.app-toolbar')).toHaveCount(0);
+	await expect(page.locator('a.return')).toHaveCount(0);
+	const home = page.getByRole('link', { name: 'Ephemeral Wave: return to the main site' });
+	await expect(home).toBeVisible();
+	await expect(home).toHaveAttribute('href', '/');
+	const frame = (await page.locator('.ds-topbar').boundingBox())!;
+	expect(frame.y).toBeLessThan(40);
+
+	// The gear, at the bar's right end, opens Theme and MIDI; a click outside or Esc closes it
+	const gear = page.getByRole('button', { name: 'Settings', exact: true });
+	const save = (await page.locator('.pc-primary').boundingBox())!;
+	expect((await gear.boundingBox())!.x).toBeGreaterThan(save.x);
+	const panel = page.getByRole('dialog', { name: 'Settings' });
+	await expect(panel).toBeHidden();
+	await gear.click();
+	await expect(panel).toBeVisible();
+	await expect(gear).toHaveAttribute('aria-expanded', 'true');
+	await expect(panel.getByRole('button', { name: 'Enable MIDI' })).toBeVisible();
+	// The link home is only for narrow windows, where the logo is hidden
+	await expect(panel.getByRole('link', { name: 'Return to Ephemeral Wave' })).toBeHidden();
+	await panel.getByRole('button', { name: 'Analog', exact: true }).click();
+	await expect(page.locator('html')).toHaveClass(/theme-analog/);
+	await expect(panel).toBeVisible(); // picking a theme leaves it open, to try another
+	await page.mouse.click(5, 600);
+	await expect(panel).toBeHidden();
+	await gear.click();
+	await page.keyboard.press('Escape');
+	await expect(panel).toBeHidden();
+
+	// One volume knob: no Vol on the Step Sequencer, and it isn't offered to MIDI learn
+	await expect(page.getByRole('slider', { name: 'Synth volume' })).toHaveCount(0);
+	await expect(page.getByRole('slider', { name: 'Volume', exact: true })).toBeVisible();
+
+	// Every control in the panel can be clicked (nothing drawn over it)
+	await gear.click();
+	for (const b of await panel.getByRole('button').all()) await b.click({ trial: true });
+
+	// Narrow: the logo is hidden and the panel has the link home, inside the window
+	await page.setViewportSize({ width: 390, height: 800 });
+	await expect(home).toBeHidden();
+	const link = panel.getByRole('link', { name: 'Return to Ephemeral Wave' });
+	await expect(link).toBeVisible();
+	const box = (await panel.boundingBox())!;
+	expect(box.x).toBeGreaterThanOrEqual(0);
+	expect(box.x + box.width).toBeLessThanOrEqual(390);
+	expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('PR 92: a MIDI controller chosen lights the gear; Learn closes the panel', async ({ page }) => {
+	await page.addInitScript(() => {
+		const input = { id: 'ctl', name: 'Test controller', state: 'connected', onmidimessage: null };
+		const access = { inputs: new Map([['ctl', input]]), outputs: new Map(), onstatechange: null };
+		(navigator as any).requestMIDIAccess = async () => access;
+	});
+	await page.reload();
+	const gear = page.getByRole('button', { name: 'Settings', exact: true });
+	await expect(gear.locator('.sm-dot')).toHaveCount(0);
+	await openSettings(page);
+	await page.getByRole('button', { name: 'Enable MIDI' }).click();
+	await page.locator('#midi-input-select').selectOption('ctl');
+	await expect(gear.locator('.sm-dot')).toHaveCount(1);
+	await page.getByRole('button', { name: 'Learn', exact: true }).click();
+	await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
+	await expect(page.getByRole('region', { name: 'MIDI learn' })).toBeVisible();
+	await page.getByRole('button', { name: 'Done' }).click();
+	await expect(page.getByRole('region', { name: 'MIDI learn' })).toBeHidden();
 });
 
 test('Analog: its button applies its own colours, and is remembered', async ({ page }) => {
@@ -4168,6 +4248,7 @@ async function connectController(page: Page) {
 	});
 	await page.reload();
 	await expect(pads(page)).toHaveCount(16);
+	await openSettings(page);
 	await page.getByRole('button', { name: 'Enable MIDI' }).click();
 	const learn = page.getByRole('button', { name: 'Learn', exact: true });
 	await expect(learn).toBeDisabled(); // no controller chosen yet
@@ -4241,6 +4322,7 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 		.toEqual({ '1:21': 'filter.cutoff', '3:22': 'pitchEnv.decay' });
 	await page.reload();
 	await expect(pads(page)).toHaveCount(16);
+	await openSettings(page);
 	await page.getByRole('button', { name: 'Enable MIDI' }).click();
 	await page.locator('#midi-input-select').selectOption('test-controller');
 	await turn(21, 127);

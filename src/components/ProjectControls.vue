@@ -104,8 +104,6 @@
                 </div>
             </div>
 
-            <slot name="tools-left" />
-
             <!-- data-keeps-brush: Undo and Redo don't put the Repeats brush down (DrumSequencer) -->
             <div class="pc-history" data-keeps-brush>
                 <button class="pc-btn pc-icon-btn hw-cap" :disabled="!props.canUndo" @click="emit('undo')"
@@ -136,7 +134,6 @@
         </div>
 
         <div class="pc-right">
-            <slot name="tools-before-save" />
             <div class="pc-actions">
                 <button class="pc-btn pc-primary hw-cap" :disabled="!store.loaded || !dirty || status === 'saving'"
                     @click="saveNow" :title="hotkeyTitle">
@@ -148,6 +145,7 @@
                     <span class="pc-dot" :class="dotClass"></span>
                 </span>
             </div>
+            <!-- The gear (SettingsMenu.vue: Theme and MIDI), from DrumSequencer -->
             <slot name="tools-right" />
         </div>
     </div>
@@ -954,6 +952,23 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
     .pc-meta {
         display: none;
+    }
+}
+
+/* Phone-width windows: tighter, so the name box keeps room beside the gear (PR 92) */
+@media (max-width: 575.98px) {
+    .pc-toolbar {
+        gap: .4rem;
+        padding: .45rem .5rem;
+    }
+
+    .pc-left,
+    .pc-right {
+        gap: .3rem;
+    }
+
+    .pc-btn {
+        padding: .3rem .45rem;
     }
 }
 </style>
