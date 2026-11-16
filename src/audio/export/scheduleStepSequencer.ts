@@ -21,6 +21,7 @@ import { createCrusher } from "../crusher";
 import { createPingPong } from "../pingPong";
 import { clampUnisonVoices, unisonPhase, unisonPosition } from "../unison";
 import { createTape, tapeSettings, type TapeMode } from "../tape";
+import { sampleBuffer, SAMPLE_WAVE, type SampleData } from "../sample";
 
 export type StepSequencerState = {
 	bpm: number;
@@ -76,6 +77,7 @@ export type StepSequencerState = {
 		};
 
 		pulse?: { width: number }; // the pulse wave's width, % (missing: 50)
+		sample?: SampleData | null; // the recorded sound, the 'sample' wave (sample.ts; missing: none)
 
 		velocity?: VelocityRouting; // velocity routing amounts (missing: off)
 	};
@@ -559,6 +561,7 @@ export function scheduleStepSequencer(
 			fmState,
 			pitchEnv,
 			pulseWidth: state.synth.pulse?.width ?? PULSE_WIDTH_DEFAULT,
+			sample: sampleBuffer(state.synth.sample ?? null),
 			velocityRouting: state.synth.velocity,
 			driveEnabled,
 			driveDry,
@@ -608,6 +611,7 @@ function scheduleSynthNote(opts: {
 	fmState: FMState;
 	pitchEnv: PitchEnvState;
 	pulseWidth: number;
+	sample: AudioBuffer | null;
 	velocityRouting?: VelocityRouting;
 	driveEnabled: boolean;
 	driveDry: GainNode;
@@ -622,7 +626,7 @@ function scheduleSynthNote(opts: {
 	const {
 		ctx, time, maxDuration, freq, baseVelocity, channelVolume, wave,
 		envState, filterState, noiseState, padNoiseOn,
-		unisonState, fmState, pitchEnv, pulseWidth, velocityRouting, driveEnabled,
+		unisonState, fmState, pitchEnv, pulseWidth, sample, velocityRouting, driveEnabled,
 		driveDry, driveShaper, driveSum,
 		lfoState, lfoGainNode,
 		noiseOut, noiseBuffers, random,
@@ -711,7 +715,7 @@ function scheduleSynthNote(opts: {
 	for (let i = 0; i < voices; i++) {
 		// The voice's sound source, as in the live engine (the pulse network for 'pulse')
 		// (each unison voice starting at its own point of its cycle, unison.ts)
-		const source = createVoiceSource(ctx, wave, pulseWidth, unisonPhase(i, voices, spreadPct));
+		const source = createVoiceSource(ctx, wave, pulseWidth, unisonPhase(i, voices, spreadPct), wave === SAMPLE_WAVE ? sample : null);
 		const osc = source.osc;
 
 		const voiceFilter = ctx.createBiquadFilter();

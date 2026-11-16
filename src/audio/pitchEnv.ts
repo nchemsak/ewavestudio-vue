@@ -50,7 +50,7 @@ export function pitchEnvTimeConstant(decay: number): number {
  * @param baseDetuneCents - the voice's own detune (unison), where the sweep settles
  */
 export function applyPitchEnv(
-    osc: OscillatorNode,
+    osc: { frequency: AudioParam; detune: AudioParam },
     baseFreq: number,
     startTime: number,
     startCents: number,

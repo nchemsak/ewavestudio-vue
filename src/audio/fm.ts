@@ -11,7 +11,7 @@ export interface FMOptions {
  */
 export function startFM(
     ctx: BaseAudioContext,
-    carrier: OscillatorNode,
+    carrier: { frequency: AudioParam },
     baseFreq: number,
     startTime: number,
     { enabled, modFreqHz, index, ratio }: FMOptions

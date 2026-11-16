@@ -114,7 +114,7 @@ const presetLeaves = (p: (typeof PRESETS)[number]) => {
 const soundLeaves = (snap: any) => {
 	const all = leaves({ synth: snap.synth, fx: snap.fx });
 	return Object.fromEntries(Object.entries(all).filter(([path]) =>
-		!/^synth\.tuning\.|^synth\.noise\.(mask|type)$|^fx\.delay\.time$/.test(path)));
+		!/^synth\.tuning\.|^synth\.sample\b|^synth\.noise\.(mask|type)$|^fx\.delay\.time$/.test(path)));
 };
 
 describe('the preset library', () => {
@@ -176,6 +176,9 @@ describe('applying a preset', () => {
 		expect(after.ui).toEqual(before.ui);
 		expect(after.synth.tuning).toEqual(before.synth.tuning);
 		expect(after.synth.noise.mask).toEqual(before.synth.noise.mask);
+		// The recording isn't part of a preset: it stays for the 'sample' wave
+		expect(after.synth.sample).toEqual(before.synth.sample);
+		expect(after.synth.sample).not.toBeNull();
 		const withoutWaves = (snap: any) => snap.instruments.map(({ waveforms, ...rest }: any) => rest);
 		expect(withoutWaves(after)).toEqual(withoutWaves(before));
 	});
@@ -219,6 +222,7 @@ describe('resetting the sound', () => {
 			...factory.synth,
 			noise: { ...factory.synth.noise, mask: before.synth.noise.mask },
 			tuning: before.synth.tuning,
+			sample: before.synth.sample,
 		});
 		// The delay time is the division at this project's tempo (123 BPM)
 		expect(after.fx).toEqual({ ...factory.fx, delay: { ...factory.fx.delay, time: 60 / 123 * 0.75 } });

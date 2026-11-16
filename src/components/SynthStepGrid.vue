@@ -100,7 +100,7 @@ import { padHue } from '../lib/padColour';
 type NoteNameFn = (hz: number) => string;
 import WaveIcon from './WaveIcon.vue';
 import LfoBendMark from './LfoBendMark.vue';
-import type { Wave } from '../audio/waves';
+import type { PadWave } from '../audio/waves';
 import type { LfoView } from '../lib/lfoVisual';
 
 const props = withDefaults(
@@ -120,8 +120,8 @@ const props = withDefaults(
         showVelocity?: boolean;
         showPitch?: boolean;
 
-        waveforms?: Wave[];
-        defaultWave?: Wave;
+        waveforms?: PadWave[];
+        defaultWave?: PadWave;
 
         // Hits per step: 1, or 2–4 quick hits (a ratchet; src/audio/ratchet.ts)
         ratchets?: number[];
@@ -375,8 +375,8 @@ function noiseOn(i: number) {
 const svgDur = '0.6s';
 const svgBase = 0.8;
 
-function waveFor(i: number): Wave {
-    return (props.waveforms?.[i] ?? props.defaultWave ?? 'sine') as Wave;
+function waveFor(i: number): PadWave {
+    return (props.waveforms?.[i] ?? props.defaultWave ?? 'sine') as PadWave;
 }
 
 const nearestNote = props.nearestNote;

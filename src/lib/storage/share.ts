@@ -4,7 +4,7 @@
 //
 // The code is the export file's shape ({ version, meta: { name }, data }, as File → Export
 // file writes it, without the project id and `ui`: the theme and open panels are the
-// recipient's own), as JSON, compressed with deflate (CompressionStream) and written in
+// recipient's own; and without the recorded sound, synth.sample), as JSON, compressed with deflate (CompressionStream) and written in
 // base64url. Its first letter says how: 'z' deflated, 'j' plain JSON (a browser without
 // CompressionStream). Opening one goes through validateAndMigrate(), as an import does.
 
@@ -18,9 +18,12 @@ export type SharePayload = {
     data: Record<string, unknown>;
 };
 
-// What a link carries: the project's settings without `ui`, and its name
+// What a link carries: the project's settings without `ui` and without the recording (about
+// 128 kB, too big for a link: pads on the 'sample' wave play a sine there), and its name
 export function buildSharePayload(name: string, data: any): SharePayload {
     const { ui: _ui, ...rest } = (data ?? {}) as Record<string, unknown>;
+    const synth = rest.synth as Record<string, unknown> | undefined;
+    if (synth && 'sample' in synth) rest.synth = { ...synth, sample: null };
     // "Untitled" is no name (File → Open lists only named projects; the recipient's Save asks)
     const trimmed = (name ?? '').trim();
     const clean = trimmed.toLowerCase() === 'untitled' ? '' : trimmed;

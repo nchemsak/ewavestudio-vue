@@ -19,7 +19,8 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, type Ref } from 'vue';
 import { applyPitchEnv, pitchEnvStartCents } from './pitchEnv';
 import { applyFilterEnv } from './filterEnv';
-import { createVoiceSource, lfoPwmTapGain, prepareVoiceWave, waveGain, type Wave } from './waves';
+import { createVoiceSource, lfoPwmTapGain, prepareVoiceWave, waveGain, type Wave, type PadWave } from './waves';
+import { sampleBuffer, SAMPLE_WAVE, type PitchedSource, type SampleData } from './sample';
 import { routeVelocity, routedCutoff, routedSemitones, routedNoise } from './velocity';
 import { startFM } from './fm';
 import { startNoteLfo, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, lfoWaveAt, type LfoTarget } from './lfo';
@@ -63,7 +64,7 @@ export type LiveEngineSettings = {
 	pattern: {
 		lanes: R<LiveLane[]>;
 		stepLength: R<number>;
-		selectedWaveform: R<Wave>;
+		selectedWaveform: R<PadWave>;
 		noiseMask: R<boolean[]>; // per step: may this step add noise?
 		repeatChord: R<number[]>; // the key's chord, pitch classes: what Up/Down repeats step through
 	};
@@ -84,6 +85,7 @@ export type LiveEngineSettings = {
 	fm: { enabled: R<boolean>; modFreq: R<number>; index: R<number>; ratio: R<number | null> };
 	pitchEnv: { enabled: R<boolean>; semitones: R<number>; decayMs: R<number>; mode: R<'up' | 'down' | 'random'> };
 	pulse: { width: R<number> }; // pulse wave's width, % (waves.ts)
+	sample: R<SampleData | null>; // the recorded sound, the 'sample' wave (sample.ts)
 	// Velocity routing amounts, % −100..100 (velocity.ts)
 	velocity: { decay: R<number>; cutoff: R<number>; pitchEnv: R<number>; noise: R<number> };
 	delay: {
@@ -780,12 +782,13 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			};
 			return { tap, make };
 		})() : null;
-		let firstOsc: OscillatorNode | null = null;
+		let firstOsc: PitchedSource | null = null;
 
 		for (let i = 0; i < voices; i++) {
 			// The voice's sound source: the oscillator, plus the pulse network for 'pulse'
 			// (each unison voice starting at its own point of its cycle, unison.ts)
-			const source = createVoiceSource(audioCtx, waveType, s.pulse.width.value, unisonPhase(i, voices, spreadPct));
+			const source = createVoiceSource(audioCtx, waveType, s.pulse.width.value, unisonPhase(i, voices, spreadPct),
+				waveType === SAMPLE_WAVE ? sampleBuffer(s.sample.value) : null);
 			const osc = source.osc;
 			const voiceFilter = audioCtx.createBiquadFilter();
 			const voiceGain = audioCtx.createGain();
@@ -1053,7 +1056,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 					const t = startTime + swingOffset;
 
 					if (inst.type === 'synth') {
-						const wf = (inst.waveforms?.[stepIndex] ?? selectedWaveform.value) as Wave;
+						const wf = (inst.waveforms?.[stepIndex] ?? selectedWaveform.value) as PadWave;
 						const padNoiseOn = noiseMask.value?.[stepIndex] ?? true;
 
 						// One note, or a ratchet's 2–4 quick hits within the step (ratchet.ts).

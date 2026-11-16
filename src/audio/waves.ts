@@ -22,6 +22,8 @@
 // Each source exposes `osc`, the OscillatorNode whose frequency and detune the engines set
 // (pitch envelope, FM, unison detune, LFO pitch), and `output`, the node to connect onward.
 
+import { createSampleVoice, SAMPLE_WAVE, type PitchedSource } from './sample';
+
 export const WAVE_IDS = ['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'organ', 'hollow', 'glass'] as const;
 export type Wave = typeof WAVE_IDS[number];
 
@@ -29,6 +31,10 @@ export const WAVE_LABELS: Record<Wave, string> = {
 	sine: 'Sine', triangle: 'Triangle', sawtooth: 'Saw', square: 'Square',
 	pulse: 'Pulse', organ: 'Organ', hollow: 'Hollow', glass: 'Glass',
 };
+
+// What a pad can play: a wave, or the recorded sound (sample.ts)
+export type PadWave = Wave | typeof SAMPLE_WAVE;
+export const padWaveLabel = (w: string) => (w === SAMPLE_WAVE ? 'Sample' : WAVE_LABELS[w as Wave] ?? w);
 
 export const isWave = (w: unknown): w is Wave => typeof w === 'string' && (WAVE_IDS as readonly string[]).includes(w);
 
@@ -207,7 +213,7 @@ export function prepareVoiceWave(ctx: BaseAudioContext, w: string, phase: number
 // Phase-shifted waves END
 
 export type VoiceSource = {
-	osc: OscillatorNode;      // set its frequency and detune; connect FM/LFO pitch to it
+	osc: PitchedSource;       // set its frequency and detune; connect FM/LFO pitch to it
 	output: AudioNode;        // connect this onward (to the voice's filter)
 	width: AudioParam | null; // pulse only: the threshold offset, for the LFO's PW tap
 	start(t: number): void;
@@ -216,7 +222,11 @@ export type VoiceSource = {
 
 // The source for one voice of a note, for wave `w` (an unknown name plays a sine), starting
 // `phase` cycles into its wave (unison voices; 0 for one voice)
-export function createVoiceSource(ctx: BaseAudioContext, w: string, widthPct = PULSE_WIDTH_DEFAULT, phase = 0): VoiceSource {
+export function createVoiceSource(ctx: BaseAudioContext, w: string, widthPct = PULSE_WIDTH_DEFAULT, phase = 0,
+	sample: AudioBuffer | null = null): VoiceSource {
+	// The recorded sound (sample.ts): a buffer played at the note's pitch; without a
+	// recording, a sine. Unison voices start together (a recording has no cycle to shift).
+	if (w === SAMPLE_WAVE && sample) return { ...createSampleVoice(ctx, sample), width: null };
 	const osc = ctx.createOscillator();
 	const known = isWave(w) ? w : 'sine';
 	if (w === 'pulse') {
