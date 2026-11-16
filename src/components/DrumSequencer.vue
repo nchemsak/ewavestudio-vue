@@ -2344,11 +2344,11 @@ const tapeWobble = ref(TAPE_DEFAULTS.wobble); // 0..1: wow and flutter
 const tapeMode = ref<TapeMode>(TAPE_DEFAULTS.mode); // 'tape' | 'vinyl'
 
 // MOCKUP SWITCH (to be removed once a layout is picked): how the fourth pedal fits the Effects
-// card. ?tape=a: four slimmer pedals in the card as it is; b (the default): the card a little
-// wider, Noise and the LFO a little narrower; c: the tape as a low deck under three shorter pedals.
+// card. ?tape=a: four slimmer pedals in the card as it is; b: the card a little wider, Noise
+// and the LFO a little narrower; c (the default): the tape as a low deck under three shorter pedals.
 const tapeMock = (() => {
 	const m = new URLSearchParams(window.location.search).get('tape');
-	return m === 'a' || m === 'c' ? m : 'b';
+	return m === 'a' || m === 'b' ? m : 'c';
 })();
 
 // Tape END
@@ -4764,8 +4764,8 @@ const phoneCtx = reactive({
 
 /* MOCKUPS START (?tape=a, b or c; to be removed once one is picked) */
 
-/* A and B: four pedals across. In A they are 87 px wide: a pedal's TONE knob moves left, clear
-   of its CRUSH or PING PONG switch, and the names are a size smaller */
+/* A and B: four pedals across. In A they are 87 px wide: a pedal's TONE knob moves a little
+   left and its CRUSH or PING PONG switch to the edge, and the names are a size smaller */
 
 .tape-a .fx-pair {
 	gap: 10px;
@@ -4774,7 +4774,11 @@ const phoneCtx = reactive({
 .tape-a .fx-pair :deep(.delay-pedal .knob-cell.tone),
 .tape-a .fx-pair :deep(.drive-pedal .knob-cell.tone) {
 	justify-self: start;
-	margin-left: 22%;
+	margin-left: 20%;
+}
+
+.tape-a .fx-pair :deep(.pedal-switch) {
+	right: -1px;
 }
 
 /* ... and TONE's caption goes under its knob: above it, it ran into the other two */
@@ -4833,6 +4837,14 @@ const phoneCtx = reactive({
 
 .tape-c .fx-pair :deep(.knob-group) {
 	padding: 0;
+}
+
+/* The short foot keeps the pedal's lighter shade behind its name, so the name reads as well
+   as it did on the tall one */
+.tape-c .fx-pair :deep(.delay-pedal .panel-bottom),
+.tape-c .fx-pair :deep(.drive-pedal .panel-bottom),
+.tape-c .fx-pair :deep(.reverb-pedal .panel-bottom) {
+	background: linear-gradient(var(--pedal-foot-hi, var(--pedal-hi)) 50%, var(--pedal-foot-lo, var(--pedal-lo)));
 }
 
 /* MOCKUPS END */

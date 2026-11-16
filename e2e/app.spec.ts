@@ -267,8 +267,9 @@ test("disconnects each note's LFO tap when the note ends", async ({ page }) => {
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
 	await page.waitForTimeout(1500);
 	expect(await notesPlayed(page)).toBeGreaterThanOrEqual(6);
-	// Before the fix, every note played stayed connected
-	expect(await page.evaluate(() => (window as any).__paramSources.size)).toBeLessThanOrEqual(2);
+	// Before the fix, every note played stayed connected. What stays is the engine's own: among
+	// them the tape pedal's four (its saturation's gain, and three sines on its delay's time)
+	expect(await page.evaluate(() => (window as any).__paramSources.size)).toBeLessThanOrEqual(6);
 });
 
 test('the built page has the Google Analytics tag (stubbed out here)', async ({ page }) => {
@@ -1760,12 +1761,14 @@ test('laid out like hardware: Sound in rows beside Compose, ending on one line; 
 		// 190 px wide on a tablet and 168 on a phone. Three across from 720 px, one column below
 		const pedals = await page.locator('.ds-grid .module.fx .fx-pair > *').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
 		const fx = await rect('.ds-grid .module.fx .fx-pair');
+		// Three pedals on one row, and the tape deck under them, as wide as the three
 		expect(pedals, at).toHaveLength(4);
+		const deck = pedals.pop()!;
 		for (const p of pedals) expect(p.width, `${at}: a pedal's width`).toBeLessThanOrEqual(121);
-		// Four across; on a phone, two rows of two
-		if (width >= 720) expect(new Set(pedals.map((p) => Math.round(p.y))).size, `${at}: pedals on one row`).toBe(1);
-		else expect(new Set(pedals.map((p) => Math.round(p.x))).size, `${at}: pedals in two columns`).toBe(2);
-		const last = width >= 720 ? pedals[3] : pedals[1];
+		expect(new Set(pedals.map((p) => Math.round(p.y))).size, `${at}: pedals on one row`).toBe(1);
+		expect(deck.y, `${at}: the deck under the pedals`).toBeGreaterThan(pedals[0].y + pedals[0].height);
+		expect(Math.abs(deck.x - pedals[0].x) + Math.abs(deck.x + deck.width - (pedals[2].x + pedals[2].width)), `${at}: the deck as wide as the pedals`).toBeLessThanOrEqual(2);
+		const last = pedals[2];
 		const sideL = pedals[0].x - fx.left, sideR = fx.right - (last.x + last.width);
 		expect(Math.abs(sideL - sideR), `${at}: pedals centred`).toBeLessThanOrEqual(2);
 		// The arrow keys move between the tabs

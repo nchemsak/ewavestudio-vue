@@ -546,14 +546,20 @@ watch(() => props.mode, (v) => { localMode.value = clampTapeMode(v); });
     border-radius: 0;
     background: none;
     box-shadow: none;
-    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-columns: auto auto minmax(0, 1fr);
     grid-template-rows: auto;
-    grid-template-areas: 'age wobble mode led';
+    grid-template-areas: 'age wobble mode';
     column-gap: 12px;
     justify-items: start;
 }
 
+/* The deck's light sits in its top right corner, clear of the switch on a narrow deck */
 .is-deck .check-led {
+    position: absolute;
+    top: 7px;
+    right: 9px;
+    width: 9px;
+    height: 9px;
     margin: 0;
 }
 

@@ -23,7 +23,7 @@ https://www.ephemeralwave.com/studio/ and is never changed.
 - Velocity routing: a VEL switch on the Envelope, Pitch, Filter and Noise cards lets a step's
   velocity also shape its decay, brightness, pitch sweep and noise, so soft steps sound like
   softer hits
-- Delay (synced to the tempo, with a ping-pong switch), overdrive (with a bit-crusher switch) and reverb
+- Delay (synced to the tempo, with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a tape pedal (wear, wow and flutter, tape hiss or vinyl crackle)
 - Six built-in sounds (Kick, Snare, Metal, Pluck, Acid, Bell) that set the sound without
   touching your pattern, and six built-in patterns (Pulse, Offbeat, Gallop, Rolls, Bassline,
   Broken) that set the pattern in your key without touching the sound; each with a dice that
@@ -35,7 +35,7 @@ https://www.ephemeralwave.com/studio/ and is never changed.
   MIDI: Chrome, Edge and other Chromium browsers)
 - Projects saved in the browser, with undo/redo, JSON import and export, and share links (the project packed into the link)
 - Export audio for a DAW: seamless loops of 1–8 bars (or with the tail), effects stems (dry,
-  delay, reverb, noise) that add up to the mix, a MIDI file of the pattern, and a one-shot of
+  delay, reverb, noise, tape noise) that add up to the mix, a MIDI file of the pattern, and a one-shot of
   the sound at any note, as one .zip
 - Keyboard shortcuts: Space plays and stops, 1–4 switch the screen view, Ctrl/Cmd+S saves,
   Ctrl/Cmd+Shift+S saves as a new project (File → Save as…), Ctrl/Cmd+Z undoes

@@ -8,7 +8,7 @@ Audio API; there is no backend. Features: one 16-step synth lane with per-step p
 velocity, waveform (sine, triangle, saw, square, a pulse with adjustable width, and three
 harmonic shapes) and ratchet (2–4 quick hits within the step); amp envelope, pitch envelope (a drum-style sweep), filter with its own
 envelope, noise, FM,
-unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch) and reverb; Web MIDI note
+unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a tape pedal (wear, wobble, tape or vinyl); Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
 arpeggio in a key and scale; a new key or scale moves the pattern with it); a screen with an oscilloscope, spectrum,
 spectrogram and tuner, and envelope and filter views while their knobs are turned; six built-in sounds that set the sound (not the pattern) and six built-in patterns
@@ -155,7 +155,7 @@ src/components/
                          the live engine, and decides what a MIDI note plays; its template's
                          LAYOUT section lays out the panel (see "Layout" under Conventions)
   modules/*.vue          Synth and effect panels: Envelope, Filter, PitchEnv, Noise, FM,
-                         Unison, LFOGroup, Delay, Drive, Reverb (UI only; mostly v-model);
+                         Unison, LFOGroup, Delay, Drive, Reverb, Tape (UI only; mostly v-model);
                          PedalSwitch.vue, a pedal's mini toggle (CRUSH, PING PONG)
   SynthStepGrid.vue      16 synth step pads with velocity and pitch sliders
   PhoneLayout.vue        Phone mode's layout (see "Phone mode"): pads, Play, steppers, macros;
@@ -205,6 +205,8 @@ src/audio/
   crusher.ts             The bit crusher (an AudioWorklet built from a Blob URL), see
                          "Effect switches"
   pingPong.ts            The ping-pong delay network, see "Effect switches"
+  tape.ts                The tape pedal: what its knobs mean, its nodes, its hiss and crackle
+                         (see "The tape pedal")
   unison.ts              Unison: 2–4 voices, where each sits and starts in its cycle (see
                          "Audio engine (live)")
   reverb/generateIr.ts   Algorithmic impulse response for the ConvolverNode
@@ -290,10 +292,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Graph: per-note synth voices → drive (dry + shaper → tone → [bit crusher] → `driveSum`).
   From `driveSum` two paths run in parallel: delay (dry + wet, with a feedback loop and tone
   filters; the plain delay or the ping-pong one, each with its own send) and a reverb send
-  (tone filter → convolver → wet gain). Both go to `masterGain` → destination. An
-  `AnalyserNode` is tapped from `masterGain` for the scope, spectrogram and tuner. The noise
-  layer (and the hidden sample lanes) go straight to `masterGain`, so they bypass drive, delay
-  and reverb.
+  (tone filter → convolver → wet gain). Both go to `preMaster`, and so do the noise layer (and
+  the hidden sample lanes), which bypass drive, delay and reverb. From `preMaster` everything
+  goes through the tape pedal, or round it while it's off (see "The tape pedal"), to
+  `masterGain` → destination. An `AnalyserNode` is tapped from `masterGain` for the scope,
+  spectrogram and tuner.
 - Scheduler: `schedule()` runs every 25 ms, driven by a ticker in a small Web Worker
   (`src/audio/ticker.ts`), so playback keeps going in background tabs; it falls back to
   `setInterval` if a worker can't be created. Each run schedules the steps that start within
@@ -621,6 +624,64 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   ringing in the other carry on. Browser tests check the echoes' sides live (per-channel
   probes, `__channelPeaksOver`) and in the export, and that the crusher quantizes live.
 
+### The tape pedal
+- The fourth pedal, last in the chain (`src/audio/tape.ts`, both engines; `TapeEffect.vue`):
+  the synth with its drive, the echoes, the reverb and the noise layer all go through it.
+  Saved as `fx.tape` { enabled, age, wobble, mode } (off, 0.4, 0.3, `'tape'`; a project saved
+  before it gets it off at those values; knobs kept within 0–1, an unknown mode is tape). A
+  sound setting: presets and File → New reset it (`resetSoundToFactoryDefaults`), and the
+  Sounds dice turns it on in a quarter of its rolls (age 0.15–0.7, wobble 0.1–0.6, vinyl in
+  30 % of them; drawn last, so every roll from before the pedal is the same sound). AGE and
+  WOBBLE are MIDI-learnable (`tape.age`, `tape.wobble`; 33 learnable knobs).
+- **AGE** (`tapeSettings()`): soft saturation (k from 0 to 3; a makeup gain keeps a level of
+  0.4 where it was, so quieter sounds come up and louder ones are squeezed), a duller top (a
+  12 dB/octave low-pass from 20 kHz down to 3.2 kHz, flat below its cutoff) and the tape's own
+  noise (its gain 0.03 × age^1.5). At 0 the pedal changes next to nothing.
+- **The saturation is a gain, not a curve the sound passes through**: a WaveShaper reads the
+  level of the whole mix (`sidechain`) and adds to a GainNode's `gain` what makes it
+  `makeup · tanh(k·x) / (k·x)` (`tapeGainCurve()`, an odd number of points, 0 at silence, so
+  no offset). The mix comes out as `tanh(k·mix) / k`, a plain soft saturation, and any part of
+  the mix gets the very same gain, which is what lets the export's stems still add up to the
+  mix (a curve on each stem wouldn't). Both channels get one gain (the two channels' average).
+- **WOBBLE**: a `DelayNode` whose time three sines move (`WOBBLE_PARTS`: for tape a 0.8 Hz wow
+  that bends the pitch 1 % at full, a 0.31 Hz drift, 0.4 %, and a 7.5 Hz flutter, 0.2 %; for
+  vinyl 33⅓ turns a minute, 0.9 %, and twice that, 0.3 %, no flutter), by `wobble^1.5` so the
+  knob's first half stays subtle. The delay rests in the middle of its swing (4 ms at most, so
+  a MIDI note is that much later while it wobbles) and is 0 with WOBBLE at 0.
+- **TAPE | VINYL** (`mode`): what the noise is (hiss: white noise through 2–11 kHz; or a
+  record's crackle, about nine ticks a second and the odd pop, `fillCrackle()`, over hiss at
+  35 %) and how the pitch sways. The noise loops in 4 s and 11 s buffers.
+- **Live** (`liveEngine.ts`, the `Tape` section): the switch crossfades between round the
+  pedal and through it. The noise plays only while something does: while the sequencer plays,
+  and for a note played by hand (MIDI, a preview) until 1 s after it ends; then it fades and is
+  gone 2 s later (`holdTapeNoise()`), so the app is silent at rest. Its buffers are made when
+  the pedal is first switched on.
+- **Export** (`scheduleStepSequencer.ts`): the parts' gates meet in `partBus`, which goes
+  through the tape; `fullBus` gets every part whatever is rendered, for the saturation. The
+  tape's noise is a part of its own, `'tape'` (a fifth stem, `..._tape.wav`, left out while
+  the pedal is off or AGE is 0); it takes its random numbers last, so the notes' are the same
+  with the pedal on or off. Each sway's rate is moved to the nearest one with whole cycles in
+  the bars (`tapeSettings()`'s `loopSeconds`), so a loop repeats without a jump in pitch. The
+  noise plays for the bars and stops there (a loop then has no doubled stretch of it where the
+  tail is folded on); with the tail it fades for 1.5 s (`tapeNoise.fade`). A **one-shot**
+  can't be trimmed where it fades, since hiss never does: it ends where the hit has faded
+  under the hiss (the mix less the `'tape'` part, rendered with the same seed), with a 40 ms
+  fade (`subtract()`, `fadeOut()` in `src/lib/export/audio.ts`).
+- **The panel**: AGE and WOBBLE knobs and a little slide switch between the words TAPE and
+  VINYL (a radio group; either word picks it, the lever flips it), greyed out while the pedal
+  is off. Two reels, or records, turn while the pattern plays (not with
+  `prefers-reduced-motion`). A green pedal, shaded per theme (`.tape-pedal` in `_themes.scss`).
+- **The overdrive and stems** (found while testing this, on `main` too): with the overdrive
+  on, the stems don't reliably add up to the mix. Its curve turns silence into a small steady
+  offset (see "Dropped after PR 30"), and Chrome renders that offset differently from one
+  offline render to the next (a steady difference of up to 0.01 in some exports, a tiny click
+  where a note ends in most). The tape's stems test leaves the overdrive off for that reason.
+  The fix would be the odd-count curve dropped after PR 30.
+- Unit tests (`tape.test.ts`): the knobs' meanings, whole cycles in a loop, the gain curve,
+  parts adding up through the mix's gain, the noise. Browser tests measure exports (duller,
+  squeezed, hiss between hits, the pitch swaying about 1 %, the stems adding up for tape and
+  vinyl, the one-shot's end) and the live path (hiss while playing, gone after Stop).
+
 ### LFO visualizer
 - While the LFO moves something, its movement is drawn on the control it moves, in amber
   (`--lfo-mod`; the themes' knob arcs are blue to purple or
@@ -712,7 +773,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### MIDI learn
 - A controller's knobs turn the app's knobs. Learn (in the MIDI toolbar, once an input is
-  chosen) starts learn mode: the 31 learnable knobs (32 until PR 77 made Unison's Voices keys) get a dashed outline and a badge ("CC 21",
+  chosen) starts learn mode: the 33 learnable knobs (32 until PR 77 made Unison's Voices keys; the tape pedal's two since) get a dashed outline and a badge ("CC 21",
   or "CC 7 ch 3" off channel 1) for the controller knob they follow, and a bar at the bottom of
   the screen says what to do (with Clear all and Done; a spacer under the page lets the last
   knobs scroll clear of it). Click a knob (or Enter on it) to arm it, then turn a controller
@@ -1180,7 +1241,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   often as needed), so it repeats in a DAW as it loops in the app; only its very first play
   from silence has a faint tail of a bar that never played. **With tail**: a clean start, and
   the sound rings out after the bars until it fades below −80 dBFS (`trimTail()`, 5 s at most).
-- **Files**: the **mix**; **effects stems** (dry, delay, reverb, noise; the engine renders one
+- **Files**: the **mix**; **effects stems** (dry, delay, reverb, noise, and the tape pedal's own noise; the engine renders one
   `part` at a time, each through its own gate to the master, so they add up to the mix: a
   browser test sums them sample for sample. A stem that's silent, its effect off, is left out;
   dry is always there. With the tail, every file ends where the last of them fades, so they
@@ -1325,7 +1386,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   must match the ref's starting value; a browser test compares File → New with a fresh page),
   and to `changeEverything()` in `testState.ts` (the round-trip test names any setting it
   doesn't cover). If it affects sound, also to
-  `liveEngine.ts`, `exportState` and `scheduleStepSequencer.ts`. Treat a missing field in an
+  `liveEngine.ts`, `exportState` and `scheduleStepSequencer.ts` (anything that makes noise or
+  takes time must still let the stems add up: see "The tape pedal"). Treat a missing field in an
   older snapshot as "use the default", so existing saved projects still load.
 
 ## Conventions
@@ -1632,6 +1694,13 @@ Give it a signature, then show it:
    whose time drifts) and a TAPE | VINYL switch (crackle and pops for the hiss). Both engines;
    its noise from the export's seeded random numbers, so stems still add up; saved, reset by
    presets, rolled by the Sounds dice sometimes. Four pedals across: mockups first.
+   **In progress** (branch `claude/bold-lamport-x96rzg`, no PR yet): the pedal is built in both
+   engines, saved and tested (see "The tape pedal"); how it fits the Effects card waits for
+   the maintainer's pick of three mockups, behind `?tape=a` (four slim pedals), `?tape=b` (a
+   wider Effects card, Noise and the LFO in their narrow shapes) and `?tape=c` (the default:
+   three pedals with short footswitches over a tape deck). The `MOCKUP` blocks in
+   `DrumSequencer.vue` and `LFOGroup.vue` and the deck layout in `TapeEffect.vue` go once one
+   is picked.
 6. **The screen at rest shows the hit.** While stopped, the screen draws one hit of the current
    sound as a waveform (the export engine renders one in a few milliseconds), with its length
    and peak, redrawn as a knob turns; so the biggest thing on the page is never blank.
