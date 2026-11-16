@@ -1143,7 +1143,7 @@ defineExpose({ getUi, setUi, generate });
 .mm-primary-btn {
     --cap-travel: 3px;
     --cap-hi: hsl(var(--pt-accent) 80% 60%);
-    --cap-lo: hsl(var(--pt-accent-2, var(--pt-accent)) 80% 60%);
+    --cap-lo: hsl(var(--pt-accent) 74% 50%); /* one hue (PR 93): the gradient is Play's */
     --cap-edge: color-mix(in oklab, var(--cap-lo), black 60%);
     --cap-ink: var(--pt-text);
     width: 100%;
@@ -1331,17 +1331,18 @@ defineExpose({ getUi, setUi, generate });
         0 6px 14px rgb(0 0 0 / 0.22);
 }
 
+/* The key the pattern is in: a ring in the LEDs' colour (PR 93; the wash until then, which
+   took the accent from Generate) */
 .kb-white.is-active {
     box-shadow:
-        inset 0 0 0 2px hsl(var(--pt-accent) 90% 60% / 0.85),
-        inset 0 1px 0 rgb(255 255 255 / 0.05),
+        inset 0 0 0 3px var(--hw-led),
+        inset 0 0 14px color-mix(in oklab, var(--hw-led), transparent 55%),
         0 2px 0 rgb(0 0 0 / 0.5),
         0 8px 18px rgb(0 0 0 / 0.28);
-    background: var(--pt-wash);
 }
 
 .kb-white.is-active .wlabel {
-    color: var(--pt-wash-ink);
+    color: #10131a;
     font-size: 1rem;
 }
 
@@ -1386,15 +1387,14 @@ defineExpose({ getUi, setUi, generate });
 
 .kb-black.is-active {
     box-shadow:
-        0 0 0 2px hsl(var(--pt-accent) 90% 60% / 0.9),
-        inset 0 1px 0 rgb(255 255 255 / 0.05),
+        inset 0 0 0 3px var(--hw-led),
+        inset 0 0 14px color-mix(in oklab, var(--hw-led), transparent 55%),
         0 2px 0 rgb(0 0 0 / 0.8),
         0 8px 16px rgb(0 0 0 / 0.4);
-    background: var(--pt-wash);
 }
 
 .kb-black.is-active .blabel {
-    color: var(--pt-wash-ink);
+    color: var(--hw-led);
     font-size: 1rem;
 }
 
@@ -1415,8 +1415,8 @@ defineExpose({ getUi, setUi, generate });
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: var(--pt-wash);
-    box-shadow: inset 0 0 0 2px hsl(var(--pt-accent) 90% 60% / 0.9);
+    background: color-mix(in oklab, var(--hw-led), transparent 70%);
+    box-shadow: inset 0 0 0 2px var(--hw-led);
     pointer-events: none;
     animation: mm-ghost 0.9s ease-in-out infinite;
 }
@@ -1496,15 +1496,15 @@ defineExpose({ getUi, setUi, generate });
     pointer-events: none;
 }
 
-/* On a white key the LED's pale green hardly showed: a bigger dot in the accent, ringed dark
-   (PR 80) */
+/* On a white key the LED's pale green hardly showed: a bigger dot, ringed dark (PR 80), in a
+   deeper shade of the LEDs' colour (PR 93; the accent until then) */
 .kb-white.in-scale::before {
     bottom: 23px;
     width: 9px;
     height: 9px;
     margin-left: -4.5px;
-    background: hsl(var(--pt-accent) 85% 48%);
-    box-shadow: 0 0 0 1.5px #14161f, 0 1px 2px 1.5px rgb(0 0 0 / 0.35);
+    background: color-mix(in oklab, var(--hw-led), black 22%);
+    box-shadow: 0 0 0 1.5px #14161f, 0 0 6px color-mix(in oklab, var(--hw-led), transparent 30%);
 }
 
 .kb-black.in-scale::before {
@@ -1766,7 +1766,7 @@ defineExpose({ getUi, setUi, generate });
    what it makes */
 .mm-gen-bar {
     --cap-hi: hsl(var(--pt-accent) 78% 58%);
-    --cap-lo: hsl(var(--pt-accent-2, var(--pt-accent)) 72% 46%);
+    --cap-lo: hsl(var(--pt-accent) 74% 46%); /* one hue (PR 93): the gradient is Play's alone */
     --cap-edge: color-mix(in oklab, var(--cap-lo), black 60%);
     --cap-ink: #fff;
     display: inline-flex;

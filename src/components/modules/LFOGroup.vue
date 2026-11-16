@@ -826,10 +826,11 @@ svg {
     cursor: default;
 }
 
+/* As FM's keys: down, the wave lit in the LEDs' colour (PR 93; the accent until then) */
 .lk-key.on {
-    color: #10131a;
-    background: linear-gradient(180deg, hsl(var(--pt-accent) 90% 80%), hsl(var(--pt-accent) 85% 68%));
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 8px hsl(var(--pt-accent) 85% 65% / 0.5);
+    color: var(--hw-led);
+    background: linear-gradient(180deg, color-mix(in oklab, var(--pt-surface-2), black 30%), color-mix(in oklab, var(--pt-surface-2), black 10%));
+    box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.6), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 0 8px color-mix(in oklab, var(--hw-led), transparent 80%);
 }
 
 /* Under 1200 px the card isn't stretched: the keys keep to the old switch's height */

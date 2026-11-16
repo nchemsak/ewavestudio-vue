@@ -484,11 +484,9 @@
 	padding: 0.5rem 0.25rem 0.75rem;
 }
 
+/* The Waveforms card has the other cards' background (PR 93; the wash until then): its tiles
+   carry the colour */
 .generators {
-	.pt-card {
-		background: var(--pt-wash);
-	}
-
 	.pt-collapse-body {
 		margin-top: 0px;
 	}

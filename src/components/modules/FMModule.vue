@@ -195,8 +195,9 @@ function onPadMove(p: PadPoint) {
 </script>
 
 <style scoped>
-/* Mod Freq only does something with Free */
-.is-disabled {
+/* Mod Freq only does something with Free (only its mini knob: the screen's root has an
+   is-disabled of its own while FM is off, which this dimmed to 0.55 until PR 93) */
+.sp-mini.is-disabled {
     opacity: 0.55;
 }
 </style>

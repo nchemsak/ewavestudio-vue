@@ -3468,12 +3468,13 @@ const phoneCtx = reactive({
 	margin-top: 0;
 }
 
+/* An LED: the LEDs' colour while the lane plays (PR 93; the accent until then) */
 .mute-dot {
 	width: 12px;
 	height: 12px;
 	border-radius: 50%;
-	background: var(--pt-btn-border);
-	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+	background: var(--hw-led);
+	box-shadow: 0 0 6px var(--hw-led), inset 0 0 0 1px rgba(255, 255, 255, .08);
 	cursor: pointer;
 	transition: transform .15s ease, filter .15s ease;
 }

@@ -494,8 +494,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     its whole cycle, "4 bars · 4 bars shown"). Its readout names the rate, and the target and
     depth ("Pitch 25 cents"), or in amber why the LFO moves nothing ("No Pulse", "FM off":
     `.lfo-status`). Under it Rate, Depth, the wave and RETRIG (`PillSwitch`, now inside
-    the card) on one line (the wave: two **keys** with the wave drawn on them, lit in the
-    accent like FM's ratio keys, `.lk-key`, PR 83, option 1 of two mockups; the other lit them
+    the card) on one line (the wave: two **keys** with the wave drawn on them, the chosen one
+    down with its wave in the LEDs' colour like FM's ratio keys (in the accent until PR 93), `.lk-key`, PR 83, option 1 of two mockups; the other lit them
     in amber with the names; 52 × 36 px, 46 × 26 under 1200 px so the card stays 154 px; a
     small switch with LEDs before), and a **patch bay** (`.lv-bay`): an "LFO out" socket and the five
     targets' sockets (still `role="radio"` buttons, named as before), with one cable from LFO
@@ -530,9 +530,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     each note; drag the point sideways for Cutoff and up for Resonance. Env Amt and Decay are
     mini knobs only. The VEL switch is under the mini knobs (FilterModule's `tools` slot).
   - **FM**: a **ribbon** down the left edge is its name and switch (`role="switch"`, as
-    Noise's and the LFO's, in the accent while on); the screen draws the carrier bent by the
+    Noise's and the LFO's; its LED lights while on, and until PR 93 the whole ribbon was the accent); the screen draws the carrier bent by the
     modulator (a plain sine while off), drag up and down for Amount; the ratio is four **keys**
-    under the screen (Lock, Metal, Bell, Free; `.sp-key`, lit in the accent); Freq (Mod Freq,
+    under the screen (Lock, Metal, Bell, Free; `.sp-key`, the chosen one down with its label in the LEDs' colour, as every switch; in the accent until PR 93); Freq (Mod Freq,
     for Free) and Amount are mini knobs on the right.
   - **Unison**: a ribbon; the screen draws a wave per voice drifting apart (Detune) and dots
     for where they sit left to right (Spread), drag sideways for Detune and up for Spread;
@@ -548,7 +548,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Time runs on a square-root scale (`timeX()`), so a 20 ms attack shows beside a 2 s decay.
   `src/lib/shapeViews.ts` has the curves and the drag's inverse maps (unit-tested).
 - Colours: the screens are each theme's screen colours (as the LFO card's), the curves in the
-  accent, not amber: amber stays the LFO's. When
+  screen's own ink (`--sp-line` is `--sp-ink`; the accent until PR 93), not amber: amber stays the LFO's. When
   the LFO moves the cutoff, the Filter screen shows its swing as an amber band and where it is
   now as an amber line; on FM's Amount, the wave as the LFO has it now in amber (from
   `lfoView`; the mini knobs keep their dot and arc).
@@ -881,8 +881,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     late, as it plays. Repeats are 2–4 segments, at the pitches the engine plays (stepping up
     or down for Up / Down: `ratchetPitches()`). The voice itself isn't cut between steps (only
     a repeat's hits are); the screen cuts so notes don't overlap.
-  - The **scale's dots** on the white keys are 9 px in the accent with a dark ring (PR 80:
-    the LED's pale green, 6 px, hardly showed on white); the black keys keep the LED dot.
+  - The **scale's dots** on the white keys are 9 px with a dark ring (PR 80: the LED's pale
+    green, 6 px, hardly showed on white), in a deeper shade of the LEDs' colour (the accent from
+    PR 80 to 92); the black keys keep the LED dot. **The key the pattern is in** has a ring in
+    the LEDs' colour, its own white or black kept (PR 93; it was filled with the pink wash),
+    and a key waiting for the bar a ghost of that ring.
   - The chosen maker's panel (Melody | Arpeggio is in the header), both in one grid cell so
     the card never changes height: Melody's Active Pads Only and its note; the arpeggio's
     Pattern and Tones steppers over Rate (1/8 | 1/16), Octaves (1 | 2 | 3) and Skip. Then
@@ -1441,6 +1444,25 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     screen, a wood-brown page and a copper wash.
   - **Dark** (its own page since PR 79): a near-black page and a cool grey-violet wash; until
     then it shared Synthwave's pink-to-violet ones, so it wasn't really dark.
+  - **One accent, one job** (PR 93, option A of two mockups; B removed only the gradients):
+    the theme's accent is for what you press to make something: Generate, Save and the Random
+    wave tile; the pink-to-cyan gradient is on Play only. What's lit or chosen is in the LEDs'
+    colour (`--hw-led`, mint; also the knobs' notches): FM's, Unison's and the LFO's keys, the
+    chosen wave tile's ring, the dice badges, the scale's dots and the chosen piano key, the
+    Step Sequencer's dot, and the FM and Unison ribbons, which are dark with their LED lit, as
+    Noise's has one. Amber stays the LFO's. The shape cards' screens draw in their own ink.
+    Card edges are a neutral hairline (`.pt-card`, the accent faintly until then). The
+    Waveforms card has the other cards' background (its wash went). Not changed: the knobs'
+    arcs, focus rings, the notices' and menus' gradient borders, the Noise ribbon's colour,
+    and phone mode's own tabs and buttons. Captions on a part that's switched off (the
+    pedals', Noise's, FM's) are dimmed but readable: `--pedal-ink-off` 0.8 (0.5 measured 1.2
+    to 1.9 : 1), 0.86 on Analog's delay, the darkest pedal, whose orange is a little lighter
+    too (#d6894f / #b8693a; 0.74 there measured 2.7 : 1 on the Checks' machine, whose fonts
+    draw thinner than a local run's), and the text colour less 42 % off the pedals (#666
+    measured 2.9 : 1); the lowest is now about 3.7 : 1 (Dark's delay); FM's
+    screen is no longer dimmed twice (FMModule's rule for Freq reached it). The plan's
+    "9–10 px violet captions" were already near-white after the card redesigns. Labels stay
+    monospace (a plain sans was mocked up and turned down).
   - **The effect pedals** (PR 79, option A of three mockups: B was the pedals in the theme's
     hues, C dark enclosures with a coloured band): each keeps its own colour (an orange delay,
     a yellow overdrive, a stone reverb; the tape deck, PR 90, green), shaded per theme in `_themes.scss` (Synthwave coral
@@ -1458,9 +1480,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     `Screen.vue`); use them rather than a fixed color that only suits the dark themes. For
     example `--pt-inset` is the background of an inset panel inside a card (Pattern Tools'
     sections, the Sounds and Patterns boxes; mixed lighter, the Sound and Compose sections):
-    dark. Others: `--pt-wash` (the pink-to-violet
-    gradient of the Waveforms card and the Melody Maker's chosen key; `--pt-wash-ink` is the
-    text on it), `--pt-page` (the page behind the frame, the wash unless a theme sets it),
+    dark. Others: `--pt-wash` (a pink-to-violet
+    gradient, now only the page behind the frame in Synthwave: the Waveforms card and the
+    Melody Maker's chosen key lost it in PR 93; `--pt-wash-ink` is the text on it),
+    `--pt-page` (the page behind the frame, the wash unless a theme sets it),
     `--pt-noise-on` (the NOISE switch when on), `--pt-surface-3` (the NOISE switch when off;
     unset, so the fallback), `--pt-menu-caption` (captions in the ⋯
     menus). A new theme needs a button, its name in `THEMES`, a `$themes` entry, and the
@@ -1477,6 +1500,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     the tempo's − and +, the preset boxes' dice, Generate, Play). `hw-cap-sm` is a small cap
     (1 px of travel instead of 2). Generate, Save and Play are caps in the accent's colours
     (they set `--cap-hi`, `--cap-lo`, `--cap-edge`, `--cap-ink`); Play stays down while playing.
+    Only Play has the pink-to-cyan gradient; Generate and Save are one hue (see "One accent").
   - A **switch** is a row of caps; the chosen one stays down with its LED lit. `hw-led-top`
     puts the LED over the label (Melody | Arpeggio, FM's ratios, the LFO's Wave and Target, the
     pad settings, the Export dialog); `hw-led-mini` is a slim LED bar at the cap's top edge
@@ -1487,7 +1511,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     that are on while it's lit, as before). The
     tiles (the eight waves, and on the phone the LFO's power tile; FM's and Unison's until PR 77) are caps too, with the LED beside
     their caption; they keep their icons, animations, dice and the Pulse Width knob (which
-    goes down with its tile), and the chosen one has a thin ring in the accent.
+    goes down with its tile), and the chosen one has a thin ring in the LEDs' colour (the accent
+    until PR 93). The Random tile stays filled in the accent (the maintainer's call): it makes
+    something, as Generate does.
   - A cap counts as down when it has `is-active`, `on`, `active`, `hw-down`,
     `aria-pressed="true"` or `aria-checked="true"`, whichever its component already used.
   - **A cap never changes the layout:** the edge under it is a `box-shadow` and a press is a
@@ -1654,7 +1680,7 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 
 Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the maintainer
 changes it as ideas come up; the list now is the one agreed in PR 86). The drums come back as
-the Drums machine (item 12), not as the old sample lanes.
+the Drums machine (item 11), not as the old sample lanes.
 
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
@@ -1676,16 +1702,16 @@ Random tile's dice, the dice badges saved).
 around the market, and put 38 ideas with mockups on a page; the maintainer answered each Yes,
 Maybe or No. The list below is the Yes answers in the agreed order; the Maybes and Nos follow
 it. What the review found, and what the answers settled:
-- **The look:** no overhaul. Targeted fixes now (PRs 89 and 92, then items 0–1), and one layout change later, with
-  the machines (item 11), so the layout changes once.
+- **The look:** no overhaul. Targeted fixes now (PRs 89, 92 and 93, then item 1), and one layout change later, with
+  the machines (item 10), so the layout changes once.
 - **The first visit** is silent (no step is on) and the glowing Generate gives every pad A
   (Scale starts at None): PR 87, before anything else.
-- **One 16-step bar repeats forever:** patterns A–D and a chain (item 9).
-- **More sequencers are small machines with hard limits** (items 10–13), not copies of today's
+- **One 16-step bar repeats forever:** patterns A–D and a chain (item 8).
+- **More sequencers are small machines with hard limits** (items 9–12), not copies of today's
   panel: they share the tempo, the key and scale, the pattern slots and the pedalboard; one is
   on the pads at a time. Today's synth becomes the **Rhythm** machine and stays the DFAM-style
   core (see "Design intent").
-- **Money:** nothing is charged for. Launch free and see who comes back (item 8) before any
+- **Money:** nothing is charged for. Launch free and see who comes back (item 7) before any
   paid route; a plugin or a native app (a new sound engine) was turned down.
 
 Redesigns are visual: every control keeps working as it does, and each card keeps its size.
@@ -1699,73 +1725,67 @@ button where the eye ends up (Generate, PR 82).
 
 Finish what's here:
 
-1. **One accent, one job.** The pink-to-cyan gradient on Play only; the accent on what you
-   press to make something (Generate, Save); mint for LEDs and notches and amber for the LFO,
-   as now. The Waveforms card's wash calmed to the other cards' background, so its tiles carry
-   it. Captions' contrast up a step in Synthwave (9–10 px violet on purple is the hardest text
-   on the page). Maybe labels in a plain sans, numbers and readouts staying monospace. Mockups
-   first.
-2. **Fit the window without scrolling** (put off after PR 70; moved up in the review: the panel
+1. **Fit the window without scrolling** (put off after PR 70; moved up in the review: the panel
    is 1,356 px tall at 1600 px wide, so the pads scroll away on most laptops), centred
    vertically when it fits: tighten spacing (the screen's margins, the gaps between sections;
    the desktop's pedals got short footswitches in PR 90), then scale the frame down to fit short windows (with a floor).
    Measure at the maintainer's screen and common laptop sizes. Checked again when the machines'
-   rail arrives (item 11).
-3. **Record a take.** A REC cap beside Play records what's heard, knob moves included, to a
+   rail arrives (item 10).
+2. **Record a take.** A REC cap beside Play records what's heard, knob moves included, to a
    WAV (the output captured without loss, in a worklet), and stops with Stop. Export renders
    the pattern as set; it can't capture a filter sweep that's performed.
 
 Show it (its signature, the tape pedal, was PR 90):
 
-4. **The screen at rest shows the hit.** While stopped, the screen draws one hit of the current
+3. **The screen at rest shows the hit.** While stopped, the screen draws one hit of the current
    sound as a waveform (the export engine renders one in a few milliseconds), with its length
    and peak, redrawn as a knob turns; so the biggest thing on the page is never blank.
-5. **A Simple view on desktop.** Phone mode's layout (big pads, the Sound and Pattern
+4. **A Simple view on desktop.** Phone mode's layout (big pads, the Sound and Pattern
    steppers, four knobs) on a computer, as Simple | Full in the top bar, remembered; the full
    panel stays as it is.
-6. **Sample a sound.** Record about a second from the microphone; it becomes a wave tile,
+5. **Sample a sound.** Record about a second from the microphone; it becomes a wave tile,
    played at each pad's pitch through the same envelope, filter and pedals. Both engines; kept
    with the project in IndexedDB, left out of share links (too big). The hidden sample lanes
    already play recordings.
-7. **Lessons.** A Learn item in the menu: about ten short lessons that light one control at a
+6. **Lessons.** A Learn item in the menu: about ten short lessons that light one control at a
    time ("drag this point left: the hit gets darker"), built on the hint Generate has.
-8. **Launch free and measure; a tip jar.** Mostly the maintainer's: a short video, posts where
+7. **Launch free and measure; a tip jar.** Mostly the maintainer's: a short video, posts where
    synth people gather and to the sites that cover free browser instruments. Claude's part: a
    Support link in the gear menu, an analytics event for a visitor who comes back within a
    week, and a first free pack of one-shots made with the app. Nothing is charged for.
 
 Grow into a small groovebox:
 
-9. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
+8. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
     holds the steps, notes, velocities and repeats; the sound is shared. A slot clicked while
     playing takes over at the next bar (the bar queue, with its ghost). Copy A to B. Under the
     slots, a chain of up to eight cells plays them in order, and Export audio can render the
     chain. No timeline. Saved so that a pattern is a list of tracks from the start, even with
     one track, and the machines need no second change to saved projects.
-10. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
+9. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
     that builds a note, used by the live engine and the export engine (today two engines kept
     in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
     on the output (dropped after PR 30 for one voice; four machines summed need it).
-11. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
+10. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
     name, mute, level and a tiny row of its steps); the pads show the chosen machine; the Sound
     section becomes the chosen machine's panel; a send to the pedals per machine; a stem per
     machine in the export. Bass: one note at a time, 30–250 Hz, saw or square with a sub, one
     filter with its envelope, Accent per step, about six knobs (Cutoff, Reso, Env, Decay, Sub,
     Drive), following the key. Decide Slide and Tie (a Maybe below) when it starts. Mockups
     first; the phone gets a way to choose the machine.
-12. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
+11. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
     Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
     drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
     light work for a phone. It replaces the hidden sample lanes: their playback code is reused,
     the rest and the three mp3 files go (see "Dead code").
-13. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
+12. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
     touch plates, one slow filter, joystick and short sequencer are worth borrowing; its
     per-voice knobs and microtonal tuning are not). Six plates, one per note of the key's
     chord; a touched plate latches a small swarm of detuned oscillators, fading in over a bar
     or more; an X/Y pad (the filter one way, the swarm's spread the other); Attack and Release
     in bars; no steps: its sequencer counts bars, a chord per bar for 4 or 8 bars, across the
     pattern chain; straight to the reverb.
-14. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+13. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
     the maintainer wants some maintenance, each as its own PR.
 
 Maybe (the maintainer's answer in the review, or earlier; ask before starting one):
@@ -1854,7 +1874,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   interval (a fifth, an octave, detuned) and level, maybe hard sync or VCO 1 → 2 FM; a card,
   both engines, presets, the dice, saving. It must sound unlike the FM card's modulator, which
   is already a second oscillator.
-- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 10–13.)
+- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 9–12.)
 - **Patch cables** (put off after PR 49: the maintainer wants to tweak the layout more first):
   animated cables from the LFO to what it moves (Cutoff, the Pulse tile, the pads), swaying a
   little, never over a control, still with `prefers-reduced-motion`. They depend on where
@@ -1889,7 +1909,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
   ticks, 24 a quarter note, which jitter); MIDI out would send the pattern's notes to another
   synth, timed against the audio clock.
-- (Several patterns chained into a song: planned now, item 9.)
+- (Several patterns chained into a song: planned now, item 8.)
 - **32 steps, or per-lane lengths** (the export code's types already allow 32; "Last step", a
   Maybe above, is the smaller version).
 - **Per-step parameter locks** (for example a different filter cutoff on each step). Each
@@ -1905,8 +1925,8 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   808 makes cymbals and cowbell) and struck (a click ringing tuned resonant filters).
 - The old drum-lane items (lanes through the pedals with pitch, decay and pan; custom samples
   stored in the browser; drum kits; the export rendering only the synth lane; the sample paths
-  that depend on the trailing slash) are overtaken by the Drums machine (item 12), a send and a
-  stem per machine (item 11) and Sample a sound (item 6). Still on hold from them: samples
+  that depend on the trailing slash) are overtaken by the Drums machine (item 11), a send and a
+  stem per machine (item 10) and Sample a sound (item 5). Still on hold from them: samples
   loaded by drag-and-drop, and drum slots played by MIDI notes.
 - **Shared session ("jam"):** several people on one URL, for example one phone playing the
   drum lanes and another the synth. It needs a realtime relay between devices; the site is
@@ -2011,6 +2031,7 @@ Done:
 | 90 | A tape pedal, last in the chain (`src/audio/tape.ts`, both engines; the noise layer goes through it too): AGE (soft saturation, a duller top, the tape's own noise), WOBBLE (wow and flutter from a short delay whose time drifts) and TAPE \| VINYL (hiss, or crackle and pops, and how the pitch sways). The saturation is a gain that follows the whole mix, so the export's stems still add up; the tape's noise is a stem of its own, a loop's wobble fits the bars, and a one-shot ends where the hit fades under the hiss. Saved (older projects: off), reset by presets, rolled by the Sounds dice, AGE and WOBBLE MIDI-learnable. On the desktop it's a deck under the three pedals, whose footswitches became short bars (option C of three mockups); the phone has four pedals. |
 | 91 | Fix: PR 90's deploy failed on its tape stems test, which passed on the PR. On a busy machine Chrome stopped processing the export's delay, reverb or tape path at moments that varied from render to render, cutting echoes from one stem or the mix and not the others. A silent source now keeps them running to the end of every export render (`keepAlive` in `scheduleStepSequencer.ts`); with a CPU core kept busy the test failed 5 times in 10 before and never in 10 after. |
 | 92 | Theme and MIDI inside the frame (option A of three mockups): a gear at the top bar's right end opens Theme (Synthwave, Analog, Dark: lightest to darkest) and MIDI (`SettingsMenu.vue`), with an LED once a controller is chosen; the row above the frame and the link under it are gone, and the logo is the link back to Ephemeral Wave (in the gear's panel under 576 px, where the logo is hidden). One volume knob: the Step Sequencer's Vol is hidden (its value still plays), no longer MIDI-learnable, and the LFO's Level mark is on the Volume knob. |
+| 93 | One accent, one job (option A of two mockups): the accent only on what makes something (Generate and Save, one hue each, and the Random wave tile), the pink-to-cyan gradient on Play only; FM's, Unison's and the LFO's lit keys, the chosen wave tile's ring, the dice badges, the scale's dots, the chosen piano key (a ring instead of the wash), the Step Sequencer's dot and the FM and Unison ribbons' LEDs in the LEDs' mint; the shape screens' curves in their own ink; card edges neutral; the Waveforms card without its wash. Captions on a switched-off part readable (the pedals' 1.2–1.9 : 1 → 3.7 : 1 and up; Analog's delay pedal a little lighter); FM's screen no longer dimmed twice while off. Labels stay monospace. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

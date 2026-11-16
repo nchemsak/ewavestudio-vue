@@ -186,7 +186,7 @@ $down: ".is-active", ".on", ".active", ".hw-down", "[aria-pressed='true']", "[ar
 .wave-btn.hw-cap.is-active {
     box-shadow:
         inset 0 2px 5px rgb(0 0 0 / 0.5),
-        0 0 0 1px hsl(var(--pt-accent) 80% 62% / 0.6);
+        0 0 0 1px color-mix(in oklab, var(--hw-led), transparent 40%);
 }
 
 .wave-btn .wave-label {

@@ -219,8 +219,9 @@ function onDiceKey(e) {
 }
 
 .dice-badge.on {
-    background: hsl(var(--pt-accent) 80% 60% / .15);
-    border-color: hsl(var(--pt-accent) 80% 60% / .55);
+    /* the LEDs' colour (PR 93): the accent is for Generate and Save */
+    background: color-mix(in oklab, var(--hw-led), transparent 88%);
+    border-color: color-mix(in oklab, var(--hw-led), transparent 50%);
 }
 
 .dice-badge.on svg circle {

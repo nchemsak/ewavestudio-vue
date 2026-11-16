@@ -367,8 +367,9 @@ input[type="range"]::-webkit-slider-thumb {
 .knob-stack.disabled .knob-label,
 .knob-wrapper.disabled .knob-label,
 .knob-wrapper[aria-disabled="true"] .knob-label {
-    /* on a pedal, its own ink dimmed (PR 79: grey was faint on the darker pedals) */
-    color: var(--pedal-ink-off, #666);
+    /* on a pedal, its own ink dimmed (PR 79: grey was faint on the darker pedals); elsewhere the
+       text colour dimmed (PR 93: #666 measured 2.9 : 1 on the Noise card) */
+    color: var(--pedal-ink-off, color-mix(in oklab, var(--pt-text), transparent 42%));
 }
 
 .knob-wrapper.disabled .dial-grip,
@@ -434,7 +435,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .knob-stack.disabled .knob-label {
-    color: #666;
+    color: var(--pedal-ink-off, color-mix(in oklab, var(--pt-text), transparent 42%));
 }
 
 .knob-group-header {

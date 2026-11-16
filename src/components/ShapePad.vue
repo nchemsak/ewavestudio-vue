@@ -80,7 +80,7 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
 .sp-pad {
     --sp-bg: #0c1118;
     --sp-ink: #cfe0ff;
-    --sp-line: hsl(var(--pt-accent) 90% 72%);
+    --sp-line: var(--sp-ink); /* the screen's own ink, as the LFO card's (the accent until PR 93) */
     position: relative;
     flex: 1 1 0;
     min-width: 0;
@@ -102,7 +102,7 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
 
 .sp-pad.dragging {
     cursor: grabbing;
-    box-shadow: inset 0 0 0 1px hsl(var(--pt-accent) 80% 65% / 0.85), inset 0 2px 10px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(0, 0, 0, 0.45);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--sp-ink), transparent 30%), inset 0 2px 10px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(0, 0, 0, 0.45);
 }
 
 .sp-pad.is-disabled {
@@ -341,10 +341,9 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
     outline-offset: -3px;
 }
 
+/* On: only its LED lights, as Noise's (PR 93; the ribbon was filled with the accent until then) */
 .sp-ribbon.is-on {
-    background: linear-gradient(180deg, hsl(var(--pt-accent) 70% 52%), hsl(var(--pt-accent) 70% 36%));
-    color: #fff;
-    box-shadow: 1px 0 0 rgba(0, 0, 0, 0.85), 0 0 14px hsl(var(--pt-accent) 85% 60% / 0.45);
+    color: var(--pt-text);
 }
 
 .sp-ribbon-led {
@@ -424,10 +423,13 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
     outline-offset: 1px;
 }
 
+/* The chosen key stays down, its label lit in the LEDs' colour, as every other switch (PR 93;
+   lit in the accent until then) */
 .sp-key.on {
-    color: #10131a;
-    background: linear-gradient(180deg, hsl(var(--pt-accent) 90% 80%), hsl(var(--pt-accent) 85% 68%));
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 8px hsl(var(--pt-accent) 85% 65% / 0.5);
+    color: var(--hw-led);
+    background: linear-gradient(180deg, color-mix(in oklab, var(--pt-surface-2), black 30%), color-mix(in oklab, var(--pt-surface-2), black 10%));
+    box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.6), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 0 8px color-mix(in oklab, var(--hw-led), transparent 80%);
+    text-shadow: 0 0 6px color-mix(in oklab, var(--hw-led), transparent 40%);
 }
 
 .is-off .sp-key {
@@ -435,6 +437,6 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
 }
 
 .is-off .sp-mini {
-    opacity: 0.75;
+    opacity: 0.85; /* 0.75 until PR 93: FM's Freq, dimmed twice, measured 4.6 : 1 */
 }
 </style>
