@@ -8,13 +8,25 @@
 // a Blob URL, as the bit crusher is, so the build has no extra file), which passes each block
 // of 128 samples on. Its output is silent and goes nowhere audible, so nothing is heard while
 // recording. The browser's echo cancelling, noise suppression and level control are off: they
-// would eat a drum hit's attack and pump its tail.
+// would eat a drum hit's attack and pump its tail. Every channel of the input is summed: a
+// two-input audio interface sends its input 2 as the right channel (PR 95 read the left only,
+// so a microphone on input 2 was never heard).
 
 import { ref } from 'vue';
-import { trimRecording, ONSET_LEVEL, PRE_ROLL_S, SAMPLE_MAX_S } from '../audio/sample';
+import { trimRecording, MIN_LEVEL, PRE_ROLL_S, SAMPLE_MAX_S } from '../audio/sample';
 
 // How long it listens for a sound to start before giving up
 export const LISTEN_MAX_S = 6;
+// The room's own noise is measured over the first moment of listening; a sound starts with a
+// block this many times louder than it (12 dB), and never below MIN_ONSET (about −50 dBFS).
+// Until PR 96 the start was a fixed −36 dBFS, which a Focusrite's input at a usual gain didn't
+// reach, so it said "Nothing heard" to a voice the computer's meters showed.
+export const FLOOR_S = 0.15;
+export const ONSET_OVER_FLOOR = 4;
+export const MIN_ONSET = 0.003;
+
+// Where a sound starts, for a room whose noise peaks at `floor`
+export const onsetLevel = (floor: number) => Math.max(MIN_ONSET, floor * ONSET_OVER_FLOOR);
 
 export type RecorderState = 'idle' | 'asking' | 'listening' | 'recording' | 'denied' | 'silent' | 'unsupported';
 
@@ -22,8 +34,11 @@ const PROCESSOR = 'ew-sample-recorder';
 const processorSource = () => `
 class Recorder extends AudioWorkletProcessor {
 	process(inputs) {
-		const ch = inputs[0] && inputs[0][0];
-		if (ch) this.port.postMessage(ch.slice(0));
+		const chs = inputs[0];
+		if (!chs || !chs.length) return true;
+		const out = chs[0].slice(0);
+		for (let c = 1; c < chs.length; c++) for (let i = 0; i < out.length; i++) out[i] += chs[c][i];
+		this.port.postMessage(out);
 		return true;
 	}
 }
@@ -61,7 +76,7 @@ export function useSampleRecorder(audioCtx: AudioContext) {
 		try {
 			const resumed = audioCtx.resume().catch(() => {});
 			stream = await navigator.mediaDevices.getUserMedia({
-				audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
+				audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
 			});
 			await resumed;
 			await loadRecorder(audioCtx);
@@ -84,6 +99,13 @@ export function useSampleRecorder(audioCtx: AudioContext) {
 		let beforeLen = 0;
 		const kept: Float32Array[] = [];
 		let keptLen = 0;
+		// Everything heard while listening, for when no block crosses the start level: then the
+		// loudest moment is kept, if it stood out from the room at all
+		const heard: Float32Array[] = [];
+		const floorFrames = Math.round(FLOOR_S * sr);
+		let heardLen = 0;
+		let floor = 0;
+		let loudest = 0;
 		state.value = 'listening';
 
 		const result = await new Promise<Float32Array | null>((resolve) => {
@@ -97,10 +119,16 @@ export function useSampleRecorder(audioCtx: AudioContext) {
 				mute.disconnect();
 				stream.getTracks().forEach((t) => t.stop());
 				level.value = 0;
-				if (!keptLen) { resolve(null); return; }
-				const all = new Float32Array(keptLen);
+				const fallback = !keptLen && !cancelled && loudest >= MIN_LEVEL && loudest >= floor * 3;
+				const blocks = keptLen ? kept : fallback ? heard : null;
+				if (!blocks) {
+					if (!cancelled) console.info(`Sample: nothing heard (loudest ${dbfs(loudest)}, room ${dbfs(floor)})`);
+					resolve(null);
+					return;
+				}
+				const all = new Float32Array(blocks.reduce((n, b) => n + b.length, 0));
 				let o = 0;
-				for (const b of kept) { all.set(b, o); o += b.length; }
+				for (const b of blocks) { all.set(b, o); o += b.length; }
 				resolve(all);
 			}
 			finish = done;
@@ -113,7 +141,11 @@ export function useSampleRecorder(audioCtx: AudioContext) {
 					before.push(block);
 					beforeLen += block.length;
 					while (beforeLen - before[0].length >= preRoll) beforeLen -= before.shift()!.length;
-					if (peak < ONSET_LEVEL) return;
+					heard.push(block);
+					heardLen += block.length;
+					if (heardLen <= floorFrames) { floor = Math.max(floor, peak); return; }
+					loudest = Math.max(loudest, peak);
+					if (peak < onsetLevel(floor)) return;
 					state.value = 'recording';
 					kept.push(...before);
 					keptLen = beforeLen;
@@ -132,3 +164,5 @@ export function useSampleRecorder(audioCtx: AudioContext) {
 
 	return { state, level, record, stop: () => finish?.() };
 }
+
+const dbfs = (v: number) => (v > 0 ? `${(20 * Math.log10(v)).toFixed(1)} dBFS` : 'silence');

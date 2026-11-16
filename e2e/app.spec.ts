@@ -457,6 +457,36 @@ test('Sample: a sound recorded from the microphone plays on every pad at its pit
 	expect(after.data.synth.sample).toEqual(saved.data.synth.sample);
 });
 
+test('Sample: a quiet microphone on an interface\'s input 2 (the right channel) is heard', async ({ page }) => {
+	// PR 96: a Focusrite's "Analogue 1 + 2" sends input 2 as the right channel, which PR 95
+	// never read, and a usual preamp gain peaks far under the −36 dBFS it waited for
+	await page.evaluate(() => {
+		navigator.mediaDevices.getUserMedia = async () => {
+			const ctx = new AudioContext();
+			const dest = ctx.createMediaStreamDestination();
+			const merge = ctx.createChannelMerger(2);
+			const osc = ctx.createOscillator();
+			const g = ctx.createGain();
+			const t = ctx.currentTime + 0.4;
+			osc.frequency.value = 220;
+			g.gain.setValueAtTime(0, ctx.currentTime);
+			g.gain.setValueAtTime(0.01, t); // about −40 dBFS
+			g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+			g.gain.setValueAtTime(0, t + 0.41);
+			osc.connect(g).connect(merge, 0, 1); // right only
+			merge.connect(dest);
+			osc.start();
+			return dest.stream;
+		};
+	});
+	const strip = page.locator('.st-pick');
+	await page.getByRole('button', { name: 'Record a sample' }).click();
+	await expect(strip).toHaveAttribute('aria-pressed', 'true', { timeout: 5000 });
+	const seconds = Number(/\(([\d.]+) s\)/.exec((await strip.getAttribute('title'))!)![1]);
+	expect(seconds).toBeGreaterThan(0.2);
+	expect(seconds).toBeLessThan(0.6);
+});
+
 test('Sample: a blocked microphone says so and changes nothing', async ({ page }) => {
 	await page.evaluate(() => {
 		navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('Permission denied', 'NotAllowedError'); };

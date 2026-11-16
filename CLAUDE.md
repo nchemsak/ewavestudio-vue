@@ -730,12 +730,20 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   link, a project from before), a pad on `'sample'` plays a sine.
 - **Recording** (`useSampleRecorder.ts`): REC asks for the microphone (echo cancelling, noise
   suppression and level control off: they eat a hit's attack), then listens, keeping nothing
-  until a sound starts (a block louder than about −36 dBFS, `ONSET_LEVEL`), then about a second
-  from 5 ms before it, and stops by itself; after 6 s of quiet it gives up ("Nothing heard"). A
-  press while it listens or records stops it. The microphone is read in the app's own
-  AudioContext by a tiny AudioWorklet from a Blob URL (as the bit crusher), into a silent gain.
-  `trimRecording()` (unit-tested) cuts it where it stays 50 dB under its peak, fades its last
-  10 ms and sets its peak to full scale. Then (`SAMPLE` section of `DrumSequencer.vue`) it
+  until a sound starts, then about a second from 5 ms before it, and stops by itself; after
+  6 s it gives up ("Nothing heard", and the console says how loud the loudest moment and the
+  room were). A press while it listens or records stops it. The microphone is read in the app's
+  own AudioContext by a tiny AudioWorklet from a Blob URL (as the bit crusher), into a silent
+  gain; **every channel of the input is summed** (PR 96: a two-input audio interface such as a
+  Focusrite's "Analogue 1 + 2" sends input 2 as the right channel, and PR 95 read only the left,
+  so a microphone on input 2 was "Nothing heard"). **The start level follows the room** (PR 96;
+  PR 95 waited for a fixed −36 dBFS, which an interface's input at a usual gain didn't reach):
+  the first 0.15 s measure its noise (`FLOOR_S`), and a sound starts with a block 12 dB louder
+  (`onsetLevel()`, at least about −50 dBFS, `MIN_ONSET`). If no block gets there, it keeps the
+  loudest moment of what it heard, if that stood out from the room (3 times its noise, and over
+  −66 dBFS, `MIN_LEVEL`). `trimRecording()` (unit-tested) starts it at its first sample within
+  20 dB of its own peak (`ONSET_SHARE`), cuts it where it stays 50 dB under its peak, fades its
+  last 10 ms and sets its peak to full scale, so how loud it came in doesn't matter. Then (`SAMPLE` section of `DrumSequencer.vue`) it
   goes on every pad and becomes the main wave (as a wave tile's click does), and plays once on
   A3; one undo step with the waves. Analytics `sample_record` (with `seconds`).
 - **Saved** as `synth.sample` `{ data, sampleRate }`: 16-bit PCM in base64 (about 128 kB for a
@@ -765,8 +773,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (`WAVE_IDS`); `PadWave` is a wave or `'sample'`.
 - Browser tests record from a fake microphone (`fakeMicrophone()`: a falling tone after 0.4 s):
   the strip lights, the file has the recording on every pad, one-shots on A3 and A4 play it at
-  twice the speed, the pad menu, File → New and import, one undo step; and a blocked
-  microphone.
+  twice the speed, the pad menu, File → New and import, one undo step; a quiet microphone
+  (−40 dBFS) on the right channel only (PR 96); and a blocked microphone.
 
 ### LFO visualizer
 - While the LFO moves something, its movement is drawn on the control it moves, in amber
@@ -2119,6 +2127,7 @@ Done:
 | 93 | One accent, one job (option A of two mockups): the accent only on what makes something (Generate and Save, one hue each, and the Random wave tile), the pink-to-cyan gradient on Play only; FM's, Unison's and the LFO's lit keys, the chosen wave tile's ring, the dice badges, the scale's dots, the chosen piano key (a ring instead of the wash), the Step Sequencer's dot and the FM and Unison ribbons' LEDs in the LEDs' mint; the shape screens' curves in their own ink; card edges neutral; the Waveforms card without its wash. Captions on a switched-off part readable (the pedals' 1.2–1.9 : 1 → 3.7 : 1 and up; Analog's delay pedal a little lighter); FM's screen no longer dimmed twice while off. Labels stay monospace. |
 | 94 | The screen at rest shows the hit: while nothing plays, the screen draws one hit of the current sound (the one-shot the export would make, rendered offline in a few tens of ms) as a waveform on a square-root time scale, in its pad's colour, with its note, length and peak, redrawn as the sound changes (`src/components/hitView.ts`, `renderHit()`); Play brings back the chosen view, and a view picked at rest shows instead until the next rest. Plan: fitting the window and Record a take put off. |
 | 95 | Sample a sound (before the Simple view, the maintainer's call): REC in a strip under the wave tiles (option B of two mockups) records about a second from the microphone, from just before the sound starts, and the pads play it as a ninth wave, Sample, at their pitch (as recorded on A3) through the same envelope, filter and pedals, in both engines (`src/audio/sample.ts`, `useSampleRecorder.ts`, `SampleTile.vue`); saved with the project (16-bit PCM in base64), kept by sound presets, cleared by File → New, left out of share links; offered in a pad's ⋮ menu and on the phone's Sound page. |
+| 96 | Fix: REC said "Nothing heard" to the maintainer's Focusrite (a microphone on input 2, at a usual gain): the recorder read only the input's left channel (input 2 is the right) and waited for a fixed −36 dBFS. Every channel is summed now, the start level is 12 dB over the room's own noise (at least −50 dBFS), and if nothing gets there the loudest moment is kept, trimmed against its own peak. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -14,14 +14,19 @@
 //   out (too big for a link).
 // - A recording is trimmed to where the sound starts (a few ms before), at most SAMPLE_MAX_S
 //   long, cut where it has faded, with a short fade at the end, and its peak set to full scale.
+//   How loud it came in doesn't matter: the start is found against its own peak (PR 96: a
+//   Focusrite's input at a usual gain never reached the fixed −36 dBFS PR 95 waited for).
 
 // Helpers START
 
 export const SAMPLE_WAVE = 'sample';
 export const SAMPLE_ROOT_HZ = 220;
 export const SAMPLE_MAX_S = 1;
-// What counts as the sound starting: a sample this loud (about −36 dBFS)
-export const ONSET_LEVEL = 0.016;
+// Quieter than this throughout (about −66 dBFS) is no sound at all
+export const MIN_LEVEL = 0.0005;
+// The sound starts at its first sample within 20 dB of the recording's peak (a level of its
+// own, not a fixed one: a microphone's preamp at a modest gain peaks far below full scale)
+export const ONSET_SHARE = 0.1;
 // Kept before the onset, so the attack isn't clipped
 export const PRE_ROLL_S = 0.005;
 // The end: where it stays more than this far under its peak (−50 dB)
@@ -100,13 +105,16 @@ export function sampleFrom(v: unknown): SampleData | null {
 	return { data: s.data, sampleRate: s.sampleRate };
 }
 
-// A recording made ready to play: from where the sound starts (less PRE_ROLL_S), at most
-// SAMPLE_MAX_S, cut where it stays 50 dB under its peak, a FADE_S fade at the end, its peak at
-// full scale. null when nothing in it is loud enough to count as a sound.
+// A recording made ready to play: from where the sound starts (its first sample within 20 dB of
+// the loudest, less PRE_ROLL_S), at most SAMPLE_MAX_S, cut where it stays 50 dB under its peak,
+// a FADE_S fade at the end, its peak at full scale. null when nothing in it reaches MIN_LEVEL.
 export function trimRecording(input: Float32Array, sampleRate: number): Float32Array | null {
-	let onset = -1;
-	for (let i = 0; i < input.length; i++) if (Math.abs(input[i]) >= ONSET_LEVEL) { onset = i; break; }
-	if (onset < 0) return null;
+	let loudest = 0;
+	for (let i = 0; i < input.length; i++) loudest = Math.max(loudest, Math.abs(input[i]));
+	if (loudest < MIN_LEVEL) return null;
+	const level = loudest * ONSET_SHARE;
+	let onset = 0;
+	while (Math.abs(input[onset]) < level) onset++;
 	const start = Math.max(0, onset - Math.round(PRE_ROLL_S * sampleRate));
 	const end0 = Math.min(input.length, start + Math.round(SAMPLE_MAX_S * sampleRate));
 	let peak = 0;
