@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { barFrames, foldLoop, trimTail, peakOf, normalizeGain, applyGain, NORMALIZE_PEAK } from './audio';
+import { barFrames, foldLoop, trimTail, peakOf, normalizeGain, applyGain, subtract, fadeOut, NORMALIZE_PEAK } from './audio';
 import { patternToMidi, midiNoteOf, notesInRange, midiToHz, PPQ, STEP_TICKS } from './midi';
 import { zipFiles, crc32 } from './zip';
 import { safeName, keyLabel, exportNames } from './names';
@@ -105,6 +105,17 @@ describe('export audio helpers', () => {
 		expect(g).toBeCloseTo(NORMALIZE_PEAK / 0.4);
 		expect([...applyGain(a, g)[0]]).toEqual([0.2 * g, -0.4 * g].map(v => expect.closeTo(v, 6)));
 		expect(normalizeGain(0)).toBe(1); // silence stays silent
+	});
+
+	it('take one sound from another, and fade an ending out', () => {
+		// The mix less the tape's noise is the sound under it
+		expect([...subtract([ch(1, 0.5, 0.25)], [ch(0.5, 0.5)])[0]]).toEqual([0.5, 0, 0.25]);
+		const [faded] = fadeOut([ch(1, 1, 1, 1, 1, 1)], 4);
+		expect([...faded]).toEqual([1, 1, 0.75, 0.5, 0.25, 0]);
+		// A fade longer than the sound fades all of it; the sound given is left as it was
+		const short = [ch(1, 1)];
+		expect([...fadeOut(short, 10)[0]]).toEqual([0.5, 0]);
+		expect([...short[0]]).toEqual([1, 1]);
 	});
 
 	it('repeat random numbers for the same seed', () => {

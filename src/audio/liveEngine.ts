@@ -5,9 +5,10 @@
 //
 // Graph: per-note synth voices → drive (dry + shaper → tone, optionally through the bit
 // crusher, → driveSum). From driveSum two paths run in parallel: delay (dry + wet, feedback loop with
-// tone filters; plain or ping-pong) and a reverb send (tone filter → convolver → wet gain). Both go to masterGain → destination. The analyser for the
-// screen views is tapped from masterGain. The noise layer and the sample lanes go straight
-// to masterGain, so they bypass drive, delay and reverb.
+// tone filters; plain or ping-pong) and a reverb send (tone filter → convolver → wet gain). Both go to preMaster, and so do the
+// noise layer and the sample lanes, which bypass drive, delay and reverb. From preMaster
+// everything goes through the tape pedal (tape.ts), or round it while it's off, to masterGain
+// → destination. The analyser for the screen views is tapped from masterGain.
 //
 // WAV export uses a separate offline engine (export/scheduleStepSequencer.ts). Changes to
 // the sound here must be mirrored there, or exports will sound different.
@@ -27,6 +28,7 @@ import { generateReverbIR } from './reverb/generateIr';
 import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from './ratchet';
 import { createCrusher, loadCrusher, setCrusher } from './crusher';
 import { createPingPong } from './pingPong';
+import { createTape, tapeSettings, type TapeMode } from './tape';
 import { clampUnisonVoices, unisonPhase, unisonPosition } from './unison';
 import {
 	divisionToHz,
@@ -96,6 +98,8 @@ export type LiveEngineSettings = {
 	};
 	drive: { enabled: R<boolean>; type: R<string>; amount: R<number>; tone: R<number>; mix: R<number>; crush: R<boolean> };
 	reverb: { enabled: R<boolean>; mix: R<number>; decay: R<number>; tone: R<number> };
+	// The tape pedal, last in the chain (tape.ts): age and wobble 0..1
+	tape: { enabled: R<boolean>; age: R<number>; wobble: R<number>; mode: R<TapeMode> };
 	// Called just before a bar's first step is built (about 100 ms before it sounds), so a
 	// change waiting for the bar (DrumSequencer's BAR QUEUE) is applied in time for it
 	onBarStart?: () => void;
@@ -135,6 +139,69 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	});
 
 	// Context + master END
+
+	// Tape START
+
+	// Everything on its way to the master meets here, and goes through the tape pedal or,
+	// while it's off, round it (tape.ts)
+	const preMaster = audioCtx.createGain();
+	const tapeAround = audioCtx.createGain();
+	const tapeThrough = audioCtx.createGain();
+	const tape = createTape(audioCtx);
+	preMaster.connect(tapeAround).connect(masterGain);
+	preMaster.connect(tape.input);
+	preMaster.connect(tape.sidechain);
+	tape.output.connect(tapeThrough).connect(masterGain);
+
+	// The tape's own noise (hiss, crackle) plays while something does: the sequencer, or a
+	// note played by hand until a second after it ends. Its buffers are made when the pedal is
+	// first turned on.
+	const tapeNoiseGate = audioCtx.createGain();
+	tapeNoiseGate.gain.value = 0;
+	tape.noise.connect(tapeNoiseGate).connect(tapeThrough);
+	let tapeNoiseStarted = false;
+	const TAPE_NOISE_HOLD_S = 1;    // how long the noise stays after the sound
+	const TAPE_NOISE_FADE_S = 0.25; // then it fades (a time constant),
+	const TAPE_NOISE_GONE_S = 2;    // and is gone this long after the hold
+
+	function applyTapeEnabled(now = false) {
+		const on = s.tape.enabled.value;
+		if (on && !tapeNoiseStarted) {
+			tapeNoiseStarted = true;
+			tape.startNoise(Math.random);
+		}
+		const t = audioCtx.currentTime;
+		if (now) {
+			tapeAround.gain.setValueAtTime(on ? 0 : 1, t);
+			tapeThrough.gain.setValueAtTime(on ? 1 : 0, t);
+		} else {
+			tapeAround.gain.setTargetAtTime(on ? 0 : 1, t, 0.005);
+			tapeThrough.gain.setTargetAtTime(on ? 1 : 0, t, 0.005);
+		}
+	}
+	const currentTape = () => tapeSettings(s.tape.age.value, s.tape.wobble.value, s.tape.mode.value);
+	tape.apply(currentTape());
+	applyTapeEnabled(true);
+	watch(s.tape.enabled, () => applyTapeEnabled());
+	watch([s.tape.age, s.tape.wobble, s.tape.mode], () => tape.apply(currentTape(), true));
+
+	// The noise from `from` on; with `until`, it goes a moment after that
+	function holdTapeNoise(from: number, until?: number) {
+		const g = tapeNoiseGate.gain;
+		g.cancelScheduledValues(from);
+		g.setTargetAtTime(1, from, 0.02);
+		if (until !== undefined) {
+			g.setTargetAtTime(0, until + TAPE_NOISE_HOLD_S, TAPE_NOISE_FADE_S);
+			g.setValueAtTime(0, until + TAPE_NOISE_HOLD_S + TAPE_NOISE_GONE_S);
+		}
+	}
+	watch(isPlaying, (playing) => {
+		const t = audioCtx.currentTime;
+		if (playing) holdTapeNoise(t);
+		else holdTapeNoise(t, t);
+	});
+
+	// Tape END
 
 	// Delay START
 
@@ -371,7 +438,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		// Wire in parallel
 		reverbToneFilter.connect(newConvolver);
 		newConvolver.connect(newWet);
-		newWet.connect(masterGain);
+		newWet.connect(preMaster);
 
 		const fadeTime = 0.25; // seconds
 		const now = audioCtx.currentTime;
@@ -396,11 +463,11 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		}, fadeTime * 1000 + 50);
 	}
 
-	// Drive sum → tone filter → convolver → wet gain → master
+	// Drive sum → tone filter → convolver → wet gain → the tape pedal, then the master
 	driveSum.connect(reverbToneFilter);
 	reverbToneFilter.connect(reverbConvolver);
 	reverbConvolver.connect(reverbWet);
-	reverbWet.connect(masterGain);
+	reverbWet.connect(preMaster);
 	reverbWet.gain.value = 0;
 
 	function ensureReverbIR() {
@@ -648,6 +715,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const gateEnd = startTime + Math.max(0.02, (s.envelope.decayMs.value / 1000) * routed.decayFactor);
 		const noteEnd = cutNoteEnd(s.envelope.enabled.value ? naturalEnd : gateEnd, startTime, attackTime, opts.maxDuration);
 
+		// A note played by hand (MIDI, a preview) brings the tape's noise with it
+		if (s.tape.enabled.value && !isPlaying.value) holdTapeNoise(startTime, noteEnd);
+
 		//  Per-step blend (masked)
 		const addNoiseForThisPad = opts.addNoise !== false;
 		const blend = (addNoiseForThisPad && s.noise.enabled.value)
@@ -869,16 +939,16 @@ export function useLiveEngine(s: LiveEngineSettings) {
 				noiseLP.type = 'lowpass';
 				noiseLP.frequency.setValueAtTime(16000, startTime); // tame ultra-high fizz
 
-				// Mono path to master
+				// Mono path to the tape pedal and the master
 				const noiseOut: AudioNode = tremolo ? noiseEnvGain.connect(tremolo.make()) : noiseEnvGain;
 				mix.connect(noiseHP).connect(noiseLP).connect(noiseEnvGain);
-				noiseOut.connect(masterGain);
+				noiseOut.connect(preMaster);
 			}
 		}
 	}
 
-	delayDry.connect(masterGain);
-	delayWet.connect(masterGain);
+	delayDry.connect(preMaster);
+	delayWet.connect(preMaster);
 
 	// Unison: build the waves its voices start with as soon as the setting changes, rather
 	// than on the first note (a few ms each, too long for a MIDI note played 3 ms ahead)
@@ -897,7 +967,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		source.buffer = buffer;
 		const gain = audioCtx.createGain();
 		gain.gain.setValueAtTime(Math.max(0.0001, amp), time); // no master volume here
-		source.connect(gain).connect(masterGain);
+		source.connect(gain).connect(preMaster);
 		source.start(time);
 	}
 

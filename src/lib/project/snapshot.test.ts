@@ -37,6 +37,7 @@ describe('factory defaults (File → New)', () => {
 			},
 			drive: { enabled: false, type: 'overdrive', amount: 0.4, tone: 5000, mix: 0.5, crush: false },
 			reverb: { enabled: false, mix: 0.18, decay: 1.4, tone: 0.6 },
+			tape: { enabled: false, age: 0.4, wobble: 0.3, mode: 'tape' },
 		});
 		expect(snap.melody).toEqual({
 			keyRoot: 'A', keyScale: 'naturalMinor', rangePreset: 'wide', arpPattern: 'up', arpRate: '1/16', arpOctaves: 1, arpTones: 'chord', arpSkip: false, activeOnly: true,
@@ -120,6 +121,19 @@ describe('saving and loading a project', () => {
 		expect([st.fx.delay.pingPong.value, st.fx.drive.crush.value]).toEqual([false, false]);
 		applySnapshot(st, { fx: { delay: { pingPong: true }, drive: { crush: true } } });
 		expect([st.fx.delay.pingPong.value, st.fx.drive.crush.value]).toEqual([true, true]);
+	});
+
+	it('opens a project saved before the tape pedal with it off, at its starting values', () => {
+		const st = fresh();
+		changeEverything(st);
+		expect(st.fx.tape.enabled.value).toBe(true);
+		applySnapshot(st, { fx: { reverb: { enabled: true, mix: 0.2 } } });
+		expect([st.fx.tape.enabled.value, st.fx.tape.age.value, st.fx.tape.wobble.value, st.fx.tape.mode.value]).toEqual([false, 0.4, 0.3, 'tape']);
+		// Its own values come back, kept within the knobs; an unknown mode is tape
+		applySnapshot(st, { fx: { tape: { enabled: true, age: 0.75, wobble: 7, mode: 'vinyl' } } });
+		expect([st.fx.tape.enabled.value, st.fx.tape.age.value, st.fx.tape.wobble.value, st.fx.tape.mode.value]).toEqual([true, 0.75, 1, 'vinyl']);
+		applySnapshot(st, { fx: { tape: { enabled: true, age: 'old', mode: 'reel' } } });
+		expect([st.fx.tape.age.value, st.fx.tape.wobble.value, st.fx.tape.mode.value]).toEqual([0.4, 0.3, 'tape']);
 	});
 
 	it('plays an arpeggio saved at 1/4 (dropped) at 1/8', () => {

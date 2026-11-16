@@ -32,7 +32,7 @@ describe('MIDI learn mappings', () => {
 	});
 
 	it('name every learnable knob', () => {
-		expect(Object.keys(MIDI_KNOBS)).toHaveLength(31);
+		expect(Object.keys(MIDI_KNOBS)).toHaveLength(33);
 		for (const name of Object.values(MIDI_KNOBS)) expect(name.length).toBeGreaterThan(2);
 	});
 });

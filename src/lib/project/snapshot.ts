@@ -26,6 +26,7 @@ import { PULSE_WIDTH_DEFAULT, WAVE_IDS, foldPulseWidth } from '../../audio/waves
 import { VELOCITY_DESTINATIONS, VELOCITY_SWITCHED } from '../../audio/velocity';
 import { clampRatchet, clampRepeatNotes } from '../../audio/ratchet';
 import { arpRateFrom, type ArpRate } from '../melody/arp';
+import { clampTapeMode, TAPE_DEFAULTS, type TapeMode } from '../../audio/tape';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -138,6 +139,8 @@ export type ProjectState = {
 		};
 		drive: { enabled: Ref<boolean>; type: Ref<string>; amount: Ref<number>; tone: Ref<number>; mix: Ref<number>; crush: Ref<boolean> };
 		reverb: { enabled: Ref<boolean>; mix: Ref<number>; decay: Ref<number>; tone: Ref<number> };
+		// The tape pedal, last in the chain (src/audio/tape.ts): age and wobble 0..1
+		tape: { enabled: Ref<boolean>; age: Ref<number>; wobble: Ref<number>; mode: Ref<TapeMode> };
 	};
 	instruments: Ref<Instrument[]>;
 	melody: MelodyUi; // reactive
@@ -222,6 +225,10 @@ function byName(st: ProjectState) {
 		reverbMix: fx.reverb.mix,
 		reverbDecay: fx.reverb.decay,
 		reverbTone: fx.reverb.tone,
+		tapeEnabled: fx.tape.enabled,
+		tapeAge: fx.tape.age,
+		tapeWobble: fx.tape.wobble,
+		tapeMode: fx.tape.mode,
 		instruments: st.instruments,
 		melodyUi: st.melody,
 		selectedWaveform: st.selectedWaveform,
@@ -246,6 +253,7 @@ export function buildSnapshot(st: ProjectState) {
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone,
+		tapeEnabled, tapeAge, tapeWobble, tapeMode,
 		instruments, melodyUi, selectedWaveform,
 	} = byName(st);
 
@@ -357,6 +365,12 @@ export function buildSnapshot(st: ProjectState) {
 				decay: reverbDecay.value,
 				tone: reverbTone.value,
 			},
+			tape: {
+				enabled: tapeEnabled.value,
+				age: tapeAge.value,
+				wobble: tapeWobble.value,
+				mode: tapeMode.value,
+			},
 
 		},
 		instruments: instruments.value.map(i => ({
@@ -415,6 +429,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone,
+		tapeEnabled, tapeAge, tapeWobble, tapeMode,
 		instruments, melodyUi, selectedWaveform,
 	} = byName(st);
 
@@ -594,6 +609,16 @@ export function applySnapshot(st: ProjectState, s: any) {
 		if (typeof s.fx.reverb.decay === 'number') reverbDecay.value = s.fx.reverb.decay;
 		if (typeof s.fx.reverb.tone === 'number') reverbTone.value = s.fx.reverb.tone;
 	}
+	if (s.fx?.tape || s.fx?.delay || s.fx?.drive || s.fx?.reverb) {
+		// The tape pedal: a project saved before it (it has the other pedals, not this one)
+		// gets it off, at its starting values
+		const t = s.fx.tape;
+		const knob = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : fallback);
+		tapeEnabled.value = t?.enabled === true;
+		tapeAge.value = knob(t?.age, TAPE_DEFAULTS.age);
+		tapeWobble.value = knob(t?.wobble, TAPE_DEFAULTS.wobble);
+		tapeMode.value = clampTapeMode(t?.mode);
+	}
 
 	if (s.melody) {
 		if (s.melody.keyRoot) melodyUi.keyRoot = s.melody.keyRoot;
@@ -751,6 +776,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone,
+		tapeEnabled, tapeAge, tapeWobble, tapeMode,
 	} = byName(st);
 
 	envelopeEnabled.value = true;
@@ -823,6 +849,12 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 	reverbMix.value = 0.18;
 	reverbDecay.value = 1.4;
 	reverbTone.value = 0.6;
+
+	// FX: Tape
+	tapeEnabled.value = false;
+	tapeAge.value = TAPE_DEFAULTS.age;
+	tapeWobble.value = TAPE_DEFAULTS.wobble;
+	tapeMode.value = TAPE_DEFAULTS.mode;
 }
 
 // Factory defaults END

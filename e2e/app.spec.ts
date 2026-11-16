@@ -267,8 +267,9 @@ test("disconnects each note's LFO tap when the note ends", async ({ page }) => {
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
 	await page.waitForTimeout(1500);
 	expect(await notesPlayed(page)).toBeGreaterThanOrEqual(6);
-	// Before the fix, every note played stayed connected
-	expect(await page.evaluate(() => (window as any).__paramSources.size)).toBeLessThanOrEqual(2);
+	// Before the fix, every note played stayed connected. What stays is the engine's own: among
+	// them the tape pedal's four (its saturation's gain, and three sines on its delay's time)
+	expect(await page.evaluate(() => (window as any).__paramSources.size)).toBeLessThanOrEqual(6);
 });
 
 test('the built page has the Google Analytics tag (stubbed out here)', async ({ page }) => {
@@ -1005,7 +1006,7 @@ test('delay, drive and reverb are in the signal path', async ({ page }) => {
 
 	expect(await tailSwing()).toBeLessThan(0.0001); // dry: silent once the note has ended
 
-	const reverbSwitch = page.locator('.fx .footswitch').last();
+	const reverbSwitch = page.locator('.fx .reverb-pedal .footswitch');
 	await reverbSwitch.click();
 	await expect(reverbSwitch).toHaveAttribute('aria-pressed', 'true');
 	expect(await tailSwing()).toBeGreaterThan(0.0003); // the reverb tail is quiet at the default mix
@@ -1760,11 +1761,15 @@ test('laid out like hardware: Sound in rows beside Compose, ending on one line; 
 		// 190 px wide on a tablet and 168 on a phone. Three across from 720 px, one column below
 		const pedals = await page.locator('.ds-grid .module.fx .fx-pair > *').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
 		const fx = await rect('.ds-grid .module.fx .fx-pair');
-		expect(pedals, at).toHaveLength(3);
+		// Three pedals on one row, and the tape deck under them, as wide as the three
+		expect(pedals, at).toHaveLength(4);
+		const deck = pedals.pop()!;
 		for (const p of pedals) expect(p.width, `${at}: a pedal's width`).toBeLessThanOrEqual(121);
-		if (width >= 720) expect(new Set(pedals.map((p) => Math.round(p.y))).size, `${at}: pedals on one row`).toBe(1);
-		else expect(new Set(pedals.map((p) => Math.round(p.x))).size, `${at}: pedals in one column`).toBe(1);
-		const sideL = pedals[0].x - fx.left, sideR = fx.right - (pedals[2].x + pedals[2].width);
+		expect(new Set(pedals.map((p) => Math.round(p.y))).size, `${at}: pedals on one row`).toBe(1);
+		expect(deck.y, `${at}: the deck under the pedals`).toBeGreaterThan(pedals[0].y + pedals[0].height);
+		expect(Math.abs(deck.x - pedals[0].x) + Math.abs(deck.x + deck.width - (pedals[2].x + pedals[2].width)), `${at}: the deck as wide as the pedals`).toBeLessThanOrEqual(2);
+		const last = pedals[2];
+		const sideL = pedals[0].x - fx.left, sideR = fx.right - (last.x + last.width);
 		expect(Math.abs(sideL - sideR), `${at}: pedals centred`).toBeLessThanOrEqual(2);
 		// The arrow keys move between the tabs
 		await page.keyboard.press('ArrowRight');
@@ -2345,6 +2350,266 @@ test('LFO rates are locked to the bar: 4 bars to 1/64, the cycle starts on bar 1
 });
 
 // Imports a project with only step 1 on, at velocity `vel`, and optional velocity amounts
+// The pitch of a steady tone from `fromS` to `toS` seconds into the file: its upward zero
+// crossings, each placed between two samples, counted against the time from the first to the last
+function wavPitchHz(bytes: Buffer, fromS: number, toS: number) {
+	const { rate, samples } = wavSamples(bytes);
+	const a = Math.round(fromS * rate), b = Math.min(samples.length, Math.round(toS * rate));
+	const at: number[] = [];
+	for (let i = a + 1; i < b; i++) {
+		if (samples[i - 1] < 0 && samples[i] >= 0) at.push(i - 1 + samples[i - 1] / (samples[i - 1] - samples[i]));
+	}
+	return at.length < 2 ? 0 : ((at.length - 1) * rate) / (at[at.length - 1] - at[0]);
+}
+
+test('the tape pedal: AGE dulls and squeezes the sound and adds hiss, WOBBLE sways the pitch, in the export', async ({ page }) => {
+	await setTempo(page, 80); // a bar is 3 s
+	await turnOnPads(page, [0]);
+	// Pad 1 loud and pad 9 soft, a bright wave with the filter open
+	const exportWith = async (id: string, tape: Record<string, unknown> | null, change?: (d: any) => void) => {
+		await importChanged(page, id, (d) => {
+			const lane = d.instruments.find((i: any) => i.name === 'synth-voice');
+			lane.steps = lane.steps.map((_: boolean, i: number) => i === 0 || i === 8);
+			lane.velocities = lane.velocities.map((_: number, i: number) => (i === 8 ? 0.25 : 1));
+			lane.waveforms = lane.waveforms.map(() => 'sawtooth');
+			d.selectedWaveform = 'sawtooth';
+			d.synth.filter.cutoff = 10000;
+			d.fx.tape = { enabled: !!tape, age: 0, wobble: 0, mode: 'tape', ...tape };
+			change?.(d);
+		});
+		return exportWav(page);
+	};
+	const off = await exportWith('tape-off', null);
+	// The aged one with its stems: the mix, and the sound without the tape's own noise
+	await exportWith('tape-old', { age: 1 });
+	const aged = unzip((await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: true, midi: false, oneShot: false, normalize: false })).bytes);
+	const part = (name: string) => aged[Object.keys(aged).find((f) => f.endsWith(`_${name}.wav`))!];
+	const old = part('mix');
+
+	// A duller top: the saw changes less from sample to sample (the dry stem: under the hiss)
+	expect(wavBrightness(part('dry'), 0.005, 0.2)).toBeLessThan(wavBrightness(off, 0.005, 0.2) * 0.75);
+	// Saturation: the loud hit is squeezed and the soft one comes up, so they're closer
+	const ratio = (b: Buffer) => wavWindow(b, 0, 0.4).peak / wavWindow(b, 1.5, 1.9).peak;
+	expect(ratio(off)).toBeGreaterThan(3.5);
+	expect(ratio(old)).toBeLessThan(ratio(off) * 0.9);
+	expect(wavPeak(old)).toBeLessThan(1);
+	// Hiss, between the hits (they've faded by then) and only with the pedal
+	expect(wavWindow(off, 0.9, 1.4).rms).toBeLessThan(1e-4);
+	const hiss = wavWindow(old, 0.9, 1.4).rms;
+	expect(hiss).toBeGreaterThan(0.002);
+	expect(hiss).toBeLessThan(0.03);
+	// With its tail, the hiss goes with the bar: it fades within 1.5 s of its end
+	const { frames, rate } = wavSamples(old);
+	expect(frames / rate).toBeGreaterThan(3.5);
+	expect(frames / rate).toBeLessThan(4.7);
+
+	// AGE at 0 with the pedal on: next to nothing changes (its low-pass is up at 20 kHz), and
+	// there's no hiss
+	const fresh = await exportWith('tape-new', { age: 0 });
+	expect(wavPeak(fresh) / wavPeak(off)).toBeGreaterThan(0.93);
+	expect(wavPeak(fresh) / wavPeak(off)).toBeLessThan(1.07);
+	expect(wavBrightness(fresh, 0.005, 0.2) / wavBrightness(off, 0.005, 0.2)).toBeGreaterThan(0.85);
+	expect(wavWindow(fresh, 0.9, 1.4).rms).toBeLessThan(1e-4);
+
+	// WOBBLE: a long, steady A5 holds its pitch without it and sways with it (about 1 % either
+	// way for the tape's slow wow), as a tape does and as a record does
+	const steady = (d: any) => {
+		const lane = d.instruments.find((i: any) => i.name === 'synth-voice');
+		lane.steps = lane.steps.map((_: boolean, i: number) => i === 0);
+		lane.waveforms = lane.waveforms.map(() => 'sine');
+		lane.pitches = lane.pitches.map(() => 880);
+		d.synth.envelope.decayMs = 2000;
+	};
+	const sway = (b: Buffer) => {
+		const hz = [0.05, 0.3, 0.55, 0.8, 1.05, 1.3].map((t) => wavPitchHz(b, t, t + 0.2));
+		return { spread: (Math.max(...hz) - Math.min(...hz)) / 880, mean: hz.reduce((x, y) => x + y, 0) / hz.length };
+	};
+	const still = sway(await exportWith('wobble-off', { wobble: 0 }, steady));
+	expect(still.mean).toBeCloseTo(880, 0);
+	expect(still.spread).toBeLessThan(0.0005);
+	for (const mode of ['tape', 'vinyl']) {
+		const moving = sway(await exportWith(`wobble-${mode}`, { wobble: 1, mode }, steady));
+		expect(moving.spread, mode).toBeGreaterThan(0.008);
+		expect(moving.spread, mode).toBeLessThan(0.04);
+		expect(Math.abs(moving.mean - 880), mode).toBeLessThan(8);
+	}
+});
+
+test('the tape pedal: its noise is a stem of its own and the stems still add up; a one-shot ends under the hiss', async ({ page }) => {
+	await setTempo(page, 80);
+	const name = page.getByRole('textbox', { name: 'Project name' });
+	await name.fill('Tape');
+	await name.press('Enter');
+	await turnOnPads(page, [0, 4, 8, 12]);
+	// Noise and reverb (Snare) and the delay: every stem has sound. Not the overdrive: its
+	// curve turns silence into a small steady offset, which Chrome renders differently from
+	// one render to the next (on main too), so with it on the stems miss the mix by that much
+	await soundsBox(page).getByRole('button', { name: 'Snare', exact: true }).click();
+	await page.locator('.fx .footswitch').nth(0).click();
+
+	const stemsOf = async (id: string, mode: string, ending: 'Loop' | 'With tail') => {
+		await importChanged(page, id, (d) => { d.fx.tape = { enabled: true, age: 0.8, wobble: 0.7, mode }; });
+		const zip = await exportAudio(page, { bars: 1, ending, mix: true, stems: true, midi: false, oneShot: true, oneShotNote: 'A2 (110 Hz)', normalize: true });
+		const files = unzip(zip.bytes);
+		const base = `${id}_80bpm_Amin_1bar${ending === 'Loop' ? '' : '-tail'}`;
+		expect(Object.keys(files).sort()).toEqual([
+			...['delay', 'dry', 'mix', 'noise', 'reverb', 'tape'].map((p) => `${base}_${p}.wav`), `${id}_oneshot_A2.wav`,
+		].sort());
+		// The stems add up to the mix, sample for sample, in both channels: the saturation
+		// follows the whole mix, so each part gets the gain the mix got
+		for (const ch of [0, 1]) {
+			const mix = wavSamples(files[`${base}_mix.wav`], ch).samples;
+			const stems = ['dry', 'delay', 'reverb', 'noise', 'tape'].map((p) => wavSamples(files[`${base}_${p}.wav`], ch).samples);
+			let worst = 0;
+			for (let i = 0; i < mix.length; i++) worst = Math.max(worst, Math.abs(stems.reduce((a, st) => a + st[i], 0) - mix[i]));
+			expect(worst, `${id}, channel ${ch}`).toBeLessThan(1e-3);
+			for (const st of stems) expect(st.length).toBe(mix.length);
+		}
+		return { files, base };
+	};
+
+	// Tape: the stem is a steady hiss. A loop is exactly the bar, hiss to its very end.
+	const tape = await stemsOf('Tape-loop', 'tape', 'Loop');
+	const hiss = tape.files[`${tape.base}_tape.wav`];
+	expect(wavSamples(hiss).frames).toBe(wavSamples(hiss).rate * 3);
+	const crest = (b: Buffer, to: number) => wavWindow(b, 0, to).peak / wavWindow(b, 0, to).rms;
+	expect(wavWindow(hiss, 0, 3).rms).toBeGreaterThan(0.001);
+	expect(crest(hiss, 3)).toBeLessThan(6);
+	expect(wavWindow(hiss, 2.9, 3).rms).toBeGreaterThan(wavWindow(hiss, 0, 3).rms * 0.7);
+
+	// Vinyl: crackle, mostly quiet with ticks standing out; with its tail it fades after the bar
+	const vinyl = await stemsOf('Tape-tail', 'vinyl', 'With tail');
+	const crackle = vinyl.files[`${vinyl.base}_tape.wav`];
+	expect(crest(crackle, 3)).toBeGreaterThan(8);
+	expect(wavWindow(crackle, 4.6, 9).peak).toBeLessThan(1e-4);
+
+	// The one-shot: the hit with its hiss, cut where the hit has faded under it (not 6 s of
+	// hiss), ending in a short fade
+	const shot = tape.files['Tape-loop_oneshot_A2.wav'];
+	const { frames, rate, samples } = wavSamples(shot);
+	expect(frames / rate).toBeGreaterThan(0.2);
+	expect(frames / rate).toBeLessThan(5.5);
+	expect(Math.abs(samples[frames - 1])).toBeLessThan(1e-3);
+	expect(wavWindow(shot, frames / rate - 0.2, frames / rate - 0.06).rms).toBeGreaterThan(1e-3);
+});
+
+test('the tape pedal: on the panel, saved, one undo step a change, reset by File → New and a sound preset', async ({ page }) => {
+	const tape = page.locator('.ds-grid .tape-pedal');
+	const footswitch = tape.locator('.footswitch');
+	const age = page.getByRole('slider', { name: 'AGE' });
+	const wobble = page.getByRole('slider', { name: 'WOBBLE' });
+	const mode = (name: string) => page.getByRole('radiogroup', { name: 'Tape or vinyl' }).getByRole('radio', { name, exact: true });
+	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.fx.tape;
+
+	// It's the last pedal, off, with its knobs and switch greyed out
+	await expect(page.locator('.ds-grid .fx-pair > *').last().locator('.tape-pedal')).toHaveCount(1);
+	await expect(footswitch).toHaveAttribute('aria-pressed', 'false');
+	await expect(age).toHaveAttribute('aria-disabled', 'true');
+	await expect(mode('Vinyl')).toBeDisabled();
+	expect(await saved()).toEqual({ enabled: false, age: 0.4, wobble: 0.3, mode: 'tape' });
+	await page.waitForTimeout(SETTLED);
+
+	await footswitch.click();
+	await expect(footswitch).toHaveAttribute('aria-pressed', 'true');
+	await expect(mode('Tape')).toHaveAttribute('aria-checked', 'true');
+	await page.waitForTimeout(SETTLED);
+	await mode('Vinyl').click();
+	await expect(mode('Vinyl')).toHaveAttribute('aria-checked', 'true');
+	await expect(mode('Tape')).toHaveAttribute('aria-checked', 'false');
+	await page.waitForTimeout(SETTLED);
+	await age.focus();
+	await page.keyboard.press('End');
+	await expect(age).toHaveAttribute('aria-valuetext', '100%');
+	await wobble.focus();
+	await page.keyboard.press('Home');
+	await expect(wobble).toHaveAttribute('aria-valuetext', '0%');
+	await page.waitForTimeout(SETTLED);
+	expect(await saved()).toEqual({ enabled: true, age: 1, wobble: 0, mode: 'vinyl' });
+
+	// The lever between the two words flips it
+	await tape.locator('.ms-slot').click();
+	await expect(mode('Tape')).toHaveAttribute('aria-checked', 'true');
+	await page.waitForTimeout(SETTLED);
+
+	// Undo: the lever, the knobs, then Vinyl, then the pedal itself
+	const undo = page.getByRole('button', { name: 'Undo', exact: true });
+	await undo.click();
+	await expect(mode('Vinyl')).toHaveAttribute('aria-checked', 'true');
+	await undo.click();
+	await expect(age).toHaveAttribute('aria-valuetext', '40%');
+	await expect(wobble).toHaveAttribute('aria-valuetext', '30%');
+	await undo.click();
+	await expect(mode('Tape')).toHaveAttribute('aria-checked', 'true');
+	await undo.click();
+	await expect(footswitch).toHaveAttribute('aria-pressed', 'false');
+	await page.getByRole('button', { name: 'Redo', exact: true }).click();
+	await expect(footswitch).toHaveAttribute('aria-pressed', 'true');
+
+	// A sound preset starts from the factory sound: the pedal goes off
+	await soundsBox(page).getByRole('button', { name: 'Kick', exact: true }).click();
+	await expect(footswitch).toHaveAttribute('aria-pressed', 'false');
+	// And File → New
+	await footswitch.click();
+	await mode('Vinyl').click();
+	await chooseFromFileMenu(page, 'New');
+	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
+	await expect(footswitch).toHaveAttribute('aria-pressed', 'false');
+	await expect(mode('Tape')).toHaveAttribute('aria-checked', 'true');
+	await expect(age).toHaveAttribute('aria-valuetext', '40%');
+});
+
+test('the tape pedal is last in the live path: its hiss plays while the pattern does, and the noise layer goes through it', async ({ page }) => {
+	const swing = (ms: number) => page.evaluate((t) => (window as any).__swingOver(t) as Promise<number>, ms);
+	const play = page.getByRole('button', { name: 'Play', exact: true });
+	const stop = page.getByRole('button', { name: 'Stop', exact: true });
+	const tape = page.locator('.ds-grid .tape-pedal');
+
+	// No step is on: with the pedal off, playing is silent
+	await play.click();
+	expect(await swing(400)).toBeLessThan(1e-4);
+	await stop.click();
+	await page.waitForTimeout(3300); // the noise stays 1 s after Stop, then fades for 2
+
+	// The pedal on, AGE at full: hiss while it plays, and the reels turn
+	await tape.locator('.footswitch').click();
+	await page.getByRole('slider', { name: 'AGE' }).focus();
+	await page.keyboard.press('End');
+	await expect(tape).not.toHaveClass(/\bturning\b/);
+	await page.waitForTimeout(300);
+	expect(await swing(300), 'no hiss while stopped').toBeLessThan(1e-4);
+	await play.click();
+	await expect(tape).toHaveClass(/\bturning\b/);
+	await page.waitForTimeout(200);
+	const hiss = await swing(500);
+	expect(hiss).toBeGreaterThan(0.005);
+	expect(hiss).toBeLessThan(0.2);
+	// Vinyl crackles instead: ticks reach further than the surface noise under them
+	await page.getByRole('radio', { name: 'Vinyl', exact: true }).click();
+	await page.waitForTimeout(200);
+	expect(await swing(1500)).toBeGreaterThan(0.01);
+	// Stopped, the noise stays a moment, then goes
+	await stop.click();
+	await expect(tape).not.toHaveClass(/\bturning\b/);
+	await page.waitForTimeout(3500);
+	expect(await swing(400)).toBeLessThan(1e-4);
+
+	// The pedal off again: nothing of it is left, and a note still reaches the speakers
+	await tape.locator('.footswitch').click();
+	await turnOnPads(page, [0, 4, 8, 12]);
+	await play.click();
+	const plain = await swing(1200);
+	await stop.click();
+	expect(plain).toBeGreaterThan(0.05);
+	// On, the notes come through it (AGE at full squeezes and dulls them, never silences them)
+	await tape.locator('.footswitch').click();
+	await page.getByRole('radio', { name: 'Tape', exact: true }).click();
+	await play.click();
+	const aged = await swing(1200);
+	await stop.click();
+	expect(aged).toBeGreaterThan(0.05);
+	expect(aged).toBeLessThan(2);
+});
+
 async function importOneStep(page: Page, vel: number, velocity?: Record<string, number>, change?: (data: any) => void) {
 	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
 	const lane = project.data.instruments.find((i: any) => i.name === 'synth-voice');
@@ -2999,7 +3264,7 @@ test('PR 79: the pedals and the screen\'s keys follow the theme, the pedals\' na
 		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${theme}`));
 		// Each pedal's name, and its knobs' captions while it's on (the overdrive switched on)
 		await page.locator('.ds-grid .drive-pedal .footswitch').click();
-		for (const pedal of ['delay', 'drive', 'reverb']) {
+		for (const pedal of ['delay', 'drive', 'reverb', 'tape']) {
 			const name = page.locator(`.ds-grid .${pedal}-pedal .effect-label`);
 			await name.scrollIntoViewIfNeeded();
 			expect(await textContrast(page, name), `${theme}: ${pedal}'s name`).toBeGreaterThanOrEqual(4.5);
@@ -3926,7 +4191,7 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 
 	await learn.click();
 	await expect(learn).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(31);
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(33);
 	await cutoff.click();
 	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
 	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');
@@ -4814,16 +5079,16 @@ test.describe('Phone mode', () => {
 	});
 
 	test('PR 72: pedals near their desktop shape, the menu laid out, no Shift+click on a touch screen', async ({ page }) => {
-		// FX: three pedals at most 150 px wide (they were stretched to 262), centred
+		// FX: four pedals at most 150 px wide (they were stretched to 262), centred
 		await page.getByRole('tab', { name: 'FX' }).click();
 		const pedals = await page.locator('.pl-fx > *').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
-		expect(pedals).toHaveLength(3);
+		expect(pedals).toHaveLength(4);
 		for (const p of pedals) {
 			expect(p.width).toBeLessThanOrEqual(150);
 			expect(p.height).toBeGreaterThan(p.width * 1.4);
 		}
 		const frame = (await page.locator('.pl-fx').boundingBox())!;
-		const left = pedals[0].x - frame.x, right = frame.x + frame.width - (pedals[2].x + pedals[2].width);
+		const left = pedals[0].x - frame.x, right = frame.x + frame.width - (pedals[3].x + pedals[3].width);
 		expect(Math.abs(left - right)).toBeLessThan(2);
 
 		// The menu: a header with ✕ (no Close button), File · name · Save without Undo and Redo

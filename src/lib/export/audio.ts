@@ -60,3 +60,18 @@ export function applyGain(channels: Channels, gain: number): Channels {
 	if (gain === 1) return channels;
 	return channels.map((ch) => ch.map((v) => v * gain));
 }
+
+// One sound less another, sample by sample (what's left of the mix without one of its parts)
+export function subtract(a: Channels, b: Channels): Channels {
+	return a.map((ch, c) => ch.map((v, i) => v - (b[c]?.[i] ?? 0)));
+}
+
+// The same sound, its last `frames` samples fading evenly to silence
+export function fadeOut(channels: Channels, frames: number): Channels {
+	return channels.map((ch) => {
+		const n = Math.min(frames, ch.length);
+		const out = ch.slice();
+		for (let i = 0; i < n; i++) out[ch.length - 1 - i] *= i / n;
+		return out;
+	});
+}

@@ -4,9 +4,9 @@
 //
 // For the Export audio dialog (src/audio/export/exportFiles.ts) it plays the pattern `bars`
 // times, can render one part of the mix on its own (`part`: the dry sound, the delay's echoes,
-// the reverb, or the noise layer, which add up to the mix), and takes its random numbers
-// (noise, the pitch envelope's random mode) from `random`, so every part of one export plays
-// the same noise and the same random sweeps.
+// the reverb, the noise layer, or the tape pedal's own noise, which add up to the mix), and
+// takes its random numbers (noise, the pitch envelope's random mode, the tape's hiss) from
+// `random`, so every part of one export plays the same noise and the same random sweeps.
 
 import { applyPitchEnv, pitchEnvStartCents } from "../pitchEnv";
 import { lfoFilterTapGain } from "../synthHelpers";
@@ -20,6 +20,7 @@ import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from "../ratchet";
 import { createCrusher } from "../crusher";
 import { createPingPong } from "../pingPong";
 import { clampUnisonVoices, unisonPhase, unisonPosition } from "../unison";
+import { createTape, tapeSettings, type TapeMode } from "../tape";
 
 export type StepSequencerState = {
 	bpm: number;
@@ -105,6 +106,13 @@ export type StepSequencerState = {
 			decay: number;    // seconds
 			tone: number;     // 0..1 (dark→bright)
 		};
+		// The tape pedal, last in the chain (tape.ts; missing: off)
+		tape?: {
+			enabled: boolean;
+			age: number;      // 0..1
+			wobble: number;   // 0..1
+			mode: TapeMode;
+		};
 	};
 
 	sampleRate: number;
@@ -113,11 +121,16 @@ export type StepSequencerState = {
 	bars?: number;          // how many times the pattern plays (default 1)
 	part?: ExportPart;      // which part of the mix to render (default 'mix')
 	random?: () => number;  // 0 ≤ x < 1 (default Math.random); seeded for an export's parts
+	// The tape pedal's own noise (hiss, crackle) plays for `seconds` (default: the bars, so a
+	// loop repeats without a doubled stretch of it), then fades for `fade` seconds (default 0)
+	tapeNoise?: { seconds?: number; fade?: number };
 };
 
 // The mix, or one part of it: the parts add up to the mix. 'dry' is the sound with drive but
-// without the delay's echoes or the reverb; the noise layer skips the effects, as live.
-export type ExportPart = 'mix' | 'dry' | 'delay' | 'reverb' | 'noise';
+// without the delay's echoes or the reverb; the noise layer skips those effects, as live.
+// With the tape pedal on, each of those is as it comes off the tape, and 'tape' is the
+// tape's own noise.
+export type ExportPart = 'mix' | 'dry' | 'delay' | 'reverb' | 'noise' | 'tape';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -267,20 +280,45 @@ export function scheduleStepSequencer(
 	masterGain.gain.setValueAtTime(clamp01(state.masterVolume), ctx.currentTime + offsetSeconds);
 	masterGain.connect(ctx.destination);
 
-	// The parts of the mix, each through its own gate to the master: all open for the mix, one
-	// for a part. Everything is scheduled the same either way, so a part uses the same random
-	// numbers as the mix.
+	// The parts of the mix, each through its own gate: all open for the mix, one for a part.
+	// Everything is scheduled the same either way, so a part uses the same random numbers as
+	// the mix. The gates meet in `partBus`; `fullBus` gets every part whatever is rendered,
+	// because the tape pedal's saturation follows the level of the whole mix (tape.ts), which
+	// is what lets the parts still add up to it.
 	const part = state.part ?? 'mix';
-	const partOut = (name: ExportPart) => {
+	const partBus = ctx.createGain();
+	const fullBus = ctx.createGain();
+	const gate = (name: ExportPart, to: AudioNode) => {
 		const g = ctx.createGain();
 		g.gain.value = part === 'mix' || part === name ? 1 : 0;
-		g.connect(masterGain);
+		g.connect(to);
 		return g;
+	};
+	const partOut = (name: ExportPart) => {
+		const bus = ctx.createGain();
+		bus.connect(gate(name, partBus));
+		bus.connect(fullBus);
+		return bus;
 	};
 	const dryOut = partOut('dry');
 	const delayOut = partOut('delay');
 	const reverbOut = partOut('reverb');
 	const noiseOut = partOut('noise');
+
+	// The tape pedal, last in the chain: everything goes through it, and its own noise is a
+	// part of its own. Its sways are fitted to the bars, so a loop repeats without a jump.
+	const tapeState = state.fx.tape;
+	const barsSeconds = bars * state.stepsCount * (60 / state.bpm / 4);
+	const tape = tapeState?.enabled ? createTape(ctx) : null;
+	if (tape && tapeState) {
+		tape.apply(tapeSettings(tapeState.age, tapeState.wobble, tapeState.mode, barsSeconds));
+		partBus.connect(tape.input);
+		fullBus.connect(tape.sidechain);
+		tape.output.connect(masterGain);
+		tape.noise.connect(gate('tape', masterGain));
+	} else {
+		partBus.connect(masterGain);
+	}
 
 	// Noise buffers (shared by all notes)
 	const noiseBuffers = generateNoiseBuffers(ctx, random);
@@ -298,6 +336,16 @@ export function scheduleStepSequencer(
 	const driveWet = ctx.createGain();
 	const driveMakeup = ctx.createGain();
 	const driveSum = ctx.createGain();
+
+	// Keeps the effects running to the end of the render. Chrome stops processing a node once
+	// every source feeding it has finished, at a moment that depends on how busy the browser is,
+	// so a delay's echoes, the reverb's tail or the tape pedal's path could be cut short in one
+	// render and not in another, and the stems then missed the mix (by 0.2 on a loaded machine).
+	// A silent source into driveSum and the parts' buses keeps everything after them going.
+	const keepAlive = ctx.createConstantSource();
+	keepAlive.offset.value = 0;
+	for (const n of [driveSum, dryOut, delayOut, reverbOut, noiseOut]) keepAlive.connect(n);
+	keepAlive.start(ctx.currentTime + offsetSeconds);
 
 	// CRUSH: shaper → tone → bit crusher → makeup (crusher.ts). The caller loads the crusher's
 	// worklet into ctx first (loadCrusher); without it the tone filter goes straight on.
@@ -522,6 +570,13 @@ export function scheduleStepSequencer(
 			noiseBuffers,
 			random,
 		}));
+	}
+
+	// The tape's noise takes its random numbers last, so the notes' are the same with the
+	// pedal on or off
+	if (tape) {
+		const t0 = ctx.currentTime + offsetSeconds;
+		tape.startNoise(random, t0, t0 + (state.tapeNoise?.seconds ?? barsSeconds), state.tapeNoise?.fade ?? 0);
 	}
 }
 
@@ -794,8 +849,8 @@ function scheduleSynthNote(opts: {
 			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, burstEnd);
 			noiseEnvGain.gain.setTargetAtTime(0.0001, burstEnd, 0.01);
 
-			// As in the live engine: band-limited, then straight to the master, skipping drive,
-			// delay and reverb (exports before PR 34 sent it through the effects)
+			// As in the live engine: band-limited, then straight on to the tape pedal and the
+			// master, skipping drive, delay and reverb (exports before PR 34 sent it through them)
 			const noiseHP = ctx.createBiquadFilter();
 			noiseHP.type = "highpass";
 			noiseHP.frequency.setValueAtTime(40, time);    // remove sub-rumble

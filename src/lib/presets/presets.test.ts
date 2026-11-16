@@ -40,6 +40,8 @@ const RANGES: Record<string, [number, number]> = {
 	'fx.reverb.mix': [0, 1],
 	'fx.reverb.decay': [0.2, 4],
 	'fx.reverb.tone': [0, 1],
+	'fx.tape.age': [0, 1],
+	'fx.tape.wobble': [0, 1],
 };
 const LFO_DIVISIONS = ['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32'];
 
@@ -336,6 +338,7 @@ describe('the dice (a random sound)', () => {
 			reverb: share(p => !!p.fx?.reverb),
 			delay: share(p => !!p.fx?.delay),
 			drive: share(p => !!p.fx?.drive),
+			tape: share(p => !!p.fx?.tape),
 		};
 		for (const [part, s] of Object.entries(parts)) {
 			expect(s, part).toBeGreaterThan(0.1);
