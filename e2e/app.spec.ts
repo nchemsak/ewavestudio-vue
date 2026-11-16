@@ -2972,9 +2972,7 @@ async function textContrast(page: Page, text: ReturnType<Page['locator']>) {
 }
 
 test('the Pattern Tools, Sounds, Patterns and section captions are readable in every theme', async ({ page }) => {
-	// The Light theme has no button at the moment (ThemeToggle.vue), but a saved choice still
-	// applies it
-	for (const theme of ['synthwave', 'dark', 'analog', 'slate', 'light']) {
+	for (const theme of ['synthwave', 'dark', 'analog']) {
 		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), theme);
 		await page.reload();
 		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${theme}`));
@@ -2995,7 +2993,7 @@ test('the Pattern Tools, Sounds, Patterns and section captions are readable in e
 
 test('PR 79: the pedals and the screen\'s keys follow the theme, the pedals\' names readable; Dark has a dark page', async ({ page }) => {
 	const looks: Record<string, string[]> = {};
-	for (const theme of ['synthwave', 'dark', 'analog', 'slate']) {
+	for (const theme of ['synthwave', 'dark', 'analog']) {
 		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), theme);
 		await page.reload();
 		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${theme}`));
@@ -3017,25 +3015,32 @@ test('PR 79: the pedals and the screen\'s keys follow the theme, the pedals\' na
 	}
 	// The delay pedal and the screen's keys differ in every theme (they were the same in all);
 	// the FM and Unison keys take the caps' colours (Synthwave's and Dark's differ)
-	for (const i of [0, 1, 3]) expect(new Set(Object.values(looks).map((l) => l[i])).size, `part ${i}`).toBe(4);
+	for (const i of [0, 1, 3]) expect(new Set(Object.values(looks).map((l) => l[i])).size, `part ${i}`).toBe(3);
 	expect(looks.synthwave[2]).not.toBe(looks.dark[2]);
 	// Dark's page is dark (it was Synthwave's pink wash): its brightest stop is near black
 	const stops = [...looks.dark[3].matchAll(/rgb\((\d+), (\d+), (\d+)\)/g)].map((m) => Math.max(+m[1], +m[2], +m[3]));
 	expect(Math.max(...stops)).toBeLessThan(48);
 });
 
-test('PR 85: the Sand theme is gone; a browser that had it opens in Synthwave', async ({ page }) => {
+test('PR 89: three themes; a browser that had Sand, Slate or Light saved opens in Synthwave', async ({ page }) => {
 	const themes = page.getByRole('group', { name: 'Theme' }).getByRole('button');
-	await expect(themes).toHaveText(['Dark', 'Synthwave', 'Analog', 'Slate']);
-	await page.evaluate(() => localStorage.setItem('ewave-studio2:ui-theme', 'sand'));
-	await page.reload();
-	await expect(page.locator('html')).toHaveClass(/theme-synthwave/);
-	await expect(page.locator('html')).not.toHaveClass(/theme-sand/);
-	await expect(page.getByRole('button', { name: 'Synthwave', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await expect(themes).toHaveText(['Dark', 'Synthwave', 'Analog']);
+	for (const gone of ['sand', 'slate', 'light']) {
+		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), gone);
+		await page.reload();
+		await expect(page.locator('html')).toHaveClass(/theme-synthwave/);
+		await expect(page.locator('html')).not.toHaveClass(new RegExp(`theme-${gone}`));
+		await expect(page.getByRole('button', { name: 'Synthwave', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	}
+	// None of their rules is left in the built CSS
+	const css = await page.evaluate(() => [...document.styleSheets].flatMap((sh) => {
+		try { return [...sh.cssRules].map((r) => r.cssText); } catch { return []; }
+	}).join('\n'));
+	expect(css).not.toMatch(/theme-(sand|slate|light)\b/);
 });
 
-test('Analog and Slate: their buttons apply their own colours, and are remembered', async ({ page }) => {
-	for (const [name, page1, screen] of [['Analog', 'rgb(107, 75, 52)', '#1a1208'], ['Slate', 'rgb(119, 132, 154)', '#16222a']]) {
+test('Analog: its button applies its own colours, and is remembered', async ({ page }) => {
+	for (const [name, page1, screen] of [['Analog', 'rgb(107, 75, 52)', '#1a1208']]) {
 		const button = page.getByRole('button', { name, exact: true });
 		await button.click();
 		await expect(button).toHaveAttribute('aria-pressed', 'true');
@@ -5133,7 +5138,7 @@ test.describe('Phone mode', () => {
 		await page.getByRole('button', { name: 'Menu' }).click();
 		const menu = page.getByRole('dialog', { name: 'Menu' });
 		await expect(menu.getByRole('button', { name: 'File ▾' })).toBeVisible();
-		await expect(menu.getByRole('button', { name: 'Slate', exact: true })).toBeVisible();
+		await expect(menu.getByRole('button', { name: 'Analog', exact: true })).toBeVisible();
 		// The File menu opens there without scrolling, and works (Export audio… opens its dialog
 		// over the phone layout)
 		await menu.getByRole('button', { name: 'File ▾' }).click();

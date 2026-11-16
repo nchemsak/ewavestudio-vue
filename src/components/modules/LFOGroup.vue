@@ -676,29 +676,6 @@ svg {
     --lfo-lcd-ink: #ffcf8a;
 }
 
-.theme-slate .lv-screen {
-    --lfo-lcd-bg: #0b181d;
-    --lfo-lcd-ink: #bfe6e0;
-}
-
-/* Light's screen: a green-grey LCD with dark ink */
-.theme-light .lv-screen {
-    --lfo-lcd-bg: #a9b29a;
-    --lfo-lcd-ink: #1d2419;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 0, 0, 0.45);
-}
-
-.theme-light .lv-screen {
-    --lfo-lcd-bg: #cdd2d5;
-    --lfo-lcd-ink: #111;
-}
-
-/* Dark ink on a pale screen: full strength and a little heavier, to stay readable at 9 px */
-.theme-light .lv-read {
-    opacity: 1;
-    font-weight: 600;
-}
-
 .lv-plot {
     position: absolute;
     inset: 2px;
@@ -742,11 +719,6 @@ svg {
     filter: drop-shadow(0 0 3px color-mix(in oklab, var(--lfo-mod), transparent 40%));
 }
 
-.theme-light .lv-wave {
-    stroke: #7a3d00;
-    filter: none;
-}
-
 .is-off .lv-wave {
     stroke-opacity: 0.35;
     filter: none;
@@ -788,11 +760,6 @@ svg {
 .lv-read.idle {
     color: #ffc107;
     opacity: 1;
-}
-
-.theme-light .lv-read.idle {
-    color: #7a3d00;
-    font-weight: 700;
 }
 
 .lv .lfo-row {
@@ -873,7 +840,6 @@ svg {
     }
 }
 
-
 /* The patch bay: a recessed strip of six sockets, their names above them */
 .lv-bay {
     position: relative;
@@ -884,11 +850,6 @@ svg {
     border-radius: 8px;
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.26));
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-}
-
-.theme-light .lv-bay {
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.09));
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
 .lv-jack {

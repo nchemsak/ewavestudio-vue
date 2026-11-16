@@ -100,24 +100,6 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
     --sp-ink: #ffcf8a;
 }
 
-.theme-slate .sp-pad {
-    --sp-bg: #0b181d;
-    --sp-ink: #bfe6e0;
-}
-
-.theme-light .sp-pad {
-    --sp-bg: #a9b29a;
-    --sp-ink: #1d2419;
-    --sp-line: #1d2419;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 0, 0, 0.45);
-}
-
-.theme-light .sp-pad {
-    --sp-bg: #cdd2d5;
-    --sp-ink: #111;
-    --sp-line: #111;
-}
-
 .sp-pad.dragging {
     cursor: grabbing;
     box-shadow: inset 0 0 0 1px hsl(var(--pt-accent) 80% 65% / 0.85), inset 0 2px 10px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(0, 0, 0, 0.45);
@@ -242,11 +224,6 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
     font-weight: 400;
     letter-spacing: 0.06em;
     opacity: 0.85;
-}
-
-.theme-light .sp-title small {
-    opacity: 1;
-    font-weight: 600;
 }
 
 .sp-hint {
