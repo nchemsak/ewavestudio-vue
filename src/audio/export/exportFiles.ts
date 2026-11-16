@@ -2,11 +2,12 @@
 // The files File → Export audio… makes (ExportDialog.vue chooses, DrumSequencer.vue downloads):
 // - the mix: N bars of the pattern, as a seamless loop (exactly N bars, the effects' tail
 //   folded onto the start) or with its tail (clean start, the tail rings out after the bars);
-// - effects stems: dry, delay, reverb and noise, rendered one at a time with the same random
-//   numbers as the mix, so they add up to it (a stem that would be silent, an effect that's
-//   off, is left out);
+// - effects stems: dry, delay, reverb, noise and the tape pedal's own noise, rendered one at a
+//   time with the same random numbers as the mix, so they add up to it (a stem that would be
+//   silent, an effect that's off, is left out);
 // - a MIDI file of the same bars (src/lib/export/midi.ts);
-// - a one-shot: one hit of the sound at a chosen note, effects included, until it fades.
+// - a one-shot: one hit of the sound at a chosen note, effects included, until it fades (the
+//   tape pedal's hiss never does, so it ends where the hit has faded under it).
 // Normalize turns the mix and stems up by one gain (so the stems still add up), and the
 // one-shot on its own, to −1 dBFS. Rendering uses the offline engine (scheduleStepSequencer)
 // in an OfflineAudioContext, faster than real time.
@@ -14,7 +15,7 @@
 import { loadCrusher } from '../crusher';
 import { scheduleStepSequencer, type ExportPart, type StepSequencerState } from './scheduleStepSequencer';
 import { encodeWavFloat32 } from './encodeWav';
-import { applyGain, barFrames, foldLoop, normalizeGain, peakOf, trimTail, type Channels } from '../../lib/export/audio';
+import { applyGain, barFrames, fadeOut, foldLoop, normalizeGain, peakOf, subtract, trimTail, type Channels } from '../../lib/export/audio';
 import { patternToMidi } from '../../lib/export/midi';
 import { exportNames, type Ending } from '../../lib/export/names';
 import { seededRandom } from '../../lib/random';
@@ -26,7 +27,7 @@ export type ExportOptions = {
 	bars: ExportBars;
 	ending: Ending;
 	mix: boolean;
-	stems: boolean;      // dry, delay, reverb, noise
+	stems: boolean;      // dry, delay, reverb, noise, tape
 	midi: boolean;
 	oneShot: boolean;
 	oneShotHz: number;   // the one-shot's note
@@ -37,7 +38,7 @@ export const DEFAULT_EXPORT_OPTIONS: Omit<ExportOptions, 'oneShotHz'> = {
 	bars: 1, ending: 'loop', mix: true, stems: false, midi: false, oneShot: false, normalize: true,
 };
 
-export const STEM_PARTS: ExportPart[] = ['dry', 'delay', 'reverb', 'noise'];
+export const STEM_PARTS: ExportPart[] = ['dry', 'delay', 'reverb', 'noise', 'tape'];
 
 // The one-shot is rendered this long, then trimmed where it fades
 const ONE_SHOT_SECONDS = 6;
@@ -45,6 +46,10 @@ const ONE_SHOT_SECONDS = 6;
 const TAIL_MARGIN_S = 0.05;
 // A stem quieter than this throughout is silent (its effect is off) and left out
 const SILENT_PEAK = 1e-6;
+// With its tail, the tape pedal's noise fades for this long after the bars
+const TAPE_NOISE_FADE_S = 1.5;
+// A one-shot through the tape pedal ends with a fade this long, under its hiss
+const ONE_SHOT_FADE_S = 0.04;
 
 export type ExportFile = { name: string; data: Uint8Array; type: string };
 
@@ -86,7 +91,13 @@ export async function buildExportFiles(
 	const seed = Math.floor(Math.random() * 2 ** 32);
 	const rendered: { part: ExportPart; channels: Channels }[] = [];
 	for (const part of parts) {
-		rendered.push({ part, channels: await render({ ...state, bars: o.bars, part, random: seededRandom(seed) }, seconds) });
+		rendered.push({
+			part,
+			channels: await render({
+				...state, bars: o.bars, part, random: seededRandom(seed),
+				tapeNoise: { fade: o.ending === 'tail' ? TAPE_NOISE_FADE_S : 0 },
+			}, seconds),
+		});
 		progress(++done, total);
 	}
 	// A loop folds its tail onto its start; with the tail, every file ends where the last of
@@ -121,11 +132,13 @@ export async function buildExportFiles(
 	if (o.oneShot) {
 		// One full-velocity hit on the first step, at the chosen note, on the main wave
 		const n = state.stepsCount;
-		const raw = await render({
+		const hit = (part: ExportPart, random: () => number) => render({
 			...state,
 			swing: 0,
 			bars: 1,
-			part: 'mix',
+			part,
+			random,
+			tapeNoise: { seconds: ONE_SHOT_SECONDS },
 			pattern: {
 				active: Array.from({ length: n }, (_, i) => i === 0),
 				velocities: Array(n).fill(1),
@@ -135,7 +148,20 @@ export async function buildExportFiles(
 			},
 			synth: { ...state.synth, noise: { ...state.synth.noise, mask: Array(n).fill(true) } },
 		}, ONE_SHOT_SECONDS);
-		const channels = trimTail(raw, Math.round(0.02 * sr), Math.round(TAIL_MARGIN_S * sr));
+		const hitSeed = Math.floor(Math.random() * 2 ** 32);
+		const raw = await hit('mix', seededRandom(hitSeed));
+		const minFrames = Math.round(0.02 * sr);
+		const margin = Math.round(TAIL_MARGIN_S * sr);
+		let channels: Channels;
+		if (state.fx.tape?.enabled) {
+			// The tape's noise never fades: the one-shot ends where the hit has faded under it
+			// (the mix less the noise, rendered with the same random numbers), with a short fade
+			const sound = subtract(raw, await hit('tape', seededRandom(hitSeed)));
+			const frames = trimTail(sound, minFrames, margin)[0].length;
+			channels = fadeOut(raw.map((c) => c.slice(0, frames)), Math.round(ONE_SHOT_FADE_S * sr));
+		} else {
+			channels = trimTail(raw, minFrames, margin);
+		}
 		const g = o.normalize ? normalizeGain(peakOf(channels)) : 1;
 		files.push({ name: names.oneShot(meta.noteName(o.oneShotHz)), data: wav(applyGain(channels, g), sr), type: 'audio/wav' });
 		progress(++done, total);

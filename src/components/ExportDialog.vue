@@ -98,7 +98,7 @@ const props = defineProps<{
 	options: ExportOptions;                     // starting choices (the last ones used)
 	notes: { hz: number; label: string }[];     // the one-shot's note choices
 	bpm: number;
-	effectsOn: { delay: boolean; reverb: boolean; noise: boolean };
+	effectsOn: { delay: boolean; reverb: boolean; noise: boolean; tape: boolean };
 	busy: boolean;
 	progress: string;                           // "2 of 5" while rendering
 	simple?: boolean;                           // phone mode: Bars and Ending only, the mix normalized
@@ -144,11 +144,12 @@ const lfoUneven = computed(() => o.ending === 'loop' && lfoBars.value > 1 && o.b
 // The shortest length that holds whole cycles (none for a dotted 1/8, whose cycle is 3 bars)
 const lfoFit = computed(() => EXPORT_BARS.find((b) => b % lfoBars.value === 0) ?? null);
 
-const stems = computed(() => ['dry', ...(['delay', 'reverb', 'noise'] as const).filter((p) => props.effectsOn[p])]);
+const STEM_EFFECTS = ['delay', 'reverb', 'noise', 'tape'] as const;
+const stems = computed(() => ['dry', ...STEM_EFFECTS.filter((p) => props.effectsOn[p])]);
 // "a, b and c"
 const list = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
 const stemsText = computed(() => {
-	const off = (['delay', 'reverb', 'noise'] as const).filter((p) => !props.effectsOn[p]);
+	const off = STEM_EFFECTS.filter((p) => !props.effectsOn[p]);
 	if (stems.value.length === 1) return `dry only: ${list([...off])} are off`;
 	return `${list(stems.value)}: they add up to the mix${off.length ? `; ${list([...off])} ${off.length === 1 ? 'is' : 'are'} off` : ''}`;
 });

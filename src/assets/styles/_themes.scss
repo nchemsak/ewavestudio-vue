@@ -158,14 +158,15 @@ $base: map.get($themes, synthwave);
 }
 
 /* The effect pedals (PR 79, option A of three mockups): each keeps its own colour (an orange
-   delay, a yellow overdrive, a stone reverb), shaded for the theme, with its name engraved in
+   delay, a yellow overdrive, a stone reverb, a green tape), shaded for the theme, with its name engraved in
    dark ink (white with a glow was hard to read). The pedals read --pedal-hi / --pedal-lo (the
    body), --pedal-ink (the knobs' and switch's captions), --pedal-ink-off (a switch while its
    pedal is off), --pedal-name and --pedal-name-shadow; without a theme's values they keep
    their first colours */
 .delay-pedal,
 .drive-pedal,
-.reverb-pedal {
+.reverb-pedal,
+.tape-pedal {
     --pedal-ink: rgba(0, 0, 0, 0.9);
     --pedal-ink-off: rgba(0, 0, 0, 0.5);
     --pedal-name: rgba(0, 0, 0, 0.86);
@@ -176,18 +177,21 @@ $base: map.get($themes, synthwave);
     .delay-pedal { --pedal-hi: #ff9a72; --pedal-lo: #ff6f86; }
     .drive-pedal { --pedal-hi: #ffe27a; --pedal-lo: #f5b847; }
     .reverb-pedal { --pedal-hi: #cbbcf2; --pedal-lo: #9d88d8; }
+    .tape-pedal { --pedal-hi: #8fe3d6; --pedal-lo: #4dbdbb; }
 }
 
 .theme-dark {
     .delay-pedal { --pedal-hi: #d48a52; --pedal-lo: #b0673a; }
     .drive-pedal { --pedal-hi: #d3be6a; --pedal-lo: #b39538; }
     .reverb-pedal { --pedal-hi: #aaa59c; --pedal-lo: #817a6e; }
+    .tape-pedal { --pedal-hi: #9fb59c; --pedal-lo: #718c75; }
 }
 
 .theme-analog {
     .delay-pedal { --pedal-hi: #cc7840; --pedal-lo: #a8592a; }
     .drive-pedal { --pedal-hi: #e0bb5e; --pedal-lo: #c49b3a; }
     .reverb-pedal { --pedal-hi: #e8dec7; --pedal-lo: #c8b996; }
+    .tape-pedal { --pedal-hi: #b3ad72; --pedal-lo: #8d8748; }
 }
 
 .theme-synthwave a.return {

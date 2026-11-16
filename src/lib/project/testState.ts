@@ -78,6 +78,7 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 			},
 			drive: { enabled: ref(true), type: ref('fuzz'), amount: ref(0.9), tone: ref(1), mix: ref(0.9), crush: ref(true) },
 			reverb: { enabled: ref(true), mix: ref(0.9), decay: ref(5), tone: ref(0.1) },
+			tape: { enabled: ref(true), age: ref(0.9), wobble: ref(0.9), mode: ref<'tape' | 'vinyl'>('vinyl') },
 		},
 		instruments,
 		melody: reactive({
@@ -132,6 +133,7 @@ export function changeEverything(st: ProjectState) {
 	fx.delay.pingPong.value = true;
 	fx.drive.enabled.value = true; fx.drive.type.value = 'fuzz'; fx.drive.amount.value = 0.8; fx.drive.tone.value = 3000; fx.drive.mix.value = 0.7; fx.drive.crush.value = true;
 	fx.reverb.enabled.value = true; fx.reverb.mix.value = 0.5; fx.reverb.decay.value = 3; fx.reverb.tone.value = 0.2;
+	fx.tape.enabled.value = true; fx.tape.age.value = 0.7; fx.tape.wobble.value = 0.6; fx.tape.mode.value = 'vinyl';
 	Object.assign(st.melody, {
 		keyRoot: 'D', keyScale: 'dorian', rangePreset: 'mid', arpPattern: 'updown', arpRate: '1/8', arpOctaves: 2, arpTones: 'seventh',
 		arpSkip: true, activeOnly: false, mode: 'arp',
