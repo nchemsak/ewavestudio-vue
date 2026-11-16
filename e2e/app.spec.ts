@@ -3243,6 +3243,49 @@ async function textContrast(page: Page, text: ReturnType<Page['locator']>) {
 	}, png);
 }
 
+test('PR 93: one accent: lit keys, the chosen key and the mute dot in the LEDs\' colour, no wash, readable captions while off', async ({ page }) => {
+	const style = (sel: string, prop: string, pseudo?: string) => page.locator(sel).first()
+		.evaluate((el, [p, ps]) => getComputedStyle(el, ps || null).getPropertyValue(p), [prop, pseudo ?? ''] as const);
+	for (const theme of ['synthwave', 'dark', 'analog']) {
+		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), theme);
+		await page.reload();
+		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${theme}`));
+		const led = await page.evaluate(() => {
+			const probe = document.createElement('i');
+			probe.style.color = 'var(--hw-led)';
+			document.body.append(probe);
+			const c = getComputedStyle(probe).color;
+			probe.remove();
+			return c;
+		});
+		// FM's and Unison's chosen keys, the LFO's wave key and the Step Sequencer's dot: the LEDs'
+		expect(await style('.ds-grid .fm-unit .sp-key.on', 'color'), theme).toBe(led);
+		expect(await style('.ds-grid .uni-unit .sp-key.on', 'color'), theme).toBe(led);
+		expect(await style('.ds-grid .lk-key.on', 'color'), theme).toBe(led);
+		expect(await style('.ds-steps .mute-dot', 'background-color'), theme).toBe(led);
+		// The Melody Maker's key: a ring, not the wash; the white key keeps its own white
+		const key = '.ds-grid .mm-kb .kb-white.is-active';
+		expect(await style(key, 'box-shadow'), theme).toContain(led);
+		expect(await style(key, 'background-image'), theme).not.toContain('radial-gradient');
+		// The Waveforms card has the other cards' background
+		expect(await style('.ds-grid .generators .pt-card', 'background-image'), theme)
+			.toBe(await style('.ds-grid .fm-unit', 'background-image'));
+		// Generate is one hue: its cap's two colours share the accent's hue
+		const caps = await page.locator('.ds-grid .mm-gen-bar').evaluate((el) => {
+			const cs = getComputedStyle(el);
+			return [cs.getPropertyValue('--cap-hi'), cs.getPropertyValue('--cap-lo')];
+		});
+		const hue = (c: string) => c.match(/hsl\(\s*([\d.]+)/)?.[1] ?? c;
+		expect(hue(caps[0]), theme).toBe(hue(caps[1]));
+		// Captions on parts that are off (Noise, every pedal): dimmed, but readable
+		for (const sel of ['.ds-grid .module.noise .knob-label', '.ds-grid .delay-pedal .knob-label', '.ds-grid .reverb-pedal .knob-label']) {
+			const caption = page.locator(sel).first();
+			await caption.scrollIntoViewIfNeeded();
+			expect(await textContrast(page, caption), `${theme}: ${sel}`).toBeGreaterThanOrEqual(3);
+		}
+	}
+});
+
 test('the Pattern Tools, Sounds, Patterns and section captions are readable in every theme', async ({ page }) => {
 	for (const theme of ['synthwave', 'dark', 'analog']) {
 		await page.evaluate((t) => localStorage.setItem('ewave-studio2:ui-theme', t), theme);
