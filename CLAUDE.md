@@ -6,7 +6,7 @@ https://www.ephemeralwave.com/studio/ and is never updated or overwritten, so th
 be compared; never deploy this code to `/studio/`. Everything runs client-side with the Web
 Audio API; there is no backend. Features: one 16-step synth lane with per-step pitch,
 velocity, waveform (sine, triangle, saw, square, a pulse with adjustable width, and three
-harmonic shapes) and ratchet (2–4 quick hits within the step); amp envelope, pitch envelope (a drum-style sweep), filter with its own
+harmonic shapes, and a sound recorded from the microphone) and ratchet (2–4 quick hits within the step); amp envelope, pitch envelope (a drum-style sweep), filter with its own
 envelope, noise, FM,
 unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a tape pedal (wear, wobble, tape or vinyl); Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
@@ -185,6 +185,8 @@ src/components/
   WaveButton.vue, WaveIcon.vue  A wave's big tile (Waveforms panel) and small line icon (pads)
   RandomWaveTile.vue     The Waveforms card's Random: a tall tile that rolls the pads' waves and
                          shows their mix (see "Layout" under Conventions)
+  SampleTile.vue         The Waveforms card's Sample strip: REC, and the recording to pick (see
+                         "Sample a sound")
   VelSwitch.vue          The Filter card's VEL switch: velocity routing (the only one since PR 67)
   PillSwitch.vue         The small on/off pill with an LED in a card's header (VEL, RETRIG)
   ShapePad.vue           A card's screen that you drag (Envelope, Pitch, Filter, FM, Unison), and
@@ -214,6 +216,8 @@ src/audio/
                          (see "The tape pedal")
   unison.ts              Unison: 2–4 voices, where each sits and starts in its cycle (see
                          "Audio engine (live)")
+  sample.ts              The recorded sound, the 'sample' wave: kept as base64 PCM, trimmed, and
+                         played at a note's pitch (see "Sample a sound")
   reverb/generateIr.ts   Algorithmic impulse response for the ConvolverNode
   export/scheduleStepSequencer.ts  Separate offline engine used for audio export
   export/exportFiles.ts  The Export audio dialog's files: renders, loops, stems, one-shot; and
@@ -269,6 +273,7 @@ src/composables/useUndoHistory.ts  When to record an undo step, and applying und
 src/composables/useLfoVisual.ts  The LFO visualizer's frame clock
 src/composables/useFirstGenerate.ts  Whether Generate has been pressed in this browser (the hint)
 src/composables/usePlayhead.ts  The Melody Maker screen's playhead: where the bar is, each frame
+src/composables/useSampleRecorder.ts  Recording from the microphone (see "Sample a sound")
 src/assets/styles/       _bootstrap-custom.scss (the Bootstrap parts in use, then main.scss),
                          and all global SCSS (themes are in _themes.scss, the buttons' look in
                          _hardware.scss: see "Buttons" under Conventions). _sequencer.scss and
@@ -706,6 +711,62 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   parts adding up through the mix's gain, the noise. Browser tests measure exports (duller,
   squeezed, hiss between hits, the pitch swaying about 1 %, the stems adding up for tape and
   vinyl, the one-shot's end) and the live path (hiss while playing, gone after Stop).
+
+### Sample a sound
+- PR 95 (picked before the Simple view, the maintainer's call). A sound recorded from the
+  microphone, about a second, is a ninth wave, `'sample'`, that the pads play at their pitch
+  through the same envelope, filter, FM, unison, LFO, noise and pedals, in both engines
+  (`src/audio/sample.ts`; `createVoiceSource()` in `waves.ts` takes the buffer).
+- **Pitch**: it plays as recorded on A3 (`SAMPLE_ROOT_HZ`, 220 Hz, the pads' default note), an
+  octave up twice as fast and half as long, as a sampler plays a key; no pitch detection.
+  `createSampleVoice()` gives the buffer a `frequency` parameter, as an oscillator has: a
+  `ConstantSourceNode`'s offset, scaled by 1/220 into the buffer's `playbackRate` (set to 0), so
+  the pitch envelope (`applyPitchEnv()`), FM (`startFM()`, whose carrier is now any
+  `{ frequency }`), unison detune and the LFO's pitch target work on it unchanged
+  (`PitchedSource`). `playbackRate` and `detune` are k-rate on a buffer source, so FM moves it a
+  block (128 samples) at a time: grainier than on an oscillator. Unison voices start together
+  (a recording has no cycle to shift). A recording that ends before the envelope does simply
+  stops. `waveGain('sample')` is 1: the recording is at full scale. Without a recording (a share
+  link, a project from before), a pad on `'sample'` plays a sine.
+- **Recording** (`useSampleRecorder.ts`): REC asks for the microphone (echo cancelling, noise
+  suppression and level control off: they eat a hit's attack), then listens, keeping nothing
+  until a sound starts (a block louder than about −36 dBFS, `ONSET_LEVEL`), then about a second
+  from 5 ms before it, and stops by itself; after 6 s of quiet it gives up ("Nothing heard"). A
+  press while it listens or records stops it. The microphone is read in the app's own
+  AudioContext by a tiny AudioWorklet from a Blob URL (as the bit crusher), into a silent gain.
+  `trimRecording()` (unit-tested) cuts it where it stays 50 dB under its peak, fades its last
+  10 ms and sets its peak to full scale. Then (`SAMPLE` section of `DrumSequencer.vue`) it
+  goes on every pad and becomes the main wave (as a wave tile's click does), and plays once on
+  A3; one undo step with the waves. Analytics `sample_record` (with `seconds`).
+- **Saved** as `synth.sample` `{ data, sampleRate }`: 16-bit PCM in base64 (about 128 kB for a
+  second at 48 kHz), so it's in IndexedDB, the export file, Save as… and undo like any setting
+  (an undo step's JSON is that much bigger; the history keeps 100). `sampleFrom()` checks it on
+  load (a damaged one is dropped); a project without one opens with none. File → New clears it
+  (`resetToFactoryDefaults()`); a sound preset and the phone's Reset keep it (it isn't in
+  `resetSoundToFactoryDefaults()`, `applyPreset()` passes it on, and `soundKey()` leaves it out,
+  so recording doesn't unlight a preset). **Share links leave it out** (`buildSharePayload()`:
+  too big for a link), so their pads on `'sample'` play a sine. `sampleBuffer()` makes the
+  AudioBuffer once per recording; an AudioBuffer plays in any context, so the export's offline
+  renders and the screen's hit at rest use the same one.
+- **Where it sits** (option B of two mockups; A was a tall tile beside Random, which made the
+  wave tiles narrower): a strip under the wave tiles and Random, as wide as them
+  (`SampleTile.vue`, `.st-strip`, 40 px): REC (a round cap with a red dot, blinking while busy,
+  a level meter under it) at its start, then "SAMPLE" with an LED and a picture of the recording
+  (or a microphone while there's none). The strip picks the recording for every pad (with none
+  it records), lit with the wave tiles' ring while every pad plays it; while recording its
+  caption says "Make a sound", "Recording", or afterwards "Microphone blocked" / "Nothing heard"
+  (also a `role="status"` for screen readers). On the desktop and the tablet's Sound tab the
+  card is the size it was (it had room); in one column (under 720 px) it's 50 px taller. A
+  pad's ⋮ menu offers Sample while there's a recording (or the pad still plays it). The pads'
+  icon is a jagged burst (`WaveIcon.vue`). The phone's Sound page has SAMPLE and REC as the
+  ninth and tenth buttons of its wave grid (five across; TRIANGLE reads TRI there), so it still
+  fits 568 × 320.
+- Not in Random's pool, the dice badges or the Sounds dice: the waves stay the eight
+  (`WAVE_IDS`); `PadWave` is a wave or `'sample'`.
+- Browser tests record from a fake microphone (`fakeMicrophone()`: a falling tone after 0.4 s):
+  the strip lights, the file has the recording on every pad, one-shots on A3 and A4 play it at
+  twice the speed, the pad menu, File → New and import, one undo step; and a blocked
+  microphone.
 
 ### LFO visualizer
 - While the LFO moves something, its movement is drawn on the control it moves, in amber
@@ -1387,7 +1448,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   packs the project as it is now (unsaved changes included) into the link's fragment,
   `/studio2/#p=<code>`, which is never sent to the server, so it works on static hosting. The
   code is the export file's shape (`{ version, meta: { name }, data }`, without the project id
-  and `ui`, so the theme and open panels stay the recipient's), as JSON, deflated
+  and `ui`, so the theme and open panels stay the recipient's, and without the recorded
+  sound, `synth.sample`), as JSON, deflated
   (`CompressionStream('deflate-raw')`) and in base64url, its first letter `z` (or `j`, plain
   JSON, where a browser has no CompressionStream): about 1.2 kB for a factory project. A touch
   device gets its share sheet (`navigator.share`); a computer gets the link copied ("Link
@@ -1708,7 +1770,7 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 
 Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the maintainer
 changes it as ideas come up; the list now is the one agreed in PR 86). The drums come back as
-the Drums machine (item 8), not as the old sample lanes.
+the Drums machine (item 7), not as the old sample lanes.
 
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
@@ -1731,15 +1793,15 @@ around the market, and put 38 ideas with mockups on a page; the maintainer answe
 Maybe or No. The list below is the Yes answers in the agreed order; the Maybes and Nos follow
 it. What the review found, and what the answers settled:
 - **The look:** no overhaul. Targeted fixes now (PRs 89, 92 and 93; fitting the window, put off below), and one layout
-  change later, with the machines (item 7), so the layout changes once.
+  change later, with the machines (item 6), so the layout changes once.
 - **The first visit** is silent (no step is on) and the glowing Generate gives every pad A
   (Scale starts at None): PR 87, before anything else.
-- **One 16-step bar repeats forever:** patterns A–D and a chain (item 5).
-- **More sequencers are small machines with hard limits** (items 6–9), not copies of today's
+- **One 16-step bar repeats forever:** patterns A–D and a chain (item 4).
+- **More sequencers are small machines with hard limits** (items 5–8), not copies of today's
   panel: they share the tempo, the key and scale, the pattern slots and the pedalboard; one is
   on the pads at a time. Today's synth becomes the **Rhythm** machine and stays the DFAM-style
   core (see "Design intent").
-- **Money:** nothing is charged for. Launch free and see who comes back (item 4) before any
+- **Money:** nothing is charged for. Launch free and see who comes back (item 3) before any
   paid route; a plugin or a native app (a new sound engine) was turned down.
 
 Redesigns are visual: every control keeps working as it does, and each card keeps its size.
@@ -1751,54 +1813,51 @@ do, sockets, steppers that open a list for a choice of words, switches for numbe
 only where a control doesn't explain itself, not too many buttons on show, and the action
 button where the eye ends up (Generate, PR 82).
 
-Show it (its signature, the tape pedal, was PR 90; the screen at rest, PR 94):
+Show it (its signature, the tape pedal, was PR 90; the screen at rest, PR 94; Sample a sound,
+PR 95, came before the Simple view, the maintainer's call):
 
 1. **A Simple view on desktop.** Phone mode's layout (big pads, the Sound and Pattern
    steppers, four knobs) on a computer, as Simple | Full in the top bar, remembered; the full
    panel stays as it is.
-2. **Sample a sound.** Record about a second from the microphone; it becomes a wave tile,
-   played at each pad's pitch through the same envelope, filter and pedals. Both engines; kept
-   with the project in IndexedDB, left out of share links (too big). The hidden sample lanes
-   already play recordings.
-3. **Lessons.** A Learn item in the menu: about ten short lessons that light one control at a
+2. **Lessons.** A Learn item in the menu: about ten short lessons that light one control at a
    time ("drag this point left: the hit gets darker"), built on the hint Generate has.
-4. **Launch free and measure; a tip jar.** Mostly the maintainer's: a short video, posts where
+3. **Launch free and measure; a tip jar.** Mostly the maintainer's: a short video, posts where
    synth people gather and to the sites that cover free browser instruments. Claude's part: a
    Support link in the gear menu, an analytics event for a visitor who comes back within a
    week, and a first free pack of one-shots made with the app. Nothing is charged for.
 
 Grow into a small groovebox:
 
-5. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
+4. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
     holds the steps, notes, velocities and repeats; the sound is shared. A slot clicked while
     playing takes over at the next bar (the bar queue, with its ghost). Copy A to B. Under the
     slots, a chain of up to eight cells plays them in order, and Export audio can render the
     chain. No timeline. Saved so that a pattern is a list of tracks from the start, even with
     one track, and the machines need no second change to saved projects.
-6. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
+5. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
     that builds a note, used by the live engine and the export engine (today two engines kept
     in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
     on the output (dropped after PR 30 for one voice; four machines summed need it).
-7. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
+6. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
     name, mute, level and a tiny row of its steps); the pads show the chosen machine; the Sound
     section becomes the chosen machine's panel; a send to the pedals per machine; a stem per
     machine in the export. Bass: one note at a time, 30–250 Hz, saw or square with a sub, one
     filter with its envelope, Accent per step, about six knobs (Cutoff, Reso, Env, Decay, Sub,
     Drive), following the key. Decide Slide and Tie (a Maybe below) when it starts. Mockups
     first; the phone gets a way to choose the machine.
-8. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
+7. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
     Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
     drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
     light work for a phone. It replaces the hidden sample lanes: their playback code is reused,
     the rest and the three mp3 files go (see "Dead code").
-9. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
+8. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
     touch plates, one slow filter, joystick and short sequencer are worth borrowing; its
     per-voice knobs and microtonal tuning are not). Six plates, one per note of the key's
     chord; a touched plate latches a small swarm of detuned oscillators, fading in over a bar
     or more; an X/Y pad (the filter one way, the swarm's spread the other); Attack and Release
     in bars; no steps: its sequencer counts bars, a chord per bar for 4 or 8 bars, across the
     pattern chain; straight to the reverb.
-10. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+9. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
     the maintainer wants some maintenance, each as its own PR.
 
 Put off after PR 93 (the maintainer's call: back to them after some of the items above):
@@ -1808,7 +1867,7 @@ Put off after PR 93 (the maintainer's call: back to them after some of the items
   Centred vertically when it fits: tighten spacing (the screen's margins, the gaps between
   sections; the desktop's pedals got short footswitches in PR 90), then scale the frame down
   to fit short windows (with a floor). Measure at the maintainer's screen and common laptop
-  sizes, once the machines' rail is there (item 7).
+  sizes, once the machines' rail is there (item 6).
 - **Record a take** (put off after PR 93, for now). A REC cap beside Play records what's heard,
   knob moves included, to a WAV (the output captured without loss, in a worklet), and stops
   with Stop. Export renders the pattern as set; it can't capture a filter sweep that's
@@ -1900,7 +1959,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   interval (a fifth, an octave, detuned) and level, maybe hard sync or VCO 1 → 2 FM; a card,
   both engines, presets, the dice, saving. It must sound unlike the FM card's modulator, which
   is already a second oscillator.
-- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 6–9.)
+- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 5–8.)
 - **Patch cables** (put off after PR 49: the maintainer wants to tweak the layout more first):
   animated cables from the LFO to what it moves (Cutoff, the Pulse tile, the pads), swaying a
   little, never over a control, still with `prefers-reduced-motion`. They depend on where
@@ -1935,7 +1994,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
   ticks, 24 a quarter note, which jitter); MIDI out would send the pattern's notes to another
   synth, timed against the audio clock.
-- (Several patterns chained into a song: planned now, item 5.)
+- (Several patterns chained into a song: planned now, item 4.)
 - **32 steps, or per-lane lengths** (the export code's types already allow 32; "Last step", a
   Maybe above, is the smaller version).
 - **Per-step parameter locks** (for example a different filter cutoff on each step). Each
@@ -1951,8 +2010,8 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   808 makes cymbals and cowbell) and struck (a click ringing tuned resonant filters).
 - The old drum-lane items (lanes through the pedals with pitch, decay and pan; custom samples
   stored in the browser; drum kits; the export rendering only the synth lane; the sample paths
-  that depend on the trailing slash) are overtaken by the Drums machine (item 8), a send and a
-  stem per machine (item 7) and Sample a sound (item 2). Still on hold from them: samples
+  that depend on the trailing slash) are overtaken by the Drums machine (item 7), a send and a
+  stem per machine (item 6) and Sample a sound (PR 95). Still on hold from them: samples
   loaded by drag-and-drop, and drum slots played by MIDI notes.
 - **Shared session ("jam"):** several people on one URL, for example one phone playing the
   drum lanes and another the synth. It needs a realtime relay between devices; the site is
@@ -2059,6 +2118,7 @@ Done:
 | 92 | Theme and MIDI inside the frame (option A of three mockups): a gear at the top bar's right end opens Theme (Synthwave, Analog, Dark: lightest to darkest) and MIDI (`SettingsMenu.vue`), with an LED once a controller is chosen; the row above the frame and the link under it are gone, and the logo is the link back to Ephemeral Wave (in the gear's panel under 576 px, where the logo is hidden). One volume knob: the Step Sequencer's Vol is hidden (its value still plays), no longer MIDI-learnable, and the LFO's Level mark is on the Volume knob. |
 | 93 | One accent, one job (option A of two mockups): the accent only on what makes something (Generate and Save, one hue each, and the Random wave tile), the pink-to-cyan gradient on Play only; FM's, Unison's and the LFO's lit keys, the chosen wave tile's ring, the dice badges, the scale's dots, the chosen piano key (a ring instead of the wash), the Step Sequencer's dot and the FM and Unison ribbons' LEDs in the LEDs' mint; the shape screens' curves in their own ink; card edges neutral; the Waveforms card without its wash. Captions on a switched-off part readable (the pedals' 1.2–1.9 : 1 → 3.7 : 1 and up; Analog's delay pedal a little lighter); FM's screen no longer dimmed twice while off. Labels stay monospace. |
 | 94 | The screen at rest shows the hit: while nothing plays, the screen draws one hit of the current sound (the one-shot the export would make, rendered offline in a few tens of ms) as a waveform on a square-root time scale, in its pad's colour, with its note, length and peak, redrawn as the sound changes (`src/components/hitView.ts`, `renderHit()`); Play brings back the chosen view, and a view picked at rest shows instead until the next rest. Plan: fitting the window and Record a take put off. |
+| 95 | Sample a sound (before the Simple view, the maintainer's call): REC in a strip under the wave tiles (option B of two mockups) records about a second from the microphone, from just before the sound starts, and the pads play it as a ninth wave, Sample, at their pitch (as recorded on A3) through the same envelope, filter and pedals, in both engines (`src/audio/sample.ts`, `useSampleRecorder.ts`, `SampleTile.vue`); saved with the project (16-bit PCM in base64), kept by sound presets, cleared by File → New, left out of share links; offered in a pad's ⋮ menu and on the phone's Sound page. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

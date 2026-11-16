@@ -10,9 +10,9 @@
             <div v-if="showWaveRow" class="pad-row">
                 <div class="pad-label">Wave</div>
                 <div class="pt-seg pt-seg-sm wave-seg" role="group" aria-label="Waveform">
-                    <button v-for="w in WAVE_IDS" :key="w" class="pt-seg-btn hw-led-top" :class="{ 'is-active': waveLocal === w }"
+                    <button v-for="w in waveChoices" :key="w" class="pt-seg-btn hw-led-top" :class="{ 'is-active': waveLocal === w }"
                         :aria-pressed="waveLocal === w" @click="setWave(w)">
-                        {{ WAVE_LABELS[w] }}
+                        {{ padWaveLabel(w) }}
                     </button>
                 </div>
             </div>
@@ -97,7 +97,8 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import Knob from './Knob.vue';
 
 type AnchorRect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
-import { WAVE_IDS, WAVE_LABELS, type Wave } from '../audio/waves';
+import { WAVE_IDS, padWaveLabel, type PadWave } from '../audio/waves';
+import { SAMPLE_WAVE } from '../audio/sample';
 import { RATCHET_COUNTS, type RepeatNotes } from '../audio/ratchet';
 
 const NOTE_CHOICES: { id: RepeatNotes; label: string }[] = [
@@ -124,7 +125,8 @@ const props = withDefaults(defineProps<{
     maxHz: number;
     anchorRect?: AnchorRect;
     title?: string;
-    wave?: Wave;
+    wave?: PadWave;
+    hasSample?: boolean; // a recording exists: Sample is one of the waves (sample.ts)
     noiseEnabled?: boolean;
     // The Noise card is off: no pad has noise, so the switch reads Off and says why
     noiseCardOff?: boolean;
@@ -135,7 +137,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
     (e: 'update:open', v: boolean): void;
     (e: 'update:hz', v: number): void;
-    (e: 'update:wave', v: Wave): void;
+    (e: 'update:wave', v: PadWave): void;
     (e: 'update:noiseEnabled', v: boolean): void;
     (e: 'update:ratchet', v: number): void;
     (e: 'update:repeatNotes', v: RepeatNotes): void;
@@ -281,10 +283,13 @@ const hzInput = computed({
 });
 
 const showWaveRow = computed(() => props.wave !== undefined);
-const waveLocal = ref<Wave>(props.wave ?? 'sine');
+const waveLocal = ref<PadWave>(props.wave ?? 'sine');
+// The eight waves, and the recording when there is one (or this pad still plays it)
+const waveChoices = computed<PadWave[]>(() =>
+    props.hasSample || props.wave === SAMPLE_WAVE ? [...WAVE_IDS, SAMPLE_WAVE] : [...WAVE_IDS]);
 watch(() => props.wave, (v) => { if (v) waveLocal.value = v; });
 watch(waveLocal, (v) => emit('update:wave', v));
-function setWave(w: Wave): void { waveLocal.value = w; }
+function setWave(w: PadWave): void { waveLocal.value = w; }
 
 const showNoiseRow = computed(() => typeof props.noiseEnabled === 'boolean');
 const showRatchetRow = computed(() => typeof props.ratchet === 'number');

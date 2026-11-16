@@ -363,6 +363,110 @@ test('at rest the screen shows one hit of the sound, redrawn as the sound change
 	await expect(hitCanvas(page)).toBeVisible({ timeout: 4000 });
 });
 
+// A fake microphone (PR 95): a quiet room, then a drum-like hit 0.4 s after the browser asks
+// for it: a tone falling from 330 to 90 Hz, gone after half a second
+function fakeMicrophone() {
+	navigator.mediaDevices.getUserMedia = async () => {
+		const ctx = new AudioContext();
+		const dest = ctx.createMediaStreamDestination();
+		const osc = ctx.createOscillator();
+		const g = ctx.createGain();
+		const t = ctx.currentTime + 0.4;
+		osc.frequency.setValueAtTime(330, t);
+		osc.frequency.exponentialRampToValueAtTime(90, t + 0.25);
+		g.gain.setValueAtTime(0, ctx.currentTime);
+		g.gain.setValueAtTime(0.8, t);
+		g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+		osc.connect(g).connect(dest);
+		osc.start();
+		return dest.stream;
+	};
+}
+
+// Upward zero crossings in the first `seconds` of a sound, from where it starts
+function crossingsFromStart(samples: Float32Array, rate: number, seconds: number) {
+	const start = samples.findIndex((v) => Math.abs(v) > 0.01);
+	let n = 0;
+	for (let i = start + 1; i < start + seconds * rate && i < samples.length; i++) if (samples[i - 1] < 0 && samples[i] >= 0) n++;
+	return n;
+}
+
+test('Sample: a sound recorded from the microphone plays on every pad at its pitch, is saved and undone', async ({ page }) => {
+	await page.evaluate(fakeMicrophone);
+	const strip = page.locator('.st-pick');
+	await expect(strip).toHaveAttribute('aria-label', 'Sample: record a sound');
+	await expect(strip).toHaveAttribute('aria-pressed', 'false');
+
+	// REC listens, keeps the hit from just before it starts, and puts it on every pad
+	await page.getByRole('button', { name: 'Record a sample' }).click();
+	await expect(strip).toHaveAttribute('aria-pressed', 'true', { timeout: 6000 });
+	await expect(strip).toHaveAttribute('aria-label', 'Sample: play the recording on every pad');
+	await expect(page.getByRole('button', { name: 'Record a new sample' })).toBeVisible();
+	const seconds = Number(/\(([\d.]+) s\)/.exec((await strip.getAttribute('title'))!)![1]);
+	expect(seconds).toBeGreaterThan(0.3);
+	expect(seconds).toBeLessThan(0.6);
+
+	// Saved with the project: the recording, every pad's wave and the main wave
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	expect(saved.data.synth.sample.data).toMatch(/^[A-Za-z0-9+/]+=*$/);
+	expect(saved.data.synth.sample.sampleRate).toBeGreaterThanOrEqual(44100);
+	expect(saved.data.selectedWaveform).toBe('sample');
+	expect(saved.data.instruments.find((i: any) => i.name === 'synth-voice').waveforms).toEqual(Array(16).fill('sample'));
+
+	// Played at each note's pitch, as recorded on A3: an octave up is twice as fast
+	const oneShot = async (note: string) => wavSamples((await exportAudio(page, {
+		mix: false, stems: false, midi: false, oneShot: true, oneShotNote: note, normalize: false,
+	})).bytes);
+	const a3 = await oneShot('A3 (220 Hz)');
+	const a4 = await oneShot('A4 (440 Hz)');
+	// (the hit falls from 330 Hz, so: the same cycles in half the time)
+	const onA3 = crossingsFromStart(a3.samples, a3.rate, 0.1);
+	expect(onA3).toBeGreaterThan(15);
+	expect(Math.abs(crossingsFromStart(a4.samples, a4.rate, 0.05) - onA3)).toBeLessThanOrEqual(2);
+	expect(crossingsFromStart(a4.samples, a4.rate, 0.1)).toBeGreaterThan(onA3 * 1.3);
+
+	// A pad's ⋮ menu offers it too
+	await page.locator('.pad-row .pad-settings-dot').first().click();
+	const pop = page.locator('.pad-popover');
+	await expect(pop.getByRole('button', { name: 'Sample', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await pop.getByRole('button', { name: 'Close' }).click();
+
+	// File → New leaves no recording; the project file brings it back
+	await chooseFromFileMenu(page, 'New');
+	await expect(strip).toHaveAttribute('aria-label', 'Sample: record a sound');
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'With sample.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(saved)),
+	});
+	await expect(strip).toHaveAttribute('aria-pressed', 'true');
+
+	// A recording is one undo step: the recording and the pads' waves go back together
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.getByRole('button', { name: 'Record a new sample' }).click();
+	await expect(page.getByRole('button', { name: 'Stop recording' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Record a new sample' })).toBeVisible({ timeout: 6000 });
+	await page.waitForTimeout(600);
+	await page.locator('.wave-row').getByRole('radio', { name: 'SAW', exact: true }).click();
+	await expect(strip).toHaveAttribute('aria-pressed', 'false');
+	await page.waitForTimeout(600);
+	await page.keyboard.press('Control+z'); // the saw
+	await expect(strip).toHaveAttribute('aria-pressed', 'true');
+	await page.waitForTimeout(100);
+	await page.keyboard.press('Control+z'); // the new recording: the imported one again
+	await expect(strip).toHaveAttribute('aria-pressed', 'true');
+	const after = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	expect(after.data.synth.sample).toEqual(saved.data.synth.sample);
+});
+
+test('Sample: a blocked microphone says so and changes nothing', async ({ page }) => {
+	await page.evaluate(() => {
+		navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('Permission denied', 'NotAllowedError'); };
+	});
+	await page.getByRole('button', { name: 'Record a sample' }).click();
+	await expect(page.locator('.st [role="status"]')).toHaveText('Microphone blocked');
+	await expect(page.locator('.st-pick')).toHaveAttribute('aria-pressed', 'false');
+	await expect(page.locator('.st-pick')).toHaveAttribute('aria-label', 'Sample: record a sound');
+});
+
 test('the spectrogram draws a note in its pad\'s colour', async ({ page }) => {
 	// Every pad on A3 (220 Hz, a blue pad), the default sine
 	await turnOnPads(page, [0, 4, 8, 12]);

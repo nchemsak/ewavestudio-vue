@@ -35,7 +35,15 @@
 							<h2 class="pt-title">Wave</h2>
 							<div class="pl-wave-grid">
 								<button v-for="t in WAVE_TILES" :key="t.value" type="button" class="pt-btn"
-									:aria-pressed="selectedWaveform === t.value" @click="applyWaveToAll(t.value)">{{ t.label }}</button>
+									:aria-pressed="selectedWaveform === t.value" :aria-label="t.label" @click="applyWaveToAll(t.value)">{{ t.value === 'triangle' ? 'TRI' : t.label }}</button>
+								<!-- The recording (PR 95): Sample picks it (records one first if there's none),
+									 REC records again; while recording it says what it's doing -->
+								<button type="button" class="pt-btn" :aria-pressed="selectedWaveform === 'sample'"
+									:disabled="sampleBusy" :aria-label="sample ? 'Sample: the recording on every pad' : 'Sample: record a sound'"
+									@click="sample ? applyWaveToAll('sample') : recordSample()">SAMPLE</button>
+								<button type="button" class="pt-btn pl-rec" :class="{ 'is-on': sampleBusy }"
+									:aria-label="sampleBusy ? 'Stop recording' : sample ? 'Record a new sample' : 'Record a sample'"
+									@click="recordSample()"><span class="pl-rec-dot" aria-hidden="true" />{{ sampleStatus || 'REC' }}</button>
 							</div>
 						</section>
 						<!-- Noise is on the Mod page since PR 73, as its whole card -->
@@ -365,14 +373,11 @@
 										<RandomWaveTile :waves="padWaves" :palettes="WAVE_PALETTES" :mixed="wavesMixed"
 											:disabled="!randomPoolArray.length" :title="randomTooltip" @roll="applyRandomWaves()" />
 									</div>
-									<!-- Sample: a sound recorded from the microphone (SampleTile.vue) -->
-									<div v-if="sampleLayout === 'tile'" class="wave-cell st-cell">
-										<SampleTile layout="tile" :sample="sample" :state="recorder.state.value" :level="recorder.level.value"
-											:lit="litWave === 'sample'" @pick="applyWaveToAll('sample')" @record="recordSample()" />
-									</div>
 								</div>
-								<div v-if="sampleLayout === 'strip'" class="st-strip">
-									<SampleTile layout="strip" :sample="sample" :state="recorder.state.value" :level="recorder.level.value"
+								<!-- Sample: a sound recorded from the microphone, a strip under the tiles (PR 95,
+									 option B of two mockups; A was a tall tile beside Random) -->
+								<div class="st-strip">
+									<SampleTile :sample="sample" :state="recorder.state.value" :level="recorder.level.value"
 										:lit="litWave === 'sample'" @pick="applyWaveToAll('sample')" @record="recordSample()" />
 								</div>
 							</div>
@@ -648,7 +653,7 @@
 			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
 			@export="runExport" @close="exportOpen = false" />
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
-			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
+			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave" :hasSample="!!sample"
 			v-model:noiseEnabled="padNoiseEnabled" :noiseCardOff="!noiseEnabled" v-model:ratchet="currentPadRatchet" v-model:repeatNotes="currentPadRepeatNotes" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
 			:anchorRect="padPopover.anchorRect" :title="padPopover.title" @audition="hz => auditionPad(padSettings.index, hz)" />
 	</div>
@@ -1918,12 +1923,12 @@ const padFrequencies = computed<number[]>({
 	set: v => { if (synthInstrument.value) synthInstrument.value.pitches = v; }
 });
 
-const currentPadWave = computed<Wave>({
+const currentPadWave = computed<PadWave>({
 	get() {
 		const inst = instruments.value.find(i => i.name === padSettings.name) as any;
-		if (!inst) return selectedWaveform.value as Wave;
+		if (!inst) return selectedWaveform.value as PadWave;
 		const i = padSettings.index;
-		return (inst.waveforms?.[i] ?? selectedWaveform.value) as Wave;
+		return (inst.waveforms?.[i] ?? selectedWaveform.value) as PadWave;
 	},
 	set(w) {
 		const inst = instruments.value.find(i => i.name === padSettings.name) as any;
@@ -3534,10 +3539,13 @@ onMounted(() => {
 // A sound recorded from the microphone, played by the pads as the 'sample' wave (sample.ts,
 // useSampleRecorder.ts, SampleTile.vue). A recording is one undo step, and puts the recording
 // on every pad (as a wave tile's click does) and plays it once on A3, as recorded.
-// `sampleLayout`: where the Sample control sits, 'tile' (beside Random) or 'strip' (under the
-// tiles); ?sample=b shows the strip (mockups).
-const sampleLayout = new URLSearchParams(location.search).get('sample') === 'b' ? 'strip' : 'tile';
 const recorder = useSampleRecorder(audioCtx);
+
+const sampleBusy = computed(() => ['asking', 'listening', 'recording'].includes(recorder.state.value));
+// What the phone's REC button says while it's busy, or after nothing was heard
+const sampleStatus = computed(() => ({
+	asking: 'Allow mic', listening: 'Listening', recording: 'Rec…', denied: 'No mic', silent: 'Nothing', unsupported: 'No mic',
+} as Record<string, string>)[recorder.state.value] ?? '');
 
 async function recordSample() {
 	const rec = await recorder.record();
@@ -4057,14 +4065,46 @@ async function recordSample() {
 
 .pl-wave-grid {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-template-columns: repeat(5, minmax(0, 1fr));
 	gap: 6px;
 }
 
 .pl-wave-grid .pt-btn {
 	min-height: 34px;
-	font-size: 12px;
-	padding: 4px;
+	font-size: 11px;
+	padding: 4px 2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* REC: a red dot before its word; blinking while it listens or records */
+.pl-rec {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+}
+
+.pl-rec-dot {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #e5484d;
+}
+
+.pl-rec.is-on .pl-rec-dot {
+	background: #ff5a5f;
+	box-shadow: 0 0 6px #ff5a5f;
+	animation: pl-blink 1s steps(2, start) infinite;
+}
+
+@keyframes pl-blink {
+	to { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pl-rec.is-on .pl-rec-dot { animation: none; }
 }
 
 .pl-gens {
@@ -4442,18 +4482,7 @@ async function recordSample() {
 	align-self: stretch;
 }
 
-/* Sample (SampleTile.vue): a tall tile beside Random ('tile'), or a strip under the tiles ('strip') */
-.wave-row:has(.st-cell) {
-	grid-template-columns: repeat(4, minmax(0, 1fr)) 58px 58px;
-}
-
-.wave-row .st-cell {
-	grid-column: 6;
-	grid-row: 1 / span 2;
-	align-self: stretch;
-	width: 100%;
-}
-
+/* Sample (SampleTile.vue, PR 95): a strip under the tiles, as wide as them */
 .st-strip {
 	height: 40px;
 	margin-top: 10px;

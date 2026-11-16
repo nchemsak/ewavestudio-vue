@@ -23,6 +23,8 @@ https://www.ephemeralwave.com/studio/ and is never changed.
 - Velocity routing: a VEL switch on the Envelope, Pitch, Filter and Noise cards lets a step's
   velocity also shape its decay, brightness, pitch sweep and noise, so soft steps sound like
   softer hits
+- Sample a sound: REC records about a second from the microphone (it starts when you make a
+  sound), and the pads play it at their pitch through the same envelope, filter and effects
 - Delay (synced to the tempo, with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a tape pedal (wear, wow and flutter, tape hiss or vinyl crackle)
 - Six built-in sounds (Kick, Snare, Metal, Pluck, Acid, Bell) that set the sound without
   touching your pattern, and six built-in patterns (Pulse, Offbeat, Gallop, Rolls, Bassline,
