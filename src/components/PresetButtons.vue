@@ -59,8 +59,7 @@ function roll() {
 	min-width: 0;
 }
 
-/* Pattern Tools' section look: an inset panel (dark, or a light tint in the light theme)
-   with a centered title */
+/* Pattern Tools' section look: an inset panel with a centered title */
 .preset-box {
 	position: relative;
 	width: fit-content;

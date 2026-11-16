@@ -1014,7 +1014,6 @@ const applyScope = ref<'all' | 'active'>(props.initialActiveOnly === false ? 'al
 watch(applyScope, (v) => emit('active-only-change', v === 'active'));
 watch(() => props.initialActiveOnly, (v) => { if (typeof v === 'boolean') applyScope.value = v ? 'active' : 'all'; });
 
-
 type UiSnapshot = {
     keyRoot: RootNote;
     keyScale: KeyScale;
@@ -1447,10 +1446,6 @@ defineExpose({ getUi, setUi, generate });
     color: hsl(var(--pt-accent) 85% 65%);
 }
 
-.theme-light .mm-queued-note {
-    color: hsl(var(--pt-accent) 80% 32%);
-}
-
 /* A touch screen (a phone, a tablet) has no Shift key: the key just waits for the bar */
 @media (pointer: coarse) {
     .mm-shift-hint {
@@ -1480,16 +1475,6 @@ defineExpose({ getUi, setUi, generate });
 .theme-analog .mm-card {
     --mm-lcd-bg: #160f05;
     --mm-lcd-ink: #ffcf8a;
-}
-
-.theme-slate .mm-card {
-    --mm-lcd-bg: #0b181d;
-    --mm-lcd-ink: #bfe6e0;
-}
-
-.theme-light .mm-card {
-    --mm-lcd-bg: #cdd2d5;
-    --mm-lcd-ink: #111;
 }
 
 .mm-card .mm-kb-wrap {
@@ -1592,11 +1577,6 @@ defineExpose({ getUi, setUi, generate });
     box-shadow: inset 0 0 0 1px hsl(var(--pt-accent) 80% 65% / 0.7), inset 0 1px 5px rgba(0, 0, 0, 0.7);
 }
 
-.theme-light .mm-step-name {
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 1px 4px rgba(0, 0, 0, 0.3);
-    font-weight: 600;
-}
-
 .mm-caret {
     font-size: 0.6rem;
     opacity: 0.7;
@@ -1692,10 +1672,6 @@ defineExpose({ getUi, setUi, generate });
     }
 }
 
-.theme-light .mm-screen {
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 0, 0, 0.45);
-}
-
 .mm-roll {
     position: absolute;
     inset: 2px;
@@ -1722,11 +1698,6 @@ defineExpose({ getUi, setUi, generate });
     fill-opacity: 0.13;
 }
 
-.theme-light .mm-band {
-    fill: #1d2419;
-    fill-opacity: 0.12;
-}
-
 /* The arpeggio Generate would write */
 .mm-ghost {
     fill: none;
@@ -1746,17 +1717,6 @@ defineExpose({ getUi, setUi, generate });
     filter: brightness(1.3) drop-shadow(0 0 3px currentColor);
 }
 
-.theme-light .mm-note,
-.theme-light .mm-tail {
-    filter: brightness(0.62) saturate(1.4);
-}
-
-.theme-light .is-playing {
-    stroke: var(--mm-lcd-ink);
-    stroke-width: 1.5;
-    filter: brightness(0.5) saturate(1.8);
-}
-
 .mm-read {
     position: absolute;
     top: 4px;
@@ -1767,11 +1727,6 @@ defineExpose({ getUi, setUi, generate });
     color: var(--mm-lcd-ink);
     opacity: 0.9;
     white-space: nowrap;
-}
-
-.theme-light .mm-read {
-    opacity: 1;
-    font-weight: 600;
 }
 
 .mm-read--l {
@@ -1914,10 +1869,6 @@ defineExpose({ getUi, setUi, generate });
 
 .mm-hint-main b {
     color: hsl(var(--pt-accent) 90% 70%);
-}
-
-.theme-light .mm-hint-main b {
-    color: inherit;
 }
 
 .mm-hint-sub {

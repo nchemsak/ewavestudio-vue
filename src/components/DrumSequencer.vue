@@ -1306,7 +1306,7 @@ function startSpectrogram() {
 	// theme's four loudness colours (--nac-spec-low/mid/high/peak in Screen.vue).
 	const SPEC_COLOURS = 'note' as 'note' | 'loudness';
 	const binHz = audioCtx.sampleRate / analyser.fftSize;
-	// The theme's screen is light (the light theme): louder notes are darker there
+	// A light screen (no theme has one since PR 89 removed Light): louder notes darker there
 	const isLightScreen = (bg: string) => {
 		const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg);
 		if (!m) return false;

@@ -4,7 +4,7 @@
 // lowest pad pitch (100 Hz) to red for the highest (2 kHz), linear in Hz.
 //
 // On the spectrogram each frequency is drawn in its pad colour, brighter when louder (darker
-// on the light theme's pale screen). Above the pads' range (a sound's harmonics) the colour
+// on a pale screen, which no theme has since PR 89). Above the pads' range (a sound's harmonics) the colour
 // carries on from red toward magenta, so the upper part of the screen isn't one flat red.
 
 export const PAD_LOW_HZ = 100;

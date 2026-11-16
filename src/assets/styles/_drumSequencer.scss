@@ -257,30 +257,6 @@
 	}
 }
 
-.theme-light .drum-sequencer,
-.drum-sequencer.theme-light {
-	--slider-bg: rgba(0, 0, 0, 0.1);
-	--slider-track: rgba(0, 0, 0, 0.25);
-	--slider-thumb: #2563eb;
-	--slider-thumb-border: rgba(0, 0, 0, 0.28);
-	--knob-arc-start: #4fa3ff;
-	--knob-arc-end: #9775ff;
-	--knob-pointer: #7c4dff;
-	--knob-track: #d3d8e1;
-	--knob-track-disabled: #c2c7d0;
-	--knob-arc-disabled: #b6bcc7;
-	--knob-face: #eef2f6;
-
-	--knob-marker: rgba(79, 163, 255, 0.55);
-	--knob-marker-active: #cfe2ff;
-	--lfo-mod: #e08a00; /* darker, to show on white */
-	--knob-detent: rgba(0, 150, 90, 0.6);
-	--knob-detent-on: #009a5e;
-
-	--pad-bg: #eef1f6;
-	--pad-tint: #7c4dff;
-}
-
 .theme-synthwave .drum-sequencer,
 .drum-sequencer.theme-synthwave {
 	--slider-bg: rgba(255, 255, 255, 0.1);
@@ -320,26 +296,6 @@
 	--knob-detent-on: #9be3b4;
 	--pad-bg: #24211d;
 	--pad-tint: #f2b04a;
-}
-
-/* Slate: a teal-to-blue arc on blue-grey */
-.theme-slate .drum-sequencer,
-.drum-sequencer.theme-slate {
-	--slider-thumb: #6fd6c4;
-	--knob-arc-start: #6fd6c4;
-	--knob-arc-end: #7aa7ff;
-	--knob-pointer: #e3e8ef;
-	--knob-track: #4a5263;
-	--knob-track-disabled: #3b4250;
-	--knob-arc-disabled: #566073;
-	--knob-face: #222731;
-	--knob-marker: rgba(122, 167, 255, 0.55);
-	--knob-marker-active: #d6e4ff;
-	--lfo-mod: #ffc861;
-	--knob-detent: rgba(170, 230, 160, 0.65);
-	--knob-detent-on: #b6efa9;
-	--pad-bg: #2c323e;
-	--pad-tint: #6fd6c4;
 }
 
 /* ----------------------------------------------------------
@@ -528,7 +484,6 @@
 	padding: 0.5rem 0.25rem 0.75rem;
 }
 
-
 .generators {
 	.pt-card {
 		background: var(--pt-wash);
@@ -555,7 +510,6 @@
 	gap: 10px;
 	margin: 4px 0 12px;
 }
-
 
 .noise-inline {
 	display: flex;

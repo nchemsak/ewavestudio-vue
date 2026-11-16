@@ -14,16 +14,6 @@ $themes: (
         accent2: 195,
         accent3: 320,
         chevron: #dfe7ff),
-    light: (bg: #f7f8fa,
-        panel: #ffffff,
-        text: #121419,
-        muted: #5a5e6b,
-        surface1: #ffffff,
-        surface2: #eceff4,
-        accent: 235,
-        accent2: 200,
-        accent3: 320,
-        chevron: #3b4048),
     synthwave: (bg: #0d0221,
         panel: #160b2e,
         text: #fdfdff,
@@ -45,19 +35,7 @@ $themes: (
         accent: 30,
         accent2: 46,
         accent3: 10,
-        chevron: #efe6d4),
-    /* Slate: a calm mid-tone blue-grey between Dark and a light theme, teal accents, a deep
-       blue-green screen */
-    slate: (bg: #252a33,
-        panel: #2c323e,
-        text: #e3e8ef,
-        muted: #a6afbf,
-        surface1: #39404e,
-        surface2: #323845,
-        accent: 172,
-        accent2: 214,
-        accent3: 350,
-        chevron: #e3e8ef)
+        chevron: #efe6d4)
 );
 
 /* Mixin to emit CSS custom properties for a theme class */
@@ -92,14 +70,6 @@ $themes: (
             --pt-tile-2: #{color.mix(#000, map.get($t, surface2), 18%)};
         }
 
-        @if $name ==light {
-            --pt-tile-1: #{color.mix(#000, map.get($t, surface1), 6%)};
-            --pt-tile-2: #{color.mix(#000, map.get($t, surface2), 10%)};
-            /* slightly cooler, stronger accent ring on light */
-            --pt-btn-border: hsl(var(--pt-accent) 72% 46%);
-            --pt-btn-glow: hsl(var(--pt-accent) 90% 55% / 0.32);
-        }
-
         @if $name ==analog {
             --pt-tile-1: #24211d;
             --pt-tile-2: #1b1916;
@@ -107,12 +77,6 @@ $themes: (
             --pt-btn-glow: hsl(var(--pt-accent) 90% 55% / 0.32);
         }
 
-        @if $name ==slate {
-            --pt-tile-1: #333a47;
-            --pt-tile-2: #2c323e;
-            --pt-btn-border: hsl(var(--pt-accent) 52% 52%);
-            --pt-btn-glow: hsl(var(--pt-accent) 70% 50% / 0.28);
-        }
     }
 }
 
@@ -143,8 +107,7 @@ $base: map.get($themes, synthwave);
     --pt-text-strong: #fff;
 
     --pt-hairline: rgba(255, 255, 255, 0.06);
-    /* An inset panel inside a card (Pattern Tools' sections, the Presets box): dark here, a
-       light tint in the light theme, where a dark one would hide its muted caption */
+    /* An inset panel inside a card (Pattern Tools' sections, the Presets box) */
     --pt-inset: rgba(15, 18, 26, 0.70);
     --pt-focus-ring: 0 0 0 3px hsl(var(--pt-accent) 90% 60% / 0.35);
 
@@ -165,7 +128,6 @@ $base: map.get($themes, synthwave);
     --pt-wash-ink: #fff;
 }
 
-
 @each $name, $t in $themes {
     @include emit-theme($name, $t);
 }
@@ -173,8 +135,7 @@ $base: map.get($themes, synthwave);
 :root,
 .theme-dark,
 .theme-synthwave,
-.theme-analog,
-.theme-slate {
+.theme-analog {
     color-scheme: dark;
 }
 
@@ -196,34 +157,12 @@ $base: map.get($themes, synthwave);
     --pt-page: radial-gradient(circle at center, #23252c 0%, #16181d 62%, #0b0c0f 100%);
 }
 
-.theme-slate {
-    --pt-header-fg: #eceff4;
-    --pt-text-strong: #f2f4f8;
-    --pt-hairline: rgba(227, 232, 239, 0.1);
-    --pt-inset: rgba(20, 24, 31, 0.42);
-    --pt-wash: radial-gradient(circle at center, #7fb3b0 0%, #5f7f92 70%, #4c6175 100%);
-    --pt-page: radial-gradient(circle at center, #77849a 0%, #4f596c 68%, #3b4352 100%);
-    --pt-noise-on: #2f9c8c;
-    --pt-menu-caption: #a6afbf;
-}
-
-.theme-light {
-    color-scheme: light;
-    --pt-header-fg: #1f2328;
-    --pt-text-strong: #1f2328;
-    --pt-hairline: rgba(0, 0, 0, 0.12);
-    --pt-inset: rgba(31, 35, 40, 0.07);
-    --pt-menu-caption: var(--pt-muted);
-    /* The Noise switch when off (its fallback is navy, for the dark themes) */
-    --pt-surface-3: #dfe3ea;
-}
-
 /* The effect pedals (PR 79, option A of three mockups): each keeps its own colour (an orange
    delay, a yellow overdrive, a stone reverb), shaded for the theme, with its name engraved in
    dark ink (white with a glow was hard to read). The pedals read --pedal-hi / --pedal-lo (the
    body), --pedal-ink (the knobs' and switch's captions), --pedal-ink-off (a switch while its
    pedal is off), --pedal-name and --pedal-name-shadow; without a theme's values they keep
-   their first colours (the Light theme) */
+   their first colours */
 .delay-pedal,
 .drive-pedal,
 .reverb-pedal {
@@ -251,12 +190,6 @@ $base: map.get($themes, synthwave);
     .reverb-pedal { --pedal-hi: #e8dec7; --pedal-lo: #c8b996; }
 }
 
-.theme-slate {
-    .delay-pedal { --pedal-hi: #cc9f80; --pedal-lo: #aa7f62; }
-    .drive-pedal { --pedal-hi: #cbc08a; --pedal-lo: #aa9c62; }
-    .reverb-pedal { --pedal-hi: #a6b9c3; --pedal-lo: #8297a3; }
-}
-
 .theme-synthwave a.return {
     color: #ffb3e6;
 }
@@ -267,10 +200,6 @@ $base: map.get($themes, synthwave);
 
 .theme-analog a.return {
     color: #f2b04a;
-}
-
-.theme-slate a.return {
-    color: #bfeee4;
 }
 
 @supports (color: color-mix(in oklab, #000, #fff)) {
@@ -874,7 +803,6 @@ $base: map.get($themes, synthwave);
     min-inline-size: 0;
 }
 
-
 @media (max-width: 1279px) {
 
     .pt-cards.controlsWrapper>.pt-card,
@@ -907,24 +835,11 @@ $base: map.get($themes, synthwave);
     margin-bottom: 0px;
 }
 
-.theme-light .toggle-header .group-title,
-.theme-light .toggle-header:hover .group-title,
-.theme-light .toggle-header:focus-visible .group-title,
-.theme-light .toggle-header.is-active .group-title,
-.theme-light .toggle-header.is-active:hover .group-title {
-    color: var(--pt-text-strong, #1f2328) !important;
-}
-
 .toggle-header:hover .pt-dot,
 .toggle-header:focus-visible .pt-dot,
 .toggle-header:hover .pt-seg-btn,
 .toggle-header:focus-visible .pt-seg-btn {
     //    intentionally empty: rely on existing accent styles
-}
-
-.theme-light .toggle-header .pt-title,
-.theme-light .toggle-header:hover .pt-title {
-    color: var(--pt-text-strong, #1f2328) !important;
 }
 
 .toggle-header {
@@ -953,10 +868,6 @@ $base: map.get($themes, synthwave);
 
 .pt-title {
     color: var(--pt-text-strong);
-}
-
-.theme-light .pt-title {
-    color: var(--pt-text-strong, #1f2328) !important;
 }
 
 .pt-collapse-btn .pt-title {
@@ -1011,83 +922,3 @@ $base: map.get($themes, synthwave);
         0 6px 18px hsl(var(--pt-accent) 90% 60% / .22);
 }
 
-
-
-.theme-light {
-    --pad-wash-base: .22;
-    --pad-wash-scale: .70;
-    --pad-wash-sat: 88%;
-    --pad-wash-lit: 52%;
-}
-
-/* Pads on a light theme: a light tile, the note's colour multiplied in */
-.theme-light {
-
-    .padTEST {
-        background:
-            linear-gradient(145deg,
-                color-mix(in oklab, var(--pt-tile-1), black 6%),
-                color-mix(in oklab, var(--pt-tile-2), black 8%));
-        box-shadow:
-            inset 0 0 0 1px rgba(0, 0, 0, .06),
-            0 1px 0 rgba(0, 0, 0, .04);
-    }
-
-    .padTEST.selected::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        border-radius: inherit;
-        pointer-events: none;
-
-        --fill: calc(var(--vol, 0) * 1%);
-        --feather: 0.6%;
-
-        --_a: calc(var(--pad-wash-base, .22) + (var(--pad-wash-scale, .70) * (var(--vol, 0) / 100)));
-        background: hsl(var(--heat-h) var(--pad-wash-sat, 88%) var(--pad-wash-lit, 52%) / var(--_a));
-        mix-blend-mode: multiply;
-
-        -webkit-mask-image: linear-gradient(to top,
-                #000 0%,
-                #000 calc(var(--fill) - var(--feather)),
-                #000 var(--fill),
-                transparent calc(var(--fill) + var(--feather)),
-                transparent 100%);
-        mask-image: linear-gradient(to top,
-                #000 0%,
-                #000 calc(var(--fill) - var(--feather)),
-                #000 var(--fill),
-                transparent calc(var(--fill) + var(--feather)),
-                transparent 100%);
-
-        box-shadow: inset 0 calc(var(--feather) * -1) 0 rgba(0, 0, 0, .04);
-        z-index: 0;
-    }
-
-    .padTEST.playing {
-        outline: 2px solid hsl(var(--pt-accent) 82% 52% / .9);
-        outline-offset: -2px;
-        box-shadow:
-            0 0 0 4px hsl(var(--pt-accent) 90% 60% / .2),
-            inset 0 0 0 1px rgba(0, 0, 0, .06);
-    }
-
-    /* Noise tints were getting lost on white; make them cooperate with the wash */
-    .padTEST .noise-overlay {
-        mix-blend-mode: overlay !important;
-    }
-
-    .padTEST .noise-overlay.mode-static,
-    .padTEST .noise-overlay.mode-svg,
-    .padTEST .noise-overlay.mode-gif {
-        mix-blend-mode: multiply !important;
-        filter: saturate(1.12) contrast(1.05);
-    }
-
-    /* Keep tiny badges legible */
-    .wave-badge,
-    .pad-head .pad-step-num {
-        background: linear-gradient(145deg, rgba(0, 0, 0, .68), rgba(0, 0, 0, .42));
-        border-color: rgba(255, 255, 255, .16);
-    }
-}

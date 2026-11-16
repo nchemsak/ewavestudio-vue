@@ -12,8 +12,7 @@
    The pedals' CRUSH and PING PONG switches and their footswitches are not caps (the
    maintainer's call: they're fine as they are). */
 
-/* The caps' colours. Dark caps in every theme with a button;
-   the hidden Light theme has light ones. */
+/* The caps' colours: dark caps in every theme */
 :root {
     --cap-hi: #43207a;
     --cap-lo: #2a0f52;
@@ -36,23 +35,6 @@
     --cap-edge: #0c0b0a;
     --cap-ink: #efe6d4;
     --hw-led: #9be3b4;
-}
-
-.theme-slate {
-    --cap-hi: #4b5466;
-    --cap-lo: #39404e;
-    --cap-edge: #171b22;
-    --cap-ink: #e3e8ef;
-    --hw-led: #b6efa9;
-}
-
-.theme-light {
-    --cap-hi: #ffffff;
-    --cap-lo: #e4e8ef;
-    --cap-edge: #9aa1b0;
-    --cap-ink: #121419;
-    --hw-led: #00a865;
-    --hw-led-off: rgb(0 0 0 / 0.2);
 }
 
 /* A cap that is down: chosen, or on. Each component marks it its own way. */

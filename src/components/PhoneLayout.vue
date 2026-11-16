@@ -457,12 +457,6 @@ function hzText(hz: number) {
 	-webkit-touch-callout: none;
 }
 
-.theme-light .phone-layout {
-	--pp-sat: 52%;
-	--pp-lit: 50%;
-	--pl-now: hsl(var(--pt-accent) 80% 45%);
-}
-
 /* top bar */
 .pl-top {
 	display: flex;
@@ -505,29 +499,11 @@ function hzText(hz: number) {
 	box-shadow: 0 0 0 1.5px #fff;
 }
 
-.theme-light .pl-mp {
-	background: rgba(0, 0, 0, .14);
-}
-
-.theme-light .pl-mp.beat {
-	background: rgba(0, 0, 0, .28);
-}
-
-.theme-light .pl-mp.on {
-	background: hsl(var(--h) var(--pp-sat, 70%) var(--pp-lit, 45%));
-}
-
-.theme-light .pl-mp.now {
-	box-shadow: 0 0 0 1.5px #1c2317;
-}
-
 /* The mini scope and pads: each theme's screen colours (Screen.vue's are its own) */
-.theme-light .pl-minipads { background: #cdd2d5; }
-.theme-light .pl-scope { background: #cdd2d5; color: #1f2937; }
+
 .theme-analog .pl-minipads { background: #1a1208; }
 .theme-analog .pl-scope { background: #1a1208; color: #ffb547; }
-.theme-slate .pl-minipads { background: #16222a; }
-.theme-slate .pl-scope { background: #16222a; color: #8fe3d2; }
+
 .theme-synthwave .pl-minipads { background: #2a0f52; }
 .theme-synthwave .pl-scope { background: #2a0f52; color: #f3c6ff; }
 

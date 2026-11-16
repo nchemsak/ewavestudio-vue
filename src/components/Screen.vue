@@ -152,23 +152,6 @@ const fkeyDefs = computed(() => {
     font-family: Cousine, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-.theme-light .nac-screen {
-    --nac-bezel-bg: #e9edf3;
-    --nac-bezel-rim: rgba(0, 0, 0, .06);
-    --nac-lcd-bg: #cdd2d5;
-    --nac-lcd-vignette: rgba(0, 0, 0, .12);
-    --nac-lcd-gloss: rgba(255, 255, 255, .35);
-    --nac-lcd-scanline: #b37a30;
-    --nac-spec-low: #2196f3;
-    --nac-spec-mid: #43a047;
-    --nac-spec-high: #ff9800;
-    --nac-spec-peak: #000;
-    --nac-lcd-fg: #111;
-    --nac-scope-trace: #1f2937;
-    --nac-scope-width: 2.5;
-    --fkey-ico: #1f2937;
-}
-
 /* Dark: the default screen, with grey keys */
 .theme-dark .nac-screen {
     --fkey-hi: #d7dbe2;
@@ -192,21 +175,6 @@ const fkeyDefs = computed(() => {
     --nac-lcd-fg: #ffb547;
     --nac-scope-trace: #ffb547;
     --fkey-ico: #1b1916;
-}
-
-/* Slate: a deep blue-green screen */
-.theme-slate .nac-screen {
-    --fkey-hi: #dde4ec;
-    --fkey-lo: #c3cdd8;
-    --nac-bezel-bg: #222731;
-    --nac-bezel-rim: rgba(255, 255, 255, .06);
-    --nac-lcd-bg: #16222a;
-    --nac-lcd-vignette: rgba(0, 0, 0, .35);
-    --nac-lcd-gloss: rgba(255, 255, 255, .08);
-    --nac-lcd-scanline: #8fe3d2;
-    --nac-lcd-fg: #d3eef2;
-    --nac-scope-trace: #8fe3d2;
-    --fkey-ico: #222731;
 }
 
 .theme-synthwave .nac-screen {
