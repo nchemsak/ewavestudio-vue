@@ -1,10 +1,10 @@
 <template>
 	<!-- Hidden behind the "Turn your phone" screen, so nothing of it shows or scrolls there -->
-	<div v-show="!phoneHint" class="container app-frame">
+	<div v-show="!phoneHint" class="container app-frame" :class="{ 'no-chrome': CHROME }">
 		<div class="row">
 			<div class="col-12">
 				<!-- Top toolbar -->
-				<header v-show="!phoneActive" class="app-toolbar">
+				<header v-if="!CHROME" v-show="!phoneActive" class="app-toolbar">
 					<div class="app-toolbar-left">
 						<ThemeToggle />
 					</div>
@@ -20,7 +20,7 @@
 		</div>
 	</div>
 	<!-- In the installed app the main site opens in the browser, not in the app's window -->
-	<a v-show="!phoneActive && !phoneHint" href="/" class="return" :target="pwa.state.standalone ? '_blank' : undefined"
+	<a v-if="!CHROME" v-show="!phoneActive && !phoneHint" href="/" class="return" :target="pwa.state.standalone ? '_blank' : undefined"
 		:rel="pwa.state.standalone ? 'noopener' : undefined">Return to Ephemeral Wave</a>
 	<PwaNotice />
 	<!-- On a phone showing the desktop view: always a way back to the phone view -->
@@ -47,6 +47,7 @@ import { useTheme } from './composables/useTheme';
 import { usePwa } from './composables/usePwa';
 import { usePhoneMode } from './composables/usePhoneMode';
 import { watchEffect } from 'vue';
+import { CHROME } from './lib/mockChrome';
 useTheme();
 // Installing the app and using it offline: registers the service worker (builds only)
 const pwa = usePwa();
@@ -69,6 +70,12 @@ watchEffect(() => document.documentElement.classList.toggle('phone-mode', phoneA
 		padding-left: 12px;
 		padding-right: 12px;
 	}
+}
+
+/* MOCKUP (plan item 1): no row above the frame, so the frame gets a margin of its own */
+.app-frame.no-chrome {
+	padding-top: 16px;
+	padding-bottom: 16px;
 }
 
 .app-toolbar {

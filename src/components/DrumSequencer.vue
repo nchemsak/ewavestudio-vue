@@ -142,7 +142,21 @@
 				<ProjectControls :exporting="isExporting" :can-undo="canUndo" :can-redo="canRedo"
 					@export-audio="openExportDialog" @undo="undo" @redo="redo">
 					<template #brand>
-						<img class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave">
+						<a v-if="CHROME" class="topbar-home" href="/" title="Return to Ephemeral Wave">
+							<img class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave: back to the main site">
+						</a>
+						<img v-else class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave">
+					</template>
+					<!-- MOCKUP (plan item 1): Theme and MIDI in the top bar -->
+					<template v-if="CHROME === 'b' && !phoneActive" #tools-left>
+						<SettingsMenu :midi="midi" align="left" />
+					</template>
+					<template v-if="CHROME === 'c' && !phoneActive" #tools-before-save>
+						<ThemeSwatches class="topbar-swatches" />
+						<SettingsMenu :midi="midi" kind="midi" />
+					</template>
+					<template v-if="CHROME === 'a' && !phoneActive" #tools-right>
+						<SettingsMenu :midi="midi" />
 					</template>
 				</ProjectControls>
 			</section>
@@ -169,7 +183,7 @@
 					<div class="transport-knobs">
 						<!-- Volume -->
 						<div class="position-relative text-center knob-wrap">
-							<Knob midi-id="transport.volume" v-model="volume" label="Volume" :value-text="`${Math.round(volume * 100)}%`" :min="0" :max="1" :step="0.01" size="medium"
+							<LfoModKnob :lfoView="CHROME ? lfoView : null" valueKey="level" rangeKey="levelRange" midi-id="transport.volume" v-model="volume" label="Volume" :value-text="`${Math.round(volume * 100)}%`" :min="0" :max="1" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(volume * 100)}%`">
 								{{ Math.round(volume * 100) }}%
@@ -239,7 +253,7 @@
 						</button>
 
 						<!-- MIDI fallback lives in the right cluster -->
-						<MidiToolbar v-if="midi.supported && !hasMidiTarget" :midi="midi" />
+						<MidiToolbar v-if="midi.supported && !hasMidiTarget && !CHROME" :midi="midi" />
 					</div>
 				</div>
 
@@ -261,7 +275,7 @@
 						<h2 class="pt-title">Step Sequencer</h2>
 
 						<!-- The LFO's Level target shows on it (a dot and an arc; LfoModKnob reads the view) -->
-						<LfoModKnob :lfoView="lfoView" valueKey="level" rangeKey="levelRange"
+						<LfoModKnob v-if="!CHROME" :lfoView="lfoView" valueKey="level" rangeKey="levelRange"
 							midi-id="synth.volume" v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
 							label="Vol" aria-label="Synth volume"
 							:value-text="`${Math.round(synthInstrument.channelVolume * 100)}%`" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
@@ -672,6 +686,9 @@ import WaveButton from './WaveButton.vue'
 import VelSwitch from './VelSwitch.vue';
 import PillSwitch from './PillSwitch.vue';
 import LfoModKnob from './LfoModKnob.vue';
+import SettingsMenu from './SettingsMenu.vue';
+import ThemeSwatches from './ThemeSwatches.vue';
+import { CHROME } from '../lib/mockChrome';
 import { LFO_DEPTH_MAX, LFO_DEFAULT_DEPTH, type LfoTarget } from '../audio/lfo';
 import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
@@ -2746,9 +2763,12 @@ const lfoView: LfoView = reactive({
 		? lfoFmAmountAt(fmIndex.value, lfoDepth.value, lfoPos.value) : null)),
 	fmAmountRange: computed(() => (lfoAt('fm') && fmInUse.value ? lfoFmAmountRange(fmIndex.value, lfoDepth.value) : null)),
 	level: computed(() => (lfoAt('amp') && lfoPos.value != null
-		? lfoLevelAt(synthInstrument.value?.channelVolume ?? 1, lfoDepth.value, lfoPos.value) : null)),
-	levelRange: computed(() => (lfoAt('amp') ? lfoLevelRange(synthInstrument.value?.channelVolume ?? 1, lfoDepth.value) : null)),
+		? lfoLevelAt(levelKnob(), lfoDepth.value, lfoPos.value) : null)),
+	levelRange: computed(() => (lfoAt('amp') ? lfoLevelRange(levelKnob(), lfoDepth.value) : null)),
 });
+
+// MOCKUP (plan item 1): the Level mark is on the Volume knob once Vol is hidden
+function levelKnob() { return CHROME ? volume.value : (synthInstrument.value?.channelVolume ?? 1); }
 
 // LFO visualizer END
 
@@ -3487,6 +3507,20 @@ const phoneCtx = reactive({
 	width: auto;
 	margin: -4px 6px -4px 0;
 	border-radius: 4px;
+}
+
+.topbar-home {
+	display: block;
+	border-radius: 6px;
+	transition: filter .15s;
+}
+
+.topbar-home:hover {
+	filter: brightness(1.25);
+}
+
+.topbar-swatches {
+	margin-right: 4px;
 }
 
 /* Phones: the project name needs the room (phone mode, planned, will place the logo) */

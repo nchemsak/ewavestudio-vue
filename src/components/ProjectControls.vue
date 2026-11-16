@@ -104,6 +104,8 @@
                 </div>
             </div>
 
+            <slot name="tools-left" />
+
             <!-- data-keeps-brush: Undo and Redo don't put the Repeats brush down (DrumSequencer) -->
             <div class="pc-history" data-keeps-brush>
                 <button class="pc-btn pc-icon-btn hw-cap" :disabled="!props.canUndo" @click="emit('undo')"
@@ -134,6 +136,7 @@
         </div>
 
         <div class="pc-right">
+            <slot name="tools-before-save" />
             <div class="pc-actions">
                 <button class="pc-btn pc-primary hw-cap" :disabled="!store.loaded || !dirty || status === 'saving'"
                     @click="saveNow" :title="hotkeyTitle">
@@ -141,11 +144,11 @@
                     <span v-else-if="dirty">Save</span>
                     <span v-else>Saved</span>
                 </button>
+                <span class="pc-status" aria-live="polite" aria-atomic="true">
+                    <span class="pc-dot" :class="dotClass"></span>
+                </span>
             </div>
-
-            <span class="pc-status" aria-live="polite" aria-atomic="true">
-                <span class="pc-dot" :class="dotClass"></span>
-            </span>
+            <slot name="tools-right" />
         </div>
     </div>
 </template>
@@ -855,6 +858,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .pc-actions {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: .5rem;
