@@ -688,6 +688,14 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   offline render to the next (a steady difference of up to 0.01 in some exports, a tiny click
   where a note ends in most). The tape's stems test leaves the overdrive off for that reason.
   The fix would be the odd-count curve dropped after PR 30.
+- **Keep-alive in the export** (PR 91): a silent `ConstantSourceNode` (`keepAlive` in
+  `scheduleStepSequencer.ts`) feeds `driveSum` and the parts' buses for the whole render. Chrome
+  stops processing a node once every source feeding it has finished, at a moment that depends
+  on how busy the browser is, so a delay's echoes, the reverb's tail or the tape's path could be
+  cut short in one render and not another. PR 90's tape stems test then failed on the deploy's
+  machine (the mix 0.07 off its stems); with one CPU core kept busy it failed in 5 of 10 runs
+  before and in none of 10 after. It doesn't reach the overdrive's own nodes (above `driveSum`),
+  so the overdrive's offset (below) still varies.
 - Unit tests (`tape.test.ts`): the knobs' meanings, whole cycles in a loop, the gain curve,
   parts adding up through the mix's gain, the noise. Browser tests measure exports (duller,
   squeezed, hiss between hits, the pitch swaying about 1 %, the stems adding up for tape and
@@ -1993,6 +2001,7 @@ Done:
 | 89 | Three themes: Synthwave, Dark and Analog stay; **Slate** (its button, its name in `THEMES`, its CSS) and the hidden **Light** theme (every `.theme-light` rule) removed, 8.6 kB of CSS; a browser that had either saved opens in Synthwave, as Sand's did. Every element in the three kept themes has the computed style it had before (checked at four widths), but for the missing button. |
 | 85 | The maintainer's list after PR 84: the **Sand** theme removed (a browser that had it opens in Synthwave); the screen opens on the **Spectrum** (F2) instead of the Scope; the Random tile's dice tumbles properly (a hop and quarter turns, a new face each turn, landing on another face, one size); and the wave tiles' dice badges (which waves Random picks from) are saved with the project, so File → New and a sound preset light them all again and an opened project brings its own (they carried over before). |
 | 90 | A tape pedal, last in the chain (`src/audio/tape.ts`, both engines; the noise layer goes through it too): AGE (soft saturation, a duller top, the tape's own noise), WOBBLE (wow and flutter from a short delay whose time drifts) and TAPE \| VINYL (hiss, or crackle and pops, and how the pitch sways). The saturation is a gain that follows the whole mix, so the export's stems still add up; the tape's noise is a stem of its own, a loop's wobble fits the bars, and a one-shot ends where the hit fades under the hiss. Saved (older projects: off), reset by presets, rolled by the Sounds dice, AGE and WOBBLE MIDI-learnable. On the desktop it's a deck under the three pedals, whose footswitches became short bars (option C of three mockups); the phone has four pedals. |
+| 91 | Fix: PR 90's deploy failed on its tape stems test, which passed on the PR. On a busy machine Chrome stopped processing the export's delay, reverb or tape path at moments that varied from render to render, cutting echoes from one stem or the mix and not the others. A silent source now keeps them running to the end of every export render (`keepAlive` in `scheduleStepSequencer.ts`); with a CPU core kept busy the test failed 5 times in 10 before and never in 10 after. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

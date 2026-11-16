@@ -337,6 +337,16 @@ export function scheduleStepSequencer(
 	const driveMakeup = ctx.createGain();
 	const driveSum = ctx.createGain();
 
+	// Keeps the effects running to the end of the render. Chrome stops processing a node once
+	// every source feeding it has finished, at a moment that depends on how busy the browser is,
+	// so a delay's echoes, the reverb's tail or the tape pedal's path could be cut short in one
+	// render and not in another, and the stems then missed the mix (by 0.2 on a loaded machine).
+	// A silent source into driveSum and the parts' buses keeps everything after them going.
+	const keepAlive = ctx.createConstantSource();
+	keepAlive.offset.value = 0;
+	for (const n of [driveSum, dryOut, delayOut, reverbOut, noiseOut]) keepAlive.connect(n);
+	keepAlive.start(ctx.currentTime + offsetSeconds);
+
 	// CRUSH: shaper → tone → bit crusher → makeup (crusher.ts). The caller loads the crusher's
 	// worklet into ctx first (loadCrusher); without it the tone filter goes straight on.
 	driveShaper.connect(driveToneFilter);
