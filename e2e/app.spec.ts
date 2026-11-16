@@ -3159,7 +3159,7 @@ test('Sounds and Patterns sit side by side between Swing and Play, or on a row o
 					clipped: buttons.filter((b) => b.scrollWidth > b.clientWidth).map((b) => b.textContent),
 				};
 			});
-			const logo = document.querySelector('.topbar-logo');
+			const logo = document.querySelector('.topbar-home');
 			return {
 				boxes,
 				card: rect(document.querySelector('.ds-transport')!),
