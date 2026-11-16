@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	encodeSample, decodeSample, sampleFrom, sampleSeconds, trimRecording,
-	ONSET_LEVEL, PRE_ROLL_S, SAMPLE_MAX_S, FADE_S,
+	MIN_LEVEL, ONSET_SHARE, PRE_ROLL_S, SAMPLE_MAX_S, FADE_S,
 } from './sample';
 
 const SR = 48000;
@@ -36,12 +36,13 @@ describe('a recorded sound', () => {
 		const n = SR * 3;
 		const x = new Float32Array(n);
 		const onset = SR * 1; // a second of near-silence first
-		for (let i = 0; i < onset; i++) x[i] = (i % 2 ? 1 : -1) * ONSET_LEVEL * 0.5;
+		for (let i = 0; i < onset; i++) x[i] = (i % 2 ? 1 : -1) * 0.005; // a quiet room
 		// A hit: 0.4 at its start, decaying, gone after 0.3 s
 		for (let i = 0; i < SR * 0.3; i++) x[onset + i] = 0.4 * Math.exp(-i / (SR * 0.03)) * Math.sin(i / 10);
 		const out = trimRecording(x, SR)!;
-		// From PRE_ROLL_S before the first sample loud enough (a few samples into the hit)
-		const found = x.findIndex((v) => Math.abs(v) >= ONSET_LEVEL);
+		// From PRE_ROLL_S before its first sample within 20 dB of its peak (a few samples into the hit)
+		const xPeak = peakOf(x);
+		const found = x.findIndex((v) => Math.abs(v) >= xPeak * ONSET_SHARE);
 		expect(found - onset).toBeGreaterThanOrEqual(0);
 		expect(found - onset).toBeLessThan(20);
 		const start = found - Math.round(PRE_ROLL_S * SR);
@@ -55,7 +56,17 @@ describe('a recorded sound', () => {
 	it('is at most a second long, and silence is no recording', () => {
 		const loud = Float32Array.from({ length: SR * 3 }, (_, i) => Math.sin(i / 20) * 0.5);
 		expect(trimRecording(loud, SR)!.length).toBe(SAMPLE_MAX_S * SR);
-		expect(trimRecording(new Float32Array(SR).fill(ONSET_LEVEL / 2), SR)).toBeNull();
+		expect(trimRecording(new Float32Array(SR).fill(MIN_LEVEL / 2), SR)).toBeNull();
+	});
+
+	it('is found however quietly it came in (PR 96: an interface\'s input at −40 dBFS was "nothing")', () => {
+		const x = new Float32Array(SR);
+		const onset = SR / 4;
+		for (let i = 0; i < SR / 4; i++) x[onset + i] = 0.01 * Math.exp(-i / (SR * 0.03)) * Math.sin(i / 10);
+		const out = trimRecording(x, SR)!;
+		expect(out).not.toBeNull();
+		expect(peakOf(out)).toBeCloseTo(1, 5);
+		expect(out.length / SR).toBeLessThan(0.3); // from the hit, not the quarter second before it
 	});
 });
 
