@@ -4806,11 +4806,12 @@ test('while playing, a key waits for the next bar (a ghost and a caption), a pat
 	await expect(keyButton(page, 'D')).toHaveClass(/is-queued/);
 	const ghost = await keyButton(page, 'D').evaluate((el) => {
 		const a = getComputedStyle(el, '::after');
-		return { content: a.content, opacity: Number(a.opacity), bg: a.backgroundImage };
+		return { content: a.content, opacity: Number(a.opacity), bg: a.backgroundColor };
 	});
 	expect(ghost.content).not.toBe('none');
 	expect(ghost.opacity).toBeGreaterThan(0.2);
-	expect(ghost.bg).toContain('gradient');
+	// a tint of the LEDs' colour since PR 93 (the wash's gradient before)
+	expect(ghost.bg).not.toBe('rgba(0, 0, 0, 0)');
 	await expect(page.locator('.mm-queued-note')).toHaveText('· D at the next bar (Shift+click: now)');
 	await expect(keyButton(page, 'D')).toHaveAttribute('aria-checked', 'true', { timeout: 3000 });
 	await expect(page.locator('.mm-queued-note')).toHaveCount(0);
