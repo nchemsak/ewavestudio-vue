@@ -1,0 +1,73 @@
+import { describe, it, expect } from 'vitest';
+import { hitSeconds, hitSpanMs, hitTicks, hitColumns, formatLength, formatPeak, HIT_MAX_S } from './hitView';
+import { timeX } from '../lib/shapeViews';
+
+const sound = (o: { env?: [boolean, number, number]; delay?: [boolean, number, number, number]; reverb?: [boolean, number, number] } = {}) => {
+	const [envOn, attackMs, decayMs] = o.env ?? [true, 20, 400];
+	const [delayOn, time, feedback, delayMix] = o.delay ?? [false, 0.375, 0.3, 0.3];
+	const [revOn, decay, revMix] = o.reverb ?? [false, 2, 0.3];
+	return {
+		synth: { envelope: { enabled: envOn, attackMs, decayMs } },
+		fx: {
+			delay: { enabled: delayOn, time, feedback, mix: delayMix },
+			reverb: { enabled: revOn, decay, mix: revMix },
+		},
+	} as any;
+};
+
+describe('the hit at rest', () => {
+	it('renders as long as the sound can ring, within limits', () => {
+		expect(hitSeconds(sound())).toBeCloseTo(0.62, 5); // Attack + Decay and a little room
+		expect(hitSeconds(sound({ env: [true, 1, 50] }))).toBe(0.3); // at least 0.3 s
+		// The echoes until they fall to −60 dB: 0.3 feedback, 7 echoes of 0.375 s
+		expect(hitSeconds(sound({ delay: [true, 0.375, 0.3, 0.3] }))).toBeCloseTo(0.62 + 7 * 0.375, 5);
+		// A delay or reverb at zero mix adds nothing
+		expect(hitSeconds(sound({ delay: [true, 0.375, 0.3, 0], reverb: [true, 3, 0] }))).toBeCloseTo(0.62, 5);
+		expect(hitSeconds(sound({ reverb: [true, 2, 0.3] }))).toBeCloseTo(0.62 + 2.4, 5);
+		expect(hitSeconds(sound({ reverb: [true, 8, 0.5], delay: [true, 1, 0.9, 0.5] }))).toBe(HIT_MAX_S);
+	});
+
+	it('the time axis ends on a round number past the hit, with ticks that keep apart', () => {
+		expect(hitSpanMs(420)).toBe(500);
+		expect(hitSpanMs(500)).toBe(750);
+		expect(hitSpanMs(2570)).toBe(3000);
+		expect(hitSpanMs(99999)).toBe(6000);
+		for (const span of [50, 500, 3000, 6000]) {
+			const ticks = hitTicks(span);
+			expect(ticks.length).toBeGreaterThan(0);
+			expect(ticks.every((t) => t < span)).toBe(true);
+			const xs = [0, ...ticks.map((t) => timeX(t, 1, span))];
+			for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(0.14);
+		}
+	});
+
+	it('columns draw the wave itself near the start and its envelope further on', () => {
+		const sr = 48000, hz = 220, period = sr / hz;
+		// A 220 Hz sine at full level for 1 s, on the left only (either channel counts)
+		const left = Float32Array.from({ length: sr }, (_, i) => Math.sin((2 * Math.PI * hz * i) / sr));
+		const right = new Float32Array(sr);
+		const cols = 300;
+		const { min, max } = hitColumns([left, right], sr, cols, 1000, period);
+		// The first column is a sliver of the first cycle: near the wave's start
+		expect(max[0]).toBeLessThan(0.1);
+		expect(min[0]).toBeCloseTo(0, 5);
+		// Late columns hold a cycle or more: the whole swing
+		for (const c of [150, 299]) {
+			expect(max[c]).toBeGreaterThan(0.99);
+			expect(min[c]).toBeLessThan(-0.99);
+		}
+		// Past the end of the sound: nothing
+		const short = hitColumns([left.slice(0, 100)], sr, cols, 1000, period);
+		expect(short.max[cols - 1]).toBe(0);
+		expect(short.min[cols - 1]).toBe(0);
+	});
+
+	it('names its length and peak', () => {
+		expect(formatLength(312.4)).toBe('312 ms');
+		expect(formatLength(2570)).toBe('2.57 s');
+		expect(formatPeak(0.5)).toBe('−6.0 dB');
+		expect(formatPeak(1)).toBe('0.0 dB');
+		expect(formatPeak(1.2)).toBe('+1.6 dB');
+		expect(formatPeak(0)).toBe('silent');
+	});
+});

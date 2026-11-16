@@ -70,6 +70,37 @@ async function render(state: StepSequencerState, seconds: number): Promise<Chann
 	return [buf.getChannelData(0), buf.getChannelData(1)];
 }
 
+// One full-velocity hit on the first step, at `hz`, on `wave` (the one-shot, and the screen's
+// hit at rest). The tape pedal's noise plays for `noiseSeconds` (0: none)
+function oneShotState(state: StepSequencerState, hz: number, wave: string, part: ExportPart,
+	random: () => number, noiseSeconds: number): StepSequencerState {
+	const n = state.stepsCount;
+	return {
+		...state,
+		swing: 0,
+		bars: 1,
+		part,
+		random,
+		tapeNoise: { seconds: noiseSeconds },
+		pattern: {
+			active: Array.from({ length: n }, (_, i) => i === 0),
+			velocities: Array(n).fill(1),
+			pitches: Array(n).fill(hz),
+			waveforms: Array(n).fill(wave),
+			ratchets: Array(n).fill(1),
+		},
+		synth: { ...state.synth, noise: { ...state.synth.noise, mask: Array(n).fill(true) } },
+	};
+}
+
+// The screen's hit at rest (hitView.ts): one hit as the one-shot renders it, without the tape
+// pedal's noise (which never fades), with fixed random numbers so the picture doesn't change
+// when nothing has, cut where it fades below −80 dBFS. `seconds` is how long it may ring.
+export async function renderHit(state: StepSequencerState, hz: number, wave: string, seconds = ONE_SHOT_SECONDS): Promise<Channels> {
+	const raw = await render(oneShotState(state, hz, wave, 'mix', seededRandom(1), 0), seconds);
+	return trimTail(raw, Math.round(0.02 * state.sampleRate));
+}
+
 const wav = (channels: Channels, sampleRate: number) => new Uint8Array(encodeWavFloat32(channels, sampleRate));
 
 export async function buildExportFiles(
@@ -130,24 +161,8 @@ export async function buildExportFiles(
 	}
 
 	if (o.oneShot) {
-		// One full-velocity hit on the first step, at the chosen note, on the main wave
-		const n = state.stepsCount;
-		const hit = (part: ExportPart, random: () => number) => render({
-			...state,
-			swing: 0,
-			bars: 1,
-			part,
-			random,
-			tapeNoise: { seconds: ONE_SHOT_SECONDS },
-			pattern: {
-				active: Array.from({ length: n }, (_, i) => i === 0),
-				velocities: Array(n).fill(1),
-				pitches: Array(n).fill(o.oneShotHz),
-				waveforms: Array(n).fill(meta.oneShotWave),
-				ratchets: Array(n).fill(1),
-			},
-			synth: { ...state.synth, noise: { ...state.synth.noise, mask: Array(n).fill(true) } },
-		}, ONE_SHOT_SECONDS);
+		const hit = (part: ExportPart, random: () => number) =>
+			render(oneShotState(state, o.oneShotHz, meta.oneShotWave, part, random, ONE_SHOT_SECONDS), ONE_SHOT_SECONDS);
 		const hitSeed = Math.floor(Math.random() * 2 ** 32);
 		const raw = await hit('mix', seededRandom(hitSeed));
 		const minFrames = Math.round(0.02 * sr);

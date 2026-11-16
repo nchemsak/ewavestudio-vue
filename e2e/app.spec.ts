@@ -181,6 +181,8 @@ const lateNotes = (page: Page, from: number) =>
 
 const pads = (page: Page) => page.locator('.pad-row .padTEST');
 const screenView = (page: Page) => page.locator('.fkey[aria-pressed="true"]');
+// The hit at rest (PR 94): the screen's seventh canvas, shown while nothing plays
+const hitCanvas = (page: Page) => page.locator('.nac-screen__lcd canvas').nth(6);
 // The two preset boxes in the transport card
 const soundsBox = (page: Page) => page.getByRole('group', { name: 'Sound presets', exact: true });
 const patternsBox = (page: Page) => page.getByRole('group', { name: 'Pattern presets', exact: true });
@@ -283,9 +285,9 @@ test('the built page has the Google Analytics tag (stubbed out here)', async ({ 
 });
 
 test('number keys 1–4 switch the screen view, except while typing', async ({ page }) => {
-	// The screen opens on the Spectrum (PR 85; it was the Scope)
-	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
-	await expect(page.locator('.nac-screen__lcd canvas').nth(5)).toBeVisible();
+	// At rest the screen shows the hit (PR 94), no F-key lit; a view picked shows instead
+	await expect(hitCanvas(page)).toBeVisible();
+	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
 	await page.locator('body').click({ position: { x: 5, y: 5 } });
 	// F1 Scope, F2 Spectrum, F3 Spectrogram, F4 Tuner (PR 70: the Envelope view has no key)
 	for (const [key, title] of [['2', 'Spectrum'], ['3', 'Spectrogram'], ['4', 'Tuner'], ['1', 'Oscilloscope']]) {
@@ -296,6 +298,69 @@ test('number keys 1–4 switch the screen view, except while typing', async ({ p
 	await name.click();
 	await page.keyboard.type('23');
 	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
+});
+
+test('at rest the screen shows one hit of the sound, redrawn as the sound changes', async ({ page }) => {
+	const caption = page.locator('.nac-screen__caption');
+	const drawn = () => hitCanvas(page).evaluate((c: HTMLCanvasElement) => c.toDataURL());
+	// A fresh page: the hit of the factory sound (A3, the sine), its length and peak
+	await expect(hitCanvas(page)).toBeVisible();
+	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
+	await expect(caption).toHaveText(/^Hit: A3 Sine, \d+ ms, peak −\d+\.\d dB$/);
+	const lengthOf = async () => Number(/, (\d+) ms,/.exec((await caption.textContent())!)![1]);
+	const factoryLength = await lengthOf();
+	// Attack 20 ms + Decay 400 ms, give or take where it fades below −80 dBFS
+	expect(factoryLength).toBeGreaterThan(250);
+	expect(factoryLength).toBeLessThan(700);
+	// Something is drawn: the middle column of the plot isn't the background
+	const painted = await hitCanvas(page).evaluate((c: HTMLCanvasElement) => {
+		const ctx = c.getContext('2d')!;
+		const bg = ctx.getImageData(2, Math.round(c.height / 2), 1, 1).data;
+		const { data } = ctx.getImageData(Math.round(c.width * 0.4), 0, 1, c.height);
+		let n = 0;
+		for (let i = 0; i < data.length; i += 4) {
+			if (Math.abs(data[i] - bg[0]) + Math.abs(data[i + 1] - bg[1]) + Math.abs(data[i + 2] - bg[2]) > 60) n++;
+		}
+		return n / (data.length / 4);
+	});
+	expect(painted).toBeGreaterThan(0.2);
+
+	// A shorter Decay: the envelope view while it's turned, then the hit, shorter
+	const decay = page.locator('section[aria-label="Envelope"]').getByRole('slider', { name: 'Decay', exact: true });
+	await decay.focus();
+	await page.keyboard.press('Home');
+	await expect(page.locator('.nac-screen__lcd canvas').nth(3)).toBeVisible();
+	await page.keyboard.press('Tab');
+	await expect(hitCanvas(page)).toBeVisible();
+	await expect.poll(lengthOf).toBeLessThan(factoryLength / 2);
+
+	// A sound preset: a knob that holds no view of its own redraws it at once
+	const before = await drawn();
+	await page.locator('.transport-card').getByRole('button', { name: 'Bell', exact: true }).click();
+	await expect(caption).toHaveText(/^Hit: A3 Glass, [\d.]+ s, peak/); // the long ring of its reverb
+	await expect.poll(drawn).not.toBe(before);
+
+	// Playing: the view picked before (the Spectrum); once stopped and quiet, the hit again
+	await turnOnPads(page, [0, 8]);
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
+	await expect(hitCanvas(page)).toBeHidden();
+	await expect(caption).toHaveCount(0);
+	await page.waitForTimeout(500);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await page.waitForTimeout(500);
+	await expect(hitCanvas(page)).toBeHidden(); // its tail still shows on the Spectrum for a moment
+	await expect(hitCanvas(page)).toBeVisible({ timeout: 4000 });
+
+	// A view picked at rest shows instead, until things next come to rest
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.keyboard.press('4');
+	await expect(screenView(page)).toHaveAttribute('title', 'Tuner');
+	await expect(hitCanvas(page)).toBeHidden();
+	await page.keyboard.press('Space');
+	await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+	await page.keyboard.press('Space');
+	await expect(hitCanvas(page)).toBeVisible({ timeout: 4000 });
 });
 
 test('the spectrogram draws a note in its pad\'s colour', async ({ page }) => {
@@ -391,7 +456,8 @@ test('the Spectrum (F2) draws a played note at its frequency, in its pad\'s colo
 	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
 	await page.keyboard.press('Tab');
 	await expect(envCanvas).toBeHidden();
-	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
+	// Stopped: back to the hit once things are at rest
+	await expect(hitCanvas(page)).toBeVisible();
 });
 
 test('knobs work from the keyboard, and turning Attack shows the envelope until focus moves on', async ({ page }) => {
@@ -424,13 +490,13 @@ test('knobs work from the keyboard, and turning Attack shows the envelope until 
 	const attack = page.getByRole('slider', { name: 'Attack' });
 	const envCanvas = page.locator('.nac-screen__lcd canvas').nth(3);
 	await attack.focus();
-	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum'); // focus alone changes nothing
+	await expect(hitCanvas(page)).toBeVisible(); // focus alone changes nothing (at rest: the hit)
 	await page.keyboard.press('ArrowUp');
 	await expect(envCanvas).toBeVisible();
 	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
 	await expect(attack).toHaveAttribute('aria-valuetext', /^\d+ ms$/);
 	await page.keyboard.press('Tab');
-	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
+	await expect(hitCanvas(page)).toBeVisible();
 });
 
 test('turning Cutoff or Resonance shows the filter curve until the knob is let go', async ({ page }) => {
@@ -438,7 +504,7 @@ test('turning Cutoff or Resonance shows the filter curve until the knob is let g
 	const cutoff = page.getByRole('slider', { name: 'Cutoff', exact: true });
 	const resonance = page.getByRole('slider', { name: 'Resonance', exact: true });
 	const picture = () => filterCanvas.evaluate((c: HTMLCanvasElement) => c.toDataURL());
-	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
+	await expect(hitCanvas(page)).toBeVisible();
 	await expect(filterCanvas).toBeHidden();
 
 	// No F-key of its own: none is lit while it shows
@@ -458,10 +524,10 @@ test('turning Cutoff or Resonance shows the filter curve until the knob is let g
 	await expect(filterCanvas).toBeVisible();
 	await expect.poll(picture).not.toBe(lower);
 
-	// Let go: back to the view it was on
+	// Let go: back to what it showed (at rest: the hit)
 	await page.keyboard.press('Tab');
 	await expect(filterCanvas).toBeHidden();
-	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
+	await expect(hitCanvas(page)).toBeVisible();
 
 	// Picking another view while turning keeps that view afterwards
 	await cutoff.focus();
