@@ -3387,6 +3387,7 @@ test('PR 92: a MIDI controller chosen lights the gear; Learn closes the panel', 
 test('Analog: its button applies its own colours, and is remembered', async ({ page }) => {
 	for (const [name, page1, screen] of [['Analog', 'rgb(107, 75, 52)', '#1a1208']]) {
 		const button = page.getByRole('button', { name, exact: true });
+		await openSettings(page); // the theme buttons are in the top bar's gear (PR 92)
 		await button.click();
 		await expect(button).toHaveAttribute('aria-pressed', 'true');
 		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${name.toLowerCase()}`));
