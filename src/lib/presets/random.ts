@@ -6,7 +6,7 @@
 // Random over every knob would mostly give noise, mud or silence, so this is a recipe for a
 // percussion voice in the spirit of the synth: always a short, plucked amp envelope and a
 // filter; then, some of the time, a pitch sweep, a filter envelope, noise, FM, unison, the
-// LFO, velocity routing and each effect. The ranges keep every roll usable and the level in
+// LFO, velocity routing and each effect (the tape pedal too). The ranges keep every roll usable and the level in
 // the presets' range: resonance up to 10, drive mix up to 0.35 (the drive saturates to near
 // full scale, so its mix sets the level). A browser test renders rolls and checks none is
 // silent or clipping.
@@ -119,6 +119,10 @@ export function randomPreset(rng: Rng = Math.random): SynthPreset {
 	if (chance(0.35)) fx.reverb = { enabled: true, mix: between(0.1, 0.35, 0.01), decay: between(0.6, 3, 0.05), tone: between(0.3, 0.8, 0.01) };
 	if (chance(0.25)) fx.delay = { enabled: true, division: pick(['1/16', '1/8', '1/8.', '1/4']), mix: between(0.15, 0.3, 0.01), pingPong: chance(0.4) };
 	if (chance(0.2)) fx.drive = { enabled: true, amount: between(0.1, 0.45, 0.01), tone: between(1500, 6000, 10), mix: between(0.15, 0.35, 0.01), crush: chance(0.3) };
+
+	// The tape pedal, now and then, mostly as tape. Drawn last, so every roll from before the
+	// pedal is the same sound, with or without it.
+	if (chance(0.25)) fx.tape = { enabled: true, age: between(0.15, 0.7, 0.01), wobble: between(0.1, 0.6, 0.01), mode: chance(0.7) ? 'tape' : 'vinyl' };
 
 	return { id: 'random', label: 'Random', description: 'A random sound', wave, synth, fx };
 }

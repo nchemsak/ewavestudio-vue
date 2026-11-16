@@ -96,6 +96,8 @@
 						v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 					<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 						v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone" />
+					<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
+						v-model:mode="tapeMode" :playing="isPlaying" />
 				</div>
 			</template>
 			<template #key>
@@ -153,7 +155,7 @@
 			 screen beside them; under them Sound (three rows, each filled edge to edge) and Compose,
 			 ending on one line. Under 1200 px, Sound, Effects and Compose are tabs under the steps
 			 (data-tab says which one shows). -->
-		<div v-show="!phoneActive" class="ds-grid" :data-tab="activeTab">
+		<div v-show="!phoneActive" class="ds-grid" :class="`tape-${tapeMock}`" :data-tab="activeTab">
 
 			<!-- Visualizer Screen -->
 			<aside class="pt-card ds-visualizer">
@@ -472,6 +474,9 @@
 									v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 								<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 									v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone" />
+								<!-- The tape pedal, last in the chain (mockups: ?tape=a, b or c) -->
+								<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
+									v-model:mode="tapeMode" :playing="isPlaying" :layout="tapeMock === 'c' ? 'deck' : 'pedal'" />
 							</div>
 						</SectionWrap>
 					</div>
@@ -705,6 +710,8 @@ import type { StepSequencerState } from '../audio/export/scheduleStepSequencer';
 
 // Reverb
 import ReverbEffect from './modules/ReverbEffect.vue';
+import TapeEffect from './modules/TapeEffect.vue';
+import { TAPE_DEFAULTS, type TapeMode } from '../audio/tape';
 
 // Live sound engine
 import { useLiveEngine } from '../audio/liveEngine';
@@ -2328,6 +2335,26 @@ const reverbTone = ref(0.6);      // normalized tone control
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
+// Tape START
+
+// The tape pedal, last in the chain (src/audio/tape.ts). Starting values match snapshot.ts.
+const tapeEnabled = ref(false);
+const tapeAge = ref(TAPE_DEFAULTS.age);       // 0..1: saturation, a duller top, hiss
+const tapeWobble = ref(TAPE_DEFAULTS.wobble); // 0..1: wow and flutter
+const tapeMode = ref<TapeMode>(TAPE_DEFAULTS.mode); // 'tape' | 'vinyl'
+
+// MOCKUP SWITCH (to be removed once a layout is picked): how the fourth pedal fits the Effects
+// card. ?tape=a: four slimmer pedals in the card as it is; b (the default): the card a little
+// wider, Noise and the LFO a little narrower; c: the tape as a low deck under three shorter pedals.
+const tapeMock = (() => {
+	const m = new URLSearchParams(window.location.search).get('tape');
+	return m === 'a' || m === 'c' ? m : 'b';
+})();
+
+// Tape END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
 // Unison / Detune START
 
 const unisonEnabled = ref(false);
@@ -2554,6 +2581,12 @@ const exportState = computed<StepSequencerState>(() => {
 				decay: reverbDecay.value,
 				tone: reverbTone.value,
 			},
+			tape: {
+				enabled: tapeEnabled.value,
+				age: tapeAge.value,
+				wobble: tapeWobble.value,
+				mode: tapeMode.value,
+			},
 		},
 
 		sampleRate: audioCtx?.sampleRate || 48000,
@@ -2668,6 +2701,7 @@ const projectState: ProjectState = {
 		},
 		drive: { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix, crush: driveCrush },
 		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone },
+		tape: { enabled: tapeEnabled, age: tapeAge, wobble: tapeWobble, mode: tapeMode },
 	},
 	instruments,
 	melody: melodyUi,
@@ -2711,6 +2745,7 @@ const {
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
 	reverb: projectState.fx.reverb,
+	tape: projectState.fx.tape,
 	onBarStart: () => runQueued(),
 });
 
@@ -3026,6 +3061,7 @@ const exportEffectsOn = computed(() => ({
 	delay: delayEnabled.value && delayMix.value > 0,
 	reverb: reverbEnabled.value && reverbMix.value > 0,
 	noise: noiseEnabled.value && noiseAmount.value > 0,
+	tape: tapeEnabled.value && tapeAge.value > 0,
 }));
 
 function openExportDialog() {
@@ -3780,9 +3816,13 @@ const phoneCtx = reactive({
 	/* Effects tab: the pedals at their desktop size (118 × 239 at 1600 px), centred: wider,
 	   they looked stretched (190 px) */
 	.module.fx .fx-pair {
-		grid-template-columns: repeat(3, minmax(0, 120px));
+		grid-template-columns: repeat(4, minmax(0, 120px));
 		justify-content: center;
 		column-gap: 28px;
+	}
+
+	.tape-c .module.fx .fx-pair {
+		grid-template-columns: repeat(3, minmax(0, 120px));
 	}
 
 	/* The transport: Sounds and Patterns on a row of their own under the knobs */
@@ -3854,8 +3894,13 @@ const phoneCtx = reactive({
 	/* Effects tab: the pedals one under another (three across they'd be 105 px wide, and their
 	   labels run into the knobs), at their desktop size, centred */
 	.module.fx .fx-pair {
-		grid-template-columns: minmax(0, 120px);
+		grid-template-columns: repeat(2, minmax(0, 120px));
 		row-gap: 16px;
+	}
+
+	.tape-c .module.fx .fx-pair {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		column-gap: 8px;
 	}
 
 	.ds-tab {
@@ -3954,11 +3999,11 @@ const phoneCtx = reactive({
 /* The pedals near their desktop proportions (118 × 239 there), centred: stretched across the
    phone's width they were 262 px wide and looked fat */
 .fx-pair.pl-fx {
-	grid-template-columns: repeat(3, minmax(0, 150px));
+	grid-template-columns: repeat(4, minmax(0, 150px));
 	justify-content: center;
 	align-content: center;
 	align-items: start;
-	column-gap: 28px;
+	column-gap: 20px;
 	height: 100%;
 }
 
@@ -4706,7 +4751,7 @@ const phoneCtx = reactive({
 
 .fx-pair {
 	display: grid;
-	grid-template-columns: 1fr 1fr 1fr;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: 12px;
 	align-items: start;
 }
@@ -4716,6 +4761,81 @@ const phoneCtx = reactive({
 		grid-template-columns: 1fr;
 	}
 }
+
+/* MOCKUPS START (?tape=a, b or c; to be removed once one is picked) */
+
+/* A and B: four pedals across. In A they are 87 px wide: a pedal's TONE knob moves left, clear
+   of its CRUSH or PING PONG switch, and the names are a size smaller */
+
+.tape-a .fx-pair {
+	gap: 10px;
+}
+
+.tape-a .fx-pair :deep(.delay-pedal .knob-cell.tone),
+.tape-a .fx-pair :deep(.drive-pedal .knob-cell.tone) {
+	justify-self: start;
+	margin-left: 22%;
+}
+
+/* ... and TONE's caption goes under its knob: above it, it ran into the other two */
+.tape-a .fx-pair :deep(.knob-cell.tone .knob-label) {
+	top: auto;
+	bottom: -10px;
+}
+
+.tape-a .fx-pair :deep(.effect-label) {
+	font-size: 0.82rem;
+	line-height: 1rem;
+	letter-spacing: -0.02em;
+}
+
+.tape-b .fx-pair :deep(.effect-label) {
+	font-size: 0.95rem;
+	line-height: 1rem;
+}
+
+/* B: the Effects card takes a little of Noise's and the LFO's width */
+@media (min-width: 1200px) {
+	.tape-b .sound-row-3 {
+		grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+	}
+}
+
+/* C: three shorter pedals over the deck */
+.tape-c .fx-pair {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tape-c .fx-pair> :last-child {
+	grid-column: 1 / -1;
+}
+
+.tape-c .fx-pair :deep(.footswitch) {
+	height: 19px;
+}
+
+.tape-c .fx-pair :deep(.tape-pedal .footswitch) {
+	height: 26px;
+}
+
+.tape-c .fx-pair :deep(.footswitch::before) {
+	inset: 4px;
+	border-radius: 4px;
+}
+
+.tape-c .fx-pair :deep(.panel-seam) {
+	height: 8px;
+}
+
+.tape-c .fx-pair :deep(.tape-pedal .panel-seam) {
+	height: auto;
+}
+
+.tape-c .fx-pair :deep(.knob-group) {
+	padding: 0;
+}
+
+/* MOCKUPS END */
 
 
 

@@ -997,5 +997,36 @@ button.lv-jack:not(:disabled):hover .lv-hole:not(.plugged) {
         grid-column: 1 / -1;
     }
 }
+/* MOCKUP B (?tape=b; to be removed once a layout is picked): on the desktop too, the card
+   takes the shape it has under 1200 px, since the Effects card beside it is wider */
+@media (min-width: 1200px) {
+    .tape-b .lk-key {
+        height: 26px;
+        width: 46px;
+    }
+
+    .tape-b .lv-main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: minmax(0, 1fr) auto;
+        gap: 7px 12px;
+        padding-top: 7px;
+        padding-bottom: 7px;
+    }
+
+    .tape-b .lv-screen {
+        min-height: 0;
+    }
+
+    .tape-b .lv .lfo-row {
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+    }
+
+    .tape-b .lv-bay {
+        grid-column: 1 / -1;
+    }
+}
 /* THE CARD END */
 </style>
