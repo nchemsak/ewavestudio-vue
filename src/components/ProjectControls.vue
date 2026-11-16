@@ -133,7 +133,7 @@
                 @keydown.enter.prevent="rename" aria-label="Project name" />
         </div>
 
-        <div class="pc-right">
+        <div class="pc-right" :class="{ 'has-settings': !!$slots.settings }">
             <div class="pc-actions">
                 <button class="pc-btn pc-primary hw-cap" :disabled="!store.loaded || !dirty || status === 'saving'"
                     @click="saveNow" :title="hotkeyTitle">
@@ -146,6 +146,8 @@
             <span class="pc-status" aria-live="polite" aria-atomic="true">
                 <span class="pc-dot" :class="dotClass"></span>
             </span>
+            <!-- The gear (Theme and MIDI), from DrumSequencer -->
+            <slot name="settings" />
         </div>
     </div>
 </template>
@@ -859,6 +861,18 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
     align-items: center;
     gap: .5rem;
     padding-right: var(--status-reserved);
+}
+
+/* With the gear at the end, the status dot sits between Save and the gear */
+.pc-right.has-settings .pc-actions {
+    padding-right: 0;
+}
+
+.pc-right.has-settings .pc-status {
+    position: static;
+    transform: none;
+    inline-size: auto;
+    margin-right: .25rem;
 }
 
 .pc-status {

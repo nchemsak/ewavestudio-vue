@@ -4,7 +4,7 @@
 		<div class="row">
 			<div class="col-12">
 				<!-- Top toolbar -->
-				<header v-show="!phoneActive" class="app-toolbar">
+				<header v-show="!phoneActive && !GEAR_MOCK" class="app-toolbar">
 					<div class="app-toolbar-left">
 						<ThemeToggle />
 					</div>
@@ -20,7 +20,7 @@
 		</div>
 	</div>
 	<!-- In the installed app the main site opens in the browser, not in the app's window -->
-	<a v-show="!phoneActive && !phoneHint" href="/" class="return" :target="pwa.state.standalone ? '_blank' : undefined"
+	<a v-show="!phoneActive && !phoneHint && !GEAR_MOCK" href="/" class="return" :target="pwa.state.standalone ? '_blank' : undefined"
 		:rel="pwa.state.standalone ? 'noopener' : undefined">Return to Ephemeral Wave</a>
 	<PwaNotice />
 	<!-- On a phone showing the desktop view: always a way back to the phone view -->
@@ -47,6 +47,7 @@ import { useTheme } from './composables/useTheme';
 import { usePwa } from './composables/usePwa';
 import { usePhoneMode } from './composables/usePhoneMode';
 import { watchEffect } from 'vue';
+import { GEAR_MOCK } from './lib/gearMock';
 useTheme();
 // Installing the app and using it offline: registers the service worker (builds only)
 const pwa = usePwa();

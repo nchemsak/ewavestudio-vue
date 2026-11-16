@@ -142,7 +142,15 @@
 				<ProjectControls :exporting="isExporting" :can-undo="canUndo" :can-redo="canRedo"
 					@export-audio="openExportDialog" @undo="undo" @redo="redo">
 					<template #brand>
-						<img class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave">
+						<!-- MOCKUP (gearMock.ts): the logo is the link back to the main site -->
+						<a v-if="GEAR_MOCK" class="topbar-logo-link" href="/" title="Back to Ephemeral Wave"
+							:target="pwaStandalone ? '_blank' : undefined" :rel="pwaStandalone ? 'noopener' : undefined">
+							<img class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave: back to the main site">
+						</a>
+						<img v-else class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave">
+					</template>
+					<template v-if="GEAR_MOCK && !phoneActive" #settings>
+						<SettingsMenu :variant="GEAR_MOCK" :midi="midi" />
 					</template>
 				</ProjectControls>
 			</section>
@@ -169,7 +177,9 @@
 					<div class="transport-knobs">
 						<!-- Volume -->
 						<div class="position-relative text-center knob-wrap">
-							<Knob midi-id="transport.volume" v-model="volume" label="Volume" :value-text="`${Math.round(volume * 100)}%`" :min="0" :max="1" :step="0.01" size="medium"
+							<!-- MOCKUP (gearMock.ts): the LFO's Level mark on this knob, the Step Sequencer's Vol hidden -->
+							<LfoModKnob :lfoView="GEAR_MOCK ? lfoView : null" valueKey="level" rangeKey="levelRange"
+								midi-id="transport.volume" v-model="volume" label="Volume" :value-text="`${Math.round(volume * 100)}%`" :min="0" :max="1" :step="0.01" size="medium"
 								:useThemeArc="true" @knobStart="activeKnob = 'volume'" @knobEnd="activeKnob = null" />
 							<div class="stepper-value" aria-live="polite" :title="`${Math.round(volume * 100)}%`">
 								{{ Math.round(volume * 100) }}%
@@ -239,12 +249,12 @@
 						</button>
 
 						<!-- MIDI fallback lives in the right cluster -->
-						<MidiToolbar v-if="midi.supported && !hasMidiTarget" :midi="midi" />
+						<MidiToolbar v-if="midi.supported && !hasMidiTarget && !GEAR_MOCK" :midi="midi" />
 					</div>
 				</div>
 
 				<!-- MIDI toolbar Teleport stays outside; only used when a slot exists -->
-				<template v-if="midi.supported && hasMidiTarget">
+				<template v-if="midi.supported && hasMidiTarget && !GEAR_MOCK">
 					<Teleport to="#midi-toolbar-slot">
 						<MidiToolbar :midi="midi" />
 					</Teleport>
@@ -261,7 +271,7 @@
 						<h2 class="pt-title">Step Sequencer</h2>
 
 						<!-- The LFO's Level target shows on it (a dot and an arc; LfoModKnob reads the view) -->
-						<LfoModKnob :lfoView="lfoView" valueKey="level" rangeKey="levelRange"
+						<LfoModKnob v-if="!GEAR_MOCK" :lfoView="lfoView" valueKey="level" rangeKey="levelRange"
 							midi-id="synth.volume" v-model="synthInstrument.channelVolume" :min="0" :max="1" :step="0.01" size="small"
 							label="Vol" aria-label="Synth volume"
 							:value-text="`${Math.round(synthInstrument.channelVolume * 100)}%`" color="#8E44AD" @knobStart="activeKnob = `vol-${synthInstrument.name}`"
@@ -680,6 +690,9 @@ import MelodyMaker from './MelodyMaker.vue';
 import RandomWaveTile from './RandomWaveTile.vue';
 import MelodyModeSwitch from './MelodyModeSwitch.vue';
 import MidiToolbar from './MidiToolbar.vue';
+import SettingsMenu from './SettingsMenu.vue';
+import { GEAR_MOCK } from '../lib/gearMock';
+import { usePwa } from '../composables/usePwa';
 import { useMidiInput } from '../composables/useMidiInput';
 import { useMidiLearn } from '../composables/useMidiLearn';
 
@@ -2731,6 +2744,8 @@ const dataArray = new Uint8Array(analyser.fftSize);
 const lfoMoving = computed(() => lfoEnabled.value && lfoDepth.value > 0);
 const { lfoPos } = useLfoVisual({ lfoNow, soundingRecently, active: lfoMoving });
 const lfoAt = (target: string) => lfoMoving.value && lfoTarget.value === target;
+// The knob the Level mark is drawn on: the Step Sequencer's Vol, or (MOCKUP) the Volume knob
+const levelKnobValue = () => (GEAR_MOCK ? volume.value : synthInstrument.value?.channelVolume ?? 1);
 const lfoView: LfoView = reactive({
 	cutoff: computed(() => (lfoAt('filter') && filterEnabled.value && lfoPos.value != null
 		? lfoCutoffAt(filterCutoff.value, lfoDepth.value, audioCtx.sampleRate, lfoPos.value) : null)),
@@ -2746,8 +2761,8 @@ const lfoView: LfoView = reactive({
 		? lfoFmAmountAt(fmIndex.value, lfoDepth.value, lfoPos.value) : null)),
 	fmAmountRange: computed(() => (lfoAt('fm') && fmInUse.value ? lfoFmAmountRange(fmIndex.value, lfoDepth.value) : null)),
 	level: computed(() => (lfoAt('amp') && lfoPos.value != null
-		? lfoLevelAt(synthInstrument.value?.channelVolume ?? 1, lfoDepth.value, lfoPos.value) : null)),
-	levelRange: computed(() => (lfoAt('amp') ? lfoLevelRange(synthInstrument.value?.channelVolume ?? 1, lfoDepth.value) : null)),
+		? lfoLevelAt(levelKnobValue(), lfoDepth.value, lfoPos.value) : null)),
+	levelRange: computed(() => (lfoAt('amp') ? lfoLevelRange(levelKnobValue(), lfoDepth.value) : null)),
 });
 
 // LFO visualizer END
@@ -3344,6 +3359,8 @@ function runQueued() {
 // both ways, like the Pitch card's knob) and Space (the reverb's mix, which turns the reverb on
 // above 0 and off at 0, and the delay's mix at 0.6 times it while the delay is on).
 const { active: phoneActive, setFull: setPhoneFull } = usePhoneMode();
+// In the installed app the main site opens in the browser (the logo's link, MOCKUP)
+const pwaStandalone = usePwa().state.standalone;
 const SCALE_LABELS: Record<string, string> = {
 	none: '(no scale)', major: 'major', naturalMinor: 'minor', pentMajor: 'pentatonic major',
 	pentMinor: 'pentatonic minor', dorian: 'dorian', lydian: 'lydian', mixolydian: 'mixolydian',
@@ -3481,6 +3498,12 @@ const phoneCtx = reactive({
 }
 
 /* The logo, at the top bar's left end (ProjectControls' brand slot) */
+/* MOCKUP: the logo as the link back to the main site */
+.topbar-logo-link {
+	display: inline-flex;
+	border-radius: 8px;
+}
+
 .topbar-logo {
 	display: block;
 	height: 44px;
