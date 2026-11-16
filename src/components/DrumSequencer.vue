@@ -35,7 +35,15 @@
 							<h2 class="pt-title">Wave</h2>
 							<div class="pl-wave-grid">
 								<button v-for="t in WAVE_TILES" :key="t.value" type="button" class="pt-btn"
-									:aria-pressed="selectedWaveform === t.value" @click="applyWaveToAll(t.value)">{{ t.label }}</button>
+									:aria-pressed="selectedWaveform === t.value" :aria-label="t.label" @click="applyWaveToAll(t.value)">{{ t.value === 'triangle' ? 'TRI' : t.label }}</button>
+								<!-- The recording (PR 95): Sample picks it (records one first if there's none),
+									 REC records again; while recording it says what it's doing -->
+								<button type="button" class="pt-btn" :aria-pressed="selectedWaveform === 'sample'"
+									:disabled="sampleBusy" :aria-label="sample ? 'Sample: the recording on every pad' : 'Sample: record a sound'"
+									@click="sample ? applyWaveToAll('sample') : recordSample()">SAMPLE</button>
+								<button type="button" class="pt-btn pl-rec" :class="{ 'is-on': sampleBusy }"
+									:aria-label="sampleBusy ? 'Stop recording' : sample ? 'Record a new sample' : 'Record a sample'"
+									@click="recordSample()"><span class="pl-rec-dot" aria-hidden="true" />{{ sampleStatus || 'REC' }}</button>
 							</div>
 						</section>
 						<!-- Noise is on the Mod page since PR 73, as its whole card -->
@@ -366,6 +374,12 @@
 											:disabled="!randomPoolArray.length" :title="randomTooltip" @roll="applyRandomWaves()" />
 									</div>
 								</div>
+								<!-- Sample: a sound recorded from the microphone, a strip under the tiles (PR 95,
+									 option B of two mockups; A was a tall tile beside Random) -->
+								<div class="st-strip">
+									<SampleTile :sample="sample" :state="recorder.state.value" :level="recorder.level.value"
+										:lit="litWave === 'sample'" @pick="applyWaveToAll('sample')" @record="recordSample()" />
+								</div>
 							</div>
 						</SectionWrap>
 					</div>
@@ -639,7 +653,7 @@
 			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
 			@export="runExport" @close="exportOpen = false" />
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
-			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave"
+			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave" :hasSample="!!sample"
 			v-model:noiseEnabled="padNoiseEnabled" :noiseCardOff="!noiseEnabled" v-model:ratchet="currentPadRatchet" v-model:repeatNotes="currentPadRepeatNotes" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
 			:anchorRect="padPopover.anchorRect" :title="padPopover.title" @audition="hz => auditionPad(padSettings.index, hz)" />
 	</div>
@@ -679,9 +693,12 @@ import { usePwa } from '../composables/usePwa';
 import { LFO_DEPTH_MAX, LFO_DEFAULT_DEPTH, type LfoTarget } from '../audio/lfo';
 import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
-import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS } from '../audio/waves';
+import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS, padWaveLabel, type PadWave } from '../audio/waves';
+import { encodeSample, sampleSeconds, SAMPLE_ROOT_HZ, type SampleData } from '../audio/sample';
 import MelodyMaker from './MelodyMaker.vue';
 import RandomWaveTile from './RandomWaveTile.vue';
+import SampleTile from './SampleTile.vue';
+import { useSampleRecorder } from '../composables/useSampleRecorder';
 import MelodyModeSwitch from './MelodyModeSwitch.vue';
 import { useMidiInput } from '../composables/useMidiInput';
 import { useMidiLearn } from '../composables/useMidiLearn';
@@ -1706,11 +1723,11 @@ const activeKnob = ref(null);
 const hoveredPad = ref(null);
 const hoveredLabel = ref(null);
 
-const selectedWaveform = ref<Wave>("sine");
+const selectedWaveform = ref<PadWave>("sine");
 const waves = WAVE_IDS;
 
 // The Waveforms panel's tiles (src/audio/waves.ts lists the waves)
-const WAVE_PALETTES: Record<Wave, string[]> = {
+const WAVE_PALETTES: Record<PadWave, string[]> = {
 	sine: ['#fff', '#7bd0ff', '#666'],
 	triangle: ['#7cf3c9', '#b47aff', '#ffd06b'],
 	sawtooth: ['#ff9a62', '#ffd06b', '#75f0ff'],
@@ -1719,6 +1736,7 @@ const WAVE_PALETTES: Record<Wave, string[]> = {
 	organ: ['#ffb86b', '#ff7eb3', '#7bd0ff'],
 	hollow: ['#7cf3c9', '#7bd0ff', '#a2f5a6'],
 	glass: ['#e6c6ff', '#7bd0ff', '#fff'],
+	sample: ['#ff6b6b', '#ffd06b', '#fff'],
 };
 const WAVE_TILES = WAVE_IDS.map(value => ({
 	value, label: WAVE_LABELS[value].toUpperCase(), palette: WAVE_PALETTES[value],
@@ -1765,7 +1783,7 @@ const waveLabel = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
 // 	inst.waveforms = Array(stepLength.value).fill(selectedWaveform.value as any);
 // }
 
-function applyWaveToAll(w: Wave) {
+function applyWaveToAll(w: PadWave) {
 	selectedWaveform.value = w;
 	const inst = synthInstrument.value as any;
 	if (!inst) return;
@@ -1775,15 +1793,15 @@ function applyWaveToAll(w: Wave) {
 // The wave every pad plays, or null while they play a mix (after Random, or a pad's wave
 // changed in its ⋮ menu). Only that wave's tile is lit; with a mix, Random is. The main wave
 // (selectedWaveform) stays as it was: MIDI notes and the one-shot export play it.
-const litWave = computed<Wave | null>(() => {
+const litWave = computed<PadWave | null>(() => {
 	const inst = synthInstrument.value as any;
-	const fallback = selectedWaveform.value as Wave;
+	const fallback = selectedWaveform.value;
 	if (!inst) return fallback;
-	const waves = inst.waveforms as Wave[] | undefined;
+	const waves = inst.waveforms as PadWave[] | undefined;
 	if (!Array.isArray(waves)) return fallback;
-	let first: Wave | null = null;
+	let first: PadWave | null = null;
 	for (let i = 0; i < stepLength.value; i++) {
-		const w = (waves[i] ?? fallback) as Wave;
+		const w = (waves[i] ?? fallback) as PadWave;
 		if (first === null) first = w;
 		else if (w !== first) return null;
 	}
@@ -1791,10 +1809,10 @@ const litWave = computed<Wave | null>(() => {
 });
 const wavesMixed = computed(() => litWave.value === null);
 // Each pad's wave, which the Random tile shows while they play a mix
-const padWaves = computed<Wave[]>(() => {
+const padWaves = computed<PadWave[]>(() => {
 	const inst = synthInstrument.value as any;
-	const fallback = selectedWaveform.value as Wave;
-	return Array.from({ length: stepLength.value }, (_, i) => (inst?.waveforms?.[i] ?? fallback) as Wave);
+	const fallback = selectedWaveform.value;
+	return Array.from({ length: stepLength.value }, (_, i) => (inst?.waveforms?.[i] ?? fallback) as PadWave);
 });
 
 function applyRandomWaves() {
@@ -1905,12 +1923,12 @@ const padFrequencies = computed<number[]>({
 	set: v => { if (synthInstrument.value) synthInstrument.value.pitches = v; }
 });
 
-const currentPadWave = computed<Wave>({
+const currentPadWave = computed<PadWave>({
 	get() {
 		const inst = instruments.value.find(i => i.name === padSettings.name) as any;
-		if (!inst) return selectedWaveform.value as Wave;
+		if (!inst) return selectedWaveform.value as PadWave;
 		const i = padSettings.index;
-		return (inst.waveforms?.[i] ?? selectedWaveform.value) as Wave;
+		return (inst.waveforms?.[i] ?? selectedWaveform.value) as PadWave;
 	},
 	set(w) {
 		const inst = instruments.value.find(i => i.name === padSettings.name) as any;
@@ -2185,6 +2203,8 @@ const pitchEnvDecayMs = ref(300);
 const pitchMode = ref<'up' | 'down' | 'random'>('up');
 // The pulse wave's width, % (src/audio/waves.ts); 50 is a square
 const pulseWidth = ref(PULSE_WIDTH_DEFAULT);
+// The recorded sound the 'sample' wave plays (src/audio/sample.ts), saved with the project
+const sample = shallowRef<SampleData | null>(null);
 const pulseWidthTip = ref(false);
 // Velocity routing amounts, % −100..100 (src/audio/velocity.ts; 0 = off): what a step's
 // velocity does besides its loudness
@@ -2545,6 +2565,7 @@ const exportState = computed<StepSequencerState>(() => {
 				mode: pitchMode.value,
 			},
 			pulse: { width: pulseWidth.value },
+			sample: sample.value,
 			velocity: {
 				decay: velocityRouting.decay.value,
 				cutoff: velocityRouting.cutoff.value,
@@ -2680,6 +2701,7 @@ const projectState: ProjectState = {
 		fm: { enabled: fmEnabled, modFreq: fmModFreq, index: fmIndex, ratio: fmRatio },
 		pitchEnv: { enabled: pitchEnvEnabled, semitones: pitchEnvSemitones, decayMs: pitchEnvDecayMs, mode: pitchMode },
 		pulse: { width: pulseWidth },
+		sample,
 		randomWaves,
 		velocity: velocityRouting,
 		tuning: { selectedKeyRoot, globalOctaveOffset, currentDefaultHz },
@@ -2739,6 +2761,7 @@ const {
 	fm: projectState.synth.fm,
 	pitchEnv: projectState.synth.pitchEnv,
 	pulse: projectState.synth.pulse,
+	sample: projectState.synth.sample,
 	velocity: projectState.synth.velocity,
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
@@ -3482,7 +3505,7 @@ async function renderHitNow() {
 		const hz = hitHz.value;
 		const wave = selectedWaveform.value;
 		const channels = await renderHit(state, hz, wave, hitSeconds(state));
-		const name = `${nearestNote(hz)} ${WAVE_LABELS[wave as keyof typeof WAVE_LABELS] ?? wave}`;
+		const name = `${nearestNote(hz)} ${padWaveLabel(wave)}`;
 		hitPicture.value = { channels, sampleRate: state.sampleRate, hz, title: name };
 		hitText.value = `Hit: ${name}, ${formatLength((channels[0].length / state.sampleRate) * 1000)}, peak ${formatPeak(peakOf(channels))}`;
 	} catch (err) {
@@ -3508,6 +3531,32 @@ onMounted(() => {
 });
 
 // SCREEN AT REST END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// SAMPLE START
+
+// A sound recorded from the microphone, played by the pads as the 'sample' wave (sample.ts,
+// useSampleRecorder.ts, SampleTile.vue). A recording is one undo step, and puts the recording
+// on every pad (as a wave tile's click does) and plays it once on A3, as recorded.
+const recorder = useSampleRecorder(audioCtx);
+
+const sampleBusy = computed(() => ['asking', 'listening', 'recording'].includes(recorder.state.value));
+// What the phone's REC button says while it's busy, or after nothing was heard
+const sampleStatus = computed(() => ({
+	asking: 'Allow mic', listening: 'Listening', recording: 'Rec…', denied: 'No mic', silent: 'Nothing', unsupported: 'No mic',
+} as Record<string, string>)[recorder.state.value] ?? '');
+
+async function recordSample() {
+	const rec = await recorder.record();
+	if (!rec) return;
+	sample.value = { data: encodeSample(rec), sampleRate: audioCtx.sampleRate };
+	applyWaveToAll('sample');
+	auditionNote(SAMPLE_ROOT_HZ, 'sample', { noise: false });
+	trackEvent('sample_record', { seconds: Math.round(sampleSeconds(sample.value) * 100) / 100 });
+}
+
+// SAMPLE END
 </script>
 
 <style scoped>
@@ -4016,14 +4065,46 @@ onMounted(() => {
 
 .pl-wave-grid {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-template-columns: repeat(5, minmax(0, 1fr));
 	gap: 6px;
 }
 
 .pl-wave-grid .pt-btn {
 	min-height: 34px;
-	font-size: 12px;
-	padding: 4px;
+	font-size: 11px;
+	padding: 4px 2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* REC: a red dot before its word; blinking while it listens or records */
+.pl-rec {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+}
+
+.pl-rec-dot {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #e5484d;
+}
+
+.pl-rec.is-on .pl-rec-dot {
+	background: #ff5a5f;
+	box-shadow: 0 0 6px #ff5a5f;
+	animation: pl-blink 1s steps(2, start) infinite;
+}
+
+@keyframes pl-blink {
+	to { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pl-rec.is-on .pl-rec-dot { animation: none; }
 }
 
 .pl-gens {
@@ -4399,6 +4480,12 @@ onMounted(() => {
 	grid-column: 5;
 	grid-row: 1 / span 2;
 	align-self: stretch;
+}
+
+/* Sample (SampleTile.vue, PR 95): a strip under the tiles, as wide as them */
+.st-strip {
+	height: 40px;
+	margin-top: 10px;
 }
 
 .wave-row :deep(.dice-badge svg) {

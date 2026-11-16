@@ -26,6 +26,7 @@ describe('factory defaults (File → New)', () => {
 			fm: { enabled: false, modFreq: 200, index: 4, ratio: 1 },
 			pitchEnv: { enabled: true, semitones: 0, decayMs: 300, mode: 'up' },
 			pulse: { width: 50 },
+			sample: null,
 			randomWaves: ['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'organ', 'hollow', 'glass'],
 			velocity: { decay: 0, cutoff: 0, pitchEnv: 0, noise: 0 },
 			tuning: { selectedKeyRoot: 'A', globalOctaveOffset: 0 },

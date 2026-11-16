@@ -14,7 +14,10 @@ describe('share links', () => {
         const { name, data } = await readShare(code);
         expect(name).toBe('My beat');
         expect(data.ui).toBeUndefined();
-        const { ui: _ui, ...rest } = JSON.parse(JSON.stringify(snap));
+        // The recording stays behind (too big for a link)
+        expect(snap.synth.sample).not.toBeNull();
+        expect(data.synth.sample).toBeNull();
+        const { ui: _ui, ...rest } = JSON.parse(JSON.stringify({ ...snap, synth: { ...snap.synth, sample: null } }));
         expect(data).toEqual(rest);
 
         // Applied to fresh settings it gives the same project (ui aside)

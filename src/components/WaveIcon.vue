@@ -15,6 +15,8 @@
             <circle cx="6" cy="6" r="1.3" />
         </template>
         <path v-else-if="wave === 'glass'" d="M6 1.6 L10.2 6 L6 10.4 L1.8 6 Z" />
+        <!-- The recorded sound: a jagged burst -->
+        <path v-else-if="wave === 'sample'" d="M1 6 H2.6 L3.8 2.4 L5.2 9.6 L6.6 3.4 L7.8 8 L8.8 6 H11" />
         <circle v-else cx="6" cy="6" r="3.6" />
     </svg>
 </template>
