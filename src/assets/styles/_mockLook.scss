@@ -1,0 +1,204 @@
+/* MOCKUP (plan item "One accent, one job"; not for merging): which look shows comes from the
+   URL, set as classes on <html> by src/main.ts:
+   ?look=a  strict: the accent only on what you press to make something (Generate, Save); every
+            lit key, chosen key, ribbon switch and the mute dot in the LEDs' mint; the shape
+            screens' curves in their screen ink; card edges neutral.
+   ?look=b  gentle: only the gradients and the wash go: Generate and the chosen piano key solid
+            accent; lit keys and curves keep the accent as now.
+   Both: the Waveforms card's wash calmed to the other cards' background (its tiles carry the
+   colour), and a switched-off part's captions readable (they measured 1.9–2.9:1).
+   &labels=sans: captions, titles and buttons in a plain sans; numbers and readouts monospace. */
+
+/* BOTH LOOKS START */
+html:is(.look-a, .look-b) {
+    /* Generate: one hue (its cap shading), not pink to cyan */
+    .mm-gen-bar {
+        --cap-hi: hsl(var(--pt-accent) 78% 58%);
+        --cap-lo: hsl(var(--pt-accent) 74% 46%);
+    }
+
+    .mm-primary-btn {
+        --cap-lo: hsl(var(--pt-accent) 74% 50%);
+    }
+
+    /* The Waveforms card: the other cards' background; its tiles carry the colour */
+    .generators .pt-card {
+        background: linear-gradient(145deg, var(--pt-surface-1), var(--pt-surface-2));
+    }
+
+    /* A switched-off part's captions: dimmed, but readable (about 4.5:1 and up) */
+    .knob-stack.disabled .knob-label,
+    .knob-wrapper.disabled .knob-label,
+    .knob-wrapper[aria-disabled="true"] .knob-label {
+        color: var(--pedal-ink-off, color-mix(in oklab, var(--pt-text), transparent 42%));
+    }
+
+    .delay-pedal,
+    .drive-pedal,
+    .reverb-pedal,
+    .tape-pedal {
+        --pedal-ink-off: rgba(0, 0, 0, 0.74);
+    }
+
+    .knob-wrapper[aria-disabled="true"],
+    .knob-wrapper.disabled {
+        opacity: 1 !important;
+    }
+
+    .sp-unit.is-off .sp-mini,
+    .is-off .sp-mini {
+        opacity: 0.85;
+    }
+
+    .is-off .sp-title,
+    .is-off .sp-hint,
+    .is-off .sp-screen small {
+        opacity: 0.85;
+    }
+
+    /* A screen while its card is off: dimmed less, so its readout can be read */
+    .sp-pad.is-disabled {
+        opacity: 0.8;
+    }
+}
+/* BOTH LOOKS END */
+
+/* LOOK B START: the chosen piano key solid accent instead of the wash */
+html.look-b {
+    .kb-white.is-active,
+    .kb-black.is-active,
+    .kb-white.is-queued::after,
+    .kb-black.is-queued::after {
+        background: hsl(var(--pt-accent) 62% 52%);
+    }
+
+    .kb-white.is-queued::after,
+    .kb-black.is-queued::after {
+        background: hsl(var(--pt-accent) 62% 52% / 0.55);
+    }
+}
+/* LOOK B END */
+
+/* LOOK A START */
+html.look-a {
+    --mock-led: var(--hw-led, #5effb0);
+
+    /* Card edges: a neutral hairline, not the accent */
+    .pt-card {
+        border-color: rgb(255 255 255 / 0.08);
+    }
+
+    /* FM's and Unison's keys, the LFO's wave keys: a key that stays down, its label lit in the
+       LEDs' colour, as every other switch */
+    .sp-key.on,
+    .lk-key.on {
+        color: var(--mock-led);
+        background: linear-gradient(180deg, color-mix(in oklab, var(--pt-surface-2), black 30%), color-mix(in oklab, var(--pt-surface-2), black 10%));
+        box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.6), inset 0 0 0 1px rgb(255 255 255 / 0.06), 0 0 8px color-mix(in oklab, var(--mock-led), transparent 80%);
+        text-shadow: 0 0 6px color-mix(in oklab, var(--mock-led), transparent 40%);
+    }
+
+    .lk-key.on svg,
+    .lk-key.on path {
+        stroke: var(--mock-led);
+    }
+
+    /* FM's and Unison's ribbons: a dark switch whose LED lights (as Noise's has one) */
+    .sp-ribbon.is-on {
+        background: linear-gradient(180deg, var(--pt-surface-1), var(--pt-surface-2));
+        color: var(--pt-text);
+        box-shadow: 1px 0 0 rgba(0, 0, 0, 0.85);
+    }
+
+    .sp-ribbon.is-on .sp-ribbon-led {
+        background: var(--mock-led);
+        box-shadow: 0 0 6px var(--mock-led);
+    }
+
+    /* The shape screens draw in their own ink, as the LFO card's does */
+    .sp-screen,
+    .sp-pad {
+        --sp-line: var(--sp-ink);
+    }
+
+    /* The Melody Maker's keys: the scale's notes lit as LEDs (a deeper mint on the white keys,
+       ringed dark), the chosen key a mint ring, not the wash */
+    .kb-white.in-scale::before {
+        background: color-mix(in oklab, var(--mock-led), black 22%);
+        box-shadow: 0 0 0 1.5px #14161f, 0 0 6px color-mix(in oklab, var(--mock-led), transparent 30%);
+    }
+
+    .kb-white.is-active,
+    .kb-black.is-active {
+        background: inherit;
+        box-shadow:
+            inset 0 0 0 3px var(--mock-led),
+            inset 0 0 14px color-mix(in oklab, var(--mock-led), transparent 55%),
+            0 2px 0 rgb(0 0 0 / 0.6);
+    }
+
+    .kb-white.is-active {
+        background: linear-gradient(180deg, #e9ecef, #f9fafb);
+    }
+
+    .kb-black.is-active {
+        background: linear-gradient(180deg, #1b1d24, #2a2d36);
+    }
+
+    .kb-white.is-active .wlabel {
+        color: #10131a;
+    }
+
+    .kb-black.is-active .blabel {
+        color: var(--mock-led);
+    }
+
+    .kb-white.is-queued::after,
+    .kb-black.is-queued::after {
+        background: color-mix(in oklab, var(--mock-led), transparent 70%);
+        box-shadow: inset 0 0 0 2px var(--mock-led);
+    }
+
+    /* The chosen wave tile's ring, and the dice badges that are on: the LEDs' colour */
+    .wave-btn.hw-cap.is-active {
+        box-shadow: inset 0 2px 5px rgb(0 0 0 / 0.5), 0 0 0 1px color-mix(in oklab, var(--mock-led), transparent 40%);
+    }
+
+    .dice-badge.on {
+        background: color-mix(in oklab, var(--mock-led), transparent 88%);
+        border-color: color-mix(in oklab, var(--mock-led), transparent 50%);
+    }
+
+    /* The Step Sequencer's mute dot is an LED */
+    .mute-dot {
+        background: var(--mock-led);
+        box-shadow: 0 0 6px var(--mock-led);
+    }
+}
+/* LOOK A END */
+
+/* SANS LABELS START: captions, titles and buttons in the system's sans; numbers stay mono */
+html.labels-sans {
+    --mock-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    body,
+    button,
+    .pt-btn,
+    .pt-title,
+    .knob-label,
+    select {
+        font-family: var(--mock-sans);
+    }
+
+    .stepper-value,
+    .pad-step-num,
+    .custom-tooltip,
+    .sp-pad,
+    .lv-screen,
+    .mm-screen,
+    .pc-name,
+    .tap-btn {
+        font-family: monospace;
+    }
+}
+/* SANS LABELS END */
