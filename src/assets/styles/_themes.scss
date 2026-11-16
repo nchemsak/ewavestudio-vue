@@ -194,18 +194,6 @@ $base: map.get($themes, synthwave);
     .tape-pedal { --pedal-hi: #b3ad72; --pedal-lo: #8d8748; }
 }
 
-.theme-synthwave a.return {
-    color: #ffb3e6;
-}
-
-.theme-dark a.return {
-    color: #b9bcd6;
-}
-
-.theme-analog a.return {
-    color: #f2b04a;
-}
-
 @supports (color: color-mix(in oklab, #000, #fff)) {
     :root {
         --pt-hairline: color-mix(in oklab, var(--pt-text) 12%, transparent);

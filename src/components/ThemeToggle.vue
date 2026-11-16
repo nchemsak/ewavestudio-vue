@@ -1,11 +1,12 @@
 <template>
+    <!-- Lightest to darkest (PR 92, the maintainer's order); in the top bar's gear (SettingsMenu.vue) -->
     <div class="pt-btn-group" role="group" aria-label="Theme">
-        <button class="pt-btn hw-led-mini" :class="{ 'is-active': theme === 'dark' }" :aria-pressed="theme === 'dark'"
-            @click="setTheme('dark')">Dark</button>
         <button class="pt-btn hw-led-mini" :class="{ 'is-active': theme === 'synthwave' }" :aria-pressed="theme === 'synthwave'"
             @click="setTheme('synthwave')">Synthwave</button>
         <button class="pt-btn hw-led-mini" :class="{ 'is-active': theme === 'analog' }" :aria-pressed="theme === 'analog'"
             @click="setTheme('analog')">Analog</button>
+        <button class="pt-btn hw-led-mini" :class="{ 'is-active': theme === 'dark' }" :aria-pressed="theme === 'dark'"
+            @click="setTheme('dark')">Dark</button>
     </div>
 </template>
 

@@ -141,11 +141,12 @@
                     <span v-else-if="dirty">Save</span>
                     <span v-else>Saved</span>
                 </button>
+                <span class="pc-status" aria-live="polite" aria-atomic="true">
+                    <span class="pc-dot" :class="dotClass"></span>
+                </span>
             </div>
-
-            <span class="pc-status" aria-live="polite" aria-atomic="true">
-                <span class="pc-dot" :class="dotClass"></span>
-            </span>
+            <!-- The gear (SettingsMenu.vue: Theme and MIDI), from DrumSequencer -->
+            <slot name="tools-right" />
         </div>
     </div>
 </template>
@@ -855,6 +856,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 }
 
 .pc-actions {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: .5rem;
@@ -950,6 +952,23 @@ onUnmounted(() => { window.removeEventListener('keydown', onKeydown); });
 
     .pc-meta {
         display: none;
+    }
+}
+
+/* Phone-width windows: tighter, so the name box keeps room beside the gear (PR 92) */
+@media (max-width: 575.98px) {
+    .pc-toolbar {
+        gap: .4rem;
+        padding: .45rem .5rem;
+    }
+
+    .pc-left,
+    .pc-right {
+        gap: .3rem;
+    }
+
+    .pc-btn {
+        padding: .3rem .45rem;
     }
 }
 </style>
