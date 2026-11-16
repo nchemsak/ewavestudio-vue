@@ -745,7 +745,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 
 	melodyUi.keyRoot = 'A';
 	melodyUi.keyScale = 'naturalMinor';
-	melodyUi.rangePreset = 'wide';
+	melodyUi.rangePreset = 'mid';
 	melodyUi.arpPattern = 'up';
 	melodyUi.arpRate = '1/16';
 	melodyUi.arpOctaves = 1;

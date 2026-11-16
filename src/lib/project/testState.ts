@@ -138,7 +138,7 @@ export function changeEverything(st: ProjectState) {
 	fx.reverb.enabled.value = true; fx.reverb.mix.value = 0.5; fx.reverb.decay.value = 3; fx.reverb.tone.value = 0.2;
 	fx.tape.enabled.value = true; fx.tape.age.value = 0.7; fx.tape.wobble.value = 0.6; fx.tape.mode.value = 'vinyl';
 	Object.assign(st.melody, {
-		keyRoot: 'D', keyScale: 'dorian', rangePreset: 'mid', arpPattern: 'updown', arpRate: '1/8', arpOctaves: 2, arpTones: 'seventh',
+		keyRoot: 'D', keyScale: 'dorian', rangePreset: 'wide', arpPattern: 'updown', arpRate: '1/8', arpOctaves: 2, arpTones: 'seventh',
 		arpSkip: true, activeOnly: false, mode: 'arp',
 	});
 	st.selectedWaveform.value = 'sawtooth';

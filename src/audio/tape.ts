@@ -35,8 +35,8 @@ export const TAPE_SAT_MAX = 3;        // the saturation's k at AGE 1 (0: none)
 // The level the makeup gain keeps where it was (quieter sounds come up, louder ones are squeezed)
 export const TAPE_SAT_REF = 0.4;
 export const TAPE_HISS_MAX = 0.03;    // the hiss source's gain at AGE 1
-export const TAPE_CRACKLE_MAX = 0.12; // the crackle's (its loudest pop peaks at this)
-export const VINYL_SURFACE = 0.35;    // a record's surface noise, as a share of a tape's hiss
+export const TAPE_CRACKLE_MAX = 0.3;  // the crackle's gain at AGE 1 (its loudest tick peaks at this)
+export const VINYL_SURFACE = 0.2;     // a record's surface noise, as a share of a tape's hiss
 
 // What sways the pitch: each part's rate, and how far it bends the pitch at WOBBLE 1 (0.01 = 1 %)
 type WobblePart = { hz: number; bend: number };
@@ -86,7 +86,8 @@ export function tapeSettings(age: number, wobble: number, mode: TapeMode | strin
 		satK,
 		makeup: tapeMakeup(satK),
 		hissGain: vinyl ? hiss * VINYL_SURFACE : hiss,
-		crackleGain: vinyl ? TAPE_CRACKLE_MAX * a ** 1.5 : 0,
+		// Crackle is what a record is heard by, so it comes up sooner than the hiss (a^0.75)
+		crackleGain: vinyl ? TAPE_CRACKLE_MAX * a ** 0.75 : 0,
 		wobble: parts,
 		// At rest in the middle of its swing; with no wobble there is no delay at all
 		baseDelay: w > 0 ? WOBBLE_FLOOR_S + parts.reduce((sum, p) => sum + p.seconds, 0) : 0,
@@ -150,10 +151,12 @@ export function fillCrackle(data: Float32Array, sampleRate: number, random: () =
 			const tau = (0.001 + 0.0006 * spread) * sampleRate;
 			for (let n = 0; n < guard; n++) data[at + n] += sign * level * Math.exp(-n / tau) * Math.sin((Math.PI * n) / (2 * tau));
 		} else {
-			// A tick: a spike that rings for a few samples, each the other way
-			const tau = (0.00008 + 0.00025 * spread) * sampleRate;
-			const len = Math.min(guard, Math.ceil(tau * 7));
-			for (let n = 0; n < len; n++) data[at + n] += sign * level * 0.6 * Math.exp(-n / tau) * (n % 2 ? -0.6 : 1);
+			// A tick: a burst of noise a fraction of a millisecond long, falling away fast. (Until
+			// PR 97 it was a spike flipping sign every sample: all its energy at half the sample
+			// rate, about 24 kHz, so the ticks couldn't be heard.)
+			const tau = (0.0001 + 0.0003 * spread) * sampleRate;
+			const len = Math.min(guard, Math.ceil(tau * 6));
+			for (let n = 0; n < len; n++) data[at + n] += level * Math.exp(-n / tau) * (random() * 2 - 1);
 		}
 	}
 	for (let i = 0; i < data.length; i++) data[i] = Math.max(-1, Math.min(1, data[i]));
