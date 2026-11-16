@@ -4272,8 +4272,11 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 	await expect(cutoff).toHaveAttribute('aria-valuenow', '5000');
 
 	await learn.click();
+	// Learn closes the gear's panel (PR 92), so the knobs under it can be clicked
+	await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
+	await openSettings(page);
 	await expect(learn).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(33);
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(32);
 	await cutoff.click();
 	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
 	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');
@@ -4383,6 +4386,7 @@ test('MIDI learn: one controller knob per knob; Delete, Clear all and Escape; gr
 	// Escape ends learn mode
 	await page.keyboard.press('Escape');
 	await expect(bar).toBeHidden();
+	await openSettings(page);
 	await expect(learn).toHaveAttribute('aria-pressed', 'false');
 	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(0);
 });
