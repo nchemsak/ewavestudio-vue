@@ -19,6 +19,10 @@
 
                 <!-- Spectrum canvas (F2, PR 70; last, so the others keep their places) -->
                 <canvas v-show="view === 'spectrum'" ref="lcdSpectrum" aria-hidden="true"></canvas>
+
+                <!-- One hit of the sound, while nothing plays (no F-key, PR 94; last, so the others keep their places) -->
+                <canvas v-show="view === 'hit'" ref="lcdHit" aria-hidden="true"></canvas>
+                <p v-if="caption" class="visually-hidden nac-screen__caption">{{ caption }}</p>
             </div>
         </div>
 
@@ -42,7 +46,9 @@ import { ref, defineExpose, defineEmits, defineProps, computed } from 'vue';
 const props = defineProps({
     view: { type: String, default: 'scope' },
     activeKey: { type: Number, default: 1 },
-    fkeys: { type: Array, default: null }
+    fkeys: { type: Array, default: null },
+    // What the screen shows, for screen readers (the canvases are hidden from them)
+    caption: { type: String, default: '' }
 });
 
 defineEmits(['fkey']);
@@ -53,6 +59,7 @@ const lcdTuner = ref(null);
 const lcdEnv = ref(null);
 const lcdFilter = ref(null);
 const lcdSpectrum = ref(null);
+const lcdHit = ref(null);
 
 defineExpose({
     scopeCanvas: lcdScope,
@@ -60,7 +67,8 @@ defineExpose({
     tunerCanvas: lcdTuner,
     envCanvas: lcdEnv,
     filterCanvas: lcdFilter,
-    spectrumCanvas: lcdSpectrum
+    spectrumCanvas: lcdSpectrum,
+    hitCanvas: lcdHit
 });
 
 const ICONS = {

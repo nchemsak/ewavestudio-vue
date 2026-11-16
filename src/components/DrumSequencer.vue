@@ -171,7 +171,7 @@
 			<!-- Visualizer Screen -->
 			<aside class="pt-card ds-visualizer">
 				<div class="nac-wrap">
-					<nacScreen ref="screen" :text="lcdText" :view="lcdView" :activeKey="activeFKey"
+					<nacScreen ref="screen" :text="lcdText" :view="shownView" :activeKey="shownView === 'hit' ? 0 : activeFKey" :caption="shownView === 'hit' ? hitText : ''"
 						@fkey="handleFKey" />
 				</div>
 			</aside>
@@ -718,7 +718,9 @@ import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
 import ExportDialog from './ExportDialog.vue';
 import ShareNotice from './ShareNotice.vue';
-import { buildExportFiles, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from '../audio/export/exportFiles';
+import { buildExportFiles, renderHit, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from '../audio/export/exportFiles';
+import { startHitView, hitSeconds, formatLength, formatPeak, type HitPicture } from './hitView';
+import { peakOf } from '../lib/export/audio';
 import { midiNoteOf, midiToHz, notesInRange } from '../lib/export/midi';
 import { exportNames, keyLabel } from '../lib/export/names';
 import { zipFiles } from '../lib/export/zip';
@@ -1139,12 +1141,15 @@ const screen = ref<InstanceType<typeof nacScreen> | null>(null);
 // If the user picks another view while turning, that view stays.
 const prevScreen = ref<{ view: typeof lcdView.value; fkey: number } | null>(null);
 let screenHoldCount = 0;
+// Whether a knob holds a view now (the hit at rest gives way to it)
+const screenHeld = ref(false);
 let heldView: typeof lcdView.value | null = null;
 let userOverrodeWhileHeld = false;
 
 function holdScreen(view: typeof lcdView.value, fkey: number) {
 	if (screenHoldCount > 0 && lcdView.value !== heldView) userOverrodeWhileHeld = true;
 	screenHoldCount++;
+	screenHeld.value = true;
 	if (!prevScreen.value) prevScreen.value = { view: lcdView.value, fkey: activeFKey.value };
 	heldView = view;
 	activeFKey.value = fkey;
@@ -1175,6 +1180,7 @@ function onFilterKnobStart() {
 function onScreenKnobEnd() {
 	screenHoldCount = Math.max(0, screenHoldCount - 1);
 	if (screenHoldCount === 0) {
+		screenHeld.value = false;
 		const prev = prevScreen.value;
 		// Restore, unless the user picked another view meanwhile (an F-key or 1–4)
 		if (prev && !userOverrodeWhileHeld && lcdView.value === heldView) {
@@ -1222,6 +1228,8 @@ function fitCanvasToBox(canvas, ctx) {
 // Envelope view lost F4; it shows while its knobs are turned)
 function handleFKey(n: number) {
 	activeFKey.value = n;
+	// At rest, a view picked shows instead of the hit, until the next time things come to rest
+	if (atRest.value) pickedAtRest.value = true;
 	if (n === 1) lcdView.value = 'scope';
 	else if (n === 2) lcdView.value = 'spectrum';
 	else if (n === 3) lcdView.value = 'spec';
@@ -1240,7 +1248,7 @@ function startScope() {
 
 	function draw() {
 		requestAnimationFrame(draw);
-		if (lcdView.value !== 'scope') return;
+		if (shownView.value !== 'scope') return;
 
 		fitCanvasToBox(canvas, ctx);
 		const W = Math.round(canvas.clientWidth);
@@ -1335,7 +1343,7 @@ function startSpectrogram() {
 
 	function draw() {
 		requestAnimationFrame(draw);
-		if (lcdView.value !== 'spec') return;
+		if (shownView.value !== 'spec') return;
 
 		fitCanvasToBox(canvas, ctx);
 		const W = canvas.clientWidth;
@@ -1419,7 +1427,7 @@ function startTuner() {
 
 	function draw() {
 		requestAnimationFrame(draw);
-		if (lcdView.value !== 'tuner') return;
+		if (shownView.value !== 'tuner') return;
 
 		fitCanvasToBox(canvas, ctx);
 		const W = canvas.clientWidth, H = canvas.clientHeight;
@@ -1479,7 +1487,7 @@ function startEnvViz() {
 
 	function draw() {
 		requestAnimationFrame(draw);
-		if (lcdView.value !== 'env') return;
+		if (shownView.value !== 'env') return;
 
 		fitCanvasToBox(canvas, ctx);
 		const W = Math.round(canvas.clientWidth);
@@ -1610,7 +1618,7 @@ onMounted(() => {
 		canvas: spectrumCanvas,
 		audioCtx,
 		analyser,
-		isActive: () => lcdView.value === 'spectrum',
+		isActive: () => shownView.value === 'spectrum',
 		fit: fitCanvasToBox,
 		flats: () => accidentalMode.value === 'flat',
 	});
@@ -1619,7 +1627,7 @@ onMounted(() => {
 		canvas: filterCanvas,
 		audioCtx,
 		analyser,
-		isActive: () => lcdView.value === 'filter',
+		isActive: () => shownView.value === 'filter',
 		fit: fitCanvasToBox,
 		settings: {
 			filterEnabled: () => filterEnabled.value,
@@ -2796,6 +2804,7 @@ const noteSteps = computed(() => {
 
 // MELODY MAKER'S PLAYHEAD END
 
+
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
 // Web MIDI (live keyboard input) START
@@ -3419,6 +3428,86 @@ const phoneCtx = reactive({
 	analyser: markRaw(analyser),
 });
 // PHONE END
+
+// -----------------------------------------------------------------------------------------------------------------------------------------
+
+// SCREEN AT REST START
+
+// While nothing plays (stopped, and no note for REST_AFTER_MS), the screen shows one hit of
+// the current sound (PR 94; hitView.ts): the live views would be blank. It's rendered by the
+// export engine as the one-shot is (renderHit() in exportFiles.ts), again whenever a setting
+// changes while it shows (one render at a time; a change during one renders again after it).
+// A knob that holds a view (the envelope, the filter) still shows it; an F-key or 1–4 picked
+// at rest shows its view until things next come to rest. Not drawn in phone mode, whose
+// layout hides this screen.
+const REST_AFTER_MS = 1500;
+const atRest = ref(true);
+const pickedAtRest = ref(false);
+let stoppedAt = -Infinity;
+function setRest(rest: boolean) {
+	if (rest === atRest.value) return;
+	atRest.value = rest;
+	if (!rest) pickedAtRest.value = false; // the next rest shows the hit again
+}
+watch(isPlaying, (playing) => {
+	if (playing) setRest(false);
+	else stoppedAt = performance.now();
+});
+const restTimer = setInterval(() => {
+	setRest(!isPlaying.value && !soundingRecently(REST_AFTER_MS) && performance.now() - stoppedAt > REST_AFTER_MS);
+}, 200);
+onBeforeUnmount(() => clearInterval(restTimer));
+
+// What the screen shows: the hit at rest, else the view chosen (or held by a knob)
+const shownView = computed<typeof lcdView.value | 'hit'>(() =>
+	(atRest.value && !pickedAtRest.value && !screenHeld.value) ? 'hit' : lcdView.value);
+
+// The hit: the one-shot's note (the key's root in the pads' octave) on the main wave
+const hitHz = computed(() => midiToHz(midiNoteOf(currentDefaultHz.value)));
+const hitPicture = shallowRef<HitPicture | null>(null);
+// What it shows, for screen readers (the canvas is hidden from them): "Hit: A3 Sine, 420 ms, peak −11.7 dB"
+const hitText = ref('');
+const hitWanted = computed(() => shownView.value === 'hit' && !phoneActive.value);
+let hitDirty = true;
+let hitBusy = false;
+let hitAgain = false;
+
+async function renderHitNow() {
+	if (!synthInstrument.value) return;
+	if (hitBusy) { hitAgain = true; return; }
+	hitBusy = true;
+	hitDirty = false;
+	try {
+		const state = exportState.value;
+		const hz = hitHz.value;
+		const wave = selectedWaveform.value;
+		const channels = await renderHit(state, hz, wave, hitSeconds(state));
+		const name = `${nearestNote(hz)} ${WAVE_LABELS[wave as keyof typeof WAVE_LABELS] ?? wave}`;
+		hitPicture.value = { channels, sampleRate: state.sampleRate, hz, title: name };
+		hitText.value = `Hit: ${name}, ${formatLength((channels[0].length / state.sampleRate) * 1000)}, peak ${formatPeak(peakOf(channels))}`;
+	} catch (err) {
+		console.warn('The hit at rest could not be rendered:', err);
+	} finally {
+		hitBusy = false;
+		if (hitAgain) {
+			hitAgain = false;
+			if (hitWanted.value) renderHitNow(); else hitDirty = true;
+		}
+	}
+}
+
+watch(() => [synthInstrument.value ? exportState.value : null, selectedWaveform.value, hitHz.value], () => {
+	hitDirty = true;
+	if (hitWanted.value) renderHitNow();
+});
+watch(hitWanted, (wanted) => { if (wanted && hitDirty) renderHitNow(); });
+onMounted(() => {
+	const canvas = screen.value?.hitCanvas as unknown as HTMLCanvasElement | null;
+	if (canvas) startHitView({ canvas, isActive: () => shownView.value === 'hit', fit: fitCanvasToBox, hit: () => hitPicture.value });
+	if (hitWanted.value) renderHitNow();
+});
+
+// SCREEN AT REST END
 </script>
 
 <style scoped>
