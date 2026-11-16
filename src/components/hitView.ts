@@ -170,11 +170,11 @@ export function startHitView(opts: {
 		// The title top left, its length and peak top right (the peak in red if it would clip),
 		// shortened where the screen is narrow
 		const len = formatLength(lengthMs), pk = formatPeak(peak);
-		const fit = (left: string, right: string) => ctx!.measureText(left).width + 10 + ctx!.measureText(right).width <= plotW;
+		const fits = (left: string, right: string) => ctx!.measureText(left).width + 10 + ctx!.measureText(right).width <= plotW;
 		const lefts = [`Hit · ${h.title}`, h.title];
 		const rights: [string, string][] = [[`${len} · `, `peak ${pk}`], [`${len} · `, pk], [len, '']];
 		let left = lefts[1], right = rights[2];
-		search: for (const r of rights) for (const l of lefts) if (fit(l, r[0] + r[1])) { left = l; right = r; break search; }
+		search: for (const r of rights) for (const l of lefts) if (fits(l, r[0] + r[1])) { left = l; right = r; break search; }
 		ctx!.fillText(left, L, 12);
 		ctx!.textAlign = 'right';
 		const peakW = right[1] ? ctx!.measureText(right[1]).width : 0;
