@@ -110,3 +110,183 @@
 #effects-panel.pm-c .drive-pedal .panel-top { grid-template-areas: 'led led' 'drive level' 'tone sw'; }
 #effects-panel.pm-c .delay-pedal .check-led, #effects-panel.pm-c .drive-pedal .check-led, #effects-panel.pm-c .reverb-pedal .check-led { position: absolute; left: -18px; top: 8px; z-index: 1; }
 #effects-panel.pm-c .pedal-switch { position: static; grid-area: sw; }
+
+/* C's variations (?pedals=c1|c2|c3 also get pm-c, so they start from C) */
+
+/* pm-c1: a round chrome stomp switch at the foot of the face (the pedal's own switch, moved);
+   the ribbon is the name and its LED */
+#effects-panel.pm-c1 .delay-pedal,
+#effects-panel.pm-c1 .drive-pedal,
+#effects-panel.pm-c1 .reverb-pedal { position: relative; }
+#effects-panel.pm-c1 .delay-pedal .panel-bottom,
+#effects-panel.pm-c1 .drive-pedal .panel-bottom,
+#effects-panel.pm-c1 .reverb-pedal .panel-bottom { position: static; }
+#effects-panel.pm-c1 .delay-pedal .panel-top,
+#effects-panel.pm-c1 .drive-pedal .panel-top,
+#effects-panel.pm-c1 .reverb-pedal .panel-top { padding-bottom: 42px; }
+#effects-panel.pm-c1 .delay-pedal .footswitch,
+#effects-panel.pm-c1 .drive-pedal .footswitch,
+#effects-panel.pm-c1 .reverb-pedal .footswitch {
+    position: absolute; inset: auto; left: calc(24px + (100% - 24px) / 2 - 14px); bottom: 9px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 32%, #fbfbfb, #c4c4c4 40%, #7a7a7a 72%, #3c3c3c);
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.38), 0 0 0 4px rgba(255,255,255,0.18), 0 3px 4px rgba(0,0,0,0.5);
+}
+#effects-panel.pm-c1 .delay-pedal .footswitch:active,
+#effects-panel.pm-c1 .drive-pedal .footswitch:active,
+#effects-panel.pm-c1 .reverb-pedal .footswitch:active { transform: translateY(1px) scale(0.97); }
+
+/* pm-c3: a round chrome stomp switch at the foot of the face (the pedal's own switch, moved);
+   the ribbon is the name and its LED */
+#effects-panel.pm-c3 .delay-pedal,
+#effects-panel.pm-c3 .drive-pedal,
+#effects-panel.pm-c3 .reverb-pedal { position: relative; }
+#effects-panel.pm-c3 .delay-pedal .panel-bottom,
+#effects-panel.pm-c3 .drive-pedal .panel-bottom,
+#effects-panel.pm-c3 .reverb-pedal .panel-bottom { position: static; }
+#effects-panel.pm-c3 .delay-pedal .panel-top,
+#effects-panel.pm-c3 .drive-pedal .panel-top,
+#effects-panel.pm-c3 .reverb-pedal .panel-top { padding-bottom: 42px; }
+#effects-panel.pm-c3 .delay-pedal .footswitch,
+#effects-panel.pm-c3 .drive-pedal .footswitch,
+#effects-panel.pm-c3 .reverb-pedal .footswitch {
+    position: absolute; inset: auto; left: calc(24px + (100% - 24px) / 2 - 14px); bottom: 9px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 32%, #fbfbfb, #c4c4c4 40%, #7a7a7a 72%, #3c3c3c);
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.38), 0 0 0 4px rgba(255,255,255,0.18), 0 3px 4px rgba(0,0,0,0.5);
+}
+#effects-panel.pm-c3 .delay-pedal .footswitch:active,
+#effects-panel.pm-c3 .drive-pedal .footswitch:active,
+#effects-panel.pm-c3 .reverb-pedal .footswitch:active { transform: translateY(1px) scale(0.97); }
+
+/* pm-c2: pedal hardware: corner screws and a bevel on the face, two jack sockets on the top edge,
+   and the ribbon a darker painted stripe with light lettering */
+#effects-panel.pm-c2 .delay-pedal,
+#effects-panel.pm-c2 .drive-pedal,
+#effects-panel.pm-c2 .reverb-pedal { position: relative; }
+#effects-panel.pm-c2 .delay-pedal::before,
+#effects-panel.pm-c2 .drive-pedal::before,
+#effects-panel.pm-c2 .reverb-pedal::before,
+#effects-panel.pm-c2 .delay-pedal::after,
+#effects-panel.pm-c2 .drive-pedal::after,
+#effects-panel.pm-c2 .reverb-pedal::after {
+    content: ''; position: absolute; top: -5px; width: 13px; height: 6px; z-index: 0;
+    border-radius: 2px 2px 0 0; background: linear-gradient(#6a6a6a, #2a2a2a);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
+}
+#effects-panel.pm-c2 .delay-pedal::before,
+#effects-panel.pm-c2 .drive-pedal::before,
+#effects-panel.pm-c2 .reverb-pedal::before { left: 38px; }
+#effects-panel.pm-c2 .delay-pedal::after,
+#effects-panel.pm-c2 .drive-pedal::after,
+#effects-panel.pm-c2 .reverb-pedal::after { right: 12px; }
+#effects-panel.pm-c2 .delay-pedal .panel-top,
+#effects-panel.pm-c2 .drive-pedal .panel-top,
+#effects-panel.pm-c2 .reverb-pedal .panel-top {
+    background:
+        radial-gradient(circle at 8px 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at calc(100% - 8px) 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at 8px calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at calc(100% - 8px) calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        linear-gradient(var(--pedal-hi), var(--pedal-lo));
+    box-shadow: inset 0 2px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.22), inset -1px 0 0 rgba(0,0,0,0.15);
+}
+#effects-panel.pm-c2 .delay-pedal .panel-bottom,
+#effects-panel.pm-c2 .drive-pedal .panel-bottom,
+#effects-panel.pm-c2 .reverb-pedal .panel-bottom {
+    background: linear-gradient(color-mix(in oklab, var(--pedal-lo) 62%, black), color-mix(in oklab, var(--pedal-lo) 48%, black));
+    box-shadow: inset -2px 0 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+#effects-panel.pm-c2 .delay-pedal .effect-label,
+#effects-panel.pm-c2 .drive-pedal .effect-label,
+#effects-panel.pm-c2 .reverb-pedal .effect-label { color: rgba(255,255,255,0.93); text-shadow: 0 1px 1px rgba(0,0,0,0.5); }
+
+/* pm-c3: pedal hardware: corner screws and a bevel on the face, two jack sockets on the top edge,
+   and the ribbon a darker painted stripe with light lettering */
+#effects-panel.pm-c3 .delay-pedal,
+#effects-panel.pm-c3 .drive-pedal,
+#effects-panel.pm-c3 .reverb-pedal { position: relative; }
+#effects-panel.pm-c3 .delay-pedal::before,
+#effects-panel.pm-c3 .drive-pedal::before,
+#effects-panel.pm-c3 .reverb-pedal::before,
+#effects-panel.pm-c3 .delay-pedal::after,
+#effects-panel.pm-c3 .drive-pedal::after,
+#effects-panel.pm-c3 .reverb-pedal::after {
+    content: ''; position: absolute; top: -5px; width: 13px; height: 6px; z-index: 0;
+    border-radius: 2px 2px 0 0; background: linear-gradient(#6a6a6a, #2a2a2a);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
+}
+#effects-panel.pm-c3 .delay-pedal::before,
+#effects-panel.pm-c3 .drive-pedal::before,
+#effects-panel.pm-c3 .reverb-pedal::before { left: 38px; }
+#effects-panel.pm-c3 .delay-pedal::after,
+#effects-panel.pm-c3 .drive-pedal::after,
+#effects-panel.pm-c3 .reverb-pedal::after { right: 12px; }
+#effects-panel.pm-c3 .delay-pedal .panel-top,
+#effects-panel.pm-c3 .drive-pedal .panel-top,
+#effects-panel.pm-c3 .reverb-pedal .panel-top {
+    background:
+        radial-gradient(circle at 8px 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at calc(100% - 8px) 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at 8px calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at calc(100% - 8px) calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        linear-gradient(var(--pedal-hi), var(--pedal-lo));
+    box-shadow: inset 0 2px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.22), inset -1px 0 0 rgba(0,0,0,0.15);
+}
+#effects-panel.pm-c3 .delay-pedal .panel-bottom,
+#effects-panel.pm-c3 .drive-pedal .panel-bottom,
+#effects-panel.pm-c3 .reverb-pedal .panel-bottom {
+    background: linear-gradient(color-mix(in oklab, var(--pedal-lo) 62%, black), color-mix(in oklab, var(--pedal-lo) 48%, black));
+    box-shadow: inset -2px 0 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+#effects-panel.pm-c3 .delay-pedal .effect-label,
+#effects-panel.pm-c3 .drive-pedal .effect-label,
+#effects-panel.pm-c3 .reverb-pedal .effect-label { color: rgba(255,255,255,0.93); text-shadow: 0 1px 1px rgba(0,0,0,0.5); }
+
+/* The lo-fi deck follows the variation: a chrome stomp (c1, c3), screws and a painted name stripe (c2, c3) */
+#effects-panel.pm-c1 .tape-pedal.is-deck .footswitch {
+    width: 26px; height: 26px; border-radius: 50%; align-self: center;
+    background: radial-gradient(circle at 38% 32%, #fbfbfb, #c4c4c4 40%, #7a7a7a 72%, #3c3c3c);
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.38), 0 0 0 4px rgba(255,255,255,0.18), 0 3px 4px rgba(0,0,0,0.5);
+}
+#effects-panel.pm-c1 .tape-pedal.is-deck .footswitch::before { display: none; }
+#effects-panel.pm-c3 .tape-pedal.is-deck .footswitch {
+    width: 26px; height: 26px; border-radius: 50%; align-self: center;
+    background: radial-gradient(circle at 38% 32%, #fbfbfb, #c4c4c4 40%, #7a7a7a 72%, #3c3c3c);
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.38), 0 0 0 4px rgba(255,255,255,0.18), 0 3px 4px rgba(0,0,0,0.5);
+}
+#effects-panel.pm-c3 .tape-pedal.is-deck .footswitch::before { display: none; }
+#effects-panel.pm-c2 .tape-pedal.is-deck {
+    background:
+        radial-gradient(circle at 8px 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at calc(100% - 8px) 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at 8px calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at calc(100% - 8px) calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        linear-gradient(var(--pedal-hi), var(--pedal-lo));
+    box-shadow: inset 0 2px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.22);
+}
+#effects-panel.pm-c2 .tape-pedal.is-deck .panel-bottom {
+    padding-left: 14px; padding-right: 10px;
+    border-radius: 8px 0 0 8px;
+    background: linear-gradient(color-mix(in oklab, var(--pedal-lo) 62%, black), color-mix(in oklab, var(--pedal-lo) 48%, black));
+    box-shadow: inset -2px 0 3px rgba(0,0,0,0.3);
+}
+#effects-panel.pm-c2 .tape-pedal.is-deck .effect-label { color: rgba(255,255,255,0.93); text-shadow: 0 1px 1px rgba(0,0,0,0.5); }
+#effects-panel.pm-c3 .tape-pedal.is-deck {
+    background:
+        radial-gradient(circle at 8px 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at calc(100% - 8px) 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at 8px calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        radial-gradient(circle at calc(100% - 8px) calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+        linear-gradient(var(--pedal-hi), var(--pedal-lo));
+    box-shadow: inset 0 2px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.22);
+}
+#effects-panel.pm-c3 .tape-pedal.is-deck .panel-bottom {
+    padding-left: 14px; padding-right: 10px;
+    border-radius: 8px 0 0 8px;
+    background: linear-gradient(color-mix(in oklab, var(--pedal-lo) 62%, black), color-mix(in oklab, var(--pedal-lo) 48%, black));
+    box-shadow: inset -2px 0 3px rgba(0,0,0,0.3);
+}
+#effects-panel.pm-c3 .tape-pedal.is-deck .effect-label { color: rgba(255,255,255,0.93); text-shadow: 0 1px 1px rgba(0,0,0,0.5); }
+#effects-panel.pm-c2 .tape-pedal.is-deck .check-led,
+#effects-panel.pm-c3 .tape-pedal.is-deck .check-led { right: 22px; top: 6px; }
