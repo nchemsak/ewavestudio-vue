@@ -470,7 +470,7 @@
 						</div>
 					</div>
 
-					<div id="effects-panel" class="module fx" :class="pedalMock ? ['pm', 'pm-' + pedalMock, pedalMock[0] === 'c' ? 'pm-c' : ''] : []">
+					<div id="effects-panel" class="module fx" :class="pedalMock ? ['pm', 'pm-' + pedalMock, 'cd'.includes(pedalMock[0]) ? 'pm-c' : '', pedalMock[0] === 'd' ? 'pm-c3' : ''] : []">
 						<SectionWrap id="fx" title="Effects" v-model="collapsibleState['fx']">
 							<div class="fx-pair">
 								<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
@@ -807,7 +807,7 @@ const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 }) | null>(null);
 // The phone's Key page has a Melody Maker of its own
 
-// PEDAL MOCKUPS (branch only): ?pedals=a|b|c, and C's variations c1|c2|c3
+// PEDAL MOCKUPS (branch only): ?pedals=a|b|c, C's variations c1|c2|c3, and C3 with other switches d1|d2|d3|d4
 const pedalMock = new URLSearchParams(location.search).get('pedals');
 
 const melodyUi = reactive<MelodyUi>({

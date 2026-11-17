@@ -290,3 +290,121 @@
 #effects-panel.pm-c3 .tape-pedal.is-deck .effect-label { color: rgba(255,255,255,0.93); text-shadow: 0 1px 1px rgba(0,0,0,0.5); }
 #effects-panel.pm-c2 .tape-pedal.is-deck .check-led,
 #effects-panel.pm-c3 .tape-pedal.is-deck .check-led { right: 22px; top: 6px; }
+
+/* D: C3 (painted ribbon, screws, jacks) with other on/off switches in place of the chrome
+   stomp: ?pedals=d1|d2|d3|d4 (they also get pm-c and pm-c3). The deck gets the same switch. */
+
+/* d1: a ribbed rubber treadle across the foot of the face */
+#effects-panel.pm-c.pm-d1 .delay-pedal .footswitch,
+#effects-panel.pm-c.pm-d1 .drive-pedal .footswitch,
+#effects-panel.pm-c.pm-d1 .reverb-pedal .footswitch {
+    left: 40px; width: calc(100% - 56px); height: 28px; bottom: 9px; border-radius: 6px;
+    background: repeating-linear-gradient(90deg, #26252a 0 3px, #3a383f 3px 6px);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -3px 4px rgba(0,0,0,0.5), 0 2px 3px rgba(0,0,0,0.45);
+}
+#effects-panel.pm-c.pm-d1 .tape-pedal.is-deck .footswitch {
+    width: 44px; height: 24px; border-radius: 5px;
+    background: repeating-linear-gradient(90deg, #26252a 0 3px, #3a383f 3px 6px);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -3px 4px rgba(0,0,0,0.5), 0 2px 3px rgba(0,0,0,0.45);
+}
+#effects-panel.pm-c.pm-d1 .delay-pedal .footswitch:active,
+#effects-panel.pm-c.pm-d1 .drive-pedal .footswitch:active,
+#effects-panel.pm-c.pm-d1 .reverb-pedal .footswitch:active,
+#effects-panel.pm-c.pm-d1 .tape-pedal.is-deck .footswitch:active { transform: translateY(1px); }
+
+/* d2: a rocker switch that reads ON or OFF; the lit word is the state */
+#effects-panel.pm-c.pm-d2 .delay-pedal .footswitch,
+#effects-panel.pm-c.pm-d2 .drive-pedal .footswitch,
+#effects-panel.pm-c.pm-d2 .reverb-pedal .footswitch {
+    left: calc(24px + (100% - 24px) / 2 - 24px); width: 48px; height: 24px; bottom: 10px;
+}
+#effects-panel.pm-c.pm-d2 .delay-pedal .footswitch,
+#effects-panel.pm-c.pm-d2 .drive-pedal .footswitch,
+#effects-panel.pm-c.pm-d2 .reverb-pedal .footswitch,
+#effects-panel.pm-c.pm-d2 .tape-pedal.is-deck .footswitch {
+    width: 48px; height: 24px; border-radius: 4px;
+    background: linear-gradient(90deg, #1d1c20 50%, #34323a 50%);
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 3px rgba(0,0,0,0.45);
+    font: bold 0.55rem/24px monospace; color: rgba(255,255,255,0.45);
+}
+#effects-panel.pm-c.pm-d2 .delay-pedal .footswitch[aria-pressed="true"],
+#effects-panel.pm-c.pm-d2 .drive-pedal .footswitch[aria-pressed="true"],
+#effects-panel.pm-c.pm-d2 .reverb-pedal .footswitch[aria-pressed="true"],
+#effects-panel.pm-c.pm-d2 .tape-pedal.is-deck .footswitch[aria-pressed="true"] { background: linear-gradient(90deg, #34323a 50%, #1d1c20 50%); }
+#effects-panel.pm-c.pm-d2 .delay-pedal .footswitch::after,
+#effects-panel.pm-c.pm-d2 .drive-pedal .footswitch::after,
+#effects-panel.pm-c.pm-d2 .reverb-pedal .footswitch::after,
+#effects-panel.pm-c.pm-d2 .tape-pedal.is-deck .footswitch::after {
+    content: 'ON  OFF'; white-space: pre; position: absolute; inset: 0; text-align: center; letter-spacing: 0.04em;
+}
+#effects-panel.pm-c.pm-d2 .delay-pedal .footswitch[aria-pressed="true"]::after,
+#effects-panel.pm-c.pm-d2 .drive-pedal .footswitch[aria-pressed="true"]::after,
+#effects-panel.pm-c.pm-d2 .reverb-pedal .footswitch[aria-pressed="true"]::after,
+#effects-panel.pm-c.pm-d2 .tape-pedal.is-deck .footswitch[aria-pressed="true"]::after {
+    background: linear-gradient(90deg, var(--hw-led, #5effb0) 0 50%, transparent 50%); -webkit-background-clip: text; background-clip: text; color: rgba(255,255,255,0.45);
+}
+
+/* d3: the app's own push cap, with its LED and the word ON or OFF */
+#effects-panel.pm-c.pm-d3 .delay-pedal .footswitch,
+#effects-panel.pm-c.pm-d3 .drive-pedal .footswitch,
+#effects-panel.pm-c.pm-d3 .reverb-pedal .footswitch {
+    left: calc(24px + (100% - 24px) / 2 - 29px); width: 58px; height: 24px; bottom: 11px;
+}
+#effects-panel.pm-c.pm-d3 .delay-pedal .footswitch,
+#effects-panel.pm-c.pm-d3 .drive-pedal .footswitch,
+#effects-panel.pm-c.pm-d3 .reverb-pedal .footswitch,
+#effects-panel.pm-c.pm-d3 .tape-pedal.is-deck .footswitch {
+    width: 58px; height: 24px; border-radius: 6px;
+    background: linear-gradient(var(--cap-hi, #3b3550), var(--cap-lo, #2a2538));
+    box-shadow: 0 2px 0 var(--cap-edge, #15121e), 0 3px 4px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.12);
+    font: bold 0.6rem/24px monospace; color: var(--cap-ink, #e9e6f5); padding-left: 12px; text-align: center;
+}
+#effects-panel.pm-c.pm-d3 .delay-pedal .footswitch::after,
+#effects-panel.pm-c.pm-d3 .drive-pedal .footswitch::after,
+#effects-panel.pm-c.pm-d3 .reverb-pedal .footswitch::after,
+#effects-panel.pm-c.pm-d3 .tape-pedal.is-deck .footswitch::after { content: 'OFF'; }
+#effects-panel.pm-c.pm-d3 .delay-pedal .footswitch[aria-pressed="true"]::after,
+#effects-panel.pm-c.pm-d3 .drive-pedal .footswitch[aria-pressed="true"]::after,
+#effects-panel.pm-c.pm-d3 .reverb-pedal .footswitch[aria-pressed="true"]::after,
+#effects-panel.pm-c.pm-d3 .tape-pedal.is-deck .footswitch[aria-pressed="true"]::after { content: 'ON'; }
+#effects-panel.pm-c.pm-d3 .delay-pedal .footswitch::before,
+#effects-panel.pm-c.pm-d3 .drive-pedal .footswitch::before,
+#effects-panel.pm-c.pm-d3 .reverb-pedal .footswitch::before,
+#effects-panel.pm-c.pm-d3 .tape-pedal.is-deck .footswitch::before {
+    display: block; content: ''; position: absolute; inset: auto; left: 9px; top: 50%; width: 6px; height: 6px; margin-top: -3px;
+    border-radius: 50%; box-shadow: none; opacity: 1; background: var(--hw-led-off, #244a3a);
+}
+#effects-panel.pm-c.pm-d3 .delay-pedal .footswitch[aria-pressed="true"]::before,
+#effects-panel.pm-c.pm-d3 .drive-pedal .footswitch[aria-pressed="true"]::before,
+#effects-panel.pm-c.pm-d3 .reverb-pedal .footswitch[aria-pressed="true"]::before,
+#effects-panel.pm-c.pm-d3 .tape-pedal.is-deck .footswitch[aria-pressed="true"]::before { background: var(--hw-led, #5effb0); box-shadow: 0 0 6px var(--hw-led, #5effb0); }
+#effects-panel.pm-c.pm-d3 .delay-pedal .footswitch[aria-pressed="true"],
+#effects-panel.pm-c.pm-d3 .drive-pedal .footswitch[aria-pressed="true"],
+#effects-panel.pm-c.pm-d3 .reverb-pedal .footswitch[aria-pressed="true"],
+#effects-panel.pm-c.pm-d3 .tape-pedal.is-deck .footswitch[aria-pressed="true"] { transform: translateY(2px); box-shadow: 0 0 0 var(--cap-edge, #15121e), 0 1px 2px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08); }
+
+/* d4: a small flat metal button set in a hex nut */
+#effects-panel.pm-c.pm-d4 .delay-pedal .footswitch,
+#effects-panel.pm-c.pm-d4 .drive-pedal .footswitch,
+#effects-panel.pm-c.pm-d4 .reverb-pedal .footswitch { left: calc(24px + (100% - 24px) / 2 - 15px); width: 30px; height: 30px; bottom: 8px; }
+#effects-panel.pm-c.pm-d4 .delay-pedal .footswitch,
+#effects-panel.pm-c.pm-d4 .drive-pedal .footswitch,
+#effects-panel.pm-c.pm-d4 .reverb-pedal .footswitch,
+#effects-panel.pm-c.pm-d4 .tape-pedal.is-deck .footswitch {
+    width: 30px; height: 30px; border-radius: 0;
+    clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%);
+    background: linear-gradient(160deg, #d9d9d9, #8d8d8d 55%, #5a5a5a);
+    box-shadow: none;
+}
+#effects-panel.pm-c.pm-d4 .delay-pedal .footswitch::before,
+#effects-panel.pm-c.pm-d4 .drive-pedal .footswitch::before,
+#effects-panel.pm-c.pm-d4 .reverb-pedal .footswitch::before,
+#effects-panel.pm-c.pm-d4 .tape-pedal.is-deck .footswitch::before {
+    display: block; content: ''; position: absolute; inset: 7px; border-radius: 50%; opacity: 1;
+    background: radial-gradient(circle at 40% 35%, #f2f2f2, #a9a9a9 60%, #6b6b6b);
+    box-shadow: 0 0 0 1.5px rgba(0,0,0,0.45), inset 0 -1px 1px rgba(0,0,0,0.3);
+}
+#effects-panel.pm-c.pm-d4 .delay-pedal .footswitch:active::before,
+#effects-panel.pm-c.pm-d4 .drive-pedal .footswitch:active::before,
+#effects-panel.pm-c.pm-d4 .reverb-pedal .footswitch:active::before,
+#effects-panel.pm-c.pm-d4 .tape-pedal.is-deck .footswitch:active::before { inset: 8px; }
