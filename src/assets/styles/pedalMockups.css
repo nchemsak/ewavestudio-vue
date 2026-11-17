@@ -1,0 +1,112 @@
+/* PEDAL MOCKUPS (on the branch only, not for a PR): ?pedals=a|b|c on #effects-panel.
+   Every pedal stays 118 × 183 px at 1600 px, so the Effects card keeps its size. */
+
+/* Shared by all three: every caption under its own knob, nothing overlapping */
+#effects-panel.pm .delay-pedal .knob-cell .knob-wrapper,
+#effects-panel.pm .drive-pedal .knob-cell .knob-wrapper,
+#effects-panel.pm .reverb-pedal .knob-cell .knob-wrapper {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+}
+#effects-panel.pm .delay-pedal .knob-cell .knob-wrapper .knob-label,
+#effects-panel.pm .drive-pedal .knob-cell .knob-wrapper .knob-label,
+#effects-panel.pm .reverb-pedal .knob-cell .knob-wrapper .knob-label {
+    position: static;
+    width: auto;
+    margin-top: 2px;
+    line-height: 1;
+}
+/* The deck's name: lo-fi */
+#effects-panel.pm .tape-pedal .effect-label > span:not(.name-spin) { font-size: 0; }
+#effects-panel.pm .tape-pedal .effect-label > span:not(.name-spin)::after { content: 'lo-fi'; font-size: 0.8rem; }
+
+/* A: TIDY. The same arrangement, spaced out: two knobs, TONE centred under them (its caption
+   under it too), the switch beside TONE; the name and footswitch in a slimmer foot */
+#effects-panel.pm-a .delay-pedal .panel-top,
+#effects-panel.pm-a .drive-pedal .panel-top,
+#effects-panel.pm-a .reverb-pedal .panel-top {
+    padding: 4px 0 4px;
+    row-gap: 1px;
+    align-items: start;
+}
+#effects-panel.pm-a .delay-pedal .panel-bottom, #effects-panel.pm-a .drive-pedal .panel-bottom, #effects-panel.pm-a .reverb-pedal .panel-bottom { padding: 5px 8px 6px; }
+#effects-panel.pm-a .delay-pedal .effect-label,
+#effects-panel.pm-a .drive-pedal .effect-label,
+#effects-panel.pm-a .reverb-pedal .effect-label { font-size: 0.95rem; padding-bottom: 4px; }
+#effects-panel.pm-a .pedal-switch { bottom: 14px; right: 3px; }
+
+/* B: ONE ROW. The LED and the switch along the top, three smaller knobs across, and a
+   bigger name and footswitch, as on most stomp boxes */
+#effects-panel.pm-b .delay-pedal .panel-top,
+#effects-panel.pm-b .drive-pedal .panel-top,
+#effects-panel.pm-b .reverb-pedal .panel-top {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: 36px auto;
+    padding: 6px 4px 8px;
+    row-gap: 4px;
+    align-items: center;
+}
+#effects-panel.pm-b .delay-pedal .panel-top { grid-template-areas: 'led led led' 'time mix tone'; }
+#effects-panel.pm-b .drive-pedal .panel-top { grid-template-areas: 'led led led' 'drive level tone'; }
+#effects-panel.pm-b .reverb-pedal .panel-top { grid-template-areas: 'led led led' 'decay mix tone'; }
+#effects-panel.pm-b .delay-pedal .knob-cell .knob-small,
+#effects-panel.pm-b .drive-pedal .knob-cell .knob-small,
+#effects-panel.pm-b .reverb-pedal .knob-cell .knob-small { width: 31px; }
+#effects-panel.pm-b .panel-top > .check-led { justify-self: start; margin-left: 10px; }
+#effects-panel.pm-b .pedal-switch { top: 6px; bottom: auto; right: 6px; }
+#effects-panel.pm-b .delay-pedal .effect-label,
+#effects-panel.pm-b .drive-pedal .effect-label,
+#effects-panel.pm-b .reverb-pedal .effect-label { font-size: clamp(0.85rem, 1.1vw, 1.1rem); padding: 4px 0 8px; }
+#effects-panel.pm-b .delay-pedal .footswitch, #effects-panel.pm-b .drive-pedal .footswitch, #effects-panel.pm-b .reverb-pedal .footswitch { height: 33px; }
+
+/* C: RIBBON. The name runs down a ribbon on the pedal's left edge, which is its switch (an LED
+   at its top), as Noise's, the LFO's, FM's and Unison's are; the knobs get the whole face */
+#effects-panel.pm-c .delay-pedal,
+#effects-panel.pm-c .drive-pedal,
+#effects-panel.pm-c .reverb-pedal {
+    grid-template-columns: 24px 1fr;
+    grid-template-rows: 1fr;
+    height: 183px;
+}
+#effects-panel.pm-c .delay-pedal .panel-seam,
+#effects-panel.pm-c .drive-pedal .panel-seam,
+#effects-panel.pm-c .reverb-pedal .panel-seam { display: none; }
+#effects-panel.pm-c .delay-pedal .panel-bottom,
+#effects-panel.pm-c .drive-pedal .panel-bottom,
+#effects-panel.pm-c .reverb-pedal .panel-bottom {
+    grid-column: 1; grid-row: 1;
+    position: relative;
+    padding: 0;
+    border-radius: 8px 0 0 8px;
+    display: flex; align-items: center; justify-content: center;
+}
+#effects-panel.pm-c .delay-pedal .effect-label,
+#effects-panel.pm-c .drive-pedal .effect-label,
+#effects-panel.pm-c .reverb-pedal .effect-label {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    padding: 0;
+    font-size: 0.95rem;
+    letter-spacing: 0.08em;
+}
+#effects-panel.pm-c .delay-pedal .footswitch,
+#effects-panel.pm-c .drive-pedal .footswitch,
+#effects-panel.pm-c .reverb-pedal .footswitch {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    background: none; box-shadow: none; border-radius: 8px 0 0 8px;
+}
+#effects-panel.pm-c .delay-pedal .footswitch::before, #effects-panel.pm-c .drive-pedal .footswitch::before, #effects-panel.pm-c .reverb-pedal .footswitch::before { display: none; }
+#effects-panel.pm-c .delay-pedal .panel-top,
+#effects-panel.pm-c .drive-pedal .panel-top,
+#effects-panel.pm-c .reverb-pedal .panel-top {
+    grid-column: 2; grid-row: 1;
+    border-radius: 0 8px 8px 0;
+    padding: 4px 0 6px;
+    grid-template-rows: auto 1fr 1fr;
+    align-items: center;
+}
+#effects-panel.pm-c .delay-pedal .panel-top { grid-template-areas: 'led led' 'time mix' 'tone sw'; }
+#effects-panel.pm-c .drive-pedal .panel-top { grid-template-areas: 'led led' 'drive level' 'tone sw'; }
+#effects-panel.pm-c .delay-pedal .check-led, #effects-panel.pm-c .drive-pedal .check-led, #effects-panel.pm-c .reverb-pedal .check-led { position: absolute; left: -18px; top: 8px; z-index: 1; }
+#effects-panel.pm-c .pedal-switch { position: static; grid-area: sw; }
