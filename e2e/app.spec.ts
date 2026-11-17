@@ -5101,9 +5101,9 @@ test('Melody Maker: no dropdowns; steppers with lists, Narrow | Wide, and a scre
 	const size = async () => { const b = (await card.boundingBox())!; return [b.width, b.height]; };
 	const cardSize = await size();
 
-	// Not one dropdown; the captions left are Key, Scale and Octaves
+	// Not one dropdown; the captions left are Key, Scale and (an arpeggio's) Octaves
 	await expect(card.locator('select, .pt-select, .pt-selectbtn')).toHaveCount(0);
-	await expect(card.locator('.mm-cap')).toHaveText(['Scale', 'Octaves']);
+	await expect(card.locator('.mm-cap')).toHaveText(['Scale']);
 
 	// The Scale stepper: its arrows step (round the ends), and the scale's notes light on the keys.
 	// It starts on Minor (PR 87)
@@ -5137,14 +5137,18 @@ test('Melody Maker: no dropdowns; steppers with lists, Narrow | Wide, and a scre
 	// a melody can use, so Narrow's is shorter
 	const range = card.getByRole('radiogroup', { name: 'Range' });
 	await expect(range.getByRole('radio')).toHaveText(['Narrow', 'Wide']);
-	await expect(range.getByRole('radio', { name: 'Wide' })).toHaveAttribute('aria-checked', 'true');
+	// Narrow by default (PR 97; it was Wide)
+	await expect(range.getByRole('radio', { name: 'Narrow' })).toHaveAttribute('aria-checked', 'true');
 	const band = () => card.locator('.mm-band').evaluate((el) => Number(el.getAttribute('height')));
-	const wide = await band();
+	const narrow = await band();
+	await range.getByRole('radio', { name: 'Wide' }).click();
+	expect(narrow).toBeLessThan((await band()) * 0.7);
+	expect((await saved()).rangePreset).toBe('wide');
 	await range.getByRole('radio', { name: 'Narrow' }).click();
-	expect(await band()).toBeLessThan(wide * 0.7);
 	expect((await saved()).rangePreset).toBe('mid');
 
 	// A project saved with Low opens as Narrow
+	await range.getByRole('radio', { name: 'Wide' }).click();
 	await importChanged(page, 'low-range', (data) => { data.melody.rangePreset = 'low'; });
 	await expect(range.getByRole('radio', { name: 'Narrow' })).toHaveAttribute('aria-checked', 'true');
 	expect((await saved()).rangePreset).toBe('mid');
@@ -5155,6 +5159,10 @@ test('Melody Maker: no dropdowns; steppers with lists, Narrow | Wide, and a scre
 	await card.getByRole('button', { name: 'Arpeggio', exact: true }).click();
 	await expect(card.locator('.mm-band')).toHaveCount(0);
 	await expect(card.locator('.mm-note')).toHaveCount(2);
+	// Range is the melody's: an arpeggio's span is its Octaves, in Range's place (PR 97)
+	await expect(range).toHaveCount(0);
+	await expect(card.locator('.mm-cap')).toHaveText(['Scale', 'Octaves']);
+	await expect(card.locator('.mm-scale-row').getByRole('radiogroup', { name: 'Arp octaves' })).toBeVisible();
 	const ghosts = card.locator('.mm-ghost');
 	expect(await ghosts.count()).toBeGreaterThanOrEqual(14); // 16 notes at 1/16, less any the pads already play
 	await chooseRate(page, '1/8');
@@ -5798,4 +5806,52 @@ test.describe('Phone mode, upright', () => {
 		await expect(hint).toHaveCount(0);
 		await expect(page.locator('.ds-grid')).toBeVisible();
 	});
+});
+
+test("Melody Maker: an arpeggio's Octaves aren't held back by Range (PR 97: Narrow kept 3 octaves to two)", async ({ page }) => {
+	const card = page.locator('.module.melody');
+	await expect(card.getByRole('radiogroup', { name: 'Range' }).getByRole('radio', { name: 'Narrow' })).toHaveAttribute('aria-checked', 'true');
+	await card.getByRole('button', { name: 'Arpeggio', exact: true }).click();
+	const NOTE: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+	const span = async () => {
+		const labels = await page.locator('.step-card [aria-label^="Step "]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
+		const midi = labels.map((l) => /, ([A-G])([#b]?)(-?\d+)/.exec(l)).filter(Boolean)
+			.map((m) => 12 * (Number(m![3]) + 1) + NOTE[m![1]] + (m![2] === '#' ? 1 : m![2] === 'b' ? -1 : 0));
+		expect(midi).toHaveLength(16);
+		return Math.max(...midi) - Math.min(...midi);
+	};
+	// Each octave more spans an octave more (the cycle fills the bar, so not exactly); Narrow's
+	// notes spanned 23 semitones at most, whatever Octaves said
+	for (const [octaves, from, to] of [[1, 12, 12], [2, 13, 24], [3, 25, 36]] as const) {
+		await card.getByRole('radiogroup', { name: 'Arp octaves' }).getByRole('radio', { name: String(octaves), exact: true }).click();
+		await card.getByRole('button', { name: 'Generate arpeggio' }).click();
+		const s = await span();
+		expect(s, `${octaves} octaves`).toBeGreaterThanOrEqual(from);
+		expect(s, `${octaves} octaves`).toBeLessThanOrEqual(to);
+	}
+});
+
+test('a knob drag ends when the button turns out to be up, even if its release never reached the page', async ({ page }) => {
+	await page.getByRole('button', { name: 'Tape pedal' }).first().click();
+	const knob = page.locator('[data-midi-id="tape.wobble"]').first();
+	const box = (await knob.boundingBox())!;
+	const x = box.x + box.width / 2, y = box.y + box.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	await page.mouse.move(x, y - 400, { steps: 8 });
+	await expect(knob).toHaveAttribute('aria-valuenow', '1');
+	// The button let go where the page didn't hear it: the next move comes with no button held
+	await page.evaluate(([cx, cy]) => window.dispatchEvent(new MouseEvent('mousemove', { clientX: cx, clientY: cy, buttons: 0 })), [x, y + 300]);
+	await expect(knob).toHaveAttribute('aria-valuenow', '1');
+	await page.evaluate(([cx, cy]) => window.dispatchEvent(new MouseEvent('mousemove', { clientX: cx, clientY: cy, buttons: 0 })), [x, y + 400]);
+	await expect(knob).toHaveAttribute('aria-valuenow', '1');
+	await page.mouse.up();
+	// An ordinary drag still turns it, and its release still ends it
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	await page.mouse.move(x, y + 400, { steps: 8 });
+	await page.mouse.up();
+	await expect(knob).toHaveAttribute('aria-valuenow', '0');
+	await page.mouse.move(x, y - 400, { steps: 4 });
+	await expect(knob).toHaveAttribute('aria-valuenow', '0');
 });

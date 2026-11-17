@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
 	tapeSettings, tapeMakeup, tapeSaturate, tapeGainCurve, wobbleDelayAt, wobblePitchAt, fillHiss, fillCrackle,
 	clampTapeMode, TAPE_CUTOFF_NEW, TAPE_CUTOFF_OLD, TAPE_SAT_MAX, TAPE_SAT_REF, TAPE_HISS_MAX, TAPE_CRACKLE_MAX,
-	VINYL_SURFACE, WOBBLE_PARTS, WOBBLE_VOICES, CRACKLE_PER_SECOND,
+	VINYL_SURFACE, WOBBLE_PARTS, WOBBLE_VOICES, CRACKLE_PER_SECOND, TAPE_DEFAULTS,
 } from './tape';
 import { seededRandom } from '../lib/random';
 
@@ -186,6 +186,26 @@ describe('the noise', () => {
 		// Another seed, another crackle
 		fillCrackle(b, sr, seededRandom(12));
 		expect(a).not.toEqual(b);
+	});
+
+	it('the ticks are heard: their energy is in the clicks\' band, not up at half the sample rate (PR 97)', () => {
+		const sr = 48000, a = new Float32Array(sr * 11);
+		fillCrackle(a, sr, seededRandom(11));
+		let all = 0, band = 0;
+		const d = (k: number) => a[k] - a[k - 1];
+		for (let i = 4; i < a.length; i++) {
+			all += a[i] * a[i];
+			// A first difference (cuts the pops' lows), then an average of 4 (cuts 12 kHz and up)
+			const v = (d(i) + d(i - 1) + d(i - 2) + d(i - 3)) / 4;
+			band += v * v;
+		}
+		// Before PR 97 (ticks flipping sign every sample): 0.97 and 2.7 %
+		expect(band).toBeGreaterThan(3);
+		expect(band / all).toBeGreaterThan(0.06);
+		// And loud enough at the pedal's starting AGE, well over the record's surface noise
+		const s = tapeSettings(TAPE_DEFAULTS.age, 0, 'vinyl');
+		expect(s.crackleGain).toBeGreaterThan(0.1);
+		expect(s.crackleGain).toBeGreaterThan(s.hissGain * 50);
 	});
 
 	it('a buffer too short for a tick stays silent', () => {

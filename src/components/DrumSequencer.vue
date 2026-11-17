@@ -812,7 +812,7 @@ const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 const melodyUi = reactive<MelodyUi>({
 	keyRoot: 'A',
 	keyScale: 'naturalMinor', // so the first Generate makes a melody (None gave every pad the key)
-	rangePreset: 'wide',
+	rangePreset: 'mid',
 	arpPattern: 'up',
 	arpRate: '1/16',
 	arpOctaves: 1,

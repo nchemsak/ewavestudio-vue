@@ -255,6 +255,12 @@ function startDrag(e, isTouch = false) {
 	emit('knobStart');
 
 	function onMove(ev) {
+		// The button is no longer held but its release never reached the page (let go outside
+		// the window, or a touchpad's tap-and-drag): the drag is over
+		if (!isTouch && ev.buttons === 0) {
+			onUp();
+			return;
+		}
 		const currentY = isTouch ? ev.touches[0].pageY : ev.pageY;
 		const deltaY = startY - currentY;
 		// 200 px of drag is the whole turn, plus 14 px at each notch

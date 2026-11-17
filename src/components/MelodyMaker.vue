@@ -35,7 +35,7 @@
                 </div>
             </div>
 
-            <!-- Scale (a stepper) and Range (Narrow | Wide: for a melody and an arpeggio alike) -->
+            <!-- Scale (a stepper) and Range (Narrow | Wide: a melody's), or for an arpeggio its Octaves -->
             <div class="mm-row mm-scale-row">
                 <span class="mm-cap">Scale</span>
                 <div class="mm-stepper" role="group" aria-label="Scale" :title="'Scale'">
@@ -49,12 +49,21 @@
                             :aria-selected="o.value === keyScale" @click.stop="chooseScale(o.value); openList = null">{{ o.long ?? o.label }}</button>
                     </div>
                 </div>
-                <div class="pt-seg pt-seg-sm mm-seg mm-range" role="radiogroup" aria-label="Range" title="Range">
+                <div v-if="mode !== 'arp'" class="pt-seg pt-seg-sm mm-seg mm-range" role="radiogroup" aria-label="Range" title="Range">
                     <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset !== 'wide' }" role="radio"
                         :aria-checked="rangePreset !== 'wide' ? 'true' : 'false'" title="Narrow: notes stay within two octaves" @click="rangePreset = 'mid'">Narrow</button>
                     <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset === 'wide' }" role="radio"
                         :aria-checked="rangePreset === 'wide' ? 'true' : 'false'" title="Wide: notes from the pads' whole range" @click="rangePreset = 'wide'">Wide</button>
                 </div>
+                <!-- An arpeggio's span is its Octaves (PR 97: Range is the melody's; Narrow held a
+                     3-octave arpeggio to two), so Octaves takes Range's place -->
+                <template v-else>
+                    <span class="mm-cap">Octaves</span>
+                    <div class="pt-seg pt-seg-sm mm-seg mm-range" role="radiogroup" aria-label="Arp octaves" title="Arp octaves">
+                        <button v-for="o in arpOctaveOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpOctaves === o.value }"
+                            role="radio" :aria-checked="arpOctaves === o.value ? 'true' : 'false'" @click="arpOctaves = o.value">{{ o.label }}</button>
+                    </div>
+                </template>
             </div>
 
             <!-- The screen: the pattern across the bar (each step that's on, at its pitch, in its
@@ -140,11 +149,6 @@
                             <div class="pt-seg pt-seg-sm mm-seg" role="radiogroup" aria-label="Arp rate" title="Arp rate">
                             <button v-for="o in arpRateOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpRate === o.value }"
                                 role="radio" :aria-checked="arpRate === o.value ? 'true' : 'false'" @click="arpRate = o.value">{{ o.label }}</button>
-                        </div>
-                            <span class="mm-cap">Octaves</span>
-                            <div class="pt-seg pt-seg-sm mm-seg" role="radiogroup" aria-label="Arp octaves" title="Arp octaves">
-                            <button v-for="o in arpOctaveOptions" :key="String(o.value)" type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': arpOctaves === o.value }"
-                                role="radio" :aria-checked="arpOctaves === o.value ? 'true' : 'false'" @click="arpOctaves = o.value">{{ o.label }}</button>
                         </div>
                             <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: arpSkip }"
                                 :aria-pressed="arpSkip ? 'true' : 'false'"
@@ -293,7 +297,7 @@ const PRESETS: Record<PresetKey, { minOct: number; maxOct: number; label: string
     wide: { minOct: 2, maxOct: 6, label: 'Wide' }
 };
 
-const rangePreset = ref<PresetKey>(props.initialRangePreset ?? 'wide');
+const rangePreset = ref<PresetKey>(props.initialRangePreset ?? 'mid');
 const minOctave = ref(3);
 const maxOctave = ref(6);
 
@@ -819,28 +823,6 @@ function nearestIndexIn(arr: number[], base: number): number | null {
     return best;
 }
 
-function pickBaseTonicByRange(tonicGroup: number[], centerMidi: number): number {
-    if (!tonicGroup.length) return centerMidi;
-    switch (rangePreset.value) {
-        case 'low':
-            return tonicGroup[0];
-        case 'high':
-            return tonicGroup[tonicGroup.length - 1];
-        case 'mid': {
-            const idx = Math.min(
-                tonicGroup.length - 1,
-                Math.ceil((tonicGroup.length - 1) / 2)
-            );
-            return tonicGroup[idx];
-        }
-        case 'wide':
-        default: {
-            const i0 = nearestIndexIn(tonicGroup, centerMidi) ?? 0;
-            return tonicGroup[i0];
-        }
-    }
-}
-
 function bakeArp(dry = false): { steps: boolean[]; freqs: number[] } | void {
     if (!props.frequencies || !props.frequencies.length) return;
 
@@ -853,11 +835,13 @@ function bakeArp(dry = false): { steps: boolean[]; freqs: number[] } | void {
     const fMin = props.minFreq ?? 100;
     const fMax = props.maxFreq ?? 2000;
 
+    // The pads' whole range: an arpeggio's span is its Octaves, not Range (Range is the
+    // melody's; until PR 97 Narrow's two octaves cut a 3-octave arpeggio to two)
     const pool = buildCandidateMidiPool(
         keyRoot.value,
         keyScale.value,
-        minOctave.value,
-        maxOctave.value,
+        0,
+        9,
         fMin,
         fMax
     ).sort((a, b) => a - b);
@@ -903,7 +887,11 @@ function bakeArp(dry = false): { steps: boolean[]; freqs: number[] } | void {
     let startTonicPick: number | null = null;
 
     if (tonicGroup.length) {
-        const baseTonic = pickBaseTonicByRange(tonicGroup, center);
+        // The key's root nearest the middle of the pads' range, an octave lower at a time
+        // while the arpeggio's top (Octaves up) wouldn't fit
+        let baseTonic = tonicGroup[nearestIndexIn(tonicGroup, center) ?? 0];
+        const top = freqToMidi(fMax);
+        while (baseTonic + 12 * arpOctaves.value > top && baseTonic - 12 >= pool[0]) baseTonic -= 12;
 
         for (let oct = 0; oct < arpOctaves.value; oct++) {
             const targetBase = baseTonic + 12 * oct;

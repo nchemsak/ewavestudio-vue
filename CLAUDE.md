@@ -661,7 +661,12 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   a MIDI note is that much later while it wobbles) and is 0 with WOBBLE at 0.
 - **TAPE | VINYL** (`mode`): what the noise is (hiss: white noise through 2–11 kHz; or a
   record's crackle, about nine ticks a second and the odd pop, `fillCrackle()`, over hiss at
-  35 %) and how the pitch sways. The noise loops in 4 s and 11 s buffers.
+  20 %) and how the pitch sways. The noise loops in 4 s and 11 s buffers. The crackle's gain
+  is 0.3 × age^0.75 (0.15 at the starting AGE), so it's heard sooner than the hiss. **PR 97**:
+  each tick is a burst of noise 0.1–0.4 ms long, falling away fast; until then it was a spike
+  flipping sign every sample, all its energy at half the sample rate (about 24 kHz), at a gain
+  of 0.12 × age^1.5 (0.03), so only the rare pops could be heard (the maintainer heard hiss
+  and no crackle). A unit test checks the ticks' energy is in the clicks' band.
 - **Live** (`liveEngine.ts`, the `Tape` section): the switch crossfades between round the
   pedal and through it. The noise plays only while something does: while the sequencer plays,
   and for a note played by hand (MIDI, a preview) until 1 s after it ends; then it fades and is
@@ -947,9 +952,14 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     buttons are named "Scale: Minor", "Arp pattern: Up", "Arp tones: Chord". Notched knobs
     were mocked up and turned down (you can't see the choices, and dragging to a scale moves
     the pattern through the ones between).
-  - **Range** is **Narrow | Wide**, beside Scale, for a melody and an arpeggio alike. Low,
+  - **Range** is **Narrow | Wide**, beside Scale, a melody's only. Low,
     Mid and High went (the same two octaves an octave apart; Pattern Tools' Octave arrows do
     that): Narrow is saved as `'mid'`, and `applySnapshot()` opens `'low'` and `'high'` as it.
+    **Narrow is the default** since PR 97 (a fresh page, File → New; it was Wide). With
+    Arpeggio, **Octaves (1 | 2 | 3) takes Range's place** beside Scale (PR 97): an arpeggio
+    builds its notes from the pads' whole range, starting on the key's root nearest the
+    middle of it, an octave lower at a time while its top wouldn't fit (`bakeArp()`). Until
+    then it took Range's octaves, so on Narrow 3 octaves came out as two.
   - **The screen** (`.mm-screen`, `src/lib/melody/roll.ts`, unit-tested): the pattern across
     the bar, each step that's on at its pitch (log in Hz over the pads' 100–2000 Hz) in its
     pad's colour, a dashed line for every octave of the key. It also shows what Generate would
@@ -984,9 +994,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     and a key waiting for the bar a ghost of that ring.
   - The chosen maker's panel (Melody | Arpeggio is in the header), both in one grid cell so
     the card never changes height: Melody's Active Pads Only and its note; the arpeggio's
-    Pattern and Tones steppers over Rate (1/8 | 1/16), Octaves (1 | 2 | 3) and Skip. Then
-    Generate.
-  - **Captions** only where the control doesn't explain itself: Key, Scale, Octaves. Range,
+    Pattern and Tones steppers over Rate (1/8 | 1/16) and Skip (Octaves is beside Scale).
+    Then Generate.
+  - **Captions** only where the control doesn't explain itself: Key, Scale, Octaves (an
+    arpeggio's, beside Scale). Range,
     Rate, Pattern and Tones have none (their names are tooltips and accessible names), so the
     tones name themselves: Chord, 7th chord, Whole scale.
   - A wide card (a tablet's Compose tab, the phone's Key page, from 640 px): the screen beside
@@ -1663,6 +1674,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   its usual 54, 58, 62, 66 and 71 %; 33 % is a triplet and reads "33% (triplet)"); every
   bipolar knob's middle; a pad's Fine at 0; Noise Color's Pink, White and Blue. Knobs with
   hard stops (Delay Time, the LFO's Rate) have none.
+  A drag follows the mouse on `window` until its `mouseup`; since PR 97 a move with no button
+  held ends it too (`ev.buttons === 0`), for a release the page never heard (let go outside
+  the window, a touchpad's tap-and-drag): the maintainer saw WOBBLE keep following the mouse
+  now and then. It couldn't be reproduced here, and nothing in the page swallows a release.
 - Layout (PR 41, "C1", picked from mockups): one piece of hardware that fills its frame, the
   `LAYOUT` sections of `DrumSequencer.vue`'s template and styles (a CSS grid, `.ds-grid`).
   The frame fills the window less a 16 px margin, up to 1320 px (`.app-frame` in `App.vue`),
@@ -1777,8 +1792,9 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 - The PR that finishes an item also updates this list: move the item to "Done".
 
 Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the maintainer
-changes it as ideas come up; the list now is the one agreed in PR 86). The drums come back as
-the Drums machine (item 7), not as the old sample lanes.
+changes it as ideas come up; the list now is the one agreed in PR 86, with the brainstorm
+after PR 96's items first). The drums come back as
+the Drums machine (item 8), not as the old sample lanes.
 
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
@@ -1801,15 +1817,15 @@ around the market, and put 38 ideas with mockups on a page; the maintainer answe
 Maybe or No. The list below is the Yes answers in the agreed order; the Maybes and Nos follow
 it. What the review found, and what the answers settled:
 - **The look:** no overhaul. Targeted fixes now (PRs 89, 92 and 93; fitting the window, put off below), and one layout
-  change later, with the machines (item 6), so the layout changes once.
+  change later, with the machines (item 7), so the layout changes once.
 - **The first visit** is silent (no step is on) and the glowing Generate gives every pad A
   (Scale starts at None): PR 87, before anything else.
-- **One 16-step bar repeats forever:** patterns A–D and a chain (item 4).
-- **More sequencers are small machines with hard limits** (items 5–8), not copies of today's
+- **One 16-step bar repeats forever:** patterns A–D and a chain (item 5).
+- **More sequencers are small machines with hard limits** (items 6–9), not copies of today's
   panel: they share the tempo, the key and scale, the pattern slots and the pedalboard; one is
   on the pads at a time. Today's synth becomes the **Rhythm** machine and stays the DFAM-style
   core (see "Design intent").
-- **Money:** nothing is charged for. Launch free and see who comes back (item 3) before any
+- **Money:** nothing is charged for. Launch free and see who comes back (put off below) before any
   paid route; a plugin or a native app (a new sound engine) was turned down.
 
 Redesigns are visual: every control keeps working as it does, and each card keeps its size.
@@ -1821,61 +1837,86 @@ do, sockets, steppers that open a list for a choice of words, switches for numbe
 only where a control doesn't explain itself, not too many buttons on show, and the action
 button where the eye ends up (Generate, PR 82).
 
-Show it (its signature, the tape pedal, was PR 90; the screen at rest, PR 94; Sample a sound,
-PR 95, came before the Simple view, the maintainer's call):
+**The maintainer's brainstorm after PR 96** (corrections to what exists, before more
+features; Claude's recommendations, which the maintainer agreed to). Its fixes were PR 97 (a
+knob drag that ends when the button is up, vinyl crackle that can be heard, Narrow as the
+Melody Maker's default, an arpeggio's Octaves not held back by Range). Then:
 
-1. **A Simple view on desktop.** Phone mode's layout (big pads, the Sound and Pattern
-   steppers, four knobs) on a computer, as Simple | Full in the top bar, remembered; the full
-   panel stays as it is.
-2. **Lessons.** A Learn item in the menu: about ten short lessons that light one control at a
-   time ("drag this point left: the hit gets darker"), built on the hint Generate has.
-3. **Launch free and measure; a tip jar.** Mostly the maintainer's: a short video, posts where
-   synth people gather and to the sites that cover free browser instruments. Claude's part: a
-   Support link in the gear menu, an analytics event for a visitor who comes back within a
-   week, and a first free pack of one-shots made with the app. Nothing is charged for.
+1. **Remove both Active Pads Only toggles.** The Melody Maker's: Generate always gives new
+   notes to the pads that are on (you set the rhythm, it picks the notes), and with none on it
+   fills all 16 and turns them on. Pattern Tools' (it moved only the octave arrows, which read
+   as if it applied to rotate and reverse too): the arrows move every pad, as on the phone.
+   `melody.activeOnly` stops applying.
+2. **The pedals: the look and the name.** The three pedals over the tape deck look squashed
+   since PR 90 (their middle part): mockups first. Rename the tape pedal **Lo-Fi** (it has a
+   vinyl mode, and "tape" reads as a tape delay; "Worn" was the other idea); `fx.tape` stays
+   the saved name.
+3. **Sample: Length, and in Random.** A **Length** mini knob on the SAMPLE strip: Full (the
+   default) plays the whole recording on the pads that play it (Attack still applies, the
+   Envelope card's Decay doesn't), lower shortens it with a fade; the Envelope card stays the
+   oscillators'. Recording doesn't change Attack or Decay (they're every pad's). And a dice
+   badge on the strip, lit once there's a recording, so Random can mix sample pads in.
+4. **Spread the big screen's views around** (mockups, ideally with the machines' layout, item
+   7, since what fills the freed space is their rail): the Spectrum behind the Filter card's
+   curve, the Tuner in the Melody Maker, the hit at rest faint behind the Envelope card's
+   curve, the scope and spectrogram small (a strip, perhaps in the top bar as phone mode's tiny
+   scope). Several small screens are cheap to draw (one shared frame loop; none drawn while
+   nothing sounds or off screen).
 
 Grow into a small groovebox:
 
-4. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
+5. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
     holds the steps, notes, velocities and repeats; the sound is shared. A slot clicked while
     playing takes over at the next bar (the bar queue, with its ghost). Copy A to B. Under the
     slots, a chain of up to eight cells plays them in order, and Export audio can render the
     chain. No timeline. Saved so that a pattern is a list of tracks from the start, even with
     one track, and the machines need no second change to saved projects.
-5. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
+6. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
     that builds a note, used by the live engine and the export engine (today two engines kept
     in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
     on the output (dropped after PR 30 for one voice; four machines summed need it).
-6. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
+7. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
     name, mute, level and a tiny row of its steps); the pads show the chosen machine; the Sound
     section becomes the chosen machine's panel; a send to the pedals per machine; a stem per
     machine in the export. Bass: one note at a time, 30–250 Hz, saw or square with a sub, one
     filter with its envelope, Accent per step, about six knobs (Cutoff, Reso, Env, Decay, Sub,
     Drive), following the key. Decide Slide and Tie (a Maybe below) when it starts. Mockups
     first; the phone gets a way to choose the machine.
-7. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
+8. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
     Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
     drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
     light work for a phone. It replaces the hidden sample lanes: their playback code is reused,
     the rest and the three mp3 files go (see "Dead code").
-8. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
+9. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
     touch plates, one slow filter, joystick and short sequencer are worth borrowing; its
     per-voice knobs and microtonal tuning are not). Six plates, one per note of the key's
     chord; a touched plate latches a small swarm of detuned oscillators, fading in over a bar
     or more; an X/Y pad (the filter one way, the swarm's spread the other); Attack and Release
     in bars; no steps: its sequencer counts bars, a chord per bar for 4 or 8 bars, across the
     pattern chain; straight to the reverb.
-9. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+10. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
     the maintainer wants some maintenance, each as its own PR.
 
 Put off after PR 93 (the maintainer's call: back to them after some of the items above):
+- **Show it** (put off after PR 96, the maintainer's call: wanted, but back to them once the
+  features have settled; its signature, the tape pedal, was PR 90; the screen at rest, PR 94;
+  Sample a sound, PR 95):
+  - **A Simple view on desktop.** Phone mode's layout (big pads, the Sound and Pattern
+    steppers, four knobs) on a computer, as Simple | Full in the top bar, remembered; the full
+    panel stays as it is.
+  - **Lessons.** A Learn item in the menu: about ten short lessons that light one control at a
+    time ("drag this point left: the hit gets darker"), built on the hint Generate has.
+  - **Launch free and measure; a tip jar.** Mostly the maintainer's: a short video, posts where
+    synth people gather and to the sites that cover free browser instruments. Claude's part: a
+    Support link in the gear menu, an analytics event for a visitor who comes back within a
+    week, and a first free pack of one-shots made with the app. Nothing is charged for.
 - **Fit the window without scrolling** (put off after PR 70; moved up in the review; put off
   again after PR 93 until the sequencer stops growing, since the machines will change its
   size): the panel is 1,356 px tall at 1600 px wide, so the pads scroll away on most laptops.
   Centred vertically when it fits: tighten spacing (the screen's margins, the gaps between
   sections; the desktop's pedals got short footswitches in PR 90), then scale the frame down
   to fit short windows (with a floor). Measure at the maintainer's screen and common laptop
-  sizes, once the machines' rail is there (item 6).
+  sizes, once the machines' rail is there (item 7).
 - **Record a take** (put off after PR 93, for now). A REC cap beside Play records what's heard,
   knob moves included, to a WAV (the output captured without loss, in a worklet), and stops
   with Stop. Export renders the pattern as set; it can't capture a filter sweep that's
@@ -1967,7 +2008,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   interval (a fifth, an octave, detuned) and level, maybe hard sync or VCO 1 → 2 FM; a card,
   both engines, presets, the dice, saving. It must sound unlike the FM card's modulator, which
   is already a second oscillator.
-- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 5–8.)
+- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 6–9.)
 - **Patch cables** (put off after PR 49: the maintainer wants to tweak the layout more first):
   animated cables from the LFO to what it moves (Cutoff, the Pulse tile, the pads), swaying a
   little, never over a control, still with `prefers-reduced-motion`. They depend on where
@@ -2002,7 +2043,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
   ticks, 24 a quarter note, which jitter); MIDI out would send the pattern's notes to another
   synth, timed against the audio clock.
-- (Several patterns chained into a song: planned now, item 4.)
+- (Several patterns chained into a song: planned now, item 5.)
 - **32 steps, or per-lane lengths** (the export code's types already allow 32; "Last step", a
   Maybe above, is the smaller version).
 - **Per-step parameter locks** (for example a different filter cutoff on each step). Each
@@ -2018,8 +2059,8 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   808 makes cymbals and cowbell) and struck (a click ringing tuned resonant filters).
 - The old drum-lane items (lanes through the pedals with pitch, decay and pan; custom samples
   stored in the browser; drum kits; the export rendering only the synth lane; the sample paths
-  that depend on the trailing slash) are overtaken by the Drums machine (item 7), a send and a
-  stem per machine (item 6) and Sample a sound (PR 95). Still on hold from them: samples
+  that depend on the trailing slash) are overtaken by the Drums machine (item 8), a send and a
+  stem per machine (item 7) and Sample a sound (PR 95). Still on hold from them: samples
   loaded by drag-and-drop, and drum slots played by MIDI notes.
 - **Shared session ("jam"):** several people on one URL, for example one phone playing the
   drum lanes and another the synth. It needs a realtime relay between devices; the site is
@@ -2128,6 +2169,7 @@ Done:
 | 94 | The screen at rest shows the hit: while nothing plays, the screen draws one hit of the current sound (the one-shot the export would make, rendered offline in a few tens of ms) as a waveform on a square-root time scale, in its pad's colour, with its note, length and peak, redrawn as the sound changes (`src/components/hitView.ts`, `renderHit()`); Play brings back the chosen view, and a view picked at rest shows instead until the next rest. Plan: fitting the window and Record a take put off. |
 | 95 | Sample a sound (before the Simple view, the maintainer's call): REC in a strip under the wave tiles (option B of two mockups) records about a second from the microphone, from just before the sound starts, and the pads play it as a ninth wave, Sample, at their pitch (as recorded on A3) through the same envelope, filter and pedals, in both engines (`src/audio/sample.ts`, `useSampleRecorder.ts`, `SampleTile.vue`); saved with the project (16-bit PCM in base64), kept by sound presets, cleared by File → New, left out of share links; offered in a pad's ⋮ menu and on the phone's Sound page. |
 | 96 | Fix: REC said "Nothing heard" to the maintainer's Focusrite (a microphone on input 2, at a usual gain): the recorder read only the input's left channel (input 2 is the right) and waited for a fixed −36 dBFS. Every channel is summed now, the start level is 12 dB over the room's own noise (at least −50 dBFS), and if nothing gets there the loudest moment is kept, trimmed against its own peak. Also: the tape pedal's squeeze test (PR 90) measured the mix, whose random hiss moved its result from export to export (it failed this PR's checks by 0.1 %); it measures the dry stem now, the same every time. |
+| 97 | Fixes from the maintainer's brainstorm after PR 96 (whose plan it also adds; the Simple view, Lessons and the launch put off): a knob drag ends when the mouse moves with no button held, for a release the page never heard (WOBBLE sometimes kept following the mouse); the vinyl's crackle can be heard (its ticks flipped sign every sample, so their energy sat at about 24 kHz, and their gain was 0.03; now bursts of noise at 0.15, over a quieter surface noise); the Melody Maker's Range starts on Narrow, and is the melody's only: with Arpeggio, Octaves sits in its place and spans the pads' whole range (on Narrow, 3 octaves came out as two). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
