@@ -8,7 +8,7 @@ Audio API; there is no backend. Features: one 16-step synth lane with per-step p
 velocity, waveform (sine, triangle, saw, square, a pulse with adjustable width, and three
 harmonic shapes, and a sound recorded from the microphone) and ratchet (2–4 quick hits within the step); amp envelope, pitch envelope (a drum-style sweep), filter with its own
 envelope, noise, FM,
-unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a tape pedal (wear, wobble, tape or vinyl); Web MIDI note
+unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a lo-fi pedal (wear, wobble, tape or vinyl); Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
 arpeggio in a key and scale; a new key or scale moves the pattern with it); a screen with an oscilloscope, spectrum,
 spectrogram and tuner, and envelope and filter views while their knobs are turned; six built-in sounds that set the sound (not the pattern) and six built-in patterns
@@ -635,7 +635,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   ringing in the other carry on. Browser tests check the echoes' sides live (per-channel
   probes, `__channelPeaksOver`) and in the export, and that the crusher quantizes live.
 
-### The tape pedal
+### The tape pedal (named lo-fi since PR 99)
+- **Named lo-fi** (PR 99, the maintainer's call: it has a vinyl mode, and "tape" reads as a tape
+  delay; "Worn" was the other idea): its name on the panel, its title, its switch ("Lo-fi pedal")
+  and MIDI learn's names ("Lo-fi age", "Lo-fi wobble"). The code, the CSS and the saved
+  `fx.tape` keep "tape", and TAPE | VINYL is still its mode switch.
 - The fourth pedal, last in the chain (`src/audio/tape.ts`, both engines; `TapeEffect.vue`):
   the synth with its drive, the echoes, the reverb and the noise layer all go through it.
   Saved as `fx.tape` { enabled, age, wobble, mode } (off, 0.4, 0.3, `'tape'`; a project saved
@@ -643,7 +647,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   sound setting: presets and File → New reset it (`resetSoundToFactoryDefaults`), and the
   Sounds dice turns it on in a quarter of its rolls (age 0.15–0.7, wobble 0.1–0.6, vinyl in
   30 % of them; drawn last, so every roll from before the pedal is the same sound). AGE and
-  WOBBLE are MIDI-learnable (`tape.age`, `tape.wobble`; 33 learnable knobs then, 32 since PR 92).
+  WOBBLE are MIDI-learnable (`tape.age`, `tape.wobble`, named "Lo-fi age" and "Lo-fi wobble" since
+  PR 99; 33 learnable knobs then, 32 since PR 92).
 - **AGE** (`tapeSettings()`): soft saturation (k from 0 to 3; a makeup gain keeps a level of
   0.4 where it was, so quieter sounds come up and louder ones are squeezed), a duller top (a
   12 dB/octave low-pass from 20 kHz down to 3.2 kHz, flat below its cutoff) and the tape's own
@@ -698,6 +703,24 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   pedals across at 120 px (about 110 under 720 px; they were one under another there). The
   phone's FX page keeps four tall pedals across, the tape as a stomp box (`layout="pedal"`,
   its reels or records beside its name).
+- **The pedals' look** (PR 99, option D1 after four rounds of mockups: A tidied the old
+  layout, B three knobs in a row, C the name on a ribbon that was the switch; then C with a
+  chrome stomp, hardware, or both (C3); then C3 with a rubber treadle (D1), a rocker, the app's
+  cap or a hex footswitch). PR 90's pedals were squashed: TONE's caption sat between the two
+  top knobs and its knob ran into their captions. Now (the `EFFECTS PEDALS` section at the end
+  of `DrumSequencer.vue`'s styles; the Effects card only, `.module.fx .fx-pair`, so the phone's
+  tall pedals are as they were), each pedal is still 183 px tall and the card the size it was
+  (407 × 321 px at 1600): its **name runs down a painted ribbon** on its left edge (the pedal's
+  colour, darker, light letters) with its **LED at the top**; its face has **corner screws** and
+  a bevel, with **two jack sockets** on its top edge; the knobs and its mini switch sit **two by
+  two, every caption under its own knob**; and its footswitch is a **ribbed rubber treadle**
+  across the foot of the face. The three footswitches have names now ("Delay pedal",
+  "Overdrive pedal", "Reverb pedal"). The **deck** has the same: a painted stripe across its
+  left end with its LED, name and treadle, screws and a bevel. Its TAPE | VINYL switch stands
+  upright, TAPE over the lever over VINYL, while the deck is under 400 px wide (a container
+  query; the desktop's deck is 363–377 px), so VINYL no longer runs off the deck at phone
+  width (it did at 390 px). A browser test checks the captions, the ribbon, the treadles and
+  the deck at 1600, 1024 and 390 px.
 - **The overdrive and stems** (found while testing this, on `main` too): with the overdrive
   on, the stems don't reliably add up to the mix. Its curve turns silence into a small steady
   offset (see "Dropped after PR 30"), and Chrome renders that offset differently from one
@@ -1798,7 +1821,7 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the maintainer
 changes it as ideas come up; the list now is the one agreed in PR 86, with the brainstorm
 after PR 96's items first). The drums come back as
-the Drums machine (item 7), not as the old sample lanes.
+the Drums machine (item 6), not as the old sample lanes.
 
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
@@ -1821,11 +1844,11 @@ around the market, and put 38 ideas with mockups on a page; the maintainer answe
 Maybe or No. The list below is the Yes answers in the agreed order; the Maybes and Nos follow
 it. What the review found, and what the answers settled:
 - **The look:** no overhaul. Targeted fixes now (PRs 89, 92 and 93; fitting the window, put off below), and one layout
-  change later, with the machines (item 6), so the layout changes once.
+  change later, with the machines (item 5), so the layout changes once.
 - **The first visit** is silent (no step is on) and the glowing Generate gives every pad A
   (Scale starts at None): PR 87, before anything else.
-- **One 16-step bar repeats forever:** patterns A–D and a chain (item 4).
-- **More sequencers are small machines with hard limits** (items 5–8), not copies of today's
+- **One 16-step bar repeats forever:** patterns A–D and a chain (item 3).
+- **More sequencers are small machines with hard limits** (items 4–7), not copies of today's
   panel: they share the tempo, the key and scale, the pattern slots and the pedalboard; one is
   on the pads at a time. Today's synth becomes the **Rhythm** machine and stays the DFAM-style
   core (see "Design intent").
@@ -1844,20 +1867,16 @@ button where the eye ends up (Generate, PR 82).
 **The maintainer's brainstorm after PR 96** (corrections to what exists, before more
 features; Claude's recommendations, which the maintainer agreed to). Its fixes were PR 97 (a
 knob drag that ends when the button is up, vinyl crackle that can be heard, Narrow as the
-Melody Maker's default, an arpeggio's Octaves not held back by Range) and PR 98 (both Active
-Pads Only toggles removed). Then:
+Melody Maker's default, an arpeggio's Octaves not held back by Range), PR 98 (both Active
+Pads Only toggles removed) and PR 99 (the pedals' look, and the tape pedal named lo-fi). Then:
 
-1. **The pedals: the look and the name.** The three pedals over the tape deck look squashed
-   since PR 90 (their middle part): mockups first. Rename the tape pedal **Lo-Fi** (it has a
-   vinyl mode, and "tape" reads as a tape delay; "Worn" was the other idea); `fx.tape` stays
-   the saved name.
-2. **Sample: Length, and in Random.** A **Length** mini knob on the SAMPLE strip: Full (the
+1. **Sample: Length, and in Random.** A **Length** mini knob on the SAMPLE strip: Full (the
    default) plays the whole recording on the pads that play it (Attack still applies, the
    Envelope card's Decay doesn't), lower shortens it with a fade; the Envelope card stays the
    oscillators'. Recording doesn't change Attack or Decay (they're every pad's). And a dice
    badge on the strip, lit once there's a recording, so Random can mix sample pads in.
-3. **Spread the big screen's views around** (mockups, ideally with the machines' layout, item
-   6, since what fills the freed space is their rail): the Spectrum behind the Filter card's
+2. **Spread the big screen's views around** (mockups, ideally with the machines' layout, item
+   5, since what fills the freed space is their rail): the Spectrum behind the Filter card's
    curve, the Tuner in the Melody Maker, the hit at rest faint behind the Envelope card's
    curve, the scope and spectrogram small (a strip, perhaps in the top bar as phone mode's tiny
    scope). Several small screens are cheap to draw (one shared frame loop; none drawn while
@@ -1865,36 +1884,36 @@ Pads Only toggles removed). Then:
 
 Grow into a small groovebox:
 
-4. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
+3. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
     holds the steps, notes, velocities and repeats; the sound is shared. A slot clicked while
     playing takes over at the next bar (the bar queue, with its ghost). Copy A to B. Under the
     slots, a chain of up to eight cells plays them in order, and Export audio can render the
     chain. No timeline. Saved so that a pattern is a list of tracks from the start, even with
     one track, and the machines need no second change to saved projects.
-5. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
+4. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
     that builds a note, used by the live engine and the export engine (today two engines kept
     in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
     on the output (dropped after PR 30 for one voice; four machines summed need it).
-6. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
+5. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
     name, mute, level and a tiny row of its steps); the pads show the chosen machine; the Sound
     section becomes the chosen machine's panel; a send to the pedals per machine; a stem per
     machine in the export. Bass: one note at a time, 30–250 Hz, saw or square with a sub, one
     filter with its envelope, Accent per step, about six knobs (Cutoff, Reso, Env, Decay, Sub,
     Drive), following the key. Decide Slide and Tie (a Maybe below) when it starts. Mockups
     first; the phone gets a way to choose the machine.
-7. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
+6. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
     Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
     drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
     light work for a phone. It replaces the hidden sample lanes: their playback code is reused,
     the rest and the three mp3 files go (see "Dead code").
-8. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
+7. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
     touch plates, one slow filter, joystick and short sequencer are worth borrowing; its
     per-voice knobs and microtonal tuning are not). Six plates, one per note of the key's
     chord; a touched plate latches a small swarm of detuned oscillators, fading in over a bar
     or more; an X/Y pad (the filter one way, the swarm's spread the other); Attack and Release
     in bars; no steps: its sequencer counts bars, a chord per bar for 4 or 8 bars, across the
     pattern chain; straight to the reverb.
-9. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+8. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
     the maintainer wants some maintenance, each as its own PR.
 
 Put off after PR 93 (the maintainer's call: back to them after some of the items above):
@@ -1916,7 +1935,7 @@ Put off after PR 93 (the maintainer's call: back to them after some of the items
   Centred vertically when it fits: tighten spacing (the screen's margins, the gaps between
   sections; the desktop's pedals got short footswitches in PR 90), then scale the frame down
   to fit short windows (with a floor). Measure at the maintainer's screen and common laptop
-  sizes, once the machines' rail is there (item 6).
+  sizes, once the machines' rail is there (item 5).
 - **Record a take** (put off after PR 93, for now). A REC cap beside Play records what's heard,
   knob moves included, to a WAV (the output captured without loss, in a worklet), and stops
   with Stop. Export renders the pattern as set; it can't capture a filter sweep that's
@@ -2008,7 +2027,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   interval (a fifth, an octave, detuned) and level, maybe hard sync or VCO 1 → 2 FM; a card,
   both engines, presets, the dice, saving. It must sound unlike the FM card's modulator, which
   is already a second oscillator.
-- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 5–8.)
+- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 4–7.)
 - **Patch cables** (put off after PR 49: the maintainer wants to tweak the layout more first):
   animated cables from the LFO to what it moves (Cutoff, the Pulse tile, the pads), swaying a
   little, never over a control, still with `prefers-reduced-motion`. They depend on where
@@ -2043,7 +2062,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
   ticks, 24 a quarter note, which jitter); MIDI out would send the pattern's notes to another
   synth, timed against the audio clock.
-- (Several patterns chained into a song: planned now, item 4.)
+- (Several patterns chained into a song: planned now, item 3.)
 - **32 steps, or per-lane lengths** (the export code's types already allow 32; "Last step", a
   Maybe above, is the smaller version).
 - **Per-step parameter locks** (for example a different filter cutoff on each step). Each
@@ -2059,8 +2078,8 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   808 makes cymbals and cowbell) and struck (a click ringing tuned resonant filters).
 - The old drum-lane items (lanes through the pedals with pitch, decay and pan; custom samples
   stored in the browser; drum kits; the export rendering only the synth lane; the sample paths
-  that depend on the trailing slash) are overtaken by the Drums machine (item 7), a send and a
-  stem per machine (item 6) and Sample a sound (PR 95). Still on hold from them: samples
+  that depend on the trailing slash) are overtaken by the Drums machine (item 6), a send and a
+  stem per machine (item 5) and Sample a sound (PR 95). Still on hold from them: samples
   loaded by drag-and-drop, and drum slots played by MIDI notes.
 - **Shared session ("jam"):** several people on one URL, for example one phone playing the
   drum lanes and another the synth. It needs a realtime relay between devices; the site is
@@ -2171,6 +2190,7 @@ Done:
 | 96 | Fix: REC said "Nothing heard" to the maintainer's Focusrite (a microphone on input 2, at a usual gain): the recorder read only the input's left channel (input 2 is the right) and waited for a fixed −36 dBFS. Every channel is summed now, the start level is 12 dB over the room's own noise (at least −50 dBFS), and if nothing gets there the loudest moment is kept, trimmed against its own peak. Also: the tape pedal's squeeze test (PR 90) measured the mix, whose random hiss moved its result from export to export (it failed this PR's checks by 0.1 %); it measures the dry stem now, the same every time. |
 | 97 | Fixes from the maintainer's brainstorm after PR 96 (whose plan it also adds; the Simple view, Lessons and the launch put off): a knob drag ends when the mouse moves with no button held, for a release the page never heard (WOBBLE sometimes kept following the mouse); the vinyl's crackle can be heard (its ticks flipped sign every sample, so their energy sat at about 24 kHz, and their gain was 0.03; now bursts of noise at 0.15, over a quieter surface noise); the Melody Maker's Range starts on Narrow, and is the melody's only: with Arpeggio, Octaves sits in its place and spans the pads' whole range (on Narrow, 3 octaves came out as two). |
 | 98 | Both Active Pads Only toggles removed (the plan's first item after PR 96's brainstorm): the Melody Maker's Generate gives new notes to the pads that are on (you set the rhythm, it picks the notes), and with none on fills all 16 and turns them on, one undo step; Pattern Tools' octave arrows move every pad, as the phone's do (the toggle moved only the pads that were on, and read as if it applied to rotate and reverse too). `melody.activeOnly` is no longer saved. Every card keeps its size; Move's two rows are centred in their section. |
+| 99 | The effect pedals redesigned (option D1 after four rounds of mockups), the card the size it was: each pedal's name runs down a painted ribbon on its left edge with its LED, its face has corner screws, a bevel and two jack sockets on its top edge, its knobs and switch sit two by two with every caption under its own knob (TONE's caption sat between the top knobs and its knob ran into their captions), and its footswitch is a ribbed rubber treadle; the deck has the same stripe, screws and treadle, and its TAPE \| VINYL switch stands upright when narrow (VINYL ran off it at phone width). The tape pedal is named **lo-fi** (it has a vinyl mode, and "tape" read as a tape delay); `fx.tape` is still the saved name. The phone's tall pedals are unchanged but for the name. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

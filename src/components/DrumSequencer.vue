@@ -470,7 +470,7 @@
 						</div>
 					</div>
 
-					<div id="effects-panel" class="module fx" :class="pedalMock ? ['pm', 'pm-' + pedalMock, 'cd'.includes(pedalMock[0]) ? 'pm-c' : '', pedalMock[0] === 'd' ? 'pm-c3' : ''] : []">
+					<div id="effects-panel" class="module fx">
 						<SectionWrap id="fx" title="Effects" v-model="collapsibleState['fx']">
 							<div class="fx-pair">
 								<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
@@ -806,9 +806,6 @@ const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 	generate?: () => void;
 }) | null>(null);
 // The phone's Key page has a Melody Maker of its own
-
-// PEDAL MOCKUPS (branch only): ?pedals=a|b|c, C's variations c1|c2|c3, and C3 with other switches d1|d2|d3|d4
-const pedalMock = new URLSearchParams(location.search).get('pedals');
 
 const melodyUi = reactive<MelodyUi>({
 	keyRoot: 'A',
@@ -4913,9 +4910,16 @@ async function recordSample() {
 	align-items: start;
 }
 
-/* Effects (option C of three mockups): delay, overdrive and reverb across, with short
-   footswitches (a bar, 75 px tall before), and the tape deck under them, as wide as the three
-   (TapeEffect's `deck` layout). The phone's FX page (.pl-fx) keeps four tall pedals. */
+/* EFFECTS PEDALS (PR 99, option D1 of four rounds of mockups) START
+   Delay, overdrive and reverb across, the lo-fi deck under them, as wide as the three
+   (TapeEffect's `deck` layout); the phone's FX page (.pl-fx) keeps four tall pedals. Each pedal
+   is 183 px tall, as before, so the card keeps its size:
+   - its name runs down a painted ribbon on its left edge, with its LED at the top;
+   - its face has corner screws and a bevel, two jack sockets stand on its top edge;
+   - the knobs and its mini switch sit two by two, every caption under its own knob (before,
+     TONE's caption sat between the top knobs and its knob ran into their captions);
+   - the footswitch is a ribbed rubber treadle across the foot of the face.
+   The deck has the same ribbon (across its left end), screws and treadle. */
 .module.fx .fx-pair> :last-child {
 	grid-column: 1 / -1;
 }
@@ -4924,35 +4928,224 @@ async function recordSample() {
 	padding: 0;
 }
 
-.module.fx .fx-pair :deep(.footswitch) {
-	height: 19px;
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal)) {
+	position: relative;
+	grid-template-columns: 24px minmax(0, 1fr);
+	grid-template-rows: 1fr;
+	height: 183px;
 }
 
-.module.fx .fx-pair :deep(.tape-pedal .footswitch) {
-	height: 26px;
+/* Two jack sockets on the top edge, as on a pedal */
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal)::before),
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal)::after) {
+	content: '';
+	position: absolute;
+	top: -5px;
+	width: 13px;
+	height: 6px;
+	border-radius: 2px 2px 0 0;
+	background: linear-gradient(#6a6a6a, #2a2a2a);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal)::before) {
+	left: 38px;
+}
+
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal)::after) {
+	right: 12px;
+}
+
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .panel-seam) {
+	display: none;
+}
+
+/* The ribbon: the pedal's colour, darker, with its name in light letters, bottom to top */
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .panel-bottom) {
+	grid-column: 1;
+	grid-row: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border-radius: 8px 0 0 8px;
+	background: linear-gradient(color-mix(in oklab, var(--pedal-lo) 62%, black), color-mix(in oklab, var(--pedal-lo) 48%, black));
+	box-shadow: inset -2px 0 3px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .effect-label) {
+	writing-mode: vertical-rl;
+	transform: rotate(180deg);
+	padding: 0;
+	font-size: 0.95rem;
+	letter-spacing: 0.08em;
+	color: rgba(255, 255, 255, 0.93);
+	text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+
+/* The face: screws in its corners, a bevel, room at its foot for the treadle */
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .panel-top) {
+	grid-column: 2;
+	grid-row: 1;
+	border-radius: 0 8px 8px 0;
+	padding: 4px 0 42px;
+	grid-template-rows: auto 1fr 1fr;
+	align-items: center;
+	background:
+		radial-gradient(circle at 8px 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+		radial-gradient(circle at calc(100% - 8px) 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+		radial-gradient(circle at 8px calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+		radial-gradient(circle at calc(100% - 8px) calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+		linear-gradient(var(--pedal-hi), var(--pedal-lo));
+	box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.22), inset -1px 0 0 rgba(0, 0, 0, 0.15);
+}
+
+.module.fx .fx-pair :deep(.delay-pedal .panel-top) {
+	grid-template-areas: 'led led' 'time mix' 'tone sw';
+}
+
+.module.fx .fx-pair :deep(.drive-pedal .panel-top) {
+	grid-template-areas: 'led led' 'drive level' 'tone sw';
+}
+
+/* The LED at the top of the ribbon */
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .check-led) {
+	position: absolute;
+	left: -18px;
+	top: 8px;
+	z-index: 1;
+}
+
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .pedal-switch) {
+	position: static;
+	grid-area: sw;
+}
+
+/* Every caption under its own knob */
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .knob-cell .knob-wrapper) {
+	display: flex;
+	flex-direction: column-reverse;
+	align-items: center;
+}
+
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .knob-cell .knob-wrapper .knob-label) {
+	position: static;
+	width: auto;
+	margin-top: 2px;
+	line-height: 1;
+}
+
+/* The footswitch: a ribbed rubber treadle across the foot of the face (the deck's at its end) */
+.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .footswitch) {
+	position: absolute;
+	left: 40px;
+	bottom: 9px;
+	width: calc(100% - 56px);
+	height: 28px;
+}
+
+.module.fx .fx-pair :deep(.footswitch) {
+	border-radius: 6px;
+	background: repeating-linear-gradient(90deg, #26252a 0 3px, #3a383f 3px 6px);
+	box-shadow:
+		inset 0 2px 0 rgba(255, 255, 255, 0.12),
+		inset 0 -3px 4px rgba(0, 0, 0, 0.5),
+		0 2px 3px rgba(0, 0, 0, 0.45);
 }
 
 .module.fx .fx-pair :deep(.footswitch::before) {
-	inset: 4px;
-	border-radius: 4px;
+	display: none;
 }
 
-.module.fx .fx-pair :deep(.panel-seam) {
+.module.fx .fx-pair :deep(.footswitch:active) {
+	transform: translateY(1px);
+	filter: none;
+}
+
+/* The lo-fi deck: the same screws and bevel, its name and treadle on a painted stripe */
+.module.fx .fx-pair :deep(.tape-pedal.is-deck) {
+	background:
+		radial-gradient(circle at 8px 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+		radial-gradient(circle at calc(100% - 8px) 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+		radial-gradient(circle at 8px calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+		radial-gradient(circle at calc(100% - 8px) calc(100% - 8px), #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
+		linear-gradient(var(--pedal-hi), var(--pedal-lo));
+	box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+}
+
+.module.fx .fx-pair :deep(.tape-pedal.is-deck .panel-bottom) {
+	padding-left: 14px;
+	padding-right: 10px;
+	border-radius: 8px 0 0 8px;
+	background: linear-gradient(color-mix(in oklab, var(--pedal-lo) 62%, black), color-mix(in oklab, var(--pedal-lo) 48%, black));
+	box-shadow: inset -2px 0 3px rgba(0, 0, 0, 0.3);
+}
+
+.module.fx .fx-pair :deep(.tape-pedal.is-deck .effect-label) {
+	color: rgba(255, 255, 255, 0.93);
+	text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+
+.module.fx .fx-pair :deep(.tape-pedal.is-deck .footswitch) {
+	width: 44px;
+	height: 24px;
+	border-radius: 5px;
+}
+
+/* Its LED on the stripe, as the pedals' are on their ribbons (placed against the deck itself) */
+.module.fx .fx-pair :deep(.tape-pedal.is-deck) {
+	position: relative;
+}
+
+.module.fx .fx-pair :deep(.tape-pedal.is-deck .panel-top) {
+	position: static;
+}
+
+.module.fx .fx-pair :deep(.tape-pedal.is-deck .check-led) {
+	grid-area: auto; /* not the pedal layout's 'led' area, which the deck's grid hasn't got */
+	left: 4px;
+	right: auto;
+	top: 5px;
+	width: 8px;
 	height: 8px;
+	z-index: 1;
 }
 
-.module.fx .fx-pair :deep(.tape-pedal .panel-seam) {
-	height: auto;
+/* A narrow deck (under 400 px: the desktop's, and phones'): TAPE over the lever over VINYL,
+   the lever upright, so VINYL no longer runs off the deck's edge at phone width */
+.module.fx .fx-pair :deep(.tape-pedal.is-deck) {
+	container-type: inline-size;
 }
 
-/* The short foot keeps the pedal's lighter shade behind its name, so the name reads as well
-   as it did on the tall one */
-.module.fx .fx-pair :deep(.delay-pedal .panel-bottom),
-.module.fx .fx-pair :deep(.drive-pedal .panel-bottom),
-.module.fx .fx-pair :deep(.reverb-pedal .panel-bottom) {
-	background: linear-gradient(var(--pedal-foot-hi, var(--pedal-hi)) 50%, var(--pedal-foot-lo, var(--pedal-lo)));
+@container (max-width: 400px) {
+	.module.fx .fx-pair :deep(.is-deck .mode-switch) {
+		grid-template-columns: auto;
+		grid-template-rows: auto auto auto;
+		justify-items: center;
+		row-gap: 3px;
+		width: auto;
+	}
+
+	.module.fx .fx-pair :deep(.is-deck .ms-tape) {
+		grid-column: 1;
+		grid-row: 1;
+		justify-self: center;
+	}
+
+	.module.fx .fx-pair :deep(.is-deck .ms-slot) {
+		grid-column: 1;
+		grid-row: 2;
+		transform: rotate(90deg);
+		margin: 4px 0;
+	}
+
+	.module.fx .fx-pair :deep(.is-deck .ms-vinyl) {
+		grid-column: 1;
+		grid-row: 3;
+		justify-self: center;
+	}
 }
 
-
+/* EFFECTS PEDALS END */
 
 </style>

@@ -48,8 +48,8 @@ export const MIDI_KNOBS: Record<string, string> = {
 	'reverb.mix': 'Reverb mix',
 	'reverb.decay': 'Reverb decay',
 	'reverb.tone': 'Reverb tone',
-	'tape.age': 'Tape age',
-	'tape.wobble': 'Tape wobble',
+	'tape.age': 'Lo-fi age',
+	'tape.wobble': 'Lo-fi wobble',
 };
 
 export function ccKey(channel: number, controller: number): CcKey {

@@ -3,7 +3,7 @@
          hiss), WOBBLE (wow and flutter) and a TAPE | VINYL switch (what the noise is and how
          the pitch sways). Two reels, or records, turn beside its name while it plays (the deck
          has a window for them). -->
-    <KnobGroup v-model="localEnabled" title="Tape" :color="color" :showToggle="false" :showHeader="false">
+    <KnobGroup v-model="localEnabled" title="Lo-fi" :color="color" :showToggle="false" :showHeader="false">
         <div class="tape-pedal" :class="[`is-${layout}`, `mode-${localMode}`, { turning: playing && localEnabled }]">
             <div class="panel-top">
                 <span class="check-led" :class="{ on: localEnabled }" aria-hidden="true"></span>
@@ -47,10 +47,10 @@
                 <!-- On the pedal, the reels (or two records) sit either side of its name -->
                 <div class="effect-label">
                     <span class="name-spin" :class="localMode === 'tape' ? 'reel' : 'record'" aria-hidden="true"></span>
-                    <span>tape</span>
+                    <span>lo-fi</span>
                     <span class="name-spin" :class="localMode === 'tape' ? 'reel' : 'record'" aria-hidden="true"></span>
                 </div>
-                <button class="footswitch" type="button" :aria-pressed="localEnabled" aria-label="Tape pedal"
+                <button class="footswitch" type="button" :aria-pressed="localEnabled" aria-label="Lo-fi pedal"
                     @click="localEnabled = !localEnabled" @keydown.space.prevent="localEnabled = !localEnabled"
                     @keydown.enter.prevent="localEnabled = !localEnabled"></button>
             </div>
