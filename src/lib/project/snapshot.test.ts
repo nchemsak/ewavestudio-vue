@@ -41,7 +41,7 @@ describe('factory defaults (File → New)', () => {
 			tape: { enabled: false, age: 0.4, wobble: 0.3, mode: 'tape' },
 		});
 		expect(snap.melody).toEqual({
-			keyRoot: 'A', keyScale: 'naturalMinor', rangePreset: 'mid', arpPattern: 'up', arpRate: '1/16', arpOctaves: 1, arpTones: 'chord', arpSkip: false, activeOnly: true,
+			keyRoot: 'A', keyScale: 'naturalMinor', rangePreset: 'mid', arpPattern: 'up', arpRate: '1/16', arpOctaves: 1, arpTones: 'chord', arpSkip: false,
 			mode: 'random',
 		});
 		expect(snap.selectedWaveform).toBe('sine');

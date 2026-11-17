@@ -59,7 +59,6 @@ export type MelodyUi = {
 	arpOctaves: 1 | 2 | 3;
 	arpTones: 'chord' | 'seventh' | 'scale';
 	arpSkip: boolean;    // the arpeggio's Skip (every other tone), on the card since PR 68
-	activeOnly: boolean; // Melody's Active Pads Only, on the card since PR 68
 	mode: 'random' | 'arp'; // what Generate makes: random notes or an arpeggio
 };
 
@@ -403,7 +402,6 @@ export function buildSnapshot(st: ProjectState) {
 			arpOctaves: melodyUi.arpOctaves,
 			arpTones: melodyUi.arpTones,
 			arpSkip: melodyUi.arpSkip,
-			activeOnly: melodyUi.activeOnly,
 			mode: melodyUi.mode,
 		},
 
@@ -646,7 +644,6 @@ export function applySnapshot(st: ProjectState, s: any) {
 		if (['chord', 'seventh', 'scale'].includes(s.melody.arpTones)) melodyUi.arpTones = s.melody.arpTones;
 		// Saved since PR 68 (the ⋯ menu's toggles weren't): a project from before gets the defaults
 		melodyUi.arpSkip = typeof s.melody.arpSkip === 'boolean' ? s.melody.arpSkip : false;
-		melodyUi.activeOnly = typeof s.melody.activeOnly === 'boolean' ? s.melody.activeOnly : true;
 		// Projects saved before PR 39 have no mode: Generate keeps what it was
 		if (s.melody.mode === 'random' || s.melody.mode === 'arp') melodyUi.mode = s.melody.mode;
 		// The Melody Maker panel follows these through its initial-* props
@@ -751,7 +748,6 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	melodyUi.arpOctaves = 1;
 	melodyUi.arpTones = 'chord';
 	melodyUi.arpSkip = false;
-	melodyUi.activeOnly = true;
 	melodyUi.mode = 'random';
 
 	// instruments

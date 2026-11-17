@@ -108,14 +108,9 @@
                  card (PR 82). -->
             <div class="mm-group">
                 <div class="mm-mode-body">
-                    <!-- Melody: which pads it fills -->
+                    <!-- Melody: what it does (it fills the pads that are on; PR 98 removed its
+                         Active Pads Only toggle) -->
                     <div class="mm-mode-panel" :class="{ 'is-hidden': mode !== 'random' }">
-                        <div class="mm-opts">
-                            <button type="button" class="mm-toggle hw-cap hw-cap-sm hw-led-left" :class="{ on: applyScope === 'active' }"
-                                :aria-pressed="applyScope === 'active' ? 'true' : 'false'"
-                                title="On: Generate gives notes to the pads that are on. Off: to every pad"
-                                @click="applyScope = applyScope === 'active' ? 'all' : 'active'">Active Pads Only</button>
-                        </div>
                         <p class="mm-mode-note">{{ randomNote }}</p>
                     </div>
                     <!-- Arpeggio: words on steppers (Pattern, Tones), numbers on switches (Rate,
@@ -208,7 +203,6 @@ const props = defineProps<{
     initialArpOctaves?: 1 | 2 | 3;
     initialArpTones?: ArpTones;
     initialArpSkip?: boolean;
-    initialActiveOnly?: boolean;
     initialMode?: 'random' | 'arp';
     // A key clicked while playing waits for the next bar (DrumSequencer's BAR QUEUE) and blinks
     queuedKey?: string | null;
@@ -238,7 +232,6 @@ const emit = defineEmits<{
     (e: 'arp-octaves-change', v: 1 | 2 | 3): void;
     (e: 'arp-tones-change', v: ArpTones): void;
     (e: 'arp-skip-change', v: boolean): void;
-    (e: 'active-only-change', v: boolean): void;
     (e: 'mode-change', v: 'random' | 'arp'): void;
     // Someone picked a key or a scale (not a project loading): the pads follow it
     (e: 'key-chosen', root: RootNote, now: boolean): void; // now: Shift+click, don't wait for the bar
@@ -566,8 +559,8 @@ const mode = ref<'random' | 'arp'>(props.initialMode ?? 'random');
 watch(mode, (v) => emit('mode-change', v));
 watch(() => props.initialMode, (v) => { if (v) mode.value = v; });
 const randomNote = computed(() => (keyScale.value === 'none'
-    ? `No scale chosen: every pad gets ${keyRoot.value}, in the range's octaves. Pick a scale for a melody.`
-    : 'Random notes from the scale and range above; the first pad that\'s on gets the key.'));
+    ? `No scale chosen: the pads that are on get ${keyRoot.value}, in the range's octaves. Pick a scale for a melody.`
+    : 'New notes for the pads that are on (all 16 if none is), from the scale and range; the first gets the key.'));
 // Until Generate is first pressed (remembered in this browser, useFirstGenerate.ts), the
 // screen says to press it and the bar glows
 const showHint = computed(() => !generatedOnce.value);
@@ -615,12 +608,12 @@ function smartGenerate(): void {
 
     const out = props.frequencies.slice();
 
-    const stepsMask =
-        applyScope.value === 'active' &&
-            props.steps &&
-            props.steps.length === out.length
-            ? props.steps
-            : out.map(() => true);
+    // You set the rhythm, Generate picks the notes: it fills the pads that are on. With none
+    // on, every pad, turned on (PR 98: the Active Pads Only toggle, which could fill the pads
+    // that are off too, where nothing is heard, went)
+    const anyOn = !!props.steps && props.steps.length === out.length && props.steps.some(Boolean);
+    const stepsMask = anyOn ? props.steps : out.map(() => true);
+    const turnAllOn = () => { if (!anyOn) emit('update:steps', out.map(() => true)); };
 
     // No scale: lock everything to the key root in some octave(s)
     if (keyScale.value === 'none') {
@@ -670,6 +663,7 @@ function smartGenerate(): void {
             out[i] = Math.max(fMin, Math.min(fMax, hz));
         }
 
+        turnAllOn();
         emit('update:frequencies', out);
         return;
     }
@@ -722,6 +716,7 @@ function smartGenerate(): void {
         out[i] = midiToFreq(midi);
     }
 
+    turnAllOn();
     emit('update:frequencies', out);
 }
 
@@ -996,12 +991,6 @@ function bakeArp(dry = false): { steps: boolean[]; freqs: number[] } | void {
     emit('update:frequencies', out);
 }
 
-// Melody's Active Pads Only (a toggle on the card since PR 68; saved): Generate fills only the
-// pads that are on, or every pad
-const applyScope = ref<'all' | 'active'>(props.initialActiveOnly === false ? 'all' : 'active');
-watch(applyScope, (v) => emit('active-only-change', v === 'active'));
-watch(() => props.initialActiveOnly, (v) => { if (typeof v === 'boolean') applyScope.value = v ? 'active' : 'all'; });
-
 type UiSnapshot = {
     keyRoot: RootNote;
     keyScale: KeyScale;
@@ -1170,12 +1159,6 @@ defineExpose({ getUi, setUi, generate });
 .mm-mode-panel {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 8px;
-}
-
-.mm-opts {
-    display: flex;
     justify-content: center;
     gap: 8px;
 }
