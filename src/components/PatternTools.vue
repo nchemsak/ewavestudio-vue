@@ -33,7 +33,7 @@
 			<!-- Move (PR 88; Octave until then): the octave arrows, then rotate one step either way
 				 (round the bar's end) and reverse; each pad's note, velocity, wave, repeats and noise
 				 move with it (src/lib/patterns/move.ts) -->
-			<section class="pt-section">
+			<section class="pt-section pt-section-move">
 				<div class="pt-section-title">Move</div>
 				<div class="pt-btn-group pt-btn-move" role="group" aria-label="Octave">
 					<button class="pt-btn move-btn" aria-label="Octave up" title="Octave up" @click="shiftOctave(+1)">↑</button>
@@ -48,14 +48,6 @@
 					<button class="pt-btn move-btn" aria-label="Rotate right"
 						title="Rotate right: every step one later, the last comes round to the start"
 						@click="emit('move', 'right')">▸</button>
-				</div>
-				<!-- A toggle (a cap with an LED, _hardware.scss), not a web checkbox (PR 67): the
-					 octave arrows move only the pads that are on while it's lit -->
-				<div class="pt-inline">
-					<button type="button" class="pt-inline-check hw-cap hw-cap-sm hw-led-left"
-						:class="{ on: applyActiveOnly }" :aria-pressed="applyActiveOnly ? 'true' : 'false'"
-						title="The octave arrows move only the pads that are on"
-						@click="applyActiveOnly = !applyActiveOnly">Active Pads Only</button>
 				</div>
 			</section>
 		</div>
@@ -89,14 +81,15 @@ onBeforeUnmount(() => { if (nudgeTimer) clearTimeout(nudgeTimer); });
 const emit = defineEmits<{
 	(e: 'update:steps', v: boolean[]): void;
 	(e: 'update:velocities', v: number[]): void;
-	(e: 'octave-shift', payload: number | { delta: number; onlyActive?: boolean }): void;
+	(e: 'octave-shift', delta: number): void;
 	(e: 'move', kind: 'left' | 'right' | 'reverse'): void;
 }>();
 
-// tuning helpers 
-const applyActiveOnly = ref(true);
+// The octave arrows move every pad, as the phone's do (PR 98: their Active Pads Only toggle,
+// which moved only the pads that are on and read as if it applied to rotate and reverse too,
+// went)
 function shiftOctave(delta: number): void {
-	emit('octave-shift', { delta, onlyActive: applyActiveOnly.value });
+	emit('octave-shift', delta);
 }
 
 // Utils 
@@ -216,6 +209,16 @@ const shapeReset = () => applyShape('reset');
 	margin-top: 6px;
 }
 
+/* The two rows in the middle of the section (PR 98: the Active Pads Only toggle under them
+   went, and the section is as tall as Step Fills' three rows) */
+.pt-section-move .pt-btn-move:first-of-type {
+	margin-top: auto;
+}
+
+.pt-section-move .pt-btn-move:last-child {
+	margin-bottom: auto;
+}
+
 /* Two rows as tall as the big octave arrows were (44 px), so the card keeps its size */
 .move-btn {
 	width: 34px;
@@ -228,28 +231,6 @@ const shapeReset = () => applyShape('reset');
 	font-size: 16px;
 }
 
-.pt-inline {
-	display: block;
-	margin-top: auto;
-	padding: 8px 4px 0;
-	text-align: center;
-	color: var(--pt-muted);
-	font-size: 0.64rem;
-	line-height: normal;
-	white-space: nowrap;
-}
-
-/* Sized like the cards' header pills (PillSwitch): a small cap, the LED beside its label */
-.pt-inline-check {
-	--hw-led-size: 5px;
-	padding: 2px 6px 2px 5px;
-	border-radius: 5px;
-	border: 1px solid transparent;
-	font: inherit;
-	font-size: inherit;
-	line-height: 1.4;
-}
-
 /* A narrow card (phones): the sections one under another, three buttons across */
 @container pattern-tools (max-width: 340px) {
 	.pt-tools-grid {
@@ -259,10 +240,6 @@ const shapeReset = () => applyShape('reset');
 	.pt-btn-group {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 8px 10px;
-	}
-
-	.pt-inline {
-		display: none;
 	}
 }
 </style>

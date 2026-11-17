@@ -2911,29 +2911,22 @@ test('VEL switch: amounts with no switch any more load as 0; at full velocity a 
 	await expect(page.getByRole('status').filter({ hasText: 'full velocity' })).toHaveCount(0, { timeout: 4000 });
 });
 
-test("Pattern Tools' Active Pads Only is a toggle cap with an LED, and the octave arrows follow it", async ({ page }) => {
-	const toggle = page.locator('.pattern-tools').getByRole('button', { name: 'Active Pads Only' });
+test("Pattern Tools' octave arrows move every pad; no Active Pads Only toggle (PR 98)", async ({ page }) => {
 	const pitches = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'))
 		.data.instruments.find((i: any) => i.name === 'synth-voice').pitches as number[];
-	// A toggle (PR 67), not a checkbox: on by default
-	await expect(page.locator('.pattern-tools input[type="checkbox"]')).toHaveCount(0);
-	await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('.pattern-tools').getByRole('button', { name: 'Active Pads Only' })).toHaveCount(0);
 	await turnOnPads(page, [0]);
 	const before = await pitches();
 
-	// On: only the pad that's on goes up an octave
+	// The pad that's on and the ones that are off alike
 	await page.getByRole('button', { name: 'Octave up' }).click();
 	let after = await pitches();
 	expect(after[0]).toBeCloseTo(before[0] * 2, 3);
-	expect(after[1]).toBeCloseTo(before[1], 3);
-
-	// Off: every pad
-	await toggle.click();
-	await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+	expect(after[1]).toBeCloseTo(before[1] * 2, 3);
 	await page.getByRole('button', { name: 'Octave down' }).click();
 	after = await pitches();
 	expect(after[0]).toBeCloseTo(before[0], 3);
-	expect(after[1]).toBeCloseTo(before[1] / 2, 3);
+	expect(after[1]).toBeCloseTo(before[1], 3);
 });
 
 test("the Noise card's Accents puts noise on the pattern's loudest hits; Halftime and Breaks are patterns", async ({ page }) => {
@@ -3497,12 +3490,11 @@ test('the Pattern Tools, Sounds, Patterns and section captions are readable in e
 		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${theme}`));
 		const captions = [
 			...await page.locator('.pattern-tools .pt-section-title').all(),
-			page.locator('.pattern-tools .pt-inline-check'),
 			...await page.locator('.preset-box .pt-section-title').all(),
 			...await page.locator('.ds-section-title').all(),
 		];
-		// Step Fills, Humanize, Move, Active Pads Only, Sounds, Patterns, Sound, Compose
-		expect(captions).toHaveLength(8);
+		// Step Fills, Humanize, Move, Sounds, Patterns, Sound, Compose
+		expect(captions).toHaveLength(7);
 		for (const caption of captions) {
 			const name = (await caption.textContent())!.trim();
 			expect(await textContrast(page, caption), `${theme}: ${name}`).toBeGreaterThanOrEqual(4.5);
@@ -4888,45 +4880,59 @@ async function chooseOption(page: Page, select: string, option: string) {
 	await page.getByRole('option', { name: new RegExp(`^(● )?${option}$`) }).click();
 }
 
-test("Melody Maker: no ⋯ menu; Active Pads Only (Melody) and Skip (Arpeggio) are toggles on the card, saved", async ({ page }) => {
+test("Melody Maker: no ⋯ menu and no Active Pads Only; Skip (Arpeggio) is a toggle on the card, saved", async ({ page }) => {
 	const card = page.locator('.module.melody');
 	await expect(card.getByRole('button', { name: 'Advanced options' })).toHaveCount(0);
-	const active = card.getByRole('button', { name: 'Active Pads Only' });
+	await expect(page.getByRole('button', { name: 'Active Pads Only' })).toHaveCount(0); // PR 98
 	const skip = card.getByRole('button', { name: 'Skip', exact: true });
 	const height = (await card.boundingBox())!.height;
 
-	// Melody shows its toggle (on by default), Arpeggio its own; the card keeps its height
-	await expect(active).toBeVisible();
-	await expect(active).toHaveAttribute('aria-pressed', 'true');
+	// Arpeggio shows its toggle; the card keeps its height in both modes
 	await expect(skip).toBeHidden();
 	await card.getByRole('button', { name: 'Arpeggio', exact: true }).click();
 	await expect(skip).toBeVisible();
 	await expect(skip).toHaveAttribute('aria-pressed', 'false');
-	await expect(active).toBeHidden();
 	expect((await card.boundingBox())!.height).toBe(height);
 
-	// Both are saved with the project, and File → New puts them back
+	// Saved with the project, and File → New puts it back
 	await skip.click();
 	await card.getByRole('button', { name: 'Melody', exact: true }).click();
-	await active.click();
-	await expect(active).toHaveAttribute('aria-pressed', 'false');
+	expect((await card.boundingBox())!.height).toBe(height);
 	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.melody;
-	expect(await saved()).toMatchObject({ arpSkip: true, activeOnly: false });
+	expect(await saved()).toMatchObject({ arpSkip: true });
 	await chooseFromFileMenu(page, 'New');
 	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
-	await expect(active).toHaveAttribute('aria-pressed', 'true');
-	expect(await saved()).toMatchObject({ arpSkip: false, activeOnly: true });
+	expect(await saved()).toMatchObject({ arpSkip: false });
+	expect(await saved()).not.toHaveProperty('activeOnly');
+});
 
-	// Active Pads Only off: Generate fills every pad, not only the ones that are on
-	await chooseOption(page, 'Scale', 'Major');
-	await turnOnPads(page, [0]);
-	await active.click();
-	const pitches = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'))
-		.data.instruments.find((i: any) => i.name === 'synth-voice').pitches as number[];
-	const before = await pitches();
-	for (let k = 0; k < 4; k++) await card.getByRole('button', { name: /^Generate (melody|arpeggio)$/ }).click();
-	const after = await pitches();
-	expect(after.slice(1).some((hz, i) => Math.abs(hz - before[i + 1]) > 0.01)).toBe(true);
+test('Melody Maker: Generate gives new notes to the pads that are on; with none on, all 16, turned on (PR 98)', async ({ page }) => {
+	const card = page.locator('.module.melody');
+	const generate = card.getByRole('button', { name: 'Generate melody' });
+	const lane = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'))
+		.data.instruments.find((i: any) => i.name === 'synth-voice') as { steps: boolean[]; pitches: number[] };
+
+	// None on: every pad gets a note and is turned on, one undo step
+	const empty = await lane();
+	expect(empty.steps.some(Boolean)).toBe(false);
+	await page.waitForTimeout(600); // let the undo history note the starting pattern
+	await generate.click();
+	let after = await lane();
+	expect(after.steps).toEqual(Array(16).fill(true));
+	await page.waitForTimeout(600);
+	await page.keyboard.press('Control+z');
+	await expect.poll(async () => (await lane()).steps.some(Boolean)).toBe(false);
+
+	// Some on: only those get new notes; the pads that are off stay off, on their notes
+	await turnOnPads(page, [0, 5]);
+	const before = await lane();
+	for (let k = 0; k < 4; k++) await generate.click();
+	after = await lane();
+	expect(after.steps).toEqual(before.steps);
+	after.pitches.forEach((hz, i) => {
+		if (i !== 0 && i !== 5) expect(hz, `pad ${i + 1}`).toBeCloseTo(before.pitches[i], 3);
+	});
+	expect(after.pitches[5]).not.toBeCloseTo(before.pitches[5], 3); // four tries: one moves it
 });
 
 test('Melody Maker: clicking a key moves the pattern there, the shorter way, plays it, and is one undo step', async ({ page }) => {
@@ -5299,7 +5305,7 @@ test('Melody Maker: one Generate button, Melody or Arpeggio, the card keeps its 
 	await expect(random).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.getByRole('button', { name: 'Arp pattern' })).toBeHidden();
 	await chooseOption(page, 'Scale', 'None');
-	await expect(page.locator('.mm-mode-note')).toContainText('No scale chosen: every pad gets A');
+	await expect(page.locator('.mm-mode-note')).toContainText('No scale chosen: the pads that are on get A');
 	const card = page.locator('.module.melody');
 	const height = (await card.boundingBox())!.height;
 

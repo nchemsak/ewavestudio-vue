@@ -123,7 +123,7 @@
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
 							:initial-arp-tones="melodyUi.arpTones" :initial-arp-skip="melodyUi.arpSkip"
-							:initial-active-only="melodyUi.activeOnly" :initial-mode="melodyUi.mode"
+							:initial-mode="melodyUi.mode"
 							@update:frequencies="padFrequencies = $event" @update:steps="steps = $event"
 							@octave-shift="octaveShiftAllSkip($event)"
 							:queued-key="queuedKey" @key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
@@ -135,8 +135,7 @@
 							@arp-rate-change="(v) => { melodyUi.arpRate = v as any }"
 							@arp-octaves-change="(v) => { melodyUi.arpOctaves = v as any }"
 							@arp-tones-change="(v) => { melodyUi.arpTones = v as any }"
-							@arp-skip-change="(v) => { melodyUi.arpSkip = v }"
-							@active-only-change="(v) => { melodyUi.activeOnly = v }" />
+							@arp-skip-change="(v) => { melodyUi.arpSkip = v }" />
 					</SectionWrap>
 				</div>
 			</template>
@@ -521,7 +520,7 @@
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
 							:initial-arp-tones="melodyUi.arpTones" :initial-arp-skip="melodyUi.arpSkip"
-							:initial-active-only="melodyUi.activeOnly" :initial-mode="melodyUi.mode"
+							:initial-mode="melodyUi.mode"
 							@update:frequencies="padFrequencies = $event" @update:steps="steps = $event"
 							@octave-shift="octaveShiftAllSkip($event)"
 							:queued-key="queuedKey" @key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
@@ -533,8 +532,7 @@
 							@arp-rate-change="(v) => { melodyUi.arpRate = v as any }"
 							@arp-octaves-change="(v) => { melodyUi.arpOctaves = v as any }"
 							@arp-tones-change="(v) => { melodyUi.arpTones = v as any }"
-							@arp-skip-change="(v) => { melodyUi.arpSkip = v }"
-							@active-only-change="(v) => { melodyUi.activeOnly = v }" />
+							@arp-skip-change="(v) => { melodyUi.arpSkip = v }" />
 					</SectionWrap>
 				</div>
 			</section>
@@ -818,7 +816,6 @@ const melodyUi = reactive<MelodyUi>({
 	arpOctaves: 1,
 	arpTones: 'chord',
 	arpSkip: false,
-	activeOnly: true,
 	mode: 'random',
 });
 
@@ -2058,20 +2055,17 @@ function canShiftOctave(hz, deltaOct) {
 	return target >= MIN_PAD_HZ && target <= MAX_PAD_HZ;
 }
 
-function octaveShiftAllSkip(deltaOct, { onlyActive = false } = {}) {
+// Every pad an octave up or down (Pattern Tools' arrows, the Melody Maker, the phone's Octave)
+function octaveShiftAllSkip(deltaOct) {
 	const inst = synthInstrument.value;
 	if (!inst) return;
 
-	// Advance the global default so untouched pads keep tracking the octave.
-	if (!onlyActive) {
-		globalOctaveOffset.value += deltaOct;
-	}
+	// Advance the global default so new pads keep tracking the octave.
+	globalOctaveOffset.value += deltaOct;
 
 	let moved = 0, skipped = 0;
 
 	for (let i = 0; i < inst.pitches.length; i++) {
-		if (onlyActive && !inst.steps[i]) continue;
-
 		const before = inst.pitches[i];
 		if (canShiftOctave(before, deltaOct)) {
 			inst.pitches[i] = before * Math.pow(2, deltaOct);
@@ -2102,10 +2096,8 @@ function movePattern(kind: MoveKind) {
 	trackEvent('pattern_move', { kind });
 }
 
-function onPatternOctaveShift(payload: number | { delta: number; onlyActive?: boolean }) {
-	const delta = typeof payload === 'number' ? payload : payload.delta;
-	const onlyActive = typeof payload === 'object' && !!payload.onlyActive;
-	octaveShiftAllSkip(delta, { onlyActive });
+function onPatternOctaveShift(delta: number) {
+	octaveShiftAllSkip(delta);
 }
 
 // The Melody Maker's key, whoever set it (a click, a project loading, undo). The pads only
