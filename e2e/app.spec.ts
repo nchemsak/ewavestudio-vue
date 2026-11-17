@@ -5838,7 +5838,7 @@ test("Melody Maker: an arpeggio's Octaves aren't held back by Range (PR 97: Narr
 });
 
 test('a knob drag ends when the button turns out to be up, even if its release never reached the page', async ({ page }) => {
-	await page.getByRole('button', { name: 'Tape pedal' }).first().click();
+	await page.getByRole('button', { name: 'Lo-fi pedal' }).first().click();
 	const knob = page.locator('[data-midi-id="tape.wobble"]').first();
 	const box = (await knob.boundingBox())!;
 	const x = box.x + box.width / 2, y = box.y + box.height / 2;
@@ -5860,4 +5860,59 @@ test('a knob drag ends when the button turns out to be up, even if its release n
 	await expect(knob).toHaveAttribute('aria-valuenow', '0');
 	await page.mouse.move(x, y - 400, { steps: 4 });
 	await expect(knob).toHaveAttribute('aria-valuenow', '0');
+});
+
+test('PR 99: the pedals: the name on a ribbon, every caption under its own knob, a rubber treadle; the deck is lo-fi', async ({ page }) => {
+	const fx = page.locator('.module.fx');
+	const pedals = ['delay', 'drive', 'reverb'];
+	const overlap = (a: DOMRect | any, b: DOMRect | any) =>
+		a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+	for (const width of [1600, 1024, 390]) {
+		await page.setViewportSize({ width, height: 1000 });
+		if (width < 1200) await page.getByRole('tab', { name: 'Effects' }).click();
+		// No caption overlaps a knob or another caption, and each sits under its own knob
+		const boxes = await page.evaluate((names) => names.map((n) => {
+			const ped = document.querySelector(`.module.fx .${n}-pedal`)!;
+			const rect = (e: Element) => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+			return {
+				pedal: rect(ped),
+				ribbon: rect(ped.querySelector('.panel-bottom')!),
+				treadle: rect(ped.querySelector('.footswitch')!),
+				knobs: [...ped.querySelectorAll('.knob-cell')].map((c) => ({
+					dial: rect(c.querySelector('.knob-dial')!), label: rect(c.querySelector('.knob-label')!),
+				})),
+			};
+		}), pedals);
+		for (const [i, b] of boxes.entries()) {
+			const name = `${pedals[i]} at ${width}`;
+			expect(b.knobs).toHaveLength(3);
+			for (const k of b.knobs) {
+				expect(k.label.top, name).toBeGreaterThanOrEqual(k.dial.bottom - 1);
+				for (const other of b.knobs) {
+					if (other !== k) {
+						expect(overlap(k.label, other.dial), name).toBe(false);
+						expect(overlap(k.label, other.label), name).toBe(false);
+					}
+				}
+			}
+			// The name runs down the ribbon on the left; the treadle is inside the face, under the knobs
+			expect(b.ribbon.left).toBeCloseTo(b.pedal.left, 0);
+			expect(b.ribbon.bottom - b.ribbon.top).toBeCloseTo(b.pedal.bottom - b.pedal.top, 0);
+			expect(b.treadle.left).toBeGreaterThan(b.ribbon.right);
+			expect(b.treadle.bottom).toBeLessThanOrEqual(b.pedal.bottom);
+			for (const k of b.knobs) expect(overlap(k.label, b.treadle), name).toBe(false);
+		}
+		// The deck is lo-fi, and TAPE | VINYL stays inside it
+		const deck = fx.locator('.tape-pedal');
+		await expect(deck.locator('.effect-label')).toHaveText(/lo-fi/);
+		const inside = await deck.evaluate((d) => d.querySelector('.ms-vinyl')!.getBoundingClientRect().right <= d.getBoundingClientRect().right);
+		expect(inside, `VINYL inside the deck at ${width}`).toBe(true);
+	}
+	// The treadles still switch their pedals, with names a screen reader can say
+	for (const name of ['Delay pedal', 'Overdrive pedal', 'Reverb pedal', 'Lo-fi pedal']) {
+		const sw = fx.getByRole('button', { name });
+		await expect(sw).toHaveAttribute('aria-pressed', 'false');
+		await sw.click();
+		await expect(sw).toHaveAttribute('aria-pressed', 'true');
+	}
 });

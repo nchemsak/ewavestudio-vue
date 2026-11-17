@@ -37,7 +37,7 @@
 
             <div class="panel-bottom">
                 <div class="effect-label">overdrive</div>
-                <button class="footswitch" type="button" :aria-pressed="localEnabled"
+                <button class="footswitch" type="button" :aria-pressed="localEnabled" aria-label="Overdrive pedal"
                     @click="localEnabled = !localEnabled" @keydown.space.prevent="localEnabled = !localEnabled"
                     @keydown.enter.prevent="localEnabled = !localEnabled"></button>
             </div>

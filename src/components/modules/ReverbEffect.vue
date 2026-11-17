@@ -36,7 +36,7 @@
 
 			<div class="panel-bottom">
 				<div class="effect-label">reverb</div>
-				<button class="footswitch" type="button" :aria-pressed="localEnabled"
+				<button class="footswitch" type="button" :aria-pressed="localEnabled" aria-label="Reverb pedal"
 					@click="localEnabled = !localEnabled" @keydown.space.prevent="localEnabled = !localEnabled"
 					@keydown.enter.prevent="localEnabled = !localEnabled" />
 			</div>
