@@ -20,7 +20,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, type Ref } from 'vue'
 import { applyPitchEnv, pitchEnvStartCents } from './pitchEnv';
 import { applyFilterEnv } from './filterEnv';
 import { createVoiceSource, lfoPwmTapGain, prepareVoiceWave, waveGain, type Wave, type PadWave } from './waves';
-import { sampleBuffer, SAMPLE_WAVE, type PitchedSource, type SampleData } from './sample';
+import { applySampleEnvelope, sampleBuffer, sampleNoteTimes, SAMPLE_WAVE, type PitchedSource, type SampleData } from './sample';
 import { routeVelocity, routedCutoff, routedSemitones, routedNoise } from './velocity';
 import { startFM } from './fm';
 import { startNoteLfo, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, lfoWaveAt, type LfoTarget } from './lfo';
@@ -86,6 +86,7 @@ export type LiveEngineSettings = {
 	pitchEnv: { enabled: R<boolean>; semitones: R<number>; decayMs: R<number>; mode: R<'up' | 'down' | 'random'> };
 	pulse: { width: R<number> }; // pulse wave's width, % (waves.ts)
 	sample: R<SampleData | null>; // the recorded sound, the 'sample' wave (sample.ts)
+	sampleLength: R<number>; // how much of it a pad plays, 0.05–1 (sample.ts)
 	// Velocity routing amounts, % −100..100 (velocity.ts)
 	velocity: { decay: R<number>; cutoff: R<number>; pitchEnv: R<number>; noise: R<number> };
 	delay: {
@@ -715,7 +716,14 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const attackEnd = startTime + attackTime;
 		const naturalEnd = attackEnd + decay;
 		const gateEnd = startTime + Math.max(0.02, (s.envelope.decayMs.value / 1000) * routed.decayFactor);
-		const noteEnd = cutNoteEnd(s.envelope.enabled.value ? naturalEnd : gateEnd, startTime, attackTime, opts.maxDuration);
+		// The recording (sample.ts) plays for its own length, not the Envelope card's Decay
+		const sampleBuf = waveType === SAMPLE_WAVE ? sampleBuffer(s.sample.value) : null;
+		const sampleTimes = sampleBuf ? sampleNoteTimes({
+			start: startTime, bufferSeconds: sampleBuf.duration, freq, length: s.sampleLength.value,
+			attack: s.envelope.enabled.value ? attackTime : 0.002, maxDuration: opts.maxDuration,
+		}) : null;
+		const noteEnd = sampleTimes ? sampleTimes.end
+			: cutNoteEnd(s.envelope.enabled.value ? naturalEnd : gateEnd, startTime, attackTime, opts.maxDuration);
 
 		// A note played by hand (MIDI, a preview) brings the tape's noise with it
 		if (s.tape.enabled.value && !isPlaying.value) holdTapeNoise(startTime, noteEnd);
@@ -733,7 +741,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const safeOscGain = Math.max(0.0001, velocity * oscBlend * wfComp);
 
 		// Single amplitude envelope for the OSC path
-		if (s.envelope.enabled.value) {
+		if (sampleTimes) {
+			applySampleEnvelope(oscEnvGain.gain, startTime, safeOscGain, sampleTimes);
+		} else if (s.envelope.enabled.value) {
 			oscEnvGain.gain.setValueAtTime(0.0001, startTime);
 			oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
 			oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
@@ -788,7 +798,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			// The voice's sound source: the oscillator, plus the pulse network for 'pulse'
 			// (each unison voice starting at its own point of its cycle, unison.ts)
 			const source = createVoiceSource(audioCtx, waveType, s.pulse.width.value, unisonPhase(i, voices, spreadPct),
-				waveType === SAMPLE_WAVE ? sampleBuffer(s.sample.value) : null);
+				sampleBuf);
 			const osc = source.osc;
 			const voiceFilter = audioCtx.createBiquadFilter();
 			const voiceGain = audioCtx.createGain();

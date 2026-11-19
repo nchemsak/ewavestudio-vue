@@ -21,7 +21,7 @@ import { createCrusher } from "../crusher";
 import { createPingPong } from "../pingPong";
 import { clampUnisonVoices, unisonPhase, unisonPosition } from "../unison";
 import { createTape, tapeSettings, type TapeMode } from "../tape";
-import { sampleBuffer, SAMPLE_WAVE, type SampleData } from "../sample";
+import { applySampleEnvelope, sampleBuffer, sampleNoteTimes, SAMPLE_WAVE, type SampleData } from "../sample";
 
 export type StepSequencerState = {
 	bpm: number;
@@ -78,6 +78,7 @@ export type StepSequencerState = {
 
 		pulse?: { width: number }; // the pulse wave's width, % (missing: 50)
 		sample?: SampleData | null; // the recorded sound, the 'sample' wave (sample.ts; missing: none)
+		sampleLength?: number; // how much of it a pad plays, 0.05–1 (missing: all of it)
 
 		velocity?: VelocityRouting; // velocity routing amounts (missing: off)
 	};
@@ -562,6 +563,7 @@ export function scheduleStepSequencer(
 			pitchEnv,
 			pulseWidth: state.synth.pulse?.width ?? PULSE_WIDTH_DEFAULT,
 			sample: sampleBuffer(state.synth.sample ?? null),
+			sampleLength: state.synth.sampleLength ?? 1,
 			velocityRouting: state.synth.velocity,
 			driveEnabled,
 			driveDry,
@@ -612,6 +614,7 @@ function scheduleSynthNote(opts: {
 	pitchEnv: PitchEnvState;
 	pulseWidth: number;
 	sample: AudioBuffer | null;
+	sampleLength?: number;
 	velocityRouting?: VelocityRouting;
 	driveEnabled: boolean;
 	driveDry: GainNode;
@@ -626,7 +629,7 @@ function scheduleSynthNote(opts: {
 	const {
 		ctx, time, maxDuration, freq, baseVelocity, channelVolume, wave,
 		envState, filterState, noiseState, padNoiseOn,
-		unisonState, fmState, pitchEnv, pulseWidth, sample, velocityRouting, driveEnabled,
+		unisonState, fmState, pitchEnv, pulseWidth, sample, sampleLength, velocityRouting, driveEnabled,
 		driveDry, driveShaper, driveSum,
 		lfoState, lfoGainNode,
 		noiseOut, noiseBuffers, random,
@@ -648,7 +651,14 @@ function scheduleSynthNote(opts: {
 	const attackEnd = time + attackSec;
 	const naturalEnd = attackEnd + decaySec;
 	const gateEnd = time + Math.max(0.02, (envState.decayMs / 1000) * routed.decayFactor);
-	const noteEnd = cutNoteEnd(envState.enabled ? naturalEnd : gateEnd, time, attackSec, maxDuration);
+	// The recording (sample.ts) plays for its own length, not the Envelope card's Decay
+	const sampleBuf = wave === SAMPLE_WAVE ? sample : null;
+	const sampleTimes = sampleBuf ? sampleNoteTimes({
+		start: time, bufferSeconds: sampleBuf.duration, freq, length: sampleLength ?? 1,
+		attack: envState.enabled ? attackSec : 0.002, maxDuration,
+	}) : null;
+	const noteEnd = sampleTimes ? sampleTimes.end
+		: cutNoteEnd(envState.enabled ? naturalEnd : gateEnd, time, attackSec, maxDuration);
 
 	const baseAmp = baseVelocity * channelVolume;
 
@@ -667,7 +677,9 @@ function scheduleSynthNote(opts: {
 	const wfComp = waveGain(wave);
 	const oscPeak = Math.max(0.0001, baseAmp * oscBlend * wfComp);
 
-	if (envState.enabled) {
+	if (sampleTimes) {
+		applySampleEnvelope(oscEnvGain.gain, time, oscPeak, sampleTimes);
+	} else if (envState.enabled) {
 		oscEnvGain.gain.setValueAtTime(0.0001, time);
 		oscEnvGain.gain.exponentialRampToValueAtTime(oscPeak, attackEnd);
 		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
@@ -715,7 +727,7 @@ function scheduleSynthNote(opts: {
 	for (let i = 0; i < voices; i++) {
 		// The voice's sound source, as in the live engine (the pulse network for 'pulse')
 		// (each unison voice starting at its own point of its cycle, unison.ts)
-		const source = createVoiceSource(ctx, wave, pulseWidth, unisonPhase(i, voices, spreadPct), wave === SAMPLE_WAVE ? sample : null);
+		const source = createVoiceSource(ctx, wave, pulseWidth, unisonPhase(i, voices, spreadPct), sampleBuf);
 		const osc = source.osc;
 
 		const voiceFilter = ctx.createBiquadFilter();

@@ -34,6 +34,9 @@ export const WAVE_LABELS: Record<Wave, string> = {
 
 // What a pad can play: a wave, or the recorded sound (sample.ts)
 export type PadWave = Wave | typeof SAMPLE_WAVE;
+// What Random can pick from (the dice badges, saved as `synth.randomWaves`): the eight waves,
+// and the recording, while there is one (PR 100)
+export const RANDOM_WAVE_IDS: readonly PadWave[] = [...WAVE_IDS, SAMPLE_WAVE];
 export const padWaveLabel = (w: string) => (w === SAMPLE_WAVE ? 'Sample' : WAVE_LABELS[w as Wave] ?? w);
 
 export const isWave = (w: unknown): w is Wave => typeof w === 'string' && (WAVE_IDS as readonly string[]).includes(w);

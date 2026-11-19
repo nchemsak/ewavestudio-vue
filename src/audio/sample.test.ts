@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
 	encodeSample, decodeSample, sampleFrom, sampleSeconds, trimRecording,
 	MIN_LEVEL, ONSET_SHARE, PRE_ROLL_S, SAMPLE_MAX_S, FADE_S,
+	clampSampleLength, sampleNoteTimes, sampleSpan, SAMPLE_LENGTH_FADE, SAMPLE_LENGTH_MIN, SAMPLE_ROOT_HZ,
 } from './sample';
 
 const SR = 48000;
@@ -75,3 +76,35 @@ function peakOf(x: Float32Array) {
 	for (const v of x) p = Math.max(p, Math.abs(v));
 	return p;
 }
+
+describe('Length (how much of the recording a note plays)', () => {
+	it('plays the whole recording at Full, at the pad\'s pitch, with only a short close', () => {
+		// 0.8 s recorded, on A3 as recorded, on A4 twice as fast
+		expect(sampleSpan(0.8, SAMPLE_ROOT_HZ, 1).seconds).toBeCloseTo(0.8);
+		expect(sampleSpan(0.8, SAMPLE_ROOT_HZ * 2, 1).seconds).toBeCloseTo(0.4);
+		expect(sampleSpan(0.8, SAMPLE_ROOT_HZ, 1).fade).toBeLessThanOrEqual(0.005);
+	});
+
+	it('plays a share of it, fading over its last part, and keeps the knob in range', () => {
+		const half = sampleSpan(0.8, SAMPLE_ROOT_HZ, 0.5);
+		expect(half.seconds).toBeCloseTo(0.4);
+		expect(half.fade).toBeCloseTo(0.4 * SAMPLE_LENGTH_FADE);
+		expect(sampleSpan(0.8, SAMPLE_ROOT_HZ, 0).seconds).toBeCloseTo(0.8 * SAMPLE_LENGTH_MIN);
+		expect(clampSampleLength(3)).toBe(1);
+		expect(clampSampleLength('x')).toBe(1);
+	});
+
+	it('times a note: Attack still applies, the Decay knob doesn\'t, a ratchet hit ends it sooner', () => {
+		const t = sampleNoteTimes({ start: 1, bufferSeconds: 0.8, freq: SAMPLE_ROOT_HZ, length: 0.5, attack: 0.02 });
+		expect(t.attackEnd).toBeCloseTo(1.02);
+		expect(t.end).toBeCloseTo(1.4);
+		expect(t.fadeFrom).toBeCloseTo(1.4 - 0.4 * SAMPLE_LENGTH_FADE);
+		const cut = sampleNoteTimes({ start: 1, bufferSeconds: 0.8, freq: SAMPLE_ROOT_HZ, length: 1, attack: 0.02, maxDuration: 0.1 });
+		expect(cut.end).toBeCloseTo(1.1);
+		expect(cut.fadeFrom).toBeLessThan(cut.end);
+		expect(cut.fadeFrom).toBeGreaterThanOrEqual(cut.attackEnd);
+		// An attack longer than the note stops where the fade starts
+		const long = sampleNoteTimes({ start: 0, bufferSeconds: 0.1, freq: SAMPLE_ROOT_HZ, length: 1, attack: 0.5 });
+		expect(long.attackEnd).toBeLessThanOrEqual(long.fadeFrom);
+	});
+});

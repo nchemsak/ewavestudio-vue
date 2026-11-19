@@ -377,7 +377,9 @@
 									 option B of two mockups; A was a tall tile beside Random) -->
 								<div class="st-strip">
 									<SampleTile :sample="sample" :state="recorder.state.value" :level="recorder.level.value"
-										:lit="litWave === 'sample'" @pick="applyWaveToAll('sample')" @record="recordSample()" />
+										:lit="litWave === 'sample'" v-model:length="sampleLength"
+										:randomIncluded="randomPool.sample" @toggle-random="onToggleRandom"
+										@pick="applyWaveToAll('sample')" @record="recordSample()" />
 								</div>
 							</div>
 						</SectionWrap>
@@ -691,8 +693,8 @@ import { usePwa } from '../composables/usePwa';
 import { LFO_DEPTH_MAX, LFO_DEFAULT_DEPTH, type LfoTarget } from '../audio/lfo';
 import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
 import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
-import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, WAVE_IDS, WAVE_LABELS, padWaveLabel, type PadWave } from '../audio/waves';
-import { encodeSample, sampleSeconds, SAMPLE_ROOT_HZ, type SampleData } from '../audio/sample';
+import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, RANDOM_WAVE_IDS, WAVE_IDS, WAVE_LABELS, padWaveLabel, type PadWave } from '../audio/waves';
+import { encodeSample, sampleSeconds, SAMPLE_LENGTH_DEFAULT, SAMPLE_ROOT_HZ, SAMPLE_WAVE, type SampleData } from '../audio/sample';
 import MelodyMaker from './MelodyMaker.vue';
 import RandomWaveTile from './RandomWaveTile.vue';
 import SampleTile from './SampleTile.vue';
@@ -1742,21 +1744,24 @@ const WAVE_TILES = WAVE_IDS.map(value => ({
 // The waves Random picks from (the tiles' dice badges). Saved with the project since PR 85
 // (synth.randomWaves), so File → New, a sound preset and opening a project set it; before, it
 // was the page's own and carried over from project to project.
-const randomWaves = ref<Wave[]>([...WAVE_IDS]);
-const randomPool = computed<Record<Wave, boolean>>(() =>
-	Object.fromEntries(WAVE_IDS.map(w => [w, randomWaves.value.includes(w)])) as Record<Wave, boolean>
+// The recording can be in it too (PR 100; the Sample strip's dice badge, shown once there's a
+// recording): 'sample' after the eight, in the pool only while there is a recording.
+const randomWaves = ref<PadWave[]>([...RANDOM_WAVE_IDS]);
+const randomPool = computed<Record<PadWave, boolean>>(() =>
+	Object.fromEntries(RANDOM_WAVE_IDS.map(w => [w, randomWaves.value.includes(w)])) as Record<PadWave, boolean>
 );
 
-const randomPoolArray = computed<Wave[]>(() => WAVE_IDS.filter(w => randomPool.value[w]));
+const randomPoolArray = computed<PadWave[]>(() =>
+	RANDOM_WAVE_IDS.filter(w => randomPool.value[w] && (w !== SAMPLE_WAVE || !!sample.value)));
 
-function onToggleRandom(w: Wave, next: boolean, only = false) {
+function onToggleRandom(w: PadWave, next: boolean, only = false) {
 	if (only) randomWaves.value = [w];
-	else randomWaves.value = WAVE_IDS.filter(k => (k === w ? next : randomPool.value[k]));
+	else randomWaves.value = RANDOM_WAVE_IDS.filter(k => (k === w ? next : randomPool.value[k]));
 }
 
 const randomTooltip = computed(() =>
 	randomPoolArray.value.length
-		? `Random from: ${randomPoolArray.value.map(w => WAVE_LABELS[w]).join(', ')}`
+		? `Random from: ${randomPoolArray.value.map(w => padWaveLabel(w)).join(', ')}`
 		: 'Select at least one wave using the little dice badges'
 );
 
@@ -1816,7 +1821,7 @@ function applyRandomWaves() {
 	const inst = synthInstrument.value as any;
 	if (!inst) return;
 
-	const pool = randomPoolArray.value.length
+	const pool: PadWave[] = randomPoolArray.value.length
 		? randomPoolArray.value
 		: [...WAVE_IDS]; // fallback
 
@@ -2197,6 +2202,8 @@ const pitchMode = ref<'up' | 'down' | 'random'>('up');
 const pulseWidth = ref(PULSE_WIDTH_DEFAULT);
 // The recorded sound the 'sample' wave plays (src/audio/sample.ts), saved with the project
 const sample = shallowRef<SampleData | null>(null);
+// How much of it a pad plays, 0.05–1 (the strip's Length knob, PR 100; 1 = all of it)
+const sampleLength = ref(SAMPLE_LENGTH_DEFAULT);
 const pulseWidthTip = ref(false);
 // Velocity routing amounts, % −100..100 (src/audio/velocity.ts; 0 = off): what a step's
 // velocity does besides its loudness
@@ -2558,6 +2565,7 @@ const exportState = computed<StepSequencerState>(() => {
 			},
 			pulse: { width: pulseWidth.value },
 			sample: sample.value,
+			sampleLength: sampleLength.value,
 			velocity: {
 				decay: velocityRouting.decay.value,
 				cutoff: velocityRouting.cutoff.value,
@@ -2694,6 +2702,7 @@ const projectState: ProjectState = {
 		pitchEnv: { enabled: pitchEnvEnabled, semitones: pitchEnvSemitones, decayMs: pitchEnvDecayMs, mode: pitchMode },
 		pulse: { width: pulseWidth },
 		sample,
+		sampleLength,
 		randomWaves,
 		velocity: velocityRouting,
 		tuning: { selectedKeyRoot, globalOctaveOffset, currentDefaultHz },
@@ -2754,6 +2763,7 @@ const {
 	pitchEnv: projectState.synth.pitchEnv,
 	pulse: projectState.synth.pulse,
 	sample: projectState.synth.sample,
+	sampleLength: projectState.synth.sampleLength,
 	velocity: projectState.synth.velocity,
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
@@ -3496,7 +3506,7 @@ async function renderHitNow() {
 		const state = exportState.value;
 		const hz = hitHz.value;
 		const wave = selectedWaveform.value;
-		const channels = await renderHit(state, hz, wave, hitSeconds(state));
+		const channels = await renderHit(state, hz, wave, hitSeconds(state, wave, hz));
 		const name = `${nearestNote(hz)} ${padWaveLabel(wave)}`;
 		hitPicture.value = { channels, sampleRate: state.sampleRate, hz, title: name };
 		hitText.value = `Hit: ${name}, ${formatLength((channels[0].length / state.sampleRate) * 1000)}, peak ${formatPeak(peakOf(channels))}`;
@@ -3543,6 +3553,9 @@ async function recordSample() {
 	const rec = await recorder.record();
 	if (!rec) return;
 	sample.value = { data: encodeSample(rec), sampleRate: audioCtx.sampleRate };
+	// A new recording plays whole, and Random may pick it (its dice badge lit)
+	sampleLength.value = SAMPLE_LENGTH_DEFAULT;
+	if (!randomWaves.value.includes(SAMPLE_WAVE)) randomWaves.value = RANDOM_WAVE_IDS.filter(w => w === SAMPLE_WAVE || randomWaves.value.includes(w));
 	applyWaveToAll('sample');
 	auditionNote(SAMPLE_ROOT_HZ, 'sample', { noise: false });
 	trackEvent('sample_record', { seconds: Math.round(sampleSeconds(sample.value) * 100) / 100 });
