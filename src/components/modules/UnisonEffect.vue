@@ -3,9 +3,9 @@
      the voices drifting apart (Detune) and where they sit left to right (Spread), and can be
      dragged: sideways for Detune, up and down for Spread (ShapePad.vue); the number of voices
      is a row of keys under the screen (a knob until PR 77); Detune and Spread are mini knobs
-     on the right. The phone's Sound page has its own Unison button and Voices knob. -->
+     on the right. The phone's Sound page has it `compact` (PR 106): no screen. -->
 <template>
-	<section class="pt-card sp-unit uni-unit" :class="{ 'is-off': !localEnabled }" aria-label="Unison">
+	<section class="pt-card sp-unit uni-unit" :class="{ 'is-off': !localEnabled, 'sp-compact': compact }" aria-label="Unison">
 		<div class="sp-body">
 			<button type="button" class="sp-ribbon" :class="{ 'is-on': localEnabled }" role="switch" :aria-checked="localEnabled" aria-label="Unison"
 				:title="localEnabled ? 'Unison: on' : 'Unison: off'" @click="localEnabled = !localEnabled">
@@ -14,14 +14,14 @@
 			</button>
 			<div class="sp-face">
 				<div class="sp-screencol">
-					<ShapePad :w="PAD_W" :h="PAD_H" :readout="`${localDetune}¢ · ${localSpread}%`" hint="↔ detune  ↕ spread" :disabled="!localEnabled"
+					<ShapePad v-if="!compact" :w="PAD_W" :h="PAD_H" :readout="`${localDetune}¢ · ${localSpread}%`" hint="↔ detune  ↕ spread" :disabled="!localEnabled"
 						@start="activeKnob = 'pad'" @move="onPadMove" @end="activeKnob = null">
 						<path v-for="(d, i) in waves" :key="i" :d="d" class="sp-line sp-voice" />
 						<circle v-for="(x, i) in dots" :key="'d' + i" :cx="x" :cy="PAD_H - 5" r="2.2" class="sp-dot" />
 					</ShapePad>
 					<div class="sp-keys" role="radiogroup" aria-label="Voices">
-						<button v-for="n in voiceChoices" :key="n" type="button" class="sp-key" :class="{ on: localVoices === n }" role="radio"
-							:aria-checked="localVoices === n" @click="localVoices = n">{{ n }} voices</button>
+						<button v-for="n in voiceChoices" :key="n" type="button" class="sp-key" :class="{ on: localVoices === n }" role="radio" :aria-label="`${n} voices`"
+							:aria-checked="localVoices === n" @click="localVoices = n">{{ n }}<span class="sp-key-unit"> voices</span></button>
 					</div>
 				</div>
 				<div class="sp-minis">
@@ -56,6 +56,8 @@ const props = withDefaults(
 		spread: number;
 		color?: string;
 		showToggle?: boolean;
+		// Phone mode's Sound page (PR 106): the ribbon, the keys and the mini knobs, no screen
+		compact?: boolean;
 	}>(),
 	{
 		enabled: false,

@@ -3,9 +3,9 @@
      LFO's); a screen draws the carrier bent by the modulator and can be dragged up and down
      for Amount (ShapePad.vue); the ratio's four choices are keys under the screen; Mod Freq
      (for Free) and Amount are mini knobs on the right. Until PR 77: a tile, a row of ratio
-     buttons and two knobs. The phone's Sound page has its own FM button and knob. -->
+     buttons and two knobs. The phone's Sound page has it `compact` (PR 106): no screen. -->
 <template>
-    <section class="pt-card sp-unit fm-unit" :class="{ 'is-off': !localEnabled }" aria-label="FM">
+    <section class="pt-card sp-unit fm-unit" :class="{ 'is-off': !localEnabled, 'sp-compact': compact }" aria-label="FM">
         <div class="sp-body">
             <button type="button" class="sp-ribbon" :class="{ 'is-on': localEnabled }" role="switch" :aria-checked="localEnabled" aria-label="FM"
                 :title="localEnabled ? 'FM: on' : 'FM: off'" @click="localEnabled = !localEnabled">
@@ -14,7 +14,7 @@
             </button>
             <div class="sp-face">
                 <div class="sp-screencol">
-                    <ShapePad :w="PAD_W" :h="PAD_H" :title="ratioName" :readout="readout" hint="↕ amount" :disabled="!localEnabled"
+                    <ShapePad v-if="!compact" :w="PAD_W" :h="PAD_H" :title="ratioName" :readout="readout" hint="↕ amount" :disabled="!localEnabled"
                         @start="activeKnob = 'ix'" @move="onPadMove" @end="activeKnob = null">
                         <path :d="wave" class="sp-line" />
                         <!-- The LFO on Amount: the wave as it has it now -->
@@ -65,6 +65,8 @@ const props = withDefaults(
         showToggle?: boolean;
         // The LFO visualizer: where the LFO's FM target has the Amount now (src/lib/lfoVisual.ts)
         lfoView?: LfoView | null;
+        // Phone mode's Sound page (PR 106): the ribbon, the keys and the mini knobs, no screen
+        compact?: boolean;
     }>(),
     {
         title: 'FM',

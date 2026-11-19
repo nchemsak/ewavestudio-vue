@@ -2,7 +2,7 @@
 <!-- The LFO card (PR 75, options A + B of the mockups): a ribbon down its left edge is the
      switch (as Noise's); a screen draws the wave across the bar over the pattern's steps; Rate,
      Depth, the Wave switch and RETRIG; and a patch bay, where a cable runs from "LFO out" to the
-     target's socket. `classic` (the phone's Mod page) draws the card as it was before. -->
+     target's socket. `classic` draws the card as it was before (the phone's Mod page until PR 106; unused since). -->
 <template>
     <KnobGroup v-model="localEnabled" :color="color" :showToggle="showToggle" :showHeader="false">
         <div v-if="!classic" class="lv" :class="{ 'is-off': !localEnabled }">

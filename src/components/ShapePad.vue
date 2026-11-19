@@ -439,4 +439,53 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
 .is-off .sp-mini {
     opacity: 0.85; /* 0.75 until PR 93: FM's Freq, dimmed twice, measured 4.6 : 1 */
 }
+
+/* Compact (phone mode's Sound page, PR 106): no screen, so a low card: the ribbon, the keys
+   and the mini knobs on one line, the ribbon's name smaller */
+.module .pt-card.sp-unit.sp-compact {
+    min-height: 0;
+}
+
+.sp-compact .sp-face {
+    align-items: center;
+    gap: 6px;
+    padding: 6px 6px 6px 7px;
+}
+
+.sp-compact .sp-keys {
+    gap: 3px;
+}
+
+.sp-compact .sp-screencol {
+    justify-content: center;
+}
+
+.sp-compact .sp-key {
+    height: 24px;
+    padding: 0 1px;
+    font-size: 8px;
+    letter-spacing: 0.03em;
+}
+
+.sp-compact .sp-key-unit {
+    display: none;
+}
+
+.sp-compact .sp-minis {
+    grid-auto-flow: column;
+}
+
+.sp-compact .sp-ribbon {
+    width: 26px;
+}
+
+.sp-compact .sp-ribbon-led {
+    top: 6px;
+}
+
+.sp-compact .sp-ribbon-label {
+    margin-top: 10px;
+    font-size: 8.5px;
+    letter-spacing: 0.08em;
+}
 </style>

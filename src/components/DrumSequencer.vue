@@ -31,69 +31,86 @@
 						</div>
 					</div>
 					<div class="pl-sound-row">
+						<!-- The waves (PR 106): the eight, Random (as the desktop's tile, in the accent:
+							 it rolls the pads' waves again), and the desktop's Sample strip under them
+							 (REC, the recording, its dice and Length). A wave is lit only while every
+							 pad plays it (litWave), as on the desktop. -->
 						<section class="pt-card pl-waves" aria-label="Wave">
-							<h2 class="pt-title">Wave</h2>
 							<div class="pl-wave-grid">
 								<button v-for="t in WAVE_TILES" :key="t.value" type="button" class="pt-btn"
-									:aria-pressed="selectedWaveform === t.value" :aria-label="t.label" @click="applyWaveToAll(t.value)">{{ t.value === 'triangle' ? 'TRI' : t.label }}</button>
-								<!-- The recording (PR 95): Sample picks it (records one first if there's none),
-									 REC records again; while recording it says what it's doing -->
-								<button type="button" class="pt-btn" :aria-pressed="selectedWaveform === 'sample'"
-									:disabled="sampleBusy" :aria-label="sample ? 'Sample: the recording on every pad' : 'Sample: record a sound'"
-									@click="sample ? applyWaveToAll('sample') : recordSample()">SAMPLE</button>
-								<button type="button" class="pt-btn pl-rec" :class="{ 'is-on': sampleBusy }"
-									:aria-label="sampleBusy ? 'Stop recording' : sample ? 'Record a new sample' : 'Record a sample'"
-									@click="recordSample()"><span class="pl-rec-dot" aria-hidden="true" />{{ sampleStatus || 'REC' }}</button>
+									:aria-pressed="litWave === t.value" :aria-label="t.label" @click="applyWaveToAll(t.value)">{{ t.value === 'triangle' ? 'TRI' : t.label }}</button>
+								<button type="button" class="hw-cap pl-random" :disabled="!randomPoolArray.length" :title="randomTooltip"
+									:aria-label="wavesMixed ? 'Random waves: the pads play a mix, roll again' : 'Random waves'"
+									@click="applyRandomWaves()">
+									<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+										<circle cx="8" cy="8" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="16" cy="16" r="1.6" /></svg>
+									<span>RANDOM</span>
+								</button>
+							</div>
+							<div class="st-strip pl-sample">
+								<SampleTile :sample="sample" :state="recorder.state.value" :level="recorder.level.value"
+									:lit="litWave === 'sample'" v-model:length="sampleLength"
+									:randomIncluded="randomPool.sample" @toggle-random="onToggleRandom"
+									@pick="applyWaveToAll('sample')" @record="recordSample()" />
 							</div>
 						</section>
-						<!-- Noise is on the Mod page since PR 73, as its whole card -->
-						<section class="pt-card pl-gens" aria-label="FM and Unison">
-							<div class="pl-gen">
-								<button type="button" class="pt-btn" :aria-pressed="fmEnabled" @click="fmEnabled = !fmEnabled">FM</button>
-								<Knob v-model="fmIndex" label="Amount" aria-label="FM amount" :min="0" :max="50" :step="0.1" size="small"
-									:disabled="!fmEnabled" :value-text="fmIndex.toFixed(1)" />
+						<!-- Noise is on the Mod page since PR 73, as its whole card. FM and Unison: the
+							 desktop's cards, compact (PR 106: the ribbon, the keys, the mini knobs; no screen) -->
+						<div class="pl-gens">
+							<div class="module fm">
+								<FMModule compact :color="'#3F51B5'" :showToggle="false" :lfoView="lfoView" v-model:enabled="fmEnabled"
+									v-model:modFreq="fmModFreq" v-model:index="fmIndex" v-model:ratio="fmRatio" />
 							</div>
-							<div class="pl-gen">
-								<button type="button" class="pt-btn" :aria-pressed="unisonEnabled" @click="unisonEnabled = !unisonEnabled">Unison</button>
-								<Knob v-model="unisonVoices" label="Voices" aria-label="Unison voices" :min="UNISON_VOICES_MIN" :max="unisonMaxVoices" :step="1" size="small"
-									:disabled="!unisonEnabled" :value-text="`${unisonVoices} voices`" />
+							<div class="module unison">
+								<UnisonEffect compact :showToggle="false" v-model:enabled="unisonEnabled" v-model:voices="unisonVoices"
+									v-model:detune="detuneCents" v-model:spread="stereoSpread" />
 							</div>
-						</section>
+						</div>
 					</div>
 				</div>
 			</template>
 			<!-- Mod (PR 73): the LFO and the Noise card, which didn't fit on Sound (one screen, no
 				 scrolling, from 568 × 320) -->
 			<template #mod>
+				<!-- The desktop's cards since PR 106: the LFO's ribbon, screen and patch bay, and
+					 Noise's ribbon (the classic LFO card and Noise's ON pill before) -->
 				<div class="pl-mod">
-					<div class="module mod">
+					<div class="module mod lfo-card">
 						<SectionWrap id="pl-lfo" title="LFO" :modelValue="true">
-							<template #tools>
-								<PillSwitch v-model="lfoRetrigger" label="RETRIG" name="LFO retrigger"
-									tip="Each note starts the LFO from the beginning" :disabled="!lfoEnabled" />
-							</template>
 							<LFOGroup :showToggle="false" :pulseInUse="pulseInUse" :fmInUse="fmInUse" v-model="lfoEnabled"
 								v-model:depth="lfoDepth" :target="lfoTarget" @update:target="chooseLfoTarget" v-model:waveform="lfoWaveform"
 								v-model:division="lfoDivision"
 								v-model:retrigger="lfoRetrigger" v-model:bipolar="lfoBipolar" :depthMax="lfoDepthMax"
-								classic color="#00BCD4" />
+								:steps="steps" color="#00BCD4" />
 						</SectionWrap>
 					</div>
 					<div class="module noise">
-						<SectionWrap id="pl-noise" title="Noise" :modelValue="true">
-							<template #tools>
-								<PillSwitch v-model="noiseEnabled" label="ON" name="Noise" tip="Noise on the pads it's applied to" />
-							</template>
-							<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
-								v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
-								v-model:mask="noiseMask" :steps="steps" :velocities="velocities" v-model:attackBurst="noiseAttackBurst"
-								v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
-						</SectionWrap>
+						<div class="noise-tv-bg" :class="{ on: noiseEnabled }" :style="noiseModuleStyle">
+							<button type="button" class="noise-ribbon" :class="{ 'is-on': noiseEnabled }"
+								:aria-pressed="noiseEnabled" aria-label="Toggle noise"
+								@click="noiseEnabled = !noiseEnabled">
+								<span class="noise-ribbon-led" aria-hidden="true"></span>
+								<span class="noise-ribbon-label">NOISE</span>
+							</button>
+							<div v-if="noiseEnabled" class="noise-overlay mode-static" aria-hidden="true">
+								<div class="grain"></div>
+							</div>
+							<SectionWrap id="pl-noise" title="" :modelValue="true">
+								<div class="gen-panel noise-panel">
+									<div class="noise-inline">
+										<NoiseModule :showToggle="false" v-model:enabled="noiseEnabled"
+											v-model:amount="noiseAmount" v-model:colorMorph="noiseColor"
+											v-model:mask="noiseMask" :steps="steps" :velocities="velocities" v-model:attackBurst="noiseAttackBurst"
+											v-model:burstMs="noiseBurstMs" :color="'#9C27B0'" />
+									</div>
+								</div>
+							</SectionWrap>
+						</div>
 					</div>
 				</div>
 			</template>
 			<template #fx>
-				<div class="fx-pair pl-fx">
+				<div class="fx-pair pedalboard pl-fx">
 					<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
 						:tempo="tempo" v-model:division="delayDivision" v-model:delayTime="delayTime"
 						v-model:delayFeedback="delayFeedback"
@@ -117,7 +134,7 @@
 						<template #tools>
 							<MelodyModeSwitch v-model="melodyUi.mode" />
 						</template>
-						<MelodyMaker :key="`pl-melody-${resetNonce}`" :frequencies="padFrequencies"
+						<MelodyMaker compact :key="`pl-melody-${resetNonce}`" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
 							:ratchets="synthInstrument?.ratchets" :repeat-notes="synthInstrument?.repeatNotes" :repeat-chord="repeatChord"
 							:swing="swing" :note-steps="noteSteps" :playView="playView"
@@ -476,7 +493,7 @@
 
 					<div id="effects-panel" class="module fx">
 						<SectionWrap id="fx" title="Effects" v-model="collapsibleState['fx']">
-							<div class="fx-pair">
+							<div class="fx-pair pedalboard">
 								<DelayEffect :showToggle="false" :audioCtx="audioCtx" v-model:enabled="delayEnabled"
 									:tempo="tempo" v-model:division="delayDivision" v-model:delayTime="delayTime"
 									v-model:delayFeedback="delayFeedback"
@@ -692,7 +709,6 @@ import SynthStepGrid from './SynthStepGrid.vue'
 import SectionWrap from './SectionWrap.vue';
 import WaveButton from './WaveButton.vue'
 import VelSwitch from './VelSwitch.vue';
-import PillSwitch from './PillSwitch.vue';
 import LfoModKnob from './LfoModKnob.vue';
 import SettingsMenu from './SettingsMenu.vue';
 import { usePwa } from '../composables/usePwa';
@@ -4062,6 +4078,8 @@ async function recordSample() {
 .pl-sound {
 	display: grid;
 	gap: 8px;
+	height: 100%;
+	align-content: center;
 }
 
 .pl-sound-row {
@@ -4079,13 +4097,15 @@ async function recordSample() {
 	flex-grow: 1.6;
 }
 
-.pl-waves {
-	flex-grow: 1.6;
+.pl-sound-row > .pl-waves {
+	flex-grow: 1.35;
 	display: grid;
+	align-content: center;
 	gap: 6px;
-	align-content: start;
+	padding: 8px;
 }
 
+/* The eight waves and Random (two keys wide), five across */
 .pl-wave-grid {
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -4093,69 +4113,82 @@ async function recordSample() {
 }
 
 .pl-wave-grid .pt-btn {
-	min-height: 34px;
-	font-size: 11px;
-	padding: 4px 2px;
+	min-height: 28px;
+	font-size: 10.5px;
+	padding: 3px 2px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
-/* REC: a red dot before its word; blinking while it listens or records */
-.pl-rec {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 4px;
-}
-
-.pl-rec-dot {
-	flex: none;
-	width: 8px;
-	height: 8px;
-	border-radius: 50%;
-	background: #e5484d;
-}
-
-.pl-rec.is-on .pl-rec-dot {
-	background: #ff5a5f;
-	box-shadow: 0 0 6px #ff5a5f;
-	animation: pl-blink 1s steps(2, start) infinite;
-}
-
-@keyframes pl-blink {
-	to { opacity: 0.35; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.pl-rec.is-on .pl-rec-dot { animation: none; }
-}
-
-.pl-gens {
-	display: flex;
-	justify-content: space-around;
-	align-items: center;
-	gap: 6px;
-}
-
-.pl-gen {
-	display: grid;
-	justify-items: center;
-	gap: 4px;
-}
-
-.pl-gen .pt-btn {
-	min-height: 32px;
-	padding: 4px 10px;
-	font-size: 12px;
-}
-
-.pl-waves .pt-btn[aria-pressed="true"],
-.pl-gen .pt-btn[aria-pressed="true"] {
+.pl-waves .pt-btn[aria-pressed="true"] {
 	box-shadow: 0 0 0 2px hsl(var(--pt-accent) 90% 60% / .35), 0 0 12px var(--pt-btn-glow);
 	font-weight: 700;
 }
 
-/* Mod: the LFO and Noise cards side by side, or one over the other on a narrow phone */
+/* Random: filled in the accent, as the desktop's tile (it makes something); it never stays down */
+.pl-random {
+	--cap-hi: hsl(var(--pt-accent) 78% 58%);
+	--cap-lo: hsl(var(--pt-accent) 74% 46%);
+	--cap-edge: color-mix(in oklab, var(--cap-lo), black 60%);
+	--cap-ink: #fff;
+	grid-column: span 2;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	min-height: 28px;
+	border: 0;
+	border-radius: 8px;
+	font: inherit;
+	font-size: 10.5px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+}
+
+.pl-random svg {
+	width: 15px;
+	height: 15px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.7px;
+}
+
+.pl-random svg circle {
+	fill: currentColor;
+	stroke: none;
+}
+
+.pl-random:disabled {
+	opacity: 0.5;
+}
+
+/* The desktop's Sample strip, a little lower */
+.st-strip.pl-sample {
+	height: 36px;
+	margin-top: 0;
+}
+
+/* FM over Unison, the desktop's cards without their screens */
+.pl-gens {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 8px;
+}
+
+.pl-gens > .module {
+	flex: 1 1 0;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.pl-gens > .module > :deep(.pt-card) {
+	flex: 1;
+}
+
+/* Mod: the desktop's LFO and Noise cards (PR 106) side by side, or one over the other on a
+   narrow phone (568 px: side by side, the LFO's screen and patch bay were squeezed) */
 .pl-mod {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4165,14 +4198,34 @@ async function recordSample() {
 	height: 100%;
 }
 
-/* The Target switch's five buttons get the card's whole width (its caption hidden) */
-.pl-mod :deep(.lfo-switch-label) {
-	display: none;
+@media (max-width: 699.98px) {
+	.pl-mod {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 6px;
+	}
 }
 
-/* The card's own title says Noise already */
-.pl-mod :deep(.knob-group-header) {
-	display: none;
+.pl-mod>.module {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.pl-mod>.module.noise>.noise-tv-bg> :deep(.pt-card) {
+	padding-top: 8px;
+	padding-bottom: 14px;
+}
+
+.pl-mod>.module.noise :deep(.pt-collapse-body) {
+	margin-top: 0;
+}
+
+.pl-mod>.module.noise>.noise-tv-bg,
+.pl-mod>.module.noise>.noise-tv-bg> :deep(.pt-card) {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
 }
 
 /* The pedals near their desktop proportions (118 × 239 there), centred: stretched across the
@@ -4186,8 +4239,38 @@ async function recordSample() {
 	height: 100%;
 }
 
+/* Key: the Melody Maker, compact (PR 106), filling the page: nothing scrolls at 568 × 320 */
 .pl-melody {
 	height: 100%;
+}
+
+.pl-melody> :deep(.pt-card) {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	padding: 8px 12px 10px;
+}
+
+.pl-melody :deep(.pt-collapse-body) {
+	flex: 1;
+	min-height: 0;
+	margin-top: 6px;
+	display: flex;
+}
+
+.pl-melody :deep(.pt-title) {
+	font-size: 1rem;
+}
+
+/* Taller keys where the phone has the height (844 × 390) */
+.pl-melody {
+	--mm-compact-white: 60px;
+}
+
+@media (min-height: 370px) {
+	.pl-melody {
+		--mm-compact-white: 84px;
+	}
 }
 /* PHONE END */
 
@@ -4955,11 +5038,11 @@ async function recordSample() {
 	grid-column: 1 / -1;
 }
 
-.module.fx .fx-pair :deep(.knob-group) {
+.fx-pair.pedalboard :deep(.knob-group) {
 	padding: 0;
 }
 
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal)) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal)) {
 	position: relative;
 	grid-template-columns: 24px minmax(0, 1fr);
 	grid-template-rows: 1fr;
@@ -4967,8 +5050,8 @@ async function recordSample() {
 }
 
 /* Two jack sockets on the top edge, as on a pedal */
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal)::before),
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal)::after) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal)::before),
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal)::after) {
 	content: '';
 	position: absolute;
 	top: -5px;
@@ -4979,20 +5062,20 @@ async function recordSample() {
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal)::before) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal)::before) {
 	left: 38px;
 }
 
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal)::after) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal)::after) {
 	right: 12px;
 }
 
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .panel-seam) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal) .panel-seam) {
 	display: none;
 }
 
 /* The ribbon: the pedal's colour, darker, with its name in light letters, bottom to top */
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .panel-bottom) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal) .panel-bottom) {
 	grid-column: 1;
 	grid-row: 1;
 	display: flex;
@@ -5004,7 +5087,7 @@ async function recordSample() {
 	box-shadow: inset -2px 0 3px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .effect-label) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal) .effect-label) {
 	writing-mode: vertical-rl;
 	transform: rotate(180deg);
 	padding: 0;
@@ -5015,7 +5098,7 @@ async function recordSample() {
 }
 
 /* The face: screws in its corners, a bevel, room at its foot for the treadle */
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .panel-top) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal) .panel-top) {
 	grid-column: 2;
 	grid-row: 1;
 	border-radius: 0 8px 8px 0;
@@ -5031,35 +5114,35 @@ async function recordSample() {
 	box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.22), inset -1px 0 0 rgba(0, 0, 0, 0.15);
 }
 
-.module.fx .fx-pair :deep(.delay-pedal .panel-top) {
+.fx-pair.pedalboard :deep(.delay-pedal .panel-top) {
 	grid-template-areas: 'led led' 'time mix' 'tone sw';
 }
 
-.module.fx .fx-pair :deep(.drive-pedal .panel-top) {
+.fx-pair.pedalboard :deep(.drive-pedal .panel-top) {
 	grid-template-areas: 'led led' 'drive level' 'tone sw';
 }
 
 /* The LED at the top of the ribbon */
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .check-led) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal) .check-led) {
 	position: absolute;
 	left: -18px;
 	top: 8px;
 	z-index: 1;
 }
 
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .pedal-switch) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal) .pedal-switch) {
 	position: static;
 	grid-area: sw;
 }
 
 /* Every caption under its own knob */
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .knob-cell .knob-wrapper) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal) .knob-cell .knob-wrapper) {
 	display: flex;
 	flex-direction: column-reverse;
 	align-items: center;
 }
 
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .knob-cell .knob-wrapper .knob-label) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal) .knob-cell .knob-wrapper .knob-label) {
 	position: static;
 	width: auto;
 	margin-top: 2px;
@@ -5067,7 +5150,7 @@ async function recordSample() {
 }
 
 /* The footswitch: a ribbed rubber treadle across the foot of the face (the deck's at its end) */
-.module.fx .fx-pair :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal) .footswitch) {
+.fx-pair.pedalboard :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal) .footswitch) {
 	position: absolute;
 	left: 40px;
 	bottom: 9px;
@@ -5075,7 +5158,7 @@ async function recordSample() {
 	height: 28px;
 }
 
-.module.fx .fx-pair :deep(.footswitch) {
+.fx-pair.pedalboard :deep(.footswitch) {
 	border-radius: 6px;
 	background: repeating-linear-gradient(90deg, #26252a 0 3px, #3a383f 3px 6px);
 	box-shadow:
@@ -5084,17 +5167,17 @@ async function recordSample() {
 		0 2px 3px rgba(0, 0, 0, 0.45);
 }
 
-.module.fx .fx-pair :deep(.footswitch::before) {
+.fx-pair.pedalboard :deep(.footswitch::before) {
 	display: none;
 }
 
-.module.fx .fx-pair :deep(.footswitch:active) {
+.fx-pair.pedalboard :deep(.footswitch:active) {
 	transform: translateY(1px);
 	filter: none;
 }
 
 /* The lo-fi deck: the same screws and bevel, its name and treadle on a painted stripe */
-.module.fx .fx-pair :deep(.tape-pedal.is-deck) {
+.fx-pair.pedalboard :deep(.tape-pedal.is-deck) {
 	background:
 		radial-gradient(circle at 8px 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
 		radial-gradient(circle at calc(100% - 8px) 8px, #ededed 0 1.4px, #8c8c8c 2.2px, #3a3a3a 3px, transparent 3.6px),
@@ -5104,7 +5187,7 @@ async function recordSample() {
 	box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.22);
 }
 
-.module.fx .fx-pair :deep(.tape-pedal.is-deck .panel-bottom) {
+.fx-pair.pedalboard :deep(.tape-pedal.is-deck .panel-bottom) {
 	padding-left: 14px;
 	padding-right: 10px;
 	border-radius: 8px 0 0 8px;
@@ -5112,27 +5195,27 @@ async function recordSample() {
 	box-shadow: inset -2px 0 3px rgba(0, 0, 0, 0.3);
 }
 
-.module.fx .fx-pair :deep(.tape-pedal.is-deck .effect-label) {
+.fx-pair.pedalboard :deep(.tape-pedal.is-deck .effect-label) {
 	color: rgba(255, 255, 255, 0.93);
 	text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
 }
 
-.module.fx .fx-pair :deep(.tape-pedal.is-deck .footswitch) {
+.fx-pair.pedalboard :deep(.tape-pedal.is-deck .footswitch) {
 	width: 44px;
 	height: 24px;
 	border-radius: 5px;
 }
 
 /* Its LED on the stripe, as the pedals' are on their ribbons (placed against the deck itself) */
-.module.fx .fx-pair :deep(.tape-pedal.is-deck) {
+.fx-pair.pedalboard :deep(.tape-pedal.is-deck) {
 	position: relative;
 }
 
-.module.fx .fx-pair :deep(.tape-pedal.is-deck .panel-top) {
+.fx-pair.pedalboard :deep(.tape-pedal.is-deck .panel-top) {
 	position: static;
 }
 
-.module.fx .fx-pair :deep(.tape-pedal.is-deck .check-led) {
+.fx-pair.pedalboard :deep(.tape-pedal.is-deck .check-led) {
 	grid-area: auto; /* not the pedal layout's 'led' area, which the deck's grid hasn't got */
 	left: 4px;
 	right: auto;
@@ -5144,12 +5227,12 @@ async function recordSample() {
 
 /* A narrow deck (under 400 px: the desktop's, and phones'): TAPE over the lever over VINYL,
    the lever upright, so VINYL no longer runs off the deck's edge at phone width */
-.module.fx .fx-pair :deep(.tape-pedal.is-deck) {
+.fx-pair.pedalboard :deep(.tape-pedal.is-deck) {
 	container-type: inline-size;
 }
 
 @container (max-width: 400px) {
-	.module.fx .fx-pair :deep(.is-deck .mode-switch) {
+	.fx-pair.pedalboard :deep(.is-deck .mode-switch) {
 		grid-template-columns: auto;
 		grid-template-rows: auto auto auto;
 		justify-items: center;
@@ -5157,20 +5240,20 @@ async function recordSample() {
 		width: auto;
 	}
 
-	.module.fx .fx-pair :deep(.is-deck .ms-tape) {
+	.fx-pair.pedalboard :deep(.is-deck .ms-tape) {
 		grid-column: 1;
 		grid-row: 1;
 		justify-self: center;
 	}
 
-	.module.fx .fx-pair :deep(.is-deck .ms-slot) {
+	.fx-pair.pedalboard :deep(.is-deck .ms-slot) {
 		grid-column: 1;
 		grid-row: 2;
 		transform: rotate(90deg);
 		margin: 4px 0;
 	}
 
-	.module.fx .fx-pair :deep(.is-deck .ms-vinyl) {
+	.fx-pair.pedalboard :deep(.is-deck .ms-vinyl) {
 		grid-column: 1;
 		grid-row: 3;
 		justify-self: center;
@@ -5180,7 +5263,7 @@ async function recordSample() {
 /* REV (option A of three mockups: B was beside a shorter treadle, C between the knobs): a mini
    switch on the ribbon, under the LED, its caption in the ribbon's light letters; the name
    moves down to make room */
-.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-switch) {
+.fx-pair.pedalboard :deep(.reverb-pedal .pedal-switch.rev-switch) {
 	position: absolute;
 	left: 0;
 	top: 26px;
@@ -5189,17 +5272,77 @@ async function recordSample() {
 	z-index: 1;
 }
 
-.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-switch .ps-label) {
+.fx-pair.pedalboard :deep(.reverb-pedal .pedal-switch.rev-switch .ps-label) {
 	color: rgba(255, 255, 255, 0.93);
 	min-height: 0;
 }
 
-.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-switch:disabled .ps-label) {
+.fx-pair.pedalboard :deep(.reverb-pedal .pedal-switch.rev-switch:disabled .ps-label) {
 	color: rgba(255, 255, 255, 0.6);
 }
 
-.module.fx .fx-pair :deep(.reverb-pedal .effect-label) {
+.fx-pair.pedalboard :deep(.reverb-pedal .effect-label) {
 	margin-top: 30px;
+}
+
+/* The phone's FX page (PR 106): the same pedals, kept tall (236 px; it has the height to
+   spare at 568 × 320), with a taller treadle for a thumb, and the lo-fi pedal too (its stomp
+   box, TapeEffect's `pedal` layout), whose reels or record turn in a window over its treadle */
+.fx-pair.pl-fx :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal)) {
+	height: 236px;
+}
+
+.fx-pair.pl-fx :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal) .panel-top) {
+	padding-bottom: 66px;
+}
+
+.fx-pair.pl-fx :deep(:is(.delay-pedal, .drive-pedal, .reverb-pedal, .tape-pedal.is-pedal) .footswitch) {
+	height: 48px;
+}
+
+.fx-pair.pl-fx :deep(.tape-pedal.is-pedal .panel-top) {
+	padding-bottom: 96px;
+	grid-template-rows: auto 1fr auto;
+}
+
+.fx-pair.pl-fx :deep(.tape-pedal.is-pedal .panel-seam) {
+	display: grid;
+	position: absolute;
+	left: 24px;
+	right: 0;
+	bottom: 64px;
+	height: 26px;
+	background: none;
+	box-shadow: none;
+}
+
+.fx-pair.pl-fx :deep(.tape-pedal.is-pedal .tape-window) {
+	display: flex;
+	width: 80%;
+	height: 24px;
+}
+
+.fx-pair.pl-fx :deep(.tape-pedal.is-pedal .tape-window .reel) {
+	width: 17px;
+	height: 17px;
+}
+
+.fx-pair.pl-fx :deep(.tape-pedal.is-pedal .tape-window .record) {
+	width: 20px;
+	height: 20px;
+	margin: 0 auto;
+}
+
+.fx-pair.pl-fx :deep(.tape-pedal.is-pedal .tape-window .tape-run) {
+	margin-top: 12px;
+}
+
+.fx-pair.pl-fx :deep(.tape-pedal.is-pedal .name-spin) {
+	display: none;
+}
+
+.fx-pair.pl-fx :deep(.tape-pedal.is-pedal .effect-label) {
+	height: auto;
 }
 
 /* EFFECTS PEDALS END */

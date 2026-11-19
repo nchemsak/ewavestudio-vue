@@ -229,8 +229,9 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	grid-area: pre;
 }
 
-/* REV, outside the Effects card (the phone's tall pedal): in the face's top-right corner. The
-   Effects card puts it on the ribbon, under the LED (DrumSequencer's EFFECTS PEDALS styles) */
+/* REV, outside a pedalboard: in the face's top-right corner. The Effects card and the phone's
+   FX page (since PR 106) put it on the ribbon, under the LED (DrumSequencer's EFFECTS PEDALS
+   styles) */
 .reverb-pedal {
 	position: relative;
 }
