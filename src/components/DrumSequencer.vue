@@ -5169,6 +5169,50 @@ async function recordSample() {
 	}
 }
 
+/* REV MOCKUPS (branch only) START */
+.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-a) {
+	position: absolute;
+	left: 0;
+	top: 26px;
+	width: 24px;
+	z-index: 1;
+}
+
+.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-a .ps-label) {
+	color: rgba(255, 255, 255, 0.93);
+	min-height: 0;
+}
+
+.module.fx .fx-pair :deep(.reverb-pedal.mock-a .effect-label) {
+	margin-top: 30px;
+}
+
+.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-b) {
+	position: absolute;
+	right: 10px;
+	bottom: 12px;
+	width: 26px;
+}
+
+.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-b .ps-label) {
+	min-height: 0;
+}
+
+.module.fx .fx-pair :deep(.reverb-pedal.mock-b .footswitch) {
+	width: calc(100% - 88px);
+}
+
+.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-c) {
+	position: absolute;
+	left: calc(50% - 17px);
+	top: 50px;
+}
+
+.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-c .ps-label) {
+	min-height: 0;
+}
+/* REV MOCKUPS (branch only) END */
+
 /* EFFECTS PEDALS END */
 
 </style>

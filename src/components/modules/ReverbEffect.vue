@@ -1,6 +1,6 @@
 <template>
 	<KnobGroup v-model="localEnabled" title="Reverb" :color="color" :showToggle="showToggle" :showHeader="false">
-		<div class="reverb-pedal">
+		<div class="reverb-pedal" :class="revMock ? `mock-${revMock}` : null">
 			<div class="panel-top">
 				<span class="check-led" :class="{ on: localEnabled }" aria-hidden="true"></span>
 
@@ -14,7 +14,7 @@
 				</div>
 
 				<div class="knob-cell decay">
-					<Knob midi-id="reverb.decay" :value-text="`${localDecay.toFixed(2)} s`" v-model="localDecay" label="DECAY" :min="0.2" :max="4.0" :step="0.05" size="small"
+					<Knob midi-id="reverb.decay" :value-text="`${localDecay.toFixed(2)} s`" v-model="localDecay" :label="revMock && mockOn ? 'SWELL' : 'DECAY'" :min="0.2" :max="4.0" :step="0.05" size="small"
 						:disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'decay'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'decay'" class="custom-tooltip">
@@ -42,12 +42,18 @@
 						{{ preLabel }}
 					</span>
 				</div>
+
+				<!-- REV MOCKUPS (branch only, ?rev=b|c): where the REV switch could go -->
+				<PedalSwitch v-if="revMock === 'b' || revMock === 'c'" v-model="mockOn" label="REV" aria-label="Reverse reverb"
+					:class="`rev-${revMock}`" :disabled="!localEnabled" />
 			</div>
 
 			<div class="panel-seam" aria-hidden="true"></div>
 
 			<div class="panel-bottom">
 				<div class="effect-label">reverb</div>
+				<PedalSwitch v-if="revMock === 'a'" v-model="mockOn" label="REV" aria-label="Reverse reverb"
+					class="rev-a" :disabled="!localEnabled" />
 				<button class="footswitch" type="button" :aria-pressed="localEnabled" aria-label="Reverb pedal"
 					@click="localEnabled = !localEnabled" @keydown.space.prevent="localEnabled = !localEnabled"
 					@keydown.enter.prevent="localEnabled = !localEnabled" />
@@ -60,6 +66,7 @@
 import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
+import PedalSwitch from './PedalSwitch.vue';
 import { DEFAULT_PRE_DIVISION, preDelayLabel, PRE_DIVISIONS } from '../../audio/reverb/preDelay';
 
 const props = withDefaults(defineProps<{
@@ -92,6 +99,10 @@ const localEnabled = ref<boolean>(props.enabled);
 const localMix = ref<number>(props.mix);
 const localDecay = ref<number>(props.decay);
 const localTone = ref<number>(props.tone);
+
+// REV MOCKUPS (branch only): ?rev=a (on the ribbon), b (beside the treadle), c (between the knobs)
+const revMock = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('rev') : null;
+const mockOn = ref(true);
 
 const activeKnob = ref<null | 'mix' | 'decay' | 'tone' | 'pre'>(null);
 
