@@ -177,6 +177,7 @@
 							:rel="pwa.state.standalone ? 'noopener' : undefined">
 							<img class="topbar-logo" src="../assets/eWaveLogo1.png" alt="Ephemeral Wave: return to the main site">
 						</a>
+						<LayoutMock v-if="mock === 'b'" part="strip" variant="b" :analyser="analyser" :sampleRate="audioCtx.sampleRate" />
 					</template>
 					<!-- The gear: Theme and MIDI (SettingsMenu.vue; PR 92, option A of three mockups).
 						 Not in phone mode, where themes are in the ☰ menu and MIDI isn't offered. -->
@@ -192,7 +193,17 @@
 			 screen beside them; under them Sound (three rows, each filled edge to edge) and Compose,
 			 ending on one line. Under 1200 px, Sound, Effects and Compose are tabs under the steps
 			 (data-tab says which one shows). -->
-		<div v-show="!phoneActive" class="ds-grid" :data-tab="activeTab">
+		<div v-show="!phoneActive" class="ds-grid" :data-tab="activeTab" :data-mock="mock || undefined">
+			<!-- MOCKUPS (?mock=a|b|c; LayoutMock.vue) -->
+			<LayoutMock v-if="mock" part="overlays" :variant="mock" :analyser="analyser" :sampleRate="audioCtx.sampleRate" :hit="() => hitPicture" />
+			<LayoutMock v-if="mock === 'a' || mock === 'c'" part="column" :variant="mock" class="ds-mockcol" :analyser="analyser"
+				:sampleRate="audioCtx.sampleRate" :steps="synthInstrument?.steps" :pitches="synthInstrument?.pitches"
+				:velocities="synthInstrument?.velocities" :currentStep="currentStep" :playing="isPlaying" :muted="synthInstrument?.muted">
+				<PresetButtons title="Sound presets" dice-label="Random sound" :presets="PRESETS" :active="activePresetId"
+					@choose="choosePreset" @random="rollRandomSound" />
+				<PresetButtons title="Pattern presets" dice-label="Random pattern" :presets="PATTERNS"
+					:active="activePatternId" @choose="choosePattern" @random="rollRandomPattern" />
+			</LayoutMock>
 
 			<!-- Visualizer Screen -->
 			<aside class="pt-card ds-visualizer">
@@ -262,6 +273,7 @@
 							@random="rollRandomPattern" />
 					</div>
 
+					<LayoutMock v-if="mock === 'b'" part="slots" variant="b" />
 					<!-- Play (+ the MIDI fallback) -->
 					<div class="transport-right">
 						<button type="button" class="pt-btn btn-lg btn3d" data-keeps-pad-settings data-keeps-brush @click="onPlayClick"
@@ -289,6 +301,7 @@
 							@click="toggleMute(synthInstrument.name)" role="button"
 							:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
 						<h2 class="pt-title">Step Sequencer</h2>
+						<LayoutMock v-if="mock === 'b'" part="tabs" variant="b" />
 
 						<!-- No Vol knob while there's one lane (PR 92): the Volume knob is enough. The lane's
 							 volume (channelVolume) is still saved and played; it comes back as each
@@ -345,6 +358,7 @@
 						:noise-fps="14" :noise-speed="40" :noise-enabled="noiseEnabled" :pepper-alpha="0.2"
 						:pepper-scale="6" :lfoView="lfoView" @open-pad-settings="({ name, index, anchorRect }) =>
 							openPadSettings(name, index, { currentTarget: { getBoundingClientRect: () => anchorRect } } as any)" />
+					<LayoutMock v-if="mock === 'c'" part="lanes" variant="c" />
 
 				</div>
 			</section>
@@ -755,6 +769,9 @@ import { useLiveEngine } from '../audio/liveEngine';
 import { useLfoVisual } from '../composables/useLfoVisual';
 import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
+import LayoutMock from './LayoutMock.vue';
+// MOCKUPS ONLY: ?mock=a|b|c (LayoutMock.vue)
+const mock = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('mock') || '') : '';
 import ExportDialog from './ExportDialog.vue';
 import ShareNotice from './ShareNotice.vue';
 import { buildExportFiles, renderHit, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from '../audio/export/exportFiles';
@@ -4072,6 +4089,17 @@ async function recordSample() {
 	}
 }
 
+/* MOCKUPS ONLY (?mock=a|b|c) */
+.ds-grid[data-mock] .ds-visualizer { position: absolute; left: -9999px; width: 400px; height: 300px; }
+.ds-mockcol { grid-area: screen; }
+.ds-grid[data-mock="c"] .transport-presets { display: none; }
+.ds-grid[data-mock="b"] {
+	grid-template-areas:
+		"transport transport"
+		"steps steps"
+		"sound compose";
+}
+.ds-grid[data-mock="b"] .transport-presets { flex: 1 1 auto; justify-content: center; }
 /* LAYOUT END */
 
 /* PHONE START: the phone layout's Sound, FX and Key pages (PhoneLayout.vue's slots) */
