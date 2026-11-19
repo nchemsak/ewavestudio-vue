@@ -6007,7 +6007,7 @@ test('PR 99: the pedals: the name on a ribbon, every caption under its own knob,
 		}), pedals);
 		for (const [i, b] of boxes.entries()) {
 			const name = `${pedals[i]} at ${width}`;
-			expect(b.knobs).toHaveLength(3);
+			expect(b.knobs).toHaveLength(pedals[i] === 'reverb' ? 4 : 3); // the reverb has PRE (PR 103)
 			for (const k of b.knobs) {
 				expect(k.label.top, name).toBeGreaterThanOrEqual(k.dial.bottom - 1);
 				for (const other of b.knobs) {
