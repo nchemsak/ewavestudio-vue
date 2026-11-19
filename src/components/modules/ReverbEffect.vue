@@ -31,10 +31,12 @@
 					</span>
 				</div>
 
-				<!-- PRE: the pre-delay, ms before the tail starts; notches at 1/64 and 1/32 of a bar -->
+				<!-- PRE: the pre-delay before the tail starts, a note value at the tempo (Off … 1/8), one
+				     position each, as the delay's TIME -->
 				<div class="knob-cell pre">
-					<Knob midi-id="reverb.preDelay" :value-text="preLabel" v-model="localPreDelay" label="PRE" :min="0" :max="PRE_DELAY_MAX_MS" :step="1" size="small"
-						:detents="preDetents" :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'pre'"
+					<Knob midi-id="reverb.preDelay" :value-text="preLabel" v-model="preKnob" label="PRE" :min="0" :max="1" :step="preStep" size="small"
+						:disabled="!localEnabled" :color="color" :showMarkers="true" :markers="preMarkers"
+						:markersOnly="true" :markersOffsetDeg="-90" @knobStart="activeKnob = 'pre'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'pre'" class="custom-tooltip">
 						{{ preLabel }}
@@ -58,7 +60,7 @@
 import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
-import { clampPreDelayMs, preDelayDetents, preDelayLabel, PRE_DELAY_MAX_MS } from '../../audio/reverb/preDelay';
+import { DEFAULT_PRE_DIVISION, preDelayLabel, PRE_DIVISIONS } from '../../audio/reverb/preDelay';
 
 const props = withDefaults(defineProps<{
 	showToggle?: boolean;
@@ -66,15 +68,15 @@ const props = withDefaults(defineProps<{
 	mix: number;
 	decay: number;
 	tone: number;          // 0 = dark, 1 = bright
-	preDelay?: number;     // ms, 0–250
-	tempo?: number;        // BPM, for PRE's notches
+	preDivision?: string;  // PRE's note value ('Off', '1/16' …)
+	tempo?: number;        // BPM, for PRE's time
 	audioCtx?: AudioContext;
 	color?: string;
 }>(), {
 	showToggle: true,
 	color: '#7c9bff',
 	tone: 0.5,
-	preDelay: 0,
+	preDivision: DEFAULT_PRE_DIVISION,
 	tempo: 120
 });
 
@@ -83,19 +85,28 @@ const emit = defineEmits<{
 	(e: 'update:mix', v: number): void;
 	(e: 'update:decay', v: number): void;
 	(e: 'update:tone', v: number): void;
-	(e: 'update:preDelay', v: number): void;
+	(e: 'update:preDivision', v: string): void;
 }>();
 
 const localEnabled = ref<boolean>(props.enabled);
 const localMix = ref<number>(props.mix);
 const localDecay = ref<number>(props.decay);
 const localTone = ref<number>(props.tone);
-const localPreDelay = ref<number>(props.preDelay);
 
 const activeKnob = ref<null | 'mix' | 'decay' | 'tone' | 'pre'>(null);
 
-const preDetents = computed(() => preDelayDetents(props.tempo).map((d) => d.ms));
-const preLabel = computed(() => preDelayLabel(localPreDelay.value, props.tempo));
+// PRE: one knob position per note value
+const preMarkers = PRE_DIVISIONS.map((_, i) => i / (PRE_DIVISIONS.length - 1));
+const preStep = 1 / (PRE_DIVISIONS.length - 1);
+const preIndex = computed(() => Math.max(0, PRE_DIVISIONS.findIndex((d) => d.label === props.preDivision)));
+const preKnob = computed<number>({
+	get: () => preIndex.value / (PRE_DIVISIONS.length - 1),
+	set: (v: number) => {
+		const i = Math.max(0, Math.min(PRE_DIVISIONS.length - 1, Math.round(v * (PRE_DIVISIONS.length - 1))));
+		if (i !== preIndex.value) emit('update:preDivision', PRE_DIVISIONS[i].label);
+	},
+});
+const preLabel = computed(() => preDelayLabel(props.tempo, PRE_DIVISIONS[preIndex.value].label));
 
 const toneLabel = computed(() => {
 	const t = localTone.value;
@@ -108,13 +119,11 @@ watch(localEnabled, v => emit('update:enabled', v));
 watch(localMix, v => emit('update:mix', Math.max(0, Math.min(1, v))));
 watch(localDecay, v => emit('update:decay', Math.max(0.2, Math.min(4.0, v))));
 watch(localTone, v => emit('update:tone', Math.max(0, Math.min(1, v))));
-watch(localPreDelay, v => emit('update:preDelay', clampPreDelayMs(v)));
 
 watch(() => props.enabled, v => (localEnabled.value = v));
 watch(() => props.mix, v => { if (v !== localMix.value) localMix.value = v; });
 watch(() => props.decay, v => { if (v !== localDecay.value) localDecay.value = v; });
 watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; });
-watch(() => props.preDelay, v => { if (v !== localPreDelay.value) localPreDelay.value = v; });
 </script>
 
 <style scoped>

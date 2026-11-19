@@ -2775,29 +2775,41 @@ test('the tape pedal: its noise is a stem of its own and the stems still add up;
 	expect(wavWindow(shot, frames / rate - 0.2, frames / rate - 0.06).rms).toBeGreaterThan(1e-3);
 });
 
-test("the reverb's PRE knob: greyed out while the pedal is off, saved, one undo step; the tail starts that much later in the export, and the stems still add up", async ({ page }) => {
+test("the reverb's PRE knob: note values at the tempo, greyed out while the pedal is off, saved, one undo step; the tail starts that much later in the export, and the stems still add up", async ({ page }) => {
 	const pre = page.locator('.ds-grid .reverb-pedal').getByRole('slider', { name: 'PRE' });
-	await expect(pre).toHaveAttribute('aria-valuenow', '0');
+	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.fx.reverb;
+	await expect(pre).toHaveAttribute('aria-valuetext', 'Off');
 	await expect(pre).toHaveAttribute('aria-disabled', 'true');
 	await page.waitForTimeout(SETTLED); // the opened project becomes the starting point
 	await page.locator('.ds-grid .reverb-pedal .footswitch').click();
 	await expect(pre).not.toHaveAttribute('aria-disabled', 'true');
 	await page.waitForTimeout(SETTLED);
+	// One position per note value: Off, 1/64, 1/32, 1/16T, 1/16 …
 	await pre.focus();
-	for (let i = 0; i < 3; i++) await pre.press('ArrowRight');
-	await expect(pre).toHaveAttribute('aria-valuetext', '3 ms');
+	for (let i = 0; i < 4; i++) await pre.press('ArrowRight');
+	await expect(pre).toHaveAttribute('aria-valuetext', '1/16 · 125 ms');
 	await page.locator('body').click({ position: { x: 2, y: 2 } }); // let go of the knob
 	await page.waitForTimeout(SETTLED);
-	const fx = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.fx;
-	expect(fx.reverb.preDelay).toBe(3);
-	await page.getByRole('button', { name: 'Undo', exact: true }).click();
-	await expect(pre).toHaveAttribute('aria-valuenow', '0');
+	let reverb = await saved();
+	expect([reverb.preDivision, reverb.preDelay]).toEqual(['1/16', 125]);
+	// The time follows the tempo
+	await setTempo(page, 100);
+	await expect(pre).toHaveAttribute('aria-valuetext', '1/16 · 150 ms');
+	await page.waitForTimeout(SETTLED);
+	reverb = await saved();
+	expect([reverb.preDivision, reverb.preDelay]).toEqual(['1/16', 150]);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click(); // the tempo
+	await page.getByRole('button', { name: 'Undo', exact: true }).click(); // PRE
+	await expect(pre).toHaveAttribute('aria-valuetext', 'Off');
 
 	// The export: one hit, the reverb's stem starts PRE later than without; the dry hit doesn't
 	await turnOnPads(page, [0]);
-	const exportWith = async (id: string, preDelay: number) => {
-		await importChanged(page, id, (d) => { d.fx.reverb = { enabled: true, mix: 0.5, decay: 1, tone: 0.6, preDelay }; });
-		await expect(pre).toHaveAttribute('aria-valuenow', String(preDelay));
+	const exportWith = async (id: string, preDivision: string) => {
+		await importChanged(page, id, (d) => {
+			d.transport.tempo = 120;
+			d.fx.reverb = { enabled: true, mix: 0.5, decay: 1, tone: 0.6, preDivision, preDelay: 0 };
+		});
+		await expect(pre).toHaveAttribute('aria-valuetext', preDivision === 'Off' ? 'Off' : `${preDivision} · 250 ms`);
 		const files = unzip((await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: true, midi: false, oneShot: false, normalize: false })).bytes);
 		const of = (part: string) => files[Object.keys(files).find((n) => n.endsWith(`_${part}.wav`))!];
 		const onsetMs = (b: Buffer) => {
@@ -2814,11 +2826,11 @@ test("the reverb's PRE knob: greyed out while the pedal is off, saved, one undo 
 		expect(worst, id).toBeLessThan(1e-3);
 		return { dry: onsetMs(of('dry')), reverb: onsetMs(of('reverb')) };
 	};
-	const none = await exportWith('Pre-0', 0);
-	const late = await exportWith('Pre-120', 120);
+	const none = await exportWith('Pre-off', 'Off');
+	const late = await exportWith('Pre-eighth', '1/8'); // 250 ms at 120 BPM
 	expect(Math.abs(late.dry - none.dry)).toBeLessThan(1);
-	expect(late.reverb - none.reverb).toBeGreaterThan(115);
-	expect(late.reverb - none.reverb).toBeLessThan(125);
+	expect(late.reverb - none.reverb).toBeGreaterThan(245);
+	expect(late.reverb - none.reverb).toBeLessThan(255);
 });
 
 test('the tape pedal: on the panel, saved, one undo step a change, reset by File → New and a sound preset', async ({ page }) => {

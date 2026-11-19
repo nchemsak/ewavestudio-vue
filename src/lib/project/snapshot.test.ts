@@ -38,7 +38,7 @@ describe('factory defaults (File → New)', () => {
 				toneEnabled: true, toneHz: 5000, toneType: 'lowpass', pingPong: false,
 			},
 			drive: { enabled: false, type: 'overdrive', amount: 0.4, tone: 5000, mix: 0.5, crush: false },
-			reverb: { enabled: false, mix: 0.18, decay: 1.4, tone: 0.6, preDelay: 0 },
+			reverb: { enabled: false, mix: 0.18, decay: 1.4, tone: 0.6, preDivision: 'Off', preDelay: 0 },
 			tape: { enabled: false, age: 0.4, wobble: 0.3, mode: 'tape' },
 		});
 		expect(snap.melody).toEqual({
@@ -138,16 +138,22 @@ describe('saving and loading a project', () => {
 		expect([st.fx.tape.age.value, st.fx.tape.wobble.value, st.fx.tape.mode.value]).toEqual([0.4, 0.3, 'tape']);
 	});
 
-	it('opens a project saved before the reverb\'s pre-delay with none, and keeps a saved one within 0–250 ms', () => {
+	it('PRE is a note value at the tempo; a project from before it is Off, one with only ms gets the nearest value', () => {
 		const st = fresh();
 		changeEverything(st);
-		expect(st.fx.reverb.preDelay.value).toBe(45);
+		expect([st.fx.reverb.preDivision.value, Math.round(st.fx.reverb.preDelay.value)]).toEqual(['1/16', 122]);
+		// Saved before PRE: Off
 		applySnapshot(st, { fx: { reverb: { enabled: true, mix: 0.2, decay: 1, tone: 0.5 } } });
-		expect(st.fx.reverb.preDelay.value).toBe(0);
-		applySnapshot(st, { fx: { reverb: { enabled: true, preDelay: 30 } } });
-		expect(st.fx.reverb.preDelay.value).toBe(30);
-		applySnapshot(st, { fx: { reverb: { enabled: true, preDelay: 999 } } });
-		expect(st.fx.reverb.preDelay.value).toBe(250);
+		expect([st.fx.reverb.preDivision.value, st.fx.reverb.preDelay.value]).toEqual(['Off', 0]);
+		// PR 103 saved ms only: the nearest value at the project's tempo (120: 1/32 is 62.5 ms)
+		applySnapshot(st, { transport: { tempo: 120 }, fx: { reverb: { enabled: true, preDelay: 60 } } });
+		expect([st.fx.reverb.preDivision.value, st.fx.reverb.preDelay.value]).toEqual(['1/32', 62.5]);
+		// The time always follows the value and the tempo, whatever ms was saved with it
+		applySnapshot(st, { transport: { tempo: 60 }, fx: { reverb: { enabled: true, preDivision: '1/8', preDelay: 3 } } });
+		expect([st.fx.reverb.preDivision.value, st.fx.reverb.preDelay.value]).toEqual(['1/8', 500]);
+		// An unknown value falls back to the ms
+		applySnapshot(st, { transport: { tempo: 120 }, fx: { reverb: { enabled: true, preDivision: '1/2', preDelay: 0 } } });
+		expect(st.fx.reverb.preDivision.value).toBe('Off');
 	});
 
 	it('plays an arpeggio saved at 1/4 (dropped) at 1/8', () => {

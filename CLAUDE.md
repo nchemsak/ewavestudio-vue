@@ -220,8 +220,8 @@ src/audio/
   sample.ts              The recorded sound, the 'sample' wave: kept as base64 PCM, trimmed, and
                          played at a note's pitch (see "Sample a sound")
   reverb/generateIr.ts   Algorithmic impulse response for the ConvolverNode
-  reverb/preDelay.ts     The reverb's pre-delay (PRE): its range, notches and label (see
-                         "Effect switches")
+  reverb/preDelay.ts     The reverb's pre-delay (PRE): its note values, their time at the tempo
+                         (followPreDelay), its label (see "Effect switches")
   export/scheduleStepSequencer.ts  Separate offline engine used for audio export
   export/exportFiles.ts  The Export audio dialog's files: renders, loops, stems, one-shot; and
                          renderHit(), the screen's hit at rest
@@ -637,21 +637,34 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   delay's same echo. The switch moves the send between the two delays, so echoes already
   ringing in the other carry on. Browser tests check the echoes' sides live (per-channel
   probes, `__channelPeaksOver`) and in the export, and that the crusher quantizes live.
-- **PRE** on the reverb (PR 103; `src/audio/reverb/preDelay.ts`, both engines): a `DelayNode`
-  on the reverb send, between its tone filter and the convolver, 0–250 ms (0, the default,
-  is the sound before it), so the hit stays dry and clear before the tail starts. It's inside
-  the reverb's stem, so the stems still add up. The knob (`reverb.preDelay`, "Reverb
-  pre-delay", MIDI-learnable; 34 learnable knobs) is the pedal's fourth, in the grid's corner
-  that was empty beside TONE (`'tone pre'`), so the pedal keeps its size; it has notches at
-  1/64 and 1/32 of a bar at the tempo (31 and 63 ms at 120 BPM, `preDelayDetents()`), named
-  in its value ("31 ms (1/64)"). Saved as `fx.reverb.preDelay` in ms (older projects 0,
-  `clampPreDelayMs()`); a sound setting, so presets and File → New put it back to 0, and the
-  Sounds dice gives it 10–80 ms in two of five rolls with the reverb (drawn after the tape,
-  so earlier rolls are the same sound). The screen's hit at rest renders that much longer.
-  Live, a turn glides the delay time (30 ms), bending the send's pitch for a moment, as a
-  delay's TIME does. A browser test checks the knob (greyed out while off, saved, one undo
-  step) and the export (the reverb stem starts 120 ms later, the dry one doesn't move, the
-  stems add up).
+- **PRE** on the reverb (PR 103; note values since PR 104; `src/audio/reverb/preDelay.ts`,
+  both engines): a `DelayNode` on the reverb send, between its tone filter and the convolver,
+  so the hit stays dry and clear before the tail starts. It's inside the reverb's stem, so the
+  stems still add up. The knob (`reverb.preDelay`, "Reverb pre-delay", MIDI-learnable; 34
+  learnable knobs) is the pedal's fourth, in the grid's corner that was empty beside TONE
+  (`'tone pre'`), so the pedal keeps its size.
+  **Note values at the tempo** (PR 104, the maintainer's call: PR 103's knob was 0–250 ms with
+  soft notches at 1/64 and 1/32, whose mint ticks hardly showed on the pale pedals): like the
+  delay's TIME, one position per value with a dot each (`markersOnly`), **Off, 1/64, 1/32,
+  1/16T, 1/16, 1/16., 1/8** (`PRE_DIVISIONS`; 0, 31, 63, 83, 125, 188 and 250 ms at 120 BPM),
+  reading "1/16 · 125 ms". Longer than 1/8 sounds like an echo. Saved as
+  `fx.reverb.preDivision`, with its time as `fx.reverb.preDelay` in ms (what the engines read):
+  `followPreDelay()` in `DrumSequencer.vue` keeps the time at the value and the tempo,
+  synchronously, and `applySnapshot()` works it out on every load, so a saved time can't
+  disagree with the knob. A project from before PR 103 gets Off; one from PR 103, with only ms,
+  the nearest value at its tempo (`preDivisionForMs()`). The DelayNodes are 1.5 s long (1/8 at
+  20 BPM). `soundKey()` leaves the ms out (it follows the tempo), so a tempo change keeps a
+  preset lit. A sound setting: presets and File → New put it back to Off, and the Sounds dice
+  picks 1/64–1/16 in two of five rolls with the reverb (drawn after the tape, so earlier rolls
+  are the same sound). The screen's hit at rest renders that much longer. Live, a change glides
+  the delay time (30 ms), bending the send's pitch for a moment, as a delay's TIME does.
+  **Notches and dots on the pedals** (PR 104): a knob's notch ticks and position dots are in
+  dark ink on the pedals' pale faces (`--knob-detent`, `--knob-marker` and their `-on` /
+  `-active` colours, set with the pedals' ink in `_themes.scss`); the panel's mint and violet
+  all but vanished there. The delay's TIME keeps its own violet and yellow dots.
+  A browser test checks the knob (its values, greyed out while off, saved, following the tempo,
+  one undo step) and the export (the reverb stem starts 250 ms later at 1/8, 120 BPM, the dry
+  one doesn't move, the stems add up).
 
 ### The tape pedal (named lo-fi since PR 99)
 - **Named lo-fi** (PR 99, the maintainer's call: it has a vinyl mode, and "tape" reads as a tape
@@ -1874,7 +1887,7 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the maintainer
 changes it as ideas come up; the list now is the one agreed in PR 86, with the brainstorms
 after PR 96 and PR 99 first). The drums come back as
-the Drums machine (item 7), not as the old sample lanes.
+the Drums machine (item 8), not as the old sample lanes.
 
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
@@ -1897,11 +1910,11 @@ around the market, and put 38 ideas with mockups on a page; the maintainer answe
 Maybe or No. The list below is the Yes answers in the agreed order; the Maybes and Nos follow
 it. What the review found, and what the answers settled:
 - **The look:** no overhaul. Targeted fixes now (PRs 89, 92 and 93; fitting the window, put off below), and one layout
-  change later, with the machines (item 6), so the layout changes once.
+  change later, with the machines (item 7), so the layout changes once.
 - **The first visit** is silent (no step is on) and the glowing Generate gives every pad A
   (Scale starts at None): PR 87, before anything else.
-- **One 16-step bar repeats forever:** patterns A–D and a chain (item 4).
-- **More sequencers are small machines with hard limits** (items 5–8), not copies of today's
+- **One 16-step bar repeats forever:** patterns A–D and a chain (item 5).
+- **More sequencers are small machines with hard limits** (items 6–9), not copies of today's
   panel: they share the tempo, the key and scale, the pattern slots and the pedalboard; one is
   on the pads at a time. Today's synth becomes the **Rhythm** machine and stays the DFAM-style
   core (see "Design intent").
@@ -1927,9 +1940,26 @@ PR 100 (the sample's Length, and the sample in Random).
 **The maintainer's brainstorm after PR 99** (recorded in PR 100; Claude's review, to be
 confirmed by the maintainer, who may reorder it). Fixes and polish first, as before, then the
 screens, then the groovebox. Its first items were PR 102 (the Move tools and the Melody Maker's
-Scale) and PR 103 (the reverb's pre-delay).
+Scale), PR 103 (the reverb's pre-delay) and PR 104 (PRE in note values). After PR 103 the
+maintainer asked about a "pre-reverb" (a reversed reverb swelling into each hit, the Maybe
+below); REV (item 1) is the part of it that needs no look-ahead.
 
-1. **Phone mode, brought up to date** (mockups where the look changes). The FX page's four
+1. **REV on the reverb** (after PR 104, the maintainer's call; first a quick mockup of where its
+   switch goes: the pedal's grid is full, so on the ribbon by the LED, or a mini switch). A
+   switch that plays the reverb's impulse response backwards: after each hit the reverb rises
+   instead of decaying, then cuts off, "sucked into" the next hit. It needs no look-ahead (the
+   swell comes after the hit), so it works live, in the export, with MIDI and with the stems.
+   Its length lines up with the pattern: while REV is on, DECAY reads as lengths, its first
+   stop **Next hit** (each hit's swell as long as the gap to the next step that's on, round
+   the bar's end too; the engine knows the pattern when it plays a hit, so it can see the gap)
+   and then fixed values (1 step, 2 steps, 1 beat, 2 beats) for a steadier pulse. Next hit
+   keeps one impulse response per gap in use (a pattern has a few, typically 2–4) and sends
+   each hit to its own, rebuilt when the tempo or the pattern changes; PRE is subtracted so
+   the swell still ends on time. Fiddly parts: swing (the gaps' exact times), repeats (the gap
+   inside the step), a pattern edit while a swell rings (it keeps its length), MIDI notes (no
+   next hit: a fixed value). If Next hit proves too fiddly, the PR ships the fixed values and
+   leaves it for later. Saved (older projects off), presets, the dice, both engines.
+2. **Phone mode, brought up to date** (mockups where the look changes). The FX page's four
    pedals in PR 99's look (the ribbon with the name, screws, the treadle; the tall pedals
    kept tall), and the other newer looks where they cost nothing to draw (the shape cards'
    screens stay classic on the Sound page: one more canvas loop each). **Nothing scrolls at
@@ -1938,7 +1968,7 @@ Scale) and PR 103 (the reverb's pre-delay).
    keyboard beside the screen and Generate, Scale and the maker's settings in a column, as
    the wide card has from 640 px, tightened). The Sound page's SAMPLE gets Length and its
    dice too. A browser test checks each page's height at 568 × 320 and 844 × 390.
-2. **The desktop view on a phone** (Desktop View in ☰, or a tablet; `pointer: coarse` under
+3. **The desktop view on a phone** (Desktop View in ☰, or a tablet; `pointer: coarse` under
    720 px): the pads in **two rows of 8**, as phone mode's (today they wrap into uneven rows
    of 44 px pads); Pattern Tools' caps and the like taller on a touch screen (44 px is the
    usual finger target; at least the 32 px the phone's caps are). **Scrolling over the
@@ -1949,8 +1979,8 @@ Scale) and PR 103 (the reverb's pre-delay).
    screen, and `preventDefault` only once a grip is held); the mini knobs beside them still
    set everything. Turning the screens off for touch altogether (the maintainer's idea) is
    the fallback if grips prove fiddly; they're the cards' most visible part.
-3. **Spread the big screen's views around** (mockups, ideally with the machines' layout, item
-   6, since what fills the freed space is their rail): the Spectrum behind the Filter card's
+4. **Spread the big screen's views around** (mockups, ideally with the machines' layout, item
+   7, since what fills the freed space is their rail): the Spectrum behind the Filter card's
    curve, the Tuner in the Melody Maker, the hit at rest faint behind the Envelope card's
    curve, the scope and spectrogram small (a strip, perhaps in the top bar as phone mode's tiny
    scope). Several small screens are cheap to draw (one shared frame loop; none drawn while
@@ -1965,36 +1995,36 @@ Scale) and PR 103 (the reverb's pre-delay).
 
 Grow into a small groovebox:
 
-4. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
+5. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
     holds the steps, notes, velocities and repeats; the sound is shared. A slot clicked while
     playing takes over at the next bar (the bar queue, with its ghost). Copy A to B. Under the
     slots, a chain of up to eight cells plays them in order, and Export audio can render the
     chain. No timeline. Saved so that a pattern is a list of tracks from the start, even with
     one track, and the machines need no second change to saved projects.
-5. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
+6. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
     that builds a note, used by the live engine and the export engine (today two engines kept
     in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
     on the output (dropped after PR 30 for one voice; four machines summed need it).
-6. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
+7. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
     name, mute, level and a tiny row of its steps); the pads show the chosen machine; the Sound
     section becomes the chosen machine's panel; a send to the pedals per machine; a stem per
     machine in the export. Bass: one note at a time, 30–250 Hz, saw or square with a sub, one
     filter with its envelope, Accent per step, about six knobs (Cutoff, Reso, Env, Decay, Sub,
     Drive), following the key. Decide Slide and Tie (a Maybe below) when it starts. Mockups
     first; the phone gets a way to choose the machine.
-7. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
+8. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
     Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
     drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
     light work for a phone. It replaces the hidden sample lanes: their playback code is reused,
     the rest and the three mp3 files go (see "Dead code").
-8. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
+9. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
     touch plates, one slow filter, joystick and short sequencer are worth borrowing; its
     per-voice knobs and microtonal tuning are not). Six plates, one per note of the key's
     chord; a touched plate latches a small swarm of detuned oscillators, fading in over a bar
     or more; an X/Y pad (the filter one way, the swarm's spread the other); Attack and Release
     in bars; no steps: its sequencer counts bars, a chord per bar for 4 or 8 bars, across the
     pattern chain; straight to the reverb.
-9. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+10. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
     the maintainer wants some maintenance, each as its own PR.
 
 Put off after PR 93 (the maintainer's call: back to them after some of the items above):
@@ -2016,7 +2046,7 @@ Put off after PR 93 (the maintainer's call: back to them after some of the items
   Centred vertically when it fits: tighten spacing (the screen's margins, the gaps between
   sections; the desktop's pedals got short footswitches in PR 90), then scale the frame down
   to fit short windows (with a floor). Measure at the maintainer's screen and common laptop
-  sizes, once the machines' rail is there (item 6).
+  sizes, once the machines' rail is there (item 7).
 - **Record a take** (put off after PR 93, for now). A REC cap beside Play records what's heard,
   knob moves included, to a WAV (the output captured without loss, in a worklet), and stops
   with Stop. Export renders the pattern as set; it can't capture a filter sweep that's
@@ -2024,7 +2054,9 @@ Put off after PR 93 (the maintainer's call: back to them after some of the items
 
 Maybe (the maintainer's answer in the review, or earlier; ask before starting one):
 - **A reverse-reverb swell** ("pre-reverb", from the brainstorm after PR 99): a reversed tail
-  that rises into each hit. A hit's swell starts before the hit, so it needs the pattern ahead
+  that rises into each hit (REV, item 1, swells after a hit into the next, which needs no
+  look-ahead; this would swell before the first hit too, and is best left until after the
+  machines' groundwork, item 6, where one function builds a note for both engines). A hit's swell starts before the hit, so it needs the pattern ahead
   of the live engine's 100 ms lookahead: easy in the export (render, reverse, place), harder
   live (schedule each hit's swell from the pattern a bar ahead, so a change takes a bar). The
   PR 34 "reverse swell" variation was dropped as DAW work; this would be a pedal setting.
@@ -2113,7 +2145,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   interval (a fifth, an octave, detuned) and level, maybe hard sync or VCO 1 → 2 FM; a card,
   both engines, presets, the dice, saving. It must sound unlike the FM card's modulator, which
   is already a second oscillator.
-- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 5–8.)
+- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 6–9.)
 - **Patch cables** (put off after PR 49: the maintainer wants to tweak the layout more first):
   animated cables from the LFO to what it moves (Cutoff, the Pulse tile, the pads), swaying a
   little, never over a control, still with `prefers-reduced-motion`. They depend on where
@@ -2148,7 +2180,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
   ticks, 24 a quarter note, which jitter); MIDI out would send the pattern's notes to another
   synth, timed against the audio clock.
-- (Several patterns chained into a song: planned now, item 4.)
+- (Several patterns chained into a song: planned now, item 5.)
 - **32 steps, or per-lane lengths** (the export code's types already allow 32; "Last step", a
   Maybe above, is the smaller version).
 - **Per-step parameter locks** (for example a different filter cutoff on each step). Each
@@ -2164,8 +2196,8 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   808 makes cymbals and cowbell) and struck (a click ringing tuned resonant filters).
 - The old drum-lane items (lanes through the pedals with pitch, decay and pan; custom samples
   stored in the browser; drum kits; the export rendering only the synth lane; the sample paths
-  that depend on the trailing slash) are overtaken by the Drums machine (item 7), a send and a
-  stem per machine (item 6) and Sample a sound (PR 95). Still on hold from them: samples
+  that depend on the trailing slash) are overtaken by the Drums machine (item 8), a send and a
+  stem per machine (item 7) and Sample a sound (PR 95). Still on hold from them: samples
   loaded by drag-and-drop, and drum slots played by MIDI notes.
 - **Shared session ("jam"):** several people on one URL, for example one phone playing the
   drum lanes and another the synth. It needs a realtime relay between devices; the site is
@@ -2281,6 +2313,7 @@ Done:
 | 101 | Fix: PR 100's deploy stopped at its checks: PR 98's Generate test expected pad 6 to get a new random note, which is A again about 1 time in 15 (PR 100's seeding of `Math.random` didn't hold, as the page draws random numbers of its own meanwhile). The test presses Generate until pad 6's note changes, up to 20 times. |
 | 102 | Move and the Melody Maker's Scale (the plan's first item after PR 99's brainstorm): Pattern Tools' Move has labelled caps, ↓ Oct \| Oct ↑, ◂ Shift \| Shift ▸ and ⇄ Reverse across, three rows level with Step Fills' (option A of three mockups); "Rotate left / right" are **Shift earlier / later**, on the phone's Pads page too; a narrow card puts the five on one row. Range and Octaves share one box beside Scale, so the Scale stepper keeps its width in both modes. Every card keeps its size on the desktop; at 390 px Pattern Tools is 24 px shorter. |
 | 103 | Pre-delay on the reverb (the plan's first item after PR 102): a PRE knob, the reverb pedal's fourth, in the corner beside TONE (the pedal keeps its size), holds the reverb send back 0–250 ms before the convolver, so the hit stays dry before the tail; notches at 1/64 and 1/32 of a bar at the tempo; both engines, inside the reverb's stem (the stems still add up); saved as `fx.reverb.preDelay` (older projects 0), reset by presets and File → New, sometimes rolled by the Sounds dice, MIDI-learnable (34 knobs; `src/audio/reverb/preDelay.ts`). |
+| 104 | PRE in note values (the maintainer's call after PR 103, whose plan it also adds: REV, a reversed reverb that ends on the next hit, is next): the reverb's PRE knob steps through Off, 1/64, 1/32, 1/16T, 1/16, 1/16. and 1/8 at the tempo, like the delay's TIME, and its time follows the tempo (`fx.reverb.preDivision`; a project from PR 103 gets the value nearest its ms). Knob notches and position dots on the pedals are in dark ink (the panel's mint ticks all but vanished on the pale pedals, Analog's cream reverb most). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -124,9 +124,9 @@ export function randomPreset(rng: Rng = Math.random): SynthPreset {
 	// pedal is the same sound, with or without it.
 	if (chance(0.25)) fx.tape = { enabled: true, age: between(0.15, 0.7, 0.01), wobble: between(0.1, 0.6, 0.01), mode: chance(0.7) ? 'tape' : 'vinyl' };
 
-	// The reverb's pre-delay, in two of five rolls with the reverb: a short gap (10–80 ms)
-	// before the tail. Drawn after the tape, so every roll from before it stays the same.
-	if (fx.reverb && chance(0.4)) fx.reverb.preDelay = between(10, 80, 1);
+	// The reverb's pre-delay, in two of five rolls with the reverb: a short gap before the tail
+	// (1/64 to 1/16 at the tempo). Drawn after the tape, so every roll from before it stays the same.
+	if (fx.reverb && chance(0.4)) fx.reverb.preDivision = pick(['1/64', '1/32', '1/16T', '1/16']);
 
 	return { id: 'random', label: 'Random', description: 'A random sound', wave, synth, fx };
 }
