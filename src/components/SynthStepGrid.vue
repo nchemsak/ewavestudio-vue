@@ -561,6 +561,16 @@ const nearestNote = props.nearestNote;
     transition: opacity .15s ease, transform .15s ease, background .15s ease;
 }
 
+/* A finger's ⋮ (PR 107): the desktop view on a phone held upright */
+@media (pointer: coarse) and (max-width: 719.98px) {
+    .pad-head .pad-settings-dot {
+        width: 100%;
+        max-width: 32px;
+        height: 28px;
+        font-size: 16px;
+    }
+}
+
 .pad-col:hover .pad-settings-dot,
 .pad-settings-dot:focus-visible {
     opacity: 1;

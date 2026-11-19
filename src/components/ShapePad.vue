@@ -9,12 +9,15 @@
      in this file's second <style> block. -->
 <template>
     <div class="sp-pad" :class="{ dragging, 'is-disabled': disabled }" aria-hidden="true"
-        @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="onUp">
+        @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="onUp" @touchmove="onTouchMove">
         <svg :viewBox="`0 0 ${w} ${h}`" preserveAspectRatio="none">
             <slot />
         </svg>
         <span v-for="p in handles" :key="p.id" class="sp-handle" :class="{ on: dragging && active === p.id }"
             :style="{ left: `${(p.x / w) * 100}%`, top: `${(p.y / h) * 100}%` }"></span>
+        <!-- On a touch screen, a grip for a pad that has none (FM, Unison): where its value is -->
+        <span v-if="touchGrip && !handles.length" class="sp-handle sp-touch-grip" :class="{ on: dragging }"
+            :style="{ left: `${(touchGrip.x / w) * 100}%`, top: `${(touchGrip.y / h) * 100}%` }"></span>
         <span v-if="title || readout" class="sp-title" :class="{ right: titleRight }">{{ title }}<small v-if="readout">{{ readout }}</small></span>
         <span v-if="hint" class="sp-hint">{{ hint }}</span>
     </div>
@@ -35,8 +38,9 @@ const props = withDefaults(defineProps<{
     readout?: string;        // the settings in numbers, under the title
     titleRight?: boolean;
     hint?: string;           // what a drag does ("↕ amount"), where there are no grips
+    touchGrip?: PadPoint | null; // a pad without grips: where a touch takes hold (shown on touch screens only)
     disabled?: boolean;
-}>(), { handles: () => [], active: '', title: '', readout: '', titleRight: false, hint: '', disabled: false });
+}>(), { handles: () => [], active: '', title: '', readout: '', titleRight: false, hint: '', touchGrip: null, disabled: false });
 
 const emit = defineEmits<{
     (e: 'start', p: PadPoint): void;
@@ -50,8 +54,20 @@ function point(e: PointerEvent): PadPoint {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     return { x: ((e.clientX - r.left) / r.width) * props.w, y: ((e.clientY - r.top) / r.height) * props.h };
 }
+// A touch screen (PR 107): a finger scrolling the page shouldn't turn a setting where it lands,
+// so a touch only takes hold within TOUCH_REACH px of a grip (a pad's own, or its touchGrip);
+// anywhere else the page scrolls (touch-action: pan-y). A mouse or a pen drags from anywhere,
+// as before.
+const TOUCH_REACH = 22;
+function nearGrip(e: PointerEvent): boolean {
+    const grips = props.handles.length ? props.handles : (props.touchGrip ? [props.touchGrip] : []);
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return grips.some((g) => Math.hypot(r.left + (g.x / props.w) * r.width - e.clientX,
+        r.top + (g.y / props.h) * r.height - e.clientY) <= TOUCH_REACH);
+}
 function onDown(e: PointerEvent) {
     if (props.disabled || e.button > 0) return;
+    if (e.pointerType === 'touch' && !nearGrip(e)) return;
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     dragging.value = true;
     const p = point(e);
@@ -60,6 +76,10 @@ function onDown(e: PointerEvent) {
 }
 function onMove(e: PointerEvent) {
     if (dragging.value) emit('move', point(e));
+}
+// While a grip is held, the page mustn't scroll under the finger (pan-y would let it)
+function onTouchMove(e: TouchEvent) {
+    if (dragging.value && e.cancelable) e.preventDefault();
 }
 function onUp() {
     if (!dragging.value) return;
@@ -90,7 +110,8 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 2px 10px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(0, 0, 0, 0.45);
     overflow: hidden;
     cursor: grab;
-    touch-action: none;
+    /* A finger scrolls the page from anywhere but a grip (onDown, onTouchMove) */
+    touch-action: pan-y pinch-zoom;
     user-select: none;
     -webkit-user-select: none;
 }
@@ -191,6 +212,21 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
 
 .is-disabled .sp-handle {
     display: none;
+}
+
+/* FM's and Unison's grip, for a finger only: a mouse drags them from anywhere */
+.sp-touch-grip {
+    display: none;
+}
+
+@media (pointer: coarse) {
+    .sp-touch-grip {
+        display: block;
+    }
+
+    .is-disabled .sp-touch-grip {
+        display: none;
+    }
 }
 
 .sp-title,

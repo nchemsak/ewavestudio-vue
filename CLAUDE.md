@@ -573,6 +573,14 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   ShapePad.vue; Unison's keys read 2, 3 there, named "2 voices"...); until then its own FM and
   Unison buttons and knobs. The FM and Unison tiles (`FmTowerButton.vue`, `UnisonButton.vue`)
   were deleted; they're in git history.
+- **On a touch screen** (PR 107): a finger that lands on a screen while scrolling no longer turns
+  a setting. The screens are `touch-action: pan-y pinch-zoom`, and a touch takes hold only
+  within 22 px of a grip (`TOUCH_REACH`, `nearGrip()` in `ShapePad.vue`); while one is held,
+  `touchmove` is cancelled so the page doesn't scroll under it. Anywhere else the page scrolls.
+  FM and Unison draw no grips, so they pass a `touchGrip` (where their value is: FM's Amount
+  height in the middle, Unison's Detune across and Spread up), drawn only on a coarse pointer
+  (`.sp-touch-grip`) and while the card is on. A mouse or a pen drags from anywhere, as before.
+  Turning the screens off for touch was the fallback, not needed.
 - A browser test drags each screen and checks the knobs' values, one undo step for a filter
   drag, the keys, and the cards' heights.
 
@@ -1873,6 +1881,16 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (120 px wide), centred, three across with the tape deck under them (PR 78; they were
   stretched); under 720 px still three across, about 110 px each (PR 90; one under another
   before, when each had its tall footswitch).
+  **The desktop view on a phone held upright** (PR 107; `pointer: coarse` under 720 px, Desktop
+  View in phone mode's ☰ or "Use the desktop view instead"): the pads are two rows of 8 (under
+  640 px for any pointer: `repeat(8, …)` and 5 px apart in `_drumSequencer.scss`, the
+  `.pad-row`'s 12 px right padding dropped, so the rows are centred; they wrapped into 6, 6 and
+  4 before), and on a touch screen the caps are at least 32 px tall (the block at the end of
+  `_hardware.scss`, scoped to `.ds-grid`, so phone mode's pages don't change: the preset boxes,
+  Pattern Tools, the Melody Maker's steppers and switches, VEL, FM's and Unison's keys, the
+  F-keys...; `.ds-grid` three times to beat the components' scoped sizes), and a pad's ⋮ is
+  32 × 28 px (`SynthStepGrid.vue`). Held sideways (844 px) nothing changes but the screens'
+  touch (see "The shape cards"). Small corner badges (the dice, TAP, REC) are left as they were.
   A browser test checks the arrangement at 1600 and 1280 px (flush bottoms, one line of knobs,
   rows filled, titles on one line, no sideways scroll) and the tabs at 1024 and 390 px, and
   another that every control can be clicked (none drawn over by another) at 1600, 1280, 1024
@@ -1960,7 +1978,7 @@ The maintainer's to-do list, agreed in earlier sessions. Rules:
 Next, in this order (agreed after PR 37, from the maintainer's brainstorm; the maintainer
 changes it as ideas come up; the list now is the one agreed in PR 86, with the brainstorms
 after PR 96 and PR 99 first). The drums come back as
-the Drums machine (item 6), not as the old sample lanes.
+the Drums machine (item 5), not as the old sample lanes.
 
 The maintainer's review after PR 49 (the pad popup, presets, Melody Maker and Unison) was
 done in PRs 50, 51 and 52.
@@ -1983,11 +2001,11 @@ around the market, and put 38 ideas with mockups on a page; the maintainer answe
 Maybe or No. The list below is the Yes answers in the agreed order; the Maybes and Nos follow
 it. What the review found, and what the answers settled:
 - **The look:** no overhaul. Targeted fixes now (PRs 89, 92 and 93; fitting the window, put off below), and one layout
-  change later, with the machines (item 5), so the layout changes once.
+  change later, with the machines (item 4), so the layout changes once.
 - **The first visit** is silent (no step is on) and the glowing Generate gives every pad A
   (Scale starts at None): PR 87, before anything else.
-- **One 16-step bar repeats forever:** patterns A–D and a chain (item 3).
-- **More sequencers are small machines with hard limits** (items 4–7), not copies of today's
+- **One 16-step bar repeats forever:** patterns A–D and a chain (item 2).
+- **More sequencers are small machines with hard limits** (items 3–6), not copies of today's
   panel: they share the tempo, the key and scale, the pattern slots and the pedalboard; one is
   on the pads at a time. Today's synth becomes the **Rhythm** machine and stays the DFAM-style
   core (see "Design intent").
@@ -2014,22 +2032,11 @@ PR 100 (the sample's Length, and the sample in Random).
 confirmed by the maintainer, who may reorder it). Fixes and polish first, as before, then the
 screens, then the groovebox. Its first items were PR 102 (the Move tools and the Melody Maker's
 Scale), PR 103 (the reverb's pre-delay), PR 104 (PRE in note values), PR 105 (REV on the
-reverb) and PR 106 (phone mode brought up to date). After PR 103 the maintainer asked about a "pre-reverb" (a reversed reverb swelling
+reverb), PR 106 (phone mode brought up to date) and PR 107 (the desktop view on a phone). After PR 103 the maintainer asked about a "pre-reverb" (a reversed reverb swelling
 into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 
-1. **The desktop view on a phone** (Desktop View in ☰, or a tablet; `pointer: coarse` under
-   720 px): the pads in **two rows of 8**, as phone mode's (today they wrap into uneven rows
-   of 44 px pads); Pattern Tools' caps and the like taller on a touch screen (44 px is the
-   usual finger target; at least the 32 px the phone's caps are). **Scrolling over the
-   screens:** the shape cards' screens (`ShapePad.vue`) take every touch (`touch-action:
-   none`), so a finger that lands on one while scrolling turns a setting instead. On a touch
-   screen a screen should only take a touch that starts on a grip (the dots it draws, within
-   about 20 px), letting the page scroll from anywhere else (`touch-action: pan-y` on the
-   screen, and `preventDefault` only once a grip is held); the mini knobs beside them still
-   set everything. Turning the screens off for touch altogether (the maintainer's idea) is
-   the fallback if grips prove fiddly; they're the cards' most visible part.
-2. **Spread the big screen's views around** (mockups, ideally with the machines' layout, item
-   5, since what fills the freed space is their rail): the Spectrum behind the Filter card's
+1. **Spread the big screen's views around** (mockups, ideally with the machines' layout, item
+   4, since what fills the freed space is their rail): the Spectrum behind the Filter card's
    curve, the Tuner in the Melody Maker, the hit at rest faint behind the Envelope card's
    curve, the scope and spectrogram small (a strip, perhaps in the top bar as phone mode's tiny
    scope). Several small screens are cheap to draw (one shared frame loop; none drawn while
@@ -2044,36 +2051,36 @@ into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 
 Grow into a small groovebox:
 
-3. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
+2. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
     holds the steps, notes, velocities and repeats; the sound is shared. A slot clicked while
     playing takes over at the next bar (the bar queue, with its ghost). Copy A to B. Under the
     slots, a chain of up to eight cells plays them in order, and Export audio can render the
     chain. No timeline. Saved so that a pattern is a list of tracks from the start, even with
     one track, and the machines need no second change to saved projects.
-4. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
+3. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
     that builds a note, used by the live engine and the export engine (today two engines kept
     in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
     on the output (dropped after PR 30 for one voice; four machines summed need it).
-5. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
+4. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
     name, mute, level and a tiny row of its steps); the pads show the chosen machine; the Sound
     section becomes the chosen machine's panel; a send to the pedals per machine; a stem per
     machine in the export. Bass: one note at a time, 30–250 Hz, saw or square with a sub, one
     filter with its envelope, Accent per step, about six knobs (Cutoff, Reso, Env, Decay, Sub,
     Drive), following the key. Decide Slide and Tie (a Maybe below) when it starts. Mockups
     first; the phone gets a way to choose the machine.
-6. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
+5. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
     Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
     drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
     light work for a phone. It replaces the hidden sample lanes: their playback code is reused,
     the rest and the three mp3 files go (see "Dead code").
-7. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
+6. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
     touch plates, one slow filter, joystick and short sequencer are worth borrowing; its
     per-voice knobs and microtonal tuning are not). Six plates, one per note of the key's
     chord; a touched plate latches a small swarm of detuned oscillators, fading in over a bar
     or more; an X/Y pad (the filter one way, the swarm's spread the other); Attack and Release
     in bars; no steps: its sequencer counts bars, a chord per bar for 4 or 8 bars, across the
     pattern chain; straight to the reverb.
-8. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
+7. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
     the maintainer wants some maintenance, each as its own PR.
 
 Put off after PR 93 (the maintainer's call: back to them after some of the items above):
@@ -2095,7 +2102,7 @@ Put off after PR 93 (the maintainer's call: back to them after some of the items
   Centred vertically when it fits: tighten spacing (the screen's margins, the gaps between
   sections; the desktop's pedals got short footswitches in PR 90), then scale the frame down
   to fit short windows (with a floor). Measure at the maintainer's screen and common laptop
-  sizes, once the machines' rail is there (item 5).
+  sizes, once the machines' rail is there (item 4).
 - **Record a take** (put off after PR 93, for now). A REC cap beside Play records what's heard,
   knob moves included, to a WAV (the output captured without loss, in a worklet), and stops
   with Stop. Export renders the pattern as set; it can't capture a filter sweep that's
@@ -2105,7 +2112,7 @@ Maybe (the maintainer's answer in the review, or earlier; ask before starting on
 - **A reverse-reverb swell** ("pre-reverb", from the brainstorm after PR 99): a reversed tail
   that rises into each hit (REV, PR 105, swells after a hit into the next, which needs no
   look-ahead; this would swell before the first hit too, and is best left until after the
-  machines' groundwork, item 4, where one function builds a note for both engines). A hit's swell starts before the hit, so it needs the pattern ahead
+  machines' groundwork, item 3, where one function builds a note for both engines). A hit's swell starts before the hit, so it needs the pattern ahead
   of the live engine's 100 ms lookahead: easy in the export (render, reverse, place), harder
   live (schedule each hit's swell from the pattern a bar ahead, so a change takes a bar). The
   PR 34 "reverse swell" variation was dropped as DAW work; this would be a pedal setting.
@@ -2194,7 +2201,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   interval (a fifth, an octave, detuned) and level, maybe hard sync or VCO 1 → 2 FM; a card,
   both engines, presets, the dice, saving. It must sound unlike the FM card's modulator, which
   is already a second oscillator.
-- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 4–7.)
+- (A second 16-pad lane, put off after PR 52, is planned now as the machines, items 3–6.)
 - **Patch cables** (put off after PR 49: the maintainer wants to tweak the layout more first):
   animated cables from the LFO to what it moves (Cutoff, the Pulse tile, the pads), swaying a
   little, never over a control, still with `prefers-reduced-motion`. They depend on where
@@ -2229,7 +2236,7 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   machine's tempo and start/stop (the 25 ms scheduler would have to follow incoming clock
   ticks, 24 a quarter note, which jitter); MIDI out would send the pattern's notes to another
   synth, timed against the audio clock.
-- (Several patterns chained into a song: planned now, item 3.)
+- (Several patterns chained into a song: planned now, item 2.)
 - **32 steps, or per-lane lengths** (the export code's types already allow 32; "Last step", a
   Maybe above, is the smaller version).
 - **Per-step parameter locks** (for example a different filter cutoff on each step). Each
@@ -2245,8 +2252,8 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   808 makes cymbals and cowbell) and struck (a click ringing tuned resonant filters).
 - The old drum-lane items (lanes through the pedals with pitch, decay and pan; custom samples
   stored in the browser; drum kits; the export rendering only the synth lane; the sample paths
-  that depend on the trailing slash) are overtaken by the Drums machine (item 6), a send and a
-  stem per machine (item 5) and Sample a sound (PR 95). Still on hold from them: samples
+  that depend on the trailing slash) are overtaken by the Drums machine (item 5), a send and a
+  stem per machine (item 4) and Sample a sound (PR 95). Still on hold from them: samples
   loaded by drag-and-drop, and drum slots played by MIDI notes.
 - **Shared session ("jam"):** several people on one URL, for example one phone playing the
   drum lanes and another the synth. It needs a realtime relay between devices; the site is
@@ -2365,6 +2372,7 @@ Done:
 | 104 | PRE in note values (the maintainer's call after PR 103, whose plan it also adds: REV, a reversed reverb that ends on the next hit, is next): the reverb's PRE knob steps through Off, 1/64, 1/32, 1/16T, 1/16, 1/16. and 1/8 at the tempo, like the delay's TIME, and its time follows the tempo (`fx.reverb.preDivision`; a project from PR 103 gets the value nearest its ms). Knob notches and position dots on the pedals are in dark ink (the panel's mint ticks all but vanished on the pale pedals, Analog's cream reverb most). |
 | 105 | REV on the reverb (the plan's item after PR 104): a switch on the reverb pedal's ribbon, under the LED (option A of three mockups), plays the reverb backwards, so each hit's reverb rises into the next hit and cuts off. While it's on, DECAY reads SWELL: **Next hit** (each swell lasts until the next step that's on, round the bar, swing included; one reversed impulse response per length behind a gate, opened as the hit reaches it) or 1 step, 2 steps, 1 beat, 2 beats; PRE is taken off so the swell still ends on time; a note with no next hit (MIDI, a preview, the one-shot) swells for a beat. Both engines, inside the reverb's stem; about as loud as the plain reverb; saved as `fx.reverb.reverse` and `fx.reverb.swell` (older projects off), reset by presets, rolled by the Sounds dice (`src/audio/reverb/reverse.ts`). |
 | 106 | Phone mode brought up to date (the plan's first item after PR 105), every page fitting without scrolling at 568 × 320 and 844 × 390 (a browser test checks both): the FX page's pedals in PR 99's look, kept tall (the name on a ribbon with its LED, REV under it, screws, jacks, knobs two by two, a treadle; the lo-fi pedal's reels in a window); the Key page's Melody Maker `compact` (the keyboard, Scale and the maker's settings beside the screen and Generate; it scrolled 203 px at 568 × 320); the Sound page's wave keys lit only while every pad plays that wave, with a Random key and the desktop's Sample strip (REC, Length, the dice), and FM and Unison as the desktop's cards without their screens (ratio keys, Voices keys, Freq, Detune and Spread, none on the phone before); the Mod page's LFO and Noise as the desktop's cards (ribbon, screen, patch bay). No mockups: every look is one the maintainer already picked for the desktop. |
+| 107 | The desktop view on a phone (the plan's first item after PR 106): held upright, the pads are two rows of 8, centred (they wrapped into 6, 6 and 4), and on a touch screen under 720 px the caps are at least 32 px tall and a pad's ⋮ 32 × 28 px; the shape screens let a finger scroll the page and only take a touch that starts on a grip (FM and Unison get a grip of their own on touch screens). Held sideways nothing changes but the screens' touch. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
