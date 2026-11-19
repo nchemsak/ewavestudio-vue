@@ -49,6 +49,9 @@
                             :aria-selected="o.value === keyScale" @click.stop="chooseScale(o.value); openList = null">{{ o.long ?? o.label }}</button>
                     </div>
                 </div>
+                <!-- Range or Octaves share one box (.mm-span) as wide in both modes, so the Scale
+                     stepper keeps its width when the mode changes (the brainstorm after PR 99) -->
+                <div class="mm-span">
                 <div v-if="mode !== 'arp'" class="pt-seg pt-seg-sm mm-seg mm-range" role="radiogroup" aria-label="Range" title="Range">
                     <button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': rangePreset !== 'wide' }" role="radio"
                         :aria-checked="rangePreset !== 'wide' ? 'true' : 'false'" title="Narrow: notes stay within two octaves" @click="rangePreset = 'mid'">Narrow</button>
@@ -64,6 +67,7 @@
                             role="radio" :aria-checked="arpOctaves === o.value ? 'true' : 'false'" @click="arpOctaves = o.value">{{ o.label }}</button>
                     </div>
                 </template>
+                </div>
             </div>
 
             <!-- The screen: the pattern across the bar (each step that's on, at its pitch, in its
@@ -1508,7 +1512,7 @@ defineExpose({ getUi, setUi, generate });
 }
 
 .mm-scale-row .mm-stepper {
-    flex: 1.3 1 0;
+    flex: 1.15 1 0;
 }
 
 .mm-step {
@@ -1622,7 +1626,16 @@ defineExpose({ getUi, setUi, generate });
 }
 
 .mm-range {
-    flex: 0.9 1 0;
+    flex: 1 1 0;
+}
+
+/* Range, or Octaves with its caption: one box, the same share of the row in both modes */
+.mm-span {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    gap: inherit;
+    min-width: 0;
 }
 
 /* The screen */

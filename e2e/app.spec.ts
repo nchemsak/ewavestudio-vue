@@ -1784,16 +1784,16 @@ test('PR 88: TAP sets the tempo from four taps; Move rotates and reverses the wh
 	const rotated = (list: any[], by: number) => list.map((_, i) => list[(i - by + n) % n]);
 	const each = (f: any, fn: (l: any[]) => any[]) => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, fn(v as any[])]));
 
-	// Rotate right: every step one later, the last round to the first; all the lists together
-	await page.getByRole('button', { name: 'Rotate right' }).click();
+	// Shift later: every step one later, the last round to the first; all the lists together
+	await page.getByRole('button', { name: 'Shift later' }).click();
 	await expect(page.locator('.pad-row .padTEST').nth(1)).toHaveClass(/\bselected\b/);
 	expect(fields(await projectData())).toEqual(each(before, (l) => rotated(l, 1)));
-	// Rotate left twice: one earlier than at first
-	await page.getByRole('button', { name: 'Rotate left' }).click();
-	await page.getByRole('button', { name: 'Rotate left' }).click();
+	// Shift earlier twice: one earlier than at first
+	await page.getByRole('button', { name: 'Shift earlier' }).click();
+	await page.getByRole('button', { name: 'Shift earlier' }).click();
 	expect(fields(await projectData())).toEqual(each(before, (l) => rotated(l, -1)));
 	// Reverse
-	await page.getByRole('button', { name: 'Rotate right' }).click();
+	await page.getByRole('button', { name: 'Shift later' }).click();
 	await page.waitForTimeout(SETTLED);
 	await page.getByRole('button', { name: 'Reverse', exact: true }).click();
 	expect(fields(await projectData())).toEqual(each(before, (l) => [...l].reverse()));
@@ -5634,12 +5634,12 @@ test.describe('Phone mode', () => {
 	test('PR 88: the Pads page rotates and reverses the pattern', async ({ page }) => {
 		await phonePads(page).nth(0).click();
 		await expect(phonePads(page).nth(0)).toHaveAttribute('aria-pressed', 'true');
-		await page.getByRole('button', { name: 'Rotate right' }).click();
+		await page.getByRole('button', { name: 'Shift later' }).click();
 		await expect(phonePads(page).nth(1)).toHaveAttribute('aria-pressed', 'true');
 		await expect(phonePads(page).nth(0)).toHaveAttribute('aria-pressed', 'false');
 		await page.getByRole('button', { name: 'Reverse', exact: true }).click();
 		await expect(phonePads(page).nth(14)).toHaveAttribute('aria-pressed', 'true');
-		await page.getByRole('button', { name: 'Rotate left' }).click();
+		await page.getByRole('button', { name: 'Shift earlier' }).click();
 		await expect(phonePads(page).nth(13)).toHaveAttribute('aria-pressed', 'true');
 	});
 
@@ -5990,5 +5990,33 @@ test('PR 99: the pedals: the name on a ribbon, every caption under its own knob,
 		await expect(sw).toHaveAttribute('aria-pressed', 'false');
 		await sw.click();
 		await expect(sw).toHaveAttribute('aria-pressed', 'true');
+	}
+});
+
+test('Move: labelled caps whose rows line up with Step Fills\'; the Melody Maker\'s Scale keeps its width in both modes', async ({ page }) => {
+	const tops = async (sel: string) => Promise.all((await page.locator(sel).all()).map(async (b) => Math.round((await b.boundingBox())!.y)));
+	const move = page.locator('.pt-section-move .pt-btn');
+	const scale = page.locator('.module.melody .mm-scale-row .mm-stepper');
+	const card = page.locator('.module.melody');
+	for (const width of [1600, 390]) {
+		await page.setViewportSize({ width, height: 1000 });
+		if (width < 1200) await page.getByRole('tab', { name: 'Compose' }).click();
+		await expect(move).toHaveText(['↓ Oct', 'Oct ↑', '◂ Shift', 'Shift ▸', '⇄ Reverse']);
+		const t = await tops('.pt-section-move .pt-btn');
+		if (width === 1600) {
+			// Three rows, two by two and Reverse across, level with Step Fills' three rows
+			const fills = [...new Set(await tops('.pt-section:first-child .pt-btn'))];
+			expect([...new Set(t)]).toEqual(fills);
+			const rev = (await move.nth(4).boundingBox())!, oct = (await move.nth(0).boundingBox())!;
+			expect(rev.width).toBeGreaterThan(oct.width * 1.8);
+		} else {
+			// A narrow card: the five on one row
+			expect(new Set(t).size).toBe(1);
+		}
+		// The Scale stepper is as wide with Octaves beside it as with Narrow | Wide
+		await card.getByText('Melody', { exact: true }).click();
+		const melodyW = (await scale.boundingBox())!.width;
+		await card.getByText('Arpeggio', { exact: true }).click();
+		expect(Math.abs((await scale.boundingBox())!.width - melodyW)).toBeLessThan(1);
 	}
 });
