@@ -38,7 +38,7 @@ describe('factory defaults (File → New)', () => {
 				toneEnabled: true, toneHz: 5000, toneType: 'lowpass', pingPong: false,
 			},
 			drive: { enabled: false, type: 'overdrive', amount: 0.4, tone: 5000, mix: 0.5, crush: false },
-			reverb: { enabled: false, mix: 0.18, decay: 1.4, tone: 0.6 },
+			reverb: { enabled: false, mix: 0.18, decay: 1.4, tone: 0.6, preDelay: 0 },
 			tape: { enabled: false, age: 0.4, wobble: 0.3, mode: 'tape' },
 		});
 		expect(snap.melody).toEqual({
@@ -136,6 +136,18 @@ describe('saving and loading a project', () => {
 		expect([st.fx.tape.enabled.value, st.fx.tape.age.value, st.fx.tape.wobble.value, st.fx.tape.mode.value]).toEqual([true, 0.75, 1, 'vinyl']);
 		applySnapshot(st, { fx: { tape: { enabled: true, age: 'old', mode: 'reel' } } });
 		expect([st.fx.tape.age.value, st.fx.tape.wobble.value, st.fx.tape.mode.value]).toEqual([0.4, 0.3, 'tape']);
+	});
+
+	it('opens a project saved before the reverb\'s pre-delay with none, and keeps a saved one within 0–250 ms', () => {
+		const st = fresh();
+		changeEverything(st);
+		expect(st.fx.reverb.preDelay.value).toBe(45);
+		applySnapshot(st, { fx: { reverb: { enabled: true, mix: 0.2, decay: 1, tone: 0.5 } } });
+		expect(st.fx.reverb.preDelay.value).toBe(0);
+		applySnapshot(st, { fx: { reverb: { enabled: true, preDelay: 30 } } });
+		expect(st.fx.reverb.preDelay.value).toBe(30);
+		applySnapshot(st, { fx: { reverb: { enabled: true, preDelay: 999 } } });
+		expect(st.fx.reverb.preDelay.value).toBe(250);
 	});
 
 	it('plays an arpeggio saved at 1/4 (dropped) at 1/8', () => {

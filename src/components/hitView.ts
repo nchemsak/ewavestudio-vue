@@ -21,7 +21,7 @@ import { sampleSeconds, sampleSpan, SAMPLE_WAVE } from '../audio/sample';
 export const HIT_MAX_S = 6;
 
 // How long a hit of `state` may ring, so a short sound isn't rendered for 6 s: the envelope,
-// the delay's echoes until they fall to −60 dB, the reverb's decay, and a little room. On the
+// the delay's echoes until they fall to −60 dB, the reverb's pre-delay and decay, and a little room. On the
 // recording (`wave` 'sample' at `hz`), its own length instead of the envelope's.
 export function hitSeconds(state: Pick<StepSequencerState, 'synth' | 'fx'>, wave?: string, hz?: number): number {
 	const env = state.synth.envelope;
@@ -34,7 +34,7 @@ export function hitSeconds(state: Pick<StepSequencerState, 'synth' | 'fx'>, wave
 		s += d.time * Math.min(60, Math.ceil(Math.log(0.001) / Math.log(fb)) + 1);
 	}
 	const r = state.fx.reverb;
-	if (r.enabled && r.mix > 0) s += r.decay * 1.2;
+	if (r.enabled && r.mix > 0) s += r.decay * 1.2 + (r.preDelay ?? 0) / 1000;
 	return Math.min(HIT_MAX_S, Math.max(0.3, s + 0.2));
 }
 

@@ -5,7 +5,7 @@
 //
 // Graph: per-note synth voices → drive (dry + shaper → tone, optionally through the bit
 // crusher, → driveSum). From driveSum two paths run in parallel: delay (dry + wet, feedback loop with
-// tone filters; plain or ping-pong) and a reverb send (tone filter → convolver → wet gain). Both go to preMaster, and so do the
+// tone filters; plain or ping-pong) and a reverb send (tone filter → pre-delay → convolver → wet gain). Both go to preMaster, and so do the
 // noise layer and the sample lanes, which bypass drive, delay and reverb. From preMaster
 // everything goes through the tape pedal (tape.ts), or round it while it's off, to masterGain
 // → destination. The analyser for the screen views is tapped from masterGain.
@@ -26,6 +26,7 @@ import { startFM } from './fm';
 import { startNoteLfo, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, lfoWaveAt, type LfoTarget } from './lfo';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
+import { clampPreDelayMs, PRE_DELAY_MAX_MS } from './reverb/preDelay';
 import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from './ratchet';
 import { createCrusher, loadCrusher, setCrusher } from './crusher';
 import { createPingPong } from './pingPong';
@@ -100,7 +101,7 @@ export type LiveEngineSettings = {
 		pingPong: R<boolean>; // echoes alternate left and right (pingPong.ts)
 	};
 	drive: { enabled: R<boolean>; type: R<string>; amount: R<number>; tone: R<number>; mix: R<number>; crush: R<boolean> };
-	reverb: { enabled: R<boolean>; mix: R<number>; decay: R<number>; tone: R<number> };
+	reverb: { enabled: R<boolean>; mix: R<number>; decay: R<number>; tone: R<number>; preDelay: R<number> };
 	// The tape pedal, last in the chain (tape.ts): age and wobble 0..1
 	tape: { enabled: R<boolean>; age: R<number>; wobble: R<number>; mode: R<TapeMode> };
 	// Called just before a bar's first step is built (about 100 ms before it sounds), so a
@@ -412,11 +413,20 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// Reverb START
 
-	const { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone } = s.reverb;
+	const { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone, preDelay: reverbPreDelayMs } = s.reverb;
 
 	let reverbConvolver = audioCtx.createConvolver();
 	const reverbToneFilter = audioCtx.createBiquadFilter();
 	reverbToneFilter.type = 'lowpass';
+	// PRE: the send waits this long before the convolver, so the hit stays dry for a moment
+	// (reverb/preDelay.ts). Echoes already in the tail carry on; a turn bends the send's pitch
+	// briefly, as a delay's time does.
+	const reverbPreDelay = audioCtx.createDelay(PRE_DELAY_MAX_MS / 1000 + 0.01);
+	reverbPreDelay.delayTime.value = clampPreDelayMs(reverbPreDelayMs.value) / 1000;
+	reverbToneFilter.connect(reverbPreDelay);
+	watch(reverbPreDelayMs, (v) => {
+		reverbPreDelay.delayTime.setTargetAtTime(clampPreDelayMs(v) / 1000, audioCtx.currentTime, 0.03);
+	});
 
 	let reverbWet = audioCtx.createGain();
 
@@ -439,7 +449,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		newWet.gain.value = 0;
 
 		// Wire in parallel
-		reverbToneFilter.connect(newConvolver);
+		reverbPreDelay.connect(newConvolver);
 		newConvolver.connect(newWet);
 		newWet.connect(preMaster);
 
@@ -457,7 +467,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 		// After fade, disconnect old chain and update references
 		setTimeout(() => {
-			try { reverbToneFilter.disconnect(oldConvolver); } catch { }
+			try { reverbPreDelay.disconnect(oldConvolver); } catch { }
 			try { oldConvolver.disconnect(); } catch { }
 			try { oldWet.disconnect(); } catch { }
 
@@ -466,9 +476,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		}, fadeTime * 1000 + 50);
 	}
 
-	// Drive sum → tone filter → convolver → wet gain → the tape pedal, then the master
+	// Drive sum → tone filter → pre-delay → convolver → wet gain → the tape pedal, then the master
 	driveSum.connect(reverbToneFilter);
-	reverbToneFilter.connect(reverbConvolver);
+	reverbPreDelay.connect(reverbConvolver);
 	reverbConvolver.connect(reverbWet);
 	reverbWet.connect(preMaster);
 	reverbWet.gain.value = 0;

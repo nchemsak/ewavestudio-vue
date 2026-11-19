@@ -103,7 +103,8 @@
 						v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
 						v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 					<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
-						v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone" />
+						v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone"
+						v-model:pre-delay="reverbPreDelay" :tempo="tempo" />
 					<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
 						v-model:mode="tapeMode" :playing="isPlaying" />
 				</div>
@@ -484,7 +485,8 @@
 									v-model:driveAmount="driveAmount" v-model:driveTone="driveTone"
 									v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 								<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
-									v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone" />
+									v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone"
+									v-model:pre-delay="reverbPreDelay" :tempo="tempo" />
 								<!-- The tape pedal, last in the chain: a low deck under the three pedals
 								     (option C of three mockups; the phone's FX page has it as a pedal) -->
 								<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
@@ -2355,6 +2357,8 @@ const reverbDecay = ref(1.4);
 
 // 0 = dark, 1 = bright
 const reverbTone = ref(0.6);      // normalized tone control
+// PRE: ms before the tail starts, 0–250 (src/audio/reverb/preDelay.ts)
+const reverbPreDelay = ref(0);
 
 // Reverb END
 
@@ -2599,6 +2603,7 @@ const exportState = computed<StepSequencerState>(() => {
 				mix: reverbMix.value,
 				decay: reverbDecay.value,
 				tone: reverbTone.value,
+				preDelay: reverbPreDelay.value,
 			},
 			tape: {
 				enabled: tapeEnabled.value,
@@ -2721,7 +2726,7 @@ const projectState: ProjectState = {
 			pingPong: delayPingPong,
 		},
 		drive: { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix, crush: driveCrush },
-		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone },
+		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone, preDelay: reverbPreDelay },
 		tape: { enabled: tapeEnabled, age: tapeAge, wobble: tapeWobble, mode: tapeMode },
 	},
 	instruments,

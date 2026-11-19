@@ -28,6 +28,7 @@ import { clampRatchet, clampRepeatNotes } from '../../audio/ratchet';
 import { arpRateFrom, type ArpRate } from '../melody/arp';
 import { clampTapeMode, TAPE_DEFAULTS, type TapeMode } from '../../audio/tape';
 import { clampSampleLength, sampleFrom, SAMPLE_LENGTH_DEFAULT, type SampleData } from '../../audio/sample';
+import { clampPreDelayMs } from '../../audio/reverb/preDelay';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -143,7 +144,8 @@ export type ProjectState = {
 			pingPong: Ref<boolean>; // echoes alternate left and right
 		};
 		drive: { enabled: Ref<boolean>; type: Ref<string>; amount: Ref<number>; tone: Ref<number>; mix: Ref<number>; crush: Ref<boolean> };
-		reverb: { enabled: Ref<boolean>; mix: Ref<number>; decay: Ref<number>; tone: Ref<number> };
+		// preDelay: ms before the reverb's tail starts (src/audio/reverb/preDelay.ts)
+		reverb: { enabled: Ref<boolean>; mix: Ref<number>; decay: Ref<number>; tone: Ref<number>; preDelay: Ref<number> };
 		// The tape pedal, last in the chain (src/audio/tape.ts): age and wobble 0..1
 		tape: { enabled: Ref<boolean>; age: Ref<number>; wobble: Ref<number>; mode: Ref<TapeMode> };
 	};
@@ -232,6 +234,7 @@ function byName(st: ProjectState) {
 		reverbMix: fx.reverb.mix,
 		reverbDecay: fx.reverb.decay,
 		reverbTone: fx.reverb.tone,
+		reverbPreDelay: fx.reverb.preDelay,
 		tapeEnabled: fx.tape.enabled,
 		tapeAge: fx.tape.age,
 		tapeWobble: fx.tape.wobble,
@@ -259,7 +262,7 @@ export function buildSnapshot(st: ProjectState) {
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
-		reverbEnabled, reverbMix, reverbDecay, reverbTone,
+		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDelay,
 		tapeEnabled, tapeAge, tapeWobble, tapeMode,
 		instruments, melodyUi, selectedWaveform,
 	} = byName(st);
@@ -373,6 +376,7 @@ export function buildSnapshot(st: ProjectState) {
 				mix: reverbMix.value,
 				decay: reverbDecay.value,
 				tone: reverbTone.value,
+				preDelay: reverbPreDelay.value,
 			},
 			tape: {
 				enabled: tapeEnabled.value,
@@ -436,7 +440,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
-		reverbEnabled, reverbMix, reverbDecay, reverbTone,
+		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDelay,
 		tapeEnabled, tapeAge, tapeWobble, tapeMode,
 		instruments, melodyUi, selectedWaveform,
 	} = byName(st);
@@ -630,6 +634,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		if (typeof s.fx.reverb.mix === 'number') reverbMix.value = s.fx.reverb.mix;
 		if (typeof s.fx.reverb.decay === 'number') reverbDecay.value = s.fx.reverb.decay;
 		if (typeof s.fx.reverb.tone === 'number') reverbTone.value = s.fx.reverb.tone;
+		reverbPreDelay.value = clampPreDelayMs(s.fx.reverb.preDelay); // older projects: 0
 	}
 	if (s.fx?.tape || s.fx?.delay || s.fx?.drive || s.fx?.reverb) {
 		// The tape pedal: a project saved before it (it has the other pedals, not this one)
@@ -799,7 +804,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, randomWaves, velocityRouting,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
-		reverbEnabled, reverbMix, reverbDecay, reverbTone,
+		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDelay,
 		tapeEnabled, tapeAge, tapeWobble, tapeMode,
 	} = byName(st);
 
@@ -873,6 +878,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 	reverbMix.value = 0.18;
 	reverbDecay.value = 1.4;
 	reverbTone.value = 0.6;
+	reverbPreDelay.value = 0;
 
 	// FX: Tape
 	tapeEnabled.value = false;
