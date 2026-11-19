@@ -4997,10 +4997,12 @@ test('Melody Maker: Generate gives new notes to the pads that are on; with none 
 	// Some on: only those get new notes; the pads that are off stay off, on their notes
 	await turnOnPads(page, [0, 5]);
 	const before = await lane();
-	// Seeded, so every run rolls the same notes: unseeded, pad 6 could land back on its own note
-	// (A, 1 in about 10) and the check below failed now and then
-	await page.evaluate(() => { let x = 11; Math.random = () => ((x = (x * 16807) % 2147483647) / 2147483647); });
-	await generate.click();
+	// Generate until pad 6 has another note: a melody's note is random, and pad 6 can land back
+	// on its own (A, about 1 in 15). Seeding Math.random didn't help: the page draws random
+	// numbers of its own between the seed and the click, more or fewer on a busier machine.
+	const pad6 = page.locator('.pad-row').getByRole('button', { name: /^Step 6, / });
+	const startName = await pad6.getAttribute('aria-label');
+	for (let k = 0; k < 20 && (await pad6.getAttribute('aria-label')) === startName; k++) await generate.click();
 	after = await lane();
 	expect(after.steps).toEqual(before.steps);
 	after.pitches.forEach((hz, i) => {
