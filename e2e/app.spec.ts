@@ -4997,13 +4997,16 @@ test('Melody Maker: Generate gives new notes to the pads that are on; with none 
 	// Some on: only those get new notes; the pads that are off stay off, on their notes
 	await turnOnPads(page, [0, 5]);
 	const before = await lane();
-	for (let k = 0; k < 4; k++) await generate.click();
+	// Seeded, so every run rolls the same notes: unseeded, pad 6 could land back on its own note
+	// (A, 1 in about 10) and the check below failed now and then
+	await page.evaluate(() => { let x = 11; Math.random = () => ((x = (x * 16807) % 2147483647) / 2147483647); });
+	await generate.click();
 	after = await lane();
 	expect(after.steps).toEqual(before.steps);
 	after.pitches.forEach((hz, i) => {
 		if (i !== 0 && i !== 5) expect(hz, `pad ${i + 1}`).toBeCloseTo(before.pitches[i], 3);
 	});
-	expect(after.pitches[5]).not.toBeCloseTo(before.pitches[5], 3); // four tries: one moves it
+	expect(after.pitches[5]).not.toBeCloseTo(before.pitches[5], 3);
 });
 
 test('Melody Maker: clicking a key moves the pattern there, the shorter way, plays it, and is one undo step', async ({ page }) => {
