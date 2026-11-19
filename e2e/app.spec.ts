@@ -3942,8 +3942,8 @@ test('hardware buttons: a push button sinks and springs back; a chosen option an
 	expect((await capState(play)).down).toBe(4);
 	await play.click();
 
-	// The pedals' CRUSH and PING PONG switches are not caps (they stay as they were)
-	await expect(page.locator('.pedal-switch')).toHaveCount(2);
+	// The pedals' CRUSH, PING PONG and REV switches are not caps (they stay as they were)
+	await expect(page.locator('.pedal-switch')).toHaveCount(3);
 	await expect(page.locator('.pedal-switch.hw-cap')).toHaveCount(0);
 });
 
