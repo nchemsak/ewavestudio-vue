@@ -227,3 +227,35 @@ $down: ".is-active", ".on", ".active", ".hw-down", "[aria-pressed='true']", "[ar
         box-shadow: none;
     }
 }
+
+/* ── Touch screens in one column (PR 107) ── the desktop view on a phone held upright, or a
+   small tablet: caps a finger can hit, at least 32 px tall (as phone mode's), where the
+   desktop's are 18–28 px. Only the desktop's grid (.ds-grid; phone mode's pages are elsewhere),
+   and only there may a cap grow: these cards are one under another, so taller is room enough.
+   (.ds-grid three times: over the components' own scoped sizes, such as the preset boxes'.) */
+@media (pointer: coarse) and (max-width: 719.98px) {
+    .ds-grid.ds-grid.ds-grid {
+        .pt-btn,
+        .pt-seg-btn,
+        .vel-btn,
+        .stepper-btn,
+        .sp-key,
+        .lk-key,
+        .fkey,
+        .pill-switch,
+        .sp-pill,
+        .mm-toggle,
+        .mm-gen-bar,
+        .mm-step-name,
+        .mm-stepper .hw-cap {
+            min-height: 32px;
+        }
+
+        /* their words in the middle of the taller cap */
+        .pt-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+    }
+}

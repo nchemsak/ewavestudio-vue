@@ -14,7 +14,7 @@
 			</button>
 			<div class="sp-face">
 				<div class="sp-screencol">
-					<ShapePad v-if="!compact" :w="PAD_W" :h="PAD_H" :readout="`${localDetune}¢ · ${localSpread}%`" hint="↔ detune  ↕ spread" :disabled="!localEnabled"
+					<ShapePad v-if="!compact" :w="PAD_W" :h="PAD_H" :readout="`${localDetune}¢ · ${localSpread}%`" hint="↔ detune  ↕ spread" :touchGrip="unisonGrip" :disabled="!localEnabled"
 						@start="activeKnob = 'pad'" @move="onPadMove" @end="activeKnob = null">
 						<path v-for="(d, i) in waves" :key="i" :d="d" class="sp-line sp-voice" />
 						<circle v-for="(x, i) in dots" :key="'d' + i" :cx="x" :cy="PAD_H - 5" r="2.2" class="sp-dot" />
@@ -168,6 +168,8 @@ const PAD_H = 60;
 const shown = computed(() => (localEnabled.value ? localVoices.value : 1));
 const waves = computed(() => voicePts(shown.value, localDetune.value, PAD_W, PAD_H).map(toPath));
 const dots = computed(() => voiceDots(shown.value, localSpread.value, PAD_W));
+// Where a finger takes hold on a touch screen: Detune across, Spread up (onPadMove's inverse)
+const unisonGrip = computed(() => ({ x: (localDetune.value / 100) * PAD_W, y: (1 - localSpread.value / 100) * PAD_H }));
 function onPadMove(p: PadPoint) {
 	localDetune.value = Math.round(Math.max(0, Math.min(1, p.x / PAD_W)) * 100);
 	localSpread.value = Math.round(Math.max(0, Math.min(1, 1 - p.y / PAD_H)) * 100);

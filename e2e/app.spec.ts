@@ -6136,6 +6136,88 @@ test.describe('Phone mode, upright', () => {
 		await expect(hint).toHaveCount(0);
 		await expect(page.locator('.ds-grid')).toBeVisible();
 	});
+
+	// PR 107: the desktop view upright: the pads in two rows of 8, caps a finger can hit, and the
+	// shape screens let a finger scroll the page unless it lands on a grip
+	test('the desktop view upright: two rows of pads, finger-sized caps, screens that scroll', async ({ page, context }) => {
+		await page.getByRole('dialog', { name: 'Turn your phone' }).getByRole('button', { name: 'Use the desktop view instead' }).click();
+		await expect(page.locator('.ds-grid')).toBeVisible();
+		const pads = await page.locator('.step-card .padTEST').evaluateAll((els) => els.map((e) => {
+			const r = e.getBoundingClientRect();
+			return { x: Math.round(r.x), y: Math.round(r.y), w: r.width };
+		}));
+		expect(pads).toHaveLength(16);
+		for (let i = 0; i < 8; i++) {
+			expect(pads[i].y).toBe(pads[0].y);
+			expect(pads[i + 8].y).toBe(pads[8].y);
+			expect(pads[i + 8].x).toBe(pads[i].x);
+		}
+		expect(pads[8].y).toBeGreaterThan(pads[0].y);
+		expect(pads[0].w).toBeGreaterThan(30);
+		// The rows are centred in the card (no empty strip on the right)
+		const card = (await page.locator('.step-card').boundingBox())!;
+		const left = pads[0].x - card.x, right = card.x + card.width - (pads[7].x + pads[7].w);
+		expect(Math.abs(left - right)).toBeLessThan(3);
+		// Caps at least 32 px tall: the preset boxes, Pattern Tools, the ⋮ on each pad
+		for (const sel of ['.preset-grid .pt-btn', '.pad-settings-dot']) {
+			const hs = await page.locator(`.ds-grid ${sel}`).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+			expect(hs.length).toBeGreaterThan(0);
+			for (const h of hs) expect(h).toBeGreaterThanOrEqual(sel === '.pad-settings-dot' ? 28 : 32);
+		}
+		await page.getByRole('tab', { name: 'Compose' }).click();
+		for (const h of await page.locator('.ds-grid .module .pt-btn:visible').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height)))
+			expect(h).toBeGreaterThanOrEqual(32);
+
+		// The screens: a finger dragged across one away from its grips scrolls the page and
+		// changes nothing; one that starts on a grip moves it, and the page stays put
+		await page.getByRole('tab', { name: 'Sound' }).click();
+		const cdp = await context.newCDPSession(page);
+		const swipe = async (x: number, y: number, dx: number, dy: number) => {
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+			for (let i = 1; i <= 10; i++) {
+				await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (dx * i) / 10, y: y + (dy * i) / 10 }] });
+				await page.waitForTimeout(16);
+			}
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+			await page.waitForTimeout(300);
+		};
+		const scrollY = () => page.evaluate(() => window.scrollY);
+		const env = page.locator('.ds-sound .sp-pad').filter({ hasText: 'Envelope' });
+		const envReadout = env.locator('.sp-title small');
+		await env.scrollIntoViewIfNeeded();
+		let box = (await env.boundingBox())!;
+		let y0 = await scrollY();
+		await swipe(box.x + box.width * 0.6, box.y + box.height * 0.4, 0, -120);
+		expect(await scrollY()).toBeGreaterThan(y0 + 40);
+		await expect(envReadout).toHaveText('20 ms · 400 ms');
+		const decayGrip = (await env.locator('.sp-handle').nth(1).boundingBox())!;
+		y0 = await scrollY();
+		await swipe(decayGrip.x + decayGrip.width / 2, decayGrip.y + decayGrip.height / 2, 40, -60);
+		expect(Math.abs((await scrollY()) - y0)).toBeLessThan(2);
+		await expect(envReadout).not.toHaveText('20 ms · 400 ms');
+		await expect(envReadout).toContainText('20 ms');
+		// FM has no grip with a mouse; a finger gets one where Amount is (only while FM is on)
+		const fm = page.getByRole('switch', { name: 'FM', exact: true }).locator('xpath=..');
+		const fmGrip = fm.locator('.sp-touch-grip');
+		await expect(fmGrip).toBeHidden();
+		await page.getByRole('switch', { name: 'FM', exact: true }).tap();
+		await expect(fmGrip).toBeVisible();
+		const fmReadout = fm.locator('.sp-title small');
+		const before = await fmReadout.textContent();
+		// Instantly (Bootstrap's reboot makes scrolling smooth), and once the page is still, so the
+		// grip's box is where the finger lands
+		await fm.evaluate((e) => e.scrollIntoView({ block: 'center', behavior: 'instant' }));
+		await expect.poll(async () => {
+			const a = await scrollY();
+			await page.waitForTimeout(100);
+			return a === (await scrollY());
+		}).toBe(true);
+		const g = (await fmGrip.boundingBox())!;
+		y0 = await scrollY();
+		await swipe(g.x + g.width / 2, g.y + g.height / 2, 0, -25);
+		expect(Math.abs((await scrollY()) - y0)).toBeLessThan(2);
+		await expect(fmReadout).not.toHaveText(before!);
+	});
 });
 
 test("Melody Maker: an arpeggio's Octaves aren't held back by Range (PR 97: Narrow kept 3 octaves to two)", async ({ page }) => {

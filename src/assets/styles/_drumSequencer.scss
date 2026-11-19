@@ -431,15 +431,19 @@
 }
 
 @media (max-width: 640px) {
-	.pad-row {
+	.pad-row,
+	.drum-sequencer .pad-row {
 		display: block;
+		padding-right: 0; /* the rows end where the card's padding does, as they start */
 	}
 
-	/* overrides Bootstrap .d-flex */
+	/* overrides Bootstrap .d-flex. Two rows of 8, as phone mode's (PR 107; they wrapped into
+	   uneven rows of 44 px pads, 6, 6 and 4 at 390 px), so a bar reads as two halves */
 	.padTEST-grid {
 		grid-auto-flow: row;
 		grid-auto-columns: initial;
-		grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+		grid-template-columns: repeat(8, minmax(0, 1fr));
+		column-gap: 5px;
 	}
 
 	.padTEST {

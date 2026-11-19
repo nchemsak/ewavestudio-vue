@@ -14,7 +14,7 @@
             </button>
             <div class="sp-face">
                 <div class="sp-screencol">
-                    <ShapePad v-if="!compact" :w="PAD_W" :h="PAD_H" :title="ratioName" :readout="readout" hint="↕ amount" :disabled="!localEnabled"
+                    <ShapePad v-if="!compact" :w="PAD_W" :h="PAD_H" :title="ratioName" :readout="readout" hint="↕ amount" :touchGrip="fmGrip" :disabled="!localEnabled"
                         @start="activeKnob = 'ix'" @move="onPadMove" @end="activeKnob = null">
                         <path :d="wave" class="sp-line" />
                         <!-- The LFO on Amount: the wave as it has it now -->
@@ -191,6 +191,8 @@ const lfoWave = computed(() => {
     return now != null && localEnabled.value ? toPath(fmPts(drawnRatio.value, now, PAD_W, PAD_H)) : '';
 });
 const readout = computed(() => `${localRatio.value === null ? `${displayHz.value} Hz` : RATIOS.find((r) => r.value === localRatio.value)?.tip.split(' ')[0] ?? ''} · ${localIndex.value.toFixed(1)}`);
+// Where a finger takes hold on a touch screen: Amount's height (onPadMove's inverse)
+const fmGrip = computed(() => ({ x: PAD_W / 2, y: (1 - localIndex.value / 50) * PAD_H }));
 function onPadMove(p: PadPoint) {
     localIndex.value = Math.round(Math.max(0, Math.min(1, 1 - p.y / PAD_H)) * 500) / 10;
 }
