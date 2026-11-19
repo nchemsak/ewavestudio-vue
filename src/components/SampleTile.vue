@@ -4,17 +4,22 @@
      with a recording, the tile itself picks it for every pad, as a wave tile does, and shows
      it (a small picture of the recording, lit while every pad plays it). While recording it
      says what it's doing and shows the input's level. A strip under the wave tiles (PR 95,
-     option B of two mockups; A was a tall tile beside Random, which made the tiles narrower). -->
+     option B of two mockups; A was a tall tile beside Random, which made the tiles narrower).
+     At its right end (PR 100): a dice badge, as the wave tiles have, shown once there's a
+     recording, so Random can mix the recording in; and Length, a mini knob: how much of the
+     recording the pads play (Full, the default, all of it; less, that share of it, fading). -->
 <template>
     <div class="st" :class="{ 'is-lit': lit, 'is-busy': busy }">
         <button type="button" class="st-pick hw-cap" :class="{ 'is-active': lit }" :disabled="busy"
             :aria-pressed="lit ? 'true' : 'false'" :aria-label="hasSample ? 'Sample: play the recording on every pad' : 'Sample: record a sound'"
             :title="hasSample ? `Sample: the recording (${seconds} s) on every pad, as recorded on A3` : 'Sample: record a sound from the microphone'"
             @click="hasSample ? emit('pick') : emit('record')">
-            <span class="st-label"><span class="hw-led" aria-hidden="true" />{{ caption }}</span>
+            <span class="st-label"><span class="hw-led" aria-hidden="true" />{{ turning ? lengthText : caption }}</span>
             <span class="st-pic" aria-hidden="true">
                 <svg v-if="hasSample" :viewBox="`0 0 ${PIC_W} ${PIC_H}`" preserveAspectRatio="none">
                     <path :d="picPath" />
+                    <!-- What Length leaves out, shaded -->
+                    <rect v-if="length < 1" class="st-cut" :x="PIC_W * length" y="0" :width="PIC_W * (1 - length)" :height="PIC_H" />
                 </svg>
                 <svg v-else class="st-mic" viewBox="0 0 24 24">
                     <rect x="9" y="3" width="6" height="11" rx="3" />
@@ -31,13 +36,32 @@
             <span v-if="busy" class="st-meter" aria-hidden="true"><i :style="{ transform: `scaleX(${meter})` }" /></span>
         </button>
 
+        <span v-if="hasSample" class="dice-badge st-dice" :class="{ on: randomIncluded }" role="switch"
+            :aria-checked="randomIncluded ? 'true' : 'false'" :aria-label="diceAria" :title="diceAria" tabindex="0"
+            @click.stop.prevent="toggleDice" @keydown.space.stop.prevent="toggleDice" @keydown.enter.stop.prevent="toggleDice">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+                <circle cx="8" cy="8" r="1.6" />
+                <circle cx="12" cy="12" r="1.6" />
+                <circle cx="16" cy="16" r="1.6" />
+            </svg>
+        </span>
+
+        <div class="st-length">
+            <Knob midi-id="sample.length" :modelValue="length" @update:modelValue="v => emit('update:length', v)"
+                label="Sample length" hideLabel size="mini" :min="SAMPLE_LENGTH_MIN" :max="1" :step="0.01"
+                :disabled="!hasSample || busy" :value-text="lengthText" color="#ff6b6b"
+                @knobStart="turning = true" @knobEnd="turning = false" />
+        </div>
+
         <span class="visually-hidden" role="status" aria-live="polite">{{ status }}</span>
     </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import { decodeSample, sampleSeconds, type SampleData } from '../audio/sample';
+import { computed, ref } from 'vue';
+import Knob from './Knob.vue';
+import { decodeSample, sampleSeconds, SAMPLE_LENGTH_MIN, type SampleData } from '../audio/sample';
 import type { RecorderState } from '../composables/useSampleRecorder';
 
 const props = defineProps<{
@@ -45,8 +69,24 @@ const props = defineProps<{
     state: RecorderState;
     level: number;     // the input's level while recording, 0..1
     lit: boolean;      // every pad plays the recording
+    length: number;    // how much of it plays, 0.05–1 (v-model:length)
+    randomIncluded: boolean; // Random may pick it (its dice badge)
 }>();
-const emit = defineEmits<{ (e: 'pick'): void; (e: 'record'): void }>();
+const emit = defineEmits<{
+    (e: 'pick'): void; (e: 'record'): void;
+    (e: 'update:length', v: number): void;
+    (e: 'toggle-random', w: 'sample', next: boolean): void;
+}>();
+
+const turning = ref(false);
+// "Full", or the share and how long that is on A3 (as recorded)
+const lengthText = computed(() => {
+    if (props.length >= 1) return 'Full';
+    const sec = props.sample ? sampleSeconds(props.sample) * props.length : 0;
+    return `${Math.round(props.length * 100)}% · ${sec < 1 ? `${Math.round(sec * 1000)} ms` : `${sec.toFixed(2)} s`}`;
+});
+const diceAria = computed(() => (props.randomIncluded ? 'Exclude Sample from Random' : 'Include Sample in Random'));
+const toggleDice = () => emit('toggle-random', 'sample', !props.randomIncluded);
 
 const hasSample = computed(() => !!props.sample);
 const busy = computed(() => props.state === 'asking' || props.state === 'listening' || props.state === 'recording');
@@ -102,7 +142,8 @@ const picPath = computed(() => {
     gap: 10px;
     width: 100%;
     height: 100%;
-    padding: 3px 10px 3px 40px;
+    /* room for REC on the left, the dice and Length on the right */
+    padding: 3px 66px 3px 40px;
     border: 0;
     border-radius: 10px;
     font: inherit;
@@ -173,6 +214,65 @@ const picPath = computed(() => {
     stroke-width: 1.6px;
     stroke-linecap: round;
     opacity: 0.55;
+}
+
+.st-pic svg .st-cut {
+    fill: rgb(0 0 0 / .55);
+}
+
+/* The dice badge (as the wave tiles', WaveButton.vue) and Length, at the strip's right end */
+.st-dice {
+    position: absolute;
+    right: 38px;
+    top: 50%;
+    width: 22px;
+    height: 22px;
+    margin-top: -11px;
+    border-radius: 8px;
+    background: color-mix(in oklab, var(--pt-surface-2), transparent 10%);
+    border: 1px solid color-mix(in oklab, var(--pt-btn-border), transparent 65%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1;
+}
+
+.st-dice svg {
+    width: 16px;
+    height: 16px;
+}
+
+.st-dice svg rect {
+    fill: none;
+    stroke: color-mix(in oklab, var(--pt-text) 90%, transparent);
+    stroke-width: 1.6px;
+}
+
+.st-dice svg circle {
+    fill: var(--pt-surface-1);
+}
+
+.st-dice.on {
+    background: color-mix(in oklab, var(--hw-led), transparent 88%);
+    border-color: color-mix(in oklab, var(--hw-led), transparent 50%);
+}
+
+.st-dice.on svg circle {
+    fill: color-mix(in oklab, var(--pt-text) 92%, transparent);
+}
+
+.st-dice:focus-visible {
+    outline: 2px solid hsl(var(--pt-accent) 80% 60%);
+    outline-offset: 2px;
+}
+
+.st-length {
+    position: absolute;
+    right: 7px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1;
 }
 
 /* REC: a small round button with a red dot, at the strip's start */

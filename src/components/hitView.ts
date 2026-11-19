@@ -13,6 +13,7 @@
 import { timeX, xTime } from '../lib/shapeViews';
 import { padHue } from '../lib/padColour';
 import type { StepSequencerState } from '../audio/export/scheduleStepSequencer';
+import { sampleSeconds, sampleSpan, SAMPLE_WAVE } from '../audio/sample';
 
 // Helpers START
 
@@ -20,10 +21,13 @@ import type { StepSequencerState } from '../audio/export/scheduleStepSequencer';
 export const HIT_MAX_S = 6;
 
 // How long a hit of `state` may ring, so a short sound isn't rendered for 6 s: the envelope,
-// the delay's echoes until they fall to −60 dB, the reverb's decay, and a little room
-export function hitSeconds(state: Pick<StepSequencerState, 'synth' | 'fx'>): number {
+// the delay's echoes until they fall to −60 dB, the reverb's decay, and a little room. On the
+// recording (`wave` 'sample' at `hz`), its own length instead of the envelope's.
+export function hitSeconds(state: Pick<StepSequencerState, 'synth' | 'fx'>, wave?: string, hz?: number): number {
 	const env = state.synth.envelope;
-	let s = env.enabled ? (env.attackMs + env.decayMs) / 1000 : 2;
+	const rec = wave === SAMPLE_WAVE ? state.synth.sample : null;
+	let s = rec ? sampleSpan(sampleSeconds(rec), hz ?? 220, state.synth.sampleLength ?? 1).seconds
+		: env.enabled ? (env.attackMs + env.decayMs) / 1000 : 2;
 	const d = state.fx.delay;
 	if (d.enabled && d.mix > 0) {
 		const fb = Math.min(0.95, Math.max(0.01, d.feedback));

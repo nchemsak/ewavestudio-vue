@@ -22,6 +22,7 @@ export const MIDI_KNOBS: Record<string, string> = {
 	'transport.tempo': 'Tempo',
 	'transport.swing': 'Swing',
 	'pulse.width': 'Pulse width',
+	'sample.length': 'Sample length',
 	'env.attack': 'Attack',
 	'env.decay': 'Decay',
 	'filter.cutoff': 'Cutoff',

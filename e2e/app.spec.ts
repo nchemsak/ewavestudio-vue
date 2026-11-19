@@ -457,6 +457,77 @@ test('Sample: a sound recorded from the microphone plays on every pad at its pit
 	expect(after.data.synth.sample).toEqual(saved.data.synth.sample);
 });
 
+// Where a one-shot's sound ends: its last sample above −50 dB of its peak, in seconds
+function soundSeconds(samples: Float32Array, rate: number) {
+	let peak = 0;
+	for (const v of samples) peak = Math.max(peak, Math.abs(v));
+	let end = samples.length;
+	while (end > 0 && Math.abs(samples[end - 1]) < peak * 0.00316) end--;
+	return end / rate;
+}
+
+test('Sample: Length plays the whole recording or a share of it; its dice badge puts it in Random', async ({ page }) => {
+	await page.evaluate(fakeMicrophone);
+	const length = page.getByRole('slider', { name: 'Sample length' });
+	// Before a recording: Length is there but greyed out, and there's no dice badge
+	await expect(length).toBeVisible();
+	await expect(page.getByRole('switch', { name: /Sample (in|from) Random/ })).toHaveCount(0);
+
+	await page.getByRole('button', { name: 'Record a sample' }).click();
+	const strip = page.locator('.st-pick');
+	await expect(strip).toHaveAttribute('aria-pressed', 'true', { timeout: 6000 });
+	const seconds = Number(/\(([\d.]+) s\)/.exec((await strip.getAttribute('title'))!)![1]);
+	await expect(length).toHaveAttribute('aria-valuetext', 'Full');
+
+	// Full: the whole recording, past the Envelope's Attack + Decay (20 + 400 ms: the hit lasts
+	// about half a second); the Decay knob no longer cuts it
+	const oneShot = async () => {
+		const w = wavSamples((await exportAudio(page, {
+			mix: false, stems: false, midi: false, oneShot: true, oneShotNote: 'A3 (220 Hz)', normalize: false,
+		})).bytes);
+		return soundSeconds(w.samples, w.rate);
+	};
+	const full = await oneShot();
+	expect(full).toBeGreaterThan(seconds * 0.85);
+	expect(full).toBeGreaterThan(0.43);
+
+	// A quarter: about a quarter as long; one undo step
+	await length.focus();
+	await page.keyboard.press('Home');
+	for (let i = 0; i < 2; i++) await page.keyboard.press('PageUp');
+	const v = Number(await length.getAttribute('aria-valuenow'));
+	expect(v).toBeGreaterThan(0.15);
+	expect(v).toBeLessThan(0.35);
+	await expect(length).toHaveAttribute('aria-valuetext', /^\d+% · \d+ ms$/);
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	const part = await oneShot();
+	expect(part).toBeLessThan(seconds * v + 0.03);
+	expect(part).toBeGreaterThan(seconds * v * 0.5);
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	expect(saved.data.synth.sampleLength).toBeCloseTo(v);
+	await page.waitForTimeout(600);
+	await page.keyboard.press('Control+z');
+	await expect(length).toHaveAttribute('aria-valuetext', 'Full');
+
+	// The dice badge, lit by the recording: with every wave's badge off, Random puts it on every pad
+	const dice = page.getByRole('switch', { name: 'Exclude Sample from Random' });
+	await expect(dice).toHaveAttribute('aria-checked', 'true');
+	for (const w of ['SINE', 'TRIANGLE', 'SAW', 'SQUARE', 'PULSE', 'ORGAN', 'HOLLOW', 'GLASS']) {
+		await page.getByRole('switch', { name: `Exclude ${w} from Random` }).click();
+	}
+	await page.getByRole('radio', { name: 'SAW', exact: true }).click();
+	await page.getByRole('button', { name: /^Random waves/ }).click();
+	await expect(strip).toHaveAttribute('aria-pressed', 'true');
+	// Its badge off too: Random picks from every wave (as with no badge lit), never the recording
+	await dice.click();
+	await expect(page.getByRole('switch', { name: 'Include Sample in Random' })).toHaveAttribute('aria-checked', 'false');
+	await page.getByRole('switch', { name: 'Include GLASS in Random' }).click();
+	await page.getByRole('button', { name: /^Random waves/ }).click();
+	await expect(page.getByRole('radio', { name: 'GLASS', exact: true })).toHaveAttribute('aria-checked', 'true');
+	const file = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	expect(file.data.synth.randomWaves).toEqual(['glass']);
+});
+
 test('Sample: a quiet microphone on an interface\'s input 2 (the right channel) is heard', async ({ page }) => {
 	// PR 96: a Focusrite's "Analogue 1 + 2" sends input 2 as the right channel, which PR 95
 	// never read, and a usual preamp gain peaks far under the −36 dBFS it waited for
@@ -4135,7 +4206,7 @@ test('PR 85: the waves Random picks from are saved with the project; File → Ne
 
 	// Saved with the project, and back when it's opened
 	const exported = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
-	expect(exported.data.synth.randomWaves).toEqual(['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'hollow']);
+	expect(exported.data.synth.randomWaves).toEqual(['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'hollow', 'sample']);
 
 	// File → New: every wave again (it carried over before)
 	await chooseFromFileMenu(page, 'New');
@@ -4515,7 +4586,7 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 	await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
 	await openSettings(page);
 	await expect(learn).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(32);
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(33);
 	await cutoff.click();
 	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
 	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');
@@ -4926,13 +4997,16 @@ test('Melody Maker: Generate gives new notes to the pads that are on; with none 
 	// Some on: only those get new notes; the pads that are off stay off, on their notes
 	await turnOnPads(page, [0, 5]);
 	const before = await lane();
-	for (let k = 0; k < 4; k++) await generate.click();
+	// Seeded, so every run rolls the same notes: unseeded, pad 6 could land back on its own note
+	// (A, 1 in about 10) and the check below failed now and then
+	await page.evaluate(() => { let x = 11; Math.random = () => ((x = (x * 16807) % 2147483647) / 2147483647); });
+	await generate.click();
 	after = await lane();
 	expect(after.steps).toEqual(before.steps);
 	after.pitches.forEach((hz, i) => {
 		if (i !== 0 && i !== 5) expect(hz, `pad ${i + 1}`).toBeCloseTo(before.pitches[i], 3);
 	});
-	expect(after.pitches[5]).not.toBeCloseTo(before.pitches[5], 3); // four tries: one moves it
+	expect(after.pitches[5]).not.toBeCloseTo(before.pitches[5], 3);
 });
 
 test('Melody Maker: clicking a key moves the pattern there, the shorter way, plays it, and is one undo step', async ({ page }) => {

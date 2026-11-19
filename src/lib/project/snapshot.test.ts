@@ -27,7 +27,8 @@ describe('factory defaults (File → New)', () => {
 			pitchEnv: { enabled: true, semitones: 0, decayMs: 300, mode: 'up' },
 			pulse: { width: 50 },
 			sample: null,
-			randomWaves: ['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'organ', 'hollow', 'glass'],
+			sampleLength: 1,
+			randomWaves: ['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'organ', 'hollow', 'glass', 'sample'],
 			velocity: { decay: 0, cutoff: 0, pitchEnv: 0, noise: 0 },
 			tuning: { selectedKeyRoot: 'A', globalOctaveOffset: 0 },
 		});
@@ -227,7 +228,7 @@ describe('saving and loading a project', () => {
 	it('saves which waves Random picks from, and gives projects saved before every wave', () => {
 		const st = fresh();
 		changeEverything(st);
-		expect(asSaved(st).synth.randomWaves).toEqual(['triangle', 'pulse']);
+		expect(asSaved(st).synth.randomWaves).toEqual(['triangle', 'pulse', 'sample']);
 		// Unknown names dropped, the tiles' order kept; none lit is allowed
 		applySnapshot(st, { synth: { randomWaves: ['glass', 'kazoo', 'sine'] } });
 		expect(st.synth.randomWaves.value).toEqual(['sine', 'glass']);
@@ -235,7 +236,23 @@ describe('saving and loading a project', () => {
 		expect(st.synth.randomWaves.value).toEqual([]);
 		// A whole project from before PR 85: every wave (it carried over from the last project)
 		applySnapshot(st, { synth: { envelope: { enabled: true, attackMs: 20, decayMs: 400 } } });
-		expect(st.synth.randomWaves.value).toHaveLength(8);
+		expect(st.synth.randomWaves.value).toHaveLength(9);
+		// A project saved before the recording could be in it (PR 100) keeps it out
+		applySnapshot(st, { synth: { randomWaves: ['sine', 'glass'] } });
+		expect(st.synth.randomWaves.value).toEqual(['sine', 'glass']);
+	});
+
+	it('saves the sample\'s Length, kept in range, and gives projects saved before it the whole recording', () => {
+		const st = fresh();
+		changeEverything(st);
+		expect(asSaved(st).synth.sampleLength).toBe(0.4);
+		applySnapshot(st, { synth: { sampleLength: 0 } });
+		expect(st.synth.sampleLength.value).toBe(0.05);
+		applySnapshot(st, { synth: { sampleLength: 7 } });
+		expect(st.synth.sampleLength.value).toBe(1);
+		applySnapshot(st, { synth: { sampleLength: 0.5 } });
+		applySnapshot(st, { synth: { envelope: { enabled: true, attackMs: 20, decayMs: 400 } } });
+		expect(st.synth.sampleLength.value).toBe(1);
 	});
 
 	it('gives projects saved before the filter envelope none', () => {

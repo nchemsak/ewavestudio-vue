@@ -22,12 +22,12 @@ export type KeyRoot = 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 
 // The synth's waveforms (src/audio/waves.ts): the oscillator's own four, the pulse and three
 // harmonic shapes. Saved projects may hold any name; an unknown one plays as a sine.
 import type { Wave } from '../../audio/waves';
-import { PULSE_WIDTH_DEFAULT, WAVE_IDS, foldPulseWidth, type PadWave } from '../../audio/waves';
+import { PULSE_WIDTH_DEFAULT, RANDOM_WAVE_IDS, WAVE_IDS, foldPulseWidth, type PadWave } from '../../audio/waves';
 import { VELOCITY_DESTINATIONS, VELOCITY_SWITCHED } from '../../audio/velocity';
 import { clampRatchet, clampRepeatNotes } from '../../audio/ratchet';
 import { arpRateFrom, type ArpRate } from '../melody/arp';
 import { clampTapeMode, TAPE_DEFAULTS, type TapeMode } from '../../audio/tape';
-import { sampleFrom, type SampleData } from '../../audio/sample';
+import { clampSampleLength, sampleFrom, SAMPLE_LENGTH_DEFAULT, type SampleData } from '../../audio/sample';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -116,8 +116,11 @@ export type ProjectState = {
 		pulse: { width: Ref<number> }; // the pulse wave's width, % (5–50; 50 is the square)
 		// The recorded sound the 'sample' wave plays (src/audio/sample.ts); none by default
 		sample: Ref<SampleData | null>;
-		// The waves the Waveforms card's Random picks from (the tiles' dice badges); all by default
-		randomWaves: Ref<Wave[]>;
+		// How much of the recording a pad plays, 0.05–1 (the strip's Length knob; 1 = all of it)
+		sampleLength: Ref<number>;
+		// The waves the Waveforms card's Random picks from (the tiles' dice badges, and the
+		// Sample strip's, PR 100); all by default
+		randomWaves: Ref<PadWave[]>;
 		// Velocity routing amounts, % −100..100 (src/audio/velocity.ts; 0 = off)
 		velocity: { decay: Ref<number>; cutoff: Ref<number>; pitchEnv: Ref<number>; noise: Ref<number> };
 		tuning: {
@@ -203,6 +206,7 @@ function byName(st: ProjectState) {
 		pitchMode: sy.pitchEnv.mode,
 		pulseWidth: sy.pulse.width,
 		sample: sy.sample,
+		sampleLength: sy.sampleLength,
 		randomWaves: sy.randomWaves,
 		velocityRouting: sy.velocity,
 		selectedKeyRoot: sy.tuning.selectedKeyRoot,
@@ -251,7 +255,7 @@ export function buildSnapshot(st: ProjectState) {
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoDepths, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, sample, randomWaves, velocityRouting,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, sample, sampleLength, randomWaves, velocityRouting,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
@@ -330,6 +334,7 @@ export function buildSnapshot(st: ProjectState) {
 			},
 			pulse: { width: pulseWidth.value },
 			sample: sample.value,
+			sampleLength: sampleLength.value,
 			randomWaves: [...randomWaves.value],
 			velocity: {
 				decay: velocityRouting.decay.value,
@@ -427,7 +432,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		unisonEnabled, unisonVoices, detuneCents, stereoSpread, unisonMaxVoices,
 		lfoEnabled, lfoRate, lfoDepth, lfoDepths, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
 		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, sample, randomWaves, velocityRouting,
+		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, sample, sampleLength, randomWaves, velocityRouting,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
@@ -562,12 +567,19 @@ export function applySnapshot(st: ProjectState, s: any) {
 		// A whole project saved without one
 		sample.value = null;
 	}
+	if (typeof syn.sampleLength === 'number') {
+		sampleLength.value = clampSampleLength(syn.sampleLength);
+	} else if (syn.envelope) {
+		// A whole project saved before Length (PR 100): the whole recording, as before
+		sampleLength.value = SAMPLE_LENGTH_DEFAULT;
+	}
 	if (Array.isArray(syn.randomWaves)) {
-		// Known waves only, in the tiles' order; none lit is allowed (Random then picks from all)
-		randomWaves.value = WAVE_IDS.filter((w) => syn.randomWaves.includes(w));
+		// Known waves only, in the tiles' order; none lit is allowed (Random then picks from all).
+		// A project saved before the recording could be in it (PR 100) keeps it out.
+		randomWaves.value = RANDOM_WAVE_IDS.filter((w) => syn.randomWaves.includes(w));
 	} else if (syn.envelope) {
 		// A whole project saved before the pool was saved (PR 85): every wave, as a fresh page
-		randomWaves.value = [...WAVE_IDS];
+		randomWaves.value = [...RANDOM_WAVE_IDS];
 	}
 	if (syn.velocity && typeof syn.velocity === 'object') {
 		for (const k of VELOCITY_DESTINATIONS) {
@@ -713,7 +725,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	const {
 		currentTheme, stepLength, collapsibleState, seqOpen, setStepLength,
 		volume, tempo, swing,
-		noiseMask, sample,
+		noiseMask, sample, sampleLength,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		instruments, melodyUi, selectedWaveform,
 	} = byName(st);
@@ -734,8 +746,10 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	// synth and effects
 	resetSoundToFactoryDefaults(st);
 	noiseMask.value = Array(stepLength.value).fill(true);
-	// The recording goes with the project (a sound preset keeps it, so it isn't in the above)
+	// The recording goes with the project (a sound preset keeps it, so it isn't in the above),
+	// and so does how much of it plays
 	sample.value = null;
+	sampleLength.value = SAMPLE_LENGTH_DEFAULT;
 
 	selectedKeyRoot.value = 'A';
 	globalOctaveOffset.value = 0;
@@ -831,7 +845,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 	pitchEnvDecayMs.value = 300;
 	pitchMode.value = 'up';
 	pulseWidth.value = PULSE_WIDTH_DEFAULT;
-	randomWaves.value = [...WAVE_IDS];
+	randomWaves.value = [...RANDOM_WAVE_IDS];
 	for (const k of VELOCITY_DESTINATIONS) velocityRouting[k].value = 0;
 
 	// FX: Delay

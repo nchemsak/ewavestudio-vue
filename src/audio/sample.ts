@@ -132,6 +132,51 @@ export function trimRecording(input: Float32Array, sampleRate: number): Float32A
 	return out;
 }
 
+// Length (PR 100): how much of the recording a pad plays. Full (1, the default) plays all of it,
+// at the pad's pitch (an octave up, half as long): the Envelope card's Attack still applies, its
+// Decay doesn't (that's the oscillators'). Lower plays that share of it, fading over its last
+// part (SAMPLE_LENGTH_FADE of it), as a gate closing. Saved as `synth.sampleLength`.
+export const SAMPLE_LENGTH_MIN = 0.05;
+export const SAMPLE_LENGTH_DEFAULT = 1;
+export const SAMPLE_LENGTH_FADE = 0.35;
+// The fade at Full: the recording has its own 10 ms fade, so the envelope only closes after it
+const FULL_FADE_S = 0.005;
+
+export const clampSampleLength = (v: unknown) =>
+	typeof v === 'number' && isFinite(v) ? Math.max(SAMPLE_LENGTH_MIN, Math.min(1, v)) : SAMPLE_LENGTH_DEFAULT;
+
+// How long a note on the sample lasts (s), and how long its fade is, played at `freq`
+export function sampleSpan(bufferSeconds: number, freq: number, length: number) {
+	const len = clampSampleLength(length);
+	const played = bufferSeconds * (SAMPLE_ROOT_HZ / Math.max(1, freq));
+	const seconds = Math.max(0.01, played * len);
+	const fade = len >= 1 ? Math.min(FULL_FADE_S, seconds / 2) : Math.max(FULL_FADE_S, seconds * SAMPLE_LENGTH_FADE);
+	return { seconds, fade };
+}
+
+// A note on the sample, timed: its attack's end, where its fade starts and where it ends.
+// `maxDuration` (a ratchet's hit) can end it sooner; the fade then fits before that end.
+export function sampleNoteTimes(o: {
+	start: number; bufferSeconds: number; freq: number; length: number; attack: number; maxDuration?: number;
+}) {
+	const { seconds, fade } = sampleSpan(o.bufferSeconds, o.freq, o.length);
+	let end = o.start + seconds;
+	if (o.maxDuration != null) end = Math.min(end, o.start + Math.max(o.maxDuration, 0.02));
+	const fadeFrom = Math.max(o.start, Math.min(o.start + seconds - fade, end - FULL_FADE_S));
+	const attackEnd = Math.min(o.start + Math.max(0.001, o.attack), fadeFrom);
+	return { attackEnd, fadeFrom, end };
+}
+
+// The note's level on a sample: up to `peak` over the attack, held, then faded out
+export function applySampleEnvelope(param: AudioParam, start: number, peak: number,
+	t: { attackEnd: number; fadeFrom: number; end: number }) {
+	param.setValueAtTime(0.0001, start);
+	if (t.attackEnd > start + 0.0005) param.exponentialRampToValueAtTime(peak, t.attackEnd);
+	else param.setValueAtTime(peak, start);
+	if (t.fadeFrom > t.attackEnd) param.setValueAtTime(peak, t.fadeFrom);
+	param.exponentialRampToValueAtTime(0.001, Math.max(t.end, t.fadeFrom + 0.001));
+}
+
 // Helpers END
 
 // Playing START

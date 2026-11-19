@@ -83,8 +83,8 @@ export function applyPreset(st: ProjectState, preset: SynthPreset) {
 export function soundKey(s: any): string {
 	if (!s?.synth || !s?.fx) return '';
 	// randomWaves (the dice badges) only says what Random picks from, and the recording (the
-	// 'sample' wave) stays through a preset: neither is part of the sound
-	const { tuning, noise, randomWaves, sample, ...synth } = s.synth;
+	// 'sample' wave) and how much of it plays stay through a preset: none is part of the sound
+	const { tuning, noise, randomWaves, sample, sampleLength, ...synth } = s.synth;
 	const { mask, type, ...noiseRest } = noise ?? {};
 	const { time, ...delay } = s.fx.delay ?? {};
 	const lane = Array.isArray(s.instruments) ? s.instruments.find((i: any) => i?.name === 'synth-voice') : null;
