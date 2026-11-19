@@ -7,6 +7,7 @@ import { STEPS, fresh, asSaved, changeEverything, leaves } from '../project/test
 import { WAVE_IDS } from '../../audio/waves';
 import { isDelayDivision } from '../delaySync';
 import { isPreDivision } from '../../audio/reverb/preDelay';
+import { isSwell } from '../../audio/reverb/reverse';
 import { VELOCITY_SWITCH_AMOUNT } from '../../audio/velocity';
 import { LFO_DEPTH_MAX } from '../../audio/lfo';
 
@@ -87,6 +88,7 @@ function expectValid(p: (typeof PRESETS)[number], where: string) {
 		if (path === 'synth.pitchEnv.mode') expect(['up', 'down', 'random'], at).toContain(v);
 		if (path === 'fx.delay.division') expect(isDelayDivision(v), at).toBe(true);
 		if (path === 'fx.reverb.preDivision') expect(isPreDivision(v), at).toBe(true);
+		if (path === 'fx.reverb.swell') expect(isSwell(v), at).toBe(true);
 	}
 }
 
@@ -348,6 +350,7 @@ describe('the dice (a random sound)', () => {
 			drive: share(p => !!p.fx?.drive),
 			tape: share(p => !!p.fx?.tape),
 			preDelay: share(p => !!p.fx?.reverb?.preDivision),
+			reverse: share(p => !!p.fx?.reverb?.reverse),
 		};
 		for (const [part, s] of Object.entries(parts)) {
 			expect(s, part).toBeGreaterThan(0.1);

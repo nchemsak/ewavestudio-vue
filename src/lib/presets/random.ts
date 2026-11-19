@@ -128,5 +128,12 @@ export function randomPreset(rng: Rng = Math.random): SynthPreset {
 	// (1/64 to 1/16 at the tempo). Drawn after the tape, so every roll from before it stays the same.
 	if (fx.reverb && chance(0.4)) fx.reverb.preDivision = pick(['1/64', '1/32', '1/16T', '1/16']);
 
+	// REV, now and then with the reverb: the reverb backwards, mostly swelling into the next hit.
+	// Drawn last, so every roll from before it stays the same.
+	if (fx.reverb && chance(0.4)) {
+		fx.reverb.reverse = true;
+		fx.reverb.swell = pick(['next', 'next', '1/8', '1/4']);
+	}
+
 	return { id: 'random', label: 'Random', description: 'A random sound', wave, synth, fx };
 }

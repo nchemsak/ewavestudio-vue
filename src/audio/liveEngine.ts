@@ -27,6 +27,7 @@ import { startNoteLfo, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, lfoWaveAt, type Lf
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
 import { clampPreDelayMs, PRE_DELAY_MAX_MS } from './reverb/preDelay';
+import { nextHitGaps, revIrSeconds, revKey, reverseIrChannels, swellSeconds } from './reverb/reverse';
 import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from './ratchet';
 import { createCrusher, loadCrusher, setCrusher } from './crusher';
 import { createPingPong } from './pingPong';
@@ -101,7 +102,7 @@ export type LiveEngineSettings = {
 		pingPong: R<boolean>; // echoes alternate left and right (pingPong.ts)
 	};
 	drive: { enabled: R<boolean>; type: R<string>; amount: R<number>; tone: R<number>; mix: R<number>; crush: R<boolean> };
-	reverb: { enabled: R<boolean>; mix: R<number>; decay: R<number>; tone: R<number>; preDelay: R<number> };
+	reverb: { enabled: R<boolean>; mix: R<number>; decay: R<number>; tone: R<number>; preDelay: R<number>; reverse: R<boolean>; swell: R<string> };
 	// The tape pedal, last in the chain (tape.ts): age and wobble 0..1
 	tape: { enabled: R<boolean>; age: R<number>; wobble: R<number>; mode: R<TapeMode> };
 	// Called just before a bar's first step is built (about 100 ms before it sounds), so a
@@ -413,7 +414,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// Reverb START
 
-	const { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone, preDelay: reverbPreDelayMs } = s.reverb;
+	const { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone, preDelay: reverbPreDelayMs, reverse: reverbReverse, swell: reverbSwell } = s.reverb;
+	// The plain reverb's level: none while REV plays the reverb backwards instead
+	const plainWet = () => (reverbEnabled.value && !reverbReverse.value ? reverbMix.value : 0);
 
 	let reverbConvolver = audioCtx.createConvolver();
 	const reverbToneFilter = audioCtx.createBiquadFilter();
@@ -455,7 +458,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 		const fadeTime = 0.25; // seconds
 		const now = audioCtx.currentTime;
-		const targetWet = reverbEnabled.value ? reverbMix.value : 0;
+		const targetWet = plainWet();
 
 		// Fade new IR up
 		newWet.gain.setValueAtTime(0, now);
@@ -528,24 +531,100 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		applyReverbTone();
 	});
 
-	// Enable/disable reverb
-	watch(reverbEnabled, (on) => {
+	// Enable/disable reverb, its mix, and REV (which plays the reverb backwards instead)
+	watch([reverbEnabled, reverbMix, reverbReverse], () => {
 		const t = audioCtx.currentTime;
-		if (on) {
-			if (!reverbConvolver.buffer) ensureReverbIR();
-			reverbWet.gain.setTargetAtTime(reverbMix.value, t, 0.03);
-		} else {
-			reverbWet.gain.setTargetAtTime(0, t, 0.03);
-		}
-	});
-
-	// Mix changes
-	watch(reverbMix, (v) => {
-		const t = audioCtx.currentTime;
-		reverbWet.gain.setTargetAtTime(reverbEnabled.value ? v : 0, t, 0.03);
+		if (reverbEnabled.value && !reverbConvolver.buffer) ensureReverbIR();
+		reverbWet.gain.setTargetAtTime(plainWet(), t, 0.03);
+		applyRevLevel();
 	});
 
 	// Reverb END
+
+	// REV START
+	// The reverb backwards (reverb/reverse.ts): after PRE the send goes into one reversed
+	// impulse response per swell length in use, each behind a gate; a hit opens its own gate as
+	// it reaches it, so its swell lasts until the next hit (Next hit) or SWELL's fixed length.
+	// The gates switch with a 3 ms glide, and a convolver whose gate shuts plays on, so a swell
+	// already rising finishes. While stopped (MIDI notes, previews) the gate for a beat's swell
+	// is open (Next hit), or SWELL's own.
+	const revWet = audioCtx.createGain();
+	revWet.gain.value = 0;
+	revWet.connect(preMaster);
+	type RevChain = { gate: GainNode; conv: ConvolverNode; usedAt: number };
+	const revChains = new Map<number, RevChain>();
+	const REV_CHAINS_MAX = 10;
+
+	function revBuffer(seconds: number): AudioBuffer {
+		const chs = reverseIrChannels(seconds, audioCtx.sampleRate);
+		const buf = audioCtx.createBuffer(2, chs[0].length, audioCtx.sampleRate);
+		chs.forEach((d, i) => buf.copyToChannel(d as Float32Array<ArrayBuffer>, i));
+		return buf;
+	}
+
+	function revChain(key: number): RevChain {
+		let c = revChains.get(key);
+		if (!c) {
+			// Make room: drop the longest-unused chain whose swell has surely finished
+			if (revChains.size >= REV_CHAINS_MAX) {
+				const now = audioCtx.currentTime;
+				const old = [...revChains.entries()].filter(([k, ch]) => ch.usedAt + k / 1000 + 1 < now)
+					.sort((a, b) => a[1].usedAt - b[1].usedAt)[0];
+				if (old) {
+					try { reverbPreDelay.disconnect(old[1].gate); } catch { }
+					old[1].gate.disconnect();
+					old[1].conv.disconnect();
+					revChains.delete(old[0]);
+				}
+			}
+			const gate = audioCtx.createGain();
+			gate.gain.value = 0;
+			const conv = audioCtx.createConvolver();
+			conv.normalize = false;
+			conv.buffer = revBuffer(key / 1000);
+			reverbPreDelay.connect(gate).connect(conv).connect(revWet);
+			c = { gate, conv, usedAt: audioCtx.currentTime };
+			revChains.set(key, c);
+		}
+		return c;
+	}
+
+	// Open the gate for a swell this long (s) at `at`, and shut the others
+	function openRev(irSeconds: number, at: number) {
+		const key = revKey(irSeconds);
+		const chain = revChain(key);
+		chain.usedAt = Math.max(chain.usedAt, at);
+		for (const [k, c] of revChains) c.gate.gain.setTargetAtTime(k === key ? 1 : 0, at, 0.003);
+	}
+
+	const revStepS = () => 60 / tempo.value / 4;
+	const revPreS = () => clampPreDelayMs(reverbPreDelayMs.value) / 1000;
+
+	// What's open while nothing is scheduled: SWELL's fixed length, or a beat for Next hit
+	function openRevAtRest() {
+		if (!reverbReverse.value) return;
+		const now = audioCtx.currentTime;
+		for (const c of revChains.values()) c.gate.gain.cancelScheduledValues(now);
+		openRev(revIrSeconds(swellSeconds(reverbSwell.value, revStepS(), null), revPreS()), now);
+	}
+
+	// A step that's on, played at `t` (the swung step time): with Next hit, its swell lasts until
+	// the next step that's on (the pattern as it is now); its gate opens as the hit reaches it
+	function revForStep(stepIdx: number, active: readonly boolean[], t: number) {
+		if (!reverbReverse.value || reverbSwell.value !== 'next') return;
+		const gap = nextHitGaps(active, revStepS(), swing.value)[stepIdx];
+		openRev(revIrSeconds(swellSeconds('next', revStepS(), gap), revPreS()), t + revPreS());
+	}
+
+	function applyRevLevel() {
+		const on = reverbEnabled.value && reverbReverse.value;
+		revWet.gain.setTargetAtTime(on ? reverbMix.value : 0, audioCtx.currentTime, 0.03);
+		if (on) openRevAtRest();
+	}
+	// A new length, tempo or PRE: the gate for it (the sequencer's next hits take over again)
+	watch([reverbSwell, tempo, reverbPreDelayMs], openRevAtRest);
+	onMounted(applyRevLevel);
+	// REV END
 
 	// LFO START
 
@@ -1021,6 +1100,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	function hardStopSequencer() {
 		sequencerTicker.stop();
+		openRevAtRest(); // REV: the gate for a note with no next hit
 		isPlaying.value = false;
 		currentStep.value = -1;
 		stepIndex = 0;
@@ -1084,6 +1164,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 						const span = stepSpan(stepIndex, stepLength.value, stepDuration, swing.value);
 						// Up or Down repeats step through the key's chord (ratchetPitches)
 						const hitHz = ratchetPitches(pitch, inst.ratchets?.[stepIndex], inst.repeatNotes?.[stepIndex], s.pattern.repeatChord.value);
+						// REV with Next hit: this hit's swell lasts until the next step that's on
+						revForStep(stepIndex, inst.steps.slice(0, stepLength.value).map(Boolean), t);
 						ratchetHits(t, span, inst.ratchets?.[stepIndex]).forEach((hit, k) => {
 							playSynthNote(hitHz[k] ?? pitch, amp, safeDecay, hit.time, wf, { addNoise: padNoiseOn, vel, maxDuration: hit.maxDuration });
 						});

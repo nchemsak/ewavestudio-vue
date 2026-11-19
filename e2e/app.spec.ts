@@ -2833,6 +2833,90 @@ test("the reverb's PRE knob: note values at the tempo, greyed out while the peda
 	expect(late.reverb - none.reverb).toBeLessThan(255);
 });
 
+test("REV on the reverb: its switch on the ribbon, SWELL's lengths, saved, one undo step; each swell rises into the next hit in the export, and the stems still add up", async ({ page }) => {
+	const pedal = page.locator('.ds-grid .reverb-pedal');
+	const rev = pedal.getByRole('switch', { name: 'Reverse reverb' });
+	const knob = pedal.getByRole('slider', { name: /^(DECAY|SWELL)$/ });
+	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.fx.reverb;
+	await expect(rev).toBeDisabled();
+	await expect(rev).toHaveAttribute('aria-checked', 'false');
+	await page.waitForTimeout(SETTLED); // the opened project becomes the starting point
+	await pedal.locator('.footswitch').click();
+	await page.waitForTimeout(SETTLED);
+	// On the ribbon, under the LED
+	const ribbon = (await pedal.locator('.panel-bottom').boundingBox())!;
+	const sw = (await rev.boundingBox())!;
+	expect(sw.x).toBeGreaterThanOrEqual(ribbon.x - 1);
+	expect(sw.x + sw.width).toBeLessThanOrEqual(ribbon.x + ribbon.width + 1);
+	await expect(knob).toHaveAccessibleName('DECAY');
+	await rev.click();
+	await expect(rev).toHaveAttribute('aria-checked', 'true');
+	// DECAY reads SWELL: Next hit, 1 step, 2 steps, 1 beat, 2 beats
+	await expect(knob).toHaveAccessibleName('SWELL');
+	await expect(knob).toHaveAttribute('aria-valuetext', 'Next hit');
+	await page.waitForTimeout(SETTLED);
+	await knob.focus();
+	for (let i = 0; i < 3; i++) await knob.press('ArrowRight');
+	await expect(knob).toHaveAttribute('aria-valuetext', '1 beat');
+	await page.locator('body').click({ position: { x: 2, y: 2 } });
+	await page.waitForTimeout(SETTLED);
+	let reverb = await saved();
+	expect([reverb.reverse, reverb.swell, reverb.decay]).toEqual([true, '1/4', 1.4]);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click(); // the length
+	await expect(knob).toHaveAttribute('aria-valuetext', 'Next hit');
+	await page.getByRole('button', { name: 'Undo', exact: true }).click(); // REV
+	await expect(rev).toHaveAttribute('aria-checked', 'false');
+	await expect(knob).toHaveAccessibleName('DECAY');
+
+	// The export: hits on steps 1 and 5 at 120 BPM, so the first hit's swell lasts 0.5 s (to step
+	// 5) and the second's 1.5 s (to the next bar's step 1)
+	await turnOnPads(page, [0, 4]);
+	const exportWith = async (id: string, reverse: boolean) => {
+		await importChanged(page, id, (d) => {
+			d.transport.tempo = 120;
+			d.transport.swing = 0;
+			d.fx.reverb = { enabled: true, mix: 0.4, decay: 1.4, tone: 0.6, preDivision: 'Off', preDelay: 0, reverse, swell: 'next' };
+		});
+		const files = unzip((await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: true, midi: false, oneShot: false, normalize: false })).bytes);
+		const of = (part: string) => files[Object.keys(files).find((n) => n.endsWith(`_${part}.wav`))!];
+		const mix = wavSamples(of('mix')).samples;
+		const stems = ['dry', 'reverb'].map((p) => wavSamples(of(p)).samples);
+		let worst = 0;
+		for (let i = 0; i < mix.length; i++) worst = Math.max(worst, Math.abs(stems[0][i] + stems[1][i] - mix[i]));
+		expect(worst, id).toBeLessThan(1e-3);
+		return of('reverb');
+	};
+	const plain = await exportWith('Rev-off', false);
+	const back = await exportWith('Rev-next', true);
+	const rms = (b: Buffer, from: number, to: number) => wavWindow(b, from, to).rms;
+	// The first swell rises until the second hit (0.5 s), the second until the bar's end (2 s)
+	expect(rms(back, 0.4, 0.49)).toBeGreaterThan(rms(back, 0.02, 0.12) * 4);
+	expect(rms(back, 1.85, 1.99)).toBeGreaterThan(rms(back, 0.7, 0.9) * 4);
+	// …where the plain reverb decays
+	expect(rms(plain, 0.4, 0.49)).toBeLessThan(rms(plain, 0.02, 0.12));
+	// About as loud as the plain reverb, and never clipping
+	expect(wavPeak(back)).toBeLessThan(1);
+	expect(rms(back, 0, 2)).toBeGreaterThan(rms(plain, 0, 2) * 0.3);
+	expect(rms(back, 0, 2)).toBeLessThan(rms(plain, 0, 2) * 3);
+
+	// Live: a short hit on step 1, then Stop before step 5. Its swell rises for the 0.5 s up to
+	// where step 5 would be and stops there (the plain reverb would ring on)
+	await importChanged(page, 'Rev-live', (d) => {
+		d.transport.tempo = 120;
+		d.synth.envelope.decayMs = 60;
+		d.fx.reverb = { enabled: true, mix: 1, decay: 1.4, tone: 0.6, preDivision: 'Off', preDelay: 0, reverse: true, swell: 'next' };
+	});
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await page.waitForTimeout(150);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await page.waitForTimeout(60);
+	const rising = await page.evaluate(() => (window as any).__swingOver(230) as Promise<number>);
+	await page.waitForTimeout(200);
+	const after = await page.evaluate(() => (window as any).__swingOver(400) as Promise<number>);
+	expect(rising).toBeGreaterThan(0.01);
+	expect(after).toBeLessThan(rising / 3);
+});
+
 test('the tape pedal: on the panel, saved, one undo step a change, reset by File → New and a sound preset', async ({ page }) => {
 	const tape = page.locator('.ds-grid .tape-pedal');
 	const footswitch = tape.locator('.footswitch');
@@ -3858,8 +3942,8 @@ test('hardware buttons: a push button sinks and springs back; a chosen option an
 	expect((await capState(play)).down).toBe(4);
 	await play.click();
 
-	// The pedals' CRUSH and PING PONG switches are not caps (they stay as they were)
-	await expect(page.locator('.pedal-switch')).toHaveCount(2);
+	// The pedals' CRUSH, PING PONG and REV switches are not caps (they stay as they were)
+	await expect(page.locator('.pedal-switch')).toHaveCount(3);
 	await expect(page.locator('.pedal-switch.hw-cap')).toHaveCount(0);
 });
 

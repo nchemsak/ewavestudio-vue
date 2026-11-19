@@ -82,6 +82,7 @@ function oneShotState(state: StepSequencerState, hz: number, wave: string, part:
 		part,
 		random,
 		tapeNoise: { seconds: noiseSeconds },
+		oneShot: true,
 		pattern: {
 			active: Array.from({ length: n }, (_, i) => i === 0),
 			velocities: Array(n).fill(1),

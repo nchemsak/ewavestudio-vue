@@ -104,7 +104,8 @@
 						v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 					<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 						v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone"
-						v-model:pre-division="reverbPreDivision" :tempo="tempo" />
+						v-model:pre-division="reverbPreDivision" v-model:reverse="reverbReverse"
+						v-model:swell="reverbSwell" :tempo="tempo" />
 					<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
 						v-model:mode="tapeMode" :playing="isPlaying" />
 				</div>
@@ -486,7 +487,8 @@
 									v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 								<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 									v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone"
-									v-model:pre-division="reverbPreDivision" :tempo="tempo" />
+									v-model:pre-division="reverbPreDivision" v-model:reverse="reverbReverse"
+									v-model:swell="reverbSwell" :tempo="tempo" />
 								<!-- The tape pedal, last in the chain: a low deck under the three pedals
 								     (option C of three mockups; the phone's FX page has it as a pedal) -->
 								<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
@@ -668,6 +670,7 @@ import Knob from './Knob.vue';
 import DelayEffect from './modules/DelayEffect.vue';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, DEFAULT_TEMPO, followDelaySync } from '../lib/delaySync';
 import { DEFAULT_PRE_DIVISION, followPreDelay } from '../audio/reverb/preDelay';
+import { DEFAULT_SWELL } from '../audio/reverb/reverse';
 import { TEMPO_DETENTS, SWING_DETENTS, TRIPLET_SWING } from '../lib/knobDetents';
 import { shortestInterval, transposePitches, remapScale, nearestRootHz, patternCenterHz, chordPitchClasses } from '../lib/melody/theory';
 import DriveEffect from './modules/DriveEffect.vue';
@@ -2363,6 +2366,9 @@ const reverbTone = ref(0.6);      // normalized tone control
 const reverbPreDivision = ref(DEFAULT_PRE_DIVISION);
 const reverbPreDelay = ref(0);
 followPreDelay({ tempo, division: reverbPreDivision, ms: reverbPreDelay });
+// REV: the reverb backwards, each swell SWELL long (src/audio/reverb/reverse.ts)
+const reverbReverse = ref(false);
+const reverbSwell = ref(DEFAULT_SWELL);
 
 // Reverb END
 
@@ -2609,6 +2615,8 @@ const exportState = computed<StepSequencerState>(() => {
 				tone: reverbTone.value,
 				preDivision: reverbPreDivision.value,
 				preDelay: reverbPreDelay.value,
+				reverse: reverbReverse.value,
+				swell: reverbSwell.value,
 			},
 			tape: {
 				enabled: tapeEnabled.value,
@@ -2731,7 +2739,7 @@ const projectState: ProjectState = {
 			pingPong: delayPingPong,
 		},
 		drive: { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix, crush: driveCrush },
-		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone, preDivision: reverbPreDivision, preDelay: reverbPreDelay },
+		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone, preDivision: reverbPreDivision, preDelay: reverbPreDelay, reverse: reverbReverse, swell: reverbSwell },
 		tape: { enabled: tapeEnabled, age: tapeAge, wobble: tapeWobble, mode: tapeMode },
 	},
 	instruments,
@@ -5167,6 +5175,31 @@ async function recordSample() {
 		grid-row: 3;
 		justify-self: center;
 	}
+}
+
+/* REV (option A of three mockups: B was beside a shorter treadle, C between the knobs): a mini
+   switch on the ribbon, under the LED, its caption in the ribbon's light letters; the name
+   moves down to make room */
+.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-switch) {
+	position: absolute;
+	left: 0;
+	top: 26px;
+	right: auto;
+	width: 24px;
+	z-index: 1;
+}
+
+.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-switch .ps-label) {
+	color: rgba(255, 255, 255, 0.93);
+	min-height: 0;
+}
+
+.module.fx .fx-pair :deep(.reverb-pedal .pedal-switch.rev-switch:disabled .ps-label) {
+	color: rgba(255, 255, 255, 0.6);
+}
+
+.module.fx .fx-pair :deep(.reverb-pedal .effect-label) {
+	margin-top: 30px;
 }
 
 /* EFFECTS PEDALS END */

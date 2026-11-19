@@ -14,6 +14,7 @@ import { timeX, xTime } from '../lib/shapeViews';
 import { padHue } from '../lib/padColour';
 import type { StepSequencerState } from '../audio/export/scheduleStepSequencer';
 import { sampleSeconds, sampleSpan, SAMPLE_WAVE } from '../audio/sample';
+import { swellSeconds } from '../audio/reverb/reverse';
 
 // Helpers START
 
@@ -21,9 +22,9 @@ import { sampleSeconds, sampleSpan, SAMPLE_WAVE } from '../audio/sample';
 export const HIT_MAX_S = 6;
 
 // How long a hit of `state` may ring, so a short sound isn't rendered for 6 s: the envelope,
-// the delay's echoes until they fall to −60 dB, the reverb's pre-delay and decay, and a little room. On the
+// the delay's echoes until they fall to −60 dB, the reverb's pre-delay and decay (or REV's swell), and a little room. On the
 // recording (`wave` 'sample' at `hz`), its own length instead of the envelope's.
-export function hitSeconds(state: Pick<StepSequencerState, 'synth' | 'fx'>, wave?: string, hz?: number): number {
+export function hitSeconds(state: Pick<StepSequencerState, 'synth' | 'fx'> & { bpm?: number }, wave?: string, hz?: number): number {
 	const env = state.synth.envelope;
 	const rec = wave === SAMPLE_WAVE ? state.synth.sample : null;
 	let s = rec ? sampleSpan(sampleSeconds(rec), hz ?? 220, state.synth.sampleLength ?? 1).seconds
@@ -34,7 +35,10 @@ export function hitSeconds(state: Pick<StepSequencerState, 'synth' | 'fx'>, wave
 		s += d.time * Math.min(60, Math.ceil(Math.log(0.001) / Math.log(fb)) + 1);
 	}
 	const r = state.fx.reverb;
-	if (r.enabled && r.mix > 0) s += r.decay * 1.2 + (r.preDelay ?? 0) / 1000;
+	// REV swells for SWELL's length (a beat for Next hit: one hit has no next) instead of decaying
+	if (r.enabled && r.mix > 0) {
+		s += (r.preDelay ?? 0) / 1000 + (r.reverse ? swellSeconds(r.swell ?? 'next', 60 / (state.bpm || 120) / 4, null) : r.decay * 1.2);
+	}
 	return Math.min(HIT_MAX_S, Math.max(0.3, s + 0.2));
 }
 

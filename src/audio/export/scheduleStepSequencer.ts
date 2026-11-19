@@ -17,6 +17,7 @@ import { startFM } from "../fm";
 import { startNoteLfo, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, type LfoTarget } from "../lfo";
 import { generateReverbIR } from "../reverb/generateIr";
 import { clampPreDelayMs, PRE_DELAY_MAX_MS } from "../reverb/preDelay";
+import { DEFAULT_SWELL, isSwell, nextHitGaps, revIrSeconds, revKey, reverseIrChannels, swellSeconds } from "../reverb/reverse";
 import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from "../ratchet";
 import { createCrusher } from "../crusher";
 import { createPingPong } from "../pingPong";
@@ -110,6 +111,8 @@ export type StepSequencerState = {
 			decay: number;    // seconds
 			tone: number;     // 0..1 (dark→bright)
 			preDelay?: number; // ms before the tail starts (missing: 0)
+			reverse?: boolean; // REV: the reverb backwards (reverb/reverse.ts; missing: off)
+			swell?: string;    // REV's length: 'next' (until the next hit) or a fixed one
 		};
 		// The tape pedal, last in the chain (tape.ts; missing: off)
 		tape?: {
@@ -129,6 +132,9 @@ export type StepSequencerState = {
 	// The tape pedal's own noise (hiss, crackle) plays for `seconds` (default: the bars, so a
 	// loop repeats without a doubled stretch of it), then fades for `fade` seconds (default 0)
 	tapeNoise?: { seconds?: number; fade?: number };
+	// One note with no next hit (the one-shot, the screen's hit at rest): REV's Next hit swells
+	// for a beat, as for a MIDI note
+	oneShot?: boolean;
 };
 
 // The mix, or one part of it: the parts add up to the mix. 'dry' is the sound with drive but
@@ -477,6 +483,49 @@ export function scheduleStepSequencer(
 		reverbToneFilter.frequency.value = 20000;
 	}
 
+	// REV (reverb/reverse.ts): the reverb backwards instead, as live: after PRE, one reversed
+	// impulse response per swell length behind a gate, each hit opening its own as it reaches
+	// it. Inside the reverb's stem.
+	const revOn = reverbEnabled && rev.reverse === true;
+	const revSwell = isSwell(rev.swell) ? rev.swell : DEFAULT_SWELL;
+	const revPreS = clampPreDelayMs(rev.preDelay) / 1000;
+	const revGates = new Map<number, GainNode>();
+	const revWet = ctx.createGain(); // MIX, as the plain reverb's
+	revWet.gain.value = clamp01(rev.mix);
+	revWet.connect(reverbOut);
+	const revGate = (irSeconds: number) => {
+		const key = revKey(irSeconds);
+		let gate = revGates.get(key);
+		if (!gate) {
+			gate = ctx.createGain();
+			gate.gain.value = 0;
+			const conv = ctx.createConvolver();
+			conv.normalize = false;
+			const chs = reverseIrChannels(key / 1000, sr);
+			const buf = ctx.createBuffer(2, chs[0].length, sr);
+			chs.forEach((d, i) => buf.copyToChannel(d as Float32Array<ArrayBuffer>, i));
+			conv.buffer = buf;
+			reverbPreDelay.connect(gate).connect(conv).connect(revWet);
+			revGates.set(key, gate);
+		}
+		return { key, gate };
+	};
+	const openRev = (irSeconds: number, at: number) => {
+		const { key } = revGate(irSeconds);
+		for (const [k, g] of revGates) g.gain.setTargetAtTime(k === key ? 1 : 0, at, 0.003);
+	};
+	if (revOn) {
+		reverbWet.gain.value = 0; // the plain reverb is off while REV plays it backwards
+		const stepS = 60 / state.bpm / 4;
+		// SWELL's fixed length, or a beat for one note: open from the start (Next hit: per hit, below)
+		if (revSwell !== 'next' || state.oneShot) {
+			openRev(revIrSeconds(swellSeconds(revSwell, stepS, null), revPreS), ctx.currentTime + offsetSeconds);
+		}
+	}
+	const revGaps = revOn && revSwell === 'next' && !state.oneShot
+		? nextHitGaps(state.pattern.active.slice(0, state.stepsCount).map(Boolean), 60 / state.bpm / 4, clamp01(state.swing))
+		: null;
+
 	// -------------------------------------------------------------------------
 	// Connect FX to master
 	// -------------------------------------------------------------------------
@@ -548,6 +597,9 @@ export function scheduleStepSequencer(
 		const t = ctx.currentTime + offsetSeconds + barStart + stepIndex * stepDuration + swingOffset;
 
 		const padNoiseOn = noiseState.mask?.[stepIndex] ?? true;
+
+		// REV with Next hit: this hit's swell lasts until the next step that's on
+		if (revGaps) openRev(revIrSeconds(swellSeconds('next', stepDuration, revGaps[stepIndex]), revPreS), t + revPreS);
 
 		// One note, or a ratchet's 2–4 quick hits within the step, as in the live engine
 		const span = stepSpan(stepIndex, state.stepsCount, stepDuration, clamp01(state.swing));
