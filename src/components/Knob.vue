@@ -496,15 +496,14 @@ function onPress(e, isTouch = false) {
 }
 
 .drive-pedal .tone .knob-label,
-.reverb-pedal .tone .knob-label,
 .delay-pedal .tone .knob-label {
 	position: absolute;
 	top: -14px;
 	width: 40px;
 }
 
-.reverb-pedal .mix .knob-label,
-.reverb-pedal .decay .knob-label {
+/* The reverb's four knobs sit two by two (PRE beside TONE, PR 103), each caption under its knob */
+.reverb-pedal .knob-cell .knob-label {
 	position: absolute;
 	bottom: -10px;
 	width: 40px;

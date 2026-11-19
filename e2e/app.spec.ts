@@ -2775,6 +2775,52 @@ test('the tape pedal: its noise is a stem of its own and the stems still add up;
 	expect(wavWindow(shot, frames / rate - 0.2, frames / rate - 0.06).rms).toBeGreaterThan(1e-3);
 });
 
+test("the reverb's PRE knob: greyed out while the pedal is off, saved, one undo step; the tail starts that much later in the export, and the stems still add up", async ({ page }) => {
+	const pre = page.locator('.ds-grid .reverb-pedal').getByRole('slider', { name: 'PRE' });
+	await expect(pre).toHaveAttribute('aria-valuenow', '0');
+	await expect(pre).toHaveAttribute('aria-disabled', 'true');
+	await page.waitForTimeout(SETTLED); // the opened project becomes the starting point
+	await page.locator('.ds-grid .reverb-pedal .footswitch').click();
+	await expect(pre).not.toHaveAttribute('aria-disabled', 'true');
+	await page.waitForTimeout(SETTLED);
+	await pre.focus();
+	for (let i = 0; i < 3; i++) await pre.press('ArrowRight');
+	await expect(pre).toHaveAttribute('aria-valuetext', '3 ms');
+	await page.locator('body').click({ position: { x: 2, y: 2 } }); // let go of the knob
+	await page.waitForTimeout(SETTLED);
+	const fx = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.fx;
+	expect(fx.reverb.preDelay).toBe(3);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(pre).toHaveAttribute('aria-valuenow', '0');
+
+	// The export: one hit, the reverb's stem starts PRE later than without; the dry hit doesn't
+	await turnOnPads(page, [0]);
+	const exportWith = async (id: string, preDelay: number) => {
+		await importChanged(page, id, (d) => { d.fx.reverb = { enabled: true, mix: 0.5, decay: 1, tone: 0.6, preDelay }; });
+		await expect(pre).toHaveAttribute('aria-valuenow', String(preDelay));
+		const files = unzip((await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: true, midi: false, oneShot: false, normalize: false })).bytes);
+		const of = (part: string) => files[Object.keys(files).find((n) => n.endsWith(`_${part}.wav`))!];
+		const onsetMs = (b: Buffer) => {
+			const { rate, samples } = wavSamples(b);
+			let peak = 0;
+			for (const v of samples) peak = Math.max(peak, Math.abs(v));
+			return (samples.findIndex((v) => Math.abs(v) > peak * 0.02) / rate) * 1000;
+		};
+		// The stems add up to the mix, with the pre-delay inside the reverb's stem
+		const mix = wavSamples(of('mix')).samples;
+		const stems = ['dry', 'reverb'].map((p) => wavSamples(of(p)).samples);
+		let worst = 0;
+		for (let i = 0; i < mix.length; i++) worst = Math.max(worst, Math.abs(stems[0][i] + stems[1][i] - mix[i]));
+		expect(worst, id).toBeLessThan(1e-3);
+		return { dry: onsetMs(of('dry')), reverb: onsetMs(of('reverb')) };
+	};
+	const none = await exportWith('Pre-0', 0);
+	const late = await exportWith('Pre-120', 120);
+	expect(Math.abs(late.dry - none.dry)).toBeLessThan(1);
+	expect(late.reverb - none.reverb).toBeGreaterThan(115);
+	expect(late.reverb - none.reverb).toBeLessThan(125);
+});
+
 test('the tape pedal: on the panel, saved, one undo step a change, reset by File → New and a sound preset', async ({ page }) => {
 	const tape = page.locator('.ds-grid .tape-pedal');
 	const footswitch = tape.locator('.footswitch');
@@ -4586,7 +4632,7 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 	await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
 	await openSettings(page);
 	await expect(learn).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(33);
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(34);
 	await cutoff.click();
 	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
 	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');
@@ -5961,7 +6007,7 @@ test('PR 99: the pedals: the name on a ribbon, every caption under its own knob,
 		}), pedals);
 		for (const [i, b] of boxes.entries()) {
 			const name = `${pedals[i]} at ${width}`;
-			expect(b.knobs).toHaveLength(3);
+			expect(b.knobs).toHaveLength(pedals[i] === 'reverb' ? 4 : 3); // the reverb has PRE (PR 103)
 			for (const k of b.knobs) {
 				expect(k.label.top, name).toBeGreaterThanOrEqual(k.dial.bottom - 1);
 				for (const other of b.knobs) {

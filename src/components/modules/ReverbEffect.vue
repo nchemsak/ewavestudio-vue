@@ -30,6 +30,16 @@
 						{{ toneLabel }}
 					</span>
 				</div>
+
+				<!-- PRE: the pre-delay, ms before the tail starts; notches at 1/64 and 1/32 of a bar -->
+				<div class="knob-cell pre">
+					<Knob midi-id="reverb.preDelay" :value-text="preLabel" v-model="localPreDelay" label="PRE" :min="0" :max="PRE_DELAY_MAX_MS" :step="1" size="small"
+						:detents="preDetents" :disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'pre'"
+						@knobEnd="activeKnob = null" />
+					<span v-if="activeKnob === 'pre'" class="custom-tooltip">
+						{{ preLabel }}
+					</span>
+				</div>
 			</div>
 
 			<div class="panel-seam" aria-hidden="true"></div>
@@ -48,6 +58,7 @@
 import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
+import { clampPreDelayMs, preDelayDetents, preDelayLabel, PRE_DELAY_MAX_MS } from '../../audio/reverb/preDelay';
 
 const props = withDefaults(defineProps<{
 	showToggle?: boolean;
@@ -55,12 +66,16 @@ const props = withDefaults(defineProps<{
 	mix: number;
 	decay: number;
 	tone: number;          // 0 = dark, 1 = bright
+	preDelay?: number;     // ms, 0–250
+	tempo?: number;        // BPM, for PRE's notches
 	audioCtx?: AudioContext;
 	color?: string;
 }>(), {
 	showToggle: true,
 	color: '#7c9bff',
-	tone: 0.5
+	tone: 0.5,
+	preDelay: 0,
+	tempo: 120
 });
 
 const emit = defineEmits<{
@@ -68,14 +83,19 @@ const emit = defineEmits<{
 	(e: 'update:mix', v: number): void;
 	(e: 'update:decay', v: number): void;
 	(e: 'update:tone', v: number): void;
+	(e: 'update:preDelay', v: number): void;
 }>();
 
 const localEnabled = ref<boolean>(props.enabled);
 const localMix = ref<number>(props.mix);
 const localDecay = ref<number>(props.decay);
 const localTone = ref<number>(props.tone);
+const localPreDelay = ref<number>(props.preDelay);
 
-const activeKnob = ref<null | 'mix' | 'decay' | 'tone'>(null);
+const activeKnob = ref<null | 'mix' | 'decay' | 'tone' | 'pre'>(null);
+
+const preDetents = computed(() => preDelayDetents(props.tempo).map((d) => d.ms));
+const preLabel = computed(() => preDelayLabel(localPreDelay.value, props.tempo));
 
 const toneLabel = computed(() => {
 	const t = localTone.value;
@@ -88,11 +108,13 @@ watch(localEnabled, v => emit('update:enabled', v));
 watch(localMix, v => emit('update:mix', Math.max(0, Math.min(1, v))));
 watch(localDecay, v => emit('update:decay', Math.max(0.2, Math.min(4.0, v))));
 watch(localTone, v => emit('update:tone', Math.max(0, Math.min(1, v))));
+watch(localPreDelay, v => emit('update:preDelay', clampPreDelayMs(v)));
 
 watch(() => props.enabled, v => (localEnabled.value = v));
 watch(() => props.mix, v => { if (v !== localMix.value) localMix.value = v; });
 watch(() => props.decay, v => { if (v !== localDecay.value) localDecay.value = v; });
 watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; });
+watch(() => props.preDelay, v => { if (v !== localPreDelay.value) localPreDelay.value = v; });
 </script>
 
 <style scoped>
@@ -106,7 +128,7 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 .panel-top {
 	position: relative;
 	border-radius: 8px 8px 0 0;
-	padding: 12px 0px 10px;
+	padding: 12px 0px 2px; /* 10px before PRE; the four knobs need the room */
 
 	background: linear-gradient(var(--pedal-hi, #ccc5b4), var(--pedal-lo, #a39277));
 
@@ -120,7 +142,8 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	grid-template-areas:
 		"led   led"
 		"decay   mix"
-		"tone  tone";
+		"tone  pre";
+	row-gap: 4px;
 	align-items: center;
 	justify-items: center;
 }
@@ -155,6 +178,10 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	grid-area: tone;
 }
 
+.pre {
+	grid-area: pre;
+}
+
 .knob-cell {
 	width: min-content;
 	text-align: center;
@@ -178,7 +205,8 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	user-select: none;
 }
 
-.tone .custom-tooltip {
+.tone .custom-tooltip,
+.pre .custom-tooltip {
 	top: initial;
 	bottom: -18px;
 }

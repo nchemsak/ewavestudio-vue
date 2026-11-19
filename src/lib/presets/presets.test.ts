@@ -40,6 +40,7 @@ const RANGES: Record<string, [number, number]> = {
 	'fx.reverb.mix': [0, 1],
 	'fx.reverb.decay': [0.2, 4],
 	'fx.reverb.tone': [0, 1],
+	'fx.reverb.preDelay': [0, 250],
 	'fx.tape.age': [0, 1],
 	'fx.tape.wobble': [0, 1],
 };
@@ -48,6 +49,7 @@ const LFO_DIVISIONS = ['1/1', '1/2', '1/4', '1/8.', '1/8', '1/8T', '1/16', '1/32
 // Knobs whose panel rounds what it's given to its step: a value off the step would be changed
 const KNOB_STEPS: Record<string, number> = {
 	'synth.envelope.attackMs': 1,
+	'fx.reverb.preDelay': 1,
 	'synth.envelope.decayMs': 1,
 	'synth.filter.cutoff': 1,
 	'synth.filter.envAmount': 0.1,
@@ -345,6 +347,7 @@ describe('the dice (a random sound)', () => {
 			delay: share(p => !!p.fx?.delay),
 			drive: share(p => !!p.fx?.drive),
 			tape: share(p => !!p.fx?.tape),
+			preDelay: share(p => !!p.fx?.reverb?.preDelay),
 		};
 		for (const [part, s] of Object.entries(parts)) {
 			expect(s, part).toBeGreaterThan(0.1);

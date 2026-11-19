@@ -16,6 +16,7 @@ import { routeVelocity, routedCutoff, routedSemitones, routedNoise, type Velocit
 import { startFM } from "../fm";
 import { startNoteLfo, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, type LfoTarget } from "../lfo";
 import { generateReverbIR } from "../reverb/generateIr";
+import { clampPreDelayMs, PRE_DELAY_MAX_MS } from "../reverb/preDelay";
 import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from "../ratchet";
 import { createCrusher } from "../crusher";
 import { createPingPong } from "../pingPong";
@@ -108,6 +109,7 @@ export type StepSequencerState = {
 			mix: number;      // 0..1
 			decay: number;    // seconds
 			tone: number;     // 0..1 (dark→bright)
+			preDelay?: number; // ms before the tail starts (missing: 0)
 		};
 		// The tape pedal, last in the chain (tape.ts; missing: off)
 		tape?: {
@@ -445,9 +447,13 @@ export function scheduleStepSequencer(
 	reverbToneFilter.type = "lowpass";
 	const reverbConvolver = ctx.createConvolver();
 	const reverbWet = ctx.createGain();
+	// PRE: the send waits before the convolver (reverb/preDelay.ts), inside the reverb's stem
+	const reverbPreDelay = ctx.createDelay(PRE_DELAY_MAX_MS / 1000 + 0.01);
+	reverbPreDelay.delayTime.value = reverbEnabled ? clampPreDelayMs(rev.preDelay) / 1000 : 0;
 
 	driveSum.connect(reverbToneFilter);
-	reverbToneFilter.connect(reverbConvolver);
+	reverbToneFilter.connect(reverbPreDelay);
+	reverbPreDelay.connect(reverbConvolver);
 	reverbConvolver.connect(reverbWet);
 
 	if (reverbEnabled) {
