@@ -5749,7 +5749,7 @@ test.describe('Phone mode', () => {
 		const mod = page.locator('section[aria-label="Mod"]');
 		expect(await mod.evaluate((el) => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1)).toBe(true);
 		await expect(mod.getByRole('radio')).toHaveCount(5 + 2); // the targets, the waves
-		await mod.getByRole('switch', { name: 'Noise' }).click();
+		await mod.getByRole('button', { name: 'Toggle noise' }).click(); // the ribbon (PR 106)
 		await mod.getByRole('button', { name: 'Accents' }).click();
 		await page.waitForTimeout(700);
 		const data = await saved();
@@ -5765,8 +5765,8 @@ test.describe('Phone mode', () => {
 		expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
 		const last = (await bar.getByRole('button', { name: 'Menu' }).boundingBox())!;
 		expect(last.x + last.width).toBeLessThanOrEqual(568);
-		// (The Melody Maker's Key page scrolls there, as it did before PR 73)
-		for (const tab of ['Pads', 'Sound', 'Mod', 'FX']) {
+		// Every page fits without scrolling (the Key page too since PR 106)
+		for (const tab of ['Pads', 'Sound', 'Mod', 'FX', 'Key']) {
 			await page.getByRole('tab', { name: tab }).click();
 			const page_ = page.locator(`section[aria-label="${tab === 'Pads' ? 'Play' : tab}"]`);
 			expect(await page_.evaluate((el) => el.scrollHeight <= el.clientHeight + 1), tab).toBe(true);
@@ -5783,6 +5783,112 @@ test.describe('Phone mode', () => {
 		await expect(phonePads(page).nth(14)).toHaveAttribute('aria-pressed', 'true');
 		await page.getByRole('button', { name: 'Shift earlier' }).click();
 		await expect(phonePads(page).nth(13)).toHaveAttribute('aria-pressed', 'true');
+	});
+
+	test('PR 106: every page fits at 568 × 320 and 844 × 390; the pedals, Sound and Mod in the desktop\'s looks; Sample on Sound', async ({ page }) => {
+		await page.evaluate(fakeMicrophone);
+		const saved = async () => {
+			await page.getByRole('button', { name: 'Menu' }).click();
+			const menu = page.getByRole('dialog', { name: 'Menu' });
+			await menu.getByRole('button', { name: 'File ▾' }).click();
+			const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: 'Export file' }).click()]);
+			if (await menu.isVisible()) await menu.getByRole('button', { name: 'Close menu' }).click();
+			return JSON.parse(readFileSync((await download.path())!).toString('utf8')).data;
+		};
+		const fits = async (label: string, what: string) => {
+			const section = page.locator(`section[aria-label="${label}"]`);
+			await expect(section).toBeVisible();
+			expect(await section.evaluate((el) => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1), what).toBe(true);
+		};
+
+		// Nothing scrolls, on the first iPhone SE (568 × 320) or an iPhone (844 × 390): the Key
+		// page in both modes, with the Scale list open too
+		for (const size of [{ width: 568, height: 320 }, { width: 844, height: 390 }]) {
+			await page.setViewportSize(size);
+			for (const [tab, label] of [['Pads', 'Play'], ['Sound', 'Sound'], ['Mod', 'Mod'], ['FX', 'FX'], ['Key', 'Key']]) {
+				await page.getByRole('tab', { name: tab }).click();
+				await fits(label, `${tab} at ${size.width}`);
+			}
+			const key = page.locator('section[aria-label="Key"]');
+			await key.getByRole('button', { name: 'Arpeggio', exact: true }).click();
+			await fits('Key', `Arpeggio at ${size.width}`);
+			// Octaves' three keys inside the card
+			const card = (await key.locator('.mm-card').boundingBox())!;
+			const three = (await key.getByRole('radio', { name: '3', exact: true }).boundingBox())!;
+			expect(three.x + three.width).toBeLessThanOrEqual(card.x + card.width);
+			await key.getByRole('button', { name: /^Scale:/ }).click();
+			await expect(key.getByRole('listbox', { name: 'Scale' })).toBeVisible();
+			await fits('Key', `the Scale list at ${size.width}`);
+			await key.getByRole('option', { name: size.width === 568 ? 'Dorian' : 'Lydian', exact: true }).click();
+			await key.getByRole('button', { name: 'Melody', exact: true }).click();
+			// The keyboard beside the screen, Generate under the screen
+			const kb = (await key.locator('.mm-kb').boundingBox())!;
+			const screen = (await key.locator('.mm-screen').boundingBox())!;
+			const gen = (await key.getByRole('button', { name: 'Generate melody' }).boundingBox())!;
+			expect(kb.x + kb.width).toBeLessThan(screen.x);
+			expect(gen.y).toBeGreaterThan(screen.y + screen.height - 1);
+			expect(Math.abs(gen.x - screen.x)).toBeLessThan(2);
+		}
+
+		// FX: each pedal's name on a ribbon down its left edge, as tall as its face, the REV switch on
+		// the reverb's; the lo-fi pedal's reels in a window
+		await page.getByRole('tab', { name: 'FX' }).click();
+		for (const [cls, name] of [['delay-pedal', 'delay'], ['drive-pedal', 'overdrive'], ['reverb-pedal', 'reverb'], ['tape-pedal', 'lo-fi']]) {
+			const ribbon = page.locator(`.pl-fx .${cls} .panel-bottom`);
+			await expect(ribbon).toContainText(name);
+			const r = (await ribbon.boundingBox())!;
+			const face = (await page.locator(`.pl-fx .${cls} .panel-top`).boundingBox())!;
+			expect(r.width, name).toBeLessThan(30);
+			expect(r.x + r.width, name).toBeLessThanOrEqual(face.x + 1);
+			expect(Math.abs(r.height - face.height), name).toBeLessThan(2);
+			expect(face.height, name).toBeGreaterThan(220); // the phone's pedals stay tall
+		}
+		const rev = (await page.locator('.pl-fx').getByRole('switch', { name: 'Reverse reverb' }).boundingBox())!;
+		expect(rev.x).toBeLessThan((await page.locator('.pl-fx .reverb-pedal .panel-top').boundingBox())!.x);
+		await expect(page.locator('.pl-fx .tape-window')).toBeVisible();
+		await expect(page.locator('.pl-fx .tape-window .reel')).toHaveCount(2);
+
+		// Sound: FM's and Unison's ribbons, keys and mini knobs (no screens)
+		await page.getByRole('tab', { name: 'Sound' }).click();
+		const sound = page.locator('section[aria-label="Sound"]');
+		await expect(sound.locator('.sp-pad')).toHaveCount(0);
+		await sound.getByRole('switch', { name: 'FM' }).click();
+		await sound.getByRole('button', { name: 'Metal', exact: true }).click();
+		await expect(sound.getByRole('button', { name: 'Metal', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await sound.getByRole('switch', { name: 'Unison' }).click();
+		await sound.getByRole('radio', { name: '2 voices' }).click();
+		await expect(sound.getByRole('slider', { name: 'Detune' })).toBeVisible();
+		await expect(sound.getByRole('slider', { name: 'Spread' })).toBeVisible();
+
+		// Sample: REC records onto every pad, then Length and the dice; Random picks the waves again
+		const length = sound.getByRole('slider', { name: 'Sample length' });
+		await expect(length).toBeVisible();
+		await sound.getByRole('button', { name: 'Record a sample' }).click();
+		const strip = sound.locator('.st-pick');
+		await expect(strip).toHaveAttribute('aria-pressed', 'true', { timeout: 6000 });
+		await expect(sound.getByRole('switch', { name: 'Exclude Sample from Random' })).toHaveAttribute('aria-checked', 'true');
+		await length.focus();
+		await page.keyboard.press('Home');
+		await expect(length).toHaveAttribute('aria-valuetext', /^\d+% · \d+ ms$/);
+		await sound.getByRole('button', { name: 'SAW', exact: true }).click();
+		await expect(sound.getByRole('button', { name: 'SAW', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await expect(strip).toHaveAttribute('aria-pressed', 'false');
+		await sound.getByRole('button', { name: /^Random waves/ }).click();
+		await page.waitForTimeout(700);
+		const data = await saved();
+		expect(data.synth.fm.enabled).toBe(true);
+		expect(data.synth.fm.ratio).toBe(1.5);
+		expect(data.synth.unison.enabled).toBe(true);
+		expect(data.synth.unison.voices).toBe(2);
+		expect(data.synth.sampleLength).toBeCloseTo(0.05);
+		expect(data.synth.sample).toBeTruthy();
+
+		// Mod: the LFO's ribbon, screen and patch bay; Noise's ribbon
+		await page.getByRole('tab', { name: 'Mod' }).click();
+		const mod = page.locator('section[aria-label="Mod"]');
+		await expect(mod.locator('.lv-screen')).toBeVisible();
+		await expect(mod.getByRole('switch', { name: 'LFO retrigger' })).toBeVisible();
+		await expect(mod.getByRole('button', { name: 'Toggle noise' })).toBeVisible();
 	});
 
 	test('Reset in the menu asks first, then resets the pads (and the sound, if asked); Undo brings them back', async ({ page }) => {

@@ -6,7 +6,7 @@
      Melody | Arpeggio and the chosen one's settings. Generate itself is in the card's header
      (DrumSequencer's SectionWrap tools; `generate` is exposed). -->
 <template>
-    <div class="melody-maker mm-skin" :class="props.currentTheme">
+    <div class="melody-maker mm-skin" :class="[props.currentTheme, { 'is-compact': props.compact }]">
         <section class="pt-section mm-card">
             <div class="mm-kb-wrap">
                 <div class="mm-field">
@@ -220,6 +220,9 @@ const props = defineProps<{
     // Where the bar is while playing (usePlayhead.ts). Only RollPlayhead and `playingHit`
     // read it, so the card doesn't redraw every frame.
     playView?: PlayView | null;
+    // Phone mode's Key page (PR 106): the keyboard, Scale and the maker's settings in a column
+    // beside the screen and Generate, so the card fits 568 × 320 without scrolling
+    compact?: boolean;
 }>();
 
 /*  Defaults  */
@@ -1077,6 +1080,127 @@ defineExpose({ getUi, setUi, generate });
     .mm-group {
         grid-area: group;
     }
+}
+
+/* Compact (phone mode's Key page, PR 106): the keyboard, Scale and the maker's settings in a
+   column, beside the screen with Generate under it; shorter keys, tighter gaps. Nothing
+   scrolls at 568 × 320, the first iPhone SE held sideways. */
+.melody-maker.is-compact {
+    height: 100%;
+}
+
+.melody-maker.is-compact>.mm-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr auto;
+    grid-template-areas: "kb screen" "scale screen" "body screen" "body gen";
+    column-gap: 12px;
+    row-gap: 6px;
+    height: 100%;
+}
+
+.melody-maker.is-compact .mm-kb-wrap {
+    grid-area: kb;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+}
+
+.melody-maker.is-compact .mm-scale-row {
+    grid-area: scale;
+}
+
+.melody-maker.is-compact .mm-screen {
+    grid-area: screen;
+    min-height: 0;
+}
+
+/* Its two parts become the grid's: the settings under Scale, Generate under the screen */
+.melody-maker.is-compact .mm-group {
+    display: contents;
+}
+
+.melody-maker.is-compact .mm-mode-body {
+    grid-area: body;
+    align-self: start;
+    padding-top: 6px;
+    border-top: 1px dashed var(--pt-hairline);
+}
+
+.melody-maker.is-compact .mm-mode-panel {
+    gap: 6px;
+}
+
+.melody-maker.is-compact .mm-mode-note {
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.melody-maker.is-compact .mm-gen-bar {
+    grid-area: gen;
+    height: 30px;
+}
+
+.melody-maker.is-compact .mm-label {
+    font-size: 0.75rem;
+    line-height: 1.3;
+}
+
+.melody-maker.is-compact .mm-kb {
+    --whiteH: var(--mm-compact-white, 60px);
+    --blackH: calc(var(--whiteH) * 0.6);
+    padding-bottom: 2px;
+}
+
+/* Scale's row: tighter, so an arpeggio's Octaves (1 | 2 | 3) fits beside the stepper */
+.melody-maker.is-compact .mm-scale-row {
+    gap: 6px;
+}
+
+.melody-maker.is-compact .mm-scale-row .mm-stepper {
+    flex: 1 1 0;
+    gap: 3px;
+}
+
+.melody-maker.is-compact .mm-span {
+    flex: 1.15 1 0;
+}
+
+.melody-maker.is-compact .mm-span .mm-seg {
+    gap: 4px;
+}
+
+.melody-maker.is-compact .mm-step {
+    width: 22px;
+}
+
+/* The scale list in two columns, so it stays on the page */
+.melody-maker.is-compact .mm-scale-row .mm-list {
+    display: grid;
+    grid-template-columns: auto auto;
+    max-height: 96px;
+    overflow-y: auto;
+}
+
+.melody-maker.is-compact .mm-list-item {
+    padding: 3px 8px;
+}
+
+.melody-maker.is-compact .mm-hint-arrow--one {
+    display: inline;
+}
+
+.melody-maker.is-compact .mm-hint-arrow--wide {
+    display: none;
+}
+
+.melody-maker.is-compact .mm-hint-lcd {
+    align-items: center;
+    justify-content: center;
+}
+
+.melody-maker.is-compact .mm-hint-main {
+    font-size: 13px;
 }
 
 .mm-field {
