@@ -30,59 +30,24 @@
 				</div>
 			</section>
 
-			<!-- Move (PR 88; Octave until then): the octave arrows, then rotate one step either way
+			<!-- Move (PR 88; Octave until then): the octave arrows, then shift one step either way
 				 (round the bar's end) and reverse; each pad's note, velocity, wave, repeats and noise
-				 move with it (src/lib/patterns/move.ts) -->
-			<!-- MOCKUPS (branch only, not for a PR): ?move=a|b|c -->
-			<section v-if="moveMock" class="pt-section pt-section-move mv" :class="`mv-${moveMock}`">
+				 move with it (src/lib/patterns/move.ts). Labelled caps two by two, Reverse across
+				 the bottom (option A of three mockups, after PR 100): the three rows line up with
+				 Step Fills' and Humanize's; until then bare arrows, and "rotate" -->
+			<section class="pt-section pt-section-move">
 				<div class="pt-section-title">Move</div>
-				<!-- A: four labelled caps two by two, Reverse the full width under them -->
-				<div v-if="moveMock === 'a'" class="mv-grid">
-					<button class="pt-btn mv-btn" aria-label="Octave down" title="Every pad an octave down" @click="shiftOctave(-1)">↓ Oct</button>
-					<button class="pt-btn mv-btn" aria-label="Octave up" title="Every pad an octave up" @click="shiftOctave(+1)">Oct ↑</button>
-					<button class="pt-btn mv-btn" aria-label="Shift earlier" title="Shift earlier: every step one to the left; step 1 comes round to the end" @click="emit('move', 'left')">◂ Shift</button>
-					<button class="pt-btn mv-btn" aria-label="Shift later" title="Shift later: every step one to the right; step 16 comes round to the start" @click="emit('move', 'right')">Shift ▸</button>
-					<button class="pt-btn mv-btn mv-wide" aria-label="Reverse" title="Reverse: the pattern backwards" @click="emit('move', 'reverse')">⇄ Reverse</button>
-				</div>
-				<!-- B: a caption per row, symbols on the caps -->
-				<div v-else-if="moveMock === 'b'" class="mv-rows">
-					<span class="mv-cap">Octave</span>
-					<button class="pt-btn mv-btn" aria-label="Octave down" title="Every pad an octave down" @click="shiftOctave(-1)">−</button>
-					<button class="pt-btn mv-btn" aria-label="Octave up" title="Every pad an octave up" @click="shiftOctave(+1)">+</button>
-					<span class="mv-cap">Shift</span>
-					<button class="pt-btn mv-btn" aria-label="Shift earlier" title="Shift earlier: every step one to the left; step 1 comes round to the end" @click="emit('move', 'left')">◂</button>
-					<button class="pt-btn mv-btn" aria-label="Shift later" title="Shift later: every step one to the right; step 16 comes round to the start" @click="emit('move', 'right')">▸</button>
-					<span class="mv-cap">Reverse</span>
-					<button class="pt-btn mv-btn mv-span2" aria-label="Reverse" title="Reverse: the pattern backwards" @click="emit('move', 'reverse')">⇄</button>
-				</div>
-				<!-- C: two captioned columns, Octave and Steps, with arrows on the caps -->
-				<div v-else class="mv-cols">
-					<span class="mv-cap">Octave</span>
-					<span class="mv-cap">Steps</span>
-					<button class="pt-btn mv-btn" aria-label="Octave up" title="Every pad an octave up" @click="shiftOctave(+1)">↑ Up</button>
-					<div class="mv-pair">
-						<button class="pt-btn mv-btn" aria-label="Shift earlier" title="Shift earlier: every step one to the left; step 1 comes round to the end" @click="emit('move', 'left')">◂</button>
-						<button class="pt-btn mv-btn" aria-label="Shift later" title="Shift later: every step one to the right; step 16 comes round to the start" @click="emit('move', 'right')">▸</button>
-					</div>
-					<button class="pt-btn mv-btn" aria-label="Octave down" title="Every pad an octave down" @click="shiftOctave(-1)">↓ Down</button>
-					<button class="pt-btn mv-btn" aria-label="Reverse" title="Reverse: the pattern backwards" @click="emit('move', 'reverse')">⇄ Rev</button>
-				</div>
-			</section>
-			<section v-else class="pt-section pt-section-move">
-				<div class="pt-section-title">Move</div>
-				<div class="pt-btn-group pt-btn-move" role="group" aria-label="Octave">
-					<button class="pt-btn move-btn" aria-label="Octave up" title="Octave up" @click="shiftOctave(+1)">↑</button>
-					<button class="pt-btn move-btn" aria-label="Octave down" title="Octave down" @click="shiftOctave(-1)">↓</button>
-				</div>
-				<div class="pt-btn-group pt-btn-move pt-btn-move-3" role="group" aria-label="Rotate and reverse">
-					<button class="pt-btn move-btn" aria-label="Rotate left"
-						title="Rotate left: every step one earlier, the first comes round to the end"
-						@click="emit('move', 'left')">◂</button>
-					<button class="pt-btn move-btn" aria-label="Reverse" title="Reverse: the pattern backwards"
-						@click="emit('move', 'reverse')">⇄</button>
-					<button class="pt-btn move-btn" aria-label="Rotate right"
-						title="Rotate right: every step one later, the last comes round to the start"
-						@click="emit('move', 'right')">▸</button>
+				<div class="pt-btn-group pt-btn-move" role="group" aria-label="Move">
+					<button class="pt-btn" aria-label="Octave down" title="Every pad an octave down" @click="shiftOctave(-1)">↓ Oct</button>
+					<button class="pt-btn" aria-label="Octave up" title="Every pad an octave up" @click="shiftOctave(+1)">Oct ↑</button>
+					<button class="pt-btn" aria-label="Shift earlier"
+						title="Shift earlier: every step one to the left; step 1 comes round to the end"
+						@click="emit('move', 'left')">◂ Shift</button>
+					<button class="pt-btn" aria-label="Shift later"
+						title="Shift later: every step one to the right; step 16 comes round to the start"
+						@click="emit('move', 'right')">Shift ▸</button>
+					<button class="pt-btn pt-btn-wide" aria-label="Reverse" title="Reverse: the pattern backwards"
+						@click="emit('move', 'reverse')">⇄ Reverse</button>
 				</div>
 			</section>
 		</div>
@@ -92,12 +57,6 @@
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount } from 'vue';
 import { velocityShape, type VelocityShapeId } from '../lib/patterns/velocityShapes';
-
-// MOCKUPS (branch only): ?move=a|b|c
-const moveMock = (() => {
-	const m = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('move') : null;
-	return m === 'a' || m === 'b' || m === 'c' ? m : null;
-})();
 
 const props = defineProps<{
 	steps: boolean[];
@@ -238,104 +197,9 @@ const shapeReset = () => applyShape('reset');
 	white-space: nowrap;
 }
 
-/* Move: the octave arrows on one row, rotate and reverse on the next */
-.pt-btn-move {
-	display: flex;
-	flex-wrap: nowrap;
-	justify-content: center;
-	gap: 6px;
-}
-
-.pt-btn-move + .pt-btn-move {
-	margin-top: 6px;
-}
-
-/* The two rows in the middle of the section (PR 98: the Active Pads Only toggle under them
-   went, and the section is as tall as Step Fills' three rows) */
-.pt-section-move .pt-btn-move:first-of-type {
-	margin-top: auto;
-}
-
-.pt-section-move .pt-btn-move:last-child {
-	margin-bottom: auto;
-}
-
-/* Two rows as tall as the big octave arrows were (44 px), so the card keeps its size */
-.move-btn {
-	width: 34px;
-	height: 19px;
-	padding: 0;
-	font-size: 14px;
-}
-
-.pt-btn-move-3 .move-btn {
-	font-size: 16px;
-}
-
-/* MOCKUPS (branch only): the Move section's three options. Their caps are the other
-   sections' size (.pt-btn), on rows 8 px apart as theirs, so the three sections line up */
-.mv .mv-btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 3px;
-}
-
-.mv-grid,
-.mv-rows,
-.mv-cols {
-	padding: 0 6px;
-}
-
-.mv-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 8px 6px;
-}
-
-.mv-grid .mv-wide {
+/* Move: labelled caps two by two, Reverse the full width under them */
+.pt-btn-move .pt-btn-wide {
 	grid-column: 1 / -1;
-}
-
-.mv-rows {
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
-	align-items: center;
-	gap: 8px 5px;
-}
-
-.mv-rows .mv-span2 {
-	grid-column: span 2;
-}
-
-.mv-rows .mv-btn {
-	height: 20.4px; /* a .pt-btn's height, for the bigger symbols */
-	padding-top: 0;
-	padding-bottom: 0;
-	font-size: 13px;
-}
-
-.mv-cap {
-	font-size: 0.5rem;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-	color: var(--pt-menu-caption, rgb(255 255 255 / .6));
-	white-space: nowrap;
-	text-align: center;
-}
-
-.mv-cols {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-	align-items: center;
-	gap: 8px 6px;
-	margin-top: -4px;
-}
-
-.mv-pair {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 4px;
 }
 
 /* A narrow card (phones): the sections one under another, three buttons across */
@@ -347,6 +211,16 @@ const shapeReset = () => applyShape('reset');
 	.pt-btn-group {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 8px 10px;
+	}
+
+	/* Move's five caps on one row */
+	.pt-btn-group.pt-btn-move {
+		grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.3fr);
+		gap: 8px 5px;
+	}
+
+	.pt-btn-move .pt-btn-wide {
+		grid-column: auto;
 	}
 }
 </style>

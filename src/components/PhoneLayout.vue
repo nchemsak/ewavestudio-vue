@@ -89,10 +89,10 @@
 							<button type="button" aria-label="Octave up" title="Every pad an octave up" @click="ctx.octave(1)">↑</button>
 						</div>
 						<!-- Move (PR 88): Pattern Tools' rotate and reverse -->
-						<div class="pl-mini pl-move" role="group" aria-label="Rotate and reverse">
-							<button type="button" aria-label="Rotate left" title="Every step one earlier" @click="ctx.move('left')">◂</button>
+						<div class="pl-mini pl-move" role="group" aria-label="Shift and reverse">
+							<button type="button" aria-label="Shift earlier" title="Shift earlier: every step one to the left" @click="ctx.move('left')">◂</button>
 							<button type="button" aria-label="Reverse" title="The pattern backwards" @click="ctx.move('reverse')">⇄</button>
-							<button type="button" aria-label="Rotate right" title="Every step one later" @click="ctx.move('right')">▸</button>
+							<button type="button" aria-label="Shift later" title="Shift later: every step one to the right" @click="ctx.move('right')">▸</button>
 						</div>
 						<!-- Humanize (PR 73): Pattern Tools' velocity shapes, in a list like the steppers' -->
 						<button type="button" class="pl-mini pl-hum" aria-haspopup="dialog"

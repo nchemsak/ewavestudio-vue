@@ -3441,7 +3441,7 @@ const phoneCtx = reactive({
 	fullLayout: () => setPhoneFull(true),
 	// Every pad an octave up or down (Pattern Tools' octave arrows)
 	octave: (delta: number) => onPatternOctaveShift(delta),
-	// Rotate or reverse the pattern (Pattern Tools' Move)
+	// Shift or reverse the pattern (Pattern Tools' Move)
 	move: (kind: MoveKind) => movePattern(kind),
 	// The menu's Reset: the pads as File → New has them (the Step Sequencer's Reset Pads), and
 	// with `sound` the factory sound too (as File → New, presets' starting point)
