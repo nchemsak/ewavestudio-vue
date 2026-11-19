@@ -104,7 +104,7 @@
 						v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 					<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 						v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone"
-						v-model:pre-delay="reverbPreDelay" :tempo="tempo" />
+						v-model:pre-division="reverbPreDivision" :tempo="tempo" />
 					<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
 						v-model:mode="tapeMode" :playing="isPlaying" />
 				</div>
@@ -486,7 +486,7 @@
 									v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 								<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 									v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone"
-									v-model:pre-delay="reverbPreDelay" :tempo="tempo" />
+									v-model:pre-division="reverbPreDivision" :tempo="tempo" />
 								<!-- The tape pedal, last in the chain: a low deck under the three pedals
 								     (option C of three mockups; the phone's FX page has it as a pedal) -->
 								<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
@@ -667,6 +667,7 @@ import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed, m
 import Knob from './Knob.vue';
 import DelayEffect from './modules/DelayEffect.vue';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, DEFAULT_TEMPO, followDelaySync } from '../lib/delaySync';
+import { DEFAULT_PRE_DIVISION, followPreDelay } from '../audio/reverb/preDelay';
 import { TEMPO_DETENTS, SWING_DETENTS, TRIPLET_SWING } from '../lib/knobDetents';
 import { shortestInterval, transposePitches, remapScale, nearestRootHz, patternCenterHz, chordPitchClasses } from '../lib/melody/theory';
 import DriveEffect from './modules/DriveEffect.vue';
@@ -2357,8 +2358,11 @@ const reverbDecay = ref(1.4);
 
 // 0 = dark, 1 = bright
 const reverbTone = ref(0.6);      // normalized tone control
-// PRE: ms before the tail starts, 0–250 (src/audio/reverb/preDelay.ts)
+// PRE: a note value at the tempo ('Off', '1/16' …) and its time in ms, which follows the tempo
+// (src/audio/reverb/preDelay.ts)
+const reverbPreDivision = ref(DEFAULT_PRE_DIVISION);
 const reverbPreDelay = ref(0);
+followPreDelay({ tempo, division: reverbPreDivision, ms: reverbPreDelay });
 
 // Reverb END
 
@@ -2603,6 +2607,7 @@ const exportState = computed<StepSequencerState>(() => {
 				mix: reverbMix.value,
 				decay: reverbDecay.value,
 				tone: reverbTone.value,
+				preDivision: reverbPreDivision.value,
 				preDelay: reverbPreDelay.value,
 			},
 			tape: {
@@ -2726,7 +2731,7 @@ const projectState: ProjectState = {
 			pingPong: delayPingPong,
 		},
 		drive: { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix, crush: driveCrush },
-		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone, preDelay: reverbPreDelay },
+		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone, preDivision: reverbPreDivision, preDelay: reverbPreDelay },
 		tape: { enabled: tapeEnabled, age: tapeAge, wobble: tapeWobble, mode: tapeMode },
 	},
 	instruments,
