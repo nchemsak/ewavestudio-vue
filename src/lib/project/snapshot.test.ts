@@ -38,7 +38,7 @@ describe('factory defaults (File → New)', () => {
 				toneEnabled: true, toneHz: 5000, toneType: 'lowpass', pingPong: false,
 			},
 			drive: { enabled: false, type: 'overdrive', amount: 0.4, tone: 5000, mix: 0.5, crush: false },
-			reverb: { enabled: false, mix: 0.18, decay: 1.4, tone: 0.6, preDivision: 'Off', preDelay: 0 },
+			reverb: { enabled: false, mix: 0.18, decay: 1.4, tone: 0.6, preDivision: 'Off', preDelay: 0, reverse: false, swell: 'next' },
 			tape: { enabled: false, age: 0.4, wobble: 0.3, mode: 'tape' },
 		});
 		expect(snap.melody).toEqual({
@@ -154,6 +154,18 @@ describe('saving and loading a project', () => {
 		// An unknown value falls back to the ms
 		applySnapshot(st, { transport: { tempo: 120 }, fx: { reverb: { enabled: true, preDivision: '1/2', preDelay: 0 } } });
 		expect(st.fx.reverb.preDivision.value).toBe('Off');
+	});
+
+	it('REV is off in a project saved before it, and an unknown length is Next hit', () => {
+		const st = fresh();
+		changeEverything(st);
+		expect([st.fx.reverb.reverse.value, st.fx.reverb.swell.value]).toEqual([true, '1/4']);
+		applySnapshot(st, { fx: { reverb: { enabled: true, mix: 0.2 } } });
+		expect([st.fx.reverb.reverse.value, st.fx.reverb.swell.value]).toEqual([false, 'next']);
+		applySnapshot(st, { fx: { reverb: { enabled: true, reverse: true, swell: '3 bars' } } });
+		expect([st.fx.reverb.reverse.value, st.fx.reverb.swell.value]).toEqual([true, 'next']);
+		applySnapshot(st, { fx: { reverb: { enabled: true, reverse: true, swell: '1/2' } } });
+		expect(st.fx.reverb.swell.value).toBe('1/2');
 	});
 
 	it('plays an arpeggio saved at 1/4 (dropped) at 1/8', () => {

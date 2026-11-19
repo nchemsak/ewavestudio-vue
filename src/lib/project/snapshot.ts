@@ -28,6 +28,7 @@ import { clampRatchet, clampRepeatNotes } from '../../audio/ratchet';
 import { arpRateFrom, type ArpRate } from '../melody/arp';
 import { clampTapeMode, TAPE_DEFAULTS, type TapeMode } from '../../audio/tape';
 import { clampSampleLength, sampleFrom, SAMPLE_LENGTH_DEFAULT, type SampleData } from '../../audio/sample';
+import { DEFAULT_SWELL, isSwell } from '../../audio/reverb/reverse';
 import { DEFAULT_PRE_DIVISION, isPreDivision, preDelayMs, preDivisionForMs } from '../../audio/reverb/preDelay';
 export type { Wave };
 
@@ -146,7 +147,9 @@ export type ProjectState = {
 		drive: { enabled: Ref<boolean>; type: Ref<string>; amount: Ref<number>; tone: Ref<number>; mix: Ref<number>; crush: Ref<boolean> };
 		// PRE (src/audio/reverb/preDelay.ts): preDivision, the knob's note value ('Off', '1/16' …);
 		// preDelay, its time in ms at the tempo (what the engines read)
-		reverb: { enabled: Ref<boolean>; mix: Ref<number>; decay: Ref<number>; tone: Ref<number>; preDivision: Ref<string>; preDelay: Ref<number> };
+		reverb: { enabled: Ref<boolean>; mix: Ref<number>; decay: Ref<number>; tone: Ref<number>; preDivision: Ref<string>; preDelay: Ref<number>;
+			// REV (src/audio/reverb/reverse.ts): the reverb backwards, each swell SWELL long
+			reverse: Ref<boolean>; swell: Ref<string> };
 		// The tape pedal, last in the chain (src/audio/tape.ts): age and wobble 0..1
 		tape: { enabled: Ref<boolean>; age: Ref<number>; wobble: Ref<number>; mode: Ref<TapeMode> };
 	};
@@ -237,6 +240,8 @@ function byName(st: ProjectState) {
 		reverbTone: fx.reverb.tone,
 		reverbPreDivision: fx.reverb.preDivision,
 		reverbPreDelay: fx.reverb.preDelay,
+		reverbReverse: fx.reverb.reverse,
+		reverbSwell: fx.reverb.swell,
 		tapeEnabled: fx.tape.enabled,
 		tapeAge: fx.tape.age,
 		tapeWobble: fx.tape.wobble,
@@ -264,7 +269,7 @@ export function buildSnapshot(st: ProjectState) {
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
-		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDivision, reverbPreDelay,
+		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDivision, reverbPreDelay, reverbReverse, reverbSwell,
 		tapeEnabled, tapeAge, tapeWobble, tapeMode,
 		instruments, melodyUi, selectedWaveform,
 	} = byName(st);
@@ -380,6 +385,8 @@ export function buildSnapshot(st: ProjectState) {
 				tone: reverbTone.value,
 				preDivision: reverbPreDivision.value,
 				preDelay: reverbPreDelay.value,
+				reverse: reverbReverse.value,
+				swell: reverbSwell.value,
 			},
 			tape: {
 				enabled: tapeEnabled.value,
@@ -443,7 +450,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
-		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDivision, reverbPreDelay,
+		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDivision, reverbPreDelay, reverbReverse, reverbSwell,
 		tapeEnabled, tapeAge, tapeWobble, tapeMode,
 		instruments, melodyUi, selectedWaveform,
 	} = byName(st);
@@ -641,6 +648,9 @@ export function applySnapshot(st: ProjectState, s: any) {
 		// neither (Off)
 		const pd = s.fx.reverb.preDivision;
 		reverbPreDivision.value = isPreDivision(pd) ? pd : preDivisionForMs(s.fx.reverb.preDelay, tempo.value);
+		// REV: off in a project saved before it; an unknown length is Next hit
+		reverbReverse.value = s.fx.reverb.reverse === true;
+		reverbSwell.value = isSwell(s.fx.reverb.swell) ? s.fx.reverb.swell : DEFAULT_SWELL;
 	}
 	reverbPreDelay.value = preDelayMs(tempo.value, reverbPreDivision.value); // always the value at the tempo
 	if (s.fx?.tape || s.fx?.delay || s.fx?.drive || s.fx?.reverb) {
@@ -811,7 +821,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, randomWaves, velocityRouting,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
-		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDivision, reverbPreDelay,
+		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDivision, reverbPreDelay, reverbReverse, reverbSwell,
 		tapeEnabled, tapeAge, tapeWobble, tapeMode,
 	} = byName(st);
 
@@ -887,6 +897,8 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 	reverbTone.value = 0.6;
 	reverbPreDivision.value = DEFAULT_PRE_DIVISION;
 	reverbPreDelay.value = 0;
+	reverbReverse.value = false;
+	reverbSwell.value = DEFAULT_SWELL;
 
 	// FX: Tape
 	tapeEnabled.value = false;

@@ -1,6 +1,6 @@
 <template>
 	<KnobGroup v-model="localEnabled" title="Reverb" :color="color" :showToggle="showToggle" :showHeader="false">
-		<div class="reverb-pedal" :class="revMock ? `mock-${revMock}` : null">
+		<div class="reverb-pedal" :class="{ 'is-rev': reverse }">
 			<div class="panel-top">
 				<span class="check-led" :class="{ on: localEnabled }" aria-hidden="true"></span>
 
@@ -13,12 +13,16 @@
 					</span>
 				</div>
 
+				<!-- DECAY, or while REV is on SWELL: how long each swell lasts (Next hit, 1 step … 2 beats,
+				     one position each). One knob, so a MIDI controller linked to it sets either. -->
 				<div class="knob-cell decay">
-					<Knob midi-id="reverb.decay" :value-text="`${localDecay.toFixed(2)} s`" v-model="localDecay" :label="revMock && mockOn ? 'SWELL' : 'DECAY'" :min="0.2" :max="4.0" :step="0.05" size="small"
-						:disabled="!localEnabled" :color="color" @knobStart="activeKnob = 'decay'"
+					<Knob midi-id="reverb.decay" v-model="decayKnob" :label="reverse ? 'SWELL' : 'DECAY'"
+						:value-text="decayText" :min="reverse ? 0 : 0.2" :max="reverse ? 1 : 4.0" :step="reverse ? swellStep : 0.05" size="small"
+						:disabled="!localEnabled" :color="color" :showMarkers="reverse" :markers="reverse ? swellMarkers : []"
+						:markersOnly="reverse" :markersOffsetDeg="reverse ? -90 : -6" @knobStart="activeKnob = 'decay'"
 						@knobEnd="activeKnob = null" />
 					<span v-if="activeKnob === 'decay'" class="custom-tooltip">
-						{{ localDecay.toFixed(2) }} s
+						{{ decayText }}
 					</span>
 				</div>
 
@@ -42,18 +46,16 @@
 						{{ preLabel }}
 					</span>
 				</div>
-
-				<!-- REV MOCKUPS (branch only, ?rev=b|c): where the REV switch could go -->
-				<PedalSwitch v-if="revMock === 'b' || revMock === 'c'" v-model="mockOn" label="REV" aria-label="Reverse reverb"
-					:class="`rev-${revMock}`" :disabled="!localEnabled" />
 			</div>
 
 			<div class="panel-seam" aria-hidden="true"></div>
 
 			<div class="panel-bottom">
 				<div class="effect-label">reverb</div>
-				<PedalSwitch v-if="revMock === 'a'" v-model="mockOn" label="REV" aria-label="Reverse reverb"
-					class="rev-a" :disabled="!localEnabled" />
+				<!-- REV (option A of three mockups): on the ribbon, under the LED -->
+				<PedalSwitch :model-value="reverse" label="REV" aria-label="Reverse reverb" class="rev-switch"
+					title="Reverse: each hit's reverb swells into the next hit" :disabled="!localEnabled"
+					@update:model-value="emit('update:reverse', $event)" />
 				<button class="footswitch" type="button" :aria-pressed="localEnabled" aria-label="Reverb pedal"
 					@click="localEnabled = !localEnabled" @keydown.space.prevent="localEnabled = !localEnabled"
 					@keydown.enter.prevent="localEnabled = !localEnabled" />
@@ -67,6 +69,7 @@ import { ref, watch, computed } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 import PedalSwitch from './PedalSwitch.vue';
+import { DEFAULT_SWELL, SWELLS } from '../../audio/reverb/reverse';
 import { DEFAULT_PRE_DIVISION, preDelayLabel, PRE_DIVISIONS } from '../../audio/reverb/preDelay';
 
 const props = withDefaults(defineProps<{
@@ -77,6 +80,8 @@ const props = withDefaults(defineProps<{
 	tone: number;          // 0 = dark, 1 = bright
 	preDivision?: string;  // PRE's note value ('Off', '1/16' …)
 	tempo?: number;        // BPM, for PRE's time
+	reverse?: boolean;     // REV: the reverb backwards (src/audio/reverb/reverse.ts)
+	swell?: string;        // REV's length: 'next' or a fixed one
 	audioCtx?: AudioContext;
 	color?: string;
 }>(), {
@@ -84,7 +89,9 @@ const props = withDefaults(defineProps<{
 	color: '#7c9bff',
 	tone: 0.5,
 	preDivision: DEFAULT_PRE_DIVISION,
-	tempo: 120
+	tempo: 120,
+	reverse: false,
+	swell: DEFAULT_SWELL
 });
 
 const emit = defineEmits<{
@@ -93,16 +100,14 @@ const emit = defineEmits<{
 	(e: 'update:decay', v: number): void;
 	(e: 'update:tone', v: number): void;
 	(e: 'update:preDivision', v: string): void;
+	(e: 'update:reverse', v: boolean): void;
+	(e: 'update:swell', v: string): void;
 }>();
 
 const localEnabled = ref<boolean>(props.enabled);
 const localMix = ref<number>(props.mix);
 const localDecay = ref<number>(props.decay);
 const localTone = ref<number>(props.tone);
-
-// REV MOCKUPS (branch only): ?rev=a (on the ribbon), b (beside the treadle), c (between the knobs)
-const revMock = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('rev') : null;
-const mockOn = ref(true);
 
 const activeKnob = ref<null | 'mix' | 'decay' | 'tone' | 'pre'>(null);
 
@@ -117,6 +122,28 @@ const preKnob = computed<number>({
 		if (i !== preIndex.value) emit('update:preDivision', PRE_DIVISIONS[i].label);
 	},
 });
+// SWELL (DECAY while REV is on): one knob position per length
+const swellMarkers = SWELLS.map((_, i) => i / (SWELLS.length - 1));
+const swellStep = 1 / (SWELLS.length - 1);
+const swellIndex = computed(() => Math.max(0, SWELLS.findIndex((d) => d.id === props.swell)));
+const swellKnob = computed<number>({
+	get: () => swellIndex.value / (SWELLS.length - 1),
+	set: (v: number) => {
+		const i = Math.max(0, Math.min(SWELLS.length - 1, Math.round(v * (SWELLS.length - 1))));
+		if (i !== swellIndex.value) emit('update:swell', SWELLS[i].id);
+	},
+});
+const swellText = computed(() => SWELLS[swellIndex.value].label);
+// The knob: DECAY's seconds, or SWELL's position while REV is on
+const decayKnob = computed<number>({
+	get: () => (props.reverse ? swellKnob.value : localDecay.value),
+	set: (v: number) => {
+		if (props.reverse) swellKnob.value = v;
+		else localDecay.value = v;
+	},
+});
+const decayText = computed(() => (props.reverse ? swellText.value : `${localDecay.value.toFixed(2)} s`));
+
 const preLabel = computed(() => preDelayLabel(props.tempo, PRE_DIVISIONS[preIndex.value].label));
 
 const toneLabel = computed(() => {
@@ -200,6 +227,24 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 
 .pre {
 	grid-area: pre;
+}
+
+/* REV, outside the Effects card (the phone's tall pedal): in the face's top-right corner. The
+   Effects card puts it on the ribbon, under the LED (DrumSequencer's EFFECTS PEDALS styles) */
+.reverb-pedal {
+	position: relative;
+}
+
+.reverb-pedal .rev-switch {
+	position: absolute;
+	top: 6px;
+	right: 2px;
+	bottom: auto;
+	width: 30px;
+}
+
+.reverb-pedal .rev-switch :deep(.ps-label) {
+	min-height: 0;
 }
 
 .knob-cell {
