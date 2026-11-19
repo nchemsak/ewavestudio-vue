@@ -1957,8 +1957,6 @@ screens, then the groovebox:
 
 Grow into a small groovebox:
 
-Grow into a small groovebox:
-
 6. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
     holds the steps, notes, velocities and repeats; the sound is shared. A slot clicked while
     playing takes over at the next bar (the bar queue, with its ghost). Copy A to B. Under the
