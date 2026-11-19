@@ -9,7 +9,7 @@
      in this file's second <style> block. -->
 <template>
     <div class="sp-pad" :class="{ dragging, 'is-disabled': disabled }" aria-hidden="true"
-        @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="onUp" @touchmove="onTouchMove">
+        @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="onUp" @touchmove="onTouchMove" @click="noop">
         <svg :viewBox="`0 0 ${w} ${h}`" preserveAspectRatio="none">
             <slot />
         </svg>
@@ -77,6 +77,10 @@ function onDown(e: PointerEvent) {
 function onMove(e: PointerEvent) {
     if (dragging.value) emit('move', point(e));
 }
+// A click listener makes the screen a target for the browser's touch adjustment, which moves a
+// finger to the nearest clickable element: without it, a finger on FM's grip at the screen's
+// bottom edge (its default Amount) pressed the ratio key under it instead
+function noop() {}
 // While a grip is held, the page mustn't scroll under the finger (pan-y would let it)
 function onTouchMove(e: TouchEvent) {
     if (dragging.value && e.cancelable) e.preventDefault();

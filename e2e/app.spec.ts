@@ -6204,8 +6204,14 @@ test.describe('Phone mode, upright', () => {
 		await expect(fmGrip).toBeVisible();
 		const fmReadout = fm.locator('.sp-title small');
 		const before = await fmReadout.textContent();
-		await fm.evaluate((e) => e.scrollIntoView({ block: 'center' }));
-		await page.waitForTimeout(300);
+		// Instantly (Bootstrap's reboot makes scrolling smooth), and once the page is still, so the
+		// grip's box is where the finger lands
+		await fm.evaluate((e) => e.scrollIntoView({ block: 'center', behavior: 'instant' }));
+		await expect.poll(async () => {
+			const a = await scrollY();
+			await page.waitForTimeout(100);
+			return a === (await scrollY());
+		}).toBe(true);
 		const g = (await fmGrip.boundingBox())!;
 		y0 = await scrollY();
 		await swipe(g.x + g.width / 2, g.y + g.height / 2, 0, -25);

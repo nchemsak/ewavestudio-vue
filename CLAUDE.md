@@ -580,6 +580,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   FM and Unison draw no grips, so they pass a `touchGrip` (where their value is: FM's Amount
   height in the middle, Unison's Detune across and Spread up), drawn only on a coarse pointer
   (`.sp-touch-grip`) and while the card is on. A mouse or a pen drags from anywhere, as before.
+  The pad has a no-op click listener so the browser's touch adjustment counts it as a target:
+  without it, a finger on FM's grip at the screen's bottom edge (its default Amount) went to the
+  ratio key under it (found by the browser test on the Checks' machine).
   Turning the screens off for touch was the fallback, not needed.
 - A browser test drags each screen and checks the knobs' values, one undo step for a filter
   drag, the keys, and the cards' heights.
