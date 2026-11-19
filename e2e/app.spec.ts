@@ -4206,7 +4206,7 @@ test('PR 85: the waves Random picks from are saved with the project; File → Ne
 
 	// Saved with the project, and back when it's opened
 	const exported = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
-	expect(exported.data.synth.randomWaves).toEqual(['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'hollow']);
+	expect(exported.data.synth.randomWaves).toEqual(['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'hollow', 'sample']);
 
 	// File → New: every wave again (it carried over before)
 	await chooseFromFileMenu(page, 'New');
