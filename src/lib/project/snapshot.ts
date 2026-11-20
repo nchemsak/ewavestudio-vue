@@ -10,9 +10,10 @@
 // factory defaults below (a sound setting into resetSoundToFactoryDefaults, which presets use
 // too), and, if it affects sound, into the live and export engines; see CLAUDE.md.
 
-import { isLfoTarget, isLfoDivision, lfoDepthsFrom, LFO_DEFAULT_DEPTH, type LfoTarget } from '../../audio/lfo';
+import { isLfoTarget, isLfoDivision, lfoDepthsFrom } from '../../audio/lfo';
 import type { Ref } from 'vue';
-import { clampUnisonVoices, UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MIN } from '../../audio/unison';
+import { resetRhythmSound, type RhythmSettings } from '../machines/rhythm';
+import { clampUnisonVoices, UNISON_VOICES_DEFAULT, UNISON_VOICES_MIN } from '../../audio/unison';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_TEMPO, divisionForTime, isDelayDivision, syncedDelaySeconds } from '../delaySync';
 
 type R<T> = Readonly<Ref<T>>;
@@ -27,7 +28,7 @@ import { VELOCITY_DESTINATIONS, VELOCITY_SWITCHED } from '../../audio/velocity';
 import { clampRatchet, clampRepeatNotes } from '../../audio/ratchet';
 import { arpRateFrom, type ArpRate } from '../melody/arp';
 import { clampTapeMode, TAPE_DEFAULTS, type TapeMode } from '../../audio/tape';
-import { clampSampleLength, sampleFrom, SAMPLE_LENGTH_DEFAULT, type SampleData } from '../../audio/sample';
+import { clampSampleLength, sampleFrom, SAMPLE_LENGTH_DEFAULT } from '../../audio/sample';
 import { DEFAULT_SWELL, isSwell } from '../../audio/reverb/reverse';
 import { DEFAULT_PRE_DIVISION, isPreDivision, preDelayMs, preDivisionForMs } from '../../audio/reverb/preDelay';
 import { chainFrom, emptyChain, emptySlots, slotFromLane, slotIndexFrom, slotsFrom, type Chain, type Slots } from '../patterns/slots';
@@ -76,56 +77,8 @@ export type ProjectState = {
 		seqOpen: Ref<boolean>;
 	};
 	transport: { volume: Ref<number>; tempo: Ref<number>; swing: Ref<number> };
-	synth: {
-		envelope: { enabled: Ref<boolean>; attackMs: Ref<number>; decayMs: Ref<number> };
-		// envAmount: the filter envelope in octaves (−5..+5, 0 off); envDecayMs: its decay
-		filter: { enabled: Ref<boolean>; cutoff: Ref<number>; resonance: Ref<number>; envAmount: Ref<number>; envDecayMs: Ref<number> };
-		noise: {
-			enabled: Ref<boolean>;
-			color: Ref<number>;
-			amount: Ref<number>;
-			mask: Ref<boolean[]>;
-			attackBurst: Ref<boolean>;
-			burstMs: Ref<number>;
-		};
-		unison: {
-			enabled: Ref<boolean>;
-			voices: Ref<number>;
-			detuneCents: Ref<number>;
-			stereoSpread: Ref<number>;
-			maxVoices: R<number>; // 3 on phones, 6 elsewhere
-		};
-		lfo: {
-			enabled: Ref<boolean>;
-			rate: Ref<number>;
-			depth: Ref<number>; // the current target's
-			// Each target's depth as last set (the current target's is `depth`): switching
-			// target recalls it (chooseLfoTarget in DrumSequencer.vue)
-			depths: Ref<Record<LfoTarget, number>>;
-			target: Ref<LfoTarget>;
-			waveform: Ref<'sine' | 'square'>;
-			sync: Ref<boolean>;
-			division: Ref<string>;
-			retrigger: Ref<boolean>;
-			bipolar: Ref<boolean>;
-		};
-		fm: { enabled: Ref<boolean>; modFreq: Ref<number>; index: Ref<number>; ratio: Ref<number | null> };
-		pitchEnv: {
-			enabled: Ref<boolean>;
-			semitones: Ref<number>;
-			decayMs: Ref<number>;
-			mode: Ref<'up' | 'down' | 'random'>;
-		};
-		pulse: { width: Ref<number> }; // the pulse wave's width, % (5–50; 50 is the square)
-		// The recorded sound the 'sample' wave plays (src/audio/sample.ts); none by default
-		sample: Ref<SampleData | null>;
-		// How much of the recording a pad plays, 0.05–1 (the strip's Length knob; 1 = all of it)
-		sampleLength: Ref<number>;
-		// The waves the Waveforms card's Random picks from (the tiles' dice badges, and the
-		// Sample strip's, PR 100); all by default
-		randomWaves: Ref<PadWave[]>;
-		// Velocity routing amounts, % −100..100 (src/audio/velocity.ts; 0 = off)
-		velocity: { decay: Ref<number>; cutoff: Ref<number>; pitchEnv: Ref<number>; noise: Ref<number> };
+	// The Rhythm machine's settings (src/lib/machines/rhythm.ts), and the project's key
+	synth: RhythmSettings & {
 		tuning: {
 			selectedKeyRoot: Ref<KeyRoot>;
 			globalOctaveOffset: Ref<number>;
@@ -854,63 +807,14 @@ export function resetToFactoryDefaults(st: ProjectState) {
 export function resetSoundToFactoryDefaults(st: ProjectState) {
 	const {
 		tempo,
-		envelopeEnabled, ampEnvAttackMs, ampEnvDecayMs,
-		filterEnabled, filterCutoff, filterResonance, filterEnvAmount, filterEnvDecayMs,
-		noiseEnabled, noiseColor, noiseAmount, noiseAttackBurst, noiseBurstMs,
-		unisonEnabled, unisonVoices, detuneCents, stereoSpread,
-		lfoEnabled, lfoRate, lfoDepth, lfoDepths, lfoTarget, lfoWaveform, lfoSync, lfoDivision, lfoRetrigger, lfoBipolar,
-		fmEnabled, fmModFreq, fmIndex, fmRatio,
-		pitchEnvEnabled, pitchEnvSemitones, pitchEnvDecayMs, pitchMode, pulseWidth, randomWaves, velocityRouting,
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDivision, reverbPreDelay, reverbReverse, reverbSwell,
 		tapeEnabled, tapeAge, tapeWobble, tapeMode,
 	} = byName(st);
 
-	envelopeEnabled.value = true;
-	ampEnvAttackMs.value = 20;
-	ampEnvDecayMs.value = 400;
-
-	filterEnabled.value = true;
-	filterCutoff.value = 5000;
-	filterResonance.value = 0.5;
-	filterEnvAmount.value = 0;
-	filterEnvDecayMs.value = 200;
-
-	noiseEnabled.value = false;
-	noiseColor.value = 0.5;
-	noiseAmount.value = 0.25;
-	noiseAttackBurst.value = false;
-	noiseBurstMs.value = 80;
-
-	unisonEnabled.value = false;
-	unisonVoices.value = UNISON_VOICES_DEFAULT;
-	detuneCents.value = UNISON_DETUNE_DEFAULT;
-	stereoSpread.value = UNISON_SPREAD_DEFAULT;
-
-	lfoEnabled.value = true;
-	lfoRate.value = 5;
-	lfoDepth.value = 0;
-	lfoDepths.value = { ...LFO_DEFAULT_DEPTH };
-	lfoTarget.value = 'pitch';
-	lfoWaveform.value = 'sine';
-	lfoSync.value = true;
-	lfoDivision.value = '1/8';
-	lfoRetrigger.value = false;
-	lfoBipolar.value = false;
-
-	fmEnabled.value = false;
-	fmModFreq.value = 200;
-	fmIndex.value = 4.0;
-	fmRatio.value = 1;
-
-	pitchEnvEnabled.value = true;
-	pitchEnvSemitones.value = 0;
-	pitchEnvDecayMs.value = 300;
-	pitchMode.value = 'up';
-	pulseWidth.value = PULSE_WIDTH_DEFAULT;
-	randomWaves.value = [...RANDOM_WAVE_IDS];
-	for (const k of VELOCITY_DESTINATIONS) velocityRouting[k].value = 0;
+	// The synth: the Rhythm machine's factory sound (src/lib/machines/rhythm.ts)
+	resetRhythmSound(st.synth);
 
 	// FX: Delay
 	delayEnabled.value = false;

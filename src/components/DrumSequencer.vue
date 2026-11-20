@@ -714,9 +714,9 @@ import SettingsMenu from './SettingsMenu.vue';
 import { usePwa } from '../composables/usePwa';
 import { LFO_DEPTH_MAX, LFO_DEFAULT_DEPTH, type LfoTarget } from '../audio/lfo';
 import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
-import { UNISON_DETUNE_DEFAULT, UNISON_SPREAD_DEFAULT, UNISON_VOICES_DEFAULT, UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
-import { PULSE_WIDTH_DEFAULT, PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, RANDOM_WAVE_IDS, WAVE_IDS, WAVE_LABELS, padWaveLabel, type PadWave } from '../audio/waves';
-import { encodeSample, sampleSeconds, SAMPLE_LENGTH_DEFAULT, SAMPLE_ROOT_HZ, SAMPLE_WAVE, type SampleData } from '../audio/sample';
+import { UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
+import { PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, RANDOM_WAVE_IDS, WAVE_IDS, WAVE_LABELS, padWaveLabel, type PadWave } from '../audio/waves';
+import { encodeSample, sampleSeconds, SAMPLE_LENGTH_DEFAULT, SAMPLE_ROOT_HZ, SAMPLE_WAVE } from '../audio/sample';
 import MelodyMaker from './MelodyMaker.vue';
 import RandomWaveTile from './RandomWaveTile.vue';
 import SampleTile from './SampleTile.vue';
@@ -752,6 +752,7 @@ import { TAPE_DEFAULTS, type TapeMode } from '../audio/tape';
 
 // Live sound engine
 import { useLiveEngine } from '../audio/liveEngine';
+import { createRhythm, rhythmVoice } from '../lib/machines/rhythm';
 import { useLfoVisual } from '../composables/useLfoVisual';
 import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
@@ -777,7 +778,7 @@ import {
 	lfoCutoffAt, lfoCutoffSwing, lfoPulseWidthAt, lfoPulseWidthRange, lfoBendAt, lfoBendRange,
 	lfoFmAmountAt, lfoFmAmountRange, lfoLevelAt, lfoLevelRange, type LfoView,
 } from '../lib/lfoVisual';
-import { divisionToHz, lfoAlignBars, NOISE_STOPS, type NoiseKey } from '../audio/synthHelpers';
+import { lfoAlignBars, NOISE_STOPS, type NoiseKey } from '../audio/synthHelpers';
 
 // IMPORTS END
 
@@ -821,6 +822,29 @@ const unisonMaxVoices = computed(() => (isMobile.value ? 3 : UNISON_VOICES_MAX))
 
 const STEP_COUNT = 16 as const;
 const stepLength = ref<typeof STEP_COUNT>(STEP_COUNT);
+
+// RHYTHM MACHINE START
+// The synth lane's sound settings, as refs (src/lib/machines/rhythm.ts), under the names
+// this file has always used for them
+const rhythm = createRhythm({ maxVoices: unisonMaxVoices, steps: stepLength.value });
+const {
+	envelope: { enabled: envelopeEnabled, attackMs: ampEnvAttackMs, decayMs: ampEnvDecayMs },
+	filter: { enabled: filterEnabled, cutoff: filterCutoff, resonance: filterResonance, envAmount: filterEnvAmount, envDecayMs: filterEnvDecayMs },
+	noise: { enabled: noiseEnabled, color: noiseColor, amount: noiseAmount, mask: noiseMask, attackBurst: noiseAttackBurst, burstMs: noiseBurstMs },
+	unison: { enabled: unisonEnabled, voices: unisonVoices, detuneCents, stereoSpread },
+	lfo: {
+		enabled: lfoEnabled, rate: lfoRate, depth: lfoDepth, depths: lfoDepths, target: lfoTarget, waveform: lfoWaveform,
+		sync: lfoSync, division: lfoDivision, retrigger: lfoRetrigger, bipolar: lfoBipolar,
+	},
+	fm: { enabled: fmEnabled, modFreq: fmModFreq, index: fmIndex, ratio: fmRatio },
+	pitchEnv: { enabled: pitchEnvEnabled, semitones: pitchEnvSemitones, decayMs: pitchEnvDecayMs, mode: pitchMode },
+	pulse: { width: pulseWidth },
+	sample,
+	sampleLength,
+	randomWaves,
+	velocity: velocityRouting,
+} = rhythm;
+// RHYTHM MACHINE END
 
 const showVelocity = ref(false);
 const showPitch = ref(false);
@@ -882,8 +906,6 @@ const padSizeStyle = computed(() => ({ '--padTEST-size': '41px' }));
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-const lfoRetrigger = ref(false)
-const lfoBipolar = ref(false)
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1105,10 +1127,7 @@ const currentTheme = ref('');
 
 // FM Synthesis START
 
-const fmEnabled = ref(false);
-const fmModFreq = ref(200);
-const fmIndex = ref(4.0);
-const fmRatio = ref<number | null>(1);
+// The settings are the Rhythm machine's (RHYTHM MACHINE, above)
 
 // FM Synthesis END
 
@@ -1259,12 +1278,11 @@ const WAVE_TILES = WAVE_IDS.map(value => ({
 	value, label: WAVE_LABELS[value].toUpperCase(), palette: WAVE_PALETTES[value],
 }));
 
-// The waves Random picks from (the tiles' dice badges). Saved with the project since PR 85
-// (synth.randomWaves), so File → New, a sound preset and opening a project set it; before, it
-// was the page's own and carried over from project to project.
-// The recording can be in it too (PR 100; the Sample strip's dice badge, shown once there's a
-// recording): 'sample' after the eight, in the pool only while there is a recording.
-const randomWaves = ref<PadWave[]>([...RANDOM_WAVE_IDS]);
+// The waves Random picks from (the tiles' dice badges, `randomWaves`, the Rhythm machine's).
+// Saved with the project since PR 85 (synth.randomWaves), so File → New, a sound preset and
+// opening a project set it; before, it was the page's own and carried over from project to
+// project. The recording can be in it too (PR 100; the Sample strip's dice badge, shown once
+// there's a recording): 'sample' after the eight, in the pool only while there is a recording.
 const randomPool = computed<Record<PadWave, boolean>>(() =>
 	Object.fromEntries(RANDOM_WAVE_IDS.map(w => [w, randomWaves.value.includes(w)])) as Record<PadWave, boolean>
 );
@@ -1707,41 +1725,9 @@ function auditionPad(index: number, hz: number) {
 const activeVolumePad = ref(null);
 const activePitchPad = ref(null);
 
-const pitchEnvEnabled = ref(true);
-const envelopeEnabled = ref(true);
-const filterEnabled = ref(true);
-
-const filterCutoff = ref(5000);
-const filterResonance = ref(0.5);
-// Filter envelope: the cutoff starts filterEnvAmount octaves away and returns within
-// filterEnvDecayMs (0 octaves: off)
-const filterEnvAmount = ref(0);
-const filterEnvDecayMs = ref(200);
-
-const ampEnvAttackMs = ref(20);
-const ampEnvDecayMs = ref(400);
-
 const synthDecay = computed(() => ampEnvDecayMs.value / 1000);
 
-const pitchEnvSemitones = ref(0);
-const pitchEnvDecayMs = ref(300);
-
-const pitchMode = ref<'up' | 'down' | 'random'>('up');
-// The pulse wave's width, % (src/audio/waves.ts); 50 is a square
-const pulseWidth = ref(PULSE_WIDTH_DEFAULT);
-// The recorded sound the 'sample' wave plays (src/audio/sample.ts), saved with the project
-const sample = shallowRef<SampleData | null>(null);
-// How much of it a pad plays, 0.05–1 (the strip's Length knob, PR 100; 1 = all of it)
-const sampleLength = ref(SAMPLE_LENGTH_DEFAULT);
 const pulseWidthTip = ref(false);
-// Velocity routing amounts, % −100..100 (src/audio/velocity.ts; 0 = off): what a step's
-// velocity does besides its loudness
-const velocityRouting = {
-	decay: ref(0),
-	cutoff: ref(0),
-	pitchEnv: ref(0),
-	noise: ref(0),
-};
 
 // VEL SWITCHES START
 // The Filter card has a VEL switch (VelSwitch.vue) for the cutoff's amount above (Envelope's,
@@ -1826,16 +1812,7 @@ const noiseModuleStyle = computed(() => {
 });
 
 
-// continuous color morph 0..1  (0=brown → 1=violet)
-const noiseColor = ref(0.5);
-
-const noiseAmount = ref(0.25); // 0 = no noise, 1 = full noise
-const noiseEnabled = ref(false);
-
-const noiseMask = ref<boolean[]>(Array(stepLength.value).fill(true));
-
-const noiseAttackBurst = ref(false);
-const noiseBurstMs = ref(80);
+// The settings (noiseColor: a continuous morph 0..1, brown → violet) are the Rhythm machine's
 
 // Noise END
 
@@ -1908,10 +1885,6 @@ const tapeMode = ref<TapeMode>(TAPE_DEFAULTS.mode); // 'tape' | 'vinyl'
 
 // Unison / Detune START
 
-const unisonEnabled = ref(false);
-const unisonVoices = ref(UNISON_VOICES_DEFAULT);   // 2–4
-const detuneCents = ref(UNISON_DETUNE_DEFAULT);  // 0–100 cents per step
-const stereoSpread = ref(UNISON_SPREAD_DEFAULT);  // 0–100 %
 
 watch(unisonVoices, (v) => {
 	const cap = unisonMaxVoices.value;
@@ -2008,14 +1981,9 @@ const exportState = computed<StepSequencerState>(() => {
 	const wf = (idx: number) =>
 		(inst as any).waveforms?.[idx] ?? selectedWaveform.value;
 
-	// The LFO's rate: its division at the tempo, as live (no free rate since PR 66)
-	const rateHz = divisionToHz(lfoDivision.value, tempo.value);
-
-	// Clamp unison voices here (can't use const inside an object literal)
-	const cappedVoices = Math.max(
-		UNISON_VOICES_MIN,
-		Math.min(unisonMaxVoices.value, unisonVoices.value)
-	);
+	// The voice, as the live engine plays it (rhythmVoice: the LFO's rate is its division at
+	// the tempo, unison's voices capped as on this screen)
+	const voice = rhythmVoice(rhythm, tempo.value);
 
 	return {
 		bpm: tempo.value,
@@ -2037,75 +2005,9 @@ const exportState = computed<StepSequencerState>(() => {
 		},
 
 		synth: {
-			envelope: {
-				enabled: envelopeEnabled.value,
-				attackMs: ampEnvAttackMs.value,
-				decayMs: ampEnvDecayMs.value,
-			},
-			filter: {
-				enabled: filterEnabled.value,
-				cutoff: filterCutoff.value,
-				resonance: filterResonance.value,
-				envAmount: filterEnvAmount.value,
-				envDecayMs: filterEnvDecayMs.value,
-			},
-			noise: {
-				enabled: noiseEnabled.value,
-				color: noiseColor.value,
-				type: (() => {
-					const t = noiseColor.value;
-					if (t < 0.125) return "brown";
-					if (t < 0.375) return "pink";
-					if (t < 0.625) return "white";
-					if (t < 0.875) return "blue";
-					return "violet";
-				})(),
-				amount: noiseAmount.value,
-				mask: [...noiseMask.value],
-				attackBurst: noiseAttackBurst.value,
-				burstMs: noiseBurstMs.value,
-			} as any,
-
-			unison: {
-				enabled: unisonEnabled.value,
-				voices: cappedVoices,
-				detuneCents: detuneCents.value,
-				stereoSpread: stereoSpread.value,
-			},
-
-			lfo: {
-				enabled: lfoEnabled.value,
-				target: lfoTarget.value as any,
-				waveform: lfoWaveform.value as any,
-				depth: lfoDepth.value,
-				rateHz,
-				division: lfoDivision.value,
-				retrigger: lfoRetrigger.value,
-				bipolar: lfoBipolar.value,
-			},
-
-			fm: {
-				enabled: fmEnabled.value,
-				modFreq: fmModFreq.value,
-				index: fmIndex.value,
-				ratio: fmRatio.value,
-			},
-
-			pitchEnv: {
-				enabled: pitchEnvEnabled.value,
-				semitones: pitchEnvSemitones.value,
-				decayMs: pitchEnvDecayMs.value,
-				mode: pitchMode.value,
-			},
-			pulse: { width: pulseWidth.value },
+			...voice,
+			noise: { ...voice.noise, mask: [...noiseMask.value] },
 			sample: sample.value,
-			sampleLength: sampleLength.value,
-			velocity: {
-				decay: velocityRouting.decay.value,
-				cutoff: velocityRouting.cutoff.value,
-				pitchEnv: velocityRouting.pitchEnv.value,
-				noise: velocityRouting.noise.value,
-			},
 		},
 
 		fx: {
@@ -2158,12 +2060,8 @@ const exportState = computed<StepSequencerState>(() => {
 
 // LFO START
 
-const lfoEnabled = ref(true);
-const lfoRate = ref(5);
-const lfoDepth = ref(0);
-const lfoTarget = ref<LfoTarget>('pitch');
-// Each target's depth as last set (the current target's is lfoDepth), saved with the project
-const lfoDepths = ref<Record<LfoTarget, number>>({ ...LFO_DEFAULT_DEPTH });
+// The settings are the Rhythm machine's (lfoDepths: each target's depth as last set, the
+// current target's is lfoDepth)
 
 // A new target picked: the depth set for the old one is kept, and the new one's comes back
 // (the first time, LFO_DEFAULT_DEPTH: a little, so the LFO doesn't seem to turn off). Before
@@ -2185,9 +2083,6 @@ const pulseInUse = computed(() => {
 	return (inst.steps as boolean[]).some((on, i) => on && (inst.waveforms?.[i] ?? selectedWaveform.value) === 'pulse');
 });
 
-const lfoWaveform = ref<'sine' | 'square'>('sine');
-const lfoSync = ref(true);
-const lfoDivision = ref('1/8');
 
 // Does anything use FM? (the LFO's FM target moves the FM card's Amount: nothing while FM is off)
 const fmInUse = computed(() => fmEnabled.value && fmIndex.value > 0);
@@ -2207,42 +2102,7 @@ const projectState: ProjectState = {
 	ui: { currentTheme, stepLength, collapsibleState, seqOpen },
 	transport: { volume, tempo, swing },
 	synth: {
-		envelope: { enabled: envelopeEnabled, attackMs: ampEnvAttackMs, decayMs: ampEnvDecayMs },
-		filter: { enabled: filterEnabled, cutoff: filterCutoff, resonance: filterResonance, envAmount: filterEnvAmount, envDecayMs: filterEnvDecayMs },
-		noise: {
-			enabled: noiseEnabled,
-			color: noiseColor,
-			amount: noiseAmount,
-			mask: noiseMask,
-			attackBurst: noiseAttackBurst,
-			burstMs: noiseBurstMs,
-		},
-		unison: {
-			enabled: unisonEnabled,
-			voices: unisonVoices,
-			detuneCents,
-			stereoSpread,
-			maxVoices: unisonMaxVoices,
-		},
-		lfo: {
-			enabled: lfoEnabled,
-			rate: lfoRate,
-			depth: lfoDepth,
-			depths: lfoDepths,
-			target: lfoTarget,
-			waveform: lfoWaveform,
-			sync: lfoSync,
-			division: lfoDivision,
-			retrigger: lfoRetrigger,
-			bipolar: lfoBipolar,
-		},
-		fm: { enabled: fmEnabled, modFreq: fmModFreq, index: fmIndex, ratio: fmRatio },
-		pitchEnv: { enabled: pitchEnvEnabled, semitones: pitchEnvSemitones, decayMs: pitchEnvDecayMs, mode: pitchMode },
-		pulse: { width: pulseWidth },
-		sample,
-		sampleLength,
-		randomWaves,
-		velocity: velocityRouting,
+		...rhythm,
 		tuning: { selectedKeyRoot, globalOctaveOffset, currentDefaultHz },
 	},
 	fx: {
@@ -2294,17 +2154,7 @@ const {
 } = useLiveEngine({
 	transport: projectState.transport,
 	pattern: { lanes: instruments, stepLength, selectedWaveform, noiseMask, repeatChord },
-	envelope: projectState.synth.envelope,
-	filter: projectState.synth.filter,
-	noise: projectState.synth.noise,
-	unison: projectState.synth.unison,
-	lfo: projectState.synth.lfo,
-	fm: projectState.synth.fm,
-	pitchEnv: projectState.synth.pitchEnv,
-	pulse: projectState.synth.pulse,
-	sample: projectState.synth.sample,
-	sampleLength: projectState.synth.sampleLength,
-	velocity: projectState.synth.velocity,
+	rhythm,
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
 	reverb: projectState.fx.reverb,
