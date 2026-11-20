@@ -19,9 +19,10 @@
 
 import { ref, computed, watch, onMounted, onBeforeUnmount, type Ref } from 'vue';
 import { prepareVoiceWave, type Wave, type PadWave } from './waves';
-import { sampleBuffer, SAMPLE_WAVE, type SampleData } from './sample';
-import { playNote, type VoiceSettings } from './note';
-import { lfoWaveAt, type LfoTarget } from './lfo';
+import { sampleBuffer, SAMPLE_WAVE } from './sample';
+import { playNote } from './note';
+import { rhythmVoice, type RhythmSettings } from '../lib/machines/rhythm';
+import { lfoWaveAt } from './lfo';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
 import { clampPreDelayMs, PRE_DELAY_MAX_MS } from './reverb/preDelay';
@@ -65,27 +66,8 @@ export type LiveEngineSettings = {
 		noiseMask: R<boolean[]>; // per step: may this step add noise?
 		repeatChord: R<number[]>; // the key's chord, pitch classes: what Up/Down repeats step through
 	};
-	envelope: { enabled: R<boolean>; attackMs: R<number>; decayMs: R<number> };
-	filter: { enabled: R<boolean>; cutoff: R<number>; resonance: R<number>; envAmount: R<number>; envDecayMs: R<number> };
-	noise: { enabled: R<boolean>; color: R<number>; amount: R<number>; attackBurst: R<boolean>; burstMs: R<number> };
-	unison: { enabled: R<boolean>; voices: R<number>; maxVoices: R<number>; detuneCents: R<number>; stereoSpread: R<number> };
-	lfo: {
-		enabled: R<boolean>;
-		rate: R<number>;
-		depth: R<number>;
-		target: R<LfoTarget>;
-		waveform: R<'sine' | 'square'>;
-		sync: R<boolean>;
-		division: R<string>;
-		retrigger: R<boolean>; // each note starts the LFO afresh (lfo.ts)
-	};
-	fm: { enabled: R<boolean>; modFreq: R<number>; index: R<number>; ratio: R<number | null> };
-	pitchEnv: { enabled: R<boolean>; semitones: R<number>; decayMs: R<number>; mode: R<'up' | 'down' | 'random'> };
-	pulse: { width: R<number> }; // pulse wave's width, % (waves.ts)
-	sample: R<SampleData | null>; // the recorded sound, the 'sample' wave (sample.ts)
-	sampleLength: R<number>; // how much of it a pad plays, 0.05–1 (sample.ts)
-	// Velocity routing amounts, % −100..100 (velocity.ts)
-	velocity: { decay: R<number>; cutoff: R<number>; pitchEnv: R<number>; noise: R<number> };
+	// The synth lane's sound: the Rhythm machine's settings (src/lib/machines/rhythm.ts)
+	rhythm: RhythmSettings;
 	delay: {
 		enabled: R<boolean>;
 		time: R<number>;
@@ -109,7 +91,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	const { volume, tempo, swing } = s.transport;
 	const { lanes, stepLength, selectedWaveform, noiseMask } = s.pattern;
 
-	const synthDecay = computed(() => s.envelope.decayMs.value / 1000);
+	const synthDecay = computed(() => s.rhythm.envelope.decayMs.value / 1000);
 
 	const isPlaying = ref(false);
 	const currentStep = ref(-1);
@@ -642,7 +624,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// The LFO's rate is always its division at the tempo (lfo.rate and lfo.sync are saved, but
 	// the free rate in Hz went in PR 66)
-	const { enabled: lfoEnabled, depth: lfoDepth, target: lfoTarget, waveform: lfoWaveform, division: lfoDivision, retrigger: lfoRetrigger } = s.lfo;
+	const { enabled: lfoEnabled, depth: lfoDepth, target: lfoTarget, waveform: lfoWaveform, division: lfoDivision, retrigger: lfoRetrigger } = s.rhythm.lfo;
 
 	//  LFO source + core gain. One shared oscillator; each note taps lfoGain.
 	let lfoOsc: OscillatorNode | null = null;
@@ -800,7 +782,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		if (noteStarts.length > 8) noteStarts.shift();
 
 		// The note itself is built by note.ts, as in the export engine
-		const { end } = playNote(voiceNow(), {
+		const { end } = playNote(rhythmVoice(s.rhythm, tempo.value), {
 			freq, amp: velocity, vel: opts.vel, time: startTime, wave: waveType,
 			addNoise: opts.addNoise, maxDuration: opts.maxDuration, decaySeconds: decayTime,
 		}, {
@@ -808,7 +790,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			toneOut: driveEnabled.value ? [driveDry, driveShaper] : [driveSum],
 			noiseOut: preMaster,
 			noiseBuffers,
-			sample: waveType === SAMPLE_WAVE ? sampleBuffer(s.sample.value) : null,
+			sample: waveType === SAMPLE_WAVE ? sampleBuffer(s.rhythm.sample.value) : null,
 			lfo: lfoGain,
 			release: releaseLfoTap,
 		});
@@ -817,51 +799,16 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		if (s.tape.enabled.value && !isPlaying.value) holdTapeNoise(startTime, end);
 	}
 
-	// The voice's settings now, as the plain object note.ts reads (the export state's `synth`
-	// has the same shape)
-	function voiceNow(): VoiceSettings {
-		return {
-			envelope: { enabled: s.envelope.enabled.value, attackMs: s.envelope.attackMs.value, decayMs: s.envelope.decayMs.value },
-			filter: {
-				enabled: s.filter.enabled.value, cutoff: s.filter.cutoff.value, resonance: s.filter.resonance.value,
-				envAmount: s.filter.envAmount.value, envDecayMs: s.filter.envDecayMs.value,
-			},
-			noise: {
-				enabled: s.noise.enabled.value, color: s.noise.color.value, amount: s.noise.amount.value,
-				attackBurst: s.noise.attackBurst.value, burstMs: s.noise.burstMs.value,
-			},
-			unison: {
-				enabled: s.unison.enabled.value,
-				voices: Math.min(s.unison.maxVoices.value, clampUnisonVoices(s.unison.voices.value)),
-				detuneCents: s.unison.detuneCents.value, stereoSpread: s.unison.stereoSpread.value,
-			},
-			lfo: {
-				enabled: lfoEnabled.value, target: lfoTarget.value, waveform: lfoWaveform.value,
-				depth: lfoDepth.value, rateHz: currentLfoHz(), retrigger: lfoRetrigger.value,
-			},
-			fm: { enabled: s.fm.enabled.value, modFreq: s.fm.modFreq.value, index: s.fm.index.value, ratio: s.fm.ratio.value },
-			pitchEnv: {
-				enabled: s.pitchEnv.enabled.value, semitones: s.pitchEnv.semitones.value,
-				decayMs: s.pitchEnv.decayMs.value, mode: s.pitchEnv.mode.value,
-			},
-			pulse: { width: s.pulse.width.value },
-			sampleLength: s.sampleLength.value,
-			velocity: {
-				decay: s.velocity.decay.value, cutoff: s.velocity.cutoff.value,
-				pitchEnv: s.velocity.pitchEnv.value, noise: s.velocity.noise.value,
-			},
-		};
-	}
 
 	delayDry.connect(preMaster);
 	delayWet.connect(preMaster);
 
 	// Unison: build the waves its voices start with as soon as the setting changes, rather
 	// than on the first note (a few ms each, too long for a MIDI note played 3 ms ahead)
-	watch([s.unison.enabled, s.unison.voices, s.unison.stereoSpread, s.unison.maxVoices, selectedWaveform], () => {
-		if (!s.unison.enabled.value) return;
-		const n = Math.min(s.unison.maxVoices.value, clampUnisonVoices(s.unison.voices.value));
-		for (let i = 0; i < n; i++) prepareVoiceWave(audioCtx, selectedWaveform.value, unisonPhase(i, n, s.unison.stereoSpread.value));
+	watch([s.rhythm.unison.enabled, s.rhythm.unison.voices, s.rhythm.unison.stereoSpread, s.rhythm.unison.maxVoices, selectedWaveform], () => {
+		if (!s.rhythm.unison.enabled.value) return;
+		const n = Math.min(s.rhythm.unison.maxVoices.value, clampUnisonVoices(s.rhythm.unison.voices.value));
+		for (let i = 0; i < n; i++) prepareVoiceWave(audioCtx, selectedWaveform.value, unisonPhase(i, n, s.rhythm.unison.stereoSpread.value));
 	}, { immediate: true });
 
 	// Synth voice END

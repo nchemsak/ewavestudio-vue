@@ -9,9 +9,7 @@
 // takes its random numbers (noise, the pitch envelope's random mode, the tape's hiss) from
 // `random`, so every part of one export plays the same noise and the same random sweeps.
 
-import { playNote, type NoteWiring } from "../note";
-import { type VelocityRouting } from "../velocity";
-import { type LfoTarget } from "../lfo";
+import { playNote, type NoteWiring, type VoiceSettings } from "../note";
 import { generateReverbIR } from "../reverb/generateIr";
 import { clampPreDelayMs, PRE_DELAY_MAX_MS } from "../reverb/preDelay";
 import { DEFAULT_SWELL, isSwell, nextHitGaps, revIrSeconds, revKey, reverseIrChannels, swellSeconds } from "../reverb/reverse";
@@ -49,47 +47,11 @@ export type StepSequencerState = {
 	// it every bar plays `pattern`
 	barPatterns?: StepPattern[];
 
-	synth: {
-		envelope: { enabled: boolean; attackMs: number; decayMs: number; };
-		filter: { enabled: boolean; cutoff: number; resonance: number; envAmount?: number; envDecayMs?: number };
-
-		noise: {
-			enabled: boolean;
-			color: number;             // 0..1 morph along Brown→Pink→White→Blue→Violet
-			type?: "brown" | "pink" | "white" | "blue" | "violet" | string;
-			amount: number;            // 0..1  (crossfade between tone & noise)
-			mask: boolean[];
-			attackBurst: boolean;
-			burstMs: number;
-		};
-
-		unison: { enabled: boolean; voices: number; detuneCents: number; stereoSpread: number; };
-
-		lfo: {
-			enabled: boolean;
-			target: LfoTarget;
-			waveform: "sine" | "square";
-			depth: number;       // in the target's units (lfo.ts): cents, Hz, % width, % level, % FM
-			rateHz: number;      // resolved from sync/division in the UI
-			division: string;
-			retrigger: boolean; // each note starts the LFO afresh, as live (lfo.ts)
-			bipolar: boolean;
-		};
-
-		fm: { enabled: boolean; modFreq: number; index: number; ratio: number | null; };
-
-		pitchEnv: {
-			enabled: boolean;
-			semitones: number;
-			decayMs: number;
-			mode: "up" | "down" | "random";
-		};
-
-		pulse?: { width: number }; // the pulse wave's width, % (missing: 50)
+	// The synth's voice, as note.ts plays it (the Rhythm machine's: rhythmVoice() in
+	// src/lib/machines/rhythm.ts), with the noise mask and the recording
+	synth: VoiceSettings & {
+		noise: VoiceSettings['noise'] & { mask: boolean[] }; // per step: may it add noise?
 		sample?: SampleData | null; // the recorded sound, the 'sample' wave (sample.ts; missing: none)
-		sampleLength?: number; // how much of it a pad plays, 0.05–1 (missing: all of it)
-
-		velocity?: VelocityRouting; // velocity routing amounts (missing: off)
 	};
 
 	fx: {
