@@ -9,27 +9,8 @@
 			<canvas ref="scopeEl" class="pl-scope" aria-hidden="true"></canvas>
 			<!-- A tiny copy of the 16 pads, on every page (PR 73): the steps that are on, in their
 				 notes' colours, the beats marked and the playing step outlined. Only to look at -->
-			<!-- MOCKUPS ONLY (?phone=p): a machine switch beside the tiny pads -->
-			<div v-if="mockPhone === 'p'" class="pm-switch" role="radiogroup" aria-label="Machine">
-				<button v-for="m in ['Rhythm', 'Bass']" :key="m" type="button" role="radio" :aria-checked="pm === m"
-					class="pm-key" :class="{ on: pm === m }" @click="pm = m"><i class="pm-led"></i>{{ m === 'Rhythm' ? 'RHY' : 'BASS' }}</button>
-			</div>
-			<!-- MOCKUPS ONLY (?phone=q): the tiny pads as the rail: a row per machine; a tap picks it -->
-			<div v-if="mockPhone === 'q'" class="pm-rail" role="radiogroup" aria-label="Machine">
-				<button v-for="m in ['Rhythm', 'Bass']" :key="m" type="button" role="radio" :aria-checked="pm === m"
-					class="pm-rrow" :class="{ on: pm === m }" @click="pm = m">
-					<span class="pm-rname">{{ m === 'Rhythm' ? 'R' : 'B' }}</span>
-					<span class="pm-meter"><b v-for="n in 6" :key="n" :class="{ lit: n <= (m === 'Bass' ? 5 : 4) }"></b></span>
-					<span class="pm-cells"><i v-for="(c, i) in (m === 'Bass' ? bassCells : rhythmCells)" :key="i" :style="c"
-						:class="{ beat: i % 4 === 0 }"></i></span>
-				</button>
-			</div>
-			<div v-else class="pl-minipads" aria-hidden="true">
-				<template v-if="pm === 'Bass'">
-					<span v-for="(on, i) in BASS.steps" :key="i" class="pl-mp" :class="{ on, beat: i % 4 === 0 }"
-						:style="on ? { '--h': ctx.hue(BASS.hz[i] * 4) } : undefined"></span>
-				</template>
-				<span v-else v-for="(on, i) in (ctx.inst.steps as boolean[])" :key="i" class="pl-mp"
+			<div class="pl-minipads" aria-hidden="true">
+				<span v-for="(on, i) in (ctx.inst.steps as boolean[])" :key="i" class="pl-mp"
 					:class="{ on, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
 					:style="on ? { '--h': ctx.hue(ctx.inst.pitches[i]) } : undefined"></span>
 			</div>
@@ -53,20 +34,7 @@
 		<div class="pl-pages">
 			<!-- Play -->
 			<section v-show="page === 'play'" class="pl-frame pl-play" aria-label="Play">
-				<!-- MOCKUPS ONLY: Bass's pads. Accent, slide and tie show as marks; a hold sets them -->
-				<div v-if="pm === 'Bass'" class="pl-pads" role="group" aria-label="Bass steps">
-					<button v-for="(on, i) in BASS.steps" :key="i" type="button" class="pl-pad"
-						:class="{ on, beat: i % 4 === 0 }" :style="on ? { '--h': ctx.hue(BASS.hz[i] * 4), '--v': i % 4 === 0 ? '100%' : '72%' } : undefined"
-						@click="held = i">
-						<span class="pl-num">{{ i + 1 }}</span>
-						<span v-if="on && BASS.accents[i]" class="pl-rat pm-acc">ACC</span>
-						<span v-if="on" class="pl-fill"></span>
-						<span v-if="on" class="pl-note">{{ BASS.names[i] }}</span>
-						<span v-if="BASS.links[i] === 'slide'" class="pm-link slide" aria-label="slides into the next">⤳</span>
-						<span v-else-if="BASS.links[i] === 'tie'" class="pm-link tie" aria-label="held into the next">═</span>
-					</button>
-				</div>
-				<div v-else class="pl-pads" role="group" aria-label="Steps" @pointermove="padMove">
+				<div class="pl-pads" role="group" aria-label="Steps" @pointermove="padMove">
 					<button v-for="(on, i) in (ctx.inst.steps as boolean[])" :key="i" type="button" class="pl-pad"
 						:class="{ on, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
 						:aria-pressed="!!on" :aria-label="padLabel(i)" :data-i="i"
@@ -80,20 +48,11 @@
 					</button>
 				</div>
 				<div class="pl-side">
-					<!-- MOCKUPS ONLY (?phone=r): the machine as a stepper, over Sound and Pattern -->
-					<div v-if="mockPhone === 'r'" class="pl-pick">
-						<div class="pl-stepper pm-mstep" role="group" aria-label="Machine">
-							<button type="button" class="pl-arr" aria-label="Previous machine" @click="pm = pm === 'Bass' ? 'Rhythm' : 'Bass'">◂</button>
-							<button type="button" class="pl-val"><span class="pl-cap" aria-hidden="true">Machine</span>{{ pm }}</button>
-							<button type="button" class="pl-arr" aria-label="Next machine" @click="pm = pm === 'Bass' ? 'Rhythm' : 'Bass'">▸</button>
-						</div>
-						<span class="pm-meter pm-meter-v" aria-hidden="true"><b v-for="n in 6" :key="n" :class="{ lit: n <= 5 }"></b></span>
-					</div>
 					<!-- Sound and Pattern: step through the six, a tap on the name lists them, a dice -->
 					<div class="pl-pick">
 						<div class="pl-stepper" role="group" aria-label="Sound">
 							<button type="button" class="pl-arr" aria-label="Previous sound" @click="stepSound(-1)">◂</button>
-							<button type="button" class="pl-val" aria-label="All sounds" @click="list = 'sound'"><span class="pl-cap" aria-hidden="true">Sound</span>{{ pm === 'Bass' ? 'Acid' : soundName }}</button>
+							<button type="button" class="pl-val" aria-label="All sounds" @click="list = 'sound'"><span class="pl-cap" aria-hidden="true">Sound</span>{{ soundName }}</button>
 							<button type="button" class="pl-arr" aria-label="Next sound" @click="stepSound(1)">▸</button>
 						</div>
 						<button type="button" class="pl-icon pl-dice" aria-label="Random sound" title="Random sound" @click="rollSound">
@@ -103,7 +62,7 @@
 					<div class="pl-pick">
 						<div class="pl-stepper" role="group" aria-label="Pattern">
 							<button type="button" class="pl-arr" aria-label="Previous pattern" @click="stepPattern(-1)">◂</button>
-							<button type="button" class="pl-val" aria-label="All patterns" @click="list = 'pattern'"><span class="pl-cap" aria-hidden="true">Pattern</span>{{ pm === 'Bass' ? 'Walk' : patternName }}</button>
+							<button type="button" class="pl-val" aria-label="All patterns" @click="list = 'pattern'"><span class="pl-cap" aria-hidden="true">Pattern</span>{{ patternName }}</button>
 							<button type="button" class="pl-arr" aria-label="Next pattern" @click="stepPattern(1)">▸</button>
 						</div>
 						<button type="button" class="pl-icon pl-dice" aria-label="Random pattern" title="Random pattern" @click="rollPattern">
@@ -140,14 +99,7 @@
 							title="Shape the steps' velocities (the Filter's VEL switch needs softer steps)"
 							@click="list = 'humanize'">Humanize</button>
 					</div>
-					<!-- MOCKUPS ONLY: Bass's four knobs -->
-					<div v-if="pm === 'Bass'" class="pl-macros">
-						<div v-for="k in BASS_MACROS" :key="k.label" class="pl-macro">
-							<Knob :modelValue="k.v" :label="k.label" :min="0" :max="1" :step="0.01" size="small" :value-text="k.text" />
-							<span class="pl-mv">{{ k.text }}</span>
-						</div>
-					</div>
-					<div v-else class="pl-macros">
+					<div class="pl-macros">
 						<div class="pl-macro">
 							<Knob v-model="ctx.decayMs" label="Decay" :min="50" :max="2000" :step="1" taper="log" size="small"
 								:value-text="`${Math.round(ctx.decayMs)} ms`" />
@@ -172,12 +124,7 @@
 				</div>
 			</section>
 
-			<section v-show="page === 'sound'" class="pl-frame pl-page" aria-label="Sound">
-				<!-- MOCKUPS ONLY: Bass's Sound page: the tiles, the screen, the knobs, and its Level,
-					 Pedals and meter (the rail's row, which the phone has no room for elsewhere) -->
-				<div v-if="pm === 'Bass'" class="pm-sound"><BassMock part="sound" variant="p" /></div>
-				<slot v-else name="sound" />
-			</section>
+			<section v-show="page === 'sound'" class="pl-frame pl-page" aria-label="Sound"><slot name="sound" /></section>
 			<section v-show="page === 'mod'" class="pl-frame pl-page" aria-label="Mod"><slot name="mod" /></section>
 			<section v-show="page === 'fx'" class="pl-frame pl-page" aria-label="FX"><slot name="fx" /></section>
 			<section v-show="page === 'key'" class="pl-frame pl-page" aria-label="Key"><slot name="key" /></section>
@@ -197,25 +144,7 @@
 
 		<!-- A held pad: its note (the key's scale over two octaves), velocity and repeats -->
 		<div v-if="held !== null" class="pl-scrim" @click="held = null"></div>
-		<!-- MOCKUPS ONLY: Bass's hold sheet: its notes, and Accent, Slide and Tie -->
-		<div v-if="held !== null && pm === 'Bass'" class="pl-sheet pl-picker" role="dialog" :aria-label="`Step ${held + 1}`">
-			<div class="pl-row">
-				<span class="pl-cap pl-grow">Step {{ held + 1 }} · A Minor · bass</span>
-				<button type="button" class="pt-btn pl-small">Off</button>
-				<button type="button" class="pt-btn pl-small" @click="held = null">Done</button>
-			</div>
-			<div class="pl-notes">
-				<button v-for="n in BASS_NOTES" :key="n.name" type="button" class="pl-n" :class="{ cur: n.name === BASS.names[held] }"
-					:style="{ '--h': ctx.hue(n.hz * 4) }">{{ n.name }}</button>
-			</div>
-			<div class="pl-row">
-				<label class="pl-cap" for="pm-vel">Velocity</label>
-				<input id="pm-vel" class="pl-vel" type="range" min="0.05" max="1" step="0.01" value="0.72">
-				<button v-for="t in ['Accent', 'Slide', 'Tie']" :key="t" type="button" class="pt-btn pl-small pm-tog hw-led-left"
-					:aria-pressed="(t === 'Accent' && BASS.accents[held]) || (t === 'Slide' && BASS.links[held] === 'slide') || (t === 'Tie' && BASS.links[held] === 'tie') ? 'true' : 'false'">{{ t }}</button>
-			</div>
-		</div>
-		<div v-if="held !== null && pm !== 'Bass'" class="pl-sheet pl-picker" role="dialog" :aria-label="`Step ${held + 1}`">
+		<div v-if="held !== null" class="pl-sheet pl-picker" role="dialog" :aria-label="`Step ${held + 1}`">
 			<div class="pl-row">
 				<span class="pl-cap pl-grow">Step {{ held + 1 }} · {{ scaleText }}</span>
 				<button type="button" class="pt-btn pl-small" @click="setStepOn(held, false); held = null">Off</button>
@@ -279,7 +208,6 @@
 <script setup lang="ts">
 import { ref, computed, provide, watch, onMounted, onBeforeUnmount } from 'vue';
 import Knob from './Knob.vue';
-import BassMock from './BassMock.vue';
 import ThemeToggle from './ThemeToggle.vue';
 import { SCALES, NOTE_TO_SEMITONE, midiToFreq, freqToMidiExact } from '../lib/melody/theory';
 import { VELOCITY_SHAPES, velocityShape, type VelocityShapeId } from '../lib/patterns/velocityShapes';
@@ -287,28 +215,6 @@ import { SWING_STOPS, TRIPLET_SWING, nextStop } from '../lib/knobDetents';
 
 const props = defineProps<{ ctx: any }>();
 const ctx = props.ctx;
-
-// MOCKUPS ONLY (?phone=p|q|r, &page=sound, &hold=3): picking a machine on the phone, with Bass
-// chosen. p: a switch in the top bar; q: the tiny pads as the rail; r: a Machine stepper.
-const mockQuery = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
-const mockPhone = mockQuery.get('phone') || '';
-const pm = ref(mockPhone ? 'Bass' : '');
-const BASS = (() => {
-	const hz: Record<number, number> = { 0: 55, 2: 55, 3: 110, 6: 82.41, 8: 55, 10: 49, 11: 65.41, 14: 82.41 };
-	const nm: Record<number, string> = { 0: 'A1', 2: 'A1', 3: 'A2', 6: 'E2', 8: 'A1', 10: 'G1', 11: 'C2', 14: 'E2' };
-	return {
-		steps: Array.from({ length: 16 }, (_, i) => i in hz),
-		hz: Array.from({ length: 16 }, (_, i) => hz[i] ?? 55),
-		names: Array.from({ length: 16 }, (_, i) => nm[i] ?? 'A1'),
-		accents: Array.from({ length: 16 }, (_, i) => [0, 6, 11].includes(i)),
-		links: Array.from({ length: 16 }, (_, i) => ([2, 10].includes(i) ? 'slide' : i === 14 ? 'tie' : '')),
-	};
-})();
-const BASS_NOTES = [['E1', 41.2], ['F1', 43.65], ['G1', 49], ['A1', 55], ['B1', 61.74], ['C2', 65.41], ['D2', 73.42], ['E2', 82.41],
-	['F2', 87.31], ['G2', 98], ['A2', 110], ['B2', 123.47], ['C3', 130.81], ['D3', 146.83], ['E3', 164.81], ['G3', 196]].map(([name, hz]) => ({ name: name as string, hz: hz as number }));
-const BASS_MACROS = [{ label: 'Cutoff', v: 0.32, text: '320 Hz' }, { label: 'Reso', v: 0.55, text: '55%' }, { label: 'Env', v: 0.6, text: '+3 oct' }, { label: 'Decay', v: 0.4, text: '260 ms' }];
-const bassCells = BASS.steps.map((on, i) => (on ? { background: `hsl(${ctx.hue(BASS.hz[i] * 4)} 80% 58%)` } : {}));
-const rhythmCells = computed(() => (ctx.inst.steps as boolean[]).map((on, i) => (on ? { background: `hsl(${ctx.hue(ctx.inst.pitches[i])} 80% 58%)` } : {})));
 
 // The desktop's panels shown here again must not take MIDI learn's links from the desktop's
 provide('noMidiLearn', true);
@@ -321,7 +227,7 @@ const PAGES = [
 	{ id: 'key', label: 'Key' },
 ] as const;
 type PageId = typeof PAGES[number]['id'];
-const page = ref<PageId>((mockQuery.get('page') as PageId) || 'play');
+const page = ref<PageId>('play');
 const menuOpen = ref(false);
 // The menu's Reset: asked first, then pads only or pads and sound
 const resetAsk = ref(false);
@@ -393,7 +299,7 @@ function rollPattern() { patternRolled.value = true; ctx.randomPattern(); }
 // pads paints them all the way the first one went (on, or off), as a drag does on the desktop.
 // A touch keeps sending its moves to the pad it began on, so that pad lets go of it.
 const HOLD_MS = 400;
-const held = ref<number | null>(mockQuery.get('hold') ? +mockQuery.get('hold')! : null);
+const held = ref<number | null>(null);
 let holdTimer: ReturnType<typeof setTimeout> | null = null;
 let press: null | { i: number; x: number; y: number; held: boolean; paint: boolean | null; last: number } = null;
 function padDown(i: number, e: PointerEvent) {
@@ -531,160 +437,6 @@ function hzText(hz: number) {
 </script>
 
 <style scoped>
-/* MOCKUPS ONLY (?phone=p|q|r): picking a machine, Bass's pads, its Sound page */
-.pm-switch {
-	display: flex;
-	gap: 3px;
-	padding: 3px;
-	border-radius: 10px;
-	background: rgba(0, 0, 0, .35);
-	flex: none;
-}
-
-.pm-key {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	padding: 0 9px;
-	height: 30px;
-	border: 0;
-	border-radius: 7px;
-	font: 700 11px Cousine, ui-monospace, monospace;
-	letter-spacing: .06em;
-	color: #cbbde6;
-	background: rgba(255, 255, 255, .06);
-}
-
-.pm-key.on {
-	color: #fff;
-	background: rgba(255, 255, 255, .16);
-	box-shadow: inset 0 0 0 1px var(--hw-led, #5dffb0);
-}
-
-.pm-led {
-	width: 6px;
-	height: 6px;
-	border-radius: 50%;
-	background: #2c3a33;
-}
-
-.pm-key.on .pm-led {
-	background: var(--hw-led, #5dffb0);
-	box-shadow: 0 0 5px var(--hw-led, #5dffb0);
-}
-
-.pm-rail {
-	display: flex;
-	flex-direction: column;
-	gap: 3px;
-	flex: none;
-}
-
-.pm-rrow {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	height: 17px;
-	padding: 0 5px;
-	border: 0;
-	border-radius: 5px;
-	background: rgba(0, 0, 0, .35);
-	color: #cbbde6;
-	font: 700 10px Cousine, ui-monospace, monospace;
-}
-
-.pm-rrow.on {
-	box-shadow: inset 0 0 0 1px var(--hw-led, #5dffb0);
-	color: #fff;
-}
-
-.pm-cells {
-	display: grid;
-	grid-template-columns: repeat(16, 6px);
-	gap: 2px;
-}
-
-.pm-cells i {
-	height: 9px;
-	border-radius: 1px;
-	background: rgba(255, 255, 255, .08);
-}
-
-.pm-cells i.beat {
-	background-color: rgba(255, 255, 255, .14);
-}
-
-.pm-meter {
-	display: grid;
-	grid-template-columns: repeat(6, 3px);
-	gap: 1px;
-	height: 8px;
-}
-
-.pm-meter b {
-	border-radius: 1px;
-	background: rgba(0, 0, 0, .5);
-}
-
-.pm-meter b.lit {
-	background: #3ddc97;
-	box-shadow: 0 0 3px #3ddc97;
-}
-
-.pm-meter b.lit:nth-child(n + 6) {
-	background: #ffd166;
-	box-shadow: 0 0 3px #ffd166;
-}
-
-.pm-meter-v {
-	grid-template-columns: 8px;
-	grid-template-rows: repeat(6, 1fr);
-	height: 40px;
-	align-self: center;
-	transform: rotate(180deg);
-	padding: 0 6px;
-}
-
-.pm-mstep {
-	flex: 1;
-}
-
-.pm-acc {
-	background: var(--hw-led, #5dffb0) !important;
-	color: #10091c !important;
-}
-
-.pm-link {
-	position: absolute;
-	right: 5px;
-	bottom: 5px;
-	z-index: 3;
-	min-width: 26px;
-	padding: 1px 4px;
-	border-radius: 6px;
-	background: rgba(0, 0, 0, .55);
-	font: 700 15px/1.1 Cousine, ui-monospace, monospace;
-	text-align: center;
-	color: var(--hw-led, #5dffb0);
-}
-
-.pm-tog[aria-pressed="true"] {
-	color: var(--hw-led, #5dffb0);
-}
-
-.pm-sound {
-	display: grid;
-	grid-template-columns: 130px minmax(0, 1fr) 210px;
-	grid-template-areas: "osc big knobs";
-	gap: 10px;
-	height: 100%;
-	min-height: 0;
-}
-
-.pm-sound :deep(.pt-card) {
-	padding: 10px;
-}
-
 .phone-layout {
 	--pp-sat: 82%;
 	--pp-lit: 58%;
