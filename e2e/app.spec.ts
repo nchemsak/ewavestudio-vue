@@ -229,8 +229,8 @@ async function setTempo(page: Page, bpm: number) {
 test('loads as version 2 with the synth lane and the machine rail', async ({ page }) => {
 	await expect(page).toHaveTitle('Ephemeral Wave Synth 2');
 	await expect(rail(page)).toBeVisible();
-	await expect(rail(page).locator('.mr-row')).toHaveCount(1);
-	await expect(rail(page).locator('.mr-name')).toHaveText('Rhythm');
+	await expect(rail(page).locator('.mr-row')).toHaveCount(2); // Rhythm and Bass (PR 115)
+	await expect(rail(page).locator('.mr-name')).toHaveText(['Rhythm', 'Bass']);
 	await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
 });
 
@@ -313,7 +313,7 @@ test('the machine rail: its screens draw while something plays, and Rhythm mutes
 	await turnOnPads(page, [0, 4, 8, 12]);
 	await expect(rail(page).locator('.mr-cells i.on')).toHaveCount(4);
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
-	await expect(rail(page).locator('.mr-cells i.now')).toHaveCount(1);
+	await expect(rail(page).locator('.mr-cells i.now')).toHaveCount(2); // one per row
 	await page.waitForTimeout(1500);
 	expect(await painted(spec), 'the spectrogram draws the notes').toBeGreaterThan(0.005);
 	expect(await painted(scope), 'the scope draws the wave').toBeGreaterThan(0.002);
@@ -4744,7 +4744,7 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 	await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
 	await openSettings(page);
 	await expect(learn).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(35);
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(43); // Bass's eight since PR 115
 	await cutoff.click();
 	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
 	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');
