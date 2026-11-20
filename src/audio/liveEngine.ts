@@ -8,7 +8,7 @@
 // tone filters; plain or ping-pong) and a reverb send (tone filter → pre-delay → convolver → wet gain). Both go to preMaster, and so do the
 // noise layer and the sample lanes, which bypass drive, delay and reverb. From preMaster
 // everything goes through the tape pedal (tape.ts), or round it while it's off, to masterGain
-// → destination. The views' analysers are tapped from masterGain through a 10 Hz high-pass.
+// → the output limiter (limiter.ts) → destination. The views' analysers are tapped from masterGain through a 10 Hz high-pass.
 //
 // WAV export uses a separate offline engine (export/scheduleStepSequencer.ts). Both build
 // their notes with note.ts (since PR 112); the effects graph is still built by each, so a
@@ -29,6 +29,7 @@ import { clampPreDelayMs, PRE_DELAY_MAX_MS } from './reverb/preDelay';
 import { nextHitGaps, revIrSeconds, revKey, reverseIrChannels, swellSeconds } from './reverb/reverse';
 import { ratchetHits, ratchetPitches, stepSpan } from './ratchet';
 import { createCrusher, loadCrusher, setCrusher } from './crusher';
+import { createLimiter, loadLimiter } from './limiter';
 import { createPingPong } from './pingPong';
 import { createTape, tapeSettings, type TapeMode } from './tape';
 import { clampUnisonVoices, unisonPhase } from './unison';
@@ -104,7 +105,20 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	const masterGain = audioCtx.createGain();
 	masterGain.gain.value = volume.value;
-	masterGain.connect(audioCtx.destination);
+	// The output limiter (limiter.ts), after the Volume knob: it joins once its worklet has
+	// loaded, a moment after the page opens (until then, and where there's no AudioWorklet,
+	// masterGain goes straight on). Below −1 dBFS it changes nothing. `output` is the one node
+	// connected to the speakers, so only what feeds it changes.
+	const output = audioCtx.createGain();
+	output.connect(audioCtx.destination);
+	masterGain.connect(output);
+	loadLimiter(audioCtx).then(ok => {
+		const limiter = ok ? createLimiter(audioCtx) : null;
+		if (!limiter) return;
+		limiter.connect(output);
+		masterGain.connect(limiter);
+		masterGain.disconnect(output);
+	});
 
 	// The views' tap (PR 108): a 10 Hz high-pass first, so the drive's DC offset (see "Dropped
 	// after PR 30" in CLAUDE.md) doesn't show as a block at the bottom of the spectrum. Only the

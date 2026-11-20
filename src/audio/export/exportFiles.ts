@@ -8,11 +8,13 @@
 // - a MIDI file of the same bars (src/lib/export/midi.ts);
 // - a one-shot: one hit of the sound at a chosen note, effects included, until it fades (the
 //   tape pedal's hiss never does, so it ends where the hit has faded under it).
-// Normalize turns the mix and stems up by one gain (so the stems still add up), and the
-// one-shot on its own, to −1 dBFS. Rendering uses the offline engine (scheduleStepSequencer)
+// Every file goes through the output limiter, as the app plays (limiter.ts: the stems take the
+// mix's gains). Normalize turns the mix and stems up by one gain (so the stems still add up),
+// and the one-shot on its own, to −1 dBFS. Rendering uses the offline engine (scheduleStepSequencer)
 // in an OfflineAudioContext, faster than real time.
 
 import { loadCrusher } from '../crusher';
+import { applyGains, limit, limiterGains } from '../limiter';
 import { scheduleStepSequencer, type ExportPart, type StepSequencerState } from './scheduleStepSequencer';
 import { encodeWavFloat32 } from './encodeWav';
 import { applyGain, barFrames, fadeOut, foldLoop, normalizeGain, peakOf, subtract, trimTail, type Channels } from '../../lib/export/audio';
@@ -105,7 +107,7 @@ function oneShotState(state: StepSequencerState, hz: number, wave: string, part:
 // when nothing has, cut where it fades below −80 dBFS. `seconds` is how long it may ring.
 export async function renderHit(state: StepSequencerState, hz: number, wave: string, seconds = ONE_SHOT_SECONDS): Promise<Channels> {
 	const raw = await render(oneShotState(state, hz, wave, 'mix', seededRandom(1), 0), seconds);
-	return trimTail(raw, Math.round(0.02 * state.sampleRate));
+	return limit(trimTail(raw, Math.round(0.02 * state.sampleRate)), state.sampleRate);
 }
 
 const wav = (channels: Channels, sampleRate: number) => new Uint8Array(encodeWavFloat32(channels, sampleRate));
@@ -125,7 +127,8 @@ export async function buildExportFiles(
 	const names = exportNames({ project: meta.project, bpm: state.bpm, key: meta.key, bars, ending: o.ending, chain });
 	const loopFrames = barFrames(bars, state.bpm, sr);
 	const seconds = loopFrames / sr + state.tailSeconds;
-	const parts: ExportPart[] = [...(o.mix ? ['mix' as const] : []), ...(o.stems ? STEM_PARTS : [])];
+	// The mix is rendered for the stems too: the output limiter's gains come from it
+	const parts: ExportPart[] = [...(o.mix || o.stems ? ['mix' as const] : []), ...(o.stems ? STEM_PARTS : [])];
 	const total = parts.length + (o.oneShot ? 1 : 0);
 	let done = 0;
 	progress(done, total);
@@ -148,12 +151,18 @@ export async function buildExportFiles(
 	const tailFrames = o.ending === 'tail' && rendered.length
 		? trimTail(rendered.flatMap((r) => r.channels), loopFrames, Math.round(TAIL_MARGIN_S * sr))[0].length
 		: 0;
-	const audio = rendered
-		.map(({ part, channels }) => ({
-			part,
-			channels: o.ending === 'loop' ? foldLoop(channels, loopFrames) : channels.map((c) => c.slice(0, tailFrames)),
-		}))
-		.filter(({ part, channels }) => part === 'mix' || part === 'dry' || peakOf(channels) > SILENT_PEAK);
+	const shaped = rendered.map(({ part, channels }) => ({
+		part,
+		channels: o.ending === 'loop' ? foldLoop(channels, loopFrames) : channels.map((c) => c.slice(0, tailFrames)),
+	}));
+	// The output limiter (limiter.ts), as it plays: on the mix as it loops (after the fold),
+	// and the very same gains on every stem, so the stems still add up to the mix. Below
+	// −1 dBFS it changes nothing.
+	const mixed = shaped.find((a) => a.part === 'mix');
+	const gains = mixed ? limiterGains(mixed.channels, sr) : null;
+	const audio = shaped
+		.map((a) => (gains ? { ...a, channels: applyGains(a.channels, gains) } : a))
+		.filter(({ part, channels }) => (part === 'mix' ? o.mix : part === 'dry' || peakOf(channels) > SILENT_PEAK));
 	const gain = o.normalize ? normalizeGain(peakOf(...audio.map((a) => a.channels))) : 1;
 	const files: ExportFile[] = audio.map((a) => ({
 		name: names.wav(a.part), data: wav(applyGain(a.channels, gain), sr), type: 'audio/wav',
@@ -189,6 +198,7 @@ export async function buildExportFiles(
 		} else {
 			channels = trimTail(raw, minFrames, margin);
 		}
+		channels = limit(channels, sr); // the output limiter, as a hit played live
 		const g = o.normalize ? normalizeGain(peakOf(channels)) : 1;
 		files.push({ name: names.oneShot(meta.noteName(o.oneShotHz)), data: wav(applyGain(channels, g), sr), type: 'audio/wav' });
 		progress(++done, total);
