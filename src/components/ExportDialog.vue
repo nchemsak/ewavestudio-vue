@@ -2,7 +2,8 @@
 <!-- File → Export audio…: what to export (src/audio/export/exportFiles.ts makes the files;
 	 DrumSequencer downloads them). Length in bars, loop or with tail, and which files: the mix,
 	 effects stems, a MIDI file, a one-shot at a chosen note; normalize. Several files come as
-	 one .zip. -->
+	 one .zip. While the chain has a filled cell (PR 111), Play picks the pattern showing or the
+	 chain, once through: a bar per cell, so Bars gives way to the chain's length. -->
 <template>
 	<teleport to="body">
 		<div v-if="open" class="export-overlay" @mousedown.self="close">
@@ -13,7 +14,22 @@
 					<button class="pt-btn export-close" type="button" :disabled="busy" @click="close">Close</button>
 				</div>
 
-				<div class="export-row">
+				<div v-if="chain" class="export-row">
+					<div class="export-label">Play</div>
+					<div class="pt-seg pt-seg-sm" role="group" aria-label="Play">
+						<button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': o.play === 'pattern' }"
+							:aria-pressed="o.play === 'pattern'" @click="o.play = 'pattern'">Pattern {{ slotName }}</button>
+						<button type="button" class="pt-seg-btn hw-led-top" :class="{ 'is-active': o.play === 'chain' }"
+							:aria-pressed="o.play === 'chain'" @click="o.play = 'chain'">Chain</button>
+					</div>
+					<span v-if="playChain" class="export-hint export-chain">{{ chain.join(' ') }}</span>
+				</div>
+
+				<div v-if="playChain" class="export-row">
+					<div class="export-label">Bars</div>
+					<span class="export-hint">{{ bars }}, a bar per cell · {{ lengthText }}</span>
+				</div>
+				<div v-else class="export-row">
 					<div class="export-label">Bars</div>
 					<div class="pt-seg pt-seg-sm" role="group" aria-label="Bars">
 						<button v-for="b in EXPORT_BARS" :key="b" type="button" class="pt-seg-btn hw-led-top"
@@ -35,8 +51,8 @@
 				<!-- The LFO's cycle is longer than the loop, or doesn't fit it: the loop would jump
 					 back to another point of the LFO's sweep -->
 				<p v-if="lfoUneven" class="export-note export-lfo-note">
-					The LFO's cycle takes {{ lfoBars }} bars, so a {{ o.bars }}-bar loop won't repeat smoothly{{ lfoFit ? '.' : ': With tail, or the LFO\'s RETRIG, avoids that.' }}
-					<button v-if="lfoFit" type="button" class="pt-btn pt-btn-sm" @click="o.bars = lfoFit">Use {{ lfoFit }} bars</button>
+					The LFO's cycle takes {{ lfoBars }} bars, so a {{ bars }}-bar loop won't repeat smoothly{{ lfoFit && !playChain ? '.' : ': With tail, or the LFO\'s RETRIG, avoids that.' }}
+					<button v-if="lfoFit && !playChain" type="button" class="pt-btn pt-btn-sm" @click="o.bars = lfoFit">Use {{ lfoFit }} bars</button>
 				</p>
 
 				<!-- On a phone (phone mode): just the mix, normalized; the rest is for a computer -->
@@ -47,7 +63,7 @@
 					<label class="export-check">
 						<input type="checkbox" v-model="o.mix" />
 						<span>Mix</span>
-						<span class="export-hint">the pattern as you hear it</span>
+						<span class="export-hint">{{ playChain ? 'the chain as you hear it' : 'the pattern as you hear it' }}</span>
 					</label>
 					<label class="export-check">
 						<input type="checkbox" v-model="o.stems" />
@@ -57,7 +73,7 @@
 					<label class="export-check">
 						<input type="checkbox" v-model="o.midi" />
 						<span>MIDI file</span>
-						<span class="export-hint">the pattern's notes, to play on any instrument</span>
+						<span class="export-hint">{{ playChain ? 'the chain\'s notes' : 'the pattern\'s notes' }}, to play on any instrument</span>
 					</label>
 					<div class="export-check">
 						<input id="export-one-shot" type="checkbox" v-model="o.oneShot" />
@@ -105,6 +121,8 @@ const props = defineProps<{
 	// Bars after which the LFO's cycle starts again on a bar line (lfoAlignBars); 0 while it
 	// moves nothing or restarts with each note (RETRIG), when any loop length repeats smoothly
 	lfoBars?: number;
+	chain?: string[] | null;                    // the chain's cells' letters, while one is filled (PR 111)
+	slotName?: string;                          // the pattern showing ("A")
 }>();
 
 const emit = defineEmits<{
@@ -119,8 +137,9 @@ const panel = ref<HTMLElement | null>(null);
 watch(() => props.open, async (isOpen) => {
 	if (!isOpen) return;
 	Object.assign(o, props.options);
+	if (!props.chain) o.play = 'pattern';
 	// A loop starts out at least as long as the LFO's cycle, when one of the lengths fits it
-	if (lfoUneven.value && lfoFit.value && lfoFit.value > o.bars) o.bars = lfoFit.value;
+	if (!playChain.value && lfoUneven.value && lfoFit.value && lfoFit.value > o.bars) o.bars = lfoFit.value;
 	await nextTick();
 	panel.value?.focus();
 }, { immediate: true });
@@ -129,18 +148,22 @@ function close() {
 	if (!props.busy) emit('close');
 }
 
+// What plays: the chain once through (a bar per cell), or the pattern o.bars times
+const playChain = computed(() => o.play === 'chain' && !!props.chain?.length);
+const bars = computed(() => (playChain.value ? props.chain!.length : o.bars));
+
 const lengthText = computed(() => {
-	const s = (o.bars * 4 * 60) / props.bpm;
+	const s = (bars.value * 4 * 60) / props.bpm;
 	return `${s < 10 ? s.toFixed(1) : Math.round(s)} s at ${props.bpm} BPM`;
 });
 
 const endingText = computed(() => o.ending === 'loop'
-	? `Exactly ${o.bars} bar${o.bars === 1 ? '' : 's'}. The reverb and echoes ringing at the end are added onto the start, so it repeats seamlessly in a DAW.`
+	? `Exactly ${bars.value} bar${bars.value === 1 ? '' : 's'}. The reverb and echoes ringing at the end are added onto the start, so it repeats seamlessly in a DAW.`
 	: 'Starts clean, and the reverb and echoes ring out after the last bar: for a part\'s first entrance, or the end of a song.');
 
 // A loop whose length isn't a whole number of the LFO's cycles (a 1-bar loop of a 4-bar LFO)
 const lfoBars = computed(() => props.lfoBars ?? 0);
-const lfoUneven = computed(() => o.ending === 'loop' && lfoBars.value > 1 && o.bars % lfoBars.value !== 0);
+const lfoUneven = computed(() => o.ending === 'loop' && lfoBars.value > 1 && bars.value % lfoBars.value !== 0);
 // The shortest length that holds whole cycles (none for a dotted 1/8, whose cycle is 3 bars)
 const lfoFit = computed(() => EXPORT_BARS.find((b) => b % lfoBars.value === 0) ?? null);
 
@@ -322,5 +345,10 @@ const statusText = computed(() => {
 	.export-note {
 		margin-left: 0;
 	}
+}
+
+.export-chain {
+	font-family: Cousine, ui-monospace, monospace;
+	letter-spacing: 0.08em;
 }
 </style>

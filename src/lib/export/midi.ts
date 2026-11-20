@@ -23,7 +23,12 @@ export type MidiPattern = {
 	repeatNotes?: string[]; // per step: what the hits play (ratchet.ts, ratchetPitches)
 	repeatChord?: number[]; // the key's chord, pitch classes
 	name?: string;        // the track's name
+	// The chain (PR 111): one pattern per bar, bar b playing barPatterns[b % length] (its own
+	// steps, velocities, pitches and repeats); without it every bar plays the fields above
+	barPatterns?: MidiBarPattern[];
 };
+
+export type MidiBarPattern = Pick<MidiPattern, 'active' | 'velocities' | 'pitches' | 'ratchets' | 'repeatNotes'>;
 
 export function midiNoteOf(hz: number): number {
 	return Math.max(0, Math.min(127, Math.round(69 + 12 * Math.log2(hz / 440))));
@@ -68,16 +73,17 @@ export function patternToMidi(p: MidiPattern): Uint8Array {
 	events.push({ tick: 0, order: 0, bytes: [0xff, 0x58, 0x04, 0x04, 0x02, 0x18, 0x08] });
 
 	for (let bar = 0; bar < bars; bar++) {
+		const b: MidiBarPattern = p.barPatterns?.length ? p.barPatterns[bar % p.barPatterns.length] : p;
 		for (let step = 0; step < p.stepsCount; step++) {
-			if (!p.active[step]) continue;
-			const vel = Math.max(0, Math.min(1, p.velocities[step] ?? 1));
+			if (!b.active[step]) continue;
+			const vel = Math.max(0, Math.min(1, b.velocities[step] ?? 1));
 			if (vel <= 0) continue;
-			const hitHz = ratchetPitches(p.pitches[step] || 220, p.ratchets?.[step] ?? 1, p.repeatNotes?.[step], p.repeatChord ?? []);
+			const hitHz = ratchetPitches(b.pitches[step] || 220, b.ratchets?.[step] ?? 1, b.repeatNotes?.[step], p.repeatChord ?? []);
 			const velocity = Math.max(1, Math.min(127, Math.round(vel * 127)));
 
 			const start = (bar * p.stepsCount + step) * STEP_TICKS + (step % 2 === 1 ? swing * STEP_TICKS : 0);
 			const span = stepSpan(step, p.stepsCount, STEP_TICKS, swing);
-			const hits = clampRatchet(p.ratchets?.[step] ?? 1);
+			const hits = clampRatchet(b.ratchets?.[step] ?? 1);
 			for (let k = 0; k < hits; k++) {
 				const note = midiNoteOf(hitHz[k]);
 				const on = Math.round(start + (k * span) / hits);

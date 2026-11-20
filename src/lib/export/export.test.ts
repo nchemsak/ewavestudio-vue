@@ -144,6 +144,14 @@ describe('the MIDI file', () => {
 		expect(m.notes.map(n => n.on)).toEqual([0, 1, 2, 3].map(b => b * 16 * STEP_TICKS));
 	});
 
+	it('the chain: each bar plays its own pattern, round again', () => {
+		const a = { active: steps([0]), velocities: base.velocities, pitches: Array(16).fill(220), ratchets: base.ratchets };
+		const b = { active: steps([4, 8]), velocities: base.velocities, pitches: Array(16).fill(440), ratchets: base.ratchets };
+		const m = readMidi(patternToMidi({ ...base, active: steps([]), bars: 3, barPatterns: [a, b] }));
+		expect(m.endTick).toBe(3 * 16 * STEP_TICKS);
+		expect(m.notes.map(n => [n.on / STEP_TICKS, n.note])).toEqual([[0, 57], [20, 69], [24, 69], [32, 57]]);
+	});
+
 	it("plays each step that's on at its pad's nearest note and velocity", () => {
 		const pitches = [...base.pitches];
 		pitches[4] = 261.63; pitches[8] = 445; // middle C; 445 Hz is nearest A4
@@ -223,6 +231,12 @@ describe('the zip file', () => {
 // --- Names ---------------------------------------------------------------------------------
 
 describe('export file names', () => {
+	it("a chain's files say so", () => {
+		const n = exportNames({ project: 'Beat', bpm: 120, key: 'Amin', bars: 3, ending: 'loop', chain: true });
+		expect(n.wav('mix')).toBe('Beat_120bpm_Amin_chain-3bars_mix.wav');
+		expect(exportNames({ project: 'Beat', bpm: 120, key: '', bars: 1, ending: 'tail', chain: true }).midi).toBe('Beat_120bpm_chain-1bar-tail.mid');
+	});
+
 	it('are safe on every system', () => {
 		expect(safeName('My: "Beat"/2?')).toBe('My- -Beat--2-');
 		expect(safeName('  lots   of\tspace ')).toBe('lots of space');

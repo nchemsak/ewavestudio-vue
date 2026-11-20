@@ -672,7 +672,7 @@
 		<ShareNotice :playing="isPlaying" @play="onSharePlay" />
 		<!-- File → Export audio… (src/audio/export/exportFiles.ts makes the files) -->
 		<ExportDialog :open="exportOpen" :options="exportOptions" :notes="oneShotNotes" :bpm="tempo"
-			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
+			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :chain="exportChain?.letters ?? null" :slotName="SLOT_NAMES[currentSlot]" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
 			@export="runExport" @close="exportOpen = false" />
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave" :hasSample="!!sample"
@@ -769,7 +769,7 @@ import { randomPreset } from '../lib/presets/random';
 import { PATTERNS } from '../lib/patterns/library';
 import { applyPattern, patternKey } from '../lib/patterns/patterns';
 import { moveList, MOVED_LANE_FIELDS, type MoveKind } from '../lib/patterns/move';
-import { chainCells, cycleCell, emptyChain, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, slotFromLane, slotHasSteps, SLOT_NAMES, type Chain, type Slots } from '../lib/patterns/slots';
+import { chainCells, cycleCell, emptyChain, emptyRhythm, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, rhythmOf, slotFromLane, slotHasSteps, SLOT_NAMES, type Chain, type Slots } from '../lib/patterns/slots';
 import { addTap, tapBpm } from '../lib/tapTempo';
 import { padHue, spectrumColour, spectrumHue } from '../lib/padColour';
 import { randomPattern } from '../lib/patterns/random';
@@ -2617,7 +2617,29 @@ const exportEffectsOn = computed(() => ({
 	tape: tapeEnabled.value && tapeAge.value > 0,
 }));
 
+// The chain for the Export dialog (PR 111): each filled cell's pattern, in order (the slot
+// showing from the lane; a slot never used is an empty bar), with the pads' shared waves and
+// the key's chord; and its cells' letters ("A A B A")
+const exportChain = computed(() => {
+	const lane = synthInstrument.value;
+	if (!lane || !chainUsable.value) return null;
+	const n = stepLength.value;
+	const cells = chain.value.filter((c): c is number => c != null);
+	const patterns = cells.map((slotIdx) => {
+		const t = rhythmOf(slotIdx === currentSlot.value ? slotFromLane(lane, laneHz()) : patternSlots.value[slotIdx])
+			?? emptyRhythm(n, laneHz());
+		return {
+			active: [...t.steps], velocities: [...t.velocities], pitches: [...t.pitches],
+			waveforms: Array.from({ length: n }, (_, i) => (lane as any).waveforms?.[i] ?? selectedWaveform.value),
+			ratchets: [...t.ratchets], repeatNotes: [...t.repeatNotes], repeatChord: repeatChord.value,
+		};
+	});
+	return { patterns, letters: cells.map((c) => SLOT_NAMES[c]) };
+});
+
 function openExportDialog() {
+	// The chain when it plays in the app (Chain on), else the pattern showing
+	exportOptions.play = chainOn.value && exportChain.value ? 'chain' : 'pattern';
 	// The one-shot starts on the key's root in the pads' octave (A3 unless the key or octave
 	// changed), as an exact note of the list
 	exportOptions.oneShotHz = midiToHz(midiNoteOf(currentDefaultHz.value));
@@ -2639,10 +2661,11 @@ async function runExport(options: ExportOptions) {
 	if (!synthInstrument.value || isExporting.value) return;
 	// The next export starts from these choices (from phone mode's shorter dialog, only its bars
 	// and ending, so the desktop's file choices stay as they were)
-	Object.assign(exportOptions, phoneActive.value ? { bars: options.bars, ending: options.ending } : options);
+	Object.assign(exportOptions, phoneActive.value ? { play: options.play, bars: options.bars, ending: options.ending } : options);
 	isExporting.value = true;
 	try {
-		const files = await buildExportFiles(exportState.value, options, {
+		const chainNow = options.play === 'chain' ? exportChain.value : null;
+		const files = await buildExportFiles({ ...exportState.value, barPatterns: chainNow?.patterns }, options, {
 			project: project.name || 'Untitled',
 			key: keyLabel(melodyUi.keyRoot, melodyUi.keyScale),
 			oneShotWave: selectedWaveform.value,
@@ -2654,13 +2677,14 @@ async function runExport(options: ExportOptions) {
 		} else {
 			const names = exportNames({
 				project: project.name || 'Untitled', bpm: tempo.value,
-				key: keyLabel(melodyUi.keyRoot, melodyUi.keyScale), bars: options.bars, ending: options.ending,
+				key: keyLabel(melodyUi.keyRoot, melodyUi.keyScale), bars: chainNow ? chainNow.patterns.length : options.bars,
+				ending: options.ending, chain: !!chainNow,
 			});
 			downloadFile(names.zip, zipFiles(files), 'application/zip');
 		}
 		exportOpen.value = false;
 		trackEvent('export_audio', {
-			bars: options.bars, ending: options.ending, mix: options.mix, stems: options.stems,
+			bars: chainNow ? chainNow.patterns.length : options.bars, chain: !!chainNow, ending: options.ending, mix: options.mix, stems: options.stems,
 			midi: options.midi, one_shot: options.oneShot, normalize: options.normalize, files: files.length,
 		});
 	} catch (err) {
