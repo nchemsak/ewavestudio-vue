@@ -197,9 +197,9 @@
 				 then a row per machine (only Rhythm, the synth lane, so far: its LED mutes it, its
 				 level is the lane's volume, its steps in their colours) -->
 			<MachineRail v-if="synthInstrument" class="ds-rail" :analyser="analyser" :sampleRate="audioCtx.sampleRate"
-				:active="viewSource.active" name="Rhythm" :steps="synthInstrument.steps" :pitches="synthInstrument.pitches"
-				:velocities="synthInstrument.velocities" :muted="synthInstrument.muted" v-model:level="synthInstrument.channelVolume"
-				:currentStep="currentStep" :playing="isPlaying" @toggle-mute="toggleMute(synthInstrument.name)"
+				:active="viewSource.active" :machines="railMachines" :chosen="machine"
+				:currentStep="currentStep" :playing="isPlaying" @toggle-mute="onRailMute" @update:level="onRailLevel"
+				@choose="(id: string) => { machine = id as any; }"
 				:slots="slotView" :currentSlot="currentSlot" :queuedSlot="queuedSlot" v-model:copyArmed="copyArmed"
 				@choose-slot="chooseSlot"
 				:chain="chain" :chainOn="chainOn" :chainUsable="chainUsable" :chainPlaying="chainPlaying"
@@ -288,10 +288,10 @@
 			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
 				<div class="pt-subheader step-sequencer-subheader">
 					<div class="channel-caption d-flex align-items-center gap-2">
-						<div class="mute-dot" :class="{ muted: synthInstrument.muted }"
-							@click="toggleMute(synthInstrument.name)" role="button"
-							:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
-						<h2 class="pt-title">Step Sequencer</h2>
+						<div class="mute-dot" :class="{ muted: bassChosen ? bassLane.muted : synthInstrument.muted }"
+							@click="onRailMute(machine)" role="button"
+							:title="(bassChosen ? bassLane.muted : synthInstrument.muted) ? 'Muted' : 'Playing'"></div>
+						<h2 class="pt-title">Step Sequencer<span class="ds-which"> · {{ bassChosen ? 'Bass' : 'Rhythm' }}</span></h2>
 
 						<!-- No Vol knob while there's one lane (PR 92): the Volume knob is enough. The lane's
 							 volume (channelVolume) is still saved and played; it comes back as each
@@ -300,7 +300,7 @@
 						<!-- The Repeats brush: pick ×2–×4, then click or drag across pads to give them that
 						     many quick hits (a pad that has them already goes back to one). It stays
 						     picked until Esc, its lit button, or a click outside the pads' frame. -->
-						<div class="repeat-brush" role="group" aria-label="Repeats brush"
+						<div v-if="!bassChosen" class="repeat-brush" role="group" aria-label="Repeats brush"
 							title="Pick a number, then click or drag across pads to give them that many quick hits. Click a pad again for one hit. Esc, the lit button or a click elsewhere puts the brush down.">
 							<span class="repeat-brush__label" aria-hidden="true">Repeats</span>
 							<button v-for="n in BRUSH_COUNTS" :key="n" type="button" class="vel-btn hw-cap hw-cap-sm hw-led-left"
@@ -320,10 +320,10 @@
 										class="kn"></span></button>
 							</div>
 							<div class="pt-rule" aria-hidden="true"></div>
-							<div class="mm-opt" role="menuitem" @click.stop="clearRepeats()">
+							<div v-if="!bassChosen" class="mm-opt" role="menuitem" @click.stop="clearRepeats()">
 								<span>Clear Repeats</span>
 							</div>
-							<div class="mm-reset" role="menuitem" @click.stop="resetSynthPadsToDefaults()">
+							<div class="mm-reset" role="menuitem" @click.stop="bassChosen ? resetBassPads() : resetSynthPadsToDefaults()">
 								Reset Pads
 							</div>
 						</div>
@@ -337,7 +337,10 @@
 					<div v-if="repeatBrush" class="brush-note" role="status">
 						Painting ×{{ repeatBrush }} repeats<span class="brush-note__how"> · Esc or click elsewhere to finish</span>
 					</div>
-					<SynthStepGrid :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
+					<BassPads v-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep"
+						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
+						@open-pad-settings="({ index, anchorRect }) => openBassPad(index, anchorRect)" />
+					<SynthStepGrid v-else :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
 						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
@@ -362,8 +365,10 @@
 			</div>
 
 			<!-- Sound: three rows, each filled edge to edge -->
-			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title">
-				<h2 id="sound-title" class="ds-section-title">Sound</h2>
+			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title" :data-bass="bassChosen ? '' : undefined">
+				<h2 id="sound-title" class="ds-section-title">Sound<span class="ds-which"> · {{ bassChosen ? 'Bass' : 'Rhythm' }}</span></h2>
+				<!-- The Bass machine's: wave tiles and Sub, its screen, its knobs; the pedals stay (the Effects card) -->
+				<BassSound v-show="bassChosen" :sound="bass" :noteHz="bassScreenHz" :noteName="nearestNote(bassScreenHz)" />
 
 				<!-- Row 1: the waves, beside FM and Unison -->
 				<div class="sound-row sound-row-1">
@@ -678,6 +683,10 @@
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave" :hasSample="!!sample"
 			v-model:noiseEnabled="padNoiseEnabled" :noiseCardOff="!noiseEnabled" v-model:ratchet="currentPadRatchet" v-model:repeatNotes="currentPadRepeatNotes" :minHz="MIN_PAD_HZ" :maxHz="MAX_PAD_HZ"
 			:anchorRect="padPopover.anchorRect" :title="padPopover.title" @audition="hz => auditionPad(padSettings.index, hz)" />
+		<!-- A Bass pad's ⋮: its note only -->
+		<PadSettingsPopover :key="`bass-${bassPad.index}`" v-model:open="bassPad.open" v-model:hz="bassPadHz"
+			:minHz="BASS_MIN_HZ" :maxHz="BASS_MAX_HZ" :anchorRect="bassPad.anchorRect" :title="`Bass step ${bassPad.index + 1}`"
+			@audition="hz => auditionBass(hz)" />
 	</div>
 </template>
 
@@ -753,9 +762,12 @@ import { TAPE_DEFAULTS, type TapeMode } from '../audio/tape';
 // Live sound engine
 import { useLiveEngine } from '../audio/liveEngine';
 import { createRhythm, rhythmVoice } from '../lib/machines/rhythm';
+import { bassVoice, createBass, createBassLane } from '../lib/machines/bass';
 import { useLfoVisual } from '../composables/useLfoVisual';
 import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
+import BassPads from './BassPads.vue';
+import BassSound from './BassSound.vue';
 import ExportDialog from './ExportDialog.vue';
 import ShareNotice from './ShareNotice.vue';
 import { buildExportFiles, renderHit, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from '../audio/export/exportFiles';
@@ -770,6 +782,9 @@ import { randomPreset } from '../lib/presets/random';
 import { PATTERNS } from '../lib/patterns/library';
 import { applyPattern, patternKey } from '../lib/patterns/patterns';
 import { moveList, MOVED_LANE_FIELDS, type MoveKind } from '../lib/patterns/move';
+import { bassOf, emptyBass, loadBassIntoLane } from '../lib/patterns/slots';
+import { bassDefaultHz } from '../lib/project/snapshot';
+import { BASS_MAX_HZ, BASS_MIN_HZ } from '../audio/bass';
 import { chainCells, cycleCell, emptyChain, emptyRhythm, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, rhythmOf, slotFromLane, slotHasSteps, SLOT_NAMES, type Chain, type Slots } from '../lib/patterns/slots';
 import { addTap, tapBpm } from '../lib/tapTempo';
 import { padHue, spectrumColour, spectrumHue } from '../lib/padColour';
@@ -845,6 +860,71 @@ const {
 	velocity: velocityRouting,
 } = rhythm;
 // RHYTHM MACHINE END
+
+// BASS MACHINE START
+// The Bass machine (the plan's item 4; src/lib/machines/bass.ts, src/audio/bass.ts): its
+// sound, and its lane (the current slot's Bass track as it's being edited, with its mute and
+// level). `machine` is the one the pads and the Sound section show (not saved).
+const bass = createBass();
+const bassLane = createBassLane(STEP_COUNT, 55);
+const machine = ref<'rhythm' | 'bass'>('rhythm');
+const bassChosen = computed(() => machine.value === 'bass');
+
+// The rail's rows (MachineRail.vue): Rhythm (the synth lane) and Bass
+const railMachines = computed(() => {
+	const r = synthInstrument.value;
+	return [
+		...(r ? [{ id: 'rhythm', name: 'Rhythm', steps: r.steps, pitches: r.pitches ?? [], velocities: r.velocities, muted: r.muted, level: r.channelVolume }] : []),
+		{ id: 'bass', name: 'Bass', steps: bassLane.steps, pitches: bassLane.pitches, velocities: bassLane.velocities, hueScale: 4, muted: bassLane.muted, level: bassLane.level },
+	];
+});
+function onRailMute(id: string) {
+	if (id === 'bass') bassLane.muted = !bassLane.muted;
+	else if (synthInstrument.value) toggleMute(synthInstrument.value.name);
+}
+// A Bass pad's ⋮: its note (PadSettingsPopover with no wave, noise or repeats)
+const bassPad = reactive({ open: false, index: 0, anchorRect: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 } });
+function openBassPad(index: number, r: DOMRect) {
+	if (bassPad.open && bassPad.index === index) { bassPad.open = false; return; }
+	bassPad.index = index;
+	bassPad.anchorRect = { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+	bassPad.open = true;
+}
+const bassPadHz = computed({
+	get: () => bassLane.pitches[bassPad.index] ?? 55,
+	set: (hz: number) => {
+		if (!bassPad.open) return; // the popover settles its value as it mounts
+		const p = [...bassLane.pitches];
+		p[bassPad.index] = hz;
+		bassLane.pitches = p;
+	},
+});
+// A Bass note, now, as its pads play it (only while stopped: playing, the pattern plays it)
+function auditionBass(hz: number) {
+	if (bassLane.muted || isPlaying.value) return;
+	const play = () => playBassNow(hz, 0.8);
+	if (audioCtx.state === 'running') play();
+	else audioCtx.resume().then(play, () => { });
+}
+// The note Bass's screen draws: its first note that's on, or the key's root
+const bassScreenHz = computed(() => {
+	const i = bassLane.steps.findIndex(Boolean);
+	return i >= 0 ? bassLane.pitches[i] : bassDefaultHz(currentDefaultHz.value);
+});
+// The ⋯ menu's Reset Pads, for Bass: every step off, full velocity, the key's root, no accent, slide or tie
+function resetBassPads() {
+	stepsAdvanced.open = false;
+	const n = stepLength.value, hz = bassDefaultHz(currentDefaultHz.value);
+	Object.assign(bassLane, {
+		steps: Array(n).fill(false), velocities: Array(n).fill(1), pitches: Array(n).fill(hz),
+		accents: Array(n).fill(false), slides: Array(n).fill(false), ties: Array(n).fill(false),
+	});
+}
+function onRailLevel(id: string, v: number) {
+	if (id === 'bass') bassLane.level = v;
+	else if (synthInstrument.value) synthInstrument.value.channelVolume = v;
+}
+// BASS MACHINE END
 
 const showVelocity = ref(false);
 const showPitch = ref(false);
@@ -1672,8 +1752,11 @@ function moveToKey(root: typeof selectedKeyRoot.value, audition: boolean) {
 	const inst = synthInstrument.value;
 	const semitones = shortestInterval(selectedKeyRoot.value, root);
 	if (inst && semitones) inst.pitches = transposePitches(inst.pitches, semitones, MIN_PAD_HZ, MAX_PAD_HZ);
+	// The Bass machine follows the key too
+	if (semitones) bassLane.pitches = transposePitches(bassLane.pitches, semitones, BASS_MIN_HZ, BASS_MAX_HZ);
 	// The other pattern slots move with it: the key is the project's, not one pattern's
-	if (semitones) mapOtherSlots((p) => transposePitches(p, semitones, MIN_PAD_HZ, MAX_PAD_HZ));
+	if (semitones) mapOtherSlots((p) => transposePitches(p, semitones, MIN_PAD_HZ, MAX_PAD_HZ),
+		(p) => transposePitches(p, semitones, BASS_MIN_HZ, BASS_MAX_HZ));
 	selectedKeyRoot.value = root;
 	melodyUi.keyRoot = root;
 	if (inst && audition) auditionNote(nearestRootHz(root, patternCenterHz(inst.pitches, inst.steps)));
@@ -1684,7 +1767,9 @@ function moveToKey(root: typeof selectedKeyRoot.value, audition: boolean) {
 function onScaleChosen({ from, to }: { from: MelodyUi['keyScale']; to: MelodyUi['keyScale'] }) {
 	const inst = synthInstrument.value;
 	if (inst) inst.pitches = remapScale(inst.pitches, selectedKeyRoot.value, from, to, MIN_PAD_HZ, MAX_PAD_HZ);
-	mapOtherSlots((p) => remapScale(p, selectedKeyRoot.value, from, to, MIN_PAD_HZ, MAX_PAD_HZ));
+	bassLane.pitches = remapScale(bassLane.pitches, selectedKeyRoot.value, from, to, BASS_MIN_HZ, BASS_MAX_HZ);
+	mapOtherSlots((p) => remapScale(p, selectedKeyRoot.value, from, to, MIN_PAD_HZ, MAX_PAD_HZ),
+		(p) => remapScale(p, selectedKeyRoot.value, from, to, BASS_MIN_HZ, BASS_MAX_HZ));
 	melodyUi.keyScale = to;
 }
 
@@ -2048,10 +2133,25 @@ const exportState = computed<StepSequencerState>(() => {
 			},
 		},
 
+		// The Bass machine, unless it's muted or has no step on
+		bass: bassLane.muted || !bassLane.steps.some(Boolean) ? undefined : {
+			voice: bassVoice(bass),
+			level: bassLane.level,
+			pattern: bassPatternOf(bassLane),
+		},
+
 		sampleRate: audioCtx?.sampleRate || 48000,
 		tailSeconds: 5.0,
 	};
 });
+
+// A Bass pattern's lists, copied
+function bassPatternOf(t: { steps: boolean[]; velocities: number[]; pitches: number[]; accents: boolean[]; slides: boolean[]; ties: boolean[] }) {
+	return {
+		steps: [...t.steps], velocities: [...t.velocities], pitches: [...t.pitches],
+		accents: [...t.accents], slides: [...t.slides], ties: [...t.ties],
+	};
+}
 
 
 // Export to wav file END
@@ -2123,6 +2223,7 @@ const projectState: ProjectState = {
 		tape: { enabled: tapeEnabled, age: tapeAge, wobble: tapeWobble, mode: tapeMode },
 	},
 	instruments,
+	bass: { sound: bass, lane: bassLane },
 	patterns: { slots: patternSlots, current: currentSlot, chain, chainOn },
 	melody: melodyUi,
 	selectedWaveform,
@@ -2144,6 +2245,7 @@ const {
 	isPlaying,
 	currentStep,
 	playSynthNote,
+	playBassNow,
 	startLfoIfNeeded,
 	togglePlay,
 	hardStopSequencer,
@@ -2155,6 +2257,7 @@ const {
 	transport: projectState.transport,
 	pattern: { lanes: instruments, stepLength, selectedWaveform, noiseMask, repeatChord },
 	rhythm,
+	bass: projectState.bass,
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
 	reverb: projectState.fx.reverb,
@@ -2241,6 +2344,12 @@ const midi = useMidiInput({
 		const freq = midiToFreq(note);
 		const decayTime = synthDecay.value; // seconds, as for sequencer notes
 		const wf = selectedWaveform.value;
+
+		// With Bass chosen, the keys play Bass (one note at a time), unless it's muted
+		if (bassChosen.value) {
+			if (bassLane.muted) return null;
+			return () => playBassNow(freq, velocity);
+		}
 
 		// Only if the synth lane exists and isn't muted
 		const inst = synthInstrument.value;
@@ -2475,6 +2584,8 @@ const exportChain = computed(() => {
 	if (!lane || !chainUsable.value) return null;
 	const n = stepLength.value;
 	const cells = chain.value.filter((c): c is number => c != null);
+	const bassPatterns = cells.map((slotIdx) => bassPatternOf(slotIdx === currentSlot.value ? bassLane
+		: bassOf(patternSlots.value[slotIdx]) ?? emptyBass(n, bassHz())));
 	const patterns = cells.map((slotIdx) => {
 		const t = rhythmOf(slotIdx === currentSlot.value ? slotFromLane(lane, laneHz()) : patternSlots.value[slotIdx])
 			?? emptyRhythm(n, laneHz());
@@ -2484,7 +2595,7 @@ const exportChain = computed(() => {
 			ratchets: [...t.ratchets], repeatNotes: [...t.repeatNotes], repeatChord: repeatChord.value,
 		};
 	});
-	return { patterns, letters: cells.map((c) => SLOT_NAMES[c]) };
+	return { patterns, bassPatterns, letters: cells.map((c) => SLOT_NAMES[c]) };
 });
 
 function openExportDialog() {
@@ -2515,7 +2626,12 @@ async function runExport(options: ExportOptions) {
 	isExporting.value = true;
 	try {
 		const chainNow = options.play === 'chain' ? exportChain.value : null;
-		const files = await buildExportFiles({ ...exportState.value, barPatterns: chainNow?.patterns }, options, {
+		// With the chain, Bass plays each cell's pattern too
+		const bassChain = chainNow && !bassLane.muted && chainNow.bassPatterns.some((p) => p.steps.some(Boolean))
+			? { voice: bassVoice(bass), level: bassLane.level, pattern: chainNow.bassPatterns[0], barPatterns: chainNow.bassPatterns }
+			: undefined;
+		const files = await buildExportFiles({ ...exportState.value, barPatterns: chainNow?.patterns,
+			bass: chainNow ? bassChain : exportState.value.bass }, options, {
 			project: project.name || 'Untitled',
 			key: keyLabel(melodyUi.keyRoot, melodyUi.keyScale),
 			oneShotWave: selectedWaveform.value,
@@ -2818,18 +2934,20 @@ const copyArmed = ref(false);
 const slotView = computed(() => SLOT_NAMES.map((name, i) => ({
 	name,
 	// The current slot's steps are the lane's (its stored copy may be behind)
-	filled: i === currentSlot.value ? !!synthInstrument.value?.steps.some(Boolean) : slotHasSteps(patternSlots.value[i]),
+	filled: i === currentSlot.value ? !!synthInstrument.value?.steps.some(Boolean) || bassLane.steps.some(Boolean) : slotHasSteps(patternSlots.value[i]),
 })));
 
 function laneHz() { return currentDefaultHz.value; }
+function bassHz() { return bassDefaultHz(currentDefaultHz.value); }
 
 // The lane's pattern into the current slot, then the slot `to` into the lane
 function switchToSlot(to: number) {
 	const lane = synthInstrument.value;
 	if (!lane || to === currentSlot.value) return;
 	const slots = [...patternSlots.value];
-	slots[currentSlot.value] = slotFromLane(lane, laneHz());
+	slots[currentSlot.value] = slotFromLane(lane, laneHz(), bassLane);
 	loadIntoLane(lane, slots[to], stepLength.value, laneHz());
+	loadBassIntoLane(bassLane, slots[to], stepLength.value, bassHz());
 	patternSlots.value = slots;
 	currentSlot.value = to;
 }
@@ -2850,8 +2968,8 @@ function copySlotTo(to: number) {
 	cancelQueued('slot');
 	const from = currentSlot.value;
 	const slots = [...patternSlots.value];
-	slots[from] = slotFromLane(lane, laneHz());
-	slots[to] = slotFromLane(lane, laneHz());
+	slots[from] = slotFromLane(lane, laneHz(), bassLane);
+	slots[to] = slotFromLane(lane, laneHz(), bassLane);
 	patternSlots.value = slots;
 	currentSlot.value = to; // the lane already holds the copy
 	trackEvent('pattern_copy', { from: SLOT_NAMES[from], to: SLOT_NAMES[to] });
@@ -2859,8 +2977,8 @@ function copySlotTo(to: number) {
 
 // The slots other than the current one (the lane is moved by the caller) with their pitches
 // passed through f: a key or scale picked moves every pattern
-function mapOtherSlots(f: (pitches: number[]) => number[]) {
-	patternSlots.value = patternSlots.value.map((slot, i) => (i === currentSlot.value ? slot : mapSlotPitches(slot, f)));
+function mapOtherSlots(f: (pitches: number[]) => number[], fBass?: (pitches: number[]) => number[]) {
+	patternSlots.value = patternSlots.value.map((slot, i) => (i === currentSlot.value ? slot : mapSlotPitches(slot, f, fBass)));
 }
 // The chain (PR 110, part 2 of the plan's item 2): eight cells under the slots. While Chain is
 // on and a cell is filled, each bar plays the next filled cell's slot (round again after the
@@ -3479,6 +3597,32 @@ async function recordSample() {
 	}
 }
 
+/* THE BASS MACHINE CHOSEN (option K of the mockups): the Sound section is Bass's wave tiles
+   and Sub, its screen, then its knobs beside the Effects card. The Rhythm machine's rows are
+   hidden (v-show would unmount nothing either way: these are display rules). */
+.ds-which { color: var(--hw-led, #5dffb0); font-size: 0.85em; }
+.ds-sound[data-bass] {
+	display: grid;
+	gap: 12px;
+	align-content: stretch;
+	grid-template-columns: minmax(0, .5fr) minmax(0, .5fr) minmax(0, 1fr);
+	grid-template-rows: auto 1fr auto;
+	grid-template-areas: "title title title" "osc big big" "knobs knobs fx";
+}
+.ds-sound[data-bass] > .ds-section-title { grid-area: title; }
+.ds-sound[data-bass] .sound-row-1,
+.ds-sound[data-bass] .sound-row-2,
+.ds-sound[data-bass] .sound-row-3 > .sound-stack { display: none; }
+.ds-sound[data-bass] .sound-row-3 { display: contents; }
+.ds-sound[data-bass] #effects-panel { grid-area: fx; }
+/* Under 1200 px the pedals are the Effects tab's: the knobs take the row */
+@media (max-width: 1199.98px) {
+	.ds-sound[data-bass] { grid-template-areas: "title title title" "osc big big" "knobs knobs knobs"; }
+}
+/* One column: the tiles across, the screen, the knobs */
+@media (max-width: 719.98px) {
+	.ds-sound[data-bass] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "title" "osc" "big" "knobs"; }
+}
 /* LAYOUT END */
 
 /* PHONE START: the phone layout's Sound, FX and Key pages (PhoneLayout.vue's slots) */

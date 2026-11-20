@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chainCells, chainFrom, comparableProject, cycleCell, emptyChain, emptyRhythm, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, rhythmOf, slotFromLane, slotHasSteps, slotIndexFrom, slotsFrom, SLOT_COUNT } from './slots';
+import { bassOf, emptyBass, loadBassIntoLane, chainCells, chainFrom, comparableProject, cycleCell, emptyChain, emptyRhythm, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, rhythmOf, slotFromLane, slotHasSteps, slotIndexFrom, slotsFrom, SLOT_COUNT } from './slots';
 import { applySnapshot, buildSnapshot } from '../project/snapshot';
 import { STEPS, asSaved, changeEverything, fresh } from '../project/testState';
 
@@ -62,7 +62,7 @@ describe('pattern slots', () => {
 
 describe('pattern slots in a project', () => {
 	it('File → New: four empty slots, A playing', () => {
-		expect(asSaved(fresh()).patterns).toEqual({ current: 0, slots: [{ tracks: [emptyRhythm(STEPS, 220)] }, null, null, null], chain: emptyChain(), chainOn: false });
+		expect(asSaved(fresh()).patterns).toEqual({ current: 0, slots: [{ tracks: [emptyRhythm(STEPS, 220), emptyBass(STEPS, 55)] }, null, null, null], chain: emptyChain(), chainOn: false });
 	});
 
 	it('the saved current slot is the lane as it is now', () => {
@@ -137,8 +137,9 @@ describe('which slot is showing is not a change', () => {
 		// Switch to B as the app does: the lane into C, B into the lane
 		const lane = st.instruments.value.find(i => i.name === 'synth-voice')!;
 		const slots = [...st.patterns.slots.value];
-		slots[2] = slotFromLane(lane, 220);
+		slots[2] = slotFromLane(lane, 220, st.bass.lane);
 		loadIntoLane(lane, slots[1], STEPS, 220);
+		loadBassIntoLane(st.bass.lane, slots[1], STEPS, 55);
 		st.patterns.slots.value = slots;
 		st.patterns.current.value = 1;
 		const after = asSaved(st);
@@ -153,5 +154,39 @@ describe('which slot is showing is not a change', () => {
 		const a = asSaved(st);
 		st.patterns.slots.value = [null, { tracks: [emptyRhythm(STEPS, 220)] }, null, null];
 		expect(comparableProject(asSaved(st))).toEqual(comparableProject(a));
+	});
+});
+
+describe('the Bass machine in the slots', () => {
+	it('a slot keeps a Bass track beside the Rhythm one, saved and loaded', () => {
+		const st = fresh();
+		changeEverything(st);
+		const snap = asSaved(st);
+		const bass = bassOf(snap.patterns.slots[2]);
+		expect(bass?.steps).toEqual(st.bass.lane.steps);
+		expect(bass?.accents).toEqual(st.bass.lane.accents);
+		expect(bass?.ties).toEqual(st.bass.lane.ties);
+		const back = slotsFrom(snap.patterns.slots, STEPS, 220, 55);
+		expect(bassOf(back[2])).toEqual(bass);
+	});
+
+	it('a slot from before Bass loads an empty Bass pattern into the lane', () => {
+		const lane = { ...emptyBass(STEPS, 70), steps: Array(STEPS).fill(true) };
+		loadBassIntoLane(lane, { tracks: [emptyRhythm(STEPS, 220)] }, STEPS, 55);
+		expect(lane.steps.some(Boolean)).toBe(false);
+		expect(lane.pitches).toEqual(Array(STEPS).fill(55));
+	});
+
+	it('a key change moves the Bass track with its own function', () => {
+		const slot = { tracks: [emptyRhythm(4, 220), emptyBass(4, 55)] };
+		const moved = mapSlotPitches(slot, (p) => p.map((x) => x * 2), (p) => p.map((x) => x + 1))!;
+		expect(rhythmOf(moved)!.pitches).toEqual([440, 440, 440, 440]);
+		expect(bassOf(moved)!.pitches).toEqual([56, 56, 56, 56]);
+	});
+
+	it('a slot with only Bass steps on counts as filled', () => {
+		const b = emptyBass(4, 55);
+		b.steps[2] = true;
+		expect(slotHasSteps({ tracks: [emptyRhythm(4, 220), b] })).toBe(true);
 	});
 });

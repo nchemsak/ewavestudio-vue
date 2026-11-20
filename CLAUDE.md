@@ -6,13 +6,15 @@ https://www.ephemeralwave.com/studio/ and is never updated or overwritten, so th
 be compared; never deploy this code to `/studio/`. Everything runs client-side with the Web
 Audio API; there is no backend. Features: one 16-step synth lane with per-step pitch,
 velocity, waveform (sine, triangle, saw, square, a pulse with adjustable width, and three
-harmonic shapes, and a sound recorded from the microphone) and ratchet (2–4 quick hits within the step); amp envelope, pitch envelope (a drum-style sweep), filter with its own
+harmonic shapes, and a sound recorded from the microphone) and ratchet (2–4 quick hits within the step); a Bass
+machine (one note at a time, saw or square with a sub, a resonant filter, per step Accent,
+Slide and Tie), shown on the pads by picking its row in the rail; amp envelope, pitch envelope (a drum-style sweep), filter with its own
 envelope, noise, FM,
 unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a lo-fi pedal (wear, wobble, tape or vinyl); Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
 arpeggio in a key and scale; a new key or scale moves the pattern with it); four patterns per
 project (A–D, with Copy) and a chain that plays them in order; a machine rail (a small scope and
-spectrogram, and a row per machine: only Rhythm so far), the live spectrum behind the Filter card's
+spectrogram, and a row per machine: Rhythm and Bass so far), the live spectrum behind the Filter card's
 curve, one hit of the sound behind the Envelope card's, and a tuner in the Melody Maker; six built-in sounds that set the sound (not the pattern) and six built-in patterns
 that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
 saved in IndexedDB with JSON import and export, and share links (the project in the URL); undo/redo; it installs as an app that
@@ -183,6 +185,8 @@ src/components/
   ThemeToggle.vue        The three theme buttons, lightest to darkest (in the gear)
   MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list and Learn
                          (and the MIDI learn bar, at the bottom of the screen)
+  BassPads.vue, BassSound.vue  The Bass machine's pads (Accent, Slide and Tie rows) and Sound
+                         section (see "The Bass machine")
   MachineRail.vue        The machine rail, where the big screen was (PR 108): the scope and the
                          spectrogram (monitorViews.ts), a row per machine (see "The machine rail")
   TunerBadge.vue         The tuner in the Melody Maker screen's corner
@@ -226,6 +230,8 @@ src/audio/
                          (see "The tape pedal")
   unison.ts              Unison: 2–4 voices, where each sits and starts in its cycle (see
                          "Audio engine (live)")
+  bass.ts                The Bass machine's voice (one note at a time) and what its steps play
+                         (Accent, Slide, Tie), for both engines (see "The Bass machine")
   sample.ts              The recorded sound, the 'sample' wave: kept as base64 PCM, trimmed, and
                          played at a note's pitch (see "Sample a sound")
   reverb/generateIr.ts   Algorithmic impulse response for the ConvolverNode
@@ -250,6 +256,8 @@ src/lib/patterns/        Built-in patterns: library.ts (the patterns), patterns.
 src/lib/export/          Export helpers (pure, unit-tested): audio.ts (loop folding, tail
                          trimming, normalizing), midi.ts (MIDI file), zip.ts, names.ts
 src/lib/random.ts        Seeded random numbers (export stems; tests)
+src/lib/machines/bass.ts  The Bass machine: its settings as refs, factory values, its lane
+src/lib/bassView.ts      What the Bass machine's screen draws (pure)
 src/lib/machines/rhythm.ts  The Rhythm machine (the synth lane): its settings as refs, their
                          factory values, the voice note.ts plays (see "Audio engine (live)")
 src/lib/noise/accents.ts  The Noise card's Accents: noise on the pattern's loudest hits (pure)
@@ -1073,10 +1081,87 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   same), its name, its **level** (a mini knob, `synth.volume` "Rhythm level", MIDI-learnable
   again: the lane's `channelVolume`, hidden since PR 92, default 0.5) and a tiny row of its 16
   steps in their pads' colours (brighter when louder), the playing one outlined.
-- Only **Rhythm** (the synth lane) so far. The plan: Bass, Drums and Drift add a row each
-  (items 4–6), a click on a row picks the machine the pads and the Sound section show; patterns
-  A–D (with Copy) and the chain's eight cells go under the rows (item 2). The screens shrink to
-  a strip as they come (the mockups: a 46 px strip). Drift's row shows its chords per bar.
+- **Rhythm** (the synth lane) and **Bass** (PR 115, see "The Bass machine"). A click on a row
+  (its name, `Show Bass`, `aria-pressed`, or its steps) picks the machine the pads and the
+  Sound section show (`machine` in `DrumSequencer.vue`, not saved, Rhythm on a fresh page);
+  the chosen row has a mint edge. The rows come from `railMachines` (`RailMachine`: steps,
+  pitches, velocities, mute, level; Bass's pitches drawn two octaves up, `hueScale` 4). Each
+  machine's level knob is written out once in the source (MIDI learn's ids). Drums and Drift
+  add a row each (items 5–6). Patterns A–D (with Copy) and the chain's eight cells are under
+  the rows. The screens shrink to a strip as they come (the mockups: a 46 px strip). Drift's
+  row shows its chords per bar.
+
+### The Bass machine
+- PR 115 (the plan's item 4, part 1; option K of four rounds of mockups, desktop; the phone's
+  is option P, a RHY | BASS switch in its top bar, for part 3). One note at a time, a saw or a
+  square with a sine an octave down (Sub), through one resonant low-pass whose cutoff starts
+  Env octaves up and falls back within Decay; per step **Accent**, **Slide** and **Tie**. The
+  Drive knob of the plan was dropped (the overdrive pedal does it).
+- **The sound** (`src/audio/bass.ts`, both engines; `playBassNote()`): saw (or square at 0.6,
+  for its loudness) + sine at half the pitch × Sub × 0.9 → a `BiquadFilter` low-pass (Q
+  0.7–14.7 from Reso, `bassQ()`), its envelope an offset in cents on `detune` (time constant
+  Decay / 4, kept under 18 kHz) → the level's envelope (3 ms attack, held while the note is
+  tied or slid, then a decay with time constant Decay / 3, ending at hold + 1.6 × Decay) → a
+  cut gain → the drive, as the synth lane's notes (so the delay, reverb and lo-fi pedal too).
+  At full velocity the peak is 0.5 × the machine's level. **Accent** (`accent`, 0–1): up to
+  +6 dB, the filter's envelope up to 2 octaves further and up to twice as short
+  (`bassNoteShape()`). **Slide time** (10–400 ms): each glide is a `setTargetAtTime` on both
+  oscillators' frequency, time constant a third of it.
+- **One note at a time**: each engine keeps the note sounding; a new one cuts it (`cut()`: its
+  own gain down in 5 ms, the oscillators stopped), as a single-voice synth retriggers. MIDI
+  notes play Bass while Bass is chosen (unless it's muted), cutting the same way.
+- **What the steps play** (`bassPlan()`, pure, unit-tested): per step, the note that starts
+  there or null. **Tie** holds a note through the next step whether or not it's on (the next
+  step doesn't play); **Slide** glides into the next step's note if it's on (it doesn't start
+  again: no new envelope, as on a 303); both on a step: Tie. They chain, round the bar's end;
+  a bar tied all the way round starts on its first step that's on. A held note holds until
+  its last step starts, then decays (`bassNoteFromHit()`; `stepOffset()` counts swing).
+  Live, `schedule()` plays the note that starts on each step (the plan of the lane as it is
+  then); the export, `bassNotesForBar()` per bar (with the chain, each bar's pattern; a note
+  carried round the bar's end uses its own bar's pattern).
+- **Settings** (`src/lib/machines/bass.ts`, like `rhythm.ts`): `createBass()` (refs:
+  `wave`, `sub`, `cutoff` 40–4000 Hz, `resonance`, `envAmount` 0–5 octaves, `decayMs` 30–2000,
+  `accent`, `slideMs`; `BASS_DEFAULTS`: saw, 50 %, 320 Hz, 55 %, +3, 260 ms, 60 %, 60 ms),
+  `bassVoice()` (the plain voice), and the lane, `createBassLane()` (reactive: `steps`,
+  `velocities`, `pitches` in Hz, `accents`, `slides`, `ties`, `muted`, `level` 0.6). The
+  pads' range is 30–250 Hz (`BASS_MIN_HZ`, `BASS_MAX_HZ`); an untouched pad is the key's root
+  two octaves under the pads' (A1, 55 Hz: `bassDefaultHz()` in `snapshot.ts`). The lane is
+  the current slot's Bass track as it's being edited, as the synth lane is Rhythm's.
+- **Saved** as the snapshot's `bass` { sound, muted, level, lane }, and in each pattern slot
+  as a track `{ machine: 'bass', steps, velocities, pitches, accents, slides, ties }` beside
+  the Rhythm one (`BASS_FIELDS`, `bassOf()`, `loadBassIntoLane()` in `slots.ts`; a slot
+  switch, Copy and the chain carry it). A project from before has none: an empty lane and the
+  factory sound; File → New the same. An empty Bass track compares the same as none
+  (`comparableProject()`), so picking a slot from before Bass isn't an edit. A key or scale
+  picked moves Bass's pitches too, in every slot, within its range. Share links include it.
+- **The pads** (`BassPads.vue`): SynthStepGrid (pitches × 4 for the pads' colours: Bass's
+  30–250 Hz would all be blue; its waves drawn as the bass's wave), the slide drawn under the
+  notes' names as an arc rising or falling to the next note and a tie as a bar, then three
+  rows of toggles (caps with an LED, `Accent on step 3`...), dimmed on a step that's off and
+  not carried into. A step's Slide and Tie are one or the other. Two rows of 8 under 640 px,
+  without the arcs. A pad's ⋮ opens the pad settings with only the note (`bassPad`,
+  `BASS_MIN_HZ`–`BASS_MAX_HZ`; a key previews it while stopped). The ⋯ menu's Reset Pads
+  resets the chosen machine's (Bass: every step off, A1, no accent, slide or tie); no Repeats
+  brush or Clear Repeats for Bass. The header says "Step Sequencer · Bass" (or · Rhythm), its
+  dot mutes the chosen machine.
+- **The Sound section** (`BassSound.vue`, `data-bass` on `.ds-sound`): Saw | Square tiles
+  (`role="radio"`, "Bass wave") and Sub in a column, one big screen (`src/lib/bassView.ts`,
+  unit-tested: a note of the sound worked out at a low rate, a state-variable filter
+  oversampled 16 times, on the lane's first note or the key's root; its level's envelope
+  dashed; the cutoff's fall in pink), and a card of knobs, **Filter** (Cutoff, Reso, Env) and
+  **Note** (Decay, Accent, Slide), each with its value under it, beside the Effects card (the
+  pedals are everyone's). Rhythm's three rows are hidden (CSS). Under 1200 px the knobs take
+  the row (the pedals are on the Effects tab); one column under 720 px. Kept mounted
+  (`v-show`) so MIDI learn sees its seven knobs (`bass.*`; 43 learnable knobs with the rail's
+  `bass.level`). The screen takes no drag yet.
+- **Not yet** (parts 2 and 3 of item 4): the presets boxes, Pattern Tools, the Melody Maker's
+  Generate and the hit behind the Envelope card are still Rhythm's while Bass is chosen; the
+  rail's mixer (an LED meter per machine, Pedals: how much goes through the pedals), a stem
+  per machine and Bass in the MIDI file; the phone (option P).
+- Unit tests: `bass.test.ts` (the plan, timing, the note's shape), `bassView.test.ts`,
+  `slots.test.ts` (the Bass track). Browser tests: the rail picks Bass, its pads and toggles,
+  saved, undo; Bass alone in the export at its pitch, live, a slide that doesn't start again,
+  muted from the rail; slots and a project from before.
 
 ### Patterns A–D
 - PR 109 (the plan's item 2, part 1 of about three; the slots of option A of PR 108's
@@ -1187,7 +1272,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### MIDI learn
 - A controller's knobs turn the app's knobs. Learn (in the MIDI toolbar, once an input is
-  chosen) starts learn mode: the 35 learnable knobs (31 after PR 77 made Unison's Voices keys, 33 with the tape pedal's two, 32 since PR 92 hid the Step Sequencer's Vol, 33 again with the sample's Length, PR 100, 34 with the reverb's PRE, PR 103, 35 with the rail's Rhythm level, PR 108, which is `synth.volume` again; the reverb's DECAY knob is SWELL while REV is on, PR 105) get a dashed outline and a badge ("CC 21",
+  chosen) starts learn mode: the 43 learnable knobs (Bass's eight since PR 115; 31 after PR 77 made Unison's Voices keys, 33 with the tape pedal's two, 32 since PR 92 hid the Step Sequencer's Vol, 33 again with the sample's Length, PR 100, 34 with the reverb's PRE, PR 103, 35 with the rail's Rhythm level, PR 108, which is `synth.volume` again; the reverb's DECAY knob is SWELL while REV is on, PR 105) get a dashed outline and a badge ("CC 21",
   or "CC 7 ch 3" off channel 1) for the controller knob they follow, and a bar at the bottom of
   the screen says what to do (with Clear all and Done; a spacer under the page lets the last
   knobs scroll clear of it). Click a knob (or Enter on it) to arm it, then turn a controller
@@ -2203,14 +2288,17 @@ into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 
 Grow into a small groovebox:
 
-4. **The Bass machine**, and the layout for machines: the rail beside the pads (each machine's
-    name, mute, level and a tiny row of its steps; there since PR 108 with Rhythm's row only, see
-    "The machine rail": Bass adds a row, and a click on a row picks the machine); the pads show the chosen machine; the Sound
-    section becomes the chosen machine's panel; a send to the pedals per machine; a stem per
-    machine in the export. Bass: one note at a time, 30–250 Hz, saw or square with a sub, one
-    filter with its envelope, Accent per step, about six knobs (Cutoff, Reso, Env, Decay, Sub,
-    Drive), following the key. Decide Slide and Tie (a Maybe below) when it starts. Mockups
-    first; the phone gets a way to choose the machine.
+4. **The Bass machine**, and the layout for machines (mockups done: K on the desktop, P on the
+    phone; part 1 was PR 115, see "The Bass machine"). Left:
+    - **Part 2: the mixer and the rest of the desktop.** In the rail, per machine: an 8-LED level
+      meter and **Pedals** (how much of it goes through the pedals: Rhythm at full is today's
+      sound); a stem per machine in the export, and Bass in the MIDI file (its own channel); the
+      Sounds and Patterns boxes become Bass's while Bass is chosen (six bass sounds, six bass
+      patterns, their dice); Pattern Tools and the Melody Maker's Generate on the chosen machine.
+    - **Part 3: the phone** (option P): RHY | BASS keys in the top bar (the tabs shortened to
+      their first letters at 568 px), Bass's pads with ACC, ⤳ and ═ marks, its hold sheet
+      (notes, velocity, Accent, Slide, Tie), its four macros (Cutoff, Reso, Env, Decay), and its
+      Sound page with a Mix group (Level, Pedals, the meter).
 5. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
     Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
     drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
@@ -2528,6 +2616,7 @@ Done:
 | 112 | One function builds a note (the plan's item 3, part 1; nothing to see or hear): `playNote()` in `src/audio/note.ts`, called by the live engine and the export engine, which each had their own copy kept in step by hand. The live engine hands it the settings as a plain object (`voiceNow()`), the export its state's `synth`. With the envelope switched off, the export's attack follows Attack as live (it was 10 ms). Exports from `main` and this PR matched for the presets, dice rolls and everything on. |
 | 113 | The Rhythm machine's settings moved out of `DrumSequencer.vue` (the plan's item 3, part 2; nothing to see or hear): `createRhythm()` in `src/lib/machines/rhythm.ts` makes the synth lane's sound settings from one table of factory values (`RHYTHM_DEFAULTS`, which File → New and the presets put back), and `rhythmVoice()` gives the voice `note.ts` plays to both the live engine and the export. Until then each setting was declared on its own in `DrumSequencer.vue` and its factory value written again in `snapshot.ts`. |
 | 114 | A gentle limiter on the output (the plan's item 3, part 3, which finishes the groundwork for the machines): a brickwall at −1 dBFS after the Volume knob, with a 1.5 ms look-ahead and a 100 ms release (`src/audio/limiter.ts`); an AudioWorklet live, the same code on the export's mix, whose gains go onto every stem so they still add up. Below the ceiling it does nothing, so today's sounds play and export bit for bit as before. |
+| 115 | The Bass machine, part 1 (the plan's item 4; option K of four rounds of mockups, the phone's P for part 3): a second machine, its row in the rail (a click shows it on the pads and in Sound; its LED mutes it; its level). One note at a time, saw or square with a sub, a resonant low-pass with its envelope, per step Accent, Slide (glides into the next note, which doesn't start again) and Tie (holds through the next step), in both engines (`src/audio/bass.ts`); its pads with Accent, Slide and Tie rows (`BassPads.vue`), its Sound section (Saw \| Square and Sub, a big screen of a note, Filter and Note knobs beside the pedals, `BassSound.vue`); saved with the project and in each pattern slot (older projects: empty), following the key, MIDI-learnable, played by MIDI keys while chosen. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

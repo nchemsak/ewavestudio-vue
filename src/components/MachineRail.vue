@@ -23,18 +23,27 @@
             </div>
         </div>
 
+        <!-- A click on a row (its name or its steps) picks the machine the pads and the Sound section show -->
         <div class="mr-rows" role="list">
-            <div class="mr-row is-chosen" role="listitem">
-                <button type="button" class="mr-led" :class="{ lit: !muted }" role="switch" :aria-checked="!muted"
-                    :aria-label="`${name} on`" :title="muted ? `${name} is muted: click to hear it` : `Mute ${name}`"
-                    @click="emit('toggle-mute')"></button>
-                <span class="mr-name">{{ name }}</span>
+            <div v-for="m in rows" :key="m.id" class="mr-row" :class="{ 'is-chosen': m.id === chosen }" role="listitem"
+                @click="onRowClick(m.id, $event)">
+                <button type="button" class="mr-led" :class="{ lit: !m.muted }" role="switch" :aria-checked="!m.muted"
+                    :aria-label="`${m.name} on`" :title="m.muted ? `${m.name} is muted: click to hear it` : `Mute ${m.name}`"
+                    @click="emit('toggle-mute', m.id)"></button>
+                <button type="button" class="mr-name" :aria-pressed="m.id === chosen ? 'true' : 'false'"
+                    :aria-label="`Show ${m.name}`" :title="m.id === chosen ? `The pads and Sound show ${m.name}` : `Show ${m.name} on the pads and in Sound`"
+                    @click="emit('choose', m.id)">{{ m.name }}</button>
                 <div class="mr-level">
-                    <Knob midi-id="synth.volume" v-model="levelModel" :label="`${name} level`" hideLabel size="mini"
-                        :value-text="`${Math.round(level * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
+                    <!-- One knob per machine in the source: MIDI learn's ids must each be on one knob -->
+                    <Knob v-if="m.id === 'rhythm'" midi-id="synth.volume" :modelValue="m.level" @update:modelValue="(v: number) => emit('update:level', m.id, v)"
+                        :label="`${m.name} level`" hideLabel size="mini"
+                        :value-text="`${Math.round(m.level * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
+                    <Knob v-else midi-id="bass.level" :modelValue="m.level" @update:modelValue="(v: number) => emit('update:level', m.id, v)"
+                        :label="`${m.name} level`" hideLabel size="mini"
+                        :value-text="`${Math.round(m.level * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
                 <div class="mr-cells" aria-hidden="true">
-                    <i v-for="(c, i) in cells" :key="i" :style="c.style"
+                    <i v-for="(c, i) in m.cells" :key="i" :style="c.style"
                         :class="{ on: c.on, beat: i % 4 === 0, now: playing && i === currentStep }"></i>
                 </div>
             </div>
@@ -71,16 +80,20 @@ import Knob from './Knob.vue';
 import { padHue } from '../lib/padColour';
 import { startScope, startSpectrogram } from './monitorViews';
 
+export type RailMachine = {
+    id: string; name: string;
+    steps: boolean[]; pitches: number[]; velocities: number[]; hueScale?: number;
+    muted: boolean; level: number;
+};
+
 const props = defineProps<{
     analyser: AnalyserNode;
     sampleRate: number;
     active: () => boolean;  // whether anything sounds (the screens rest otherwise)
-    name: string;
-    steps: boolean[];
-    pitches: number[];
-    velocities: number[];
-    muted: boolean;
-    level: number;          // the lane's channelVolume
+    // One row per machine: its steps, their pitches (in the pads' colours: Bass's are drawn two
+    // octaves up, `hueScale` 4), mute and level
+    machines: RailMachine[];
+    chosen: string;         // the machine the pads and Sound show
     currentStep: number;
     playing: boolean;
     slots: { name: string; filled: boolean }[]; // patterns A–D
@@ -93,8 +106,9 @@ const props = defineProps<{
     chainPlaying: number;       // the cell playing, −1 for none
 }>();
 const emit = defineEmits<{
-    (e: 'toggle-mute'): void;
-    (e: 'update:level', v: number): void;
+    (e: 'toggle-mute', id: string): void;
+    (e: 'update:level', id: string, v: number): void;
+    (e: 'choose', id: string): void;
     (e: 'choose-slot', index: number, now: boolean): void;
     (e: 'update:copyArmed', v: boolean): void;
     (e: 'chain-cell', index: number, back: boolean): void;
@@ -125,13 +139,20 @@ function listen(on: boolean) {
 watch(() => props.copyArmed, (on) => listen(on));
 onBeforeUnmount(() => listen(false));
 
-const levelModel = computed({ get: () => props.level, set: (v: number) => emit('update:level', v) });
-
 // Each step: off, or its pad's colour (the note), brighter when louder (the velocity)
-const cells = computed(() => props.steps.map((on, i) => ({
-    on,
-    style: on ? { background: `hsl(${padHue(props.pitches[i] || 220)} 80% ${38 + 24 * (props.velocities[i] ?? 1)}%)` } : undefined,
+const rows = computed(() => props.machines.map((m) => ({
+    ...m,
+    cells: m.steps.map((on, i) => ({
+        on,
+        style: on ? { background: `hsl(${padHue((m.pitches[i] || 220) * (m.hueScale ?? 1))} 80% ${38 + 24 * (m.velocities[i] ?? 1)}%)` } : undefined,
+    })),
 })));
+
+// A click on the row's steps picks it too (the LED, the name and the knob do their own)
+function onRowClick(id: string, e: MouseEvent) {
+    if ((e.target as HTMLElement).closest('.mr-led, .mr-name, .mr-level')) return;
+    emit('choose', id);
+}
 
 const scopeEl = ref<HTMLCanvasElement | null>(null);
 const specEl = ref<HTMLCanvasElement | null>(null);
@@ -256,9 +277,28 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
 }
 
 .mr-name {
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
     font: 700 12px Cousine, ui-monospace, monospace;
     letter-spacing: 0.04em;
     color: var(--pt-text, #e8e2ff);
+    opacity: 0.7;
+}
+
+.mr-row.is-chosen .mr-name {
+    opacity: 1;
+}
+
+.mr-name:focus-visible {
+    outline: 2px solid var(--pt-accent, #ff4fd8);
+    outline-offset: 2px;
+}
+
+.mr-row:not(.is-chosen) {
+    cursor: pointer;
 }
 
 .mr-level {
