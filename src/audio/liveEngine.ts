@@ -22,6 +22,8 @@ import { prepareVoiceWave, type Wave, type PadWave } from './waves';
 import { sampleBuffer, SAMPLE_WAVE } from './sample';
 import { playNote } from './note';
 import { rhythmVoice, type RhythmSettings } from '../lib/machines/rhythm';
+import { bassVoice, type BassLane, type BassSettings } from '../lib/machines/bass';
+import { bassNoteFromHit, bassPlan, playBassNote, type BassNote, type BassSounding } from './bass';
 import { lfoWaveAt } from './lfo';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
@@ -69,6 +71,8 @@ export type LiveEngineSettings = {
 	};
 	// The synth lane's sound: the Rhythm machine's settings (src/lib/machines/rhythm.ts)
 	rhythm: RhythmSettings;
+	// The Bass machine (src/lib/machines/bass.ts): its sound and its lane (missing: none)
+	bass?: { sound: BassSettings; lane: BassLane };
 	delay: {
 		enabled: R<boolean>;
 		time: R<number>;
@@ -827,6 +831,30 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// Synth voice END
 
+	// Bass voice START
+	// One note at a time (src/audio/bass.ts): a new note cuts the one sounding, as a single-voice
+	// synth retriggers. Through the drive, delay, reverb and tape, as the synth lane's notes.
+	let bassSounding: BassSounding | null = null;
+
+	function playBass(note: BassNote) {
+		if (!s.bass) return;
+		lastNoteAt = performance.now();
+		bassSounding?.cut(note.time);
+		bassSounding = playBassNote(bassVoice(s.bass.sound), note, {
+			ctx: audioCtx,
+			out: driveEnabled.value ? [driveDry, driveShaper] : [driveSum],
+		});
+		if (s.tape.enabled.value && !isPlaying.value) holdTapeNoise(note.time, bassSounding.end);
+	}
+
+	// A Bass note now (a MIDI key, a preview): `amp` its loudness, before the machine's level
+	function playBassNow(freq: number, amp: number, startTime = audioCtx.currentTime + 0.003) {
+		if (!s.bass) return;
+		playBass({ freq, amp: Math.min(1, amp * s.bass.lane.level), time: startTime });
+	}
+
+	// Bass voice END
+
 	// Samples START (only the hidden drum lanes use these)
 
 	function playBuffer(buffer: AudioBuffer, time: number, amp = 1) {
@@ -941,6 +969,17 @@ export function useLiveEngine(s: LiveEngineSettings) {
 				}
 			});
 
+			// The Bass machine: the note that starts on this step, if any (a tied or slid step
+			// is part of the note before it)
+			const bl = s.bass?.lane;
+			if (bl && !bl.muted && bl.steps[stepIndex]) {
+				const hit = bassPlan(bl, stepLength.value)[stepIndex];
+				if (hit && hit.vel > 0) {
+					const t = startTime + (stepIndex % 2 === 1 ? stepDuration * swing.value : 0);
+					playBass(bassNoteFromHit(hit, t, stepDuration, swing.value, bl.level));
+				}
+			}
+
 			currentStep.value = stepIndex;
 			stepIndex = (stepIndex + 1) % stepLength.value;
 			startTime += stepDuration;
@@ -982,6 +1021,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		isPlaying,
 		currentStep,
 		playSynthNote,
+		playBassNow,
 		startLfoIfNeeded,
 		lfoNow,
 		soundingRecently,

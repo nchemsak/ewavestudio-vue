@@ -229,8 +229,8 @@ async function setTempo(page: Page, bpm: number) {
 test('loads as version 2 with the synth lane and the machine rail', async ({ page }) => {
 	await expect(page).toHaveTitle('Ephemeral Wave Synth 2');
 	await expect(rail(page)).toBeVisible();
-	await expect(rail(page).locator('.mr-row')).toHaveCount(1);
-	await expect(rail(page).locator('.mr-name')).toHaveText('Rhythm');
+	await expect(rail(page).locator('.mr-row')).toHaveCount(2); // Rhythm and Bass (PR 115)
+	await expect(rail(page).locator('.mr-name')).toHaveText(['Rhythm', 'Bass']);
 	await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
 });
 
@@ -313,7 +313,7 @@ test('the machine rail: its screens draw while something plays, and Rhythm mutes
 	await turnOnPads(page, [0, 4, 8, 12]);
 	await expect(rail(page).locator('.mr-cells i.on')).toHaveCount(4);
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
-	await expect(rail(page).locator('.mr-cells i.now')).toHaveCount(1);
+	await expect(rail(page).locator('.mr-cells i.now')).toHaveCount(2); // one per row
 	await page.waitForTimeout(1500);
 	expect(await painted(spec), 'the spectrogram draws the notes').toBeGreaterThan(0.005);
 	expect(await painted(scope), 'the scope draws the wave').toBeGreaterThan(0.002);
@@ -4744,7 +4744,7 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 	await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
 	await openSettings(page);
 	await expect(learn).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(35);
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(43); // Bass's eight since PR 115
 	await cutoff.click();
 	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
 	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');
@@ -6632,3 +6632,120 @@ test('Move: labelled caps whose rows line up with Step Fills\'; the Melody Maker
 		expect(Math.abs((await scale.boundingBox())!.width - melodyW)).toBeLessThan(1);
 	}
 });
+
+// The Bass machine (the plan's item 4, part 1) START
+
+const railRow = (page: Page, name: string) => page.locator('.mr-row', { has: page.getByRole('button', { name: `Show ${name}` }) });
+
+test('the Bass machine: its rail row shows it on the pads and in Sound, with Accent, Slide and Tie; saved, one undo step each', async ({ page }) => {
+	await expect(page.getByRole('button', { name: 'Show Bass' })).toHaveAttribute('aria-pressed', 'false');
+	await page.getByRole('button', { name: 'Show Bass' }).click();
+	await expect(page.getByRole('button', { name: 'Show Bass' })).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('.step-card .ds-which')).toHaveText(' · Bass');
+	await expect(page.getByRole('radiogroup', { name: 'Bass wave' })).toBeVisible();
+	await expect(page.getByRole('slider', { name: 'Cutoff', exact: true }).first()).toBeVisible();
+	await expect(page.getByRole('group', { name: 'Repeats brush' })).toHaveCount(0);
+	await page.waitForTimeout(SETTLED);
+
+	await turnOnPads(page, [0, 1, 4]);
+	// Rhythm's pads stayed as they were; the rail's Bass row shows the steps
+	await expect(railRow(page, 'Bass').locator('.mr-cells i.on')).toHaveCount(3);
+	await expect(railRow(page, 'Rhythm').locator('.mr-cells i.on')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Accent on step 1', exact: true }).click();
+	await page.getByRole('button', { name: 'Slide on step 1', exact: true }).click();
+	await expect(page.locator('.bp-link.slide')).toHaveCount(1);
+	// Tie on the same step takes Slide's place
+	await page.getByRole('button', { name: 'Tie on step 1', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Slide on step 1', exact: true })).toHaveAttribute('aria-pressed', 'false');
+	await expect(page.locator('.bp-link.tie')).toHaveCount(1);
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('radio', { name: 'Square', exact: true }).click();
+	await page.waitForTimeout(SETTLED);
+
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(saved.bass.lane.steps.slice(0, 5)).toEqual([true, true, false, false, true]);
+	expect(saved.bass.lane.accents[0]).toBe(true);
+	expect(saved.bass.lane.ties[0]).toBe(true);
+	expect(saved.bass.lane.slides[0]).toBe(false);
+	expect(saved.bass.lane.pitches[0]).toBeCloseTo(55);
+	expect(saved.bass.sound.wave).toBe('square');
+	expect(saved.patterns.slots[0].tracks.map((t: any) => t.machine)).toEqual(['rhythm', 'bass']);
+
+	// One undo step each: the wave, then the tie
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(page.getByRole('radio', { name: 'Saw', exact: true })).toHaveAttribute('aria-checked', 'true');
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Tie on step 1', exact: true })).toHaveAttribute('aria-pressed', 'false');
+
+	// Back to Rhythm: its pads and Sound section
+	await page.getByRole('button', { name: 'Show Rhythm' }).click();
+	await expect(page.getByRole('radiogroup', { name: 'Bass wave' })).toBeHidden();
+	await expect(page.getByRole('radiogroup', { name: 'Waveforms' })).toBeVisible();
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(0);
+});
+
+test('the Bass machine plays: live (muted from the rail), in the export at its pitch, a slide gliding without starting again', async ({ page }) => {
+	await setTempo(page, 80); // a step is 0.1875 s
+	// Bass alone: steps 1 and 3 on, A1 then A2, step 1's Slide doing nothing (step 2 is off); a
+	// sound that holds its pitch (no sub, the filter's envelope off)
+	await importChanged(page, 'Bass alone', (d) => {
+		const n = 16, on = [0, 2];
+		d.bass = {
+			sound: { wave: 'saw', sub: 0, cutoff: 300, resonance: 0, envAmount: 0, decayMs: 2000, accent: 0.6, slideMs: 30 },
+			muted: false, level: 0.8,
+			lane: {
+				steps: Array.from({ length: n }, (_, i) => on.includes(i)), velocities: Array(n).fill(1),
+				pitches: Array.from({ length: n }, (_, i) => (i === 2 ? 110 : 55)),
+				accents: Array(n).fill(false), slides: Array.from({ length: n }, (_, i) => i === 0), ties: Array(n).fill(false),
+			},
+		};
+	});
+	const bytes = await exportWav(page);
+	expect(wavPeak(bytes)).toBeGreaterThan(0.05);
+	expect(wavPitchHz(bytes, 0.05, 0.3)).toBeGreaterThan(50);
+	expect(wavPitchHz(bytes, 0.05, 0.3)).toBeLessThan(60);
+	expect(wavPitchHz(bytes, 0.45, 0.7)).toBeGreaterThan(100);
+	expect(wavPitchHz(bytes, 0.45, 0.7)).toBeLessThan(120);
+
+	// Now step 2 on too, step 1 sliding into it: one note gliding A1 → A1 (its own pitch), then
+	// step 3; live, two notes a bar (two oscillators each), not three
+	await page.getByRole('button', { name: 'Show Bass' }).click();
+	await pads(page).nth(1).click();
+	await page.getByRole('button', { name: 'Slide on step 2', exact: true }).click();
+	const playAt = await page.evaluate(() => (window as any).__ctx.currentTime as number);
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	const peak = await page.evaluate(() => (window as any).__peakOver(1200) as Promise<number>);
+	expect(peak).toBeGreaterThan(0.02);
+	// Steps 1, 2 and 3 slide into one note: every oscillator started this bar starts on step 1
+	// (without the slides, step 3 would start one 0.375 s later)
+	const whens = await page.evaluate((t0) => (window as any).__starts
+		.filter((s: any) => s.osc && s.when >= t0 - 0.01).map((s: any) => s.when as number), playAt);
+	expect(whens.length).toBeGreaterThan(0);
+	expect(Math.max(...whens) - Math.min(...whens)).toBeLessThan(0.01);
+	// The rail's LED mutes it
+	await railRow(page, 'Bass').getByRole('switch', { name: 'Bass on' }).click();
+	await page.waitForTimeout(3200); // the held note dies away
+	const after = await page.evaluate(() => (window as any).__swingOver(800) as Promise<number>); // the drive's steady offset aside
+	expect(after).toBeLessThan(0.002);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+});
+
+test('the Bass machine: a project from before it opens with an empty Bass lane; File → New empties it; slots keep their own', async ({ page }) => {
+	await page.getByRole('button', { name: 'Show Bass' }).click();
+	await turnOnPads(page, [0, 5]);
+	// Pattern B: Bass empty; back to A: its two steps
+	await page.getByRole('button', { name: 'Pattern B' }).click();
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(0);
+	await pads(page).nth(3).click();
+	await page.getByRole('button', { name: 'Pattern A' }).click();
+	await expect(railRow(page, 'Bass').locator('.mr-cells i.on')).toHaveCount(2);
+	await page.getByRole('button', { name: 'Pattern B' }).click();
+	await expect(railRow(page, 'Bass').locator('.mr-cells i.on')).toHaveCount(1);
+
+	await importChanged(page, 'Before Bass', (d) => { delete d.bass; d.patterns.slots = d.patterns.slots.map((s: any) => s && { tracks: s.tracks.filter((t: any) => t.machine === 'rhythm') }); });
+	await expect(railRow(page, 'Bass').locator('.mr-cells i.on')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Pattern A' }).click();
+	await expect(railRow(page, 'Bass').locator('.mr-cells i.on')).toHaveCount(0);
+});
+
+// The Bass machine END

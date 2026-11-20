@@ -31,7 +31,9 @@ import { clampTapeMode, TAPE_DEFAULTS, type TapeMode } from '../../audio/tape';
 import { clampSampleLength, sampleFrom, SAMPLE_LENGTH_DEFAULT } from '../../audio/sample';
 import { DEFAULT_SWELL, isSwell } from '../../audio/reverb/reverse';
 import { DEFAULT_PRE_DIVISION, isPreDivision, preDelayMs, preDivisionForMs } from '../../audio/reverb/preDelay';
-import { chainFrom, emptyChain, emptySlots, slotFromLane, slotIndexFrom, slotsFrom, type Chain, type Slots } from '../patterns/slots';
+import { BASS_FIELDS, chainFrom, emptyChain, emptySlots, slotFromLane, slotIndexFrom, slotsFrom, type Chain, type Slots } from '../patterns/slots';
+import { applyBassSound, bassSoundSnapshot, BASS_LEVEL_DEFAULT, resetBassSound, type BassLane, type BassSettings } from '../machines/bass';
+import { BASS_MAX_HZ, BASS_MIN_HZ } from '../../audio/bass';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -113,6 +115,9 @@ export type ProjectState = {
 	// from the lane when another slot is picked and when a snapshot is built.
 	// The chain (PR 110): eight cells, each a slot or null, and whether playing follows it
 	patterns: { slots: Ref<Slots>; current: Ref<number>; chain: Ref<Chain>; chainOn: Ref<boolean> };
+	// The Bass machine (src/lib/machines/bass.ts): its sound, and its lane (the current slot's
+	// Bass track as it's being edited, with the machine's mute and level), reactive
+	bass: { sound: BassSettings; lane: BassLane };
 	melody: MelodyUi; // reactive
 	selectedWaveform: Ref<PadWave>;
 	// Resizes every lane's step arrays (and the noise mask) to the step count
@@ -380,10 +385,18 @@ export function buildSnapshot(st: ProjectState) {
 			slots: patternSlots.value.map((slot, idx) => {
 				if (idx !== currentSlot.value) return slot ? JSON.parse(JSON.stringify(slot)) : null;
 				const lane = instruments.value.find(i => i.name === 'synth-voice');
-				return lane ? slotFromLane(lane, currentDefaultHz.value) : null;
+				return lane ? slotFromLane(lane, currentDefaultHz.value, st.bass.lane) : null;
 			}),
 			chain: [...chain.value],
 			chainOn: chainOn.value,
+		},
+
+		// The Bass machine: its sound, mute and level, and its lane (the current slot's Bass track)
+		bass: {
+			sound: bassSoundSnapshot(st.bass.sound),
+			muted: st.bass.lane.muted,
+			level: st.bass.lane.level,
+			lane: Object.fromEntries(BASS_FIELDS.map((f) => [f, [...st.bass.lane[f]]])) as Record<(typeof BASS_FIELDS)[number], any[]>,
 		},
 
 		// melodyUi mirrors the Melody Maker panel, which reports every change through events
@@ -709,10 +722,22 @@ export function applySnapshot(st: ProjectState, s: any) {
 	}
 
 
+	// The Bass machine (the plan's item 4): a project saved before it has none (an empty lane,
+	// the factory sound)
+	const bassHz = bassDefaultHz(currentDefaultHz.value);
+	if (s.bass && typeof s.bass === 'object') {
+		applyBassSound(st.bass.sound, s.bass.sound);
+		if (typeof s.bass.muted === 'boolean') st.bass.lane.muted = s.bass.muted;
+		if (typeof s.bass.level === 'number' && Number.isFinite(s.bass.level)) st.bass.lane.level = Math.min(1, Math.max(0, s.bass.level));
+		applyBassLane(st.bass.lane, s.bass.lane, stepLength.value, bassHz);
+	} else if (Array.isArray(s.instruments) && s.instruments.length) {
+		resetBass(st, stepLength.value, bassHz);
+	}
+
 	// Patterns A–D (PR 109): a project saved before them has its pattern in A, B–D empty. The
 	// current slot's pattern is the lane's (above), as it always was.
 	if (s.patterns && typeof s.patterns === 'object') {
-		patternSlots.value = slotsFrom(s.patterns.slots, stepLength.value, currentDefaultHz.value);
+		patternSlots.value = slotsFrom(s.patterns.slots, stepLength.value, currentDefaultHz.value, bassHz);
 		currentSlot.value = slotIndexFrom(s.patterns.current);
 		// The chain (PR 110): a project from PR 109 has none
 		chain.value = chainFrom(s.patterns.chain);
@@ -725,6 +750,45 @@ export function applySnapshot(st: ProjectState, s: any) {
 	}
 
 	if (typeof s.selectedWaveform === 'string') selectedWaveform.value = s.selectedWaveform as any;
+}
+
+// The Bass lane's default note: the key's root two octaves under the pads' (A1, 55 Hz), in its range
+export function bassDefaultHz(padHz: number) {
+	let hz = padHz / 4;
+	while (hz > BASS_MAX_HZ) hz /= 2;
+	while (hz < BASS_MIN_HZ) hz *= 2;
+	return hz;
+}
+
+// A saved Bass lane into the lane, its lists fitted to n steps
+function applyBassLane(lane: BassLane, from: any, n: number, hz: number) {
+	if (!from || typeof from !== 'object') return;
+	const fit = <T,>(a: unknown, fill: T, each: (x: unknown) => T) => {
+		const arr = Array.isArray(a) ? a : [];
+		return Array.from({ length: n }, (_, i) => (i < arr.length ? each(arr[i]) : fill));
+	};
+	const num = (d: number, lo: number, hi: number) => (x: unknown) =>
+		(typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d);
+	lane.steps = fit(from.steps, false, (x) => x === true);
+	lane.velocities = fit(from.velocities, 1, num(1, 0, 1));
+	lane.pitches = fit(from.pitches, hz, num(hz, BASS_MIN_HZ / 2, BASS_MAX_HZ * 2));
+	lane.accents = fit(from.accents, false, (x) => x === true);
+	lane.slides = fit(from.slides, false, (x) => x === true);
+	lane.ties = fit(from.ties, false, (x) => x === true);
+}
+
+// The Bass machine back to File → New's: its sound, an empty lane, unmuted at its level
+function resetBass(st: ProjectState, n: number, hz: number) {
+	resetBassSound(st.bass.sound);
+	const lane = st.bass.lane;
+	lane.muted = false;
+	lane.level = BASS_LEVEL_DEFAULT;
+	lane.steps = Array(n).fill(false);
+	lane.velocities = Array(n).fill(1);
+	lane.pitches = Array(n).fill(hz);
+	lane.accents = Array(n).fill(false);
+	lane.slides = Array(n).fill(false);
+	lane.ties = Array(n).fill(false);
 }
 
 // Apply END
@@ -791,6 +855,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	currentSlot.value = 0;
 	chain.value = emptyChain();
 	chainOn.value = false;
+	resetBass(st, stepLength.value, bassDefaultHz(currentDefaultHz.value));
 
 	// remove custom channels
 	for (let idx = instruments.value.length - 1; idx >= 0; idx--) {

@@ -54,6 +54,15 @@ export const MIDI_KNOBS: Record<string, string> = {
 	'reverb.preDelay': 'Reverb pre-delay',
 	'tape.age': 'Lo-fi age',
 	'tape.wobble': 'Lo-fi wobble',
+	// The Bass machine (the plan's item 4): its level in the rail, and its Sound panel
+	'bass.level': 'Bass level',
+	'bass.sub': 'Bass sub',
+	'bass.cutoff': 'Bass cutoff',
+	'bass.resonance': 'Bass resonance',
+	'bass.envAmount': 'Bass env amount',
+	'bass.decay': 'Bass decay',
+	'bass.accent': 'Bass accent',
+	'bass.slide': 'Bass slide time',
 };
 
 export function ccKey(channel: number, controller: number): CcKey {

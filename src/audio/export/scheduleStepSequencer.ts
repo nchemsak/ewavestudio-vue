@@ -18,6 +18,7 @@ import { createCrusher } from "../crusher";
 import { createPingPong } from "../pingPong";
 import { createTape, tapeSettings, type TapeMode } from "../tape";
 import { sampleBuffer, type SampleData } from "../sample";
+import { bassNotesForBar, playBassNote, type BassPattern, type BassSounding, type BassVoice } from "../bass";
 
 export type StepPattern = {
 	active: boolean[];
@@ -53,6 +54,10 @@ export type StepSequencerState = {
 		noise: VoiceSettings['noise'] & { mask: boolean[] }; // per step: may it add noise?
 		sample?: SampleData | null; // the recorded sound, the 'sample' wave (sample.ts; missing: none)
 	};
+
+	// The Bass machine (src/audio/bass.ts; missing: none): its voice, level, and pattern, or one
+	// per bar with the chain (as barPatterns). Not in a one-shot.
+	bass?: { voice: BassVoice; level: number; pattern: BassPattern; barPatterns?: BassPattern[] };
 
 	fx: {
 		delay: {
@@ -512,6 +517,20 @@ export function scheduleStepSequencer(
 		lfo: lfoGainNode,
 		random,
 	};
+
+	// The Bass machine, as live: one note at a time, each cutting the one before
+	if (state.bass && !state.oneShot) {
+		const b = state.bass;
+		let sounding: BassSounding | null = null;
+		for (let bar = 0; bar < bars; bar++) {
+			const pat = b.barPatterns?.length ? b.barPatterns[bar % b.barPatterns.length] : b.pattern;
+			const barStart = ctx.currentTime + offsetSeconds + bar * state.stepsCount * stepDuration;
+			for (const note of bassNotesForBar(pat, state.stepsCount, barStart, stepDuration, clamp01(state.swing), clamp01(b.level))) {
+				sounding?.cut(note.time);
+				sounding = playBassNote(b.voice, note, { ctx, out: noteWiring.toneOut });
+			}
+		}
+	}
 
 	// The pattern, `bars` times over (with the chain, each bar its own pattern)
 	for (let bar = 0; bar < bars; bar++) {

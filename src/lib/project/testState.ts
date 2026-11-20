@@ -6,6 +6,7 @@ import { encodeSample } from '../../audio/sample';
 import { preDelayMs } from '../../audio/reverb/preDelay';
 import { emptyChain, emptyRhythm, emptySlots, type Chain, type Slots } from '../patterns/slots';
 import { ref, reactive, computed } from 'vue';
+import { createBass } from '../machines/bass';
 import {
 	buildSnapshot,
 	resetToFactoryDefaults,
@@ -86,6 +87,13 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 			tape: { enabled: ref(true), age: ref(0.9), wobble: ref(0.9), mode: ref<'tape' | 'vinyl'>('vinyl') },
 		},
 		instruments,
+		bass: {
+			sound: (() => { const b = createBass(); b.cutoff.value = 41; b.wave.value = 'square'; return b; })(),
+			lane: reactive({
+				muted: true, level: 0.1, steps: Array(STEPS).fill(true), velocities: Array(STEPS).fill(0.2),
+				pitches: Array(STEPS).fill(40), accents: Array(STEPS).fill(true), slides: Array(STEPS).fill(true), ties: Array(STEPS).fill(true),
+			}),
+		},
 		patterns: { slots: ref<Slots>(emptySlots()), current: ref(0), chain: ref<Chain>(emptyChain()), chainOn: ref(false) },
 		melody: reactive({
 			keyRoot: 'C', keyScale: 'major', rangePreset: 'wide', arpPattern: 'down', arpRate: '1/16',
@@ -155,6 +163,18 @@ export function changeEverything(st: ProjectState) {
 	synth.waveforms = synth.waveforms!.map((_, i) => (i % 2 ? 'triangle' : 'square'));
 	synth.ratchets = synth.ratchets!.map((_, i) => (i % 4) + 1);
 	synth.repeatNotes = synth.repeatNotes!.map((_, i) => ['same', 'up', 'down'][i % 3]);
+	// The Bass machine
+	const bs = st.bass.sound;
+	bs.wave.value = 'square'; bs.sub.value = 0.2; bs.cutoff.value = 900; bs.resonance.value = 0.9; bs.envAmount.value = 1.5;
+	bs.decayMs.value = 700; bs.accent.value = 0.3; bs.slideMs.value = 150;
+	const bl = st.bass.lane;
+	bl.muted = true; bl.level = 0.35;
+	bl.steps = bl.steps.map((_, i) => i % 3 === 0);
+	bl.velocities = bl.velocities.map((_, i) => 0.4 + i / 50);
+	bl.pitches = bl.pitches.map((_, i) => 50 + i);
+	bl.accents = bl.accents.map((_, i) => i % 5 === 0);
+	bl.slides = bl.slides.map((_, i) => i % 7 === 0);
+	bl.ties = bl.ties.map((_, i) => i === 9);
 	// Patterns A–D: C is playing (the lane above), B holds another pattern
 	st.patterns.current.value = 2;
 	const b = emptyRhythm(STEPS, 330);

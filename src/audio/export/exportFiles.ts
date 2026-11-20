@@ -123,7 +123,7 @@ export async function buildExportFiles(
 	// through; otherwise the pattern showing, o.bars times over
 	const chain = o.play === 'chain' && !!state.barPatterns?.length;
 	const bars = chain ? state.barPatterns!.length : o.bars;
-	state = chain ? state : { ...state, barPatterns: undefined };
+	state = chain ? state : { ...state, barPatterns: undefined, bass: state.bass && { ...state.bass, barPatterns: undefined } };
 	const names = exportNames({ project: meta.project, bpm: state.bpm, key: meta.key, bars, ending: o.ending, chain });
 	const loopFrames = barFrames(bars, state.bpm, sr);
 	const seconds = loopFrames / sr + state.tailSeconds;
