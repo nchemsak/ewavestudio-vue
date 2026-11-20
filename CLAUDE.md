@@ -11,7 +11,7 @@ envelope, noise, FM,
 unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a lo-fi pedal (wear, wobble, tape or vinyl); Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
 arpeggio in a key and scale; a new key or scale moves the pattern with it); four patterns per
-project (A–D, with Copy); a machine rail (a small scope and
+project (A–D, with Copy) and a chain that plays them in order; a machine rail (a small scope and
 spectrogram, and a row per machine: only Rhythm so far), the live spectrum behind the Filter card's
 curve, one hit of the sound behind the Envelope card's, and a tuner in the Melody Maker; six built-in sounds that set the sound (not the pattern) and six built-in patterns
 that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
@@ -251,8 +251,9 @@ src/lib/noise/accents.ts  The Noise card's Accents: noise on the pattern's loude
 src/lib/noise/masks.ts   The Noise card's Backbeat and Offbeats, and whether a mask is heard (pure)
 src/lib/patterns/velocityShapes.ts  Humanize's velocity shapes (Pattern Tools, the phone; pure)
 src/lib/patterns/move.ts  Pattern Tools' shift and reverse: which lists move, and where (pure)
-src/lib/patterns/slots.ts  Patterns A–D: what a slot holds, the lane ↔ a slot, loading saved
-                         slots (pure; see "Patterns A–D")
+src/lib/patterns/slots.ts  Patterns A–D and the chain: what a slot holds, the lane ↔ a slot,
+                         loading saved slots and chains, the chain's next cell, and a snapshot
+                         compared without the slot showing (pure; see "Patterns A–D")
 src/lib/tapTempo.ts      The TAP cap: four taps set the tempo (pure)
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
@@ -1056,15 +1057,43 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   current slot always matches its lane; `applySnapshot()` checks the slots (`slotsFrom()`: a
   damaged one is dropped, lists fitted to the bar) and takes the current one's pattern from the
   lane, as before. A project saved before PR 109 opens with its pattern in A and B–D empty;
-  File → New gives four empty slots and A. A slot change and a copy are one undo step each,
-  with the pads (the whole snapshot is the undo step). Share links include the slots.
-- Not on the phone yet (phone mode plays and edits the current slot; the desktop view has the
-  slots). At 390 px the rail, on top, is 38 px taller; from 720 px it's the size it was (its
-  screens give the room).
-- Analytics: `pattern_slot` (with `slot`), `pattern_copy` (`from`, `to`).
+  File → New gives four empty slots and A. A copy is one undo step. Share links include the
+  slots.
+- **Which slot is showing isn't an edit** (PR 110, for the chain, which switches slots every
+  bar): picking a slot makes no undo step and doesn't light the unsaved dot (PR 109 made it an
+  undo step). Undo and the dot compare `comparableProject()` (`slots.ts`): the snapshot without
+  `patterns.current`, without the synth lane's pattern fields (they're in the current slot
+  too), and with an empty pattern the same as a slot never used. A state that differs from the
+  undo history's current entry only in that overwrites the entry (`replaceCurrent`) instead of
+  adding one, so an undo still lands on the slot that was showing. The slot showing is still
+  saved with the next Save.
+- **The chain** (PR 110, part 2; the row of option A of PR 108's mockups): under the slots,
+  **Chain** (a toggle cap with an LED, `role="switch"`, disabled while every cell is empty) and
+  **eight cells** (`.mr-chain`, `.mr-cell`): a click steps a cell through — A B C D (Shift+click
+  the other way; `cycleCell()`), an empty cell dashed. While Chain is on and playing, each bar
+  plays the next filled cell's slot (`nextChainCell()`: empty cells skipped, round again after
+  the last), from the first cell on Play; `chainBar()` in `DrumSequencer.vue` switches the slot
+  from the engine's `onBarStart`, before the bar queue, as a slot clicked would at the bar. The
+  cell playing is outlined in the LEDs' colour (`.now`). Turned on while playing, it starts from
+  the first cell at the next bar. A slot picked by hand while it plays turns Chain off (and
+  waits for the bar as usual); stopped, a slot picked leaves it on (Play starts from the first
+  cell anyway). A cell changed and the switch are undo steps; the chain playing isn't (above).
+  Saved as `patterns.chain` (eight slot indexes or null, `chainFrom()`) and `patterns.chainOn`;
+  a project from PR 109 or before gets an empty chain, off; File → New too. Export audio and the
+  MIDI file still render the slot showing (the chain's export is part 3).
+- **Not on the phone, for now** (the maintainer's call after PR 109: later, once the chain and
+  its export are done; the saved slots and chain need no change for it). Phone mode plays and
+  edits the slot showing, and the chain plays while it's on.
+- The rail's screens may shrink to 32 px (44 until PR 110) and its gaps are 8 px (10), so with the
+  chain's row it's still as tall as the transport card at 1024 px; at 1600 px it's the size it
+  was; at 390 px, on top, it's 220 px (170 before PR 109).
+- Analytics: `pattern_slot` (with `slot`), `pattern_copy` (`from`, `to`), `pattern_chain` (`on`,
+  `cells`).
 - Browser tests: slots keep their own patterns, Copy, a key moving every slot, the project file,
   undo, import (and an older project), File → New; while playing, a slot waiting for the bar
-  (changing just before its step 1), Shift+click and Stop.
+  (changing just before its step 1), Shift+click and Stop; the chain (cells, the switch, playing
+  a bar each from the first cell, no unsaved dot while it plays, a slot picked by hand turning it
+  off, a cell as an undo step, saved, File → New).
 
 ### Pad and spectrogram colours
 - A lit pad's colour shows its note: blue for the lowest pad pitch (100 Hz) to red for the
@@ -1322,7 +1351,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   instead of lighting the key it emitted.
 - Stop applies what's waiting (`onPlayClick`). Undo, redo, opening a project and File → New
   throw it away (`cancelQueued()`). Clicking the key the pattern is in drops a waiting key.
-- **Pattern slots** (PR 109) wait too (kind `'slot'`, `queuedSlot`): see "Patterns A–D".
+- **Pattern slots** (PR 109) wait too (kind `'slot'`, `queuedSlot`), and the chain (PR 110)
+  switches slots at the same moment (`chainBar()`, just before `runQueued()`): see
+  "Patterns A–D".
 - Not waiting for the bar: a scale picked, Generate, Pattern Tools, patterns, sounds, Copy.
 - A browser test plays bars and checks the key changes just before the next bar's step 1 (not
   during the bar, no audition note), its ghost and caption, Shift+click, Undo and Stop, and
@@ -1473,7 +1504,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - 1–4 picked the big screen's view until PR 108, which removed the screen (see "The views").
 - Under 1200 px, the Sound / Effects / Compose tabs are one Tab stop: Left/Right (Home/End)
   move between them (`onTabKeydown` in `DrumSequencer.vue`).
-- Shift+click on a pattern slot (A–D): at once while playing too (PR 109).
+- Shift+click on a pattern slot (A–D): at once while playing too (PR 109). Shift+click on a
+  chain cell steps it back (D, C, B, A, empty; PR 110).
 - Shift+click on a Melody Maker key: at once, without waiting for the bar while playing (see
   "Changes at the bar"; the caption says so while a key waits).
 - Ctrl/Cmd+S: save; Ctrl/Cmd+Shift+S: Save as… (`ProjectControls.vue`). Escape closes menus and popovers, and ends MIDI
@@ -2104,9 +2136,9 @@ Grow into a small groovebox:
     slots, a chain of up to eight cells plays them in order, and Export audio can render the
     chain. No timeline. Saved so that a pattern is a list of tracks from the start, even with
     one track, and the machines need no second change to saved projects.
-    **Part 1 done in PR 109** (the slots, Copy, saving; see "Patterns A–D"). Next: the chain
-    (eight cells under the slots, played in order, saved with `patterns`), then Export audio
-    rendering the chain (and its MIDI file). Ask whether the phone should get the slots.
+    **Part 1 done in PR 109** (the slots, Copy, saving; see "Patterns A–D"), **part 2 in
+    PR 110** (the chain). Next, part 3: Export audio rendering the chain (and its MIDI file).
+    The phone gets the slots and the chain later (the maintainer's call after PR 109).
 3. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
     that builds a note, used by the live engine and the export engine (today two engines kept
     in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
@@ -2426,6 +2458,7 @@ Done:
 | 107 | The desktop view on a phone (the plan's first item after PR 106): held upright, the pads are two rows of 8, centred (they wrapped into 6, 6 and 4), and on a touch screen under 720 px the caps are at least 32 px tall and a pad's ⋮ 32 × 28 px; the shape screens let a finger scroll the page and only take a touch that starts on a grip (FM and Unison get a grip of their own on touch screens). Held sideways nothing changes but the screens' touch. |
 | 108 | The big screen spread around (the plan's item 1; option A of three mockups, the machine rail, with bigger screens until Bass arrives): the screen and its F-keys are gone; in its place the **machine rail**, a small scope over a small spectrogram (40 Hz–10 kHz, log) and a row for **Rhythm** (its LED mutes it, its level is the lane's volume, hidden since PR 92 and MIDI-learnable again, and its 16 steps in their colours); the live **spectrum** is drawn faintly behind the Filter card's curve, **one hit** of the sound behind the Envelope card's, and a **tuner** sits in the Melody Maker screen's corner. The views read a tap high-passed at 10 Hz (no more DC offset), and the spectrum and tuner a finer analyser (8192 points), so the spectrum's low end is drawn (it started with a wall between C1 and C2). Every card keeps its size. |
 | 109 | Patterns A–D (the plan's item 2, part 1): four pattern slots per project under the machine rail's Rhythm row (option A of PR 108's mockups), A B C D and Copy. A slot holds the steps, velocities, pitches and repeats; the sound, the pads' waves and the noise are shared. While playing, a slot waits for the next bar (a pulsing ghost; Shift+click: now; Stop applies it); Copy, then a slot, copies the current pattern into it. A key or scale picked moves every slot. Saved as `patterns` (a list of tracks per slot, so the machines need no second change); older projects open with their pattern in A; one undo step each (`src/lib/patterns/slots.ts`). |
+| 110 | The chain (the plan's item 2, part 2): under the slots, a Chain switch and eight cells, each stepping through — A B C D on a click (Shift+click back). While Chain is on, playing follows the filled cells a bar each, round again, from the first cell on Play; the cell playing is lit; a slot picked by hand while it plays turns it off. Which slot is showing is no longer an edit: picking one, or the chain playing, makes no undo step and no unsaved dot (`comparableProject()`). Saved as `patterns.chain` and `chainOn` (older projects: empty, off). The rail's screens shrink to 32 px so it's still as tall as the transport card at 1024 px. Also two browser tests made safe against races the Checks' machine found (after PR 109). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

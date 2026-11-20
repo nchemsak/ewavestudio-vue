@@ -5380,6 +5380,82 @@ test('Patterns A–D: while playing, a slot waits for the next bar (a ghost); Sh
 	expect(await onPads(page)).toEqual([8]);
 });
 
+const chainCell = (page: Page, n: number) => page.locator('.mr-chain').getByRole('button', { name: new RegExp(`^Chain cell ${n}:`) });
+
+test('the chain: cells step through the slots; playing follows them a bar each, without undo steps or the unsaved dot; a slot picked by hand stops it', async ({ page }) => {
+	// A: pad 1; B: pad 9
+	await turnOnPads(page, [0]);
+	await slotButton(page, 'B').click();
+	await turnOnPads(page, [8]);
+	await slotButton(page, 'A').click();
+
+	// Chain needs a filled cell
+	const chainSwitch = page.locator('.mr-chain').getByRole('switch', { name: 'Chain' });
+	await expect(chainSwitch).toBeDisabled();
+	// Cell 1: A (one click); cell 2: B (two); cell 3: D then back to C (Shift+click)
+	await chainCell(page, 1).click();
+	await chainCell(page, 2).click();
+	await chainCell(page, 2).click();
+	for (let i = 0; i < 4; i++) await chainCell(page, 3).click();
+	await chainCell(page, 3).click({ modifiers: ['Shift'] });
+	await expect(chainCell(page, 1)).toHaveAccessibleName('Chain cell 1: pattern A');
+	await expect(chainCell(page, 2)).toHaveAccessibleName('Chain cell 2: pattern B');
+	await expect(chainCell(page, 3)).toHaveAccessibleName('Chain cell 3: pattern C');
+	// C is empty: take it out again (C → D → empty)
+	await chainCell(page, 3).click();
+	await chainCell(page, 3).click();
+	await expect(chainCell(page, 3)).toHaveAccessibleName('Chain cell 3: empty');
+	await chainSwitch.click();
+	await expect(chainSwitch).toHaveAttribute('aria-checked', 'true');
+
+	// Saved, with the chain: the dot says saved, and nothing waits to be undone past this point
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.waitForTimeout(600);
+	await page.keyboard.press('Control+s');
+	await expect(page.locator('.pc-dot')).toHaveClass(/saved/);
+	await expect(page.locator('.pc-dot')).not.toHaveClass(/unsaved/);
+	const file = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	expect(file.data.patterns.chain).toEqual([0, 1, null, null, null, null, null, null]);
+	expect(file.data.patterns.chainOn).toBe(true);
+
+	// Play: bar 1 is cell 1 (A), bar 2 cell 2 (B), bar 3 cell 1 again
+	await slotButton(page, 'B').click(); // stopped: Play still starts from the first cell
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect(slotButton(page, 'A')).toHaveAttribute('aria-pressed', 'true');
+	await expect(chainCell(page, 1)).toHaveClass(/now/);
+	await expect(slotButton(page, 'B')).toHaveAttribute('aria-pressed', 'true', { timeout: 4000 });
+	await expect(chainCell(page, 2)).toHaveClass(/now/);
+	expect(await onPads(page)).toEqual([8]);
+	await expect(slotButton(page, 'A')).toHaveAttribute('aria-pressed', 'true', { timeout: 4000 });
+	await expect(chainCell(page, 1)).toHaveClass(/now/);
+	expect(await onPads(page)).toEqual([0]);
+	// The chain playing is no edit
+	await page.waitForTimeout(700);
+	await expect(page.locator('.pc-dot')).not.toHaveClass(/unsaved/);
+
+	// A slot picked by hand while it plays: Chain goes off, the slot waits for the bar as usual
+	await slotButton(page, 'B').click();
+	await expect(chainSwitch).toHaveAttribute('aria-checked', 'false');
+	await expect(slotButton(page, 'B')).toHaveAttribute('aria-pressed', 'true', { timeout: 4000 });
+	await expect(page.locator('.mr-cell.now')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+
+	// A chain cell is an undo step
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.waitForTimeout(600);
+	await chainCell(page, 5).click();
+	await expect(chainCell(page, 5)).toHaveAccessibleName('Chain cell 5: pattern A');
+	await page.waitForTimeout(600);
+	await page.keyboard.press('Control+z');
+	await expect(chainCell(page, 5)).toHaveAccessibleName('Chain cell 5: empty');
+
+	// File → New: an empty chain, off
+	await chooseFromFileMenu(page, 'New');
+	for (let n = 1; n <= 8; n++) await expect(chainCell(page, n)).toHaveAccessibleName(`Chain cell ${n}: empty`);
+	await expect(chainSwitch).toHaveAttribute('aria-checked', 'false');
+	await expect(chainSwitch).toBeDisabled();
+});
+
 test('Melody Maker: a new scale keeps each note on its degree; a project opening keeps its notes', async ({ page }) => {
 	const on = [0, 1, 2, 3, 4, 5, 6, 7];
 	await turnOnPads(page, on);

@@ -201,7 +201,9 @@
 				:velocities="synthInstrument.velocities" :muted="synthInstrument.muted" v-model:level="synthInstrument.channelVolume"
 				:currentStep="currentStep" :playing="isPlaying" @toggle-mute="toggleMute(synthInstrument.name)"
 				:slots="slotView" :currentSlot="currentSlot" :queuedSlot="queuedSlot" v-model:copyArmed="copyArmed"
-				@choose-slot="chooseSlot" />
+				@choose-slot="chooseSlot"
+				:chain="chain" :chainOn="chainOn" :chainUsable="chainUsable" :chainPlaying="chainPlaying"
+				@chain-cell="setChainCell" @toggle-chain="toggleChain" />
 
 			<!-- Transport: Volume, Tempo, Swing, then Sounds and Patterns side by side, then Play -->
 			<section class="pt-card transport-card ds-transport">
@@ -767,7 +769,7 @@ import { randomPreset } from '../lib/presets/random';
 import { PATTERNS } from '../lib/patterns/library';
 import { applyPattern, patternKey } from '../lib/patterns/patterns';
 import { moveList, MOVED_LANE_FIELDS, type MoveKind } from '../lib/patterns/move';
-import { emptySlots, loadIntoLane, mapSlotPitches, slotFromLane, slotHasSteps, SLOT_NAMES, type Slots } from '../lib/patterns/slots';
+import { chainCells, cycleCell, emptyChain, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, slotFromLane, slotHasSteps, SLOT_NAMES, type Chain, type Slots } from '../lib/patterns/slots';
 import { addTap, tapBpm } from '../lib/tapTempo';
 import { padHue, spectrumColour, spectrumHue } from '../lib/padColour';
 import { randomPattern } from '../lib/patterns/random';
@@ -1431,6 +1433,9 @@ const synthInstrument = computed(() => instruments.value.find(i => i.name === 's
 // is the current slot as it's being edited.
 const patternSlots = ref<Slots>(emptySlots());
 const currentSlot = ref(0);
+// The chain (saved; see PATTERN SLOTS): eight cells, each a slot or null, and whether it plays
+const chain = ref<Chain>(emptyChain());
+const chainOn = ref(false);
 const steps = computed<boolean[]>({
 	get: () => synthInstrument.value?.steps ?? [],
 	set: v => { if (synthInstrument.value) synthInstrument.value.steps = v; }
@@ -2258,7 +2263,7 @@ const projectState: ProjectState = {
 		tape: { enabled: tapeEnabled, age: tapeAge, wobble: tapeWobble, mode: tapeMode },
 	},
 	instruments,
-	patterns: { slots: patternSlots, current: currentSlot },
+	patterns: { slots: patternSlots, current: currentSlot, chain, chainOn },
 	melody: melodyUi,
 	selectedWaveform,
 	setStepLength,
@@ -2304,7 +2309,7 @@ const {
 	drive: projectState.fx.drive,
 	reverb: projectState.fx.reverb,
 	tape: projectState.fx.tape,
-	onBarStart: () => runQueued(),
+	onBarStart: () => { chainBar(); runQueued(); },
 });
 
 // What the views in the cards read (cardViews.ts): the fine analyser, while anything sounds
@@ -2957,6 +2962,8 @@ function switchToSlot(to: number) {
 
 function chooseSlot(to: number, now = false) {
 	if (copyArmed.value) { copySlotTo(to); return; }
+	// A slot picked by hand while the chain plays takes over: the chain stops following
+	if (chainOn.value && isPlaying.value) chainOn.value = false;
 	if (to === currentSlot.value) { cancelQueued('slot'); return; } // nothing to wait for
 	atNextBar('slot', String(to), () => switchToSlot(to), now);
 	trackEvent('pattern_slot', { slot: SLOT_NAMES[to] });
@@ -2980,6 +2987,40 @@ function copySlotTo(to: number) {
 // passed through f: a key or scale picked moves every pattern
 function mapOtherSlots(f: (pitches: number[]) => number[]) {
 	patternSlots.value = patternSlots.value.map((slot, i) => (i === currentSlot.value ? slot : mapSlotPitches(slot, f)));
+}
+// The chain (PR 110, part 2 of the plan's item 2): eight cells under the slots. While Chain is
+// on and a cell is filled, each bar plays the next filled cell's slot (round again after the
+// last), from the first cell on Play; the slot switches at the bar line, as a slot clicked does
+// (chainBar() from the engine's onBarStart, before the bar queue). A slot picked by hand while
+// it plays turns Chain off. A cell clicked steps through — A B C D (Shift+click: back); each
+// change is one undo step. The chain playing isn't an edit (comparableProject() in slots.ts).
+const chainCell = ref(-1); // the cell playing; −1 before the first bar
+const chainPlaying = computed(() => (isPlaying.value && chainOn.value ? chainCell.value : -1));
+const chainUsable = computed(() => chainCells(chain.value).length > 0);
+
+function chainBar() {
+	if (!chainOn.value) return;
+	const cell = nextChainCell(chain.value, chainCell.value);
+	if (cell == null) return;
+	chainCell.value = cell;
+	const slot = chain.value[cell]!;
+	cancelQueued('slot');
+	if (slot !== currentSlot.value) switchToSlot(slot);
+}
+watch(isPlaying, () => { chainCell.value = -1; }, { flush: 'sync' }); // before the engine builds the first bar
+
+function setChainCell(i: number, back: boolean) {
+	const next = [...chain.value];
+	next[i] = cycleCell(next[i], back);
+	chain.value = next;
+	if (!chainUsable.value) chainOn.value = false;
+}
+function toggleChain() {
+	if (!chainUsable.value) return;
+	chainOn.value = !chainOn.value;
+	if (chainOn.value) cancelQueued('slot');
+	chainCell.value = -1; // from the first cell: at the next bar while playing, or on Play
+	trackEvent('pattern_chain', { on: chainOn.value, cells: chainCells(chain.value).length });
 }
 // PATTERN SLOTS END
 

@@ -7,7 +7,9 @@
      rows, and patterns A–D (PR 109) and the chain (item 2) go under them, so the screens shrink
      to a strip as they come. A row will pick which machine the pads and the Sound section show.
      Patterns A–D: a cap per slot (the current one down, a slot waiting for the bar pulsing, an
-     empty slot's letter dim) and Copy (then a slot: it gets a copy of the current pattern). -->
+     empty slot's letter dim) and Copy (then a slot: it gets a copy of the current pattern).
+     The chain (PR 110) under them: a Chain toggle and eight cells, each a slot or empty (a click
+     steps it through — A B C D, Shift+click back); while it plays, the cell playing is lit. -->
 <template>
     <aside class="pt-card machine-rail" aria-label="Machines">
         <div class="mr-monitor">
@@ -48,6 +50,17 @@
                 :title="copyArmed ? 'Click a pattern to copy into it (Esc: cancel)' : `Copy pattern ${slots[currentSlot]?.name} into another`"
                 @click="emit('update:copyArmed', !copyArmed)">Copy</button>
         </div>
+        <div class="mr-chain" role="group" aria-label="Chain">
+            <button type="button" class="hw-cap hw-cap-sm hw-led-left mr-chain-on" :class="{ 'hw-down': chainOn }"
+                role="switch" :aria-checked="chainOn ? 'true' : 'false'" aria-label="Chain" :disabled="!chainUsable"
+                :title="!chainUsable ? 'Fill a cell to chain patterns' : chainOn ? 'Playing follows the chain: click to stop following it' : 'Play the cells in order, a bar each'"
+                @click="emit('toggle-chain')">Chain</button>
+            <button v-for="(c, i) in chain" :key="i" type="button" class="mr-cell"
+                :class="{ filled: c != null, now: i === chainPlaying }"
+                :aria-label="`Chain cell ${i + 1}: ${c == null ? 'empty' : `pattern ${slots[c]?.name}`}`"
+                :title="`Cell ${i + 1}: click for the next pattern, Shift+click for the one before`"
+                @click="emit('chain-cell', i, $event.shiftKey)">{{ c == null ? '' : slots[c]?.name }}</button>
+        </div>
         <p v-if="queuedSlot != null" class="visually-hidden" role="status">Pattern {{ slots[queuedSlot]?.name }} at the next bar</p>
     </aside>
 </template>
@@ -74,12 +87,18 @@ const props = defineProps<{
     currentSlot: number;
     queuedSlot: number | null;  // waiting for the bar
     copyArmed: boolean;
+    chain: (number | null)[];   // the chain's eight cells (PR 110)
+    chainOn: boolean;
+    chainUsable: boolean;       // a cell is filled
+    chainPlaying: number;       // the cell playing, −1 for none
 }>();
 const emit = defineEmits<{
     (e: 'toggle-mute'): void;
     (e: 'update:level', v: number): void;
     (e: 'choose-slot', index: number, now: boolean): void;
     (e: 'update:copyArmed', v: boolean): void;
+    (e: 'chain-cell', index: number, back: boolean): void;
+    (e: 'toggle-chain'): void;
 }>();
 
 function slotTitle(i: number) {
@@ -130,7 +149,7 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     --mr-ink: #c7d6ff;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px; /* 10 until PR 110 */
     padding: 12px;
     min-height: 0;
 }
@@ -157,7 +176,7 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
 .mr-screen {
     position: relative;
     flex: 1 1 0;
-    min-height: 44px;
+    min-height: 32px; /* 44 until PR 110: the chain's row takes the room beside the tablet's transport */
     border-radius: 6px;
     background: var(--mr-lcd-bg);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 2px 10px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(0, 0, 0, 0.45);
@@ -337,6 +356,61 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     box-shadow: inset 0 0 0 1px var(--hw-led, #7dffb0);
     animation: none;
     opacity: 0.7;
+}
+
+/* The chain (PR 110): Chain (a toggle) and eight cells */
+.mr-chain {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--pt-inset, rgba(0, 0, 0, 0.3));
+}
+
+.mr-chain-on {
+    height: 24px;
+    padding: 0 8px;
+    margin-right: 4px;
+    font: 700 10px Cousine, ui-monospace, monospace;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.mr-chain-on:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.mr-cell {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 24px;
+    padding: 0;
+    border: 1px dashed rgba(255, 255, 255, 0.22);
+    border-radius: 4px;
+    background: none;
+    font: 700 11px Cousine, ui-monospace, monospace;
+    color: var(--pt-text, #e8e2ff);
+    cursor: pointer;
+}
+
+.mr-cell.filled {
+    border-style: solid;
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.28);
+}
+
+/* The cell playing: its letter and outline in the LEDs' colour */
+.mr-cell.now {
+    color: var(--hw-led, #7dffb0);
+    border-color: var(--hw-led, #7dffb0);
+    box-shadow: 0 0 6px color-mix(in oklab, var(--hw-led, #7dffb0), transparent 55%);
+}
+
+.mr-cell:focus-visible {
+    outline: 2px solid var(--pt-accent, #ff4fd8);
+    outline-offset: 1px;
 }
 
 @keyframes mr-ghost {
