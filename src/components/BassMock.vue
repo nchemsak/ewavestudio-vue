@@ -87,6 +87,14 @@
                     </div>
                 </div>
             </div>
+            <!-- The phone: the chosen machine's Level, Pedals and meter (the rail's row) -->
+            <div v-if="variant === 'p'" class="bm-kgroup">
+                <span class="bm-kcap">Mix <i class="bm-ladder"><b v-for="n in 8" :key="n" :class="{ on: n <= 6, hot: n >= 7 }"></b></i></span>
+                <div class="bm-kgrid">
+                    <div class="bm-kcell"><Knob :modelValue="0.6" label="Level" :min="0" :max="1" :step="0.01" size="small" :useThemeArc="true" /><span class="bm-kval">60%</span></div>
+                    <div class="bm-kcell"><Knob :modelValue="0.4" label="Pedals" :min="0" :max="1" :step="0.01" size="small" :useThemeArc="true" /><span class="bm-kval">40%</span></div>
+                </div>
+            </div>
         </div>
     </div>
 </template>
@@ -524,6 +532,48 @@ function cutoffPath(W: number, H: number) {
     color: var(--pt-text, #fff);
     opacity: .8;
     margin-top: 2px;
+}
+
+.bm-ladder {
+    display: inline-grid;
+    grid-template-columns: repeat(8, 3px);
+    gap: 1px;
+    height: 8px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.bm-ladder b {
+    border-radius: 1px;
+    background: rgba(0, 0, 0, .5);
+}
+
+.bm-ladder b.on {
+    background: #3ddc97;
+}
+
+.bm-ladder b.on.hot {
+    background: #ffd166;
+}
+
+/* The phone's Sound page: everything smaller */
+.is-p .bm-tile {
+    min-height: 0;
+    padding: 6px 8px;
+}
+
+.is-p .bm-tiles.col .bm-tile svg {
+    width: 40px;
+    height: 24px;
+}
+
+.is-p .bm-screen-big {
+    min-height: 0;
+}
+
+.is-p.bm-knobcard,
+.is-p .bm-knobcard {
+    gap: 6px;
 }
 
 /* L: the tiles run the section's height */
