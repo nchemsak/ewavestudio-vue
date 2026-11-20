@@ -15,8 +15,7 @@
 						</div>
 						<div class="module pitch-env">
 							<PitchEnvModule classic :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
-								v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode"
-							@knob-start="onPitchKnobStart" @knob-end="onScreenKnobEnd" />
+								v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode"" />
 						</div>
 						<div class="module filter">
 							<SectionWrap class="filter-card" id="pl-filter" title="Filter" :modelValue="true">
@@ -137,7 +136,7 @@
 						<MelodyMaker compact :key="`pl-melody-${resetNonce}`" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
 							:ratchets="synthInstrument?.ratchets" :repeat-notes="synthInstrument?.repeatNotes" :repeat-chord="repeatChord"
-							:swing="swing" :note-steps="noteSteps" :playView="playView"
+							:swing="swing" :note-steps="noteSteps" :playView="playView" :tuner="viewSource"
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
@@ -189,18 +188,18 @@
 
 		<!-- LAYOUT START
 			 Laid out like one piece of hardware: the transport and the Step Sequencer, with the
-			 screen beside them; under them Sound (three rows, each filled edge to edge) and Compose,
+			 machine rail beside them (the big screen until PR 108); under them Sound (three rows, each filled edge to edge) and Compose,
 			 ending on one line. Under 1200 px, Sound, Effects and Compose are tabs under the steps
 			 (data-tab says which one shows). -->
 		<div v-show="!phoneActive" class="ds-grid" :data-tab="activeTab">
 
-			<!-- Visualizer Screen -->
-			<aside class="pt-card ds-visualizer">
-				<div class="nac-wrap">
-					<nacScreen ref="screen" :text="lcdText" :view="shownView" :activeKey="shownView === 'hit' ? 0 : activeFKey" :caption="shownView === 'hit' ? hitText : ''"
-						@fkey="handleFKey" />
-				</div>
-			</aside>
+			<!-- The machine rail (PR 108, where the big screen was): the scope and the spectrogram,
+				 then a row per machine (only Rhythm, the synth lane, so far: its LED mutes it, its
+				 level is the lane's volume, its steps in their colours) -->
+			<MachineRail v-if="synthInstrument" class="ds-rail" :analyser="analyser" :sampleRate="audioCtx.sampleRate"
+				:active="viewSource.active" name="Rhythm" :steps="synthInstrument.steps" :pitches="synthInstrument.pitches"
+				:velocities="synthInstrument.velocities" :muted="synthInstrument.muted" v-model:level="synthInstrument.channelVolume"
+				:currentStep="currentStep" :playing="isPlaying" @toggle-mute="toggleMute(synthInstrument.name)" />
 
 			<!-- Transport: Volume, Tempo, Swing, then Sounds and Patterns side by side, then Play -->
 			<section class="pt-card transport-card ds-transport">
@@ -423,21 +422,19 @@
 					<div class="module envelope">
 						<EnvelopeModule :color="'#4CAF50'" :showToggle="false" v-model:enabled="envelopeEnabled"
 							v-model:attackMs="ampEnvAttackMs" v-model:decayMs="ampEnvDecayMs"
-							@attack-knob-start="onEnvKnobStart" @attack-knob-end="onScreenKnobEnd"
-							@decay-knob-start="onEnvKnobStart" @decay-knob-end="onScreenKnobEnd" />
+							:hit="hitPicture" :hitText="hitText" />
 					</div>
 
 					<div class="module pitch-env">
 						<PitchEnvModule :enabled="pitchEnvEnabled" v-model:semitones="pitchEnvSemitones"
-							v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode"
-							@knob-start="onPitchKnobStart" @knob-end="onScreenKnobEnd" />
+							v-model:decayMs="pitchEnvDecayMs" v-model:mode="pitchMode"" />
 					</div>
 
 					<div class="module filter">
 						<FilterModule :color="'#FF5722'" :showToggle="false" v-model:enabled="filterEnabled"
 							v-model:cutoff="filterCutoff" v-model:resonance="filterResonance"
 							v-model:envAmount="filterEnvAmount" v-model:envDecayMs="filterEnvDecayMs"
-							:lfoView="lfoView" @knob-start="onFilterKnobStart" @knob-end="onScreenKnobEnd">
+							:lfoView="lfoView" :spectrum="viewSource">
 							<template #tools>
 								<VelSwitch v-model="velocityRouting.cutoff.value" :name="VEL_SWITCHES.cutoff.label" :tip="VEL_SWITCHES.cutoff.tip" :disabled="!filterEnabled"
 								:note="velNote.key === 'cutoff' ? velNote.text : ''" @switched-on="onVelSwitchedOn('cutoff')" />
@@ -538,7 +535,7 @@
 						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
 							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
 							:ratchets="synthInstrument?.ratchets" :repeat-notes="synthInstrument?.repeatNotes" :repeat-chord="repeatChord"
-							:swing="swing" :note-steps="noteSteps" :playView="playView"
+							:swing="swing" :note-steps="noteSteps" :playView="playView" :tuner="viewSource"
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
@@ -693,9 +690,8 @@ import { shortestInterval, transposePitches, remapScale, nearestRootHz, patternC
 import DriveEffect from './modules/DriveEffect.vue';
 import UnisonEffect from './modules/UnisonEffect.vue';
 import LFOGroup from './modules/LFOGroup.vue';
-import nacScreen from './Screen.vue';
-import { startFilterView } from './filterView';
-import { startSpectrumView } from './spectrumView';
+import MachineRail from './MachineRail.vue';
+import type { ViewSource } from './cardViews';
 import PitchEnvModule from './modules/PitchEnvModule.vue';
 import PhoneLayout from './PhoneLayout.vue';
 import { usePhoneMode } from '../composables/usePhoneMode';
@@ -758,7 +754,7 @@ import PresetButtons from './PresetButtons.vue';
 import ExportDialog from './ExportDialog.vue';
 import ShareNotice from './ShareNotice.vue';
 import { buildExportFiles, renderHit, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from '../audio/export/exportFiles';
-import { startHitView, hitSeconds, formatLength, formatPeak, type HitPicture } from './hitView';
+import { hitSeconds, formatLength, formatPeak, type HitPicture } from './hitView';
 import { peakOf } from '../lib/export/audio';
 import { midiNoteOf, midiToHz, notesInRange } from '../lib/export/midi';
 import { exportNames, keyLabel } from '../lib/export/names';
@@ -1162,520 +1158,15 @@ function midiToNamePref(m: number, mode: AccidentalMode = accidentalMode.value) 
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// nac Screen BEGIN
-
-const lcdText = ref('HARP  2');
-// The screen opens on the Spectrum (F2), the maintainer's call after PR 84 (it was the Scope)
-const activeFKey = ref<number>(2);
-const lcdView = ref<'text' | 'scope' | 'spectrum' | 'spec' | 'tuner' | 'env' | 'filter'>('spectrum');
-// What the envelope view puts first: the amp envelope (Attack, Decay) or the pitch sweep (the
-// Pitch card's knobs), whichever was turned to show it
-const envFocus = ref<'amp' | 'pitch'>('amp');
-const screen = ref<InstanceType<typeof nacScreen> | null>(null);
-
-// While a knob is turned, the screen shows what it changes (Attack/Decay and the Pitch card's
-// Amount/Decay: the envelope view; Cutoff/Resonance: the filter view; neither has an F-key
-// since PR 70), then goes back to the view it was on.
-// If the user picks another view while turning, that view stays.
-const prevScreen = ref<{ view: typeof lcdView.value; fkey: number } | null>(null);
-let screenHoldCount = 0;
-// Whether a knob holds a view now (the hit at rest gives way to it)
-const screenHeld = ref(false);
-let heldView: typeof lcdView.value | null = null;
-let userOverrodeWhileHeld = false;
-
-function holdScreen(view: typeof lcdView.value, fkey: number) {
-	if (screenHoldCount > 0 && lcdView.value !== heldView) userOverrodeWhileHeld = true;
-	screenHoldCount++;
-	screenHeld.value = true;
-	if (!prevScreen.value) prevScreen.value = { view: lcdView.value, fkey: activeFKey.value };
-	heldView = view;
-	activeFKey.value = fkey;
-	lcdView.value = view;
-}
-
-// Shows a view for a moment, as a knob turned and let go would (a VEL switch turned on)
-function flashScreen(view: typeof lcdView.value, fkey: number) {
-	holdScreen(view, fkey);
-	setTimeout(onScreenKnobEnd, VEL_FLASH_MS);
-}
-
-function onEnvKnobStart() {
-	envFocus.value = 'amp';
-	holdScreen('env', 0); // 0: no F-key lit (F4 was the envelope until PR 70)
-}
-
-// The Pitch card's Amount or Decay: the envelope view, the pitch sweep drawn on top
-function onPitchKnobStart() {
-	envFocus.value = 'pitch';
-	holdScreen('env', 0);
-}
-
-function onFilterKnobStart() {
-	holdScreen('filter', 0); // 0: no F-key lit
-}
-
-function onScreenKnobEnd() {
-	screenHoldCount = Math.max(0, screenHoldCount - 1);
-	if (screenHoldCount === 0) {
-		screenHeld.value = false;
-		const prev = prevScreen.value;
-		// Restore, unless the user picked another view meanwhile (an F-key or 1–4)
-		if (prev && !userOverrodeWhileHeld && lcdView.value === heldView) {
-			lcdView.value = prev.view;
-			activeFKey.value = prev.fkey;
-		}
-		prevScreen.value = null;
-		heldView = null;
-		userOverrodeWhileHeld = false;
-	}
-}
-
-function fitCanvasToBox(canvas, ctx) {
-	const dpr = window.devicePixelRatio || 1;
-	const rect = canvas.getBoundingClientRect();
-	const w = Math.max(1, Math.round(rect.width * dpr));
-	const h = Math.max(1, Math.round(rect.height * dpr));
-
-	// Only resize when it actually changed.
-	if (canvas.width !== w || canvas.height !== h) {
-		const prev = document.createElement('canvas');
-		prev.width = canvas.width;
-		prev.height = canvas.height;
-		if (prev.width && prev.height) {
-			const pctx = prev.getContext('2d');
-			pctx && pctx.drawImage(canvas, 0, 0);
-		}
-
-		canvas.width = w;
-		canvas.height = h;
-
-		// Restore transform for DPR drawing
-		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		ctx.scale(dpr, dpr);
-
-		if (prev.width && prev.height) ctx.drawImage(prev, 0, 0, prev.width, prev.height, 0, 0, canvas.clientWidth, canvas.clientHeight);
-	} else {
-		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		ctx.scale(dpr, dpr);
-	}
-}
-
-// Toggle by F-keys
-// F1 Scope, F2 Spectrum, F3 Spectrogram, F4 Tuner (PR 70: the Spectrum is new, and the
-// Envelope view lost F4; it shows while its knobs are turned)
-function handleFKey(n: number) {
-	activeFKey.value = n;
-	// At rest, a view picked shows instead of the hit, until the next time things come to rest
-	if (atRest.value) pickedAtRest.value = true;
-	if (n === 1) lcdView.value = 'scope';
-	else if (n === 2) lcdView.value = 'spectrum';
-	else if (n === 3) lcdView.value = 'spec';
-	else if (n === 4) lcdView.value = 'tuner';
-	else lcdView.value = 'text';
-}
-
-function startScope() {
-	const canvas = screen.value!.scopeCanvas as HTMLCanvasElement;
-	if (!canvas) return;
-	const ctx = canvas.getContext('2d');
-	if (!ctx) return;
-
-	const readVar = (name: string, fallback: string) =>
-		(getComputedStyle(canvas).getPropertyValue(name) || fallback).trim();
-
-	function draw() {
-		requestAnimationFrame(draw);
-		if (shownView.value !== 'scope') return;
-
-		fitCanvasToBox(canvas, ctx);
-		const W = Math.round(canvas.clientWidth);
-		const H = Math.round(canvas.clientHeight);
-
-		const bg = readVar('--nac-lcd-bg', '#b9bcba');
-		const trace = readVar('--nac-scope-trace', '#111');
-		const width = parseFloat(readVar('--nac-scope-width', '2')) || 2;
-
-		ctx.fillStyle = bg;
-		ctx.fillRect(0, 0, W, H);
-
-		ctx.lineWidth = width;
-		ctx.lineCap = 'round';
-		ctx.strokeStyle = trace;
-
-		analyser.getByteTimeDomainData(dataArray);
-
-		const slice = W / analyser.fftSize;
-		ctx.beginPath();
-		let x = 0;
-		for (let i = 0; i < analyser.fftSize; i++) {
-			const v = dataArray[i] / 128;
-			const y = (v * H) / 2;
-			i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-			x += slice;
-		}
-		ctx.lineTo(W, H / 2);
-		ctx.stroke();
-	}
-	draw();
-}
-
-function startSpectrogram() {
-	const scr = screen.value;
-	if (!scr) return;
-
-	const canvas = scr.specCanvas as unknown as HTMLCanvasElement;
-	if (!canvas) return;
-
-	const ctx = canvas.getContext('2d');
-	if (!ctx) return;
-
-	ctx.imageSmoothingEnabled = false;
-
-	const freqBins = new Uint8Array(analyser.frequencyBinCount);
-
-	// Helper to read current theme vars from CSS
-	const readTheme = () => {
-		const s = getComputedStyle(canvas);
-		const bg = (s.getPropertyValue('--nac-lcd-bg') || '#b9bcba').trim();
-		const low = (s.getPropertyValue('--nac-spec-low') || '#4fc3f7').trim();
-		const mid = (s.getPropertyValue('--nac-spec-mid') || '#00e676').trim();
-		const high = (s.getPropertyValue('--nac-spec-high') || '#ffc400').trim();
-		const peak = (s.getPropertyValue('--nac-spec-peak') || '#ffffff').trim();
-		return { bg, low, mid, high, peak };
-	};
-
-	// Make a tiny signature to detect when theme vars change
-	const signatureOf = (t: ReturnType<typeof readTheme>) =>
-		`${t.bg}|${t.low}|${t.mid}|${t.high}|${t.peak}`;
-
-	let theme = readTheme();
-	let lastSig = signatureOf(theme);
-
-	// The colours: each frequency in the colour its pad would have, brighter when louder
-	// (src/lib/padColour.ts), so a note shows in its pad's colour. 'loudness' brings back the
-	// theme's four loudness colours (--nac-spec-low/mid/high/peak in Screen.vue).
-	const SPEC_COLOURS = 'note' as 'note' | 'loudness';
-	const binHz = audioCtx.sampleRate / analyser.fftSize;
-	// A light screen (no theme has one since PR 89 removed Light): louder notes darker there
-	const isLightScreen = (bg: string) => {
-		const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg);
-		if (!m) return false;
-		const [r, g, b] = [m[1], m[2], m[3]].map((h) => parseInt(h, 16) / 255);
-		return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5;
-	};
-	// One colour string per hue and level step, made once
-	const noteColours = new Map<string, string>();
-	const colorFor = (v: number, bin: number, t = theme): string => {
-		if (SPEC_COLOURS === 'loudness') return v < 64 ? t.low : v < 128 ? t.mid : v < 192 ? t.high : t.peak;
-		const level = Math.min(255, Math.round(v / 8) * 8);
-		const hz = Math.round(bin * binHz);
-		const key = `${spectrumHue(hz)}|${level}|${t.bg}`;
-		let c = noteColours.get(key);
-		if (!c) {
-			c = spectrumColour(hz, level, isLightScreen(t.bg));
-			noteColours.set(key, c);
-		}
-		return c;
-	};
-
-	function draw() {
-		requestAnimationFrame(draw);
-		if (shownView.value !== 'spec') return;
-
-		fitCanvasToBox(canvas, ctx);
-		const W = canvas.clientWidth;
-		const H = canvas.clientHeight;
-
-		// Refresh theme if it changed
-		const maybeNew = readTheme();
-		const sig = signatureOf(maybeNew);
-		const themeChanged = sig !== lastSig;
-		if (themeChanged) {
-			theme = maybeNew;
-			lastSig = sig;
-			ctx.save();
-			ctx.setTransform(1, 0, 0, 1, 0, 0);
-			ctx.fillStyle = theme.bg;
-			ctx.fillRect(0, 0, canvas.width, canvas.height);
-			ctx.restore();
-		} else {
-
-			const dpr = window.devicePixelRatio || 1;
-
-			ctx.save();
-			ctx.setTransform(1, 0, 0, 1, 0, 0);
-			ctx.imageSmoothingEnabled = false;
-			ctx.drawImage(
-				canvas,
-				1 * dpr, 0,
-				canvas.width - 1 * dpr, canvas.height,
-				0, 0,
-				canvas.width - 1 * dpr, canvas.height
-			);
-			ctx.restore();
-		}
-
-		// Fetch spectrum
-		analyser.getByteFrequencyData(freqBins);
-
-		// Noise floor suppression
-		const MIN_BIN = 3;
-		const FLOOR_TAP = 8;
-		let floor = 0;
-		for (let i = 0; i < FLOOR_TAP; i++) floor += freqBins[i];
-		floor = floor / FLOOR_TAP + 3;
-
-		// Column background (silence color)
-		const x = (W - 1) | 0;
-		ctx.fillStyle = theme.bg;
-		ctx.fillRect(x, 0, 1, H);
-
-		// Draw new column with current palette
-		for (let y = 0; y < H; y++) {
-			const logY = 1 - (y + 0.5) / H;
-			const idxRaw = Math.floor(Math.pow(logY, 2.0) * (freqBins.length - MIN_BIN)) + MIN_BIN;
-			const bin = Math.min(freqBins.length - 1, Math.max(MIN_BIN, idxRaw));
-
-			const v = Math.max(0, freqBins[bin] - floor);
-			if (v < 6) continue;
-
-			ctx.fillStyle = colorFor(v, bin, theme);
-			ctx.fillRect(x, y, 1, 1);
-		}
-	}
-
-	draw();
-}
-
-function startTuner() {
-	const scr = screen.value;
-	if (!scr) return;
-
-	const canvas = scr.tunerCanvas as unknown as HTMLCanvasElement;
-	if (!canvas) return;
-
-	const ctx = canvas.getContext('2d');
-	if (!ctx) return;
-
-	// LATCH: persist last played note until a new one plays
-	let latchedHz = 0;
-	let latchedNote = '—';
-	let prevStep = -999; // track step changes - only update once per step
-
-	function draw() {
-		requestAnimationFrame(draw);
-		if (shownView.value !== 'tuner') return;
-
-		fitCanvasToBox(canvas, ctx);
-		const W = canvas.clientWidth, H = canvas.clientHeight;
-
-		const css = getComputedStyle(canvas);
-		const bg = (css.getPropertyValue('--nac-lcd-bg') || '#0f141b').trim();
-		const ink = (css.getPropertyValue('--nac-scope-trace') || '#c7d6ff').trim();
-
-		//  update latch ONLY when we advance to a new step that actually plays 
-		const inst = synthInstrument.value;
-		const step = currentStep.value;
-
-		if (inst && step >= 0 && step !== prevStep) {
-			prevStep = step;
-			if (!inst.muted && inst.steps[step]) {
-				const hz = inst.pitches?.[step] ?? 0;
-				if (hz > 0) {
-					latchedHz = hz;
-					latchedNote = midiToNamePref(freqToMidi(hz));
-
-				}
-			}
-		}
-
-		//  draw using latched values 
-		ctx.fillStyle = bg;
-		ctx.fillRect(0, 0, W, H);
-
-		ctx.textAlign = 'center';
-		ctx.textBaseline = 'middle';
-		ctx.fillStyle = ink;
-
-		const fsNote = Math.max(12, Math.floor(H * 0.30));
-		const fsFreq = Math.max(10, Math.floor(H * 0.16));
-
-		ctx.font = `700 ${fsNote}px Cousine, ui-monospace, monospace`;
-		ctx.fillText(latchedHz > 0 ? latchedNote : '—', W / 2, H * 0.46);
-
-		ctx.font = `700 ${fsFreq}px Cousine, ui-monospace, monospace`;
-		ctx.fillText(latchedHz > 0 ? `${latchedHz.toFixed(1)} Hz` : '', W / 2, H * 0.70);
-	}
-
-	draw();
-}
-
-function startEnvViz() {
-	const scr = screen.value;
-	if (!scr) return;
-
-	const canvas = scr.envCanvas as HTMLCanvasElement;
-	if (!canvas) return;
-
-	const ctx = canvas.getContext('2d');
-	if (!ctx) return;
-
-	ctx.imageSmoothingEnabled = false;
-
-	function draw() {
-		requestAnimationFrame(draw);
-		if (shownView.value !== 'env') return;
-
-		fitCanvasToBox(canvas, ctx);
-		const W = Math.round(canvas.clientWidth);
-		const H = Math.round(canvas.clientHeight);
-		ctx.clearRect(0, 0, W, H);
-
-		// Theme
-		const css = getComputedStyle(canvas);
-		const bg = (css.getPropertyValue('--nac-lcd-bg') || '#0f141b').trim();
-		const ink = (css.getPropertyValue('--nac-scope-trace') || '#c7d6ff').trim();
-
-		const L = 14, R = 10, T = 25, B = 16;
-		const plotW = Math.max(1, W - L - R);
-		const plotH = Math.max(1, H - T - B);
-
-		// Fixed time axis (log scale)
-		const AXIS_MIN_MS = 1, AXIS_MAX_MS = 2000;
-		const logMin = Math.log10(AXIS_MIN_MS);
-		const logMax = Math.log10(AXIS_MAX_MS);
-		const logSpan = logMax - logMin;
-		const timeToX = (ms: number) => {
-			const t = Math.max(AXIS_MIN_MS, Math.min(ms, AXIS_MAX_MS));
-			const n = (Math.log10(t) - logMin) / logSpan;
-			return L + n * plotW;
-		};
-
-		// Values (ms)
-		const A = Math.max(1, Math.round(ampEnvAttackMs.value));
-		const D = Math.max(1, Math.round(ampEnvDecayMs.value));
-
-		// Axes
-		ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-		ctx.strokeStyle = ink; ctx.globalAlpha = 0.25; ctx.lineWidth = 1;
-		ctx.beginPath(); ctx.moveTo(L, T + plotH); ctx.lineTo(L + plotW, T + plotH); ctx.stroke();
-		ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L + plotW, T); ctx.stroke();
-		ctx.globalAlpha = 1;
-
-		const ax = timeToX(A);
-		const STEP_MS = Math.max(0.25, AXIS_MAX_MS / (plotW * 4));
-		// One envelope: the attack, then the decay (Decay `dec` ms)
-		const strokeEnv = (dec: number) => {
-			const tau = dec / Math.log(1000);
-			ctx.beginPath();
-			ctx.moveTo(L, T + plotH);
-			ctx.lineTo(ax, T);
-			for (let ms = A; ms <= AXIS_MAX_MS; ms += STEP_MS) {
-				const amp = Math.exp(-(ms - A) / tau);
-				ctx.lineTo(timeToX(ms), T + (1 - Math.min(1, Math.max(0, amp))) * plotH);
-			}
-			ctx.stroke();
-		};
-
-		// The pitch sweep (the Pitch card, PR 70): how far the note starts from its pitch, falling
-		// to it as the engines' setTargetAtTime does (time constant Decay / 4), as a share of
-		// Amount; drawn in the screen's second colour, and first when a Pitch knob is turned
-		const semis = pitchEnvEnabled.value ? Math.round(pitchEnvSemitones.value) : 0;
-		const sweepMs = Math.max(5, Math.round(pitchEnvDecayMs.value));
-		const sweepInk = (css.getPropertyValue('--nac-spec-high') || '#ffc400').trim();
-		const pitchFirst = envFocus.value === 'pitch';
-		const strokeSweep = () => {
-			const tau = sweepMs / 4;
-			ctx.beginPath();
-			ctx.moveTo(L, T);
-			for (let ms = AXIS_MIN_MS; ms <= AXIS_MAX_MS; ms += STEP_MS) {
-				ctx.lineTo(timeToX(ms), T + (1 - Math.exp(-ms / tau)) * plotH);
-			}
-			ctx.stroke();
-		};
-
-		ctx.lineWidth = pitchFirst ? 1.5 : 2;
-		ctx.strokeStyle = ink;
-		ctx.globalAlpha = pitchFirst ? 0.45 : 1;
-		strokeEnv(D);
-		if (semis > 0) {
-			ctx.lineWidth = pitchFirst ? 2 : 1.5;
-			ctx.strokeStyle = sweepInk;
-			ctx.globalAlpha = pitchFirst ? 1 : 0.6;
-			if (!pitchFirst) ctx.setLineDash([5, 4]);
-			strokeSweep();
-			ctx.setLineDash([]);
-		}
-		ctx.globalAlpha = 1;
-		ctx.strokeStyle = ink;
-		ctx.lineWidth = 1;
-
-		// Labels & tick
-		ctx.font = `700 11px Cousine, ui-monospace, monospace`;
-		ctx.fillStyle = pitchFirst ? sweepInk : ink; ctx.globalAlpha = 0.9; ctx.textAlign = 'left';
-		const dir = pitchMode.value === 'random' ? '±' : pitchMode.value === 'down' ? '−' : '+';
-		ctx.fillText(pitchFirst
-			? (semis > 0 ? `Pitch sweep ${dir}${semis} st → note in ${sweepMs} ms` : 'Pitch sweep: off (Amount 0)')
-			: 'Amp Envelope', L, 12);
-		// The other curve's name, on the right in its own colour
-		ctx.textAlign = 'right';
-		if (!pitchFirst && semis > 0) { ctx.fillStyle = sweepInk; ctx.fillText('┄ pitch sweep', L + plotW, 12); }
-		if (pitchFirst) { ctx.fillStyle = ink; ctx.globalAlpha = 0.6; ctx.fillText('amp envelope', L + plotW, T + 14); }
-		ctx.fillStyle = ink;
-
-		// Attack's time under its tick (the amp envelope's knobs only)
-		const atkLabel = `${A} ms`;
-		const atkClear = !pitchFirst && ax - L > ctx.measureText('1 ms').width + ctx.measureText(atkLabel).width / 2 + 6;
-		if (!pitchFirst) {
-			ctx.globalAlpha = 0.85; ctx.textAlign = 'center';
-			ctx.fillText(atkLabel, Math.max(ax, L + ctx.measureText(atkLabel).width / 2), H - 4);
-			ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(ax, T); ctx.lineTo(ax, T + plotH); ctx.stroke();
-		}
-		ctx.globalAlpha = 0.85;
-
-		// time scale labels (the left one only where Attack's label leaves room for it)
-		if (pitchFirst || atkClear) { ctx.textAlign = 'left'; ctx.fillText('1 ms', L, H - 4); }
-		ctx.textAlign = 'right'; ctx.fillText('2000 ms', L + plotW, H - 4);
-		ctx.globalAlpha = 1;
-	}
-	draw();
-}
+// Window listeners START
+// (The big screen and its views lived here until PR 108: its scope and spectrogram are the
+// machine rail's now, MachineRail.vue; the spectrum, the hit and the tuner are drawn in the
+// Filter, Envelope and Melody Maker cards, cardViews.ts.)
 
 onMounted(() => {
 
 	window.addEventListener('mouseup', handleMouseUp);
 
-	// start both loops; each only draws when its view is active
-	startScope();
-	startSpectrogram();
-	startTuner();
-	startEnvViz();
-	const spectrumCanvas = screen.value?.spectrumCanvas as unknown as HTMLCanvasElement | null;
-	if (spectrumCanvas) startSpectrumView({
-		canvas: spectrumCanvas,
-		audioCtx,
-		analyser,
-		isActive: () => shownView.value === 'spectrum',
-		fit: fitCanvasToBox,
-		flats: () => accidentalMode.value === 'flat',
-	});
-	const filterCanvas = screen.value?.filterCanvas as unknown as HTMLCanvasElement | null;
-	if (filterCanvas) startFilterView({
-		canvas: filterCanvas,
-		audioCtx,
-		analyser,
-		isActive: () => shownView.value === 'filter',
-		fit: fitCanvasToBox,
-		settings: {
-			filterEnabled: () => filterEnabled.value,
-			cutoff: () => filterCutoff.value,
-			resonance: () => filterResonance.value,
-			envAmount: () => filterEnvAmount.value,
-			velCutoff: () => velocityRouting.cutoff.value,
-			lfo: () => ({ enabled: lfoEnabled.value, target: lfoTarget.value, depth: lfoDepth.value }),
-		},
-	});
 	window.addEventListener('keydown', onGlobalKeydown, { capture: true });
 	window.addEventListener('keyup', onGlobalKeyup, { capture: true });
 	window.addEventListener('mouseup', stopTempoRepeat);
@@ -1693,7 +1184,7 @@ onBeforeUnmount(() => {
 
 });
 
-// nac Screen END
+// Window listeners END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2239,22 +1730,19 @@ const velocityRouting = {
 // VEL SWITCHES START
 // The Filter card has a VEL switch (VelSwitch.vue) for the cutoff's amount above (Envelope's,
 // Pitch's and Noise's went in PR 67: hard to hear; their amounts stay at 0). Turning it on shows
-// what it does: the screen's filter view for a moment, where softer steps are drawn dashed
-// (VELOCITY_FAN), and, if every step that's on is at full velocity (so the switch can't change
-// anything yet), a note under it and a glow on Pattern Tools' Humanize.
+// what it does: if every step that's on is at full velocity (so the switch can't change anything
+// yet), a note under it and a glow on Pattern Tools' Humanize. (Until PR 108 it also showed the
+// big screen's filter view for a moment, softer steps dashed.)
 type VelKey = 'cutoff';
 const VEL_SWITCHES: Record<VelKey, { label: string; tip: string }> = {
 	cutoff: { label: 'Velocity shapes Cutoff', tip: 'Softer steps are darker' },
 };
-const VEL_FLASH_MS = 1500;
 const VEL_NOTE_MS = 3500;
 const velNote = reactive<{ key: VelKey | null; text: string }>({ key: null, text: '' });
 const humanizeNudge = ref(0);
 let velNoteTimer: ReturnType<typeof setTimeout> | null = null;
 
 function onVelSwitchedOn(key: VelKey) {
-	if (key === 'cutoff') flashScreen('filter', 0);
-
 	const lit = steps.value.map((on, i) => (on ? velocities.value[i] ?? 1 : null)).filter((v) => v != null);
 	if (lit.length && lit.every((v) => v >= 1)) {
 		velNote.key = key;
@@ -2775,6 +2263,7 @@ const projectState: ProjectState = {
 const {
 	audioCtx,
 	analyser,
+	fineAnalyser,
 	isPlaying,
 	currentStep,
 	playSynthNote,
@@ -2806,8 +2295,13 @@ const {
 	onBarStart: () => runQueued(),
 });
 
-// Oscilloscope samples (the scope view reads the analyser into this every frame)
-const dataArray = new Uint8Array(analyser.fftSize);
+// What the views in the cards read (cardViews.ts): the fine analyser, while anything sounds
+// (playing, or a note in the last 1.5 s: MIDI, a preview)
+const viewSource: ViewSource = markRaw({
+	analyser: fineAnalyser,
+	sampleRate: audioCtx.sampleRate,
+	active: () => isPlaying.value || soundingRecently(1500),
+});
 
 // Live sound engine END
 
@@ -2931,15 +2425,6 @@ function onGlobalKeydown(e: KeyboardEvent) {
 		if (isTypingTarget(e.target)) return;
 		e.preventDefault();
 		if (key === 'y' || e.shiftKey) redo(); else undo();
-		return;
-	}
-
-	// Number keys 1–4 switch the screen view, like the four buttons under the screen
-	if (/^[1-4]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-		// Leave digits alone while typing, or while a dropdown list is open
-		if (isTypingTarget(e.target) || document.querySelector('[role="listbox"]')) return;
-		e.preventDefault();
-		if (!e.repeat) handleFKey(Number(e.key));
 		return;
 	}
 
@@ -3490,43 +2975,21 @@ const phoneCtx = reactive({
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
-// SCREEN AT REST START
+// THE HIT START
 
-// While nothing plays (stopped, and no note for REST_AFTER_MS), the screen shows one hit of
-// the current sound (PR 94; hitView.ts): the live views would be blank. It's rendered by the
-// export engine as the one-shot is (renderHit() in exportFiles.ts), again whenever a setting
-// changes while it shows (one render at a time; a change during one renders again after it).
-// A knob that holds a view (the envelope, the filter) still shows it; an F-key or 1–4 picked
-// at rest shows its view until things next come to rest. Not drawn in phone mode, whose
-// layout hides this screen.
-const REST_AFTER_MS = 1500;
-const atRest = ref(true);
-const pickedAtRest = ref(false);
-let stoppedAt = -Infinity;
-function setRest(rest: boolean) {
-	if (rest === atRest.value) return;
-	atRest.value = rest;
-	if (!rest) pickedAtRest.value = false; // the next rest shows the hit again
-}
-watch(isPlaying, (playing) => {
-	if (playing) setRest(false);
-	else stoppedAt = performance.now();
-});
-const restTimer = setInterval(() => {
-	setRest(!isPlaying.value && !soundingRecently(REST_AFTER_MS) && performance.now() - stoppedAt > REST_AFTER_MS);
-}, 200);
-onBeforeUnmount(() => clearInterval(restTimer));
-
-// What the screen shows: the hit at rest, else the view chosen (or held by a knob)
-const shownView = computed<typeof lcdView.value | 'hit'>(() =>
-	(atRest.value && !pickedAtRest.value && !screenHeld.value) ? 'hit' : lcdView.value);
+// One hit of the current sound (PR 94: the screen at rest; since PR 108 drawn behind the
+// Envelope card's curve, EnvelopeModule): the one-shot the Export dialog would make
+// (renderHit() in exportFiles.ts), rendered offline again whenever the sound changes, one render
+// at a time (a change during one renders once more after it), once the settings have been
+// still for HIT_SETTLE_MS. Not in phone mode, whose Sound
+// page has the classic Envelope card; it renders on leaving phone mode.
 
 // The hit: the one-shot's note (the key's root in the pads' octave) on the main wave
 const hitHz = computed(() => midiToHz(midiNoteOf(currentDefaultHz.value)));
 const hitPicture = shallowRef<HitPicture | null>(null);
-// What it shows, for screen readers (the canvas is hidden from them): "Hit: A3 Sine, 420 ms, peak −11.7 dB"
+// What it shows, for screen readers (the picture is hidden from them): "Hit: A3 Sine, 420 ms, peak −11.7 dB"
 const hitText = ref('');
-const hitWanted = computed(() => shownView.value === 'hit' && !phoneActive.value);
+const hitWanted = computed(() => !phoneActive.value);
 let hitDirty = true;
 let hitBusy = false;
 let hitAgain = false;
@@ -3545,7 +3008,7 @@ async function renderHitNow() {
 		hitPicture.value = { channels, sampleRate: state.sampleRate, hz, title: name };
 		hitText.value = `Hit: ${name}, ${formatLength((channels[0].length / state.sampleRate) * 1000)}, peak ${formatPeak(peakOf(channels))}`;
 	} catch (err) {
-		console.warn('The hit at rest could not be rendered:', err);
+		console.warn('The hit could not be rendered:', err);
 	} finally {
 		hitBusy = false;
 		if (hitAgain) {
@@ -3555,18 +3018,20 @@ async function renderHitNow() {
 	}
 }
 
+// Rendered once the settings have been still for HIT_SETTLE_MS, so a knob drag doesn't render
+// it on every step
+const HIT_SETTLE_MS = 120;
+let hitTimer: ReturnType<typeof setTimeout> | null = null;
 watch(() => [synthInstrument.value ? exportState.value : null, selectedWaveform.value, hitHz.value], () => {
 	hitDirty = true;
-	if (hitWanted.value) renderHitNow();
+	if (hitTimer) clearTimeout(hitTimer);
+	hitTimer = setTimeout(() => { hitTimer = null; if (hitWanted.value) renderHitNow(); }, HIT_SETTLE_MS);
 });
+onBeforeUnmount(() => { if (hitTimer) clearTimeout(hitTimer); });
 watch(hitWanted, (wanted) => { if (wanted && hitDirty) renderHitNow(); });
-onMounted(() => {
-	const canvas = screen.value?.hitCanvas as unknown as HTMLCanvasElement | null;
-	if (canvas) startHitView({ canvas, isActive: () => shownView.value === 'hit', fit: fitCanvasToBox, hit: () => hitPicture.value });
-	if (hitWanted.value) renderHitNow();
-});
+onMounted(() => { if (hitWanted.value) renderHitNow(); });
 
-// SCREEN AT REST END
+// THE HIT END
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3641,10 +3106,6 @@ async function recordSample() {
 	margin: 0 0 .35rem;
 }
 
-.nac-wrap {
-	margin-top: 0;
-}
-
 /* An LED: the LEDs' colour while the lane plays (PR 93; the accent until then) */
 .mute-dot {
 	width: 12px;
@@ -3666,10 +3127,10 @@ async function recordSample() {
 
 /* LAYOUT START
    Like one piece of hardware (see the template's LAYOUT comment). From 1200 px: the transport
-   and the Step Sequencer on the left two thirds, the screen beside them; under them Sound (two
+   and the Step Sequencer on the left two thirds, the machine rail beside them; under them Sound (two
    thirds) and Compose (one third), which end on one line: Sound's last row and Melody Maker
    take up any difference. Inside Sound each row is filled edge to edge, and a card stretched
-   taller than its controls keeps them centred. Under 1200 px: the screen beside the transport,
+   taller than its controls keeps them centred. Under 1200 px: the rail beside the transport,
    the steps across, then the tabs (Sound, Effects, Compose) and the one they show. Under
    720 px (phones) everything is one column. */
 
@@ -3709,8 +3170,8 @@ async function recordSample() {
 	gap: 14px;
 	grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 	grid-template-areas:
-		"transport screen"
-		"steps screen"
+		"transport rail"
+		"steps rail"
 		"sound compose";
 	align-items: start;
 }
@@ -3723,13 +3184,9 @@ async function recordSample() {
 	grid-area: steps;
 }
 
-.ds-visualizer {
-	grid-area: screen;
+.ds-rail {
+	grid-area: rail;
 	align-self: stretch;
-	display: flex;
-	min-height: 0;
-	overflow: hidden;
-	position: relative;
 }
 
 .ds-sound {
@@ -3744,47 +3201,6 @@ async function recordSample() {
 
 .ds-tabs {
 	display: none;
-}
-
-/* The screen fills its cell: the LCD takes all the height the F-keys leave */
-.ds-visualizer .nac-wrap {
-	flex: 1 1 auto;
-	display: flex;
-	min-height: 0;
-	width: 100%;
-}
-
-.ds-visualizer .nac-wrap>* {
-	flex: 1 1 auto;
-	min-height: 0;
-	width: 100%;
-}
-
-.ds-visualizer :deep(.nac-screen) {
-	display: grid !important;
-	grid-template-rows: 1fr auto;
-	width: 100%;
-	height: 100%;
-	min-height: 0;
-}
-
-.ds-visualizer :deep(.nac-screen__lcd) {
-	height: 100% !important;
-	aspect-ratio: auto !important;
-	min-height: 0;
-}
-
-.ds-visualizer :deep(.nac-screen__lcd canvas) {
-	display: block;
-	width: 100%;
-	height: 100% !important;
-}
-
-.ds-visualizer :deep(.nac-screen__fkeys) {
-	display: grid !important;
-	grid-template-columns: repeat(4, 1fr);
-	gap: .4rem;
-	padding: 0 .75rem;
 }
 
 /* Transport: the knobs, Sounds and Patterns side by side, Play */
@@ -3910,13 +3326,13 @@ async function recordSample() {
 @media (max-width: 1199.98px) {
 	.ds-grid {
 		grid-template-areas:
-			"transport screen"
+			"transport rail"
 			"steps steps"
 			"tabs tabs"
 			"panel panel";
 	}
 
-	.ds-visualizer {
+	.ds-rail {
 		min-height: 170px;
 	}
 
@@ -4014,7 +3430,7 @@ async function recordSample() {
 	.ds-grid {
 		grid-template-columns: minmax(0, 1fr);
 		grid-template-areas:
-			"screen"
+			"rail"
 			"transport"
 			"steps"
 			"tabs"
@@ -4788,10 +4204,6 @@ async function recordSample() {
 
 .fx-adv-anchor {
 	position: relative;
-}
-
-.nac-screen__lcd>canvas {
-	image-rendering: pixelated;
 }
 
 /* PLAY BUTTON BEGIN */

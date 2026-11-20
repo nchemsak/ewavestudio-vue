@@ -29,12 +29,12 @@ describe('MIDI learn mappings', () => {
 		expect(parseMappings('{"1:21":"filter.cutoff","16:119":"lfo.rate"}')).toEqual({ '1:21': 'filter.cutoff', '16:119': 'lfo.rate' });
 		expect(parseMappings('{"0:21":"filter.cutoff","17:1":"lfo.rate","1:120":"env.decay","1:5":"gone.knob","1:6":7}')).toEqual({});
 		for (const bad of [null, '', 'not json', '[1,2]', '"text"', 'null']) expect(parseMappings(bad)).toEqual({});
-		// The Step Sequencer's Vol knob went in PR 92: a link saved to it is dropped
-		expect(parseMappings('{"1:7":"synth.volume","1:8":"transport.volume"}')).toEqual({ '1:8': 'transport.volume' });
+		// A link to a knob the app doesn't have is dropped
+		expect(parseMappings('{"1:7":"no.such.knob","1:8":"transport.volume"}')).toEqual({ '1:8': 'transport.volume' });
 	});
 
 	it('name every learnable knob', () => {
-		expect(Object.keys(MIDI_KNOBS)).toHaveLength(34);
+		expect(Object.keys(MIDI_KNOBS)).toHaveLength(35);
 		for (const name of Object.values(MIDI_KNOBS)) expect(name.length).toBeGreaterThan(2);
 	});
 });

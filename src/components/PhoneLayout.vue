@@ -499,7 +499,7 @@ function hzText(hz: number) {
 	box-shadow: 0 0 0 1.5px #fff;
 }
 
-/* The mini scope and pads: each theme's screen colours (Screen.vue's are its own) */
+/* The mini scope and pads: each theme's screen colours (the machine rail's are its own) */
 
 .theme-analog .pl-minipads { background: #1a1208; }
 .theme-analog .pl-scope { background: #1a1208; color: #ffb547; }

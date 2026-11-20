@@ -32,14 +32,15 @@ https://www.ephemeralwave.com/studio/ and is never changed.
   rolls a random one
 - A melody maker: random notes or an arpeggio in a key and scale. Click a key to move the
   pattern there (and hear it); pick a scale and the notes follow
-- Oscilloscope, spectrogram, tuner and envelope views
+- A small scope and spectrogram beside the pads, the live spectrum behind the filter's curve,
+  one hit of the sound behind the envelope's, and a tuner in the melody maker
 - Play it from a MIDI keyboard, and turn its knobs with a MIDI controller's (MIDI learn; Web
   MIDI: Chrome, Edge and other Chromium browsers)
 - Projects saved in the browser, with undo/redo, JSON import and export, and share links (the project packed into the link)
 - Export audio for a DAW: seamless loops of 1–8 bars (or with the tail), effects stems (dry,
   delay, reverb, noise, tape noise) that add up to the mix, a MIDI file of the pattern, and a one-shot of
   the sound at any note, as one .zip
-- Keyboard shortcuts: Space plays and stops, 1–4 switch the screen view, Ctrl/Cmd+S saves,
+- Keyboard shortcuts: Space plays and stops, Ctrl/Cmd+S saves,
   Ctrl/Cmd+Shift+S saves as a new project (File → Save as…), Ctrl/Cmd+Z undoes
 - Knobs with soft stops at common values, lit up when a knob sits on one: Tempo (60, 90, 100,
   120, 140, 160, 174 BPM; it starts at 120), Swing (including a triplet feel), the middle of
