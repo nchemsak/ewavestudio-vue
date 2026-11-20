@@ -4,6 +4,7 @@
 
 import { encodeSample } from '../../audio/sample';
 import { preDelayMs } from '../../audio/reverb/preDelay';
+import { emptyRhythm, emptySlots, type Slots } from '../patterns/slots';
 import { ref, reactive, computed } from 'vue';
 import {
 	buildSnapshot,
@@ -85,6 +86,7 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 			tape: { enabled: ref(true), age: ref(0.9), wobble: ref(0.9), mode: ref<'tape' | 'vinyl'>('vinyl') },
 		},
 		instruments,
+		patterns: { slots: ref<Slots>(emptySlots()), current: ref(0) },
 		melody: reactive({
 			keyRoot: 'C', keyScale: 'major', rangePreset: 'wide', arpPattern: 'down', arpRate: '1/16',
 			arpOctaves: 3, arpTones: 'scale', arpSkip: false, mode: 'random',
@@ -153,6 +155,15 @@ export function changeEverything(st: ProjectState) {
 	synth.waveforms = synth.waveforms!.map((_, i) => (i % 2 ? 'triangle' : 'square'));
 	synth.ratchets = synth.ratchets!.map((_, i) => (i % 4) + 1);
 	synth.repeatNotes = synth.repeatNotes!.map((_, i) => ['same', 'up', 'down'][i % 3]);
+	// Patterns A–D: C is playing (the lane above), B holds another pattern
+	st.patterns.current.value = 2;
+	const b = emptyRhythm(STEPS, 330);
+	b.steps = b.steps.map((_, i) => i % 3 === 0);
+	b.velocities = b.velocities.map((_, i) => 0.5 + i / 40);
+	b.pitches = b.pitches.map((_, i) => 200 + 10 * i);
+	b.ratchets = b.ratchets.map((_, i) => (i % 2) + 1);
+	b.repeatNotes = b.repeatNotes.map((_, i) => (i % 2 ? 'up' : 'same'));
+	st.patterns.slots.value = [null, { tracks: [b] }, null, null];
 }
 
 // Leaf values of an object, by path ("synth.lfo.rate", "instruments.3.steps", ...)

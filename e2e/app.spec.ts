@@ -5240,6 +5240,132 @@ test('while playing, a key waits for the next bar (a ghost and a caption), a pat
 	await expect.poll(() => notesPlayed(page)).toBeGreaterThan(quiet);
 });
 
+const slotButton = (page: Page, name: string) => page.locator('.mr-slots').getByRole('button', { name: `Pattern ${name}`, exact: true });
+const onPads = async (page: Page) => (await pads(page).evaluateAll((els) => els.map((el, i) => (el.classList.contains('selected') ? i : -1)))).filter((i) => i >= 0);
+
+test('Patterns A–D: each slot keeps its own pattern; Copy; a key moves every slot; saved, imported, one undo step', async ({ page }) => {
+	await turnOnPads(page, [0, 4]);
+	await expect(slotButton(page, 'A')).toHaveAttribute('aria-pressed', 'true');
+	await expect(slotButton(page, 'B')).toHaveClass(/empty/);
+
+	// B: an empty pattern; stopped, at once
+	await slotButton(page, 'B').click();
+	await expect(slotButton(page, 'B')).toHaveAttribute('aria-pressed', 'true');
+	await expect(slotButton(page, 'A')).toHaveAttribute('aria-pressed', 'false');
+	expect(await onPads(page)).toEqual([]);
+	await turnOnPads(page, [2]);
+	await expect(slotButton(page, 'B')).not.toHaveClass(/empty/);
+	await slotButton(page, 'A').click();
+	expect(await onPads(page)).toEqual([0, 4]);
+	await slotButton(page, 'B').click();
+	expect(await onPads(page)).toEqual([2]);
+	expect(await padNotes(page, [2])).toEqual(['A3']);
+
+	// A key picked moves every slot, not only the one playing
+	await keyButton(page, 'C').click();
+	expect(await padNotes(page, [2])).toEqual(['C4']);
+	await slotButton(page, 'A').click();
+	expect(await padNotes(page, [0, 4])).toEqual(['C4', 'C4']);
+
+	// Copy, then C: C gets A's pattern and plays; Esc puts Copy back up
+	await page.waitForTimeout(500); // each change its own undo step (useUndoHistory's SETTLE_MS)
+	const copy = page.locator('.mr-copy');
+	await copy.click();
+	await expect(copy).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('.mr-cap')).toHaveText('Copy A to');
+	await page.keyboard.press('Escape');
+	await expect(copy).toHaveAttribute('aria-pressed', 'false');
+	await copy.click();
+	await slotButton(page, 'C').click();
+	await expect(copy).toHaveAttribute('aria-pressed', 'false');
+	await expect(slotButton(page, 'C')).toHaveAttribute('aria-pressed', 'true');
+	expect(await onPads(page)).toEqual([0, 4]);
+	await page.waitForTimeout(500);
+	await pads(page).nth(4).click(); // C changes; A doesn't
+	expect(await onPads(page)).toEqual([0]);
+
+	// Saved in the project file: the current slot is the lane, the others their own
+	const file = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	const slots = file.data.patterns.slots;
+	expect(file.data.patterns.current).toBe(2);
+	expect(slots.map((s: any) => s?.tracks[0].steps.flatMap((on: boolean, i: number) => (on ? [i] : [])) ?? null))
+		.toEqual([[0, 4], [2], [0], null]);
+	expect(slots[0].tracks[0].machine).toBe('rhythm');
+
+	// Undo: back to before the pad (one step), then to A before the copy (one step)
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.waitForTimeout(500);
+	await page.keyboard.press('Control+z');
+	await expect.poll(() => onPads(page)).toEqual([0, 4]);
+	await page.keyboard.press('Control+z');
+	await expect(slotButton(page, 'A')).toHaveAttribute('aria-pressed', 'true');
+	await expect(slotButton(page, 'C')).toHaveClass(/empty/);
+
+	// An imported project opens on its own slot; one saved before PR 109 has its pattern in A
+	await importChanged(page, 'Slots', (d) => { d.patterns = file.data.patterns; d.instruments.find((i: any) => i.name === 'synth-voice').steps = file.data.patterns.slots[2].tracks[0].steps; });
+	await expect(slotButton(page, 'C')).toHaveAttribute('aria-pressed', 'true');
+	await slotButton(page, 'B').click();
+	expect(await onPads(page)).toEqual([2]);
+	await importChanged(page, 'Old', (d) => { delete d.patterns; });
+	await expect(slotButton(page, 'A')).toHaveAttribute('aria-pressed', 'true');
+	expect(await onPads(page)).toEqual([2]);
+	await expect(slotButton(page, 'B')).toHaveClass(/empty/);
+
+	// File → New: four empty slots, A
+	await slotButton(page, 'D').click();
+	await chooseFromFileMenu(page, 'New');
+	await expect(slotButton(page, 'A')).toHaveAttribute('aria-pressed', 'true');
+	for (const n of ['A', 'B', 'C', 'D']) await expect(slotButton(page, n)).toHaveClass(/empty/);
+});
+
+test('Patterns A–D: while playing, a slot waits for the next bar (a ghost); Shift+click is at once; Stop applies it', async ({ page }) => {
+	// A: pad 1; B: pad 9. 120 BPM: a bar is 2 s
+	await turnOnPads(page, [0]);
+	await slotButton(page, 'B').click();
+	await turnOnPads(page, [8]);
+	await slotButton(page, 'A').click();
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => (window as any).__starts.some((s: any) => s.osc && s.when > 0))).toBe(true);
+	const t0 = await page.evaluate(() => (window as any).__starts.find((s: any) => s.osc && s.when > 0).when as number);
+	const BAR = 2;
+	const ctxTime = () => page.evaluate(() => (window as any).__ctx.currentTime as number);
+	const nextBar = (t: number) => t0 + Math.ceil((t - t0) / BAR + 1e-6) * BAR;
+	// A quarter into a bar
+	const t = await ctxTime();
+	await page.waitForTimeout((nextBar(t) + BAR / 4 - t) * 1000);
+
+	const clickedAt = await ctxTime();
+	const changed = page.evaluate(() => new Promise<number>((resolve) => {
+		const id = setInterval(() => {
+			if (document.querySelectorAll('.pad-row .padTEST')[8].classList.contains('selected')) { clearInterval(id); resolve((window as any).__ctx.currentTime); }
+		}, 3);
+	}));
+	await slotButton(page, 'B').click();
+	await expect(slotButton(page, 'B')).toHaveClass(/is-queued/);
+	await expect(slotButton(page, 'A')).toHaveAttribute('aria-pressed', 'true');
+	expect(await onPads(page)).toEqual([0]);
+	const at = await changed;
+	const bar = nextBar(clickedAt);
+	expect(at).toBeGreaterThan(bar - 0.25);
+	expect(at).toBeLessThan(bar + 0.05);
+	await expect(slotButton(page, 'B')).toHaveAttribute('aria-pressed', 'true');
+	await expect(slotButton(page, 'B')).not.toHaveClass(/is-queued/);
+
+	// Shift+click: at once
+	await slotButton(page, 'A').click({ modifiers: ['Shift'] });
+	await expect(slotButton(page, 'A')).toHaveAttribute('aria-pressed', 'true');
+	expect(await onPads(page)).toEqual([0]);
+
+	// Stop applies what's waiting
+	const t2 = await ctxTime();
+	await page.waitForTimeout((nextBar(t2) + BAR / 4 - t2) * 1000);
+	await slotButton(page, 'B').click();
+	await expect(slotButton(page, 'B')).toHaveClass(/is-queued/);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await expect(slotButton(page, 'B')).toHaveAttribute('aria-pressed', 'true');
+	expect(await onPads(page)).toEqual([8]);
+});
+
 test('Melody Maker: a new scale keeps each note on its degree; a project opening keeps its notes', async ({ page }) => {
 	const on = [0, 1, 2, 3, 4, 5, 6, 7];
 	await turnOnPads(page, on);
