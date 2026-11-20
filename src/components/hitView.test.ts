@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hitSeconds, hitSpanMs, hitTicks, hitColumns, formatLength, formatPeak, HIT_MAX_S } from './hitView';
-import { timeX } from '../lib/shapeViews';
+import { hitSeconds, hitColumns, formatLength, formatPeak, HIT_MAX_S } from './hitView';
 
 const sound = (o: { env?: [boolean, number, number]; delay?: [boolean, number, number, number]; reverb?: [boolean, number, number] } = {}) => {
 	const [envOn, attackMs, decayMs] = o.env ?? [true, 20, 400];
@@ -15,7 +14,7 @@ const sound = (o: { env?: [boolean, number, number]; delay?: [boolean, number, n
 	} as any;
 };
 
-describe('the hit at rest', () => {
+describe('the hit (behind the Envelope card)', () => {
 	it('renders as long as the sound can ring, within limits', () => {
 		expect(hitSeconds(sound())).toBeCloseTo(0.62, 5); // Attack + Decay and a little room
 		expect(hitSeconds(sound({ env: [true, 1, 50] }))).toBe(0.3); // at least 0.3 s
@@ -33,20 +32,6 @@ describe('the hit at rest', () => {
 		};
 		expect(hitSeconds(rev('next'))).toBeCloseTo(0.62 + 0.5, 5);
 		expect(hitSeconds(rev('1/2', 125))).toBeCloseTo(0.62 + 1 + 0.125, 5);
-	});
-
-	it('the time axis ends on a round number past the hit, with ticks that keep apart', () => {
-		expect(hitSpanMs(420)).toBe(500);
-		expect(hitSpanMs(500)).toBe(750);
-		expect(hitSpanMs(2570)).toBe(3000);
-		expect(hitSpanMs(99999)).toBe(6000);
-		for (const span of [50, 500, 3000, 6000]) {
-			const ticks = hitTicks(span);
-			expect(ticks.length).toBeGreaterThan(0);
-			expect(ticks.every((t) => t < span)).toBe(true);
-			const xs = [0, ...ticks.map((t) => timeX(t, 1, span))];
-			for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(0.14);
-		}
 	});
 
 	it('columns draw the wave itself near the start and its envelope further on', () => {

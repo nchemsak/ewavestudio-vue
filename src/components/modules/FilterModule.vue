@@ -53,6 +53,8 @@
         <div class="sp-body">
             <ShapePad :w="PAD_W" :h="PAD_H" title="Filter" :readout="`${Math.round(localCutoff)} Hz · Q ${localResonance.toFixed(1)}`"
                 :handles="handles" active="cutoff" :disabled="!localEnabled" @start="onKnobStart('cutoff')" @move="onPadMove" @end="onKnobEnd">
+                <!-- The live spectrum, faint, on the same axis (PR 108: the big screen's Spectrum) -->
+                <template v-if="spectrum" #under><canvas ref="underEl" class="sp-under filter-spectrum"></canvas></template>
                 <!-- The LFO's swing of the cutoff, and where it has it now -->
                 <rect v-if="lfoSpan" :x="lfoSpan[0]" y="0" :width="lfoSpan[1] - lfoSpan[0]" :height="PAD_H" class="sp-lfo-range" />
                 <path v-if="ghost" :d="ghost" class="sp-ghost" />
@@ -97,7 +99,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue';
+import { startSpectrumUnderlay, type ViewSource } from '../cardViews';
 import Knob from '../Knob.vue';
 import type { LfoView } from '../../lib/lfoVisual';
 import ShapePad, { type PadPoint } from '../ShapePad.vue';
@@ -123,6 +126,8 @@ const props = withDefaults(
         // it has it now, over an arc for its whole swing (the knob itself stays where it's set)
         lfoView?: LfoView | null;
         classic?: boolean;
+        // What sounds, drawn behind the curve (cardViews.ts); none on the phone's classic card
+        spectrum?: ViewSource | null;
     }>(),
     {
         title: 'Filter',
@@ -223,6 +228,12 @@ function onKnobEnd() {
 
 // The screen: the response curve (closed along the bottom, so it can be filled), dashed where
 // the envelope starts each note's cutoff, and one grip at the cutoff
+// The spectrum behind the curve: its own loop, which rests while nothing sounds
+const underEl = ref<HTMLCanvasElement | null>(null);
+let stopUnder: (() => void) | null = null;
+onMounted(() => { if (underEl.value && props.spectrum) stopUnder = startSpectrumUnderlay(underEl.value, props.spectrum); });
+onBeforeUnmount(() => stopUnder?.());
+
 const PAD_W = 250;
 const PAD_H = 88;
 const shape = computed(() => toPath([[0, PAD_H + 4], ...filterPts(localCutoff.value, localResonance.value, PAD_W, PAD_H), [PAD_W, PAD_H + 4]]));

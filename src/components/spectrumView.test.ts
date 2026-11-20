@@ -1,16 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { bandLevel, holdPeaks, strongestNoteHz, noteOf, cNotes, NOTE_MIN_LEVEL, SKIP_BINS } from './spectrumView';
+import { bandLevel, holdPeaks, strongestNoteHz, noteOf, NOTE_MIN_LEVEL, SKIP_BINS } from './spectrumView';
 
-const BIN_HZ = 48000 / 2048; // the live analyser's: fftSize 2048 at 48 kHz
+const BIN_HZ = 48000 / 2048; // an analyser of 2048 points at 48 kHz (the tuner's has 8192)
 
-describe('the Spectrum view', () => {
-	it("a band's level is its loudest bin, skipping the DC bins", () => {
+describe('reading the spectrum', () => {
+	it("a band's level is its loudest bin, skipping only DC (the views' tap is high-passed, PR 108)", () => {
 		const bins = new Uint8Array(1024);
-		bins[1] = 255; // DC offset: ignored
+		bins[0] = 255; // DC: ignored
+		bins[2] = 90;  // about 47 Hz: drawn now
 		bins[10] = 120; bins[11] = 200;
-		expect(bandLevel(bins, BIN_HZ, 0, 3 * BIN_HZ)).toBe(0);
+		expect(SKIP_BINS).toBe(1);
+		expect(bandLevel(bins, BIN_HZ, 0, 0.5 * BIN_HZ)).toBe(0);
+		expect(bandLevel(bins, BIN_HZ, 0, 3 * BIN_HZ)).toBe(90);
 		expect(bandLevel(bins, BIN_HZ, 9 * BIN_HZ, 12 * BIN_HZ)).toBe(200);
-		expect(SKIP_BINS).toBeGreaterThan(1);
 	});
 
 	it('the peak-hold line jumps up at once and falls slowly', () => {
@@ -37,12 +39,5 @@ describe('the Spectrum view', () => {
 		expect(noteOf(440 * Math.pow(2, 1 / 12))).toEqual({ name: 'A#4', cents: 0 });
 		expect(noteOf(440 * Math.pow(2, 1 / 12), true).name).toBe('Bb4');
 		expect(noteOf(225).cents).toBe(39);
-	});
-
-	it('ticks every C on the axis', () => {
-		const cs = cNotes();
-		expect(cs[0].name).toBe('C1');
-		expect(cs.at(-1)!.name).toBe('C9');
-		expect(cs.find((c) => c.name === 'C4')!.hz).toBeCloseTo(261.63, 1);
 	});
 });

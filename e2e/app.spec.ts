@@ -180,9 +180,12 @@ const lateNotes = (page: Page, from: number) =>
 		.filter((s: any) => s.osc && s.now - s.when > 0.05).length as number, from);
 
 const pads = (page: Page) => page.locator('.pad-row .padTEST');
-const screenView = (page: Page) => page.locator('.fkey[aria-pressed="true"]');
-// The hit at rest (PR 94): the screen's seventh canvas, shown while nothing plays
-const hitCanvas = (page: Page) => page.locator('.nac-screen__lcd canvas').nth(6);
+// The hit (PR 94; behind the Envelope card's curve since PR 108), and what it says to screen readers
+const envelopeCard = (page: Page) => page.locator('.ds-sound section[aria-label="Envelope"]');
+const hitCanvas = (page: Page) => envelopeCard(page).locator('canvas.env-hit');
+const hitCaption = (page: Page) => envelopeCard(page).locator('.visually-hidden');
+// The machine rail (PR 108), where the big screen was
+const rail = (page: Page) => page.locator('.machine-rail');
 // The two preset boxes in the transport card
 const soundsBox = (page: Page) => page.getByRole('group', { name: 'Sound presets', exact: true });
 const patternsBox = (page: Page) => page.getByRole('group', { name: 'Pattern presets', exact: true });
@@ -223,9 +226,11 @@ async function setTempo(page: Page, bpm: number) {
 	await tempo.blur();
 }
 
-test('loads as version 2 with the synth lane and the four screen views', async ({ page }) => {
+test('loads as version 2 with the synth lane and the machine rail', async ({ page }) => {
 	await expect(page).toHaveTitle('Ephemeral Wave Synth 2');
-	await expect(page.locator('.fkey')).toHaveCount(4);
+	await expect(rail(page)).toBeVisible();
+	await expect(rail(page).locator('.mr-row')).toHaveCount(1);
+	await expect(rail(page).locator('.mr-name')).toHaveText('Rhythm');
 	await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
 });
 
@@ -284,83 +289,102 @@ test('the built page has the Google Analytics tag (stubbed out here)', async ({ 
 	expect(tag).toEqual({ gtag: 'function', config: true, script: true });
 });
 
-test('number keys 1–4 switch the screen view, except while typing', async ({ page }) => {
-	// At rest the screen shows the hit (PR 94), no F-key lit; a view picked shows instead
-	await expect(hitCanvas(page)).toBeVisible();
-	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
-	await page.locator('body').click({ position: { x: 5, y: 5 } });
-	// F1 Scope, F2 Spectrum, F3 Spectrogram, F4 Tuner (PR 70: the Envelope view has no key)
-	for (const [key, title] of [['2', 'Spectrum'], ['3', 'Spectrogram'], ['4', 'Tuner'], ['1', 'Oscilloscope']]) {
-		await page.keyboard.press(key);
-		await expect(screenView(page)).toHaveAttribute('title', title);
-	}
-	const name = page.getByRole('textbox', { name: 'Project name' });
-	await name.click();
-	await page.keyboard.type('23');
-	await expect(screenView(page)).toHaveAttribute('title', 'Oscilloscope');
-});
-
-test('at rest the screen shows one hit of the sound, redrawn as the sound changes', async ({ page }) => {
-	const caption = page.locator('.nac-screen__caption');
-	const drawn = () => hitCanvas(page).evaluate((c: HTMLCanvasElement) => c.toDataURL());
-	// A fresh page: the hit of the factory sound (A3, the sine), its length and peak
-	await expect(hitCanvas(page)).toBeVisible();
-	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
-	await expect(caption).toHaveText(/^Hit: A3 Sine, \d+ ms, peak −\d+\.\d dB$/);
-	const lengthOf = async () => Number(/, (\d+) ms,/.exec((await caption.textContent())!)![1]);
-	const factoryLength = await lengthOf();
-	// Attack 20 ms + Decay 400 ms, give or take where it fades below −80 dBFS
-	expect(factoryLength).toBeGreaterThan(250);
-	expect(factoryLength).toBeLessThan(700);
-	// Something is drawn: the middle column of the plot isn't the background
-	const painted = await hitCanvas(page).evaluate((c: HTMLCanvasElement) => {
-		const ctx = c.getContext('2d')!;
-		const bg = ctx.getImageData(2, Math.round(c.height / 2), 1, 1).data;
-		const { data } = ctx.getImageData(Math.round(c.width * 0.4), 0, 1, c.height);
+test('the machine rail: its screens draw while something plays, and Rhythm mutes and sets the level', async ({ page }) => {
+	// No big screen, no F-keys, and the number keys no longer pick views (PR 108)
+	await expect(page.locator('.fkey')).toHaveCount(0);
+	const scope = rail(page).locator('.mr-screen canvas').nth(0);
+	const spec = rail(page).locator('.mr-screen canvas').nth(1);
+	await expect(scope).toBeVisible();
+	await expect(spec).toBeVisible();
+	// How much of a canvas differs from its own corner (the screen's background)
+	const painted = (c: typeof scope) => c.evaluate((el: HTMLCanvasElement) => {
+		const ctx = el.getContext('2d')!;
+		const { data } = ctx.getImageData(0, 0, el.width, el.height);
+		const bg = [data[0], data[1], data[2]];
 		let n = 0;
 		for (let i = 0; i < data.length; i += 4) {
 			if (Math.abs(data[i] - bg[0]) + Math.abs(data[i + 1] - bg[1]) + Math.abs(data[i + 2] - bg[2]) > 60) n++;
 		}
 		return n / (data.length / 4);
 	});
-	expect(painted).toBeGreaterThan(0.2);
+	expect(await painted(spec)).toBe(0);
 
-	// A shorter Decay: the envelope view while it's turned, then the hit, shorter
-	const decay = page.locator('section[aria-label="Envelope"]').getByRole('slider', { name: 'Decay', exact: true });
+	// The row's steps follow the pads, in their colours
+	await turnOnPads(page, [0, 4, 8, 12]);
+	await expect(rail(page).locator('.mr-cells i.on')).toHaveCount(4);
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect(rail(page).locator('.mr-cells i.now')).toHaveCount(1);
+	await page.waitForTimeout(1500);
+	expect(await painted(spec), 'the spectrogram draws the notes').toBeGreaterThan(0.005);
+	expect(await painted(scope), 'the scope draws the wave').toBeGreaterThan(0.002);
+
+	// The LED mutes Rhythm: no more notes (counted by their filters' sweeps: one per note; a bar
+	// at 120 BPM has four)
+	const notes = () => page.evaluate(() => ((window as any).__filterDetuneCalls ?? []).filter((c: any) => c[0] === 'set').length as number);
+	const led = rail(page).getByRole('switch', { name: 'Rhythm on' });
+	await expect(led).toHaveAttribute('aria-checked', 'true');
+	await led.click();
+	await expect(led).toHaveAttribute('aria-checked', 'false');
+	await expect(page.locator('.mute-dot')).toHaveClass(/muted/);
+	await page.waitForTimeout(300);
+	const before = await notes();
+	await page.waitForTimeout(2100);
+	expect(await notes()).toBe(before);
+	await led.click();
+	await expect.poll(notes, { timeout: 3000 }).toBeGreaterThan(before);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+
+	// Its level is the lane's volume (hidden since PR 92), saved with the project, and MIDI-learnable
+	const level = rail(page).getByRole('slider', { name: 'Rhythm level' });
+	await expect(level).toHaveAttribute('aria-valuetext', '50%');
+	await level.focus();
+	await page.keyboard.press('Shift+ArrowUp');
+	await expect(level).toHaveAttribute('aria-valuetext', '60%');
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	expect(saved.data.instruments.find((i: any) => i.name === 'synth-voice').channelVolume).toBeCloseTo(0.6, 5);
+	await expect(level).toHaveAttribute('data-midi-id', 'synth.volume');
+});
+
+test('the hit is drawn behind the Envelope card\'s curve, redrawn as the sound changes', async ({ page }) => {
+	const caption = hitCaption(page);
+	const drawn = () => hitCanvas(page).evaluate((c: HTMLCanvasElement) => c.toDataURL());
+	// A fresh page: the hit of the factory sound (A3, the sine), its length and peak
+	await expect(hitCanvas(page)).toBeVisible();
+	await expect(caption).toHaveText(/^Hit: A3 Sine, \d+ ms, peak −\d+\.\d dB$/);
+	const lengthOf = async () => Number(/, (\d+) ms,/.exec((await caption.textContent())!)![1]);
+	const factoryLength = await lengthOf();
+	// Attack 20 ms + Decay 400 ms, give or take where it fades below −80 dBFS
+	expect(factoryLength).toBeGreaterThan(250);
+	expect(factoryLength).toBeLessThan(700);
+	// Something is drawn early on (the square-root scale: 400 ms is past 40 % of the width), and
+	// nothing near the end of the card's 2.1 s
+	const share = (x0: number, x1: number) => hitCanvas(page).evaluate((c: HTMLCanvasElement, [x0, x1]) => {
+		const ctx = c.getContext('2d')!;
+		const { data } = ctx.getImageData(Math.round(c.width * x0), 0, Math.max(1, Math.round(c.width * (x1 - x0))), c.height);
+		let n = 0;
+		for (let i = 3; i < data.length; i += 4) if (data[i] > 20) n++;
+		return n / (data.length / 4);
+	}, [x0, x1]);
+	await expect.poll(() => share(0.1, 0.3)).toBeGreaterThan(0.2);
+	expect(await share(0.8, 1)).toBe(0);
+
+	// A shorter Decay: shorter, drawn again
+	const before = await drawn();
+	const decay = envelopeCard(page).getByRole('slider', { name: 'Decay', exact: true });
 	await decay.focus();
 	await page.keyboard.press('Home');
-	await expect(page.locator('.nac-screen__lcd canvas').nth(3)).toBeVisible();
-	await page.keyboard.press('Tab');
-	await expect(hitCanvas(page)).toBeVisible();
 	await expect.poll(lengthOf).toBeLessThan(factoryLength / 2);
-
-	// A sound preset: a knob that holds no view of its own redraws it at once
-	const before = await drawn();
-	await page.locator('.transport-card').getByRole('button', { name: 'Bell', exact: true }).click();
-	await expect(caption).toHaveText(/^Hit: A3 Glass, [\d.]+ s, peak/); // the long ring of its reverb
 	await expect.poll(drawn).not.toBe(before);
 
-	// Playing: the view picked before (the Spectrum); once stopped and quiet, the hit again
+	// A sound preset redraws it, also while playing
 	await turnOnPads(page, [0, 8]);
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
-	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
-	await expect(hitCanvas(page)).toBeHidden();
-	await expect(caption).toHaveCount(0);
-	await page.waitForTimeout(500);
+	const playing = await drawn();
+	await page.locator('.transport-card').getByRole('button', { name: 'Bell', exact: true }).click();
+	await expect(caption).toHaveText(/^Hit: A3 Glass, [\d.]+ s, peak/); // the long ring of its reverb
+	await expect.poll(drawn).not.toBe(playing);
+	await expect(hitCanvas(page)).toBeVisible();
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
-	await page.waitForTimeout(500);
-	await expect(hitCanvas(page)).toBeHidden(); // its tail still shows on the Spectrum for a moment
-	await expect(hitCanvas(page)).toBeVisible({ timeout: 4000 });
-
-	// A view picked at rest shows instead, until things next come to rest
-	await page.locator('body').click({ position: { x: 5, y: 5 } });
-	await page.keyboard.press('4');
-	await expect(screenView(page)).toHaveAttribute('title', 'Tuner');
-	await expect(hitCanvas(page)).toBeHidden();
-	await page.keyboard.press('Space');
-	await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
-	await page.keyboard.press('Space');
-	await expect(hitCanvas(page)).toBeVisible({ timeout: 4000 });
 });
 
 // A fake microphone (PR 95): a quiet room, then a drum-like hit 0.4 s after the browser asks
@@ -573,16 +597,15 @@ test('the spectrogram draws a note in its pad\'s colour', async ({ page }) => {
 	await turnOnPads(page, [0, 4, 8, 12]);
 	const padHueNow = await pads(page).nth(0).evaluate((el) => Number(getComputedStyle(el).getPropertyValue('--heat-h')));
 	expect(padHueNow).toBe(padHue(220));
-	await page.locator('body').click({ position: { x: 5, y: 5 } });
-	await page.keyboard.press('3');
-	await expect(screenView(page)).toHaveAttribute('title', 'Spectrogram');
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
 	await page.waitForTimeout(2500);
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
-	// The hues drawn in the lowest fifth of the screen, where the note's fundamental is
-	const hues = await page.locator('.nac-screen__lcd canvas').nth(1).evaluate((c: HTMLCanvasElement) => {
+	// The hues drawn in the rows round 220 Hz (the rail's spectrogram: 40 Hz–10 kHz, log, low at
+	// the bottom), where the note's fundamental is
+	const hues = await rail(page).locator('.mr-screen canvas').nth(1).evaluate((c: HTMLCanvasElement) => {
 		const ctx = c.getContext('2d')!;
-		const { data } = ctx.getImageData(0, Math.floor(c.height * 0.8), c.width, Math.floor(c.height * 0.2));
+		const row = 1 - Math.log(220 / 40) / Math.log(10000 / 40);
+		const { data } = ctx.getImageData(0, Math.floor(c.height * (row - 0.08)), c.width, Math.ceil(c.height * 0.16));
 		// The screen's background: the most common colour of what's been drawn (columns not yet
 		// scrolled in are still transparent)
 		const counts = new Map<number, number>();
@@ -613,59 +636,49 @@ test('the spectrogram draws a note in its pad\'s colour', async ({ page }) => {
 	expect(near / hues.length).toBeGreaterThan(0.6);
 });
 
-test('the Spectrum (F2) draws a played note at its frequency, in its pad\'s colour; the Pitch card\'s knobs show the envelope view', async ({ page }) => {
+test('the spectrum behind the Filter card\'s curve draws a played note at its frequency, in its pad\'s colour; the tuner names it', async ({ page }) => {
 	await turnOnPads(page, [0, 4, 8, 12]); // A3, 220 Hz, the default sine
-	await page.locator('body').click({ position: { x: 5, y: 5 } });
-	await page.keyboard.press('2');
-	await expect(screenView(page)).toHaveAttribute('title', 'Spectrum');
-	const spectrum = page.locator('.nac-screen__lcd canvas').nth(5);
+	const spectrum = page.locator('.ds-sound .filter-card canvas.filter-spectrum');
 	await expect(spectrum).toBeVisible();
+	const tuner = page.locator('.ds-compose .tuner-badge');
+	await expect(tuner).not.toHaveClass(/\bon\b/); // nothing heard yet
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
 	await page.waitForTimeout(800);
-	// The column of the plot at 220 Hz (the same log axis as the filter view: 20 Hz–20 kHz,
-	// the plot 14 px in from the left and 10 from the right), read while it plays
-	const reading = await spectrum.evaluate((c: HTMLCanvasElement) => {
+	// The column at 220 Hz on the card's 20 Hz–20 kHz log axis, and one at 40 Hz (the old
+	// screen's empty wall: below 70 Hz nothing was drawn), read while it plays
+	const hues = (hz: number) => spectrum.evaluate((c: HTMLCanvasElement, hz) => {
 		const ctx = c.getContext('2d')!;
-		const dpr = c.width / c.clientWidth;
-		const plotW = c.clientWidth - 14 - 10;
-		const x = Math.round((14 + (Math.log(220 / 20) / Math.log(1000)) * plotW) * dpr);
+		const x = Math.round((Math.log(hz / 20) / Math.log(1000)) * c.width);
 		const { data } = ctx.getImageData(x, 0, 1, c.height);
-		// The screen's background (a corner): it and what's drawn faintly over it (the grid, the
-		// dashed note mark) aren't the note
-		const bg = ctx.getImageData(1, Math.round(c.height / 2), 1, 1).data;
-		const hues: number[] = [];
+		const out: number[] = [];
 		for (let i = 0; i < data.length; i += 4) {
+			if (data[i + 3] < 30) continue; // transparent: nothing drawn
 			const [r, g, b] = [data[i] / 255, data[i + 1] / 255, data[i + 2] / 255];
 			const max = Math.max(r, g, b), min = Math.min(r, g, b);
-			if (max - min < 0.25) continue; // greys: the outline, text
-			if (Math.abs(data[i] - bg[0]) + Math.abs(data[i + 1] - bg[1]) + Math.abs(data[i + 2] - bg[2]) < 90) continue;
 			const d = max - min;
+			if (d < 0.1) continue;
 			let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
 			h = Math.round(h * 60);
-			hues.push(h < 0 ? h + 360 : h);
+			out.push(h < 0 ? h + 360 : h);
 		}
-		return hues;
-	});
-	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+		return out;
+	}, hz);
+	const reading = await hues(220);
 	expect(reading.length, 'the note is drawn there').toBeGreaterThan(10);
 	const near = reading.filter((h) => Math.abs(h - padHue(220)) <= 14).length;
 	expect(near / reading.length).toBeGreaterThan(0.6);
-
-	// The Pitch card's Amount shows the envelope view (the sweep drawn on it), no F-key lit,
-	// then back to the Spectrum when the knob is let go
-	const envCanvas = page.locator('.nac-screen__lcd canvas').nth(3);
-	const amount = page.locator('.sound-row-2 .module.pitch-env').getByRole('slider', { name: 'Amount' });
-	await amount.focus();
-	await page.keyboard.press('ArrowRight');
-	await expect(envCanvas).toBeVisible();
-	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
-	await page.keyboard.press('Tab');
-	await expect(envCanvas).toBeHidden();
-	// Stopped: back to the hit once things are at rest
-	await expect(hitCanvas(page)).toBeVisible();
+	// The tuner in the Melody Maker's screen: A3, nearly in tune
+	await expect(tuner).toHaveClass(/\bon\b/);
+	await expect(tuner.locator('b')).toHaveText('A3');
+	const cents = Number((await tuner.locator('.tb-cents').textContent())!.replace('−', '-').replace(/[±¢+]/g, ''));
+	expect(Math.abs(cents)).toBeLessThanOrEqual(10);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	// Once quiet, the columns fall away and the tuner fades
+	await expect.poll(async () => (await hues(220)).length, { timeout: 5000 }).toBe(0);
+	await expect(tuner).not.toHaveClass(/\bon\b/, { timeout: 4000 });
 });
 
-test('knobs work from the keyboard, and turning Attack shows the envelope until focus moves on', async ({ page }) => {
+test('knobs work from the keyboard', async ({ page }) => {
 	// One step per arrow on a knob with few steps (tempo: 1 BPM)
 	const tempo = page.getByRole('slider', { name: 'Tempo', exact: true });
 	await expect(tempo).toHaveAttribute('aria-valuenow', '120');
@@ -690,58 +703,11 @@ test('knobs work from the keyboard, and turning Attack shows the envelope until 
 	await page.keyboard.press('ArrowDown');
 	await expect(cutoff).toHaveAttribute('aria-valuetext', '4901 Hz');
 
-	// Turning an envelope knob shows the envelope view (no F-key of its own since PR 70), as
-	// dragging it does, until the knob loses focus (moving on from Cutoff ends its filter view first)
+	// Attack too, with a value a screen reader can say
 	const attack = page.getByRole('slider', { name: 'Attack' });
-	const envCanvas = page.locator('.nac-screen__lcd canvas').nth(3);
 	await attack.focus();
-	await expect(hitCanvas(page)).toBeVisible(); // focus alone changes nothing (at rest: the hit)
 	await page.keyboard.press('ArrowUp');
-	await expect(envCanvas).toBeVisible();
-	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
 	await expect(attack).toHaveAttribute('aria-valuetext', /^\d+ ms$/);
-	await page.keyboard.press('Tab');
-	await expect(hitCanvas(page)).toBeVisible();
-});
-
-test('turning Cutoff or Resonance shows the filter curve until the knob is let go', async ({ page }) => {
-	const filterCanvas = page.locator('.nac-screen__lcd canvas').nth(4);
-	const cutoff = page.getByRole('slider', { name: 'Cutoff', exact: true });
-	const resonance = page.getByRole('slider', { name: 'Resonance', exact: true });
-	const picture = () => filterCanvas.evaluate((c: HTMLCanvasElement) => c.toDataURL());
-	await expect(hitCanvas(page)).toBeVisible();
-	await expect(filterCanvas).toBeHidden();
-
-	// No F-key of its own: none is lit while it shows
-	await cutoff.focus();
-	await page.keyboard.press('ArrowDown');
-	await expect(filterCanvas).toBeVisible();
-	await expect(page.locator('.fkey[aria-pressed="true"]')).toHaveCount(0);
-
-	// The curve follows the knobs
-	await page.waitForTimeout(100);
-	const before = await picture();
-	await page.keyboard.press('PageDown');
-	await expect.poll(picture).not.toBe(before);
-	const lower = await picture();
-	await resonance.focus(); // still the filter view
-	await page.keyboard.press('PageUp');
-	await expect(filterCanvas).toBeVisible();
-	await expect.poll(picture).not.toBe(lower);
-
-	// Let go: back to what it showed (at rest: the hit)
-	await page.keyboard.press('Tab');
-	await expect(filterCanvas).toBeHidden();
-	await expect(hitCanvas(page)).toBeVisible();
-
-	// Picking another view while turning keeps that view afterwards
-	await cutoff.focus();
-	await page.keyboard.press('ArrowUp');
-	await expect(filterCanvas).toBeVisible();
-	await page.keyboard.press('3');
-	await expect(screenView(page)).toHaveAttribute('title', 'Spectrogram');
-	await page.keyboard.press('Tab');
-	await expect(screenView(page)).toHaveAttribute('title', 'Spectrogram');
 });
 
 test('the step pads are one Tab stop: arrows move, Enter switches a pad, Space still plays', async ({ page }) => {
@@ -1975,10 +1941,10 @@ test('laid out like hardware: Sound in rows beside Compose, ending on one line; 
 		await page.setViewportSize({ width, height: 900 });
 		const at = `${width} px`;
 		const [transport, steps, screen, sound, compose] = await Promise.all(
-			['.ds-transport', '.ds-steps', '.ds-visualizer', '.ds-sound', '.ds-compose'].map(rect));
-		// The screen beside the transport and the steps, as tall as both
+			['.ds-transport', '.ds-steps', '.ds-rail', '.ds-sound', '.ds-compose'].map(rect));
+		// The machine rail beside the transport and the steps, as tall as both (the big screen's place)
 		expect(screen.left, at).toBeGreaterThan(transport.right);
-		expect(near(screen.top, transport.top) && near(screen.bottom, steps.bottom), `${at}: screen spans both`).toBe(true);
+		expect(near(screen.top, transport.top) && near(screen.bottom, steps.bottom), `${at}: rail spans both`).toBe(true);
 		// Sound and Compose side by side, ending on one line
 		expect(compose.left, at).toBeGreaterThan(sound.right);
 		expect(near(sound.top, compose.top) && near(sound.bottom, compose.bottom), `${at}: one bottom line`).toBe(true);
@@ -2104,11 +2070,10 @@ test('every control can be clicked, none drawn over by another, at every width a
 	await expect(noise).toHaveAttribute('aria-pressed', 'false');
 });
 
-test('the filter envelope sweeps each note\'s cutoff, is saved, and shows on the filter view', async ({ page }) => {
+test('the filter envelope sweeps each note\'s cutoff, and is saved', async ({ page }) => {
 	const card = page.locator('.module.filter');
 	const amount = card.getByRole('slider', { name: 'Env Amt', exact: true });
 	const decay = card.getByRole('slider', { name: 'Decay', exact: true });
-	const filterCanvas = page.locator('.nac-screen__lcd canvas').nth(4);
 	const calls = () => page.evaluate(() => (window as any).__filterDetuneCalls as any[]);
 	await expect(amount).toHaveAttribute('aria-valuenow', '0'); // off by default
 	await expect(decay).toHaveAttribute('aria-valuenow', '200');
@@ -2120,18 +2085,15 @@ test('the filter envelope sweeps each note\'s cutoff, is saved, and shows on the
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
 	expect((await calls()).every((c) => c[0] === 'set' && c[1] === 0)).toBe(true);
 
-	// +2 octaves (bipolar knob, 0.1 octave per step); turning it shows the filter view
+	// +2 octaves (bipolar knob, 0.1 octave per step)
 	await amount.focus();
 	for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowUp');
 	await expect(amount).toHaveAttribute('aria-valuetext', 'cutoff starts 2.0 octaves higher and closes');
-	await expect(filterCanvas).toBeVisible();
 	await decay.focus();
 	await page.keyboard.press('Home'); // 5 ms
-	await expect(filterCanvas).toBeVisible();
 	for (let i = 0; i < 50; i++) await page.keyboard.press('ArrowUp'); // log knob: about half a turn
 	const ms = Number(await decay.getAttribute('aria-valuenow'));
 	await page.keyboard.press('Tab');
-	await expect(filterCanvas).toBeHidden();
 
 	await page.evaluate(() => { (window as any).__filterDetuneCalls = []; });
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
@@ -3058,7 +3020,7 @@ function wavBrightness(bytes: Buffer, fromS: number, toS: number) {
 	return Math.sqrt(dsq / Math.max(sq, 1e-12));
 }
 
-test('VEL switch: only Filter has one; it makes a soft step darker, shows on the screen, and is saved', async ({ page }) => {
+test('VEL switch: only Filter has one; it makes a soft step darker, and is saved', async ({ page }) => {
 	// A saw through a 2 kHz filter, one soft step (25 %)
 	await importOneStep(page, 0.25, undefined, (data) => {
 		data.selectedWaveform = 'sawtooth';
@@ -3075,13 +3037,10 @@ test('VEL switch: only Filter has one; it makes a soft step darker, shows on the
 	await expect(sw).toHaveAttribute('aria-checked', 'false');
 	await expect(sw).toHaveAttribute('title', 'Softer steps are darker');
 
-	// On: +75 %, so the soft step's cutoff falls about an octave. The screen shows the filter
-	// view for a moment (no F-key of its own)
-	const filterCanvas = page.locator('.nac-screen__lcd canvas').nth(4);
+	// On: +75 %, so the soft step's cutoff falls about an octave
 	await sw.click();
 	await expect(sw).toHaveAttribute('aria-checked', 'true');
-	await expect(filterCanvas).toBeVisible();
-	await expect(filterCanvas).toBeHidden({ timeout: 4000 });
+	await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled(); // recorded as a step
 	// A soft step is on, so no note about full velocity
 	await expect(page.getByRole('status').filter({ hasText: 'full velocity' })).toHaveCount(0);
 
@@ -3732,12 +3691,12 @@ test('PR 79: the pedals and the screen\'s keys follow the theme, the pedals\' na
 		expect(await textContrast(page, drive), `${theme}: DRIVE`).toBeGreaterThanOrEqual(4.5);
 		looks[theme] = await page.evaluate(() => [
 			getComputedStyle(document.querySelector('.ds-grid .delay-pedal .panel-top')!).backgroundImage,
-			getComputedStyle(document.querySelector('.fkey')!).backgroundImage,
+			getComputedStyle(document.querySelector('.machine-rail .mr-screen')!).backgroundColor,
 			getComputedStyle(document.querySelector('.sp-key:not(.on)')!).backgroundImage,
 			getComputedStyle(document.body).backgroundImage,
 		]);
 	}
-	// The delay pedal and the screen's keys differ in every theme (they were the same in all);
+	// The delay pedal and the rail's screens differ in every theme (the pedals were the same in all);
 	// the FM and Unison keys take the caps' colours (Synthwave's and Dark's differ)
 	for (const i of [0, 1, 3]) expect(new Set(Object.values(looks).map((l) => l[i])).size, `part ${i}`).toBe(3);
 	expect(looks.synthwave[2]).not.toBe(looks.dark[2]);
@@ -3844,7 +3803,7 @@ test('Analog: its button applies its own colours, and is remembered', async ({ p
 		await expect(button).toHaveAttribute('aria-pressed', 'true');
 		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${name.toLowerCase()}`));
 		expect(await page.evaluate(() => getComputedStyle(document.body).backgroundImage)).toContain(page1);
-		expect(await page.locator('.nac-screen').evaluate((el) => getComputedStyle(el).getPropertyValue('--nac-lcd-bg').trim()))
+		expect(await page.locator('.machine-rail').evaluate((el) => getComputedStyle(el).getPropertyValue('--mr-lcd-bg').trim()))
 			.toBe(screen);
 		await page.reload();
 		await expect(page.locator('html')).toHaveClass(new RegExp(`theme-${name.toLowerCase()}`));
@@ -4518,15 +4477,16 @@ test("a pad's repeats can step up or down the key's chord, live, saved and in th
 		OscillatorNode.prototype.start = function (this: OscillatorNode, when = 0, ...rest: any[]) {
 			// Notes only: the LFO's oscillator runs below 20 Hz
 			const hz = set.get(this.frequency) ?? this.frequency.value;
-			if (hz >= 90) w.__oscFreqs.push({ when, hz });
+			if (hz >= 90) w.__oscFreqs.push({ when, hz, live: this.context instanceof AudioContext });
 			return (orig as any).call(this, when, ...rest);
 		};
 	});
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
-	await expect.poll(() => page.evaluate(() => (window as any).__oscFreqs.length)).toBeGreaterThanOrEqual(4);
+	await expect.poll(() => page.evaluate(() => (window as any).__oscFreqs.filter((h: any) => h.live).length)).toBeGreaterThanOrEqual(4);
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
-	const hits = await page.evaluate(() => ((window as any).__oscFreqs as { when: number; hz: number }[])
-		.sort((a, b) => a.when - b.when).slice(0, 4).map((h) => Math.round(69 + 12 * Math.log2(h.hz / 440))));
+	// (live notes only: the hit behind the Envelope card renders offline, PR 108)
+	const hits = await page.evaluate(() => ((window as any).__oscFreqs as { when: number; hz: number; live: boolean }[])
+		.filter((h) => h.live).sort((a, b) => a.when - b.when).slice(0, 4).map((h) => Math.round(69 + 12 * Math.log2(h.hz / 440))));
 	expect(hits).toEqual([57, 60, 64, 69]);
 
 	// The WAV export's engine plays them too (its oscillators start in an offline context)
@@ -4728,7 +4688,7 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 	await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
 	await openSettings(page);
 	await expect(learn).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(34);
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(35);
 	await cutoff.click();
 	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
 	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');

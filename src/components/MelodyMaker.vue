@@ -95,6 +95,8 @@
                 </svg>
                 <span class="mm-read mm-read--l" aria-hidden="true">{{ keyRoot }} {{ scaleShort }}</span>
                 <span class="mm-read mm-read--r" aria-hidden="true">{{ screenNote }}</span>
+                <!-- The tuner: the note heard and how far off (the big screen's F4 until PR 108) -->
+                <TunerBadge v-if="tuner" :source="tuner" :flats="preferFlat" />
                 <!-- Until Generate is first pressed (in this browser), the screen says to press it -->
                 <div v-if="showHint" class="mm-hint-lcd" aria-hidden="true">
                     <span class="mm-hint-box">
@@ -169,6 +171,8 @@
 </template>
 
 <script setup lang="ts">
+import TunerBadge from './TunerBadge.vue';
+import type { ViewSource } from './cardViews';
 import { ref, computed, watch, defineExpose, onMounted, onBeforeUnmount, useId } from 'vue';
 import { padHue } from '../lib/padColour';
 import { rollY, rootOctavesHz, rollNotes, ghostNotes, rollSegments, soundingKey, type RollNote } from '../lib/melody/roll';
@@ -223,6 +227,8 @@ const props = defineProps<{
     // Phone mode's Key page (PR 106): the keyboard, Scale and the maker's settings in a column
     // beside the screen and Generate, so the card fits 568 × 320 without scrolling
     compact?: boolean;
+    // The tuner in the screen's corner (PR 108; TunerBadge.vue): what it reads
+    tuner?: ViewSource | null;
 }>();
 
 /*  Defaults  */

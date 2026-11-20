@@ -27,8 +27,11 @@
 		<div class="sp-body">
 			<ShapePad :w="PAD_W" :h="PAD_H" title="Envelope" titleRight :readout="`${Math.round(attackMsLocal)} ms · ${Math.round(decayMsLocal)} ms`"
 				:handles="handles" :active="grip" :disabled="!localEnabled" @start="onPadStart" @move="onPadMove" @end="onPadEnd">
+				<!-- One hit of the sound, faint, on the same time scale (PR 108: the big screen's hit at rest) -->
+				<template v-if="hit !== undefined" #under><canvas ref="underEl" class="sp-under env-hit"></canvas></template>
 				<path :d="shape" class="sp-line sp-fill" />
 			</ShapePad>
+			<span v-if="hitText" class="visually-hidden">{{ hitText }}</span>
 			<div class="sp-minis">
 				<div class="sp-mini">
 					<Knob midi-id="env.attack" :value-text="`${Math.round(attackMsLocal)} ms`" v-model="attackNorm" label="Attack" hideLabel size="mini" :min="0" :max="100" :step="1"
@@ -46,7 +49,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { drawHitUnderlay } from '../cardViews';
+import type { HitPicture } from '../hitView';
 import Knob from '../Knob.vue';
 import ShapePad, { nearestHandle, type PadPoint } from '../ShapePad.vue';
 import { ENV_MAX_MS, ENV_TOP, envelopePts, timeX, toPath, xTime } from '../../lib/shapeViews';
@@ -66,6 +71,10 @@ const props = withDefaults(
 		attackLog?: boolean;
 		decayLog?: boolean;
 		classic?: boolean;
+		// One hit of the sound, drawn behind the curve (null until rendered; undefined: none, as
+		// on the phone's classic card), and what it is for screen readers ("Hit: A3 Sine, 420 ms…")
+		hit?: HitPicture | null;
+		hitText?: string;
 	}>(),
 	{
 		title: 'Envelope',
@@ -173,6 +182,20 @@ function onDecayEnd() {
 // The screen: the envelope's shape, and its two grips
 const PAD_W = 110;
 const PAD_H = 88;
+
+// The hit behind the curve, drawn again when it or the screen's size changes
+const underEl = ref<HTMLCanvasElement | null>(null);
+const redrawHit = () => { if (underEl.value) drawHitUnderlay(underEl.value, props.hit ?? null, ENV_TOP / PAD_H); };
+watch(() => props.hit, redrawHit);
+let resize: ResizeObserver | null = null;
+onMounted(() => {
+	redrawHit();
+	if (underEl.value && typeof ResizeObserver !== 'undefined') {
+		resize = new ResizeObserver(redrawHit);
+		resize.observe(underEl.value);
+	}
+});
+onBeforeUnmount(() => resize?.disconnect());
 const shape = computed(() => toPath(envelopePts(attackMsLocal.value, decayMsLocal.value, PAD_W, PAD_H)));
 const handles = computed(() => [
 	{ id: 'attack', x: timeX(attackMsLocal.value, PAD_W, ENV_MAX_MS), y: ENV_TOP },

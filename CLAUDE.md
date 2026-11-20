@@ -10,8 +10,9 @@ harmonic shapes, and a sound recorded from the microphone) and ratchet (2–4 qu
 envelope, noise, FM,
 unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a lo-fi pedal (wear, wobble, tape or vinyl); Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
-arpeggio in a key and scale; a new key or scale moves the pattern with it); a screen with an oscilloscope, spectrum,
-spectrogram and tuner, and envelope and filter views while their knobs are turned; six built-in sounds that set the sound (not the pattern) and six built-in patterns
+arpeggio in a key and scale; a new key or scale moves the pattern with it); a machine rail (a small scope and
+spectrogram, and a row per machine: only Rhythm so far), the live spectrum behind the Filter card's
+curve, one hit of the sound behind the Envelope card's, and a tuner in the Melody Maker; six built-in sounds that set the sound (not the pattern) and six built-in patterns
 that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
 saved in IndexedDB with JSON import and export, and share links (the project in the URL); undo/redo; it installs as an app that
 works offline (a PWA); and a phone held sideways gets a layout of its own (phone mode).
@@ -151,9 +152,8 @@ src/main.ts              createApp + Pinia, imports the global SCSS (Bootstrap +
 src/App.vue              The frame: <DrumSequencer/> +
                          <PwaNotice/> (the "new version" notice)
 src/components/
-  DrumSequencer.vue      ~3900 lines; holds nearly all app state (as refs) and the screen
-                         views; groups the saved settings as `projectState` for saving and
-                         the live engine, and decides what a MIDI note plays; its template's
+  DrumSequencer.vue      ~5300 lines; holds nearly all app state (as refs); groups the saved
+                         settings as `projectState` for saving and the live engine, and decides what a MIDI note plays; its template's
                          LAYOUT section lays out the panel (see "Layout" under Conventions)
   modules/*.vue          Synth and effect panels: Envelope, Filter, PitchEnv, Noise, FM,
                          Unison, LFOGroup, Delay, Drive, Reverb, Tape (UI only; mostly v-model);
@@ -182,7 +182,9 @@ src/components/
   ThemeToggle.vue        The three theme buttons, lightest to darkest (in the gear)
   MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list and Learn
                          (and the MIDI learn bar, at the bottom of the screen)
-  Screen.vue             "LCD" with F-key buttons; DrumSequencer draws its canvas views
+  MachineRail.vue        The machine rail, where the big screen was (PR 108): the scope and the
+                         spectrogram (monitorViews.ts), a row per machine (see "The machine rail")
+  TunerBadge.vue         The tuner in the Melody Maker screen's corner
   WaveButton.vue, WaveIcon.vue  A wave's big tile (Waveforms panel) and small line icon (pads)
   RandomWaveTile.vue     The Waveforms card's Random: a tall tile that rolls the pads' waves and
                          shows their mix (see "Layout" under Conventions)
@@ -193,9 +195,11 @@ src/components/
   PillSwitch.vue         The small on/off pill with an LED in a card's header (VEL, RETRIG)
   ShapePad.vue           A card's screen that you drag (Envelope, Pitch, Filter, FM, Unison), and
                          those cards' shared styles (see "The shape cards")
-  filterView.ts          The screen's filter view (drawing loop and its pure helpers)
-  spectrumView.ts        The screen's Spectrum view, F2 (drawing loop and its pure helpers)
-  hitView.ts             The screen at rest: one hit of the sound (drawing loop, pure helpers)
+  cardViews.ts           The views in the cards: the spectrum behind Filter's curve, the hit
+                         behind Envelope's, the tuner's reading (pure helpers and drawing)
+  monitorViews.ts        The rail's scope and spectrogram (pure helpers and drawing loops)
+  spectrumView.ts        Reading the spectrum: a band's level, peak hold, the strongest note
+  hitView.ts             The hit: how long to render it, its columns, its length and peak
   LfoModKnob.vue         A Knob that draws the LFO visualizer's dot and arc itself (the Volume knob)
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
 src/audio/
@@ -227,7 +231,7 @@ src/audio/
                          the reversed impulse response (see "Effect switches")
   export/scheduleStepSequencer.ts  Separate offline engine used for audio export
   export/exportFiles.ts  The Export audio dialog's files: renders, loops, stems, one-shot; and
-                         renderHit(), the screen's hit at rest
+                         renderHit(), the hit behind the Envelope card
   export/encodeWav.ts    AudioBuffer (or plain channels) → 32-bit float WAV
 src/stores/projectStore.ts  Pinia store: current projectId, name, data snapshot
 src/lib/project/snapshot.ts  Settings ↔ project snapshot, and factory defaults (see "Saving")
@@ -313,8 +317,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   reversed convolver per swell length → its own wet gain). Both go to `preMaster`, and so do the noise layer (and
   the hidden sample lanes), which bypass drive, delay and reverb. From `preMaster` everything
   goes through the tape pedal, or round it while it's off (see "The tape pedal"), to
-  `masterGain` → destination. An `AnalyserNode` is tapped from `masterGain` for the scope,
-  spectrogram and tuner.
+  `masterGain` → destination. The views are tapped from `masterGain` through a 10 Hz high-pass
+  (`viewTap`, PR 108, so the drive's DC offset doesn't show): `analyser` (2048 points) for the
+  rail's scope and spectrogram and phone mode's tiny scope, and `fineAnalyser` (8192 points,
+  about 6 Hz a bin) for the spectrum behind the Filter card and the tuner.
 - Scheduler: `schedule()` runs every 25 ms, driven by a ticker in a small Web Worker
   (`src/audio/ticker.ts`), so playback keeps going in background tabs; it falls back to
   `setInterval` if a worker can't be created. Each run schedules the steps that start within
@@ -367,10 +373,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   gone from the panel; a project that has one plays it as saved, its switch lit, until
   switched off. Presets and the Sounds dice use the switch's amount. Not MIDI-learnable
   (switches). The tooltip is one line ("Softer steps decay sooner"). Turning one on shows
-  what it does (`VEL SWITCHES` section of `DrumSequencer.vue`): Decay's and Cutoff's show the
-  envelope or filter view for 1.5 s (`flashScreen()`), where softer steps (70 % and 40 %,
-  `VELOCITY_FAN`) are drawn dashed whenever the switch is on; and if every step that's on is
-  at full velocity (so it can't change anything yet), a note under the switch says "Every
+  what it does (`VEL SWITCHES` section of `DrumSequencer.vue`; until PR 108 it also showed the
+  big screen's envelope or filter view for 1.5 s, softer steps dashed): if every step that's on
+  is at full velocity (so it can't change anything yet), a note under the switch says "Every
   step is at full velocity: try Humanize" and Pattern Tools' Humanize buttons glow
   (`PatternTools`' `nudge`). The phone's Sound page has the three cards' switches too.
   **Only Filter's is left** (PR 67, the maintainer's call): Decay's and the pitch sweep's were
@@ -447,7 +452,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   left below, so it opens) and returns to Cutoff within Decay, as a decaying offset in cents
   on the filter's `detune` (time constant Decay / 4, like the pitch envelope). Saved as
   `synth.filter.envAmount` (octaves, 0 = off, the default) and `envDecayMs` (default 200);
-  older projects get none. The filter view draws where each note's cutoff starts.
+  older projects get none. The Filter card's screen draws where each note's cutoff starts (dashed).
 - Envelope: the on/off switch is hidden in the interface (`EnvelopeModule` with
   `:showToggle="false"`), but saved or imported projects can have the envelope off. A note
   then holds the level the envelope would peak at (waveform balance and noise mix included),
@@ -553,8 +558,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     **Voices is keys** (2 | 3 | 4 voices; 2 | 3 on a small screen), a knob until PR 77, so
     `unison.voices` is no longer MIDI-learnable (a link saved to it is dropped on load).
 - A grip is taken by the nearest one to where the drag starts (`nearestHandle()`). A drag
-  emits the same `knob-start` / `knob-end` as the card's knobs, so the main screen shows the
-  envelope or filter view meanwhile, and it's one undo step (the pointer is held). FM's and
+  emits the same `knob-start` / `knob-end` as the card's knobs (the big screen showed the
+  envelope or filter view meanwhile until PR 108), and it's one undo step (the pointer is held). FM's and
   Unison's screens don't take a drag while the card is off. The pad takes no focus and is
   hidden from screen readers: the mini knobs are the keyboard's and MIDI learn's way in, with
   the names and value texts the knobs had. The numbers are printed in the screen (the
@@ -674,7 +679,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   20 BPM). `soundKey()` leaves the ms out (it follows the tempo), so a tempo change keeps a
   preset lit. A sound setting: presets and File → New put it back to Off, and the Sounds dice
   picks 1/64–1/16 in two of five rolls with the reverb (drawn after the tape, so earlier rolls
-  are the same sound). The screen's hit at rest renders that much longer. Live, a change glides
+  are the same sound). The hit behind the Envelope card renders that much longer. Live, a change glides
   the delay time (30 ms), bending the send's pitch for a moment, as a delay's TIME does.
   **Notches and dots on the pedals** (PR 104): a knob's notch ticks and position dots are in
   dark ink on the pedals' pale faces (`--knob-detent`, `--knob-marker` and their `-on` /
@@ -708,7 +713,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     already rising finishes. Live, `revForStep()` from `schedule()`; up to 10 chains, the
     longest-unused dropped. A note with no next hit swells for a beat (`FALLBACK_STEPS`): MIDI
     notes and previews while stopped (that gate is open at rest, `openRevAtRest()`), the
-    one-shot and the screen's hit at rest (the export state's `oneShot`).
+    one-shot and the hit behind the Envelope card (the export state's `oneShot`).
   - **Fixed lengths**: one gate open all the time.
   - **PRE is taken off** the impulse response's length (`revIrSeconds()`, 20 ms to 6 s), so the
     swell still ends on time.
@@ -875,7 +880,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   so recording doesn't unlight a preset). **Share links leave it out** (`buildSharePayload()`:
   too big for a link), so their pads on `'sample'` play a sine. `sampleBuffer()` makes the
   AudioBuffer once per recording; an AudioBuffer plays in any context, so the export's offline
-  renders and the screen's hit at rest use the same one.
+  renders and the hit behind the Envelope card use the same one.
 - **Where it sits** (option B of two mockups; A was a tall tile beside Random, which made the
   wave tiles narrower): a strip under the wave tiles and Random, as wide as them
   (`SampleTile.vue`, `.st-strip`, 40 px): REC (a round cap with a red dot, blinking while busy,
@@ -901,7 +906,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   note for both engines (unit-tested); a ratchet's hit still ends it sooner. With the envelope
   switched off the attack is instant. Saved as `synth.sampleLength` (0.05–1; a project saved
   before gets 1). It goes with the recording: a sound preset keeps it (`soundKey()` leaves it
-  out), File → New and a new recording put it back to Full. The screen's hit at rest renders
+  out), File → New and a new recording put it back to Full. The hit behind the Envelope card renders
   as long as the sample note lasts (`hitSeconds(state, wave, hz)`). The Melody Maker's screen
   still draws every note as Attack + Decay long, a sample pad's too.
 - **In Random** (PR 100): a dice badge on the strip, left of Length, shown once there's a
@@ -955,65 +960,76 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   its fields redraw every frame; `DrumSequencer` itself must never read them in its template,
   or its whole template would re-render 60 times a second.
 
-### The screen's views
-- PR 70: **F1 Scope, F2 Spectrum, F3 Spectrogram, F4 Tuner** (`Screen.vue`'s F-keys, 1–4 on the
-  keyboard, `handleFKey()`); the chosen view starts on the **Spectrum** (PR 85, the
-  maintainer's call; it was the Scope; at rest the hit shows instead, PR 94); the Envelope view lost F4 and, like the filter view, shows only
-  while its knobs are turned. Its canvases keep their order (`.nac-screen__lcd canvas`: scope,
-  spectrogram, tuner, envelope, filter, the spectrum, then the hit, each added last so the
-  others' places stay).
-- **The hit at rest** (PR 94; `src/components/hitView.ts`, pure helpers unit-tested; the
-  `SCREEN AT REST` section at the end of `DrumSequencer.vue`'s script): while nothing plays
-  (stopped, and no note, MIDI or a preview, for 1.5 s: `REST_AFTER_MS`, polled every 200 ms),
-  the screen draws one hit of the current sound instead of the chosen view, which would be
-  blank (`shownView`: the hit, or `lcdView`). No F-key is lit meanwhile. It's the one-shot the
-  Export dialog would make (`renderHit()` in `exportFiles.ts`, sharing `oneShotState()` with
-  the one-shot: full velocity, the key's root in the pads' octave, the main wave, effects
-  included), but without the tape pedal's hiss (it never fades), with fixed random numbers (so
-  it doesn't flicker when nothing changed), rendered only as long as the sound can ring
-  (`hitSeconds()`: Attack + Decay, the echoes to −60 dB, 1.2 × the reverb's decay; 6 s at most)
-  and cut where it fades below −80 dBFS. A short hit renders in about 25 ms, the Bell preset's
-  4.5 s in about 350 ms, off the main thread. It renders again on any change to `exportState`,
-  the main wave or the key while it shows (one render at a time; a change during one renders
-  once more after it), and once it shows again after changes made meanwhile; not in phone
-  mode. Drawn on the shape cards' square-root time scale, so a click shows beside a reverb
-  tail: near the start each column runs into the next, so the wave itself is drawn; further
-  on, each takes at least a cycle of the note (`hitColumns()`), so the envelope is drawn
-  without moiré. Filled in the note's pad colour, outlined in the screen's ink, scaled so a
-  hit louder than −12 dB fills the height, the peak dashed. Top: "Hit · A3 Sine" and
-  "420 ms · peak −11.7 dB" (the peak in red at 0 dB or more; shortened on a narrow screen);
-  ticks along the bottom. A screen reader gets the same as text (Screen's `caption`).
-  A knob that holds a view (the envelope, the filter) still shows it, and the hit comes back
-  when it's let go; other knobs redraw the hit as they turn. An F-key or 1–4 pressed at rest
-  shows that view until things next come to rest (`pickedAtRest`), so the Tuner can be picked
-  for MIDI notes. Play shows the chosen view (the Spectrum on a fresh page).
-- **Spectrum** (`src/components/spectrumView.ts`; pure helpers unit-tested): the output's live
-  frequency curve on the filter view's log axis (20 Hz–20 kHz), filled column by column in each
-  frequency's pad colour (`spectrumColour()`, as the spectrogram), an outline, a peak-hold line
-  that falls about 14 dB a second (`holdPeaks()`), the strongest note marked with a dashed line
-  and named top right with its cents and Hz ("A3 −4¢ · 219 Hz"; `strongestNoteHz()`, refined
-  between the analyser's ~23 Hz bins by a parabola; only between 50 Hz and 4 kHz and loud
-  enough, held 0.6 s; sharps or flats as the key, `noteOf()`), and every C ticked along the
-  bottom. The bottom three bins are skipped (the drive's DC offset).
-- **Envelope view** (`startEnvViz()` in `DrumSequencer.vue`): the amp envelope, and the pitch
-  sweep (the Pitch card: how far from the note it starts, as a share of Amount, falling with
-  time constant Decay / 4 as the engines' `setTargetAtTime`) in the screen's second colour
-  (`--nac-spec-high`). Attack/Decay show it with the amp envelope first (the sweep dashed,
-  "┄ pitch sweep"); the Pitch card's Amount and Decay (`PitchEnvModule`'s `knob-start` /
-  `knob-end`, `onPitchKnobStart()`) with the sweep first and its numbers in the title
-  ("Pitch sweep +24 st → note in 300 ms"). The "1 ms" axis label steps aside for Attack's own.
+### The views (the big screen, spread around)
+- **PR 108** (the plan's item 1; option A of three mockups, "the machine rail", with bigger
+  screens until Bass arrives): the big screen beside the transport and the Step Sequencer is
+  gone, and its views are where they mean something. No F-keys, and 1–4 no longer pick views.
+  Until then (PR 70–107) it had F1 Scope, F2 Spectrum, F3 Spectrogram, F4 Tuner, the hit at rest
+  (PR 94) and envelope and filter views while their knobs turned; see git history
+  (`Screen.vue`, `filterView.ts`, `startEnvViz()`).
+- **The rail's scope and spectrogram** (`MachineRail.vue`, `monitorViews.ts`): two small
+  screens, the scope over the spectrogram, taking whatever height the machines' rows leave (so
+  they shrink as Bass, Drums and Drift come). Each theme's screen colours (`--mr-lcd-bg`,
+  `--mr-ink`). The scope draws ~21 ms from a rising zero crossing (`risingZero()`); the
+  spectrogram scrolls a column a frame, 40 Hz–10 kHz on a log axis (`specRowHz()`; the old one
+  squeezed the low notes into its bottom rows), each frequency in its pad's colour (see below).
+  They draw only while something sounds (playing, or a note in the last 1.5 s:
+  `viewSource.active`); at rest the scope is a flat line and the spectrogram keeps its picture.
+- **The spectrum behind the Filter card's curve** (`startSpectrumUnderlay()` in `cardViews.ts`,
+  FilterModule's `spectrum` prop, ShapePad's `under` slot): the live spectrum, faint, on the
+  card's own 20 Hz–20 kHz log axis (`spectrumColumns()`, each column the loudest bin in its
+  band), each column in its pad's colour, falling about 20 dB a second (`holdPeaks()`). It reads
+  `fineAnalyser` (8192 points behind the 10 Hz high-pass), so the low end is drawn: the big
+  screen's Spectrum read 2048 points (23 Hz a bin) and skipped the bottom three bins for the DC
+  offset, so its curve started with a wall between C1 and C2 (`SKIP_BINS` is 1 now, DC only).
+  Its loop rests while nothing sounds, once the columns have fallen.
+- **The hit behind the Envelope card's curve** (PR 94's hit at rest; `drawHitUnderlay()`,
+  EnvelopeModule's `hit` and `hitText`; the `THE HIT` section at the end of `DrumSequencer.vue`'s
+  script): one hit of the current sound, the one-shot the Export dialog would make
+  (`renderHit()` in `exportFiles.ts`, sharing `oneShotState()` with the one-shot: full
+  velocity, the key's root in the pads' octave, the main wave, effects included), without the
+  tape pedal's hiss, with fixed random numbers, rendered only as long as the sound can ring
+  (`hitSeconds()`; 6 s at most) and cut where it fades below −80 dBFS, off the main thread
+  (about 25 ms for a short hit, 350 ms for Bell). Drawn faintly, filled from the bottom in its
+  pad's colour on the card's square-root time scale up to its 2.1 s (`hitHeights()`: a whole
+  cycle of the note per column once a column is wider than a third of one), as tall as the
+  curve's peak, so the curve you drag sits on the real hit. It shows all the time (not only at
+  rest, as on the big screen) and renders again once the sound has been still for 120 ms
+  (`HIT_SETTLE_MS`; one render at a time, a change during one renders once more after it);
+  not in phone mode. A screen reader gets "Hit: A3 Sine, 420 ms, peak −11.7 dB" from the card.
+- **The tuner** (`TunerBadge.vue`, MelodyMaker's `tuner` prop; on the phone's Key page too): in
+  the Melody Maker screen's bottom-right corner, the strongest note heard (`tunerReading()`:
+  `strongestNoteHz()` between 50 Hz and 4 kHz, refined between bins by a parabola; sharps or
+  flats as the key), its cents and a needle (green within 5 ¢). It shows while a note is heard
+  (the pads, MIDI notes) and 0.6 s after, then fades; it changes at most ten times a second, so
+  only the badge redraws. The big screen's tuner showed the pad's set pitch; this one listens.
+- The Pitch card's sweep and the filter's response are drawn by their own cards (PR 77), which
+  is why the envelope and filter views went with the screen.
+
+### The machine rail
+- PR 108 (`MachineRail.vue`; `.ds-rail` in the grid's `rail` area, where the screen was: beside
+  the transport and the Step Sequencer from 1200 px, beside the transport under it, on top
+  under 720 px). The groovebox's overview: the monitor (above), then **one row per machine**:
+  its LED (a click mutes it, `role="switch"` "Rhythm on"; the Step Sequencer's dot does the
+  same), its name, its **level** (a mini knob, `synth.volume` "Rhythm level", MIDI-learnable
+  again: the lane's `channelVolume`, hidden since PR 92, default 0.5) and a tiny row of its 16
+  steps in their pads' colours (brighter when louder), the playing one outlined.
+- Only **Rhythm** (the synth lane) so far. The plan: Bass, Drums and Drift add a row each
+  (items 4–6), a click on a row picks the machine the pads and the Sound section show; patterns
+  A–D (with Copy) and the chain's eight cells go under the rows (item 2). The screens shrink to
+  a strip as they come (the mockups: a 46 px strip). Drift's row shows its chords per bar.
 
 ### Pad and spectrogram colours
 - A lit pad's colour shows its note: blue for the lowest pad pitch (100 Hz) to red for the
   highest (2 kHz), linear in Hz (`padHue()` in `src/lib/padColour.ts`); its fill height shows
-  its velocity. The screen's spectrogram (F3) draws each frequency in that same colour,
+  its velocity. The rail's spectrogram draws each frequency in that same colour,
   brighter when louder (`spectrumColour()`; its pale-screen branch, darker when louder,
   is unused since PR 89 removed Light), so a note shows in its pad's colour; above the pads' range, harmonics go on from
   red toward magenta. Since PR 41 (the maintainer's call: the spectrogram in the pads'
-  colours, not the reverse). Before, the spectrogram coloured loudness in four colours per
-  theme (`--nac-spec-low/mid/high/peak` in `Screen.vue`, still defined); `SPEC_COLOURS` in
-  `startSpectrogram()` (`DrumSequencer.vue`) switches back to them in one line. A unit test
-  checks the colours; a browser test checks a played A3 is drawn in its pad's blue.
+  colours, not the reverse; the four loudness colours per theme went with `Screen.vue` in
+  PR 108). So do the spectrum behind the Filter card and the hit behind the Envelope card. A
+  unit test checks the colours; a browser test checks a played A3 is drawn in its pad's blue on
+  the spectrogram and behind the Filter curve.
 
 ### MIDI
 - `src/composables/useMidiInput.ts` handles Web MIDI (`navigator.requestMIDIAccess`): access,
@@ -1040,7 +1056,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### MIDI learn
 - A controller's knobs turn the app's knobs. Learn (in the MIDI toolbar, once an input is
-  chosen) starts learn mode: the 34 learnable knobs (31 after PR 77 made Unison's Voices keys, 33 with the tape pedal's two, 32 since PR 92 hid the Step Sequencer's Vol, whose `synth.volume` links are dropped on load, 33 again with the sample's Length, PR 100, 34 with the reverb's PRE, PR 103; the reverb's DECAY knob is SWELL while REV is on, PR 105) get a dashed outline and a badge ("CC 21",
+  chosen) starts learn mode: the 35 learnable knobs (31 after PR 77 made Unison's Voices keys, 33 with the tape pedal's two, 32 since PR 92 hid the Step Sequencer's Vol, 33 again with the sample's Length, PR 100, 34 with the reverb's PRE, PR 103, 35 with the rail's Rhythm level, PR 108, which is `synth.volume` again; the reverb's DECAY knob is SWELL while REV is on, PR 105) get a dashed outline and a badge ("CC 21",
   or "CC 7 ch 3" off channel 1) for the controller knob they follow, and a bar at the bottom of
   the screen says what to do (with Clear all and Done; a spacer under the page lets the last
   knobs scroll clear of it). Click a knob (or Enter on it) to arm it, then turn a controller
@@ -1050,8 +1066,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   replaces the old (`assign()` in `src/lib/midiLearn.ts`).
 - A controller knob turns its knob as a drag does: `Knob.vue`'s `setPosition()` maps 0–127 to
   the knob's turn (its own taper, step and notches), and emits `knobStart`, then `knobEnd` once the
-  controller knob has rested 600 ms, so the tooltip and the screen's envelope or filter view
-  work as with the mouse. Undo, saving and the engines need nothing new: a sweep is one undo
+  controller knob has rested 600 ms, so the tooltip works as with the mouse. Undo, saving and the engines need nothing new: a sweep is one undo
   step. It jumps (no pickup). A greyed-out knob (its module off) ignores it, as it ignores the
   mouse; it can still be linked, and the bar says it follows once its module is on.
 - The links belong to the controller, not to a song: they're kept in this browser
@@ -1407,12 +1422,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Space: play/stop (`onGlobalKeydown` in `DrumSequencer.vue`, ignored while typing). It does
   this everywhere, even on a focused button, knob or pad, on purpose: that's how music apps
   work. Enter presses a focused button.
-- 1–4: screen view (Oscilloscope, Spectrum, Spectrogram, Tuner), same handler; ignored while
-  typing or while a dropdown list is open. While Attack/Decay, the Pitch card's Amount/Decay
-  or Cutoff/Resonance is turned, the screen shows the envelope view or the filter view (neither
-  has an F-key), then goes back (`holdScreen`/`onScreenKnobEnd` in `DrumSequencer.vue`); a view
-  picked meanwhile stays. At rest, the screen shows the hit (see "The screen's views"), and a
-  view picked shows instead until things next come to rest.
+- 1–4 picked the big screen's view until PR 108, which removed the screen (see "The views").
 - Under 1200 px, the Sound / Effects / Compose tabs are one Tab stop: Left/Right (Home/End)
   move between them (`onTabKeydown` in `DrumSequencer.vue`).
 - Shift+click on a Melody Maker key: at once, without waiting for the bar while playing (see
@@ -1424,7 +1434,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Knobs (`Knob.vue`, `role="slider"`): Tab to one, then arrows (Up/Right turn it up) move one
   step, or about 1% of the range on a knob with more than 300 steps; Shift+arrow and Page
   Up/Down about 10%; Home/End minimum/maximum. The first key emits `knobStart`, as a drag
-  does (value tooltip, envelope or filter view), and leaving the knob emits `knobEnd`.
+  does (the value tooltip), and leaving the knob emits `knobEnd`.
 - Step pads (`SynthStepGrid.vue`): one Tab stop for the grid (only the last used pad has
   `tabindex="0"`). Left/Right move between pads, Home/End to the first/last, Enter turns
   the focused pad on or off (with the Repeats brush, gives it the brush's hits; Esc puts the
@@ -1756,13 +1766,12 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     `--pedal-hi` / `--pedal-lo` (body), `--pedal-foot-hi` / `-lo` (the name's half; unset, the
     body's), `--pedal-ink`, `--pedal-ink-off` (captions while off), `--pedal-name`,
     `--pedal-name-shadow` and `--pedal-switch-hi` / `-lo` (the footswitch); the fallbacks are
-    the first colours. The screen's F-keys are light keys tinted per theme (`--fkey-hi`,
-    `--fkey-lo`, `--fkey-ico` in `Screen.vue`; white in every theme before), and FM's and
-    Unison's keys take the caps' colours. Fixed on purpose: the pads' note colours, the LFO's
+    the first colours. The big screen's F-keys were tinted per theme too (until PR 108 removed
+    the screen), and FM's and Unison's keys take the caps' colours. Fixed on purpose: the pads' note colours, the LFO's
     amber, the Noise card's Color swatch, the footswitches and sockets.
   - Theme colors are CSS variables set per theme in `_themes.scss` (the `$themes` map, plus
-    per-theme blocks; the knobs' and pads' in `_drumSequencer.scss`, the screen's in
-    `Screen.vue`); use them rather than a fixed color that only suits the dark themes. For
+    per-theme blocks; the knobs' and pads' in `_drumSequencer.scss`, the rail's screens'
+    in `MachineRail.vue`); use them rather than a fixed color that only suits the dark themes. For
     example `--pt-inset` is the background of an inset panel inside a card (Pattern Tools'
     sections, the Sounds and Patterns boxes; mixed lighter, the Sound and Compose sections):
     dark. Others: `--pt-wash` (a pink-to-violet
@@ -1811,7 +1820,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     LED's `--hw-led`, `--hw-led-off`): dark caps in every theme with a button.
     Clear and Reset have red lettering (`pt-danger`).
   - Not caps, on purpose (the maintainer's call): the pedals' CRUSH and PING PONG switches and
-    footswitches. Also left as they were: the screen's F-keys, the piano keys, the NOISE
+    footswitches. Also left as they were: the piano keys, the NOISE
     ribbon (which got an LED in PR 74), the LFO card's ribbon and sockets (PR 75), FM's and Unison's ribbons and keys and Pitch's Random pill aside the screens (PR 77), the ⋯ menus and their sliding switches, the Sound / Effects / Compose tabs, the
     wave tiles' dice badges, and phone mode's own top bar, steppers and pads (the desktop
     panels it shows on its Sound, FX and Key pages have the caps).
@@ -1863,17 +1872,17 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   at its right end, after Save and its dot (the `tools-right` slot). The Step Sequencer has
   no Vol knob while there's one lane (PR 92): the lane's `channelVolume` is still saved and
   played (a project's is kept, File → New's is 0.5), and comes back as each machine's level.
-  From 1200 px: the transport and the Step Sequencer on the left two thirds, the screen beside
-  them as tall as both; under them two recessed sections, **Sound** (two thirds) and
+  From 1200 px: the transport and the Step Sequencer on the left two thirds, the machine rail
+  (the big screen until PR 108) beside them as tall as both; under them two recessed sections, **Sound** (two thirds) and
   **Compose** (Pattern Tools, Melody Maker), which end on one line (Sound's last row and Melody
   Maker take up any difference). Sound is three rows, each filled edge to edge: Waveforms |
   FM over Unison; Envelope | Pitch | Filter (three screens on one line, their mini knobs beside
   them; see "The shape cards"); Noise over LFO | Effects. A card stretched taller than
   its controls keeps them centred. FM and Unison are cards of their own; their ribbon is the
-  on/off switch. Under 1200 px: the screen beside the
+  on/off switch. Under 1200 px: the rail beside the
   transport, the steps across, then tabs (Sound, Effects, Compose; not saved) under the steps,
   showing one at a time (`data-tab` on the grid; the arrow keys move between tabs); under
-  720 px one column, the screen on top. Cards that change shape with their width use
+  720 px one column, the rail on top. Cards that change shape with their width use
   container queries on their own width, not the window's: Pattern Tools (three sections side
   by side, the same height, two buttons across; stacked under 340 px), Noise (mask buttons
   beside the knobs, under them below 320 px), the classic LFO card (Wave / Target captions hidden under
@@ -1890,8 +1899,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `.pad-row`'s 12 px right padding dropped, so the rows are centred; they wrapped into 6, 6 and
   4 before), and on a touch screen the caps are at least 32 px tall (the block at the end of
   `_hardware.scss`, scoped to `.ds-grid`, so phone mode's pages don't change: the preset boxes,
-  Pattern Tools, the Melody Maker's steppers and switches, VEL, FM's and Unison's keys, the
-  F-keys...; `.ds-grid` three times to beat the components' scoped sizes), and a pad's ⋮ is
+  Pattern Tools, the Melody Maker's steppers and switches, VEL, FM's and Unison's keys...; `.ds-grid` three times to beat the components' scoped sizes), and a pad's ⋮ is
   32 × 28 px (`SynthStepGrid.vue`). Held sideways (844 px) nothing changes but the screens'
   touch (see "The shape cards"). Small corner badges (the dice, TAP, REC) are left as they were.
   A browser test checks the arrangement at 1600 and 1280 px (flush bottoms, one line of knobs,
@@ -2035,22 +2043,8 @@ PR 100 (the sample's Length, and the sample in Random).
 confirmed by the maintainer, who may reorder it). Fixes and polish first, as before, then the
 screens, then the groovebox. Its first items were PR 102 (the Move tools and the Melody Maker's
 Scale), PR 103 (the reverb's pre-delay), PR 104 (PRE in note values), PR 105 (REV on the
-reverb), PR 106 (phone mode brought up to date) and PR 107 (the desktop view on a phone). After PR 103 the maintainer asked about a "pre-reverb" (a reversed reverb swelling
+reverb), PR 106 (phone mode brought up to date) PR 107 (the desktop view on a phone) and PR 108 (the big screen spread around, the machine rail). After PR 103 the maintainer asked about a "pre-reverb" (a reversed reverb swelling
 into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
-
-1. **Spread the big screen's views around** (mockups, ideally with the machines' layout, item
-   4, since what fills the freed space is their rail): the Spectrum behind the Filter card's
-   curve, the Tuner in the Melody Maker, the hit at rest faint behind the Envelope card's
-   curve, the scope and spectrogram small (a strip, perhaps in the top bar as phone mode's tiny
-   scope). Several small screens are cheap to draw (one shared frame loop; none drawn while
-   nothing sounds or off screen). **The Spectrum's left end** (the maintainer's question):
-   the sound has no cutoff there (the pads go down to 100 Hz; only the noise layer has a
-   40 Hz high-pass), it's the drawing: the analyser's bins are about 23 Hz wide, the bottom
-   three (to about 70 Hz) are left out because of the overdrive's DC offset (`SKIP_BINS`),
-   and every column of the log axis below that is drawn empty, so the curve starts with a
-   wall between C1 and C2. Fix it with the views: a DC blocker (a 10 Hz high-pass) on the
-   analyser's own tap instead of skipping bins, a bigger FFT for the Spectrum (8192: about
-   6 Hz a bin), and the axis starting where the bins can say something (about 30 Hz).
 
 Grow into a small groovebox:
 
@@ -2064,8 +2058,9 @@ Grow into a small groovebox:
     that builds a note, used by the live engine and the export engine (today two engines kept
     in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
     on the output (dropped after PR 30 for one voice; four machines summed need it).
-4. **The Bass machine**, and the layout for machines: a rail beside the pads (each machine's
-    name, mute, level and a tiny row of its steps); the pads show the chosen machine; the Sound
+4. **The Bass machine**, and the layout for machines: the rail beside the pads (each machine's
+    name, mute, level and a tiny row of its steps; there since PR 108 with Rhythm's row only, see
+    "The machine rail": Bass adds a row, and a click on a row picks the machine); the pads show the chosen machine; the Sound
     section becomes the chosen machine's panel; a send to the pedals per machine; a stem per
     machine in the export. Bass: one note at a time, 30–250 Hz, saw or square with a sub, one
     filter with its envelope, Accent per step, about six knobs (Cutoff, Reso, Env, Decay, Sub,
@@ -2376,6 +2371,7 @@ Done:
 | 105 | REV on the reverb (the plan's item after PR 104): a switch on the reverb pedal's ribbon, under the LED (option A of three mockups), plays the reverb backwards, so each hit's reverb rises into the next hit and cuts off. While it's on, DECAY reads SWELL: **Next hit** (each swell lasts until the next step that's on, round the bar, swing included; one reversed impulse response per length behind a gate, opened as the hit reaches it) or 1 step, 2 steps, 1 beat, 2 beats; PRE is taken off so the swell still ends on time; a note with no next hit (MIDI, a preview, the one-shot) swells for a beat. Both engines, inside the reverb's stem; about as loud as the plain reverb; saved as `fx.reverb.reverse` and `fx.reverb.swell` (older projects off), reset by presets, rolled by the Sounds dice (`src/audio/reverb/reverse.ts`). |
 | 106 | Phone mode brought up to date (the plan's first item after PR 105), every page fitting without scrolling at 568 × 320 and 844 × 390 (a browser test checks both): the FX page's pedals in PR 99's look, kept tall (the name on a ribbon with its LED, REV under it, screws, jacks, knobs two by two, a treadle; the lo-fi pedal's reels in a window); the Key page's Melody Maker `compact` (the keyboard, Scale and the maker's settings beside the screen and Generate; it scrolled 203 px at 568 × 320); the Sound page's wave keys lit only while every pad plays that wave, with a Random key and the desktop's Sample strip (REC, Length, the dice), and FM and Unison as the desktop's cards without their screens (ratio keys, Voices keys, Freq, Detune and Spread, none on the phone before); the Mod page's LFO and Noise as the desktop's cards (ribbon, screen, patch bay). No mockups: every look is one the maintainer already picked for the desktop. |
 | 107 | The desktop view on a phone (the plan's first item after PR 106): held upright, the pads are two rows of 8, centred (they wrapped into 6, 6 and 4), and on a touch screen under 720 px the caps are at least 32 px tall and a pad's ⋮ 32 × 28 px; the shape screens let a finger scroll the page and only take a touch that starts on a grip (FM and Unison get a grip of their own on touch screens). Held sideways nothing changes but the screens' touch. |
+| 108 | The big screen spread around (the plan's item 1; option A of three mockups, the machine rail, with bigger screens until Bass arrives): the screen and its F-keys are gone; in its place the **machine rail**, a small scope over a small spectrogram (40 Hz–10 kHz, log) and a row for **Rhythm** (its LED mutes it, its level is the lane's volume, hidden since PR 92 and MIDI-learnable again, and its 16 steps in their colours); the live **spectrum** is drawn faintly behind the Filter card's curve, **one hit** of the sound behind the Envelope card's, and a **tuner** sits in the Melody Maker screen's corner. The views read a tap high-passed at 10 Hz (no more DC offset), and the spectrum and tuner a finer analyser (8192 points), so the spectrum's low end is drawn (it started with a wall between C1 and C2). Every card keeps its size. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -8,7 +8,7 @@
 // tone filters; plain or ping-pong) and a reverb send (tone filter → pre-delay → convolver → wet gain). Both go to preMaster, and so do the
 // noise layer and the sample lanes, which bypass drive, delay and reverb. From preMaster
 // everything goes through the tape pedal (tape.ts), or round it while it's off, to masterGain
-// → destination. The analyser for the screen views is tapped from masterGain.
+// → destination. The views' analysers are tapped from masterGain through a 10 Hz high-pass.
 //
 // WAV export uses a separate offline engine (export/scheduleStepSequencer.ts). Changes to
 // the sound here must be mirrored there, or exports will sound different.
@@ -131,13 +131,32 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	masterGain.gain.value = volume.value;
 	masterGain.connect(audioCtx.destination);
 
-	// Oscilloscope / spectrogram / tuner analyser
+	// The views' tap (PR 108): a 10 Hz high-pass first, so the drive's DC offset (see "Dropped
+	// after PR 30" in CLAUDE.md) doesn't show as a block at the bottom of the spectrum. Only the
+	// views hear it; the speakers get masterGain as before.
+	const viewTap = audioCtx.createBiquadFilter();
+	viewTap.type = 'highpass';
+	viewTap.frequency.value = 10;
+	viewTap.Q.value = 0.707;
+	masterGain.connect(viewTap);
+
+	// The scope and spectrogram analyser (the rail's monitor; phone mode's tiny scope)
 	const analyser = audioCtx.createAnalyser();
 	analyser.fftSize = 2048;
-	masterGain.connect(analyser);
+	viewTap.connect(analyser);
 	analyser.smoothingTimeConstant = 0.8;
 	analyser.minDecibels = -90;
 	analyser.maxDecibels = -10;
+
+	// A finer one for the spectrum behind the Filter card's curve and the Melody Maker's tuner:
+	// 8192 points, about 6 Hz a bin at 48 kHz, so the low end is drawn and not a wall of empty
+	// columns (PR 108; the big screen's Spectrum read the 2048-point one, about 23 Hz a bin)
+	const fineAnalyser = audioCtx.createAnalyser();
+	fineAnalyser.fftSize = 8192;
+	viewTap.connect(fineAnalyser);
+	fineAnalyser.smoothingTimeConstant = 0.6;
+	fineAnalyser.minDecibels = -90;
+	fineAnalyser.maxDecibels = -10;
 
 	watch(volume, val => {
 		masterGain.gain.setTargetAtTime(val, audioCtx.currentTime, 0.01);
@@ -1213,6 +1232,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	return {
 		audioCtx,
 		analyser,
+		fineAnalyser,
 		isPlaying,
 		currentStep,
 		playSynthNote,

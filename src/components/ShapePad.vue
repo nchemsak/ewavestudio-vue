@@ -10,6 +10,9 @@
 <template>
     <div class="sp-pad" :class="{ dragging, 'is-disabled': disabled }" aria-hidden="true"
         @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="onUp" @touchmove="onTouchMove" @click="noop">
+        <!-- Behind the curve: what the sound does (the spectrum on Filter, the hit on Envelope;
+             src/components/cardViews.ts) -->
+        <slot name="under" />
         <svg :viewBox="`0 0 ${w} ${h}`" preserveAspectRatio="none">
             <slot />
         </svg>
@@ -132,6 +135,14 @@ export function nearestHandle(handles: PadHandle[], p: PadPoint): string {
 
 .sp-pad.is-disabled {
     cursor: default;
+}
+
+.sp-under {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
 }
 
 .sp-pad svg {
