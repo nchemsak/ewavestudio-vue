@@ -307,7 +307,6 @@
 								:class="{ on: repeatBrush === n }" :aria-pressed="repeatBrush === n"
 								:aria-label="`Repeats brush ×${n}`" @click="toggleRepeatBrush(n)">×{{ n }}</button>
 						</div>
-						<BassMock v-if="bassMock === 'b'" part="brush" variant="b" />
 					</div>
 
 					<div class="pt-header-tools step-menu-anchor">
@@ -367,6 +366,7 @@
 			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title" :data-bass="bassMock || undefined">
 				<h2 id="sound-title" class="ds-section-title">Sound<span v-if="bassMock"> · Bass</span></h2>
 				<BassMock v-if="bassMock" part="sound" :variant="bassMock" />
+				<BassMock v-if="bassMock" part="cables" :variant="bassMock" />
 
 				<!-- Row 1: the waves, beside FM and Unison -->
 				<div class="sound-row sound-row-1">
@@ -759,9 +759,10 @@ import { createRhythm, rhythmVoice } from '../lib/machines/rhythm';
 import { useLfoVisual } from '../composables/useLfoVisual';
 import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
-// MOCKUPS ONLY: ?bass=a|b|c (BassMock.vue), the Bass machine chosen
+// MOCKUPS ONLY: ?bass=d|e|f (BassMock.vue), the Bass machine chosen
 import BassMock from './BassMock.vue';
 const bassMock = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('bass') || '') : '';
+if (bassMock) setTimeout(() => { driveEnabled.value = true; delayEnabled.value = false; reverbEnabled.value = true; tapeEnabled.value = true; }, 900);
 const BASS_MOCK_SOUNDS = ['Sub', 'Acid', 'Rubber', 'Pluck', 'Growl', 'Hollow'].map((l) => ({ id: l.toLowerCase(), label: l, description: '' }));
 const BASS_MOCK_PATTERNS = ['Root', 'Octaves', 'Offbeat', 'Gallop', 'Walk', 'Squelch'].map((l) => ({ id: l.toLowerCase(), label: l, description: '' }));
 import ExportDialog from './ExportDialog.vue';
@@ -3487,7 +3488,7 @@ async function recordSample() {
 	}
 }
 
-/* MOCKUPS ONLY (?bass=a|b|c; BassMock.vue): the Sound section as Bass's */
+/* MOCKUPS ONLY (?bass=d|e|f; BassMock.vue): the Sound section as Bass's */
 .bm-which { color: var(--hw-led, #5dffb0); }
 .ds-sound[data-bass] {
 	display: grid;
@@ -3500,20 +3501,23 @@ async function recordSample() {
 .ds-sound[data-bass] .sound-row-3 > .sound-stack { display: none; }
 .ds-sound[data-bass] .sound-row-3 { display: contents; }
 .ds-sound[data-bass] #effects-panel { grid-area: fx; }
-.ds-sound[data-bass="a"] {
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+.ds-sound[data-bass] { position: relative; }
+/* The pedals in the chain's order: Overdrive, Delay, Reverb */
+.ds-sound[data-bass] .fx-pair > :nth-child(2) { order: -1; }
+.ds-sound[data-bass="d"] {
+	grid-template-columns: minmax(0, .5fr) minmax(0, .5fr) minmax(0, 1fr);
 	grid-template-rows: auto 1fr auto;
-	grid-template-areas: "title title" "bass bass" "sends fx";
+	grid-template-areas: "title title title" "osc big big" "ast ast fx";
 }
-.ds-sound[data-bass="b"] {
-	grid-template-columns: repeat(6, minmax(0, 1fr));
+.ds-sound[data-bass="e"] {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 	grid-template-rows: auto 1fr 1fr auto;
-	grid-template-areas: "title title title title title title" "osc osc osc osc acc acc" "filt filt filt env env drv" "sends sends sends fx fx fx";
+	grid-template-areas: "title title title title" "osc osc wave wave" "filt filt env env" "ast ast fx fx";
 }
-.ds-sound[data-bass="c"] {
+.ds-sound[data-bass="f"] {
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	grid-template-rows: auto 1fr auto;
-	grid-template-areas: "title title" "bass bass" "sends fx";
+	grid-template-areas: "title title" "big big" "mix fx";
 }
 /* LAYOUT END */
 

@@ -23,7 +23,8 @@
             </div>
         </div>
 
-        <div class="mr-rows" role="list">
+        <div class="mr-rows" :class="{ 'mock-fx': mockBass === 'e' }" role="list">
+            <div v-if="mockBass === 'e'" class="mr-heads" aria-hidden="true"><span></span><span></span><span>Level</span><span>Pedals</span><span>Steps</span></div>
             <div class="mr-row" :class="{ 'is-chosen': !mockBass }" role="listitem">
                 <button type="button" class="mr-led" :class="{ lit: !muted }" role="switch" :aria-checked="!muted"
                     :aria-label="`${name} on`" :title="muted ? `${name} is muted: click to hear it` : `Mute ${name}`"
@@ -32,6 +33,9 @@
                 <div class="mr-level">
                     <Knob midi-id="synth.volume" v-model="levelModel" :label="`${name} level`" hideLabel size="mini"
                         :value-text="`${Math.round(level * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
+                </div>
+                <div v-if="mockBass === 'e'" class="mr-level">
+                    <Knob :modelValue="1" :label="`${name} into the pedals`" hideLabel size="mini" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
                 <div class="mr-cells" aria-hidden="true">
                     <i v-for="(c, i) in cells" :key="i" :style="c.style"
@@ -44,6 +48,9 @@
                 <span class="mr-name">Bass</span>
                 <div class="mr-level">
                     <Knob :modelValue="0.6" label="Bass level" hideLabel size="mini" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
+                </div>
+                <div v-if="mockBass === 'e'" class="mr-level">
+                    <Knob :modelValue="0.4" label="Bass into the pedals" hideLabel size="mini" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
                 <div class="mr-cells" aria-hidden="true">
                     <i v-for="(c, i) in bassCells" :key="i" :style="c" :class="{ on: !!c, beat: i % 4 === 0 }"></i>
@@ -232,6 +239,23 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     padding: 4px 8px;
     border-radius: 6px;
     background: var(--pt-inset, rgba(0, 0, 0, 0.3));
+}
+
+/* MOCKUPS ONLY (?bass=e): the rows as a mixer, with how much goes into the pedals */
+.mock-fx .mr-row,
+.mr-heads {
+    grid-template-columns: 14px 56px 30px 30px minmax(0, 1fr);
+}
+
+.mr-heads {
+    display: grid;
+    gap: 8px;
+    padding: 0 8px;
+    font: 700 8px Cousine, ui-monospace, monospace;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--pt-text-dim, #b9a8d8);
+    text-align: center;
 }
 
 .mr-row.is-chosen {
