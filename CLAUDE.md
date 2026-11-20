@@ -217,6 +217,8 @@ src/audio/
   velocity.ts            Velocity routing: what a step's velocity does besides loudness
   ratchet.ts             Ratchets: when a step's 2–4 quick hits start and end, and what they
                          play (the pad's note, or up or down the key's chord)
+  limiter.ts             The output limiter at −1 dBFS (an AudioWorklet live, the same code on
+                         the export's mix), see "Audio engine (live)"
   crusher.ts             The bit crusher (an AudioWorklet built from a Blob URL), see
                          "Effect switches"
   pingPong.ts            The ping-pong delay network, see "Effect switches"
@@ -324,7 +326,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   reversed convolver per swell length → its own wet gain). Both go to `preMaster`, and so do the noise layer (and
   the hidden sample lanes), which bypass drive, delay and reverb. From `preMaster` everything
   goes through the tape pedal, or round it while it's off (see "The tape pedal"), to
-  `masterGain` → destination. The views are tapped from `masterGain` through a 10 Hz high-pass
+  `masterGain` (the Volume knob) → the output limiter → `output` → destination. The views are tapped from `masterGain` through a 10 Hz high-pass
   (`viewTap`, PR 108, so the drive's DC offset doesn't show): `analyser` (2048 points) for the
   rail's scope and spectrogram and phone mode's tiny scope, and `fineAnalyser` (8192 points,
   about 6 Hz a bin) for the spectrum behind the Filter card and the tuner.
@@ -364,6 +366,29 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   engine (which takes `rhythm` as one setting) and the export state's `synth` (with the noise
   mask and the recording), so the two can't read the settings differently. The Bass, Drums and
   Drift machines each get a file like it. Unit-tested (`rhythm.test.ts`).
+- **The output limiter** (PR 114, the plan's item 3, part 3, which finishes it;
+  `src/audio/limiter.ts`): a brickwall at −1 dBFS (`LIMITER_CEILING`, 0.891) on the whole mix,
+  after the Volume knob. One voice rarely reaches it (the presets peak at 0.2–0.65); four
+  machines summed will. **Below the ceiling it does nothing at all**: the gain is exactly 1,
+  so a sound that never goes over plays and exports bit for bit as before (exports from `main`
+  and PR 114 matched). Over it, the gain comes down across a 1.5 ms look-ahead
+  (`LOOKAHEAD_S`: the sound is that much later live, so the gain is already low when the peak
+  arrives and no wave is clipped flat; a "min then box" look-ahead, which can't be late) and
+  goes back up with a 100 ms time constant (`RELEASE_S`), to exactly 1 once within 0.0001;
+  both channels get one gain. `limiterGain()` is the whole algorithm, a sample at a time; it
+  and `limiterState()` are self-contained, because their source is copied into the live
+  engine's AudioWorklet (from a Blob URL, as the bit crusher's). **Live**: it joins a moment
+  after the page opens, once loaded (`loadLimiter()`); `output` is the one node connected to
+  the speakers, so only what feeds it changes (the browser tests' probe hooks connections to
+  the speakers). The views still read `masterGain`. **Export**: the same code over the
+  rendered mix without the delay (`limiterGains()`), after a loop's tail is folded on, as it
+  plays looping; the mix's gains go onto every stem too (`applyGains()`), so the stems still
+  add up to the mix, which is why the mix is now rendered for stems alone too. The one-shot
+  and the hit behind the Envelope card are limited on their own (`limit()`), before Normalize.
+  Not switchable: nothing to see. Unit tests (`limiter.test.ts`: nothing done under the
+  ceiling, a loud sine kept under it smoothly and steadily, the release, stems adding up, live
+  as exported); a browser test (brown noise at full Amount, which peaks at about 2.5: under
+  −1 dBFS live, in the mix, the stems adding up, the one-shot; 1.18 without the limiter).
 - Pitch envelope (`pitchEnv.ts`; panel `PitchEnvModule.vue`, the "Pitch" card next to Envelope
   and Filter): each note starts Amount semitones up, down or at a random offset, as an offset in cents on the
   oscillator's `detune` that decays exponentially (`setTargetAtTime`, time constant Decay / 4,
@@ -2178,11 +2203,6 @@ into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 
 Grow into a small groovebox:
 
-3. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
-    that builds a note, used by the live engine and the export engine (done in PR 112:
-    `note.ts`); each track's settings moved out of `DrumSequencer.vue` (the Rhythm machine's,
-    done in PR 113: `src/lib/machines/rhythm.ts`); a gentle limiter
-    on the output (dropped after PR 30 for one voice; four machines summed need it).
 4. **The Bass machine**, and the layout for machines: the rail beside the pads (each machine's
     name, mute, level and a tiny row of its steps; there since PR 108 with Rhythm's row only, see
     "The machine rail": Bass adds a row, and a click on a row picks the machine); the pads show the chosen machine; the Sound
@@ -2311,7 +2331,8 @@ were built in PR 33).
 Dropped after PR 30 (the maintainer and Claude agreed they add little): playing the synth
 from the computer keyboard (the synth is played by its sequencer, as a DFAM is, and a MIDI
 keyboard already works), and a master limiter/compressor together with the drive's DC offset
-fix. The DC offset stays: the drive shaper's curve has an even number of points (1024), so
+fix (the limiter came back in PR 114, for the machines: see "The output limiter"). The DC
+offset stays: the drive shaper's curve has an even number of points (1024), so
 silence maps to about −0.011 instead of 0, which reaches the speakers through the drive wet
 gain at about 0.004 with the default settings, in the live and export engines. It can't be
 heard, and the presets peak well below clipping (0.2–0.5), but measurements see it: the
@@ -2506,6 +2527,7 @@ Done:
 | 111 | The chain in Export audio (the plan's item 2, part 3, which finishes it): while the chain has a filled cell, the dialog's **Play** picks the pattern showing or the **Chain**, once through, a bar per cell (it opens on Chain while Chain is on); the mix, the stems and the MIDI file play each cell's pattern in its bar, a loop folding the tail onto the first bar; files named `..._chain-3bars_...`. The engine and the MIDI file take one pattern per bar (`barPatterns`, `patternForBar()`). |
 | 112 | One function builds a note (the plan's item 3, part 1; nothing to see or hear): `playNote()` in `src/audio/note.ts`, called by the live engine and the export engine, which each had their own copy kept in step by hand. The live engine hands it the settings as a plain object (`voiceNow()`), the export its state's `synth`. With the envelope switched off, the export's attack follows Attack as live (it was 10 ms). Exports from `main` and this PR matched for the presets, dice rolls and everything on. |
 | 113 | The Rhythm machine's settings moved out of `DrumSequencer.vue` (the plan's item 3, part 2; nothing to see or hear): `createRhythm()` in `src/lib/machines/rhythm.ts` makes the synth lane's sound settings from one table of factory values (`RHYTHM_DEFAULTS`, which File → New and the presets put back), and `rhythmVoice()` gives the voice `note.ts` plays to both the live engine and the export. Until then each setting was declared on its own in `DrumSequencer.vue` and its factory value written again in `snapshot.ts`. |
+| 114 | A gentle limiter on the output (the plan's item 3, part 3, which finishes the groundwork for the machines): a brickwall at −1 dBFS after the Volume knob, with a 1.5 ms look-ahead and a 100 ms release (`src/audio/limiter.ts`); an AudioWorklet live, the same code on the export's mix, whose gains go onto every stem so they still add up. Below the ceiling it does nothing, so today's sounds play and export bit for bit as before. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -4570,6 +4570,48 @@ test('Export audio: a loop is exactly N bars, with the echoes from its end folde
 	expect(wavWindow(tail.bytes, 6, 6.5).rms).toBeGreaterThan(0.001);
 });
 
+// The output limiter (PR 114, src/audio/limiter.ts): brown noise at full Amount peaks at about
+// 2.5 times full scale, straight to the output; live and exported it stays under −1 dBFS, and
+// the stems still add up to the mix
+test('the output limiter keeps a loud sound under −1 dBFS, live and exported, and the stems still add up', async ({ page }) => {
+	await turnOnPads(page, [0, 4, 8, 12]);
+	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
+	const d = project.data;
+	d.transport.volume = 1;
+	Object.assign(d.synth.noise, { enabled: true, amount: 1, color: 0 });
+	d.instruments.find((l: any) => l.type === 'synth').channelVolume = 1;
+	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
+		name: 'loud.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)),
+	});
+	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(4);
+
+	const zip = await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: true, midi: false, oneShot: true, normalize: false });
+	const files = unzip(zip.bytes);
+	const file = (part: string) => files[Object.keys(files).find((n) => n.endsWith(`_${part}.wav`))!];
+	expect(Object.keys(files).some((n) => n.endsWith('_noise.wav'))).toBe(true);
+	for (const ch of [0, 1]) {
+		const mix = wavSamples(file('mix'), ch).samples;
+		const stems = ['dry', 'noise'].map((p) => wavSamples(file(p), ch).samples);
+		let worst = 0, loudest = 0;
+		for (let i = 0; i < mix.length; i++) {
+			worst = Math.max(worst, Math.abs(stems[0][i] + stems[1][i] - mix[i]));
+			loudest = Math.max(loudest, Math.abs(mix[i]));
+		}
+		expect(worst, `channel ${ch}`).toBeLessThan(1e-4);
+		expect(loudest, `channel ${ch}`).toBeLessThanOrEqual(0.8915);
+		expect(loudest, `channel ${ch}: limited, not just quiet`).toBeGreaterThan(0.85);
+	}
+	const shot = Object.keys(files).find((n) => n.includes('_oneshot_'))!;
+	expect(wavPeak(files[shot])).toBeLessThanOrEqual(0.8915);
+
+	// Live: what reaches the speakers stays under the ceiling too
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	const live = await page.evaluate(() => (window as any).__peakOver(1500) as Promise<number>);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	expect(live).toBeGreaterThan(0.8);
+	expect(live).toBeLessThanOrEqual(0.8915);
+});
+
 test('Export audio: effects stems add up to the mix; a MIDI file and a one-shot come in the same zip', async ({ page }) => {
 	await setTempo(page, 80); // the names and the MIDI file's timing below are at 80 BPM
 	const name = page.getByRole('textbox', { name: 'Project name' });
