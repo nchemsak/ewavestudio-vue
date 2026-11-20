@@ -5456,6 +5456,70 @@ test('the chain: cells step through the slots; playing follows them a bar each, 
 	await expect(chainSwitch).toBeDisabled();
 });
 
+test('Export audio plays the chain: a bar per cell, in the WAV and the MIDI file; Pattern exports the slot showing', async ({ page }) => {
+	// A: pad 1; B: pad 9 (a pattern of its own)
+	await turnOnPads(page, [0]);
+	await slotButton(page, 'B').click();
+	await turnOnPads(page, [8]);
+	await slotButton(page, 'A').click();
+	// Chain A B A, on
+	await chainCell(page, 1).click();
+	await chainCell(page, 2).click();
+	await chainCell(page, 2).click();
+	await chainCell(page, 3).click();
+	await page.locator('.mr-chain').getByRole('switch', { name: 'Chain' }).click();
+
+	// The dialog opens on Chain (it plays in the app), three bars long
+	await chooseFromFileMenu(page, 'Export audio…');
+	const dialog = page.getByRole('dialog', { name: 'Export audio' });
+	const play = dialog.getByRole('group', { name: 'Play' });
+	await expect(play.getByRole('button', { name: 'Chain', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await expect(play.getByRole('button', { name: 'Pattern A', exact: true })).toBeVisible();
+	await expect(dialog.getByText('A B A', { exact: true })).toBeVisible();
+	await expect(dialog.getByRole('group', { name: 'Bars' })).toHaveCount(0);
+	await dialog.getByRole('button', { name: 'Close' }).click();
+
+	const zip = await exportAudio(page, { ending: 'Loop', mix: true, stems: false, midi: true, oneShot: false, normalize: false });
+	expect(zip.name).toMatch(/_120bpm_Amin_chain-3bars\.zip$/);
+	const files = unzip(zip.bytes);
+	const wavName = Object.keys(files).find((n) => n.endsWith('_mix.wav'))!;
+	expect(wavName).toMatch(/_chain-3bars_mix\.wav$/);
+	const mix = files[wavName];
+	// 120 BPM: a bar is 2 s, a step 0.125 s. A hits at 0 s and 4 s, B at 3 s (bar 2, step 9)
+	const { frames, rate } = wavSamples(mix);
+	expect(frames / rate).toBeCloseTo(6, 2);
+	const level = (t: number) => wavWindow(mix, t, t + 0.12).peak;
+	expect(level(0)).toBeGreaterThan(0.05);
+	expect(level(1)).toBeLessThan(0.01);   // bar 1 has no step 9
+	expect(level(2)).toBeLessThan(0.01);   // bar 2 has no step 1
+	expect(level(3)).toBeGreaterThan(0.05);
+	expect(level(4)).toBeGreaterThan(0.05);
+	expect(level(5)).toBeLessThan(0.01);
+	// The MIDI file: the same three hits
+	const midi = Object.entries(files).find(([n]) => n.endsWith('.mid'))![1];
+	const noteOns = [...midi.subarray(22)].flatMap((b, i, a) => (b === 0x90 ? [a[i + 1]] : []));
+	expect(noteOns.length).toBe(3);
+
+	// Pattern: the slot showing (A), its bars as before
+	const single = await (async () => {
+		await chooseFromFileMenu(page, 'Export audio…');
+		await dialog.getByRole('group', { name: 'Play' }).getByRole('button', { name: 'Pattern A', exact: true }).click();
+		await dialog.getByRole('group', { name: 'Bars' }).getByRole('button', { name: '2', exact: true }).click();
+		await dialog.getByRole('checkbox', { name: /^MIDI file/ }).setChecked(false);
+		const [download] = await Promise.all([page.waitForEvent('download'), dialog.getByRole('button', { name: 'Export', exact: true }).click()]);
+		return { name: download.suggestedFilename(), bytes: readFileSync((await download.path())!) };
+	})();
+	expect(single.name).toMatch(/_120bpm_Amin_2bars_mix\.wav$/);
+	expect(wavWindow(single.bytes, 2, 2.12).peak).toBeGreaterThan(0.05); // A again in bar 2
+	expect(wavWindow(single.bytes, 1, 1.12).peak).toBeLessThan(0.01);
+
+	// With no filled cell, no Play row
+	await page.locator('.mr-chain').getByRole('switch', { name: 'Chain' }).click();
+	for (const n of [1, 2, 3]) while (!(await chainCell(page, n).getAttribute('aria-label'))!.endsWith('empty')) await chainCell(page, n).click();
+	await chooseFromFileMenu(page, 'Export audio…');
+	await expect(dialog.getByRole('group', { name: 'Play' })).toHaveCount(0);
+});
+
 test('Melody Maker: a new scale keeps each note on its degree; a project opening keeps its notes', async ({ page }) => {
 	const on = [0, 1, 2, 3, 4, 5, 6, 7];
 	await turnOnPads(page, on);

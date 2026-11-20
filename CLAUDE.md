@@ -1035,7 +1035,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   and the noise for every slot.
 - **The synth lane is the current slot as it's being edited**: the pads, Pattern Tools,
   Generate, the pattern presets and their dice, the engines, the export (audio and MIDI: the
-  current slot only, until the chain) and the share link read and write the lane as before.
+  slot showing, or the chain since PR 111) and the share link read and write the lane as before.
   Picking another slot (`switchToSlot()`) copies the lane into the current slot's entry, then
   the chosen slot into the lane (`slotFromLane()`, `loadIntoLane()`; a slot never used loads as
   an empty pattern: steps off, full velocity, the key's root, one hit, Same).
@@ -1079,8 +1079,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   waits for the bar as usual); stopped, a slot picked leaves it on (Play starts from the first
   cell anyway). A cell changed and the switch are undo steps; the chain playing isn't (above).
   Saved as `patterns.chain` (eight slot indexes or null, `chainFrom()`) and `patterns.chainOn`;
-  a project from PR 109 or before gets an empty chain, off; File → New too. Export audio and the
-  MIDI file still render the slot showing (the chain's export is part 3).
+  a project from PR 109 or before gets an empty chain, off; File → New too.
+- **The chain in Export audio** (PR 111, part 3): see "Export audio" (Play: Pattern | Chain).
 - **Not on the phone, for now** (the maintainer's call after PR 109: later, once the chain and
   its export are done; the saved slots and chain need no change for it). Phone mode plays and
   edits the slot showing, and the chain plays while it's on.
@@ -1643,6 +1643,21 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   the last export's choices (in memory, not saved), also after opening another project; File →
   New puts back the defaults (1 bar, Loop, the mix only, Normalize on), as it does everything
   else (`resetUiToFactoryDefaults()`). The one-shot's note starts on the key's root each time.
+- **Play** (PR 111, only while the chain has a filled cell): **Pattern A** (the slot showing,
+  as before) or **Chain**: the chain once through, a bar per filled cell (empty cells skipped),
+  so Bars gives way to "3, a bar per cell" and the cells' letters ("A B A"). It opens on Chain
+  while Chain is on in the app, else on Pattern. `exportChain` in `DrumSequencer.vue` gives each
+  cell's pattern (the slot showing from the lane; a slot never used is an empty bar) with the
+  pads' shared waves and the key's chord, as the engine's `barPatterns` (bar b plays
+  `barPatterns[b % length]`, `patternForBar()` in `scheduleStepSequencer.ts`) and the MIDI file's
+  (`patternToMidi()`'s `barPatterns`). Loop folds the chain's tail onto its first bar, so the
+  chain repeats seamlessly; With tail rings out after its last. Stems add up as before. REV's
+  Next hit uses each bar's own pattern (a swell at a bar's end comes round to that pattern's
+  first hit, not the next cell's). The one-shot and the hit behind the Envelope card never play
+  the chain. Names say so: `Project_120bpm_Amin_chain-3bars_mix.wav` (`barsLabel()`'s `chain`).
+  The LFO's note counts the chain's bars (no "Use N bars" button with Chain). A browser test
+  exports a chain A B A (the hits in their bars, in the WAV and the MIDI file), Pattern's bars,
+  and no Play row without a filled cell.
 - **Bars** 1, 2, 4 or 8 (the pattern played that many times, `bars` in the engine's state).
   **Loop** (the default): exactly N bars, to the sample (`barFrames()`), with whatever rings
   past the end (reverb, echoes, a long decay) added onto the start (`foldLoop()`, wrapping as
@@ -2130,15 +2145,6 @@ into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 
 Grow into a small groovebox:
 
-2. **Patterns A–D and a chain** (about three PRs). Four pattern slots per project: a slot
-    holds the steps, notes, velocities and repeats; the sound is shared. A slot clicked while
-    playing takes over at the next bar (the bar queue, with its ghost). Copy A to B. Under the
-    slots, a chain of up to eight cells plays them in order, and Export audio can render the
-    chain. No timeline. Saved so that a pattern is a list of tracks from the start, even with
-    one track, and the machines need no second change to saved projects.
-    **Part 1 done in PR 109** (the slots, Copy, saving; see "Patterns A–D"), **part 2 in
-    PR 110** (the chain). Next, part 3: Export audio rendering the chain (and its MIDI file).
-    The phone gets the slots and the chain later (the maintainer's call after PR 109).
 3. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
     that builds a note, used by the live engine and the export engine (today two engines kept
     in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
@@ -2167,6 +2173,10 @@ Grow into a small groovebox:
     the maintainer wants some maintenance, each as its own PR.
 
 Put off after PR 93 (the maintainer's call: back to them after some of the items above):
+- **Patterns A–D and the chain on the phone** (the maintainer's call after PR 109: later).
+  Phone mode plays and edits the slot showing, the chain plays while it's on, and its Export
+  audio has Play; the slots' caps, Copy and the chain's cells aren't on its pages. The saved
+  slots and chain need no change for it.
 - **Show it** (put off after PR 96, the maintainer's call: wanted, but back to them once the
   features have settled; its signature, the tape pedal, was PR 90; the screen at rest, PR 94;
   Sample a sound, PR 95):
@@ -2459,6 +2469,7 @@ Done:
 | 108 | The big screen spread around (the plan's item 1; option A of three mockups, the machine rail, with bigger screens until Bass arrives): the screen and its F-keys are gone; in its place the **machine rail**, a small scope over a small spectrogram (40 Hz–10 kHz, log) and a row for **Rhythm** (its LED mutes it, its level is the lane's volume, hidden since PR 92 and MIDI-learnable again, and its 16 steps in their colours); the live **spectrum** is drawn faintly behind the Filter card's curve, **one hit** of the sound behind the Envelope card's, and a **tuner** sits in the Melody Maker screen's corner. The views read a tap high-passed at 10 Hz (no more DC offset), and the spectrum and tuner a finer analyser (8192 points), so the spectrum's low end is drawn (it started with a wall between C1 and C2). Every card keeps its size. |
 | 109 | Patterns A–D (the plan's item 2, part 1): four pattern slots per project under the machine rail's Rhythm row (option A of PR 108's mockups), A B C D and Copy. A slot holds the steps, velocities, pitches and repeats; the sound, the pads' waves and the noise are shared. While playing, a slot waits for the next bar (a pulsing ghost; Shift+click: now; Stop applies it); Copy, then a slot, copies the current pattern into it. A key or scale picked moves every slot. Saved as `patterns` (a list of tracks per slot, so the machines need no second change); older projects open with their pattern in A; one undo step each (`src/lib/patterns/slots.ts`). |
 | 110 | The chain (the plan's item 2, part 2): under the slots, a Chain switch and eight cells, each stepping through — A B C D on a click (Shift+click back). While Chain is on, playing follows the filled cells a bar each, round again, from the first cell on Play; the cell playing is lit; a slot picked by hand while it plays turns it off. Which slot is showing is no longer an edit: picking one, or the chain playing, makes no undo step and no unsaved dot (`comparableProject()`). Saved as `patterns.chain` and `chainOn` (older projects: empty, off). The rail's screens shrink to 32 px so it's still as tall as the transport card at 1024 px. |
+| 111 | The chain in Export audio (the plan's item 2, part 3, which finishes it): while the chain has a filled cell, the dialog's **Play** picks the pattern showing or the **Chain**, once through, a bar per cell (it opens on Chain while Chain is on); the mix, the stems and the MIDI file play each cell's pattern in its bar, a loop folding the tail onto the first bar; files named `..._chain-3bars_...`. The engine and the MIDI file take one pattern per bar (`barPatterns`, `patternForBar()`). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

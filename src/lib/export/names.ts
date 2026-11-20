@@ -23,13 +23,14 @@ export function keyLabel(root: string, scale: string): string {
 
 export type Ending = 'loop' | 'tail';
 
-export function barsLabel(bars: number, ending: Ending): string {
-	return `${bars}bar${bars === 1 ? '' : 's'}${ending === 'tail' ? '-tail' : ''}`;
+// "4bars", "4bars-tail"; the chain's (PR 111) "chain-4bars"
+export function barsLabel(bars: number, ending: Ending, chain = false): string {
+	return `${chain ? 'chain-' : ''}${bars}bar${bars === 1 ? '' : 's'}${ending === 'tail' ? '-tail' : ''}`;
 }
 
-export function exportNames(o: { project: string; bpm: number; key: string; bars: number; ending: Ending }) {
+export function exportNames(o: { project: string; bpm: number; key: string; bars: number; ending: Ending; chain?: boolean }) {
 	const project = safeName(o.project);
-	const base = [project, `${Math.round(o.bpm)}bpm`, o.key, barsLabel(o.bars, o.ending)].filter(Boolean).join('_');
+	const base = [project, `${Math.round(o.bpm)}bpm`, o.key, barsLabel(o.bars, o.ending, o.chain)].filter(Boolean).join('_');
 	return {
 		wav: (part: string) => `${base}_${part}.wav`,
 		midi: `${base}.mid`,

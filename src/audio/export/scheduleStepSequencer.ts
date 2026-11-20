@@ -25,6 +25,22 @@ import { clampUnisonVoices, unisonPhase, unisonPosition } from "../unison";
 import { createTape, tapeSettings, type TapeMode } from "../tape";
 import { applySampleEnvelope, sampleBuffer, sampleNoteTimes, SAMPLE_WAVE, type SampleData } from "../sample";
 
+export type StepPattern = {
+	active: boolean[];
+	velocities: number[];        // 0..1
+	pitches: number[];           // Hz
+	waveforms: string[]; // per-step wave (waves.ts)
+	ratchets?: number[]; // per step: 1 hit, or 2–4 quick hits (ratchet.ts)
+	repeatNotes?: string[]; // per step: what the hits play, 'same' | 'up' | 'down' (ratchet.ts)
+	repeatChord?: number[]; // the key's chord, pitch classes, which Up/Down step through
+};
+
+/** The pattern bar `bar` plays: the chain's, or the one pattern */
+export function patternForBar(state: Pick<StepSequencerState, 'pattern' | 'barPatterns'>, bar: number): StepPattern {
+	const list = state.barPatterns;
+	return list && list.length ? list[bar % list.length] : state.pattern;
+}
+
 export type StepSequencerState = {
 	bpm: number;
 	stepsCount: 16 | 32;
@@ -32,15 +48,10 @@ export type StepSequencerState = {
 	masterVolume: number;         // 0..1
 	channelVolume: number;        // 0..1
 
-	pattern: {
-		active: boolean[];
-		velocities: number[];        // 0..1
-		pitches: number[];           // Hz
-		waveforms: string[]; // per-step wave (waves.ts)
-		ratchets?: number[]; // per step: 1 hit, or 2–4 quick hits (ratchet.ts)
-		repeatNotes?: string[]; // per step: what the hits play, 'same' | 'up' | 'down' (ratchet.ts)
-		repeatChord?: number[]; // the key's chord, pitch classes, which Up/Down step through
-	};
+	pattern: StepPattern;
+	// The chain (PR 111): one pattern per bar, bar b playing barPatterns[b % length]; without
+	// it every bar plays `pattern`
+	barPatterns?: StepPattern[];
 
 	synth: {
 		envelope: { enabled: boolean; attackMs: number; decayMs: number; };
@@ -522,8 +533,10 @@ export function scheduleStepSequencer(
 			openRev(revIrSeconds(swellSeconds(revSwell, stepS, null), revPreS), ctx.currentTime + offsetSeconds);
 		}
 	}
-	const revGaps = revOn && revSwell === 'next' && !state.oneShot
-		? nextHitGaps(state.pattern.active.slice(0, state.stepsCount).map(Boolean), 60 / state.bpm / 4, clamp01(state.swing))
+	// Each bar's own gaps (with the chain, each pattern's: a swell at its end comes round to
+	// its own first hit, not the next bar's)
+	const revGapsFor = (pat: StepPattern) => revOn && revSwell === 'next' && !state.oneShot
+		? nextHitGaps(pat.active.slice(0, state.stepsCount).map(Boolean), 60 / state.bpm / 4, clamp01(state.swing))
 		: null;
 
 	// -------------------------------------------------------------------------
@@ -575,13 +588,15 @@ export function scheduleStepSequencer(
 	const stepDuration = secondsPerBeat / 4; // 16th notes
 	const chanVol = clamp01(state.channelVolume);
 
-	const steps = state.pattern.active;
-	const velArr = state.pattern.velocities;
-	const pitchArr = state.pattern.pitches;
-	const waveArr = state.pattern.waveforms;
-
-	// The pattern, `bars` times over
-	for (let bar = 0; bar < bars; bar++) for (let stepIndex = 0; stepIndex < state.stepsCount; stepIndex++) {
+	// The pattern, `bars` times over (with the chain, each bar its own pattern)
+	for (let bar = 0; bar < bars; bar++) {
+	const pat = patternForBar(state, bar);
+	const steps = pat.active;
+	const velArr = pat.velocities;
+	const pitchArr = pat.pitches;
+	const waveArr = pat.waveforms;
+	const revGaps = revGapsFor(pat);
+	for (let stepIndex = 0; stepIndex < state.stepsCount; stepIndex++) {
 		if (!steps[stepIndex]) continue;
 
 		const baseVel = clamp01(velArr[stepIndex] ?? 1);
@@ -603,8 +618,8 @@ export function scheduleStepSequencer(
 
 		// One note, or a ratchet's 2–4 quick hits within the step, as in the live engine
 		const span = stepSpan(stepIndex, state.stepsCount, stepDuration, clamp01(state.swing));
-		const hitHz = ratchetPitches(freq, state.pattern.ratchets?.[stepIndex], state.pattern.repeatNotes?.[stepIndex], state.pattern.repeatChord ?? []);
-		ratchetHits(t, span, state.pattern.ratchets?.[stepIndex]).forEach((hit, k) => scheduleSynthNote({
+		const hitHz = ratchetPitches(freq, pat.ratchets?.[stepIndex], pat.repeatNotes?.[stepIndex], pat.repeatChord ?? []);
+		ratchetHits(t, span, pat.ratchets?.[stepIndex]).forEach((hit, k) => scheduleSynthNote({
 			ctx,
 			time: hit.time,
 			maxDuration: hit.maxDuration,
@@ -633,6 +648,7 @@ export function scheduleStepSequencer(
 			noiseBuffers,
 			random,
 		}));
+	}
 	}
 
 	// The tape's noise takes its random numbers last, so the notes' are the same with the

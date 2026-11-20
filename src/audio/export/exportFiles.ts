@@ -23,7 +23,12 @@ import { seededRandom } from '../../lib/random';
 export const EXPORT_BARS = [1, 2, 4, 8] as const;
 export type ExportBars = typeof EXPORT_BARS[number];
 
+// What plays: the pattern showing, its bars times over, or the chain (PR 111), once through,
+// a bar per filled cell
+export type ExportPlay = 'pattern' | 'chain';
+
 export type ExportOptions = {
+	play: ExportPlay;
 	bars: ExportBars;
 	ending: Ending;
 	mix: boolean;
@@ -35,7 +40,7 @@ export type ExportOptions = {
 };
 
 export const DEFAULT_EXPORT_OPTIONS: Omit<ExportOptions, 'oneShotHz'> = {
-	bars: 1, ending: 'loop', mix: true, stems: false, midi: false, oneShot: false, normalize: true,
+	play: 'pattern', bars: 1, ending: 'loop', mix: true, stems: false, midi: false, oneShot: false, normalize: true,
 };
 
 export const STEM_PARTS: ExportPart[] = ['dry', 'delay', 'reverb', 'noise', 'tape'];
@@ -83,6 +88,7 @@ function oneShotState(state: StepSequencerState, hz: number, wave: string, part:
 		random,
 		tapeNoise: { seconds: noiseSeconds },
 		oneShot: true,
+		barPatterns: undefined, // one hit, never the chain
 		pattern: {
 			active: Array.from({ length: n }, (_, i) => i === 0),
 			velocities: Array(n).fill(1),
@@ -111,8 +117,13 @@ export async function buildExportFiles(
 	progress: (done: number, total: number) => void = () => {},
 ): Promise<ExportFile[]> {
 	const sr = state.sampleRate;
-	const names = exportNames({ project: meta.project, bpm: state.bpm, key: meta.key, bars: o.bars, ending: o.ending });
-	const loopFrames = barFrames(o.bars, state.bpm, sr);
+	// The chain: a bar per filled cell (state.barPatterns, the cells' patterns in order), once
+	// through; otherwise the pattern showing, o.bars times over
+	const chain = o.play === 'chain' && !!state.barPatterns?.length;
+	const bars = chain ? state.barPatterns!.length : o.bars;
+	state = chain ? state : { ...state, barPatterns: undefined };
+	const names = exportNames({ project: meta.project, bpm: state.bpm, key: meta.key, bars, ending: o.ending, chain });
+	const loopFrames = barFrames(bars, state.bpm, sr);
 	const seconds = loopFrames / sr + state.tailSeconds;
 	const parts: ExportPart[] = [...(o.mix ? ['mix' as const] : []), ...(o.stems ? STEM_PARTS : [])];
 	const total = parts.length + (o.oneShot ? 1 : 0);
@@ -126,7 +137,7 @@ export async function buildExportFiles(
 		rendered.push({
 			part,
 			channels: await render({
-				...state, bars: o.bars, part, random: seededRandom(seed),
+				...state, bars, part, random: seededRandom(seed),
 				tapeNoise: { fade: o.ending === 'tail' ? TAPE_NOISE_FADE_S : 0 },
 			}, seconds),
 		});
@@ -153,7 +164,7 @@ export async function buildExportFiles(
 			name: names.midi,
 			type: 'audio/midi',
 			data: patternToMidi({
-				bpm: state.bpm, swing: state.swing, stepsCount: state.stepsCount, bars: o.bars,
+				bpm: state.bpm, swing: state.swing, stepsCount: state.stepsCount, bars, barPatterns: state.barPatterns,
 				active: state.pattern.active, velocities: state.pattern.velocities,
 				pitches: state.pattern.pitches, ratchets: state.pattern.ratchets,
 				repeatNotes: state.pattern.repeatNotes, repeatChord: state.pattern.repeatChord, name: meta.project,
