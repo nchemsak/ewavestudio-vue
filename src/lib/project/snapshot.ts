@@ -30,7 +30,7 @@ import { clampTapeMode, TAPE_DEFAULTS, type TapeMode } from '../../audio/tape';
 import { clampSampleLength, sampleFrom, SAMPLE_LENGTH_DEFAULT, type SampleData } from '../../audio/sample';
 import { DEFAULT_SWELL, isSwell } from '../../audio/reverb/reverse';
 import { DEFAULT_PRE_DIVISION, isPreDivision, preDelayMs, preDivisionForMs } from '../../audio/reverb/preDelay';
-import { emptySlots, slotFromLane, slotIndexFrom, slotsFrom, type Slots } from '../patterns/slots';
+import { chainFrom, emptyChain, emptySlots, slotFromLane, slotIndexFrom, slotsFrom, type Chain, type Slots } from '../patterns/slots';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -158,7 +158,8 @@ export type ProjectState = {
 	// Patterns A–D (src/lib/patterns/slots.ts): the four slots and which one plays (0–3). The
 	// synth lane is the current slot as it's being edited; its entry in `slots` is filled in
 	// from the lane when another slot is picked and when a snapshot is built.
-	patterns: { slots: Ref<Slots>; current: Ref<number> };
+	// The chain (PR 110): eight cells, each a slot or null, and whether playing follows it
+	patterns: { slots: Ref<Slots>; current: Ref<number>; chain: Ref<Chain>; chainOn: Ref<boolean> };
 	melody: MelodyUi; // reactive
 	selectedWaveform: Ref<PadWave>;
 	// Resizes every lane's step arrays (and the noise mask) to the step count
@@ -254,6 +255,8 @@ function byName(st: ProjectState) {
 		instruments: st.instruments,
 		patternSlots: st.patterns.slots,
 		currentSlot: st.patterns.current,
+		chain: st.patterns.chain,
+		chainOn: st.patterns.chainOn,
 		melodyUi: st.melody,
 		selectedWaveform: st.selectedWaveform,
 	};
@@ -278,7 +281,7 @@ export function buildSnapshot(st: ProjectState) {
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDivision, reverbPreDelay, reverbReverse, reverbSwell,
 		tapeEnabled, tapeAge, tapeWobble, tapeMode,
-		instruments, patternSlots, currentSlot, melodyUi, selectedWaveform,
+		instruments, patternSlots, currentSlot, chain, chainOn, melodyUi, selectedWaveform,
 	} = byName(st);
 
 	return {
@@ -426,6 +429,8 @@ export function buildSnapshot(st: ProjectState) {
 				const lane = instruments.value.find(i => i.name === 'synth-voice');
 				return lane ? slotFromLane(lane, currentDefaultHz.value) : null;
 			}),
+			chain: [...chain.value],
+			chainOn: chainOn.value,
 		},
 
 		// melodyUi mirrors the Melody Maker panel, which reports every change through events
@@ -469,7 +474,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDivision, reverbPreDelay, reverbReverse, reverbSwell,
 		tapeEnabled, tapeAge, tapeWobble, tapeMode,
-		instruments, patternSlots, currentSlot, melodyUi, selectedWaveform,
+		instruments, patternSlots, currentSlot, chain, chainOn, melodyUi, selectedWaveform,
 	} = byName(st);
 
 	if (!s || typeof s !== 'object') return;
@@ -756,9 +761,14 @@ export function applySnapshot(st: ProjectState, s: any) {
 	if (s.patterns && typeof s.patterns === 'object') {
 		patternSlots.value = slotsFrom(s.patterns.slots, stepLength.value, currentDefaultHz.value);
 		currentSlot.value = slotIndexFrom(s.patterns.current);
+		// The chain (PR 110): a project from PR 109 has none
+		chain.value = chainFrom(s.patterns.chain);
+		chainOn.value = s.patterns.chainOn === true;
 	} else if (Array.isArray(s.instruments) && s.instruments.length) {
 		patternSlots.value = emptySlots();
 		currentSlot.value = 0;
+		chain.value = emptyChain();
+		chainOn.value = false;
 	}
 
 	if (typeof s.selectedWaveform === 'string') selectedWaveform.value = s.selectedWaveform as any;
@@ -776,7 +786,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 		volume, tempo, swing,
 		noiseMask, sample, sampleLength,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
-		instruments, patternSlots, currentSlot, melodyUi, selectedWaveform,
+		instruments, patternSlots, currentSlot, chain, chainOn, melodyUi, selectedWaveform,
 	} = byName(st);
 
 	currentTheme.value = '';
@@ -826,6 +836,8 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	});
 	patternSlots.value = emptySlots();
 	currentSlot.value = 0;
+	chain.value = emptyChain();
+	chainOn.value = false;
 
 	// remove custom channels
 	for (let idx = instruments.value.length - 1; idx >= 0; idx--) {

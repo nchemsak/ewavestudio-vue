@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { emptyRhythm, emptySlots, loadIntoLane, mapSlotPitches, rhythmOf, slotFromLane, slotHasSteps, slotIndexFrom, slotsFrom, SLOT_COUNT } from './slots';
+import { chainCells, chainFrom, comparableProject, cycleCell, emptyChain, emptyRhythm, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, rhythmOf, slotFromLane, slotHasSteps, slotIndexFrom, slotsFrom, SLOT_COUNT } from './slots';
 import { applySnapshot, buildSnapshot } from '../project/snapshot';
 import { STEPS, asSaved, changeEverything, fresh } from '../project/testState';
 
@@ -62,7 +62,7 @@ describe('pattern slots', () => {
 
 describe('pattern slots in a project', () => {
 	it('File → New: four empty slots, A playing', () => {
-		expect(asSaved(fresh()).patterns).toEqual({ current: 0, slots: [{ tracks: [emptyRhythm(STEPS, 220)] }, null, null, null] });
+		expect(asSaved(fresh()).patterns).toEqual({ current: 0, slots: [{ tracks: [emptyRhythm(STEPS, 220)] }, null, null, null], chain: emptyChain(), chainOn: false });
 	});
 
 	it('the saved current slot is the lane as it is now', () => {
@@ -88,8 +88,70 @@ describe('pattern slots in a project', () => {
 		delete old.patterns;
 		applySnapshot(b, old);
 		expect(b.patterns.current.value).toBe(0);
+		expect(b.patterns.chain.value).toEqual(emptyChain());
+		expect(b.patterns.chainOn.value).toBe(false);
 		expect(b.patterns.slots.value).toEqual(emptySlots());
 		// its pattern is in A, as the lane
 		expect(buildSnapshot(b).patterns.slots[0]!.tracks[0].steps).toEqual(saved.instruments.find((i: any) => i.name === 'synth-voice').steps);
+	});
+});
+
+describe('the chain', () => {
+	it('checks a saved chain: eight cells, each a slot or empty', () => {
+		expect(chainFrom([0, 3, 4, -1, 'A', 1.5, null, 2, 1])).toEqual([0, 3, null, null, null, null, null, 2]);
+		expect(chainFrom(undefined)).toEqual(emptyChain());
+	});
+
+	it('plays the filled cells in order, round again after the last', () => {
+		const chain = [null, 0, null, 1, 1, null, null, 2];
+		expect(chainCells(chain)).toEqual([1, 3, 4, 7]);
+		expect(nextChainCell(chain, -1)).toBe(1);
+		expect(nextChainCell(chain, 1)).toBe(3);
+		expect(nextChainCell(chain, 4)).toBe(7);
+		expect(nextChainCell(chain, 7)).toBe(1);
+		expect(nextChainCell(emptyChain(), -1)).toBeNull();
+	});
+
+	it('a click steps a cell through — A B C D, Shift+click the other way', () => {
+		const seq = [null];
+		for (let i = 0; i < 5; i++) seq.push(cycleCell(seq[seq.length - 1]));
+		expect(seq).toEqual([null, 0, 1, 2, 3, null]);
+		expect(cycleCell(null, true)).toBe(3);
+		expect(cycleCell(0, true)).toBeNull();
+	});
+
+	it('the chain is saved, and round-trips', () => {
+		const a = fresh();
+		changeEverything(a);
+		const saved = asSaved(a);
+		expect(saved.patterns.chain).toEqual([2, 2, 1, 2, null, 3, null, null]);
+		expect(saved.patterns.chainOn).toBe(true);
+	});
+});
+
+describe('which slot is showing is not a change', () => {
+	it('two snapshots that differ only in the slot showing compare the same; an edit does not', () => {
+		const st = fresh();
+		changeEverything(st);
+		const before = asSaved(st);
+		// Switch to B as the app does: the lane into C, B into the lane
+		const lane = st.instruments.value.find(i => i.name === 'synth-voice')!;
+		const slots = [...st.patterns.slots.value];
+		slots[2] = slotFromLane(lane, 220);
+		loadIntoLane(lane, slots[1], STEPS, 220);
+		st.patterns.slots.value = slots;
+		st.patterns.current.value = 1;
+		const after = asSaved(st);
+		expect(JSON.stringify(after)).not.toBe(JSON.stringify(before));
+		expect(comparableProject(after)).toEqual(comparableProject(before));
+		lane.steps = lane.steps.map(s => !s);
+		expect(comparableProject(asSaved(st))).not.toEqual(comparableProject(before));
+	});
+
+	it('an empty pattern compares the same as a slot never used', () => {
+		const st = fresh();
+		const a = asSaved(st);
+		st.patterns.slots.value = [null, { tracks: [emptyRhythm(STEPS, 220)] }, null, null];
+		expect(comparableProject(asSaved(st))).toEqual(comparableProject(a));
 	});
 });

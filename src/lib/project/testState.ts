@@ -4,7 +4,7 @@
 
 import { encodeSample } from '../../audio/sample';
 import { preDelayMs } from '../../audio/reverb/preDelay';
-import { emptyRhythm, emptySlots, type Slots } from '../patterns/slots';
+import { emptyChain, emptyRhythm, emptySlots, type Chain, type Slots } from '../patterns/slots';
 import { ref, reactive, computed } from 'vue';
 import {
 	buildSnapshot,
@@ -86,7 +86,7 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 			tape: { enabled: ref(true), age: ref(0.9), wobble: ref(0.9), mode: ref<'tape' | 'vinyl'>('vinyl') },
 		},
 		instruments,
-		patterns: { slots: ref<Slots>(emptySlots()), current: ref(0) },
+		patterns: { slots: ref<Slots>(emptySlots()), current: ref(0), chain: ref<Chain>(emptyChain()), chainOn: ref(false) },
 		melody: reactive({
 			keyRoot: 'C', keyScale: 'major', rangePreset: 'wide', arpPattern: 'down', arpRate: '1/16',
 			arpOctaves: 3, arpTones: 'scale', arpSkip: false, mode: 'random',
@@ -164,6 +164,8 @@ export function changeEverything(st: ProjectState) {
 	b.ratchets = b.ratchets.map((_, i) => (i % 2) + 1);
 	b.repeatNotes = b.repeatNotes.map((_, i) => (i % 2 ? 'up' : 'same'));
 	st.patterns.slots.value = [null, { tracks: [b] }, null, null];
+	st.patterns.chain.value = [2, 2, 1, 2, null, 3, null, null];
+	st.patterns.chainOn.value = true;
 }
 
 // Leaf values of an object, by path ("synth.lfo.rate", "instruments.3.steps", ...)

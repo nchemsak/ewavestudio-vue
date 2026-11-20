@@ -12,6 +12,9 @@
 // - After an undo or redo, settings may adjust by themselves (a panel reacting to its props,
 //   or a watcher such as the synced delay time). Those follow-ups are folded into the entry,
 //   so they don't count as a new change that would throw away the redo side.
+// - Which pattern slot is showing isn't a change (PR 110: the chain switches slots every bar):
+//   a state that differs only in that (comparableProject() in slots.ts) overwrites the current
+//   entry instead of adding one, so undo still lands on the slot that was showing.
 //
 // The history is in memory only; it isn't saved with the project. Call once, from
 // DrumSequencer's setup.
@@ -19,6 +22,7 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useProjectStore } from '../stores/projectStore';
 import { createHistory } from '../lib/project/history';
+import { comparableProject } from '../lib/patterns/slots';
 
 export const SETTLE_MS = 400;
 
@@ -45,6 +49,12 @@ export function useUndoHistory(opts: {
 		return rest;
 	};
 
+	// Whether the state differs from the current entry by more than the slot showing
+	const sameAsCurrent = (state: any) => {
+		const cur = history.current();
+		return !!cur && JSON.stringify(comparableProject(cur)) === JSON.stringify(comparableProject(state));
+	};
+
 	let timer: ReturnType<typeof setTimeout> | null = null;
 	let changePending = false; // a change seen but not recorded yet
 	let startFresh = true;     // the next record starts a new history (a new project)
@@ -59,6 +69,8 @@ export function useUndoHistory(opts: {
 		if (startFresh) {
 			history.reset(state);
 			startFresh = false;
+		} else if (sameAsCurrent(state)) {
+			history.replaceCurrent(state);
 		} else {
 			history.record(state);
 		}

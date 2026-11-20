@@ -136,3 +136,74 @@ export function slotIndexFrom(x: unknown): number {
 }
 
 // Loading END
+
+// Chain START
+// The chain (the plan's item 2, part 2): up to eight cells under the slots, each a slot or empty.
+// While it's on, playing follows the filled cells in order, a bar each, round again at the end.
+
+export const CHAIN_LENGTH = 8;
+
+export type Chain = (number | null)[];
+
+export function emptyChain(): Chain {
+	return Array(CHAIN_LENGTH).fill(null);
+}
+
+/** A saved chain, checked: 8 cells, each a slot 0–3 or null */
+export function chainFrom(saved: unknown): Chain {
+	const a = Array.isArray(saved) ? saved : [];
+	return Array.from({ length: CHAIN_LENGTH }, (_, i) => {
+		const x = a[i];
+		return Number.isInteger(x) && x >= 0 && x < SLOT_COUNT ? x : null;
+	});
+}
+
+/** The filled cells, in order: their positions in the chain */
+export function chainCells(chain: Chain): number[] {
+	return chain.flatMap((s, i) => (s == null ? [] : [i]));
+}
+
+/** The cell after `cell` (a position in the chain; −1: before the first), round the end; null with none */
+export function nextChainCell(chain: Chain, cell: number): number | null {
+	const cells = chainCells(chain);
+	if (!cells.length) return null;
+	return cells.find((i) => i > cell) ?? cells[0];
+}
+
+/** A cell clicked: — → A → B → C → D → — (back: the other way) */
+export function cycleCell(value: number | null, back = false): number | null {
+	const order = [null, ...SLOT_NAMES.map((_, i) => i)];
+	const at = order.indexOf(value);
+	return order[(at + (back ? order.length - 1 : 1)) % order.length];
+}
+
+// Chain END
+
+// Comparing projects START
+// Which slot is showing is not an edit: picking one, or the chain playing through them, mustn't
+// make an undo step or the unsaved dot. So undo and the dot compare this form of a snapshot:
+// without the current slot's index, without the synth lane's pattern (it's in its slot too:
+// buildSnapshot writes it there), and with an empty pattern the same as a slot never used.
+
+function blankTrack(t: any): boolean {
+	return !!t && Array.isArray(t.steps) && t.steps.every((s: unknown) => !s)
+		&& (t.velocities ?? []).every((v: unknown) => v === 1)
+		&& (t.ratchets ?? []).every((r: unknown) => r === 1)
+		&& (t.repeatNotes ?? []).every((n: unknown) => n === 'same')
+		&& new Set(t.pitches ?? []).size <= 1;
+}
+
+export function comparableProject(data: any): any {
+	if (!data || typeof data !== 'object' || !data.patterns || !Array.isArray(data.patterns.slots)) return data;
+	const c = JSON.parse(JSON.stringify(data));
+	const { current, ...patterns } = c.patterns;
+	void current;
+	patterns.slots = patterns.slots.map((s: any) =>
+		(!s || (Array.isArray(s.tracks) && s.tracks.every(blankTrack)) ? null : s));
+	c.patterns = patterns;
+	const lane = Array.isArray(c.instruments) ? c.instruments.find((i: any) => i?.name === 'synth-voice') : null;
+	if (lane) for (const f of SLOT_FIELDS) delete lane[f];
+	return c;
+}
+
+// Comparing projects END

@@ -169,6 +169,7 @@ import { buildSharePayload, encodeShare, shareUrl } from '../lib/storage/share';
 import { storageKey } from '../lib/storage/namespace';
 import { usePwa } from '../composables/usePwa';
 import { usePhoneMode } from '../composables/usePhoneMode';
+import { comparableProject } from '../lib/patterns/slots';
 
 const TITLE_MAX_CHARS = 28;
 const store = useProjectStore();
@@ -381,7 +382,9 @@ const saveAsTitle = computed(() => (/Mac|iPod|iPhone|iPad/.test(navigator.platfo
     ? 'A copy under a new name (⇧⌘S)' : 'A copy under a new name (Ctrl+Shift+S)'));
 const undoTitle = computed(() => (/Mac|iPod|iPhone|iPad/.test(navigator.platform) ? 'Undo (⌘Z)' : 'Undo (Ctrl+Z)'));
 const redoTitle = computed(() => (/Mac|iPod|iPhone|iPad/.test(navigator.platform) ? 'Redo (⇧⌘Z)' : 'Redo (Ctrl+Y)'));
-function hashOf(obj: unknown): string { try { return JSON.stringify(obj); } catch { return ''; } }
+// Which pattern slot is showing (or the chain playing through them) isn't an unsaved change
+// (comparableProject() in src/lib/patterns/slots.ts)
+function hashOf(obj: unknown): string { try { return JSON.stringify(comparableProject(obj)); } catch { return ''; } }
 const currentHash = computed(() => hashOf(store.data));
 const nameDirty = computed(() => (store.name || '') !== (lastSavedName.value || ''));
 const dirty = computed(() =>
