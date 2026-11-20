@@ -23,18 +23,19 @@
             </div>
         </div>
 
-        <div class="mr-rows" :class="{ 'mock-fx': mockBass === 'h' }" role="list">
-            <div v-if="mockBass === 'h'" class="mr-heads" aria-hidden="true"><span></span><span></span><span>Level</span><span>Pedals</span><span>Steps</span></div>
+        <div class="mr-rows" :class="mixMock ? ['mock-fx', `m-${mockBass}`] : null" role="list">
+            <div v-if="mixMock" class="mr-heads" aria-hidden="true"><span></span><span></span><span v-if="mockBass !== 'k'"></span><span>Level</span><span>Pedals</span><span>Steps</span></div>
             <div class="mr-row" :class="{ 'is-chosen': !mockBass || mockChosen === 'rhythm' }" role="listitem">
                 <button type="button" class="mr-led" :class="{ lit: !muted }" role="switch" :aria-checked="!muted"
                     :aria-label="`${name} on`" :title="muted ? `${name} is muted: click to hear it` : `Mute ${name}`"
                     @click="emit('toggle-mute')"></button>
                 <span class="mr-name">{{ name }}</span>
+                <span v-if="mixMock" class="mr-meter" :class="`m-${mockBass}`" aria-hidden="true"><i :style="{ '--lv': 0.62 }"></i><b v-for="n in 8" :key="n" :class="{ on: n <= Math.round(0.62 * 8), hot: n >= 7 }"></b></span>
                 <div class="mr-level">
                     <Knob midi-id="synth.volume" v-model="levelModel" :label="`${name} level`" hideLabel size="mini"
                         :value-text="`${Math.round(level * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
-                <div v-if="mockBass === 'h'" class="mr-level">
+                <div v-if="mixMock" class="mr-level">
                     <Knob :modelValue="1" :label="`${name} into the pedals`" hideLabel size="mini" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
                 <div class="mr-cells" aria-hidden="true">
@@ -46,19 +47,21 @@
             <div v-if="mockBass" class="mr-row" :class="{ 'is-chosen': mockChosen === 'bass' }" role="listitem">
                 <button type="button" class="mr-led lit" role="switch" aria-checked="true" aria-label="Bass on"></button>
                 <span class="mr-name">Bass</span>
+                <span v-if="mixMock" class="mr-meter" :class="`m-${mockBass}`" aria-hidden="true"><i :style="{ '--lv': 0.78 }"></i><b v-for="n in 8" :key="n" :class="{ on: n <= Math.round(0.78 * 8), hot: n >= 7 }"></b></span>
                 <div class="mr-level">
                     <Knob :modelValue="0.6" label="Bass level" hideLabel size="mini" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
-                <div v-if="mockBass === 'h'" class="mr-level">
+                <div v-if="mixMock" class="mr-level">
                     <Knob :modelValue="0.4" label="Bass into the pedals" hideLabel size="mini" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
                 <div class="mr-cells" aria-hidden="true">
                     <i v-for="(c, i) in bassCells" :key="i" :style="c" :class="{ on: !!c, beat: i % 4 === 0 }"></i>
                 </div>
             </div>
-            <div v-for="g in (mockBass === 'h' ? ['Drums', 'Drift'] : [])" :key="g" class="mr-row mr-ghost" role="listitem">
+            <div v-for="g in (mixMock ? ['Drums', 'Drift'] : [])" :key="g" class="mr-row mr-ghost" role="listitem">
                 <button type="button" class="mr-led" aria-label="soon" disabled></button>
                 <span class="mr-name">{{ g }}<small> soon</small></span>
+                <span v-if="mixMock" class="mr-meter" :class="`m-${mockBass}`" aria-hidden="true"><i :style="{ '--lv': 0 }"></i><b v-for="n in 8" :key="n" :class="{ on: n <= Math.round(0 * 8), hot: n >= 7 }"></b></span>
                 <div class="mr-level"><Knob :modelValue="0.5" :label="`${g} level`" hideLabel size="mini" :min="0" :max="1" :step="0.01" :disabled="true" /></div>
                 <div class="mr-level"><Knob :modelValue="0.5" :label="`${g} to the pedals`" hideLabel size="mini" :min="0" :max="1" :step="0.01" :disabled="true" /></div>
                 <div class="mr-cells" aria-hidden="true"><i v-for="i in 16" :key="i" :class="{ beat: (i - 1) % 4 === 0 }"></i></div>
@@ -119,6 +122,8 @@ const props = defineProps<{
     mockBass?: string;          // MOCKUPS ONLY
     mockChosen?: string;
 }>();
+// MOCKUPS ONLY (?bass=j|k|l): the rows as the mixer, with a tiny level meter in three styles
+const mixMock = ['j', 'k', 'l'].includes(props.mockBass || '');
 // MOCKUPS ONLY: Bass's made-up steps (A1 A1 A2 E2 · A1 G1 C2 E2), drawn two octaves up
 const bassNotes: Record<number, number> = { 0: 55, 2: 55, 3: 110, 6: 82.41, 8: 55, 10: 49, 11: 65.41, 14: 82.41 };
 const bassCells = Array.from({ length: 16 }, (_, i) => bassNotes[i]
@@ -249,10 +254,21 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     background: var(--pt-inset, rgba(0, 0, 0, 0.3));
 }
 
-/* MOCKUPS ONLY (?bass=h): the rows as a mixer, with how much goes into the pedals */
+/* MOCKUPS ONLY (?bass=j|k|l): the rows as a mixer: LED, name, a level meter, Level, Pedals,
+   the steps. J: a thin upright bar; K: a line along the row's foot; L: eight LEDs */
 .mock-fx .mr-row,
 .mr-heads {
+    grid-template-columns: 14px 50px 6px 30px 30px minmax(0, 1fr);
+}
+
+.mock-fx.m-k .mr-row,
+.m-k .mr-heads {
     grid-template-columns: 14px 56px 30px 30px minmax(0, 1fr);
+}
+
+.mock-fx.m-l .mr-row,
+.m-l .mr-heads {
+    grid-template-columns: 14px 46px 30px 30px 30px minmax(0, 1fr);
 }
 
 .mr-heads {
@@ -264,6 +280,86 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     text-transform: uppercase;
     color: var(--pt-text-dim, #b9a8d8);
     text-align: center;
+}
+
+.mock-fx .mr-row {
+    position: relative;
+}
+
+.mr-meter {
+    --meter: linear-gradient(0deg, #3ddc97 0 60%, #ffd166 60% 85%, #ff6b6b 85%);
+}
+
+.mr-meter b {
+    display: none;
+}
+
+/* J: a thin upright bar, filling from the bottom */
+.mr-meter.m-j {
+    position: relative;
+    width: 6px;
+    height: 22px;
+    border-radius: 2px;
+    background: rgba(0, 0, 0, .55);
+    overflow: hidden;
+}
+
+.mr-meter.m-j i {
+    position: absolute;
+    inset: auto 0 0;
+    height: calc(var(--lv) * 100%);
+    background: var(--meter);
+    background-size: 100% 22px;
+    background-position: bottom;
+}
+
+/* K: a line along the row's foot, as wide as the row */
+.mr-meter.m-k {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 1px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(0, 0, 0, .45);
+    overflow: hidden;
+}
+
+.mr-meter.m-k i {
+    display: block;
+    height: 100%;
+    width: calc(var(--lv) * 100%);
+    background: linear-gradient(90deg, #3ddc97, #3ddc97 60%, #ffd166 80%, #ff6b6b);
+    background-size: 330px 100%;
+}
+
+/* L: eight LEDs, green to red */
+.mr-meter.m-l {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 1px;
+    width: 30px;
+    height: 10px;
+}
+
+.mr-meter.m-l i {
+    display: none;
+}
+
+.mr-meter.m-l b {
+    display: block;
+    border-radius: 1px;
+    background: rgba(0, 0, 0, .5);
+}
+
+.mr-meter.m-l b.on {
+    background: #3ddc97;
+    box-shadow: 0 0 3px #3ddc97;
+}
+
+.mr-meter.m-l b.on.hot {
+    background: #ffd166;
+    box-shadow: 0 0 3px #ffd166;
 }
 
 .mr-ghost {

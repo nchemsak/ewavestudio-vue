@@ -1,10 +1,9 @@
 <!-- src/components/BassMock.vue -->
-<!-- MOCKUPS ONLY (behind ?bass=g|h|i, and &m=rhythm for the same with Rhythm chosen; not for a
-     PR; round 3, after the maintainer's notes on d|e|f; a–f are in git history): the Bass
-     machine, the mixer and the cables between the pedals. Nothing here makes sound, and the
-     cables are a picture: the effects keep working as they do.
-     `part`: 'pads' (Bass's pads, Accent, Slide and Tie), 'sound' (Bass's Sound section),
-     'mixer' (every machine's level and how much goes to the pedals), 'cables'. -->
+<!-- MOCKUPS ONLY (behind ?bass=j|k|l, and &m=rhythm with Rhythm chosen; not for a PR; round 4,
+     after the maintainer's notes on g|h|i; a–i are in git history): the Bass machine chosen, its
+     pads (Accent, Slide and Tie rows) and its Sound section. The mixer is in the rail
+     (MachineRail.vue). Nothing here makes sound.
+     `part`: 'pads', 'sound'. -->
 <template>
     <!-- THE PADS -->
     <div v-if="part === 'pads'" class="bm-pads" :class="`is-${variant}`">
@@ -31,31 +30,24 @@
                 <button v-for="(a, i) in accents" :key="i" type="button" tabindex="-1"
                     class="bm-tog hw-cap hw-cap-sm" :class="{ 'hw-down': a, off: !steps[i] }"><i class="bm-led" :class="{ lit: a }"></i></button>
             </div>
-            <template v-if="variant !== 'h'">
-                <div class="bm-row">
-                    <span class="bm-row-cap">Slide <small>into the next note</small></span>
-                    <button v-for="(l, i) in links" :key="i" type="button" tabindex="-1"
-                        class="bm-tog hw-cap hw-cap-sm" :class="{ 'hw-down': l === 'slide', off: !steps[i] }"><i class="bm-led" :class="{ lit: l === 'slide' }"></i></button>
-                </div>
-                <div class="bm-row">
-                    <span class="bm-row-cap">Tie <small>through the next step</small></span>
-                    <button v-for="(l, i) in links" :key="i" type="button" tabindex="-1"
-                        class="bm-tog hw-cap hw-cap-sm" :class="{ 'hw-down': l === 'tie', off: !steps[i] }"><i class="bm-led" :class="{ lit: l === 'tie' }"></i></button>
-                </div>
-            </template>
-            <!-- H: one row for both: a click goes none → slide → tie -->
-            <div v-else class="bm-row">
-                <span class="bm-row-cap">Slide ⤳ · Tie ═ <small>a click: none → slide → tie</small></span>
+            <div class="bm-row">
+                <span class="bm-row-cap">Slide <small>into the next note</small></span>
                 <button v-for="(l, i) in links" :key="i" type="button" tabindex="-1"
-                    class="bm-tog bm-glyph hw-cap hw-cap-sm" :class="{ 'hw-down': !!l, off: !steps[i] }">{{ l === 'slide' ? '⤳' : l === 'tie' ? '═' : '' }}</button>
+                    class="bm-tog hw-cap hw-cap-sm" :class="{ 'hw-down': l === 'slide', off: !steps[i] }"><i class="bm-led" :class="{ lit: l === 'slide' }"></i></button>
+            </div>
+            <div class="bm-row">
+                <span class="bm-row-cap">Tie <small>through the next step</small></span>
+                <button v-for="(l, i) in links" :key="i" type="button" tabindex="-1"
+                    class="bm-tog hw-cap hw-cap-sm" :class="{ 'hw-down': l === 'tie', off: !steps[i] }"><i class="bm-led" :class="{ lit: l === 'tie' }"></i></button>
             </div>
         </div>
     </div>
 
-    <!-- THE SOUND SECTION: the wave tiles, and one big screen with the knobs under it -->
+    <!-- THE SOUND SECTION: the wave tiles left of one big screen (G's), and the knobs: under the
+         screen (J), or bigger on a card of their own (K, L) -->
     <div v-else-if="part === 'sound'" class="bm-sound" :class="`is-${variant}`">
         <div class="pt-card bm-card bm-osc" style="grid-area: osc">
-            <div class="bm-tiles" :class="{ col: variant === 'g' }">
+            <div class="bm-tiles col">
                 <div v-for="t in ['Saw', 'Square']" :key="t" class="bm-tile hw-cap" :class="{ 'hw-down': t === 'Saw' }">
                     <svg viewBox="0 0 60 30" aria-hidden="true"><path :d="t === 'Saw' ? SAW_ICON : SQUARE_ICON" /></svg>
                     <span><i class="bm-led" :class="{ lit: t === 'Saw' }"></i>{{ t.toUpperCase() }}</span>
@@ -79,53 +71,34 @@
                 <i class="bm-grip cut" style="left: 96%; top: 84%"></i>
                 <i class="bm-grip" style="left: 62%; top: 49%"></i>
             </div>
-            <div class="bm-knobrow">
+            <div v-if="variant === 'j'" class="bm-knobrow">
                 <Knob v-for="k in KNOBS" :key="k.id" v-model="vals[k.id]" :label="k.label" :min="0" :max="1" :step="0.01"
                     size="small" :useThemeArc="true" />
             </div>
         </div>
-    </div>
-
-    <!-- THE MIXER: every machine, whichever is chosen. Level, and how much goes to the pedals
-         (the rest goes straight out); its socket's cable shows it reaching them -->
-    <div v-else-if="part === 'mixer'" class="pt-card bm-card bm-mixer" :class="`is-${variant}`" style="grid-area: mix">
-        <h3 class="bm-title">Mixer</h3>
-        <div class="bm-mix-head" aria-hidden="true">
-            <span></span><span v-if="variant === 'i'">Now</span><span>Level</span><span>Pedals</span><span></span>
-        </div>
-        <div v-for="m in MIXER" :key="m.name" class="bm-mix-row" :class="{ ghost: m.ghost, chosen: m.name === chosen }">
-            <span class="bm-mix-name"><i class="bm-led" :class="{ lit: !m.ghost }"></i>{{ m.name }}<small v-if="m.ghost">soon</small></span>
-            <span v-if="variant === 'i'" class="bm-meter"><i :style="{ width: `${m.ghost ? 0 : m.meter * 100}%` }"></i></span>
-            <Knob :modelValue="m.level" :label="`${m.name} level`" hideLabel :min="0" :max="1" :step="0.01" size="mini" :useThemeArc="true" :disabled="m.ghost" />
-            <Knob :modelValue="m.fx" :label="`${m.name} to the pedals`" hideLabel :min="0" :max="1" :step="0.01" size="mini" :useThemeArc="true" :disabled="m.ghost" />
-            <span class="bm-sock" :data-mix-jack="m.ghost ? null : m.name"></span>
+        <div v-if="variant !== 'j'" class="pt-card bm-card bm-knobcard" style="grid-area: knobs">
+            <div v-for="g in GROUPS" :key="g.title" class="bm-kgroup">
+                <span class="bm-kcap">{{ g.title }}</span>
+                <div class="bm-kgrid" :class="{ narrow: variant === 'l' }">
+                    <div v-for="k in g.knobs" :key="k.id" class="bm-kcell">
+                        <Knob v-model="vals[k.id]" :label="k.label" :min="0" :max="1" :step="0.01"
+                            :size="variant === 'k' ? 'medium' : 'small'" :useThemeArc="true" />
+                        <span class="bm-kval">{{ k.text }}</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-
-    <!-- THE CABLES: a picture of the way through the pedals that are on -->
-    <svg v-else-if="part === 'cables'" ref="svgEl" class="bm-cables" :viewBox="`0 0 ${box.w} ${box.h}`" aria-hidden="true">
-        <template v-for="(c, i) in cables" :key="i">
-            <path :d="c.d" class="bm-cable-shadow" />
-            <path :d="c.d" class="bm-cable" :style="{ stroke: c.colour }" />
-        </template>
-        <g v-for="(s, i) in sockets" :key="`s${i}`" class="bm-socket">
-            <circle :cx="s.x" :cy="s.y" r="6.5" class="ring" />
-            <circle :cx="s.x" :cy="s.y" r="3" class="hole" />
-            <text v-if="s.label" :x="s.x + (s.lx ?? 0)" :y="s.y + (s.ly ?? -11)" :text-anchor="s.anchor ?? 'middle'">{{ s.label }}</text>
-        </g>
-        <rect v-for="(p, i) in plugs" :key="`p${i}`" :x="p.x - 4" :y="p.y - 9" width="8" height="10" rx="2" class="bm-plug" />
-    </svg>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { reactive } from 'vue';
 import Knob from './Knob.vue';
 import SynthStepGrid from './SynthStepGrid.vue';
 
-const props = defineProps<{
-    part: 'pads' | 'sound' | 'mixer' | 'cables';
+defineProps<{
+    part: 'pads' | 'sound';
     variant: string;
-    chosen?: string;
     nearestNote?: (hz: number) => string;
 }>();
 
@@ -152,11 +125,10 @@ const KNOBS = [
     { id: 'decay', label: 'Decay' }, { id: 'accent', label: 'Accent' }, { id: 'glide', label: 'Slide' },
 ];
 const vals = reactive<Record<string, number>>({ cutoff: 0.32, reso: 0.55, env: 0.6, decay: 0.4, sub: 0.5, accent: 0.6, glide: 0.35 });
-const MIXER = [
-    { name: 'Rhythm', level: 0.5, fx: 1, meter: 0.62, ghost: false },
-    { name: 'Bass', level: 0.6, fx: 0.4, meter: 0.78, ghost: false },
-    { name: 'Drums', level: 0.7, fx: 0.3, meter: 0, ghost: true },
-    { name: 'Drift', level: 0.4, fx: 1, meter: 0, ghost: true },
+// K and L: the same six knobs, grouped, each with its value under it
+const GROUPS = [
+    { title: 'Filter', knobs: [{ id: 'cutoff', label: 'Cutoff', text: '320 Hz' }, { id: 'reso', label: 'Reso', text: '55%' }, { id: 'env', label: 'Env', text: '+3 oct' }] },
+    { title: 'Note', knobs: [{ id: 'decay', label: 'Decay', text: '260 ms' }, { id: 'accent', label: 'Accent', text: '60%' }, { id: 'glide', label: 'Slide', text: '60 ms' }] },
 ];
 
 // A note of the bass: a saw (and a sine an octave down) through a two-pole low-pass whose
@@ -200,75 +172,6 @@ function cutoffPath(W: number, H: number) {
     return pts.join(' ');
 }
 
-// THE CABLES, measured from the page. Drawn as a simple line through the pedals that are on,
-// left to right (the overdrive first), then down to the lo-fi deck, which is the way out. It's
-// a picture: the delay and the reverb still run side by side as they do today. A pedal's top
-// jacks are its ::before (38 px from the left) and ::after (12 px from the right), 13 px wide.
-const RHYTHM_CABLE = '#ff7eb3';
-const BASS_CABLE = '#4fd1c5';
-const CHAIN_CABLE = '#9aa3b8';
-const svgEl = ref<SVGSVGElement | null>(null);
-const box = reactive({ w: 100, h: 100 });
-const cables = ref<{ d: string; colour: string }[]>([]);
-const sockets = ref<{ x: number; y: number; label?: string; lx?: number; ly?: number; anchor?: string }[]>([]);
-const plugs = ref<{ x: number; y: number }[]>([]);
-
-function measure() {
-    const host = svgEl.value?.parentElement;
-    const fx = host?.querySelector('#effects-panel') as HTMLElement | null;
-    if (!host || !fx) return;
-    const o = host.getBoundingClientRect();
-    box.w = o.width; box.h = o.height;
-    const r = (el: Element | null) => {
-        const b = el!.getBoundingClientRect();
-        return { left: b.left - o.left, right: b.right - o.left, top: b.top - o.top, bottom: b.bottom - o.top };
-    };
-    const card = r(fx);
-    const pedal = (c: string) => r(fx.querySelector(c));
-    const drive = pedal('.drive-pedal'), reverb = pedal('.reverb-pedal'), deck = pedal('.tape-pedal');
-    const c: { d: string; colour: string }[] = [];
-    const s: typeof sockets.value = [];
-    // Overdrive → (over the delay, which is off) → reverb, by their top jacks
-    const dOut = { x: drive.right - 18.5, y: drive.top - 3 }, rIn = { x: reverb.left + 44.5, y: reverb.top - 3 };
-    c.push({ d: `M${dOut.x} ${dOut.y} C${dOut.x + 10} ${dOut.y - 30}, ${rIn.x - 10} ${rIn.y - 30}, ${rIn.x} ${rIn.y}`, colour: CHAIN_CABLE });
-    // Reverb → lo-fi, one cable down the right-hand side; the deck's socket is the way out
-    const rOut = { x: reverb.right + 4, y: reverb.top + 40 };
-    const lofi = { x: deck.right + 4, y: (deck.top + deck.bottom) / 2 };
-    s.push({ x: rOut.x, y: rOut.y }, { x: lofi.x, y: lofi.y, label: 'OUT', lx: 7, ly: 20 });
-    c.push({ d: `M${rOut.x} ${rOut.y} C${rOut.x + 20} ${rOut.y + 30}, ${lofi.x + 20} ${lofi.y - 40}, ${lofi.x} ${lofi.y}`, colour: CHAIN_CABLE });
-    plugs.value = [dOut, rIn];
-    if (props.variant === 'h') {
-        // One IN on the card, fed from the mixer in the rail
-        const p = { x: card.left + 170, y: card.top + 26 };
-        const dIn = { x: drive.left + 44.5, y: drive.top - 3 };
-        s.push({ x: p.x, y: p.y, label: 'IN ← MIXER', ly: -11 });
-        c.push({ d: `M${p.x} ${p.y} C${p.x} ${p.y + 22}, ${dIn.x} ${dIn.y - 22}, ${dIn.x} ${dIn.y}`, colour: CHAIN_CABLE });
-        plugs.value.push(dIn);
-    } else {
-        // From the mixer's sockets into the overdrive's side
-        const dIn = { x: drive.left - 4, y: drive.top + 40 };
-        s.push({ x: dIn.x, y: dIn.y });
-        host.querySelectorAll('[data-mix-jack]').forEach((el) => {
-            const b = r(el);
-            const p = { x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 };
-            const bass = el.getAttribute('data-mix-jack') === 'Bass';
-            const k = Math.max(30, (dIn.x - p.x) * 0.45);
-            c.push({ d: `M${p.x} ${p.y} C${p.x + k} ${p.y}, ${dIn.x - k} ${dIn.y}, ${dIn.x} ${dIn.y}`, colour: bass ? BASS_CABLE : RHYTHM_CABLE });
-        });
-    }
-    sockets.value = s;
-    cables.value = c;
-}
-let ro: ResizeObserver | null = null;
-let timer = 0;
-onMounted(() => {
-    if (props.part !== 'cables') return;
-    ro = new ResizeObserver(() => measure());
-    if (svgEl.value?.parentElement) ro.observe(svgEl.value.parentElement);
-    timer = window.setInterval(measure, 500);
-    measure();
-});
-onBeforeUnmount(() => { ro?.disconnect(); clearInterval(timer); });
 </script>
 
 <style scoped>
@@ -583,131 +486,57 @@ onBeforeUnmount(() => { ro?.disconnect(); clearInterval(timer); });
     justify-content: space-evenly;
 }
 
-/* THE MIXER */
-.bm-mixer {
+/* K and L: the knobs on a card of their own, in two groups */
+.bm-knobcard {
     flex-direction: column;
-    justify-content: flex-start;
-    gap: 8px;
+    justify-content: center;
+    gap: 14px;
 }
 
-.bm-mix-head,
-.bm-mix-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 44px 44px 22px;
-    align-items: center;
-    justify-items: center;
-    gap: 8px;
+.bm-kgroup {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
-.is-i .bm-mix-head,
-.is-i .bm-mix-row {
-    grid-template-columns: 110px minmax(0, 1fr) 44px 44px 22px;
-}
-
-.bm-mix-head {
+.bm-kcap {
     font: 700 9px Cousine, ui-monospace, monospace;
-    letter-spacing: .06em;
+    letter-spacing: .1em;
     text-transform: uppercase;
     color: var(--pt-text-dim, #b9a8d8);
 }
 
-.bm-mix-row {
-    padding: 4px 6px;
-    border-radius: 6px;
-    background: var(--pt-inset, rgba(0, 0, 0, .3));
+.bm-kgrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    justify-items: center;
+    gap: 4px;
 }
 
-.bm-mix-row.chosen {
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--hw-led, #7dffb0), transparent 35%);
-}
-
-.bm-mix-row.ghost {
-    opacity: .45;
-}
-
-.bm-mix-name {
-    justify-self: start;
+.bm-kcell {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 7px;
-    font: 700 11px Cousine, ui-monospace, monospace;
+}
+
+.bm-kval {
+    font: 700 9px Cousine, ui-monospace, monospace;
     color: var(--pt-text, #fff);
-    white-space: nowrap;
+    opacity: .8;
+    margin-top: 2px;
 }
 
-.bm-mix-name small {
-    font-weight: 400;
-    opacity: .7;
+/* L: the tiles run the section's height */
+.is-l .bm-tiles.col {
+    grid-auto-rows: 1fr;
 }
 
-.bm-meter {
-    justify-self: stretch;
-    height: 8px;
-    border-radius: 4px;
-    background: rgba(0, 0, 0, .45);
-    overflow: hidden;
+.is-l .bm-tiles.col .bm-tile {
+    flex-direction: column;
+    justify-content: center;
 }
 
-.bm-meter i {
-    display: block;
-    height: 100%;
-    background: linear-gradient(90deg, #3ddc97, #3ddc97 65%, #ffd166 85%, #ff6b6b);
-}
-
-.bm-sock {
-    display: inline-block;
-    width: 13px;
-    height: 13px;
-    border-radius: 50%;
-    background: radial-gradient(circle, #050505 35%, #8d8d8d 40%, #3a3a3a 70%);
-}
-
-/* THE CABLES */
-.bm-cables {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    overflow: visible;
-    z-index: 6;
-}
-
-.bm-cable,
-.bm-cable-shadow {
-    fill: none;
-    stroke-linecap: round;
-}
-
-.bm-cable {
-    stroke-width: 4;
-}
-
-.bm-cable-shadow {
-    stroke: rgba(0, 0, 0, .5);
-    stroke-width: 7;
-    transform: translateY(2px);
-}
-
-.bm-socket .ring {
-    fill: #3a3a3a;
-    stroke: #8d8d8d;
-    stroke-width: 1.5;
-}
-
-.bm-socket .hole {
-    fill: #050505;
-}
-
-.bm-socket text {
-    font: 700 8px Cousine, ui-monospace, monospace;
-    letter-spacing: .06em;
-    fill: var(--pt-text-dim, #b9a8d8);
-}
-
-.bm-plug {
-    fill: #1b1b1b;
-    stroke: #777;
-    stroke-width: 1;
+.is-l .bm-tiles.col .bm-tile svg {
+    width: 70%;
 }
 </style>
