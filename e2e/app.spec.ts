@@ -3028,6 +3028,10 @@ test('VEL switch: only Filter has one; it makes a soft step darker, and is saved
 		data.synth.filter = { ...data.synth.filter, enabled: true, cutoff: 2000 };
 	});
 	const plain = wavBrightness(await exportWav(page), 0.01, 0.15);
+	// The imported project's first moments are its undo starting point (useUndoHistory's
+	// SETTLE_MS after ProjectSync's SYNC_MS); the export above takes about as long, so a click
+	// right after it could land in that starting point, leaving nothing to undo
+	await page.waitForTimeout(600);
 
 	// Envelope's, Pitch's and Noise's switches are gone (PR 67): only Filter's is left
 	for (const name of ['Decay', 'the pitch sweep', 'the noise']) {
@@ -4474,10 +4478,13 @@ test("a pad's repeats can step up or down the key's chord, live, saved and in th
 			return origSet.call(this, v, t);
 		};
 		const orig = OscillatorNode.prototype.start;
+		const ctxIds = new WeakMap<BaseAudioContext, number>();
+		let nextCtx = 0;
 		OscillatorNode.prototype.start = function (this: OscillatorNode, when = 0, ...rest: any[]) {
 			// Notes only: the LFO's oscillator runs below 20 Hz
 			const hz = set.get(this.frequency) ?? this.frequency.value;
-			if (hz >= 90) w.__oscFreqs.push({ when, hz, live: this.context instanceof AudioContext });
+			if (!ctxIds.has(this.context)) ctxIds.set(this.context, nextCtx++);
+			if (hz >= 90) w.__oscFreqs.push({ when, hz, live: this.context instanceof AudioContext, ctx: ctxIds.get(this.context) });
 			return (orig as any).call(this, when, ...rest);
 		};
 	});
@@ -4492,8 +4499,15 @@ test("a pad's repeats can step up or down the key's chord, live, saved and in th
 	// The WAV export's engine plays them too (its oscillators start in an offline context)
 	await page.evaluate(() => { (window as any).__oscFreqs = []; });
 	await exportWav(page);
-	const exported = await page.evaluate(() => ((window as any).__oscFreqs as { when: number; hz: number }[])
-		.sort((a, b) => a.when - b.when).slice(0, 4).map((h) => Math.round(69 + 12 * Math.log2(h.hz / 440))));
+	// (the export's own render only: the hit behind the Envelope card renders offline too, PR 108,
+	// and can render while the export does: the render with the most notes is the export's)
+	const exported = await page.evaluate(() => {
+		const all = ((window as any).__oscFreqs as { when: number; hz: number; ctx: number }[]);
+		const counts = new Map<number, number>();
+		for (const h of all) counts.set(h.ctx, (counts.get(h.ctx) ?? 0) + 1);
+		const ctx = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+		return all.filter((h) => h.ctx === ctx).sort((a, b) => a.when - b.when).slice(0, 4).map((h) => Math.round(69 + 12 * Math.log2(h.hz / 440)));
+	});
 	expect(exported).toEqual([57, 60, 64, 69]);
 
 	// Saved with the project
