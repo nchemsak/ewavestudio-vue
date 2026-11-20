@@ -24,7 +24,7 @@
         </div>
 
         <div class="mr-rows" role="list">
-            <div class="mr-row is-chosen" role="listitem">
+            <div class="mr-row" :class="{ 'is-chosen': !mockBass }" role="listitem">
                 <button type="button" class="mr-led" :class="{ lit: !muted }" role="switch" :aria-checked="!muted"
                     :aria-label="`${name} on`" :title="muted ? `${name} is muted: click to hear it` : `Mute ${name}`"
                     @click="emit('toggle-mute')"></button>
@@ -36,6 +36,17 @@
                 <div class="mr-cells" aria-hidden="true">
                     <i v-for="(c, i) in cells" :key="i" :style="c.style"
                         :class="{ on: c.on, beat: i % 4 === 0, now: playing && i === currentStep }"></i>
+                </div>
+            </div>
+            <!-- MOCKUPS ONLY (?bass=a|b|c): Bass's row, chosen -->
+            <div v-if="mockBass" class="mr-row is-chosen" role="listitem">
+                <button type="button" class="mr-led lit" role="switch" aria-checked="true" aria-label="Bass on"></button>
+                <span class="mr-name">Bass</span>
+                <div class="mr-level">
+                    <Knob :modelValue="0.6" label="Bass level" hideLabel size="mini" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
+                </div>
+                <div class="mr-cells" aria-hidden="true">
+                    <i v-for="(c, i) in bassCells" :key="i" :style="c" :class="{ on: !!c, beat: i % 4 === 0 }"></i>
                 </div>
             </div>
         </div>
@@ -91,7 +102,12 @@ const props = defineProps<{
     chainOn: boolean;
     chainUsable: boolean;       // a cell is filled
     chainPlaying: number;       // the cell playing, −1 for none
+    mockBass?: string;          // MOCKUPS ONLY
 }>();
+// MOCKUPS ONLY: Bass's made-up steps (A1 A1 A2 E2 · A1 G1 C2 E2), drawn two octaves up
+const bassNotes: Record<number, number> = { 0: 55, 2: 55, 3: 110, 6: 82.41, 8: 55, 10: 49, 11: 65.41, 14: 82.41 };
+const bassCells = Array.from({ length: 16 }, (_, i) => bassNotes[i]
+    ? { background: `hsl(${padHue(bassNotes[i] * 4)} 80% ${i % 4 === 0 ? 62 : 55}%)` } : null);
 const emit = defineEmits<{
     (e: 'toggle-mute'): void;
     (e: 'update:level', v: number): void;
