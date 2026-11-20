@@ -23,9 +23,9 @@
             </div>
         </div>
 
-        <div class="mr-rows" :class="{ 'mock-fx': mockBass === 'e' }" role="list">
-            <div v-if="mockBass === 'e'" class="mr-heads" aria-hidden="true"><span></span><span></span><span>Level</span><span>Pedals</span><span>Steps</span></div>
-            <div class="mr-row" :class="{ 'is-chosen': !mockBass }" role="listitem">
+        <div class="mr-rows" :class="{ 'mock-fx': mockBass === 'h' }" role="list">
+            <div v-if="mockBass === 'h'" class="mr-heads" aria-hidden="true"><span></span><span></span><span>Level</span><span>Pedals</span><span>Steps</span></div>
+            <div class="mr-row" :class="{ 'is-chosen': !mockBass || mockChosen === 'rhythm' }" role="listitem">
                 <button type="button" class="mr-led" :class="{ lit: !muted }" role="switch" :aria-checked="!muted"
                     :aria-label="`${name} on`" :title="muted ? `${name} is muted: click to hear it` : `Mute ${name}`"
                     @click="emit('toggle-mute')"></button>
@@ -34,7 +34,7 @@
                     <Knob midi-id="synth.volume" v-model="levelModel" :label="`${name} level`" hideLabel size="mini"
                         :value-text="`${Math.round(level * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
-                <div v-if="mockBass === 'e'" class="mr-level">
+                <div v-if="mockBass === 'h'" class="mr-level">
                     <Knob :modelValue="1" :label="`${name} into the pedals`" hideLabel size="mini" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
                 <div class="mr-cells" aria-hidden="true">
@@ -42,19 +42,26 @@
                         :class="{ on: c.on, beat: i % 4 === 0, now: playing && i === currentStep }"></i>
                 </div>
             </div>
-            <!-- MOCKUPS ONLY (?bass=a|b|c): Bass's row, chosen -->
-            <div v-if="mockBass" class="mr-row is-chosen" role="listitem">
+            <!-- MOCKUPS ONLY: Bass's row -->
+            <div v-if="mockBass" class="mr-row" :class="{ 'is-chosen': mockChosen === 'bass' }" role="listitem">
                 <button type="button" class="mr-led lit" role="switch" aria-checked="true" aria-label="Bass on"></button>
                 <span class="mr-name">Bass</span>
                 <div class="mr-level">
                     <Knob :modelValue="0.6" label="Bass level" hideLabel size="mini" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
-                <div v-if="mockBass === 'e'" class="mr-level">
+                <div v-if="mockBass === 'h'" class="mr-level">
                     <Knob :modelValue="0.4" label="Bass into the pedals" hideLabel size="mini" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
                 <div class="mr-cells" aria-hidden="true">
                     <i v-for="(c, i) in bassCells" :key="i" :style="c" :class="{ on: !!c, beat: i % 4 === 0 }"></i>
                 </div>
+            </div>
+            <div v-for="g in (mockBass === 'h' ? ['Drums', 'Drift'] : [])" :key="g" class="mr-row mr-ghost" role="listitem">
+                <button type="button" class="mr-led" aria-label="soon" disabled></button>
+                <span class="mr-name">{{ g }}<small> soon</small></span>
+                <div class="mr-level"><Knob :modelValue="0.5" :label="`${g} level`" hideLabel size="mini" :min="0" :max="1" :step="0.01" :disabled="true" /></div>
+                <div class="mr-level"><Knob :modelValue="0.5" :label="`${g} to the pedals`" hideLabel size="mini" :min="0" :max="1" :step="0.01" :disabled="true" /></div>
+                <div class="mr-cells" aria-hidden="true"><i v-for="i in 16" :key="i" :class="{ beat: (i - 1) % 4 === 0 }"></i></div>
             </div>
         </div>
 
@@ -110,6 +117,7 @@ const props = defineProps<{
     chainUsable: boolean;       // a cell is filled
     chainPlaying: number;       // the cell playing, −1 for none
     mockBass?: string;          // MOCKUPS ONLY
+    mockChosen?: string;
 }>();
 // MOCKUPS ONLY: Bass's made-up steps (A1 A1 A2 E2 · A1 G1 C2 E2), drawn two octaves up
 const bassNotes: Record<number, number> = { 0: 55, 2: 55, 3: 110, 6: 82.41, 8: 55, 10: 49, 11: 65.41, 14: 82.41 };
@@ -241,7 +249,7 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     background: var(--pt-inset, rgba(0, 0, 0, 0.3));
 }
 
-/* MOCKUPS ONLY (?bass=e): the rows as a mixer, with how much goes into the pedals */
+/* MOCKUPS ONLY (?bass=h): the rows as a mixer, with how much goes into the pedals */
 .mock-fx .mr-row,
 .mr-heads {
     grid-template-columns: 14px 56px 30px 30px minmax(0, 1fr);
@@ -256,6 +264,16 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     text-transform: uppercase;
     color: var(--pt-text-dim, #b9a8d8);
     text-align: center;
+}
+
+.mr-ghost {
+    opacity: .45;
+}
+
+.mr-ghost small {
+    font-weight: 400;
+    font-size: 9px;
+    opacity: .8;
 }
 
 .mr-row.is-chosen {

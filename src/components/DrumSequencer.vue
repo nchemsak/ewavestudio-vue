@@ -191,7 +191,7 @@
 			 machine rail beside them (the big screen until PR 108); under them Sound (three rows, each filled edge to edge) and Compose,
 			 ending on one line. Under 1200 px, Sound, Effects and Compose are tabs under the steps
 			 (data-tab says which one shows). -->
-		<div v-show="!phoneActive" class="ds-grid" :data-tab="activeTab">
+		<div v-show="!phoneActive" class="ds-grid" :data-tab="activeTab" :data-mixrow="bassMock === 'i' || undefined">
 
 			<!-- The machine rail (PR 108, where the big screen was): the scope and the spectrogram,
 				 then a row per machine (only Rhythm, the synth lane, so far: its LED mutes it, its
@@ -203,7 +203,7 @@
 				:slots="slotView" :currentSlot="currentSlot" :queuedSlot="queuedSlot" v-model:copyArmed="copyArmed"
 				@choose-slot="chooseSlot"
 				:chain="chain" :chainOn="chainOn" :chainUsable="chainUsable" :chainPlaying="chainPlaying"
-				@chain-cell="setChainCell" @toggle-chain="toggleChain" :mockBass="bassMock || undefined" />
+				@chain-cell="setChainCell" @toggle-chain="toggleChain" :mockBass="bassMock || undefined" :mockChosen="bassChosen ? 'bass' : 'rhythm'" />
 
 			<!-- Transport: Volume, Tempo, Swing, then Sounds and Patterns side by side, then Play -->
 			<section class="pt-card transport-card ds-transport">
@@ -258,10 +258,10 @@
 						 patterns (src/lib/patterns/), each with a dice. Between the knobs and Play from
 						 1200 px; a row of their own under them narrower. -->
 					<div class="transport-presets">
-						<PresetButtons :title="bassMock ? 'Bass sounds' : 'Sound presets'" dice-label="Random sound" :presets="bassMock ? BASS_MOCK_SOUNDS : PRESETS" :active="bassMock ? 'acid' : activePresetId"
+						<PresetButtons :title="bassChosen ? 'Bass sounds' : 'Sound presets'" dice-label="Random sound" :presets="bassChosen ? BASS_MOCK_SOUNDS : PRESETS" :active="bassChosen ? 'acid' : activePresetId"
 							@choose="choosePreset" @random="rollRandomSound" />
-						<PresetButtons :title="bassMock ? 'Bass patterns' : 'Pattern presets'" dice-label="Random pattern" :presets="bassMock ? BASS_MOCK_PATTERNS : PATTERNS"
-							:active="bassMock ? null : activePatternId" @choose="choosePattern"
+						<PresetButtons :title="bassChosen ? 'Bass patterns' : 'Pattern presets'" dice-label="Random pattern" :presets="bassChosen ? BASS_MOCK_PATTERNS : PATTERNS"
+							:active="bassChosen ? null : activePatternId" @choose="choosePattern"
 							@random="rollRandomPattern" />
 					</div>
 
@@ -291,7 +291,7 @@
 						<div class="mute-dot" :class="{ muted: synthInstrument.muted }"
 							@click="toggleMute(synthInstrument.name)" role="button"
 							:title="synthInstrument.muted ? 'Muted' : 'Playing'"></div>
-						<h2 class="pt-title">Step Sequencer<span v-if="bassMock" class="bm-which"> · Bass</span></h2>
+						<h2 class="pt-title">Step Sequencer<span v-if="bassChosen" class="bm-which"> · Bass</span></h2>
 
 						<!-- No Vol knob while there's one lane (PR 92): the Volume knob is enough. The lane's
 							 volume (channelVolume) is still saved and played; it comes back as each
@@ -337,7 +337,7 @@
 					<div v-if="repeatBrush" class="brush-note" role="status">
 						Painting ×{{ repeatBrush }} repeats<span class="brush-note__how"> · Esc or click elsewhere to finish</span>
 					</div>
-					<BassMock v-if="bassMock" part="pads" :variant="bassMock" :nearestNote="nearestNote" />
+					<BassMock v-if="bassChosen" part="pads" :variant="bassMock" :nearestNote="nearestNote" />
 					<SynthStepGrid v-else :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
@@ -363,10 +363,12 @@
 			</div>
 
 			<!-- Sound: three rows, each filled edge to edge -->
-			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title" :data-bass="bassMock || undefined">
-				<h2 id="sound-title" class="ds-section-title">Sound<span v-if="bassMock"> · Bass</span></h2>
-				<BassMock v-if="bassMock" part="sound" :variant="bassMock" />
-				<BassMock v-if="bassMock" part="cables" :variant="bassMock" />
+			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title"
+				:data-bass="bassChosen ? bassMock : undefined" :data-rmock="bassMock && !bassChosen ? bassMock : undefined">
+				<h2 id="sound-title" class="ds-section-title">Sound<span v-if="bassChosen"> · Bass</span><span v-else-if="bassMock"> · Rhythm</span></h2>
+				<BassMock v-if="bassChosen" part="sound" :variant="bassMock" />
+				<BassMock v-if="bassMock === 'g'" part="mixer" variant="g" :chosen="bassChosen ? 'Bass' : 'Rhythm'" />
+				<BassMock v-if="bassMock && bassMock !== 'i'" part="cables" :variant="bassMock" />
 
 				<!-- Row 1: the waves, beside FM and Unison -->
 				<div class="sound-row sound-row-1">
@@ -495,6 +497,7 @@
 						</div>
 					</div>
 
+					<Teleport defer to="#bm-mix-fx" :disabled="bassMock !== 'i'">
 					<div id="effects-panel" class="module fx">
 						<SectionWrap id="fx" title="Effects" v-model="collapsibleState['fx']">
 							<div class="fx-pair pedalboard">
@@ -517,6 +520,7 @@
 							</div>
 						</SectionWrap>
 					</div>
+					</Teleport>
 				</div>
 			</section>
 
@@ -562,6 +566,15 @@
 							@arp-skip-change="(v) => { melodyUi.arpSkip = v }" />
 					</SectionWrap>
 				</div>
+			</section>
+			<!-- MOCKUPS ONLY (?bass=i): the mixer and the pedals as a section of their own, across the frame -->
+			<section v-if="bassMock === 'i'" class="ds-section ds-mixsec" aria-label="Mix">
+				<h2 class="ds-section-title">Mix</h2>
+				<div class="bm-mixrow">
+					<BassMock part="mixer" variant="i" :chosen="bassChosen ? 'Bass' : 'Rhythm'" />
+					<div id="bm-mix-fx"></div>
+				</div>
+				<BassMock part="cables" variant="i" />
 			</section>
 			<!-- LAYOUT END -->
 
@@ -759,9 +772,12 @@ import { createRhythm, rhythmVoice } from '../lib/machines/rhythm';
 import { useLfoVisual } from '../composables/useLfoVisual';
 import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
-// MOCKUPS ONLY: ?bass=d|e|f (BassMock.vue), the Bass machine chosen
+// MOCKUPS ONLY: ?bass=g|h|i (&m=rhythm) (BassMock.vue), the Bass machine chosen
 import BassMock from './BassMock.vue';
-const bassMock = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('bass') || '') : '';
+const mockParams = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
+const bassMock = mockParams.get('bass') || '';
+// &m=rhythm: the same option with Rhythm chosen (where the mixer sits then)
+const bassChosen = !!bassMock && mockParams.get('m') !== 'rhythm';
 if (bassMock) setTimeout(() => { driveEnabled.value = true; delayEnabled.value = false; reverbEnabled.value = true; tapeEnabled.value = true; }, 900);
 const BASS_MOCK_SOUNDS = ['Sub', 'Acid', 'Rubber', 'Pluck', 'Growl', 'Hollow'].map((l) => ({ id: l.toLowerCase(), label: l, description: '' }));
 const BASS_MOCK_PATTERNS = ['Root', 'Octaves', 'Offbeat', 'Gallop', 'Walk', 'Squelch'].map((l) => ({ id: l.toLowerCase(), label: l, description: '' }));
@@ -3488,37 +3504,77 @@ async function recordSample() {
 	}
 }
 
-/* MOCKUPS ONLY (?bass=d|e|f; BassMock.vue): the Sound section as Bass's */
+/* MOCKUPS ONLY (?bass=g|h|i, &m=rhythm; BassMock.vue): the Sound section as Bass's, the mixer */
 .bm-which { color: var(--hw-led, #5dffb0); }
-.ds-sound[data-bass] {
+.ds-sound[data-bass],
+.ds-sound[data-rmock="g"] {
 	display: grid;
 	grid-auto-rows: auto;
 	align-content: stretch;
 }
-.ds-sound[data-bass] > .ds-section-title { grid-area: title; }
+.ds-sound[data-bass] > .ds-section-title,
+.ds-sound[data-rmock="g"] > .ds-section-title { grid-area: title; }
 .ds-sound[data-bass] .sound-row-1,
 .ds-sound[data-bass] .sound-row-2,
 .ds-sound[data-bass] .sound-row-3 > .sound-stack { display: none; }
 .ds-sound[data-bass] .sound-row-3 { display: contents; }
 .ds-sound[data-bass] #effects-panel { grid-area: fx; }
-.ds-sound[data-bass] { position: relative; }
-/* The pedals in the chain's order: Overdrive, Delay, Reverb */
-.ds-sound[data-bass] .fx-pair > :nth-child(2) { order: -1; }
-.ds-sound[data-bass="d"] {
+.ds-sound[data-bass],
+.ds-sound[data-rmock],
+.ds-mixsec { position: relative; }
+/* The pedals in the cables' order: Overdrive, Delay, Reverb */
+#effects-panel.module.fx .fx-pair > :nth-child(2) { order: -1; }
+/* Room for the side sockets */
+.ds-sound[data-bass] #effects-panel :deep(.pt-card),
+.ds-sound[data-rmock] #effects-panel :deep(.pt-card),
+.ds-mixsec #effects-panel :deep(.pt-card) { padding-left: 22px; padding-right: 26px; }
+/* G: the mixer beside the pedals, for every machine. Bass: the tiles in a column beside the
+   big screen. Rhythm: Noise and the LFO side by side on a row of their own */
+.ds-sound[data-bass="g"] {
 	grid-template-columns: minmax(0, .5fr) minmax(0, .5fr) minmax(0, 1fr);
 	grid-template-rows: auto 1fr auto;
-	grid-template-areas: "title title title" "osc big big" "ast ast fx";
+	grid-template-areas: "title title title" "osc big big" "mix mix fx";
 }
-.ds-sound[data-bass="e"] {
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	grid-template-rows: auto 1fr 1fr auto;
-	grid-template-areas: "title title title title" "osc osc wave wave" "filt filt env env" "ast ast fx fx";
+.ds-sound[data-rmock="g"] {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	grid-template-areas: "title title" "r1 r1" "r2 r2" "st st" "mix fx";
 }
-.ds-sound[data-bass="f"] {
+.ds-sound[data-rmock="g"] .sound-row-1 { grid-area: r1; }
+.ds-sound[data-rmock="g"] .sound-row-2 { grid-area: r2; }
+.ds-sound[data-rmock="g"] .sound-row-3 { display: contents; }
+.ds-sound[data-rmock="g"] .sound-row-3 > .sound-stack { grid-area: st; }
+.ds-sound[data-rmock="g"] #effects-panel { grid-area: fx; }
+.ds-sound:is([data-rmock="g"], [data-rmock="i"]) .sound-row-3 > .sound-stack { flex-direction: row; }
+.ds-sound:is([data-rmock="g"], [data-rmock="i"]) .sound-row-3 > .sound-stack > .module { flex: 1 1 0; min-width: 0; }
+.ds-sound[data-rmock="i"] .sound-row-3 { grid-template-columns: minmax(0, 1fr); }
+/* H: the mixer is the rail. Bass: the big screen across, the tiles beside the pedals */
+.ds-sound[data-bass="h"] {
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	grid-template-rows: auto 1fr auto;
-	grid-template-areas: "title title" "big big" "mix fx";
+	grid-template-areas: "title title" "big big" "osc fx";
 }
+/* I: the mixer and the pedals in a section of their own, across the frame */
+.ds-sound[data-bass="i"] {
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: auto 1fr auto;
+	grid-template-areas: "title" "big" "osc";
+}
+.ds-grid[data-mixrow] {
+	grid-template-areas:
+		"transport rail"
+		"steps rail"
+		"sound compose"
+		"mix mix";
+}
+.ds-mixsec { grid-area: mix; }
+.bm-mixrow {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 470px;
+	gap: 14px;
+	align-items: stretch;
+}
+.bm-mixrow > #bm-mix-fx { display: flex; flex-direction: column; }
+.bm-mixrow > :deep(.bm-mixer) { grid-area: auto !important; }
 /* LAYOUT END */
 
 /* PHONE START: the phone layout's Sound, FX and Key pages (PhoneLayout.vue's slots) */
