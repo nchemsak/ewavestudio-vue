@@ -1,6 +1,7 @@
 // src/audio/export/scheduleStepSequencer.ts
 // Pure offline scheduler for the Step Sequencer synth.
-// Rebuilds a minimal version of your live graph inside any BaseAudioContext.
+// Rebuilds the live effects graph inside any BaseAudioContext; its notes are built by
+// note.ts, as the live engine's are.
 //
 // For the Export audio dialog (src/audio/export/exportFiles.ts) it plays the pattern `bars`
 // times, can render one part of the mix on its own (`part`: the dry sound, the delay's echoes,
@@ -8,22 +9,17 @@
 // takes its random numbers (noise, the pitch envelope's random mode, the tape's hiss) from
 // `random`, so every part of one export plays the same noise and the same random sweeps.
 
-import { applyPitchEnv, pitchEnvStartCents } from "../pitchEnv";
-import { lfoFilterTapGain } from "../synthHelpers";
-import { applyFilterEnv } from "../filterEnv";
-import { createVoiceSource, lfoPwmTapGain, waveGain, PULSE_WIDTH_DEFAULT } from "../waves";
-import { routeVelocity, routedCutoff, routedSemitones, routedNoise, type VelocityRouting } from "../velocity";
-import { startFM } from "../fm";
-import { startNoteLfo, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, type LfoTarget } from "../lfo";
+import { playNote, type NoteWiring } from "../note";
+import { type VelocityRouting } from "../velocity";
+import { type LfoTarget } from "../lfo";
 import { generateReverbIR } from "../reverb/generateIr";
 import { clampPreDelayMs, PRE_DELAY_MAX_MS } from "../reverb/preDelay";
 import { DEFAULT_SWELL, isSwell, nextHitGaps, revIrSeconds, revKey, reverseIrChannels, swellSeconds } from "../reverb/reverse";
-import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from "../ratchet";
+import { ratchetHits, ratchetPitches, stepSpan } from "../ratchet";
 import { createCrusher } from "../crusher";
 import { createPingPong } from "../pingPong";
-import { clampUnisonVoices, unisonPhase, unisonPosition } from "../unison";
 import { createTape, tapeSettings, type TapeMode } from "../tape";
-import { applySampleEnvelope, sampleBuffer, sampleNoteTimes, SAMPLE_WAVE, type SampleData } from "../sample";
+import { sampleBuffer, type SampleData } from "../sample";
 
 export type StepPattern = {
 	active: boolean[];
@@ -162,25 +158,9 @@ function clamp01(x: number) {
 	return Math.max(0, Math.min(1, x));
 }
 
-// Noise setup (same stops + loudness behavior as DrumSequencer.vue)
+// Noise buffers, made from `random` (the colours and their loudness are in note.ts)
 
 type NoiseKey = "brown" | "pink" | "white" | "blue" | "violet";
-
-const NOISE_STOPS: { key: NoiseKey; pos: number }[] = [
-	{ key: "brown", pos: 0.00 },
-	{ key: "pink", pos: 0.25 },
-	{ key: "white", pos: 0.50 },
-	{ key: "blue", pos: 0.75 },
-	{ key: "violet", pos: 1.00 },
-];
-
-const NOISE_LOUDNESS: Record<NoiseKey, number> = {
-	brown: 2.5,
-	pink: 2.0,
-	white: 1.0,
-	blue: 1.5,
-	violet: 2.0,
-};
 
 function generateNoiseBuffers(ctx: BaseAudioContext, random: () => number): Record<NoiseKey, AudioBuffer> {
 	const length = ctx.sampleRate * 2; // 2 seconds
@@ -248,29 +228,6 @@ function generateNoiseBuffers(ctx: BaseAudioContext, random: () => number): Reco
 	norm(vd);
 
 	return { white, pink, brown, blue, violet };
-}
-
-function pickNoiseStops(morph: number) {
-	let t = clamp01(morph);
-	let lower = NOISE_STOPS[0];
-	let upper = NOISE_STOPS[NOISE_STOPS.length - 1];
-
-	for (let i = 0; i < NOISE_STOPS.length - 1; i++) {
-		const a = NOISE_STOPS[i];
-		const b = NOISE_STOPS[i + 1];
-		if (t >= a.pos && t <= b.pos) {
-			lower = a;
-			upper = b;
-			break;
-		}
-	}
-
-	const span = Math.max(1e-6, upper.pos - lower.pos);
-	const wMorph = (t - lower.pos) / span;
-	const wA = 1 - wMorph;
-	const wB = wMorph;
-
-	return { lower, upper, wA, wB };
 }
 
 // Drive curve (same behavior as live generateDriveCurve)
@@ -577,16 +534,22 @@ export function scheduleStepSequencer(
 	// Note scheduling (synth voice only)
 	// -------------------------------------------------------------------------
 
-	const envState = state.synth.envelope;
-	const filterState = state.synth.filter;
 	const noiseState = state.synth.noise;
-	const uni = state.synth.unison;
-	const fmState = state.synth.fm;
-	const pitchEnv = state.synth.pitchEnv;
 
 	const secondsPerBeat = 60 / state.bpm;
 	const stepDuration = secondsPerBeat / 4; // 16th notes
 	const chanVol = clamp01(state.channelVolume);
+
+	// Where every note goes (note.ts builds it, as in the live engine)
+	const noteWiring: NoteWiring = {
+		ctx,
+		toneOut: driveEnabled ? [driveDry, driveShaper] : [driveSum],
+		noiseOut,
+		noiseBuffers,
+		sample: sampleBuffer(state.synth.sample ?? null),
+		lfo: lfoGainNode,
+		random,
+	};
 
 	// The pattern, `bars` times over (with the chain, each bar its own pattern)
 	for (let bar = 0; bar < bars; bar++) {
@@ -619,35 +582,15 @@ export function scheduleStepSequencer(
 		// One note, or a ratchet's 2–4 quick hits within the step, as in the live engine
 		const span = stepSpan(stepIndex, state.stepsCount, stepDuration, clamp01(state.swing));
 		const hitHz = ratchetPitches(freq, pat.ratchets?.[stepIndex], pat.repeatNotes?.[stepIndex], pat.repeatChord ?? []);
-		ratchetHits(t, span, pat.ratchets?.[stepIndex]).forEach((hit, k) => scheduleSynthNote({
-			ctx,
-			time: hit.time,
-			maxDuration: hit.maxDuration,
+		ratchetHits(t, span, pat.ratchets?.[stepIndex]).forEach((hit, k) => playNote(state.synth, {
 			freq: hitHz[k] ?? freq,
-			baseVelocity: baseVel,
-			channelVolume: chanVol,
+			amp: baseVel * chanVol,
+			vel: baseVel,
+			time: hit.time,
 			wave,
-			envState,
-			filterState,
-			noiseState,
-			padNoiseOn,
-			unisonState: uni,
-			fmState,
-			pitchEnv,
-			pulseWidth: state.synth.pulse?.width ?? PULSE_WIDTH_DEFAULT,
-			sample: sampleBuffer(state.synth.sample ?? null),
-			sampleLength: state.synth.sampleLength ?? 1,
-			velocityRouting: state.synth.velocity,
-			driveEnabled,
-			driveDry,
-			driveShaper,
-			driveSum,
-			lfoState,
-			lfoGainNode,
-			noiseOut,
-			noiseBuffers,
-			random,
-		}));
+			addNoise: padNoiseOn,
+			maxDuration: hit.maxDuration,
+		}, noteWiring));
 	}
 	}
 
@@ -656,301 +599,5 @@ export function scheduleStepSequencer(
 	if (tape) {
 		const t0 = ctx.currentTime + offsetSeconds;
 		tape.startNoise(random, t0, t0 + (state.tapeNoise?.seconds ?? barsSeconds), state.tapeNoise?.fade ?? 0);
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Single-note scheduling (parity with live playSynthNote noise behavior)
-// ---------------------------------------------------------------------------
-
-type EnvState = StepSequencerState["synth"]["envelope"];
-type FilterState = StepSequencerState["synth"]["filter"];
-type NoiseState = StepSequencerState["synth"]["noise"];
-type UnisonState = StepSequencerState["synth"]["unison"];
-type FMState = StepSequencerState["synth"]["fm"];
-type PitchEnvState = StepSequencerState["synth"]["pitchEnv"];
-type LfoState = StepSequencerState["synth"]["lfo"];
-
-function scheduleSynthNote(opts: {
-	ctx: BaseAudioContext;
-	time: number;
-	maxDuration?: number; // a ratchet hit ends by then, where the next hit begins
-	freq: number;
-	baseVelocity: number;
-	channelVolume: number;
-	wave: string;
-	envState: EnvState;
-	filterState: FilterState;
-	noiseState: NoiseState;
-	padNoiseOn: boolean;
-	unisonState: UnisonState;
-	fmState: FMState;
-	pitchEnv: PitchEnvState;
-	pulseWidth: number;
-	sample: AudioBuffer | null;
-	sampleLength?: number;
-	velocityRouting?: VelocityRouting;
-	driveEnabled: boolean;
-	driveDry: GainNode;
-	driveShaper: WaveShaperNode;
-	driveSum: GainNode;
-	lfoState: LfoState;
-	lfoGainNode: GainNode | null;
-	noiseOut: GainNode; // the noise layer's way to the master (it skips the effects, as live)
-	noiseBuffers: Record<NoiseKey, AudioBuffer>;
-	random: () => number;
-}) {
-	const {
-		ctx, time, maxDuration, freq, baseVelocity, channelVolume, wave,
-		envState, filterState, noiseState, padNoiseOn,
-		unisonState, fmState, pitchEnv, pulseWidth, sample, sampleLength, velocityRouting, driveEnabled,
-		driveDry, driveShaper, driveSum,
-		lfoState, lfoGainNode,
-		noiseOut, noiseBuffers, random,
-	} = opts;
-
-	const attackSec = envState.enabled
-		? Math.max(0.001, envState.attackMs / 1000)
-		: 0.01;
-
-	// Velocity routing, as in the live engine: the step's velocity also shapes decay, cutoff,
-	// pitch envelope and noise
-	const routed = routeVelocity(velocityRouting, baseVelocity);
-	const noteCutoff = routedCutoff(filterState.cutoff, routed);
-
-	const decaySec = (envState.enabled
-		? Math.max(0.05, envState.decayMs / 1000)
-		: 0.1) * routed.decayFactor;
-
-	const attackEnd = time + attackSec;
-	const naturalEnd = attackEnd + decaySec;
-	const gateEnd = time + Math.max(0.02, (envState.decayMs / 1000) * routed.decayFactor);
-	// The recording (sample.ts) plays for its own length, not the Envelope card's Decay
-	const sampleBuf = wave === SAMPLE_WAVE ? sample : null;
-	const sampleTimes = sampleBuf ? sampleNoteTimes({
-		start: time, bufferSeconds: sampleBuf.duration, freq, length: sampleLength ?? 1,
-		attack: envState.enabled ? attackSec : 0.002, maxDuration,
-	}) : null;
-	const noteEnd = sampleTimes ? sampleTimes.end
-		: cutNoteEnd(envState.enabled ? naturalEnd : gateEnd, time, attackSec, maxDuration);
-
-	const baseAmp = baseVelocity * channelVolume;
-
-	// --- Tone vs Noise blend: 100% parity with live code ---------------------
-	const addNoiseForThisPad = padNoiseOn !== false;
-	const blend = (addNoiseForThisPad && noiseState.enabled)
-		? routedNoise(clamp01(noiseState.amount), routed)
-		: 0;
-
-	const oscBlend = 1 - blend;
-	const noiseBlend = blend;
-
-	// Tone envelope gain
-	const oscEnvGain = ctx.createGain();
-
-	const wfComp = waveGain(wave);
-	const oscPeak = Math.max(0.0001, baseAmp * oscBlend * wfComp);
-
-	if (sampleTimes) {
-		applySampleEnvelope(oscEnvGain.gain, time, oscPeak, sampleTimes);
-	} else if (envState.enabled) {
-		oscEnvGain.gain.setValueAtTime(0.0001, time);
-		oscEnvGain.gain.exponentialRampToValueAtTime(oscPeak, attackEnd);
-		oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
-	} else {
-		// Same level as the envelope's peak: waveform balance and noise mix included
-		oscEnvGain.gain.setValueAtTime(oscPeak, time);
-		oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005);
-	}
-
-	// The LFO this note listens to: the shared one, or with Retrigger its own, starting with
-	// the note (as in the live engine)
-	const lfoSrc: AudioNode | null = !(lfoState.enabled && lfoGainNode) ? null
-		: lfoState.retrigger ? startNoteLfo(ctx, lfoState.waveform, lfoState.rateHz, lfoState.depth, time, noteEnd)
-		: lfoGainNode;
-	// Level (tremolo): the whole note, tone and noise, goes through gains the LFO moves
-	let tremoloTap: GainNode | null = null;
-	if (lfoSrc && lfoState.target === "amp") {
-		tremoloTap = ctx.createGain();
-		tremoloTap.gain.value = LFO_AMP_TAP;
-		lfoSrc.connect(tremoloTap);
-	}
-	const tremolo = (input: AudioNode): AudioNode => {
-		if (!tremoloTap) return input;
-		const g = ctx.createGain();
-		g.gain.value = lfoAmpBase(lfoState.depth);
-		tremoloTap.connect(g.gain);
-		return input.connect(g);
-	};
-
-	// --- Unison / filter / LFO hookup (simplified parity) -------------------
-	const voices = unisonState.enabled ? clampUnisonVoices(unisonState.voices) : 1;
-
-	const detuneStep = voices > 1 ? unisonState.detuneCents : 0;
-	const spreadPct = voices > 1 ? unisonState.stereoSpread : 0;
-
-	// Pitch envelope: one starting offset for the whole note, as in the live engine
-	const pitchDecay = pitchEnv.decayMs / 1000;
-	const pitchStartCents = pitchEnvStartCents({
-		enabled: pitchEnv.enabled,
-		semitones: routedSemitones(pitchEnv.semitones, routed),
-		mode: pitchEnv.mode,
-		decay: pitchDecay,
-	}, random);
-
-	for (let i = 0; i < voices; i++) {
-		// The voice's sound source, as in the live engine (the pulse network for 'pulse')
-		// (each unison voice starting at its own point of its cycle, unison.ts)
-		const source = createVoiceSource(ctx, wave, pulseWidth, unisonPhase(i, voices, spreadPct), sampleBuf);
-		const osc = source.osc;
-
-		const voiceFilter = ctx.createBiquadFilter();
-		voiceFilter.type = "lowpass";
-
-		const voiceGain = ctx.createGain();
-		const panner = ctx.createStereoPanner();
-
-		const dNorm = unisonPosition(i, voices);
-		const detuneC = dNorm * detuneStep;
-		// Frequency, and detune: the unison detune plus the pitch envelope's sweep
-		applyPitchEnv(osc, freq, time, pitchStartCents, pitchDecay, detuneC);
-
-		const fmHandle = startFM(ctx, osc, freq, time, {
-			enabled: fmState.enabled,
-			modFreqHz: fmState.modFreq,
-			index: fmState.index,
-			ratio: fmState.ratio,
-		});
-
-
-		if (filterState.enabled) {
-			voiceFilter.frequency.setValueAtTime(noteCutoff, time);
-			voiceFilter.Q.setValueAtTime(filterState.resonance, time);
-			// Filter envelope, as in the live engine
-			applyFilterEnv(voiceFilter, time, filterState.envAmount ?? 0, (filterState.envDecayMs ?? 200) / 1000);
-		} else {
-			voiceFilter.frequency.setValueAtTime(20000, time);
-			voiceFilter.Q.setValueAtTime(0.0001, time);
-		}
-
-		voiceGain.gain.setValueAtTime(1 / voices, time);
-		panner.pan.setValueAtTime((dNorm * spreadPct) / 100, time);
-
-		// LFO modulation, as in the live engine (Level is note-wide, above)
-		if (lfoSrc) {
-			const lfoGainNode = lfoSrc;
-			if (lfoState.target === "pitch") {
-				const tap = ctx.createGain();
-				tap.gain.value = 1;
-				lfoGainNode.connect(tap).connect(osc.detune);
-			} else if (lfoState.target === "filter") {
-				const f0 = filterState.enabled ? noteCutoff : 20000;
-				const tap = ctx.createGain();
-				tap.gain.value = lfoFilterTapGain(f0, lfoState.depth, ctx.sampleRate);
-
-				const ctrlLP = ctx.createBiquadFilter();
-				ctrlLP.type = "lowpass";
-				ctrlLP.frequency.value = 120;
-
-				lfoGainNode.connect(tap).connect(ctrlLP).connect(voiceFilter.frequency);
-			} else if (lfoState.target === "pwm" && source.width) {
-				const tap = ctx.createGain();
-				tap.gain.value = lfoPwmTapGain(pulseWidth, lfoState.depth);
-				lfoGainNode.connect(tap).connect(source.width);
-			} else if (lfoState.target === "fm" && fmHandle) {
-				const tap = ctx.createGain();
-				tap.gain.value = lfoFmTapGain(fmHandle.deviationHz);
-				lfoGainNode.connect(tap).connect(fmHandle.deviation);
-			}
-		}
-
-		source.output.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
-
-		source.start(time);
-		source.stop(noteEnd);
-		if (fmHandle) fmHandle.stop(noteEnd);
-	}
-
-	// Tone path → drive / FX chain (through the tremolo when the LFO moves the level)
-	const oscOut = tremolo(oscEnvGain);
-	if (driveEnabled) {
-		oscOut.connect(driveDry);
-		oscOut.connect(driveShaper);
-	} else {
-		oscOut.connect(driveSum);
-	}
-
-	// --- Noise path (matches live DrumSequencer playSynthNote) --------------
-
-	if (noiseBlend > 0 && noiseState.enabled) {
-		const { lower, upper, wA, wB } = pickNoiseStops(noiseState.color);
-
-		const bufA = noiseBuffers[lower.key];
-		const bufB = noiseBuffers[upper.key];
-
-		if (bufA || bufB) {
-			const mix = ctx.createGain();
-			mix.gain.setValueAtTime(1, time);
-
-			if (bufA) {
-				const sA = ctx.createBufferSource();
-				sA.buffer = bufA;
-				sA.loop = false;
-				const gA = ctx.createGain();
-				gA.gain.setValueAtTime(wA, time);
-				sA.connect(gA).connect(mix);
-				sA.start(time);
-				sA.stop(noteEnd);
-			}
-			if (bufB) {
-				const sB = ctx.createBufferSource();
-				sB.buffer = bufB;
-				sB.loop = false;
-				const gB = ctx.createGain();
-				gB.gain.setValueAtTime(wB, time);
-				sB.connect(gB).connect(mix);
-				sB.start(time);
-				sB.stop(noteEnd);
-			}
-
-			const noiseEnvGain = ctx.createGain();
-			const attackEnd = time + attackSec;
-
-			const gainLower = NOISE_LOUDNESS[lower.key];
-			const gainUpper = NOISE_LOUDNESS[upper.key];
-			const colorGain = gainLower * wA + gainUpper * wB;
-
-			const safePeak = Math.max(0.0001, baseAmp * noiseBlend * colorGain);
-
-			noiseEnvGain.gain.setValueAtTime(0.0001, time);
-			noiseEnvGain.gain.exponentialRampToValueAtTime(safePeak, attackEnd);
-
-			const BURST_MAX_MS = 250;
-			const burstActive =
-				noiseState.attackBurst && noiseState.burstMs < BURST_MAX_MS;
-
-			const burstEnd = burstActive
-				? Math.min(
-					noteEnd,
-					attackEnd + Math.max(0.005, noiseState.burstMs / 1000)
-				)
-				: noteEnd;
-
-			noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, burstEnd);
-			noiseEnvGain.gain.setTargetAtTime(0.0001, burstEnd, 0.01);
-
-			// As in the live engine: band-limited, then straight on to the tape pedal and the
-			// master, skipping drive, delay and reverb (exports before PR 34 sent it through them)
-			const noiseHP = ctx.createBiquadFilter();
-			noiseHP.type = "highpass";
-			noiseHP.frequency.setValueAtTime(40, time);    // remove sub-rumble
-			const noiseLP = ctx.createBiquadFilter();
-			noiseLP.type = "lowpass";
-			noiseLP.frequency.setValueAtTime(16000, time); // tame ultra-high fizz
-
-			mix.connect(noiseHP).connect(noiseLP).connect(noiseEnvGain);
-			tremolo(noiseEnvGain).connect(noiseOut);
-
-		}
 	}
 }
