@@ -84,6 +84,7 @@ describe('applyPattern', () => {
 			const out = JSON.parse(JSON.stringify(s));
 			const l = out.instruments.find((i: any) => i.name === 'synth-voice');
 			delete l.steps; delete l.velocities; delete l.pitches; delete l.ratchets; delete l.repeatNotes;
+			delete out.patterns.slots[out.patterns.current]; // the current slot is the lane
 			return out;
 		};
 		expect(strip(after)).toEqual(strip(before));

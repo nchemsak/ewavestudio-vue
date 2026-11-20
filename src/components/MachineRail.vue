@@ -4,8 +4,10 @@
      spectrogram (monitorViews.ts; the big screen's F1 and F3). Under it, one row per machine:
      its LED (a click mutes it), its name, its level and a tiny row of its 16 steps. There's one
      machine for now, Rhythm (the synth lane); Bass, Drums and Drift (the plan's items 4–6) add
-     rows, and patterns A–D and the chain (item 2) go under them, so the screens shrink to a
-     strip as they come. A row will pick which machine the pads and the Sound section show. -->
+     rows, and patterns A–D (PR 109) and the chain (item 2) go under them, so the screens shrink
+     to a strip as they come. A row will pick which machine the pads and the Sound section show.
+     Patterns A–D: a cap per slot (the current one down, a slot waiting for the bar pulsing, an
+     empty slot's letter dim) and Copy (then a slot: it gets a copy of the current pattern). -->
 <template>
     <aside class="pt-card machine-rail" aria-label="Machines">
         <div class="mr-monitor">
@@ -35,11 +37,23 @@
                 </div>
             </div>
         </div>
+
+        <div ref="slotsEl" class="mr-slots" role="group" aria-label="Patterns">
+            <span class="mr-cap" aria-hidden="true">{{ copyArmed ? `Copy ${slots[currentSlot]?.name} to` : 'Pattern' }}</span>
+            <button v-for="(s, i) in slots" :key="s.name" type="button" class="hw-cap hw-cap-sm mr-slot"
+                :class="{ 'hw-down': i === currentSlot, 'is-queued': i === queuedSlot, empty: !s.filled, target: copyArmed && i !== currentSlot }"
+                :aria-pressed="i === currentSlot ? 'true' : 'false'" :aria-label="`Pattern ${s.name}`" :title="slotTitle(i)"
+                @click="emit('choose-slot', i, $event.shiftKey)">{{ s.name }}</button>
+            <button type="button" class="hw-cap hw-cap-sm mr-copy" :class="{ 'hw-down': copyArmed }" :aria-pressed="copyArmed ? 'true' : 'false'"
+                :title="copyArmed ? 'Click a pattern to copy into it (Esc: cancel)' : `Copy pattern ${slots[currentSlot]?.name} into another`"
+                @click="emit('update:copyArmed', !copyArmed)">Copy</button>
+        </div>
+        <p v-if="queuedSlot != null" class="visually-hidden" role="status">Pattern {{ slots[queuedSlot]?.name }} at the next bar</p>
     </aside>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Knob from './Knob.vue';
 import { padHue } from '../lib/padColour';
 import { startScope, startSpectrogram } from './monitorViews';
@@ -56,11 +70,41 @@ const props = defineProps<{
     level: number;          // the lane's channelVolume
     currentStep: number;
     playing: boolean;
+    slots: { name: string; filled: boolean }[]; // patterns A–D
+    currentSlot: number;
+    queuedSlot: number | null;  // waiting for the bar
+    copyArmed: boolean;
 }>();
 const emit = defineEmits<{
     (e: 'toggle-mute'): void;
     (e: 'update:level', v: number): void;
+    (e: 'choose-slot', index: number, now: boolean): void;
+    (e: 'update:copyArmed', v: boolean): void;
 }>();
+
+function slotTitle(i: number) {
+    const s = props.slots[i];
+    if (props.copyArmed && i !== props.currentSlot) return `Copy pattern ${props.slots[props.currentSlot]?.name} into ${s.name}`;
+    if (i === props.currentSlot) return `Pattern ${s.name} is playing`;
+    if (i === props.queuedSlot) return `Pattern ${s.name} at the next bar (Shift+click: now)`;
+    return `Pattern ${s.name}${s.filled ? '' : ' (empty)'}${props.playing ? ': at the next bar (Shift+click: now)' : ''}`;
+}
+
+// While Copy is down, Esc or a click anywhere but the patterns puts it back up
+const slotsEl = ref<HTMLElement | null>(null);
+function onDownElsewhere(e: PointerEvent) {
+    if (!slotsEl.value?.contains(e.target as Node)) emit('update:copyArmed', false);
+}
+function onEsc(e: KeyboardEvent) {
+    if (e.key === 'Escape') emit('update:copyArmed', false);
+}
+function listen(on: boolean) {
+    const f = on ? window.addEventListener : window.removeEventListener;
+    f('pointerdown', onDownElsewhere as any, true);
+    f('keydown', onEsc as any);
+}
+watch(() => props.copyArmed, (on) => listen(on));
+onBeforeUnmount(() => listen(false));
 
 const levelModel = computed({ get: () => props.level, set: (v: number) => emit('update:level', v) });
 
@@ -222,5 +266,88 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
 .mr-cells i.now {
     outline: 1px solid #fff;
     outline-offset: 0;
+}
+
+/* Patterns A–D (PR 109; option A of PR 108's mockups): a caption, four caps and Copy */
+.mr-slots {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--pt-inset, rgba(0, 0, 0, 0.3));
+}
+
+.mr-cap {
+    min-width: 0;
+    flex: 1 1 auto;
+    font: 700 9px Cousine, ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pt-text, #e8e2ff);
+    opacity: 0.75;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mr-slot {
+    position: relative;
+    min-width: 30px;
+    height: 24px;
+    padding: 0;
+    font: 700 11px Cousine, ui-monospace, monospace;
+}
+
+.mr-copy {
+    height: 24px;
+    padding: 0 8px;
+    margin-left: 4px;
+    font: 700 10px Cousine, ui-monospace, monospace;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* An empty slot: its letter dim (until it's the one playing) */
+.mr-slot.empty:not(.hw-down) {
+    color: color-mix(in oklab, var(--cap-ink, #e8e2ff), transparent 50%);
+}
+
+/* The current one is down with its letter in the LEDs' colour, as every switch */
+.mr-slot.hw-down {
+    color: var(--hw-led, #7dffb0);
+}
+
+/* Waiting for the bar: a pulsing ghost of the LEDs' colour, as a Melody Maker key's */
+.mr-slot.is-queued::after,
+.mr-slot.target::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: color-mix(in oklab, var(--hw-led, #7dffb0), transparent 70%);
+    box-shadow: inset 0 0 0 2px var(--hw-led, #7dffb0);
+    pointer-events: none;
+    animation: mr-ghost 0.9s ease-in-out infinite;
+}
+
+/* Copy is down: the slots it could go to are outlined, steady */
+.mr-slot.target::after {
+    background: none;
+    box-shadow: inset 0 0 0 1px var(--hw-led, #7dffb0);
+    animation: none;
+    opacity: 0.7;
+}
+
+@keyframes mr-ghost {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 0.6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mr-slot.is-queued::after {
+        animation: none;
+        opacity: 0.45;
+    }
 }
 </style>

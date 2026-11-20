@@ -199,7 +199,9 @@
 			<MachineRail v-if="synthInstrument" class="ds-rail" :analyser="analyser" :sampleRate="audioCtx.sampleRate"
 				:active="viewSource.active" name="Rhythm" :steps="synthInstrument.steps" :pitches="synthInstrument.pitches"
 				:velocities="synthInstrument.velocities" :muted="synthInstrument.muted" v-model:level="synthInstrument.channelVolume"
-				:currentStep="currentStep" :playing="isPlaying" @toggle-mute="toggleMute(synthInstrument.name)" />
+				:currentStep="currentStep" :playing="isPlaying" @toggle-mute="toggleMute(synthInstrument.name)"
+				:slots="slotView" :currentSlot="currentSlot" :queuedSlot="queuedSlot" v-model:copyArmed="copyArmed"
+				@choose-slot="chooseSlot" />
 
 			<!-- Transport: Volume, Tempo, Swing, then Sounds and Patterns side by side, then Play -->
 			<section class="pt-card transport-card ds-transport">
@@ -765,6 +767,7 @@ import { randomPreset } from '../lib/presets/random';
 import { PATTERNS } from '../lib/patterns/library';
 import { applyPattern, patternKey } from '../lib/patterns/patterns';
 import { moveList, MOVED_LANE_FIELDS, type MoveKind } from '../lib/patterns/move';
+import { emptySlots, loadIntoLane, mapSlotPitches, slotFromLane, slotHasSteps, SLOT_NAMES, type Slots } from '../lib/patterns/slots';
 import { addTap, tapBpm } from '../lib/tapTempo';
 import { padHue, spectrumColour, spectrumHue } from '../lib/padColour';
 import { randomPattern } from '../lib/patterns/random';
@@ -1423,6 +1426,11 @@ function triggerFilePicker(inst: any) {
 }
 
 const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
+
+// Patterns A–D (saved; see PATTERN SLOTS): the four slots, and which one plays. The synth lane
+// is the current slot as it's being edited.
+const patternSlots = ref<Slots>(emptySlots());
+const currentSlot = ref(0);
 const steps = computed<boolean[]>({
 	get: () => synthInstrument.value?.steps ?? [],
 	set: v => { if (synthInstrument.value) synthInstrument.value.steps = v; }
@@ -1641,6 +1649,8 @@ function moveToKey(root: typeof selectedKeyRoot.value, audition: boolean) {
 	const inst = synthInstrument.value;
 	const semitones = shortestInterval(selectedKeyRoot.value, root);
 	if (inst && semitones) inst.pitches = transposePitches(inst.pitches, semitones, MIN_PAD_HZ, MAX_PAD_HZ);
+	// The other pattern slots move with it: the key is the project's, not one pattern's
+	if (semitones) mapOtherSlots((p) => transposePitches(p, semitones, MIN_PAD_HZ, MAX_PAD_HZ));
 	selectedKeyRoot.value = root;
 	melodyUi.keyRoot = root;
 	if (inst && audition) auditionNote(nearestRootHz(root, patternCenterHz(inst.pitches, inst.steps)));
@@ -1651,6 +1661,7 @@ function moveToKey(root: typeof selectedKeyRoot.value, audition: boolean) {
 function onScaleChosen({ from, to }: { from: MelodyUi['keyScale']; to: MelodyUi['keyScale'] }) {
 	const inst = synthInstrument.value;
 	if (inst) inst.pitches = remapScale(inst.pitches, selectedKeyRoot.value, from, to, MIN_PAD_HZ, MAX_PAD_HZ);
+	mapOtherSlots((p) => remapScale(p, selectedKeyRoot.value, from, to, MIN_PAD_HZ, MAX_PAD_HZ));
 	melodyUi.keyScale = to;
 }
 
@@ -2247,6 +2258,7 @@ const projectState: ProjectState = {
 		tape: { enabled: tapeEnabled, age: tapeAge, wobble: tapeWobble, mode: tapeMode },
 	},
 	instruments,
+	patterns: { slots: patternSlots, current: currentSlot },
 	melody: melodyUi,
 	selectedWaveform,
 	setStepLength,
@@ -2744,6 +2756,7 @@ function getPadStyle(instrument: any, index: number) {
 // that aren't saved
 function resetUiToFactoryDefaults() {
 	cancelQueued();
+	copyArmed.value = false;
 	hardStopSequencer();
 
 	resetToFactoryDefaults(projectState);
@@ -2886,9 +2899,11 @@ async function startFirstVisit() {
 // new one replaces it. Stop applies what's waiting; undo, redo, opening a project and File →
 // New throw it away. Each change is one undo step, as before. (Patterns waited too in PR 55;
 // they change at once since, the maintainer's call: only 'key' is queued now.)
-type QueueKind = 'key';
+type QueueKind = 'key' | 'slot';
 const queued = shallowRef<{ kind: QueueKind; id: string; run: () => void }[]>([]);
 const queuedKey = computed(() => queued.value.find(q => q.kind === 'key')?.id ?? null);
+// A pattern slot waiting for the bar (PATTERN SLOTS), as its index
+const queuedSlot = computed(() => { const id = queued.value.find(q => q.kind === 'slot')?.id; return id == null ? null : Number(id); });
 
 function atNextBar(kind: QueueKind, id: string, run: () => void, now = false) {
 	cancelQueued(kind);
@@ -2906,6 +2921,67 @@ function runQueued() {
 	for (const q of due) q.run();
 }
 // BAR QUEUE END
+
+// PATTERN SLOTS START
+// Patterns A–D (the plan's item 2, part 1; src/lib/patterns/slots.ts): four patterns per
+// project, under the machine rail's rows (option A of PR 108's mockups). A slot holds the
+// steps, velocities, pitches and repeats; the sound, the pads' waves and the noise mask are
+// shared. The synth lane is always the current slot being edited, so everything that reads or
+// changes the pattern (the pads, Pattern Tools, Generate, the pattern presets, the engines,
+// the export) works on the current slot as it did on the one pattern.
+//
+// A slot clicked while playing waits for the next bar's step 1 (the bar queue, with a pulsing
+// ghost on its button), as a key does; stopped, or with Shift+click, at once. Copy, then a
+// slot: that slot gets a copy of the current pattern and becomes the current one (at once: it
+// sounds the same). Each is one undo step. A key or scale picked moves every slot.
+const copyArmed = ref(false);
+
+const slotView = computed(() => SLOT_NAMES.map((name, i) => ({
+	name,
+	// The current slot's steps are the lane's (its stored copy may be behind)
+	filled: i === currentSlot.value ? !!synthInstrument.value?.steps.some(Boolean) : slotHasSteps(patternSlots.value[i]),
+})));
+
+function laneHz() { return currentDefaultHz.value; }
+
+// The lane's pattern into the current slot, then the slot `to` into the lane
+function switchToSlot(to: number) {
+	const lane = synthInstrument.value;
+	if (!lane || to === currentSlot.value) return;
+	const slots = [...patternSlots.value];
+	slots[currentSlot.value] = slotFromLane(lane, laneHz());
+	loadIntoLane(lane, slots[to], stepLength.value, laneHz());
+	patternSlots.value = slots;
+	currentSlot.value = to;
+}
+
+function chooseSlot(to: number, now = false) {
+	if (copyArmed.value) { copySlotTo(to); return; }
+	if (to === currentSlot.value) { cancelQueued('slot'); return; } // nothing to wait for
+	atNextBar('slot', String(to), () => switchToSlot(to), now);
+	trackEvent('pattern_slot', { slot: SLOT_NAMES[to] });
+}
+
+function copySlotTo(to: number) {
+	copyArmed.value = false;
+	const lane = synthInstrument.value;
+	if (!lane || to === currentSlot.value) return;
+	cancelQueued('slot');
+	const from = currentSlot.value;
+	const slots = [...patternSlots.value];
+	slots[from] = slotFromLane(lane, laneHz());
+	slots[to] = slotFromLane(lane, laneHz());
+	patternSlots.value = slots;
+	currentSlot.value = to; // the lane already holds the copy
+	trackEvent('pattern_copy', { from: SLOT_NAMES[from], to: SLOT_NAMES[to] });
+}
+
+// The slots other than the current one (the lane is moved by the caller) with their pitches
+// passed through f: a key or scale picked moves every pattern
+function mapOtherSlots(f: (pitches: number[]) => number[]) {
+	patternSlots.value = patternSlots.value.map((slot, i) => (i === currentSlot.value ? slot : mapSlotPitches(slot, f)));
+}
+// PATTERN SLOTS END
 
 // PRESETS END
 

@@ -30,6 +30,7 @@ import { clampTapeMode, TAPE_DEFAULTS, type TapeMode } from '../../audio/tape';
 import { clampSampleLength, sampleFrom, SAMPLE_LENGTH_DEFAULT, type SampleData } from '../../audio/sample';
 import { DEFAULT_SWELL, isSwell } from '../../audio/reverb/reverse';
 import { DEFAULT_PRE_DIVISION, isPreDivision, preDelayMs, preDivisionForMs } from '../../audio/reverb/preDelay';
+import { emptySlots, slotFromLane, slotIndexFrom, slotsFrom, type Slots } from '../patterns/slots';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -154,6 +155,10 @@ export type ProjectState = {
 		tape: { enabled: Ref<boolean>; age: Ref<number>; wobble: Ref<number>; mode: Ref<TapeMode> };
 	};
 	instruments: Ref<Instrument[]>;
+	// Patterns A–D (src/lib/patterns/slots.ts): the four slots and which one plays (0–3). The
+	// synth lane is the current slot as it's being edited; its entry in `slots` is filled in
+	// from the lane when another slot is picked and when a snapshot is built.
+	patterns: { slots: Ref<Slots>; current: Ref<number> };
 	melody: MelodyUi; // reactive
 	selectedWaveform: Ref<PadWave>;
 	// Resizes every lane's step arrays (and the noise mask) to the step count
@@ -247,6 +252,8 @@ function byName(st: ProjectState) {
 		tapeWobble: fx.tape.wobble,
 		tapeMode: fx.tape.mode,
 		instruments: st.instruments,
+		patternSlots: st.patterns.slots,
+		currentSlot: st.patterns.current,
 		melodyUi: st.melody,
 		selectedWaveform: st.selectedWaveform,
 	};
@@ -271,7 +278,7 @@ export function buildSnapshot(st: ProjectState) {
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDivision, reverbPreDelay, reverbReverse, reverbSwell,
 		tapeEnabled, tapeAge, tapeWobble, tapeMode,
-		instruments, melodyUi, selectedWaveform,
+		instruments, patternSlots, currentSlot, melodyUi, selectedWaveform,
 	} = byName(st);
 
 	return {
@@ -411,6 +418,16 @@ export function buildSnapshot(st: ProjectState) {
 			repeatNotes: i.repeatNotes ? [...i.repeatNotes] : null,
 		})),
 
+		// Patterns A–D: the current slot is the synth lane as it is now
+		patterns: {
+			current: currentSlot.value,
+			slots: patternSlots.value.map((slot, idx) => {
+				if (idx !== currentSlot.value) return slot ? JSON.parse(JSON.stringify(slot)) : null;
+				const lane = instruments.value.find(i => i.name === 'synth-voice');
+				return lane ? slotFromLane(lane, currentDefaultHz.value) : null;
+			}),
+		},
+
 		// melodyUi mirrors the Melody Maker panel, which reports every change through events
 		melody: {
 			keyRoot: melodyUi.keyRoot,
@@ -452,7 +469,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbPreDivision, reverbPreDelay, reverbReverse, reverbSwell,
 		tapeEnabled, tapeAge, tapeWobble, tapeMode,
-		instruments, melodyUi, selectedWaveform,
+		instruments, patternSlots, currentSlot, melodyUi, selectedWaveform,
 	} = byName(st);
 
 	if (!s || typeof s !== 'object') return;
@@ -734,6 +751,16 @@ export function applySnapshot(st: ProjectState, s: any) {
 	}
 
 
+	// Patterns A–D (PR 109): a project saved before them has its pattern in A, B–D empty. The
+	// current slot's pattern is the lane's (above), as it always was.
+	if (s.patterns && typeof s.patterns === 'object') {
+		patternSlots.value = slotsFrom(s.patterns.slots, stepLength.value, currentDefaultHz.value);
+		currentSlot.value = slotIndexFrom(s.patterns.current);
+	} else if (Array.isArray(s.instruments) && s.instruments.length) {
+		patternSlots.value = emptySlots();
+		currentSlot.value = 0;
+	}
+
 	if (typeof s.selectedWaveform === 'string') selectedWaveform.value = s.selectedWaveform as any;
 }
 
@@ -749,7 +776,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 		volume, tempo, swing,
 		noiseMask, sample, sampleLength,
 		selectedKeyRoot, globalOctaveOffset, currentDefaultHz,
-		instruments, melodyUi, selectedWaveform,
+		instruments, patternSlots, currentSlot, melodyUi, selectedWaveform,
 	} = byName(st);
 
 	currentTheme.value = '';
@@ -797,6 +824,9 @@ export function resetToFactoryDefaults(st: ProjectState) {
 		if (i.ratchets) i.ratchets = Array(stepLength.value).fill(1);
 		if (i.repeatNotes) i.repeatNotes = Array(stepLength.value).fill('same');
 	});
+	patternSlots.value = emptySlots();
+	currentSlot.value = 0;
+
 	// remove custom channels
 	for (let idx = instruments.value.length - 1; idx >= 0; idx--) {
 		if ((instruments.value[idx] as any).isCustom) instruments.value.splice(idx, 1);

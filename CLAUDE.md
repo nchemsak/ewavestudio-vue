@@ -10,7 +10,8 @@ harmonic shapes, and a sound recorded from the microphone) and ratchet (2–4 qu
 envelope, noise, FM,
 unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a lo-fi pedal (wear, wobble, tape or vinyl); Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
-arpeggio in a key and scale; a new key or scale moves the pattern with it); a machine rail (a small scope and
+arpeggio in a key and scale; a new key or scale moves the pattern with it); four patterns per
+project (A–D, with Copy); a machine rail (a small scope and
 spectrogram, and a row per machine: only Rhythm so far), the live spectrum behind the Filter card's
 curve, one hit of the sound behind the Envelope card's, and a tuner in the Melody Maker; six built-in sounds that set the sound (not the pattern) and six built-in patterns
 that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
@@ -51,7 +52,7 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   arithmetic, the Melody Maker's screen (note lengths, the playing note), the cards' screens (`shapeViews.ts`), MIDI input (with a fake MIDI system), MIDI learn (and that every learnable knob
   is in the app), the undo history, project snapshots (save → load round trip, older
   projects, factory defaults), presets (exact values, knob ranges, pattern untouched),
-  patterns (from the key, sound untouched, the dice's rolls), pad colours,
+  patterns (from the key, sound untouched, the dice's rolls), the pattern slots A–D, pad colours,
   ratchet timing, the bit crusher, knob notches, the Melody Maker's theory (moving a pattern to another key or
   scale) and arpeggio layout (Rate, fitting the bar), and the export helpers (loop folding, MIDI and zip files read
   back, names).
@@ -250,6 +251,8 @@ src/lib/noise/accents.ts  The Noise card's Accents: noise on the pattern's loude
 src/lib/noise/masks.ts   The Noise card's Backbeat and Offbeats, and whether a mask is heard (pure)
 src/lib/patterns/velocityShapes.ts  Humanize's velocity shapes (Pattern Tools, the phone; pure)
 src/lib/patterns/move.ts  Pattern Tools' shift and reverse: which lists move, and where (pure)
+src/lib/patterns/slots.ts  Patterns A–D: what a slot holds, the lane ↔ a slot, loading saved
+                         slots (pure; see "Patterns A–D")
 src/lib/tapTempo.ts      The TAP cap: four taps set the tempo (pure)
 src/lib/delaySync.ts     Tempo-synced delay: divisions, synced time, followDelaySync (see
                          "Delay time")
@@ -1019,6 +1022,50 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   A–D (with Copy) and the chain's eight cells go under the rows (item 2). The screens shrink to
   a strip as they come (the mockups: a 46 px strip). Drift's row shows its chords per bar.
 
+### Patterns A–D
+- PR 109 (the plan's item 2, part 1 of about three; the slots of option A of PR 108's
+  mockups): **four patterns per project**, under the rail's rows (`.mr-slots` in
+  `MachineRail.vue`): a "Pattern" caption, caps **A B C D** (the one playing down with its
+  letter in the LEDs' colour, an empty slot's letter dim) and **Copy**. The `PATTERN SLOTS`
+  section of `DrumSequencer.vue`; `src/lib/patterns/slots.ts` (unit-tested).
+- **A slot holds the pattern**: which steps are on, their velocities, pitches, repeats and what
+  the repeats play (`SLOT_FIELDS`). The sound, the pads' waves (a sound preset sets them) and
+  the noise mask (the Noise card's) are shared by every slot, so Move's shift moves the waves
+  and the noise for every slot.
+- **The synth lane is the current slot as it's being edited**: the pads, Pattern Tools,
+  Generate, the pattern presets and their dice, the engines, the export (audio and MIDI: the
+  current slot only, until the chain) and the share link read and write the lane as before.
+  Picking another slot (`switchToSlot()`) copies the lane into the current slot's entry, then
+  the chosen slot into the lane (`slotFromLane()`, `loadIntoLane()`; a slot never used loads as
+  an empty pattern: steps off, full velocity, the key's root, one hit, Same).
+- **While playing, a slot waits for the next bar's step 1** (the bar queue, kind `'slot'`, see
+  "Changes at the bar"), with a pulsing ghost on its cap (`.is-queued`, steady with
+  `prefers-reduced-motion`) and a title saying so; stopped, or with Shift+click, at once; Stop
+  applies it, undo drops it; the slot playing clicked again drops a waiting one.
+- **Copy**: lit while down, the caption reads "Copy A to" and the other slots are outlined;
+  the next slot clicked gets a copy of the current pattern and becomes the current one, at once
+  even while playing (it sounds the same). Esc, Copy again or a click anywhere but the slots
+  puts it back up; File → New too.
+- **A key or scale picked moves every slot** (`mapOtherSlots()` beside the lane's move in
+  `moveToKey()` and `onScaleChosen()`): the key is the project's. Pattern Tools' octave arrows,
+  Move, Humanize, Generate and the pattern presets change the current slot only.
+- **Saved** as `patterns: { current, slots }`, each slot `{ tracks: [{ machine: 'rhythm',
+  steps, velocities, pitches, ratchets, repeatNotes }] }` or null for a slot never used: a list
+  of tracks from the start, so the machines add a track without a second change to saved
+  projects. `buildSnapshot()` writes the lane into the current slot, so a saved project's
+  current slot always matches its lane; `applySnapshot()` checks the slots (`slotsFrom()`: a
+  damaged one is dropped, lists fitted to the bar) and takes the current one's pattern from the
+  lane, as before. A project saved before PR 109 opens with its pattern in A and B–D empty;
+  File → New gives four empty slots and A. A slot change and a copy are one undo step each,
+  with the pads (the whole snapshot is the undo step). Share links include the slots.
+- Not on the phone yet (phone mode plays and edits the current slot; the desktop view has the
+  slots). At 390 px the rail, on top, is 38 px taller; from 720 px it's the size it was (its
+  screens give the room).
+- Analytics: `pattern_slot` (with `slot`), `pattern_copy` (`from`, `to`).
+- Browser tests: slots keep their own patterns, Copy, a key moving every slot, the project file,
+  undo, import (and an older project), File → New; while playing, a slot waiting for the bar
+  (changing just before its step 1), Shift+click and Stop.
+
 ### Pad and spectrogram colours
 - A lit pad's colour shows its note: blue for the lowest pad pitch (100 Hz) to red for the
   highest (2 kHz), linear in Hz (`padHue()` in `src/lib/padColour.ts`); its fill height shows
@@ -1275,7 +1322,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   instead of lighting the key it emitted.
 - Stop applies what's waiting (`onPlayClick`). Undo, redo, opening a project and File → New
   throw it away (`cancelQueued()`). Clicking the key the pattern is in drops a waiting key.
-- Not waiting for the bar: a scale picked, Generate, Pattern Tools, patterns, sounds.
+- **Pattern slots** (PR 109) wait too (kind `'slot'`, `queuedSlot`): see "Patterns A–D".
+- Not waiting for the bar: a scale picked, Generate, Pattern Tools, patterns, sounds, Copy.
 - A browser test plays bars and checks the key changes just before the next bar's step 1 (not
   during the bar, no audition note), its ghost and caption, Shift+click, Undo and Stop, and
   that a pattern changes at once while playing.
@@ -1425,6 +1473,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - 1–4 picked the big screen's view until PR 108, which removed the screen (see "The views").
 - Under 1200 px, the Sound / Effects / Compose tabs are one Tab stop: Left/Right (Home/End)
   move between them (`onTabKeydown` in `DrumSequencer.vue`).
+- Shift+click on a pattern slot (A–D): at once while playing too (PR 109).
 - Shift+click on a Melody Maker key: at once, without waiting for the bar while playing (see
   "Changes at the bar"; the caption says so while a key waits).
 - Ctrl/Cmd+S: save; Ctrl/Cmd+Shift+S: Save as… (`ProjectControls.vue`). Escape closes menus and popovers, and ends MIDI
@@ -1604,7 +1653,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 ### Saving / projects
 - The settings stay refs in `DrumSequencer.vue`. It groups every saved one into `projectState`
   (type `ProjectState`), shaped like a snapshot:
-  `{ meta, ui, transport, synth, fx, instruments[], melody, selectedWaveform }`.
+  `{ meta, ui, transport, synth, fx, instruments[], patterns, melody, selectedWaveform }`
+  (`patterns`, the slots A–D, since PR 109: see "Patterns A–D").
 - `src/lib/project/snapshot.ts`: `buildSnapshot(state)` turns the settings into a plain object,
   `applySnapshot(state, s)` restores them (a missing or wrongly typed field keeps its current
   value), and `resetToFactoryDefaults(state)` is File → New (its synth and effects part is
@@ -2054,6 +2104,9 @@ Grow into a small groovebox:
     slots, a chain of up to eight cells plays them in order, and Export audio can render the
     chain. No timeline. Saved so that a pattern is a list of tracks from the start, even with
     one track, and the machines need no second change to saved projects.
+    **Part 1 done in PR 109** (the slots, Copy, saving; see "Patterns A–D"). Next: the chain
+    (eight cells under the slots, played in order, saved with `patterns`), then Export audio
+    rendering the chain (and its MIDI file). Ask whether the phone should get the slots.
 3. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
     that builds a note, used by the live engine and the export engine (today two engines kept
     in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
@@ -2372,6 +2425,7 @@ Done:
 | 106 | Phone mode brought up to date (the plan's first item after PR 105), every page fitting without scrolling at 568 × 320 and 844 × 390 (a browser test checks both): the FX page's pedals in PR 99's look, kept tall (the name on a ribbon with its LED, REV under it, screws, jacks, knobs two by two, a treadle; the lo-fi pedal's reels in a window); the Key page's Melody Maker `compact` (the keyboard, Scale and the maker's settings beside the screen and Generate; it scrolled 203 px at 568 × 320); the Sound page's wave keys lit only while every pad plays that wave, with a Random key and the desktop's Sample strip (REC, Length, the dice), and FM and Unison as the desktop's cards without their screens (ratio keys, Voices keys, Freq, Detune and Spread, none on the phone before); the Mod page's LFO and Noise as the desktop's cards (ribbon, screen, patch bay). No mockups: every look is one the maintainer already picked for the desktop. |
 | 107 | The desktop view on a phone (the plan's first item after PR 106): held upright, the pads are two rows of 8, centred (they wrapped into 6, 6 and 4), and on a touch screen under 720 px the caps are at least 32 px tall and a pad's ⋮ 32 × 28 px; the shape screens let a finger scroll the page and only take a touch that starts on a grip (FM and Unison get a grip of their own on touch screens). Held sideways nothing changes but the screens' touch. |
 | 108 | The big screen spread around (the plan's item 1; option A of three mockups, the machine rail, with bigger screens until Bass arrives): the screen and its F-keys are gone; in its place the **machine rail**, a small scope over a small spectrogram (40 Hz–10 kHz, log) and a row for **Rhythm** (its LED mutes it, its level is the lane's volume, hidden since PR 92 and MIDI-learnable again, and its 16 steps in their colours); the live **spectrum** is drawn faintly behind the Filter card's curve, **one hit** of the sound behind the Envelope card's, and a **tuner** sits in the Melody Maker screen's corner. The views read a tap high-passed at 10 Hz (no more DC offset), and the spectrum and tuner a finer analyser (8192 points), so the spectrum's low end is drawn (it started with a wall between C1 and C2). Every card keeps its size. |
+| 109 | Patterns A–D (the plan's item 2, part 1): four pattern slots per project under the machine rail's Rhythm row (option A of PR 108's mockups), A B C D and Copy. A slot holds the steps, velocities, pitches and repeats; the sound, the pads' waves and the noise are shared. While playing, a slot waits for the next bar (a pulsing ghost; Shift+click: now; Stop applies it); Copy, then a slot, copies the current pattern into it. A key or scale picked moves every slot. Saved as `patterns` (a list of tracks per slot, so the machines need no second change); older projects open with their pattern in A; one undo step each (`src/lib/patterns/slots.ts`). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
