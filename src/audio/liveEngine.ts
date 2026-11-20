@@ -10,39 +10,34 @@
 // everything goes through the tape pedal (tape.ts), or round it while it's off, to masterGain
 // → destination. The views' analysers are tapped from masterGain through a 10 Hz high-pass.
 //
-// WAV export uses a separate offline engine (export/scheduleStepSequencer.ts). Changes to
-// the sound here must be mirrored there, or exports will sound different.
+// WAV export uses a separate offline engine (export/scheduleStepSequencer.ts). Both build
+// their notes with note.ts (since PR 112); the effects graph is still built by each, so a
+// change to the effects here must be mirrored there, or exports will sound different.
 //
 // Call useLiveEngine() once, from a component's setup: it registers watchers and
 // mount/unmount hooks.
 
 import { ref, computed, watch, onMounted, onBeforeUnmount, type Ref } from 'vue';
-import { applyPitchEnv, pitchEnvStartCents } from './pitchEnv';
-import { applyFilterEnv } from './filterEnv';
-import { createVoiceSource, lfoPwmTapGain, prepareVoiceWave, waveGain, type Wave, type PadWave } from './waves';
-import { applySampleEnvelope, sampleBuffer, sampleNoteTimes, SAMPLE_WAVE, type PitchedSource, type SampleData } from './sample';
-import { routeVelocity, routedCutoff, routedSemitones, routedNoise } from './velocity';
-import { startFM } from './fm';
-import { startNoteLfo, lfoAmpBase, LFO_AMP_TAP, lfoFmTapGain, lfoWaveAt, type LfoTarget } from './lfo';
+import { prepareVoiceWave, type Wave, type PadWave } from './waves';
+import { sampleBuffer, SAMPLE_WAVE, type SampleData } from './sample';
+import { playNote, type VoiceSettings } from './note';
+import { lfoWaveAt, type LfoTarget } from './lfo';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
 import { clampPreDelayMs, PRE_DELAY_MAX_MS } from './reverb/preDelay';
 import { nextHitGaps, revIrSeconds, revKey, reverseIrChannels, swellSeconds } from './reverb/reverse';
-import { cutNoteEnd, ratchetHits, ratchetPitches, stepSpan } from './ratchet';
+import { ratchetHits, ratchetPitches, stepSpan } from './ratchet';
 import { createCrusher, loadCrusher, setCrusher } from './crusher';
 import { createPingPong } from './pingPong';
 import { createTape, tapeSettings, type TapeMode } from './tape';
-import { clampUnisonVoices, unisonPhase, unisonPosition } from './unison';
+import { clampUnisonVoices, unisonPhase } from './unison';
 import {
 	divisionToHz,
 	lfoAlignBars,
 	generateDriveCurve,
 	linearPassthroughCurve,
 	generateNoiseBuffers,
-	NOISE_STOPS,
-	NOISE_LOUDNESS,
 	type NoiseKey,
-	lfoFilterTapGain,
 } from './synthHelpers';
 
 type R<T> = Readonly<Ref<T>>;
@@ -114,9 +109,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	const { volume, tempo, swing } = s.transport;
 	const { lanes, stepLength, selectedWaveform, noiseMask } = s.pattern;
 
-	const synthAttack = computed(() => s.envelope.attackMs.value / 1000);
 	const synthDecay = computed(() => s.envelope.decayMs.value / 1000);
-	const pitchEnvDecay = computed(() => s.pitchEnv.decayMs.value / 1000);
 
 	const isPlaying = ref(false);
 	const currentStep = ref(-1);
@@ -806,266 +799,58 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		noteStarts.push(startTime);
 		if (noteStarts.length > 8) noteStarts.shift();
 
-		// Velocity routing: what this note's velocity does to decay, cutoff, pitch env and noise
-		const routed = routeVelocity({
-			decay: s.velocity.decay.value,
-			cutoff: s.velocity.cutoff.value,
-			pitchEnv: s.velocity.pitchEnv.value,
-			noise: s.velocity.noise.value,
-		}, opts.vel ?? 1);
-
-		const attackTime = isFinite(synthAttack.value) && synthAttack.value > 0 ? synthAttack.value : 0.01;
-		const decay = (isFinite(decayTime) && decayTime > 0 ? decayTime : 0.1) * routed.decayFactor;
-
-		// ENV sums all unison voices
-		const oscEnvGain = audioCtx.createGain();
-
-		// Shared envelope timings
-		const attackEnd = startTime + attackTime;
-		const naturalEnd = attackEnd + decay;
-		const gateEnd = startTime + Math.max(0.02, (s.envelope.decayMs.value / 1000) * routed.decayFactor);
-		// The recording (sample.ts) plays for its own length, not the Envelope card's Decay
-		const sampleBuf = waveType === SAMPLE_WAVE ? sampleBuffer(s.sample.value) : null;
-		const sampleTimes = sampleBuf ? sampleNoteTimes({
-			start: startTime, bufferSeconds: sampleBuf.duration, freq, length: s.sampleLength.value,
-			attack: s.envelope.enabled.value ? attackTime : 0.002, maxDuration: opts.maxDuration,
-		}) : null;
-		const noteEnd = sampleTimes ? sampleTimes.end
-			: cutNoteEnd(s.envelope.enabled.value ? naturalEnd : gateEnd, startTime, attackTime, opts.maxDuration);
-
-		// A note played by hand (MIDI, a preview) brings the tape's noise with it
-		if (s.tape.enabled.value && !isPlaying.value) holdTapeNoise(startTime, noteEnd);
-
-		//  Per-step blend (masked)
-		const addNoiseForThisPad = opts.addNoise !== false;
-		const blend = (addNoiseForThisPad && s.noise.enabled.value)
-			? routedNoise(Math.min(Math.max(s.noise.amount.value, 0), 1), routed)
-			: 0;
-		const oscBlend = 1 - blend;
-		const noiseBlend = blend;
-
-		// Apply waveform loudness compensation to the TONAL path only
-		const wfComp = waveGain(waveType);
-		const safeOscGain = Math.max(0.0001, velocity * oscBlend * wfComp);
-
-		// Single amplitude envelope for the OSC path
-		if (sampleTimes) {
-			applySampleEnvelope(oscEnvGain.gain, startTime, safeOscGain, sampleTimes);
-		} else if (s.envelope.enabled.value) {
-			oscEnvGain.gain.setValueAtTime(0.0001, startTime);
-			oscEnvGain.gain.exponentialRampToValueAtTime(safeOscGain, attackEnd);
-			oscEnvGain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
-		} else {
-			// Same level as the envelope's peak: waveform balance and noise mix included
-			oscEnvGain.gain.setValueAtTime(safeOscGain, startTime);
-			oscEnvGain.gain.setTargetAtTime(0.0001, noteEnd - 0.01, 0.005);
-		}
-
-		//  UNISON
-		const voices = s.unison.enabled.value
-			? Math.min(s.unison.maxVoices.value, clampUnisonVoices(s.unison.voices.value))
-			: 1;
-
-		const detuneStep = (voices > 1) ? s.unison.detuneCents.value : 0;
-		const spreadPct = (voices > 1) ? s.unison.stereoSpread.value : 0;
-
-		const filterEnabled = s.filter.enabled.value;
-		const filterCutoff = routedCutoff(s.filter.cutoff.value, routed);
-
-		// Pitch envelope: one starting offset for the whole note, so the voices sweep together
-		const pitchStartCents = pitchEnvStartCents({
-			enabled: s.pitchEnv.enabled.value,
-			semitones: routedSemitones(s.pitchEnv.semitones.value, routed),
-			mode: s.pitchEnv.mode.value,
-			decay: pitchEnvDecay.value,
+		// The note itself is built by note.ts, as in the export engine
+		const { end } = playNote(voiceNow(), {
+			freq, amp: velocity, vel: opts.vel, time: startTime, wave: waveType,
+			addNoise: opts.addNoise, maxDuration: opts.maxDuration, decaySeconds: decayTime,
+		}, {
+			ctx: audioCtx,
+			toneOut: driveEnabled.value ? [driveDry, driveShaper] : [driveSum],
+			noiseOut: preMaster,
+			noiseBuffers,
+			sample: waveType === SAMPLE_WAVE ? sampleBuffer(s.sample.value) : null,
+			lfo: lfoGain,
+			release: releaseLfoTap,
 		});
 
-		// The LFO this note listens to: the shared one, or with Retrigger its own, starting now
-		const lfoOn = lfoEnabled.value && lfoDepth.value !== 0;
-		const lfoSrc: AudioNode = lfoOn && lfoRetrigger.value
-			? startNoteLfo(audioCtx, lfoWaveform.value, currentLfoHz(), lfoDepth.value, startTime, noteEnd)
-			: lfoGain;
-		const lfoTapFrom = (tap: AudioNode) => { lfoSrc.connect(tap); return tap; };
+		// A note played by hand (MIDI, a preview) brings the tape's noise with it
+		if (s.tape.enabled.value && !isPlaying.value) holdTapeNoise(startTime, end);
+	}
 
-		// Level (tremolo): the whole note, tone and noise, goes through a gain the LFO moves
-		const tremolo = (lfoOn && lfoTarget.value === 'amp') ? (() => {
-			const tap = audioCtx.createGain();
-			tap.gain.value = LFO_AMP_TAP;
-			lfoTapFrom(tap);
-			const make = () => {
-				const g = audioCtx.createGain();
-				g.gain.value = lfoAmpBase(lfoDepth.value);
-				tap.connect(g.gain);
-				return g;
-			};
-			return { tap, make };
-		})() : null;
-		let firstOsc: PitchedSource | null = null;
-
-		for (let i = 0; i < voices; i++) {
-			// The voice's sound source: the oscillator, plus the pulse network for 'pulse'
-			// (each unison voice starting at its own point of its cycle, unison.ts)
-			const source = createVoiceSource(audioCtx, waveType, s.pulse.width.value, unisonPhase(i, voices, spreadPct),
-				sampleBuf);
-			const osc = source.osc;
-			const voiceFilter = audioCtx.createBiquadFilter();
-			const voiceGain = audioCtx.createGain();
-			const panner = audioCtx.createStereoPanner();
-			const dNorm = unisonPosition(i, voices);
-			const detuneC = dNorm * detuneStep;
-			// Frequency, and detune: the unison detune plus the pitch envelope's sweep
-			applyPitchEnv(osc, freq, startTime, pitchStartCents, pitchEnvDecay.value, detuneC);
-
-			const fmHandle = startFM(audioCtx, osc, freq, startTime, {
-				enabled: s.fm.enabled.value,
-				modFreqHz: s.fm.modFreq.value,
-				index: s.fm.index.value,
-				ratio: s.fm.ratio.value
-			});
-
-			voiceFilter.type = 'lowpass';
-			if (filterEnabled) {
-				voiceFilter.frequency.setValueAtTime(filterCutoff, startTime);
-				voiceFilter.Q.setValueAtTime(s.filter.resonance.value, startTime);
-				// Filter envelope: the cutoff starts Env Amt octaves away and returns within Decay
-				applyFilterEnv(voiceFilter, startTime, s.filter.envAmount.value, s.filter.envDecayMs.value / 1000);
-			} else {
-				voiceFilter.frequency.setValueAtTime(20000, startTime);
-				voiceFilter.Q.setValueAtTime(0.0001, startTime);
-			}
-
-			voiceGain.gain.setValueAtTime(1 / voices, startTime);
-			panner.pan.setValueAtTime((dNorm * spreadPct) / 100, startTime);
-
-			if (!firstOsc) firstOsc = osc;
-			//  LFO routing per target (Level is note-wide, above)
-			if (lfoOn) {
-				if (lfoTarget.value === 'pitch') {
-					const lfoTap = audioCtx.createGain(); lfoTap.gain.value = 1;
-					lfoTapFrom(lfoTap).connect(osc.detune);
-					osc.addEventListener('ended', () => releaseLfoTap(lfoTap));
-
-				} else if (lfoTarget.value === 'filter') {
-					//  keep cutoff in a safe band and smooth the control
-					const f0 = filterEnabled ? filterCutoff : 20000;
-					const lfoTap = audioCtx.createGain();
-					// shrink the depth so the cutoff stays within the safe band
-					lfoTap.gain.value = lfoFilterTapGain(f0, lfoDepth.value, audioCtx.sampleRate);
-
-					const ctrlLP = audioCtx.createBiquadFilter();
-					ctrlLP.type = 'lowpass';
-					ctrlLP.frequency.value = 120;
-
-					lfoTapFrom(lfoTap).connect(ctrlLP).connect(voiceFilter.frequency);
-					osc.addEventListener('ended', () => releaseLfoTap(lfoTap, ctrlLP));
-				} else if (lfoTarget.value === 'pwm' && source.width) {
-					// Pulse-width modulation: moves the pulse's threshold (pulse wave only)
-					const lfoTap = audioCtx.createGain();
-					lfoTap.gain.value = lfoPwmTapGain(s.pulse.width.value, lfoDepth.value);
-					lfoTapFrom(lfoTap).connect(source.width);
-					osc.addEventListener('ended', () => releaseLfoTap(lfoTap));
-				} else if (lfoTarget.value === 'fm' && fmHandle) {
-					// FM: the FM card's Amount swings by ±depth %
-					const lfoTap = audioCtx.createGain();
-					lfoTap.gain.value = lfoFmTapGain(fmHandle.deviationHz);
-					lfoTapFrom(lfoTap).connect(fmHandle.deviation);
-					osc.addEventListener('ended', () => releaseLfoTap(lfoTap));
-				}
-			}
-
-			// voice chain into the shared envelope
-			source.output.connect(voiceFilter).connect(voiceGain).connect(panner).connect(oscEnvGain);
-
-			source.start(startTime);
-			source.stop(noteEnd);
-			if (fmHandle) fmHandle.stop(noteEnd);
-		}
-
-		// The tone's way out: through the tremolo when the LFO moves the level
-		const oscOut: AudioNode = tremolo ? oscEnvGain.connect(tremolo.make()) : oscEnvGain;
-		if (tremolo && firstOsc) {
-			const t = tremolo.tap;
-			firstOsc.addEventListener('ended', () => setTimeout(() => releaseLfoTap(t), 500)); // after the noise
-		}
-		if (driveEnabled.value) {
-			oscOut.connect(driveDry);
-			oscOut.connect(driveShaper);
-		} else {
-			oscOut.connect(driveSum);
-		}
-
-		//  Noise
-		if (noiseBlend > 0) {
-			const t = Math.min(1, Math.max(0, s.noise.color.value));
-			let lower = NOISE_STOPS[0], upper = NOISE_STOPS[NOISE_STOPS.length - 1];
-			for (let i = 0; i < NOISE_STOPS.length - 1; i++) {
-				const a = NOISE_STOPS[i], b = NOISE_STOPS[i + 1];
-				if (t >= a.pos && t <= b.pos) { lower = a; upper = b; break; }
-			}
-			const span = Math.max(1e-6, upper.pos - lower.pos);
-			const wMorph = (t - lower.pos) / span;
-			const wA = 1 - wMorph, wB = wMorph;
-
-			const bufA = noiseBuffers[lower.key];
-			const bufB = noiseBuffers[upper.key];
-
-			if (bufA || bufB) {
-				const mix = audioCtx.createGain();
-				mix.gain.setValueAtTime(1, startTime);
-
-				if (bufA) {
-					const sA = audioCtx.createBufferSource();
-					sA.buffer = bufA; sA.loop = false;
-					const gA = audioCtx.createGain(); gA.gain.setValueAtTime(wA, startTime);
-					sA.connect(gA).connect(mix);
-					sA.start(startTime);
-					sA.stop(noteEnd);
-				}
-				if (bufB) {
-					const sB = audioCtx.createBufferSource();
-					sB.buffer = bufB; sB.loop = false;
-					const gB = audioCtx.createGain(); gB.gain.setValueAtTime(wB, startTime);
-					sB.connect(gB).connect(mix);
-					sB.start(startTime);
-					sB.stop(noteEnd);
-				}
-
-				const noiseEnvGain = audioCtx.createGain();
-				const attackEnd = startTime + attackTime;
-
-				// Interpolate loudness between the two neighboring colors
-				const gainLower = NOISE_LOUDNESS[lower.key];
-				const gainUpper = NOISE_LOUDNESS[upper.key];
-				const colorGain = gainLower * wA + gainUpper * wB;
-
-				const safePeak = Math.max(0.0001, velocity * noiseBlend * colorGain);
-				noiseEnvGain.gain.setValueAtTime(0.0001, startTime);
-				noiseEnvGain.gain.exponentialRampToValueAtTime(safePeak, attackEnd);
-
-				const BURST_MAX_MS = 250;
-				const burstMs = s.noise.burstMs.value;
-				const burstActive = s.noise.attackBurst.value && (burstMs < BURST_MAX_MS);
-				const burstEnd = burstActive
-					? Math.min(noteEnd, attackEnd + Math.max(0.005, burstMs / 1000))
-					: noteEnd;
-
-				noiseEnvGain.gain.exponentialRampToValueAtTime(0.001, burstEnd);
-				noiseEnvGain.gain.setTargetAtTime(0.0001, burstEnd, 0.01);
-
-				const noiseHP = audioCtx.createBiquadFilter();
-				noiseHP.type = 'highpass';
-				noiseHP.frequency.setValueAtTime(40, startTime);    // remove sub-rumble
-
-				const noiseLP = audioCtx.createBiquadFilter();
-				noiseLP.type = 'lowpass';
-				noiseLP.frequency.setValueAtTime(16000, startTime); // tame ultra-high fizz
-
-				// Mono path to the tape pedal and the master
-				const noiseOut: AudioNode = tremolo ? noiseEnvGain.connect(tremolo.make()) : noiseEnvGain;
-				mix.connect(noiseHP).connect(noiseLP).connect(noiseEnvGain);
-				noiseOut.connect(preMaster);
-			}
-		}
+	// The voice's settings now, as the plain object note.ts reads (the export state's `synth`
+	// has the same shape)
+	function voiceNow(): VoiceSettings {
+		return {
+			envelope: { enabled: s.envelope.enabled.value, attackMs: s.envelope.attackMs.value, decayMs: s.envelope.decayMs.value },
+			filter: {
+				enabled: s.filter.enabled.value, cutoff: s.filter.cutoff.value, resonance: s.filter.resonance.value,
+				envAmount: s.filter.envAmount.value, envDecayMs: s.filter.envDecayMs.value,
+			},
+			noise: {
+				enabled: s.noise.enabled.value, color: s.noise.color.value, amount: s.noise.amount.value,
+				attackBurst: s.noise.attackBurst.value, burstMs: s.noise.burstMs.value,
+			},
+			unison: {
+				enabled: s.unison.enabled.value,
+				voices: Math.min(s.unison.maxVoices.value, clampUnisonVoices(s.unison.voices.value)),
+				detuneCents: s.unison.detuneCents.value, stereoSpread: s.unison.stereoSpread.value,
+			},
+			lfo: {
+				enabled: lfoEnabled.value, target: lfoTarget.value, waveform: lfoWaveform.value,
+				depth: lfoDepth.value, rateHz: currentLfoHz(), retrigger: lfoRetrigger.value,
+			},
+			fm: { enabled: s.fm.enabled.value, modFreq: s.fm.modFreq.value, index: s.fm.index.value, ratio: s.fm.ratio.value },
+			pitchEnv: {
+				enabled: s.pitchEnv.enabled.value, semitones: s.pitchEnv.semitones.value,
+				decayMs: s.pitchEnv.decayMs.value, mode: s.pitchEnv.mode.value,
+			},
+			pulse: { width: s.pulse.width.value },
+			sampleLength: s.sampleLength.value,
+			velocity: {
+				decay: s.velocity.decay.value, cutoff: s.velocity.cutoff.value,
+				pitchEnv: s.velocity.pitchEnv.value, noise: s.velocity.noise.value,
+			},
+		};
 	}
 
 	delayDry.connect(preMaster);

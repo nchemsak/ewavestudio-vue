@@ -208,6 +208,7 @@ src/audio/
   synthHelpers.ts        Pure helpers: noise colors and buffers, drive curves, waveform
                          loudness, LFO division → bars, Hz and where it restarts
   ticker.ts              Worker-driven timer for the sequencer clock
+  note.ts                One note of the synth voice, built for both engines (`playNote`)
   pitchEnv.ts, filterEnv.ts, fm.ts  Per-note helpers shared by the live and offline engines
   lfo.ts                 The LFO's targets and Depth ranges, a note's own LFO (Retrigger), Level
                          and FM amounts (see "Audio engine (live)")
@@ -335,6 +336,20 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - `playSynthNote()` builds a new set of nodes for every note (oscillator per unison voice,
   biquad filter, panner, FM modulator, noise buffer sources, envelope gain). Pitch envelope and
   FM come from `src/audio/pitchEnv.ts` and `src/audio/fm.ts`.
+- **One function builds a note, for both engines** (PR 112, the plan's item 3, part 1):
+  `playNote(voice, note, wiring)` in `src/audio/note.ts`. `voice` is the synth's settings as a
+  plain object (`VoiceSettings`: the export state's `synth` has that shape, and the live engine
+  builds one from its refs for each note, `voiceNow()`); `note` is what to play (pitch,
+  loudness, velocity, time, wave, noise, a ratchet's cut); `wiring` is where it goes (the tone's
+  ways out, the noise's, the shared LFO, the noise buffers, the recording, the random numbers,
+  and live only `release`, which disconnects a note's LFO taps once it has ended). It returns
+  when the note ends. `playSynthNote()` (live) and the export's step loop only call it. Until
+  then each engine had its own copy, kept in step by hand; the one difference left between
+  them went: with the envelope switched off (a project can have it), the export's attack was
+  10 ms whatever Attack said, the live engine's Attack, which both use now. Its pure parts,
+  `noteTimes()`, `noiseMorph()` and `noiseBurstEnd()`, are unit-tested. Exports of the six
+  presets, six dice rolls and four projects with everything on, from `main` and from PR 112,
+  matched (see the PR). The effects graph is still built by each engine.
 - Pitch envelope (`pitchEnv.ts`; panel `PitchEnvModule.vue`, the "Pitch" card next to Envelope
   and Filter): each note starts Amount semitones up, down or at a random offset, as an offset in cents on the
   oscillator's `detune` that decays exponentially (`setTargetAtTime`, time constant Decay / 4,
@@ -534,7 +549,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     it was, `classic`: the power tile, the Target switch's five buttons on a line of their own,
     option C of PR 61's mockups; `classic` is unused since).
 - Audio export uses a **separate** offline engine (`scheduleStepSequencer.ts`), fed by the
-  `exportState` computed. It renders only the synth lane. Changes to the live sound (new
+  `exportState` computed. It renders only the synth lane. Its notes come from `note.ts`, as the
+  live engine's (PR 112); its effects graph is its own, so changes to the effects (new
   parameters, changed gain staging) must be mirrored there, or exports will sound different.
   (Until PR 34 it sent the noise layer through drive, delay and reverb, unfiltered; now it
   matches the live engine: 40 Hz–16 kHz, straight to the master.) See "Export audio".
@@ -1810,7 +1826,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   must match the ref's starting value; a browser test compares File → New with a fresh page),
   and to `changeEverything()` in `testState.ts` (the round-trip test names any setting it
   doesn't cover). If it affects sound, also to
-  `liveEngine.ts`, `exportState` and `scheduleStepSequencer.ts` (anything that makes noise or
+  `liveEngine.ts`, `exportState` and `scheduleStepSequencer.ts` (a setting of the note: to
+  `VoiceSettings` and `playNote()` in `note.ts`, `voiceNow()` in `liveEngine.ts` and
+  `exportState`'s `synth`; anything that makes noise or
   takes time must still let the stems add up: see "The tape pedal"). Treat a missing field in an
   older snapshot as "use the default", so existing saved projects still load.
 
@@ -2146,8 +2164,8 @@ into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 Grow into a small groovebox:
 
 3. **Groundwork for the machines** (about three PRs; nothing to see or hear). One function
-    that builds a note, used by the live engine and the export engine (today two engines kept
-    in step by hand); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
+    that builds a note, used by the live engine and the export engine (done in PR 112:
+    `note.ts`); each track's settings moved out of `DrumSequencer.vue`; a gentle limiter
     on the output (dropped after PR 30 for one voice; four machines summed need it).
 4. **The Bass machine**, and the layout for machines: the rail beside the pads (each machine's
     name, mute, level and a tiny row of its steps; there since PR 108 with Rhythm's row only, see
@@ -2470,6 +2488,7 @@ Done:
 | 109 | Patterns A–D (the plan's item 2, part 1): four pattern slots per project under the machine rail's Rhythm row (option A of PR 108's mockups), A B C D and Copy. A slot holds the steps, velocities, pitches and repeats; the sound, the pads' waves and the noise are shared. While playing, a slot waits for the next bar (a pulsing ghost; Shift+click: now; Stop applies it); Copy, then a slot, copies the current pattern into it. A key or scale picked moves every slot. Saved as `patterns` (a list of tracks per slot, so the machines need no second change); older projects open with their pattern in A; one undo step each (`src/lib/patterns/slots.ts`). |
 | 110 | The chain (the plan's item 2, part 2): under the slots, a Chain switch and eight cells, each stepping through — A B C D on a click (Shift+click back). While Chain is on, playing follows the filled cells a bar each, round again, from the first cell on Play; the cell playing is lit; a slot picked by hand while it plays turns it off. Which slot is showing is no longer an edit: picking one, or the chain playing, makes no undo step and no unsaved dot (`comparableProject()`). Saved as `patterns.chain` and `chainOn` (older projects: empty, off). The rail's screens shrink to 32 px so it's still as tall as the transport card at 1024 px. |
 | 111 | The chain in Export audio (the plan's item 2, part 3, which finishes it): while the chain has a filled cell, the dialog's **Play** picks the pattern showing or the **Chain**, once through, a bar per cell (it opens on Chain while Chain is on); the mix, the stems and the MIDI file play each cell's pattern in its bar, a loop folding the tail onto the first bar; files named `..._chain-3bars_...`. The engine and the MIDI file take one pattern per bar (`barPatterns`, `patternForBar()`). |
+| 112 | One function builds a note (the plan's item 3, part 1; nothing to see or hear): `playNote()` in `src/audio/note.ts`, called by the live engine and the export engine, which each had their own copy kept in step by hand. The live engine hands it the settings as a plain object (`voiceNow()`), the export its state's `synth`. With the envelope switched off, the export's attack follows Attack as live (it was 10 ms). Exports from `main` and this PR matched for the presets, dice rolls and everything on. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
