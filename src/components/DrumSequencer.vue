@@ -259,11 +259,16 @@
 						 patterns (src/lib/patterns/), each with a dice. Between the knobs and Play from
 						 1200 px; a row of their own under them narrower. -->
 					<div class="transport-presets">
-						<PresetButtons title="Sound presets" dice-label="Random sound" :presets="PRESETS" :active="activePresetId"
+						<!-- While Bass is chosen they're Bass's (src/lib/machines/bassPresets.ts, PR 117) -->
+						<PresetButtons v-if="!bassChosen" title="Sound presets" dice-label="Random sound" :presets="PRESETS" :active="activePresetId"
 							@choose="choosePreset" @random="rollRandomSound" />
-						<PresetButtons title="Pattern presets" dice-label="Random pattern" :presets="PATTERNS"
+						<PresetButtons v-else title="Bass sounds" dice-label="Random bass sound" :presets="BASS_SOUNDS" :active="activeBassSoundId"
+							@choose="chooseBassSound" @random="rollBassSound" />
+						<PresetButtons v-if="!bassChosen" title="Pattern presets" dice-label="Random pattern" :presets="PATTERNS"
 							:active="activePatternId" @choose="choosePattern"
 							@random="rollRandomPattern" />
+						<PresetButtons v-else title="Bass patterns" dice-label="Random bass pattern" :presets="BASS_PATTERNS"
+							:active="activeBassPatternId" @choose="chooseBassPattern" @random="rollBassPattern" />
 					</div>
 
 					<!-- Play (+ the MIDI fallback) -->
@@ -529,9 +534,9 @@
 
 				<div class="module pattern-tools">
 					<SectionWrap id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
-						<PatternTools :steps="steps" :velocities="velocities" :currentTheme="currentTheme" :nudge="humanizeNudge"
-							@update:steps="steps = $event" @update:velocities="velocities = $event"
-							@octave-shift="onPatternOctaveShift" @move="movePattern" />
+						<PatternTools :steps="editSteps" :velocities="editVelocities" :currentTheme="currentTheme" :nudge="humanizeNudge"
+							@update:steps="editSteps = $event" @update:velocities="editVelocities = $event"
+							@octave-shift="onEditOctaveShift" @move="onEditMove" />
 					</SectionWrap>
 				</div>
 
@@ -542,17 +547,17 @@
 							<template #tools>
 								<MelodyModeSwitch v-model="melodyUi.mode" />
 							</template>
-						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="padFrequencies"
-							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
-							:ratchets="synthInstrument?.ratchets" :repeat-notes="synthInstrument?.repeatNotes" :repeat-chord="repeatChord"
-							:swing="swing" :note-steps="noteSteps" :playView="playView" :tuner="viewSource"
+						<MelodyMaker :key="`melody-${resetNonce}`" ref="melodyRef" :frequencies="editPitches"
+							:steps="editSteps" :min-freq="editMinHz" :max-freq="editMaxHz" :octave-shift="bassChosen ? -2 : 0" :currentTheme="currentTheme"
+							:ratchets="bassChosen ? undefined : synthInstrument?.ratchets" :repeat-notes="bassChosen ? undefined : synthInstrument?.repeatNotes" :repeat-chord="repeatChord"
+							:swing="swing" :note-steps="bassChosen ? bassNoteSteps : noteSteps" :playView="playView" :tuner="viewSource"
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
 							:initial-arp-tones="melodyUi.arpTones" :initial-arp-skip="melodyUi.arpSkip"
 							:initial-mode="melodyUi.mode"
-							@update:frequencies="padFrequencies = $event" @update:steps="steps = $event"
-							@octave-shift="octaveShiftAllSkip($event)"
+							@update:frequencies="editPitches = $event" @update:steps="editSteps = $event"
+							@octave-shift="onEditOctaveShift($event)"
 							:queued-key="queuedKey" @key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
 							@mode-change="(v) => { melodyUi.mode = v }"
 							@key-root-change="(r) => { onKeyRootChange(r); melodyUi.keyRoot = r as any; }"
@@ -767,6 +772,7 @@ import { bassVoice, createBass, createBassLane } from '../lib/machines/bass';
 import { useLfoVisual } from '../composables/useLfoVisual';
 import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
+import { BASS_PATTERNS, BASS_SOUNDS, bassPatternFrom, bassPatternKey, bassSoundKey, bassSoundOf, randomBassPattern, randomBassSound, type BassStep } from '../lib/machines/bassPresets';
 import BassPads from './BassPads.vue';
 import BassSound from './BassSound.vue';
 import ExportDialog from './ExportDialog.vue';
@@ -2881,6 +2887,84 @@ async function choosePattern(id: string, track = true) {
 function rollRandomPattern() {
 	applyPattern(projectState, randomPattern(), { min: MIN_PAD_HZ, max: MAX_PAD_HZ });
 	trackEvent('pattern_random');
+}
+
+// The Bass machine's Sounds and Patterns (PR 117; src/lib/machines/bassPresets.ts): while Bass
+// is chosen the boxes are its. A sound sets Bass's sound from its factory sound up; a pattern
+// Bass's pattern, from the key's root in its octave. One undo step each. A button is lit while
+// Bass's sound or pattern is exactly the preset's (Bass's knobs don't round what they're given).
+const activeBassSoundId = computed<string | null>(() => {
+	const key = bassSoundKey(bassVoice(bass));
+	return BASS_SOUNDS.find((p) => bassSoundKey(bassSoundOf(p.sound)) === key)?.id ?? null;
+});
+const activeBassPatternId = computed<string | null>(() => {
+	const key = bassPatternKey(bassLane);
+	return BASS_PATTERNS.find((p) => bassPatternKey(bassPatternFrom(p.steps, bassHz())) === key)?.id ?? null;
+});
+function applyBassVoice(v: ReturnType<typeof bassSoundOf>) {
+	for (const k of ['wave', 'sub', 'cutoff', 'resonance', 'envAmount', 'decayMs', 'accent', 'slideMs'] as const) (bass[k] as any).value = v[k];
+}
+function chooseBassSound(id: string) {
+	const p = BASS_SOUNDS.find((x) => x.id === id);
+	if (!p) return;
+	applyBassVoice(bassSoundOf(p.sound));
+	trackEvent('bass_sound_select', { sound: id });
+}
+function rollBassSound() {
+	applyBassVoice(randomBassSound());
+	trackEvent('bass_sound_random');
+}
+function applyBassSteps(steps: BassStep[]) {
+	Object.assign(bassLane, bassPatternFrom(steps, bassHz(), stepLength.value));
+}
+function chooseBassPattern(id: string) {
+	const p = BASS_PATTERNS.find((x) => x.id === id);
+	if (!p) return;
+	applyBassSteps(p.steps);
+	trackEvent('bass_pattern_select', { pattern: id });
+}
+function rollBassPattern() {
+	applyBassSteps(randomBassPattern());
+	trackEvent('bass_pattern_random');
+}
+
+// Pattern Tools and the Melody Maker edit the machine shown (PR 117): Rhythm's lane, or Bass's
+// (its own range, 30–250 Hz). The phone's pages still edit Rhythm's (the phone is part 3).
+const editSteps = computed<boolean[]>({
+	get: () => (bassChosen.value ? bassLane.steps : steps.value),
+	set: (v) => { if (bassChosen.value) bassLane.steps = v; else steps.value = v; },
+});
+const editVelocities = computed<number[]>({
+	get: () => (bassChosen.value ? bassLane.velocities : velocities.value),
+	set: (v) => { if (bassChosen.value) bassLane.velocities = v; else velocities.value = v; },
+});
+const editPitches = computed<number[]>({
+	get: () => (bassChosen.value ? bassLane.pitches : padFrequencies.value),
+	set: (v) => { if (bassChosen.value) bassLane.pitches = v; else padFrequencies.value = v; },
+});
+const editMinHz = computed(() => (bassChosen.value ? BASS_MIN_HZ : MIN_PAD_HZ));
+const editMaxHz = computed(() => (bassChosen.value ? BASS_MAX_HZ : MAX_PAD_HZ));
+// How long a Bass note sounds, in steps, for the Melody Maker's screen
+const bassNoteSteps = computed(() => (bass.decayMs.value * 1.6 / 1000) / (60 / tempo.value / 4));
+
+function onEditOctaveShift(delta: number) {
+	if (!bassChosen.value) { onPatternOctaveShift(delta); return; }
+	// Every Bass pad that stays in its range moves (as Rhythm's arrows do theirs)
+	bassLane.pitches = bassLane.pitches.map((hz) => {
+		const to = hz * 2 ** delta;
+		return to >= BASS_MIN_HZ && to <= BASS_MAX_HZ ? to : hz;
+	});
+}
+function onEditMove(kind: MoveKind) {
+	if (!bassChosen.value) { movePattern(kind); return; }
+	const n = bassLane.steps.length;
+	for (const f of ['steps', 'velocities', 'pitches', 'accents'] as const) (bassLane as any)[f] = moveList(bassLane[f] as any[], kind);
+	// A slide or tie joins a step to the next; reversed, it joins the step before (which comes after)
+	for (const f of ['slides', 'ties'] as const) {
+		const list = bassLane[f];
+		bassLane[f] = kind === 'reverse' ? list.map((_, i) => list[(2 * n - 2 - i) % n]) : moveList(list, kind)!;
+	}
+	trackEvent('pattern_move', { kind, machine: 'bass' });
 }
 
 // The very first visit in this browser (useProjectSync) opens a starter beat, so the first

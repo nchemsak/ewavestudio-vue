@@ -1155,9 +1155,35 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (`v-show`) so MIDI learn sees its seven knobs (`bass.*`; 43 learnable knobs with the rail's
   `bass.level`). The screen takes no drag yet.
 - **The mixer** (PR 116, item 4's part 2a; option L's meter of the mockups): see "The rail's
-  mixer". **Not yet** (2b and 3): the presets boxes, Pattern Tools, the Melody Maker's Generate
-  and the hit behind the Envelope card are still Rhythm's while Bass is chosen; the phone
-  (option P).
+  mixer".
+- **Bass's Sounds and Patterns** (PR 117, part 2b; `src/lib/machines/bassPresets.ts`,
+  unit-tested): while Bass is chosen the transport's boxes are **Bass sounds** (Sub, Acid,
+  Rubber, Pluck, Growl, Hollow, and a dice "Random bass sound") and **Bass patterns** (Root,
+  Octaves, Offbeat, Gallop, Walk, Squelch, and "Random bass pattern"). A sound sets Bass's
+  sound from its factory sound up (`bassSoundOf()`); a pattern Bass's pattern only, its notes
+  semitones from the key's root in Bass's octave folded into 30–250 Hz (`bassPatternFrom()`;
+  only the root, fifth and octaves, so in every scale), off steps on the root. One undo step
+  each. A button is lit while Bass's sound or pattern is exactly the preset's
+  (`bassSoundKey()`, `bassPatternKey()`, compared live: Bass's knobs don't round what they're
+  given, so no noting after the panels follow as Rhythm's presets need). The dice: a sound
+  (saw 60 %, cutoff 90–900 Hz and decay 90–800 ms on a log scale, so never silent; values on
+  the knobs' steps) and a bassline (a one-beat idea repeated, sometimes two alternating, step
+  1 the accented root, mostly roots with some octaves and fifths, a fifth of the hits
+  accented, slides into a note now and then and the odd tie, never more than four empty steps
+  in a row). Analytics `bass_sound_select`, `bass_sound_random`, `bass_pattern_select`,
+  `bass_pattern_random`.
+- **Pattern Tools and the Melody Maker edit the machine shown** (PR 117): `editSteps`,
+  `editVelocities`, `editPitches` in `DrumSequencer.vue` are Rhythm's lane's or Bass's, as are
+  the Melody Maker's range (`editMinHz`, `editMaxHz`: 30–250 Hz for Bass) and its notes' length
+  on the screen (`bassNoteSteps`: Decay × 1.6). Step Fills, Humanize, Generate (melody or
+  arpeggio) and the screen work on Bass's pads as on Rhythm's. Range's octaves move two down for
+  Bass (MelodyMaker's `octaveShift`, `poolLo` / `poolHi`): Narrow is about 33–123 Hz, so a
+  melody sits low, not at the top of Bass's range. Move: ↓ Oct / Oct ↑ move every Bass pad that
+  stays in its range (not the key's octave, as Rhythm's do); Shift moves each step's lists
+  together; Reverse keeps a slide or tie joining the same two notes (it now joins the step
+  before, which comes after). The phone's pages still edit Rhythm's (part 3).
+- **Not yet** (part 3): the phone (option P). The hit behind the Envelope card stays Rhythm's
+  (Bass's screen draws its own note).
 
 ### The rail's mixer
 - PR 116 (the plan's item 4, part 2a). Each machine's row in the rail is a channel strip: its
@@ -2328,10 +2354,7 @@ into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 Grow into a small groovebox:
 
 4. **The Bass machine**, and the layout for machines (mockups done: K on the desktop, P on the
-    phone; part 1 was PR 115, see "The Bass machine"). Left:
-    - **Part 2b: the rest of the desktop** (2a, the mixer, was PR 116). The Sounds and Patterns
-      boxes become Bass's while Bass is chosen (six bass sounds, six bass patterns, their dice);
-      Pattern Tools and the Melody Maker's Generate on the chosen machine.
+    phone; part 1 was PR 115, 2a PR 116, 2b PR 117, see "The Bass machine"). Left:
     - **Part 3: the phone** (option P): RHY | BASS keys in the top bar (the tabs shortened to
       their first letters at 568 px), Bass's pads with ACC, ⤳ and ═ marks, its hold sheet
       (notes, velocity, Accent, Slide, Tie), its four macros (Cutoff, Reso, Env, Decay), and its
@@ -2655,6 +2678,7 @@ Done:
 | 114 | A gentle limiter on the output (the plan's item 3, part 3, which finishes the groundwork for the machines): a brickwall at −1 dBFS after the Volume knob, with a 1.5 ms look-ahead and a 100 ms release (`src/audio/limiter.ts`); an AudioWorklet live, the same code on the export's mix, whose gains go onto every stem so they still add up. Below the ceiling it does nothing, so today's sounds play and export bit for bit as before. |
 | 115 | The Bass machine, part 1 (the plan's item 4; option K of four rounds of mockups, the phone's P for part 3): a second machine, its row in the rail (a click shows it on the pads and in Sound; its LED mutes it; its level). One note at a time, saw or square with a sub, a resonant low-pass with its envelope, per step Accent, Slide (glides into the next note, which doesn't start again) and Tie (holds through the next step), in both engines (`src/audio/bass.ts`); its pads with Accent, Slide and Tie rows (`BassPads.vue`), its Sound section (Saw \| Square and Sub, a big screen of a note, Filter and Note knobs beside the pedals, `BassSound.vue`); saved with the project and in each pattern slot (older projects: empty), following the key, MIDI-learnable, played by MIDI keys while chosen. |
 | 116 | The Bass machine, part 2a: the rail's mixer. Each machine's row has an 8-LED meter (lit while it plays) and **Pedals**, how much of it goes through the overdrive, delay and reverb (the rest skips them; full, as before, by default), on machine buses in both engines; the Export dialog's **Machine stems** (`_rhythm.wav`, `_bass.wav`, adding up to the mix); Bass in the MIDI file on channel 2 (held notes, slides, Accent at 127). Saved (`mixer.rhythm.pedals`, `bass.pedals`), MIDI-learnable (45 knobs). |
+| 117 | The Bass machine, part 2b: while Bass is shown, the transport's boxes are **Bass sounds** (Sub, Acid, Rubber, Pluck, Growl, Hollow) and **Bass patterns** (Root, Octaves, Offbeat, Gallop, Walk, Squelch, from the key's root), each with a dice and lit while it matches (`src/lib/machines/bassPresets.ts`); Pattern Tools (Step Fills, Humanize, Move) and the Melody Maker (Generate, its screen) edit Bass's pads, within its range, a melody two octaves down. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

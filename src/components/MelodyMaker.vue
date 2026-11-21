@@ -191,6 +191,7 @@ const props = defineProps<{
     steps?: boolean[];
     minFreq?: number;
     maxFreq?: number;
+    octaveShift?: number; // Range's octaves moved by this many (Bass's pads: −2)
     currentTheme?: string;
 
     initialKeyRoot?: 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'Ab' | 'A' | 'Bb' | 'B';
@@ -306,6 +307,9 @@ const PRESETS: Record<PresetKey, { minOct: number; maxOct: number; label: string
 const rangePreset = ref<PresetKey>(props.initialRangePreset ?? 'mid');
 const minOctave = ref(3);
 const maxOctave = ref(6);
+// The octaves a melody may use: Range's, moved by `octaveShift` (Bass: two octaves down, PR 117)
+const poolLo = computed(() => minOctave.value + (props.octaveShift ?? 0));
+const poolHi = computed(() => maxOctave.value + (props.octaveShift ?? 0));
 
 watch(
     rangePreset,
@@ -442,7 +446,7 @@ const roll = computed(() => {
     let ghost: RollNote[] = [];
     if (mode.value === 'random') {
         const pool = keyScale.value === 'none' ? []
-            : buildCandidateMidiPool(keyRoot.value, keyScale.value, minOctave.value, maxOctave.value, lo, hi);
+            : buildCandidateMidiPool(keyRoot.value, keyScale.value, poolLo.value, poolHi.value, lo, hi);
         if (pool.length) {
             const top = y(midiToFreq(Math.max(...pool))), bottom = y(midiToFreq(Math.min(...pool)));
             band = { y: top - 4, h: bottom - top + 8 };
@@ -502,8 +506,8 @@ const poolSummary = computed(() => {
     const pool = buildCandidateMidiPool(
         keyRoot.value,
         keyScale.value,
-        minOctave.value,
-        maxOctave.value,
+        poolLo.value,
+        poolHi.value,
         fMin,
         fMax
     );
@@ -687,8 +691,8 @@ function smartGenerate(): void {
     const pool = buildCandidateMidiPool(
         keyRoot.value,
         keyScale.value,
-        minOctave.value,
-        maxOctave.value,
+        poolLo.value,
+        poolHi.value,
         freqMin,
         freqMax
     ).sort((a, b) => a - b);
