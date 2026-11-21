@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createHistory } from './history';
+import { createHistory, POOLED_LENGTH } from './history';
 
 type S = { tempo: number; steps: boolean[] };
 const s = (tempo: number, steps = [false, false]): S => ({ tempo, steps });
@@ -101,5 +101,26 @@ describe('undo history', () => {
 		let e: S | null;
 		while ((e = h.undo())) back.push(e.tempo);
 		expect(back).toEqual([9, 8, 7]);
+	});
+
+	it('keeps a long string (a recording) once, and gives it back whole', () => {
+		type R = { tempo: number; sound: { data: string } };
+		const rec = 'AB'.repeat(POOLED_LENGTH); // longer than POOLED_LENGTH
+		const h = createHistory<R>();
+		h.record({ tempo: 1, sound: { data: rec } });
+		for (let t = 2; t <= 50; t++) h.record({ tempo: t, sound: { data: rec } });
+		const back = h.undo()!;
+		expect(back.tempo).toBe(49);
+		expect(back.sound.data).toBe(rec);
+		expect(h.isCurrent({ tempo: 49, sound: { data: rec } })).toBe(true);
+		// Another recording is another string; equal states still compare equal
+		const other = 'CD'.repeat(POOLED_LENGTH);
+		expect(h.record({ tempo: 49, sound: { data: other } })).toBe(true);
+		expect(h.record({ tempo: 49, sound: { data: other } })).toBe(false);
+		expect(h.undo()!.sound.data).toBe(rec);
+		expect(h.redo()!.sound.data).toBe(other);
+		// A short string isn't pooled, and survives as it was
+		h.reset({ tempo: 3, sound: { data: 'short' } });
+		expect(h.current()).toEqual({ tempo: 3, sound: { data: 'short' } });
 	});
 });

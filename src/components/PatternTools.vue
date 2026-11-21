@@ -38,8 +38,10 @@
 			<section class="pt-section pt-section-move">
 				<div class="pt-section-title">Move</div>
 				<div class="pt-btn-group pt-btn-move" role="group" aria-label="Move">
-					<button class="pt-btn" aria-label="Octave down" title="Every pad an octave down" @click="shiftOctave(-1)">↓ Oct</button>
-					<button class="pt-btn" aria-label="Octave up" title="Every pad an octave up" @click="shiftOctave(+1)">Oct ↑</button>
+					<button class="pt-btn" aria-label="Octave down" :disabled="props.noOctave"
+						:title="props.noOctave ? 'A drum hit has no note to move' : 'Every pad an octave down'" @click="shiftOctave(-1)">↓ Oct</button>
+					<button class="pt-btn" aria-label="Octave up" :disabled="props.noOctave"
+						:title="props.noOctave ? 'A drum hit has no note to move' : 'Every pad an octave up'" @click="shiftOctave(+1)">Oct ↑</button>
 					<button class="pt-btn" aria-label="Shift earlier"
 						title="Shift earlier: every step one to the left; step 1 comes round to the end"
 						@click="emit('move', 'left')">◂ Shift</button>
@@ -63,6 +65,7 @@ const props = defineProps<{
 	velocities?: number[];
 	currentTheme?: string;
 	nudge?: number; // a new value makes Humanize glow for a moment
+	noOctave?: boolean; // Drums: the octave arrows greyed out (a drum hit has no note)
 }>();
 
 const nudged = ref(false);
@@ -179,6 +182,11 @@ const shapeReset = () => applyShape('reset');
 
 .pt-section-title {
 	text-align: center;
+}
+
+.pt-btn:disabled {
+	opacity: .4;
+	cursor: not-allowed;
 }
 
 .pt-btn-group {

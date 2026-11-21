@@ -7,7 +7,7 @@
 			<template #sound>
 				<!-- Bass shown (PR 118): its Sound section, compact, with a Mix group (Level, Pedals, the meter) -->
 				<div v-if="bassChosen" class="pl-bass-sound">
-					<BassSound compact :sound="bass" :noteHz="bassScreenHz" :noteName="nearestNote(bassScreenHz)">
+					<BassSound compact :sound="bass" :noteHz="bassScreenHz" :noteName="nearestNote(bassScreenHz)" @preview="auditionBass(bassScreenHz)">
 						<template #mix>
 							<div class="bs-kgroup pl-mix" role="group" aria-label="Bass mix">
 								<span class="bs-kcap">Mix <LevelMeter :read="() => machineLevel('bass')" :active="viewSource.active" label="Bass level meter" /></span>
@@ -215,7 +215,7 @@
 			<MachineRail v-if="synthInstrument" class="ds-rail" :analyser="analyser" :sampleRate="audioCtx.sampleRate"
 				:active="viewSource.active" :machines="railMachines" :chosen="machine"
 				:currentStep="currentStep" :playing="isPlaying" @toggle-mute="onRailMute" @update:level="onRailLevel"
-				@update:pedals="(id: string, v: number) => { if (id === 'bass') bassLane.pedals = v; else rhythmPedals = v; }" :meter="machineLevel"
+				@update:pedals="(id: string, v: number) => { if (id === 'drums') drums.pedals = v; else if (id === 'bass') bassLane.pedals = v; else rhythmPedals = v; }" :meter="machineLevel"
 				@choose="(id: string) => { machine = id as any; }"
 				:slots="slotView" :currentSlot="currentSlot" :queuedSlot="queuedSlot" v-model:copyArmed="copyArmed"
 				@choose-slot="chooseSlot"
@@ -274,7 +274,8 @@
 					<!-- Sounds and Patterns, side by side: ready-made sounds (src/lib/presets/) and
 						 patterns (src/lib/patterns/), each with a dice. Between the knobs and Play from
 						 1200 px; a row of their own under them narrower. -->
-					<div class="transport-presets">
+					<!-- Drums' kits and patterns come in the machine's next part; meanwhile the boxes keep their place -->
+					<div class="transport-presets" :class="{ 'is-hidden': drumsChosen }" :inert="drumsChosen || undefined">
 						<!-- While Bass is chosen they're Bass's (src/lib/machines/bassPresets.ts, PR 117) -->
 						<PresetButtons v-if="!bassChosen" title="Sound presets" dice-label="Random sound" :presets="PRESETS" :active="activePresetId"
 							@choose="choosePreset" @random="rollRandomSound" />
@@ -310,10 +311,10 @@
 			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
 				<div class="pt-subheader step-sequencer-subheader">
 					<div class="channel-caption d-flex align-items-center gap-2">
-						<div class="mute-dot" :class="{ muted: bassChosen ? bassLane.muted : synthInstrument.muted }"
+						<div class="mute-dot" :class="{ muted: drumsChosen ? drums.muted : bassChosen ? bassLane.muted : synthInstrument.muted }"
 							@click="onRailMute(machine)" role="button"
-							:title="(bassChosen ? bassLane.muted : synthInstrument.muted) ? 'Muted' : 'Playing'"></div>
-						<h2 class="pt-title">Step Sequencer<span class="ds-which"> · {{ bassChosen ? 'Bass' : 'Rhythm' }}</span></h2>
+							:title="(drumsChosen ? drums.muted : bassChosen ? bassLane.muted : synthInstrument.muted) ? 'Muted' : 'Playing'"></div>
+						<h2 class="pt-title">Step Sequencer<span class="ds-which"> · {{ machineName }}</span></h2>
 
 						<!-- No Vol knob while there's one lane (PR 92): the Volume knob is enough. The lane's
 							 volume (channelVolume) is still saved and played; it comes back as each
@@ -322,7 +323,7 @@
 						<!-- The Repeats brush: pick ×2–×4, then click or drag across pads to give them that
 						     many quick hits (a pad that has them already goes back to one). It stays
 						     picked until Esc, its lit button, or a click outside the pads' frame. -->
-						<div v-if="!bassChosen" class="repeat-brush" role="group" aria-label="Repeats brush"
+						<div v-if="machine === 'rhythm'" class="repeat-brush" role="group" aria-label="Repeats brush"
 							title="Pick a number, then click or drag across pads to give them that many quick hits. Click a pad again for one hit. Esc, the lit button or a click elsewhere puts the brush down.">
 							<span class="repeat-brush__label" aria-hidden="true">Repeats</span>
 							<button v-for="n in BRUSH_COUNTS" :key="n" type="button" class="vel-btn hw-cap hw-cap-sm hw-led-left"
@@ -342,10 +343,10 @@
 										class="kn"></span></button>
 							</div>
 							<div class="pt-rule" aria-hidden="true"></div>
-							<div v-if="!bassChosen" class="mm-opt" role="menuitem" @click.stop="clearRepeats()">
+							<div v-if="machine === 'rhythm'" class="mm-opt" role="menuitem" @click.stop="clearRepeats()">
 								<span>Clear Repeats</span>
 							</div>
-							<div class="mm-reset" role="menuitem" @click.stop="bassChosen ? resetBassPads() : resetSynthPadsToDefaults()">
+							<div class="mm-reset" role="menuitem" @click.stop="drumsChosen ? resetDrumPads() : bassChosen ? resetBassPads() : resetSynthPadsToDefaults()">
 								Reset Pads
 							</div>
 						</div>
@@ -359,7 +360,10 @@
 					<div v-if="repeatBrush" class="brush-note" role="status">
 						Painting ×{{ repeatBrush }} repeats<span class="brush-note__how"> · Esc or click elsewhere to finish</span>
 					</div>
-					<BassPads v-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep"
+					<DrumPads v-if="drumsChosen" :rows="drums.rows" :slots="drums.slots" :names="drumNames" :sources="drumSources"
+						:hues="drumHues" :picked="drumPick" :current-step="currentStep" @update:rows="setDrumRows"
+						@pick="(k: number) => { drumPick = k; }" @toggle-mute="toggleDrumSlotMute" />
+					<BassPads v-else-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep"
 						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
 						@open-pad-settings="({ index, anchorRect }) => openBassPad(index, anchorRect)" />
 					<SynthStepGrid v-else :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
@@ -387,10 +391,25 @@
 			</div>
 
 			<!-- Sound: three rows, each filled edge to edge -->
-			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title" :data-bass="bassChosen ? '' : undefined">
-				<h2 id="sound-title" class="ds-section-title">Sound<span class="ds-which"> · {{ bassChosen ? 'Bass' : 'Rhythm' }}</span></h2>
+			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title" :data-bass="bassChosen ? '' : undefined" :data-drums="drumsChosen ? '' : undefined">
+				<div class="ds-sound-head">
+					<h2 id="sound-title" class="ds-section-title">Sound<span class="ds-which"> · {{ machineName }}</span></h2>
+					<!-- Keep as drum (the plan's item 5): one hit of Rhythm's sound into a Drums slot -->
+					<div v-if="machine === 'rhythm'" class="keep-drum" role="group" aria-label="Keep as drum">
+						<span class="keep-drum__cap" aria-hidden="true">{{ keptNote || 'Keep as drum' }}</span>
+						<button v-for="(n, k) in drumNames" :key="k" type="button" class="hw-cap hw-cap-sm keep-drum__slot"
+							:class="{ busy: keepingDrum === k }" :style="{ '--h': drumHues[k] }" :disabled="keepingDrum != null"
+							:aria-label="`Keep as drum in slot ${k + 1}`"
+							:title="`Keep a hit of this sound as a drum, in Drums slot ${k + 1} (now ${n})`" @click="keepAsDrum(k)">{{ k + 1 }}</button>
+						<span class="visually-hidden" role="status">{{ keptNote }}</span>
+					</div>
+				</div>
+				<!-- The Drums machine's: a card per slot, and the Sounds shelf beside the pedals. Kept
+					 mounted (v-show) so MIDI learn sees its knobs -->
+				<DrumSound v-show="drumsChosen" :drums="drums" :kit="drumKit" :picked="drumPick" :playing="isPlaying"
+					@preview="previewDrum" @preview-sound="previewDrumSound" />
 				<!-- The Bass machine's: wave tiles and Sub, its screen, its knobs; the pedals stay (the Effects card) -->
-				<BassSound v-show="bassChosen" :sound="bass" :noteHz="bassScreenHz" :noteName="nearestNote(bassScreenHz)" />
+				<BassSound v-show="bassChosen" :sound="bass" :noteHz="bassScreenHz" :noteName="nearestNote(bassScreenHz)" @preview="auditionBass(bassScreenHz)" />
 
 				<!-- Row 1: the waves, beside FM and Unison -->
 				<div class="sound-row sound-row-1">
@@ -549,16 +568,20 @@
 				<h2 id="compose-title" class="ds-section-title">Compose</h2>
 
 				<div class="module pattern-tools">
-					<SectionWrap id="pattern-tools" title="Pattern Tools" v-model="collapsibleState['pattern-tools']">
+					<!-- On Drums, Step Fills and Humanize work on the picked row, named in the title -->
+					<SectionWrap id="pattern-tools" :title="drumsChosen ? `Pattern Tools · ${drumNames[drumPick]}` : 'Pattern Tools'" v-model="collapsibleState['pattern-tools']">
 						<PatternTools :steps="editSteps" :velocities="editVelocities" :currentTheme="currentTheme" :nudge="humanizeNudge"
+							:noOctave="drumsChosen"
 							@update:steps="editSteps = $event" @update:velocities="editVelocities = $event"
 							@octave-shift="onEditOctaveShift" @move="onEditMove" />
 					</SectionWrap>
 				</div>
 
-				<div class="module melody">
+				<!-- Drums: the Melody Maker has no notes to work on, so it's dimmed, with a note -->
+				<div class="module melody" :class="{ 'is-off': drumsChosen }">
+					<p v-if="drumsChosen" class="melody-off-note">The Melody Maker works on Rhythm and Bass: pick one in the rail.</p>
 					<!-- Its options are on the card since PR 68 (no ⋯ menu) -->
-					<SectionWrap id="melody" title="Melody Maker" v-model="collapsibleState['melody']">
+					<SectionWrap id="melody" title="Melody Maker" v-model="collapsibleState['melody']" :inert="drumsChosen || undefined">
 							<!-- What Generate makes; Generate is the card's last line (PR 82) -->
 							<template #tools>
 								<MelodyModeSwitch v-model="melodyUi.mode" />
@@ -791,6 +814,12 @@ import PresetButtons from './PresetButtons.vue';
 import { BASS_PATTERNS, BASS_SOUNDS, bassPatternFrom, bassPatternKey, bassSoundKey, bassSoundOf, randomBassPattern, randomBassSound, type BassStep } from '../lib/machines/bassPresets';
 import BassPads from './BassPads.vue';
 import BassSound from './BassSound.vue';
+import DrumPads from './DrumPads.vue';
+import DrumSound from './DrumSound.vue';
+import { createDrums, hitToSound, keepSound, slotData, slotSound, soundName, type Drums } from '../lib/machines/drums';
+import { soundHue } from '../lib/machines/drumColours';
+import { loadDrumKit } from '../audio/drumKit';
+import type { DrumRow, KitId } from '../audio/drums';
 import LevelMeter from './LevelMeter.vue';
 import ExportDialog from './ExportDialog.vue';
 import ShareNotice from './ShareNotice.vue';
@@ -806,7 +835,7 @@ import { randomPreset } from '../lib/presets/random';
 import { PATTERNS } from '../lib/patterns/library';
 import { applyPattern, patternKey } from '../lib/patterns/patterns';
 import { moveList, MOVED_LANE_FIELDS, type MoveKind } from '../lib/patterns/move';
-import { bassOf, emptyBass, loadBassIntoLane } from '../lib/patterns/slots';
+import { bassOf, drumRowsOf, emptyBass, loadBassIntoLane } from '../lib/patterns/slots';
 import { bassDefaultHz } from '../lib/project/snapshot';
 import { BASS_MAX_HZ, BASS_MIN_HZ } from '../audio/bass';
 import { chainCells, cycleCell, emptyChain, emptyRhythm, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, rhythmOf, slotFromLane, slotHasSteps, SLOT_NAMES, type Chain, type Slots } from '../lib/patterns/slots';
@@ -891,8 +920,10 @@ const {
 // level). `machine` is the one the pads and the Sound section show (not saved).
 const bass = createBass();
 const bassLane = createBassLane(STEP_COUNT, 55);
-const machine = ref<'rhythm' | 'bass'>('rhythm');
+const machine = ref<'rhythm' | 'bass' | 'drums'>('rhythm');
 const bassChosen = computed(() => machine.value === 'bass');
+const drumsChosen = computed(() => machine.value === 'drums');
+const machineName = computed(() => ({ rhythm: 'Rhythm', bass: 'Bass', drums: 'Drums' })[machine.value]);
 // The rail's mixer (PR 116): how much of Rhythm goes through the pedals (Bass's is bassLane.pedals)
 const rhythmPedals = ref(1);
 
@@ -902,10 +933,14 @@ const railMachines = computed(() => {
 	return [
 		...(r ? [{ id: 'rhythm', name: 'Rhythm', steps: r.steps, pitches: r.pitches ?? [], velocities: r.velocities, muted: r.muted, level: r.channelVolume, pedals: rhythmPedals.value }] : []),
 		{ id: 'bass', name: 'Bass', steps: bassLane.steps, pitches: bassLane.pitches, velocities: bassLane.velocities, hueScale: 4, muted: bassLane.muted, level: bassLane.level, pedals: bassLane.pedals },
+		// Drums: its four rows stacked in each step, each in its sound's colour
+		{ id: 'drums', name: 'Drums', steps: [], pitches: [], velocities: [], muted: drums.muted, level: drums.level, pedals: drums.pedals,
+			stack: Array.from({ length: stepLength.value }, (_, i) => drums.rows.map((r, k) => (r.steps[i] && !drums.slots[k]?.muted ? drumHues.value[k] : null))) },
 	];
 });
 function onRailMute(id: string) {
-	if (id === 'bass') bassLane.muted = !bassLane.muted;
+	if (id === 'drums') drums.muted = !drums.muted;
+	else if (id === 'bass') bassLane.muted = !bassLane.muted;
 	else if (synthInstrument.value) toggleMute(synthInstrument.value.name);
 }
 // A Bass pad's ⋮: its note (PadSettingsPopover with no wave, noise or repeats)
@@ -947,10 +982,90 @@ function resetBassPads() {
 	});
 }
 function onRailLevel(id: string, v: number) {
-	if (id === 'bass') bassLane.level = v;
+	if (id === 'drums') drums.level = v;
+	else if (id === 'bass') bassLane.level = v;
 	else if (synthInstrument.value) synthInstrument.value.channelVolume = v;
 }
 // BASS MACHINE END
+
+// DRUMS MACHINE START
+// The Drums machine (the plan's item 5; src/lib/machines/drums.ts, src/audio/drums.ts): four
+// slots, each playing a recording (the frozen kit's, or a sound kept from Rhythm), and its rows
+// (the current slot's Drums track as it's being edited). The picked row (not saved) is what
+// Pattern Tools' Step Fills and Humanize work on.
+const drums: Drums = createDrums(STEP_COUNT);
+const drumPick = ref(0);
+// The kit, once loaded (drumKit.ts; a chunk of its own): the pictures and the export read it
+const drumKit = shallowRef<Record<KitId, any> | null>(null);
+loadDrumKit().then((k) => { drumKit.value = k; }).catch(() => { });
+const drumHues = computed(() => drums.slots.map((_, k) => soundHue(slotSound(drums, k))));
+const drumNames = computed(() => drums.slots.map((_, k) => soundName(slotSound(drums, k), drums.kept)));
+const drumSources = computed(() => drums.slots.map((_, k) => (slotSound(drums, k).startsWith('kit:') ? 'Kit' : 'Kept')));
+function setDrumRows(rows: DrumRow[]) { drums.rows = rows; }
+function toggleDrumSlotMute(k: number) {
+	drums.slots = drums.slots.map((s, j) => (j === k ? { ...s, muted: !s.muted } : s));
+}
+// A click on a slot's picture: its hit (only while stopped: playing, the pattern plays it)
+function previewDrum(k: number) {
+	drumPick.value = k;
+	if (isPlaying.value) return;
+	playDrumNow(k);
+}
+// A click on one of the shelf's sounds: it, as a slot plays it
+function previewDrumSound(ref: string) {
+	if (isPlaying.value) return;
+	if (ref.startsWith('kit:')) playDrumSound(drumKit.value?.[ref.slice(4) as KitId] ?? null);
+	else playDrumSound(drums.kept.find((k) => k.id === ref) ?? null);
+}
+// The ⋯ menu's Reset Pads, for Drums: every row's steps off, full velocity
+function resetDrumPads() {
+	stepsAdvanced.open = false;
+	drums.rows = drumRowsOf(null, stepLength.value);
+}
+// Keep as drum (Rhythm's Sound): one hit of Rhythm's sound as it is now (the hit behind the
+// Envelope card: renderHit, but dry), kept on the shelf and put in slot `k`. One undo step.
+const keepingDrum = ref<number | null>(null);
+const keptNote = ref('');
+let keptNoteTimer: ReturnType<typeof setTimeout> | null = null;
+async function keepAsDrum(k: number) {
+	if (keepingDrum.value != null || !synthInstrument.value) return;
+	keepingDrum.value = k;
+	try {
+		// Dry, as the kit is: the Drums machine has its own way into the delay, reverb and lo-fi
+		// pedal (the drive stays: it's part of the hit's tone)
+		const st = exportState.value;
+		const state = { ...st, fx: { ...st.fx, delay: { ...st.fx.delay, enabled: false }, reverb: { ...st.fx.reverb, enabled: false },
+			...(st.fx.tape ? { tape: { ...st.fx.tape, enabled: false } } : {}) } };
+		const hz = hitHz.value, wave = selectedWaveform.value;
+		const sound = hitToSound(await renderHit(state, hz, wave, hitSeconds(state, wave, hz)), state.sampleRate);
+		if (!sound) { showKeptNote('That sound is silent: nothing kept'); return; }
+		const kept = keepSound(drums, k, sound);
+		showKeptNote(`Kept as ${kept.name}, in Drums slot ${k + 1}`);
+		trackEvent('drums_keep', { slot: k + 1 });
+	} catch (err) {
+		console.warn('The sound could not be kept:', err);
+	} finally {
+		keepingDrum.value = null;
+	}
+}
+function showKeptNote(text: string) {
+	keptNote.value = text;
+	if (keptNoteTimer) clearTimeout(keptNoteTimer);
+	keptNoteTimer = setTimeout(() => { keptNote.value = ''; }, 3500);
+}
+// What the export plays: each slot's recording and settings, the rows (or one set per bar)
+function drumsExport(barRows?: DrumRow[][]) {
+	if (drums.muted) return undefined;
+	const rowsPlay = (rows: DrumRow[]) => rows.some((r, k) => !drums.slots[k]?.muted && r.steps.some(Boolean));
+	if (!(barRows ?? [drums.rows]).some(rowsPlay)) return undefined;
+	return {
+		slots: drums.slots.map((sl, k) => ({ data: slotData(drums, k, drumKit.value), tune: sl.tune, decay: sl.decay, level: sl.level, muted: sl.muted })),
+		level: drums.level, pedals: drums.pedals,
+		rows: (barRows?.[0] ?? drums.rows).map((r) => ({ steps: [...r.steps], velocities: [...r.velocities] })),
+		barRows,
+	};
+}
+// DRUMS MACHINE END
 
 const showVelocity = ref(false);
 const showPitch = ref(false);
@@ -2166,6 +2281,8 @@ const exportState = computed<StepSequencerState>(() => {
 			pedals: bassLane.pedals,
 			pattern: bassPatternOf(bassLane),
 		},
+		// The Drums machine, unless it's muted or has nothing to play
+		drums: drumsExport(),
 		// The rail's mixer: how much of Rhythm goes through the pedals
 		rhythmPedals: rhythmPedals.value,
 
@@ -2253,6 +2370,7 @@ const projectState: ProjectState = {
 	},
 	instruments,
 	bass: { sound: bass, lane: bassLane },
+	drums,
 	mixer: { rhythmPedals },
 	patterns: { slots: patternSlots, current: currentSlot, chain, chainOn },
 	melody: melodyUi,
@@ -2276,6 +2394,8 @@ const {
 	currentStep,
 	playSynthNote,
 	playBassNow,
+	playDrumNow,
+	playDrumSound,
 	machineLevel,
 	startLfoIfNeeded,
 	togglePlay,
@@ -2289,6 +2409,7 @@ const {
 	pattern: { lanes: instruments, stepLength, selectedWaveform, noiseMask, repeatChord },
 	rhythm,
 	bass: projectState.bass,
+	drums,
 	rhythmPedals,
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
@@ -2627,7 +2748,10 @@ const exportChain = computed(() => {
 			ratchets: [...t.ratchets], repeatNotes: [...t.repeatNotes], repeatChord: repeatChord.value,
 		};
 	});
-	return { patterns, bassPatterns, letters: cells.map((c) => SLOT_NAMES[c]) };
+	const drumRows = cells.map((slotIdx) => (slotIdx === currentSlot.value
+		? drums.rows.map((r) => ({ steps: [...r.steps], velocities: [...r.velocities] }))
+		: drumRowsOf(patternSlots.value[slotIdx], n)));
+	return { patterns, bassPatterns, drumRows, letters: cells.map((c) => SLOT_NAMES[c]) };
 });
 
 function openExportDialog() {
@@ -2662,8 +2786,10 @@ async function runExport(options: ExportOptions) {
 		const bassChain = chainNow && !bassLane.muted && chainNow.bassPatterns.some((p) => p.steps.some(Boolean))
 			? { voice: bassVoice(bass), level: bassLane.level, pedals: bassLane.pedals, pattern: chainNow.bassPatterns[0], barPatterns: chainNow.bassPatterns }
 			: undefined;
+		await loadDrumKit().then((k) => { drumKit.value = k; }).catch(() => { });
 		const files = await buildExportFiles({ ...exportState.value, barPatterns: chainNow?.patterns,
-			bass: chainNow ? bassChain : exportState.value.bass }, options, {
+			bass: chainNow ? bassChain : exportState.value.bass,
+			drums: chainNow ? drumsExport(chainNow.drumRows) : drumsExport() }, options, {
 			project: project.name || 'Untitled',
 			key: keyLabel(melodyUi.keyRoot, melodyUi.keyScale),
 			oneShotWave: selectedWaveform.value,
@@ -2947,13 +3073,20 @@ function rollBassPattern() {
 
 // Pattern Tools and the Melody Maker edit the machine shown (PR 117): Rhythm's lane, or Bass's
 // (its own range, 30–250 Hz). The phone's pages still edit Rhythm's (the phone is part 3).
+// Drums (the plan's item 5): Step Fills and Humanize work on the picked row; Move on every row.
 const editSteps = computed<boolean[]>({
-	get: () => (bassChosen.value ? bassLane.steps : steps.value),
-	set: (v) => { if (bassChosen.value) bassLane.steps = v; else steps.value = v; },
+	get: () => (drumsChosen.value ? drums.rows[drumPick.value].steps : bassChosen.value ? bassLane.steps : steps.value),
+	set: (v) => {
+		if (drumsChosen.value) drums.rows = drums.rows.map((r, k) => (k === drumPick.value ? { ...r, steps: v } : r));
+		else if (bassChosen.value) bassLane.steps = v; else steps.value = v;
+	},
 });
 const editVelocities = computed<number[]>({
-	get: () => (bassChosen.value ? bassLane.velocities : velocities.value),
-	set: (v) => { if (bassChosen.value) bassLane.velocities = v; else velocities.value = v; },
+	get: () => (drumsChosen.value ? drums.rows[drumPick.value].velocities : bassChosen.value ? bassLane.velocities : velocities.value),
+	set: (v) => {
+		if (drumsChosen.value) drums.rows = drums.rows.map((r, k) => (k === drumPick.value ? { ...r, velocities: v } : r));
+		else if (bassChosen.value) bassLane.velocities = v; else velocities.value = v;
+	},
 });
 const editPitches = computed<number[]>({
 	get: () => (bassChosen.value ? bassLane.pitches : padFrequencies.value),
@@ -2965,6 +3098,7 @@ const editMaxHz = computed(() => (bassChosen.value ? BASS_MAX_HZ : MAX_PAD_HZ));
 const bassNoteSteps = computed(() => (bass.decayMs.value * 1.6 / 1000) / (60 / tempo.value / 4));
 
 function onEditOctaveShift(delta: number) {
+	if (drumsChosen.value) return; // a drum hit has no note (the arrows are greyed out)
 	if (!bassChosen.value) { onPatternOctaveShift(delta); return; }
 	// Every Bass pad that stays in its range moves (as Rhythm's arrows do theirs)
 	bassLane.pitches = bassLane.pitches.map((hz) => {
@@ -2973,6 +3107,11 @@ function onEditOctaveShift(delta: number) {
 	});
 }
 function onEditMove(kind: MoveKind) {
+	if (drumsChosen.value) {
+		drums.rows = drums.rows.map((r) => ({ steps: moveList(r.steps, kind)!, velocities: moveList(r.velocities, kind)! }));
+		trackEvent('pattern_move', { kind, machine: 'drums' });
+		return;
+	}
 	if (!bassChosen.value) { movePattern(kind); return; }
 	const n = bassLane.steps.length;
 	for (const f of ['steps', 'velocities', 'pitches', 'accents'] as const) (bassLane as any)[f] = moveList(bassLane[f] as any[], kind);
@@ -3044,7 +3183,9 @@ const copyArmed = ref(false);
 const slotView = computed(() => SLOT_NAMES.map((name, i) => ({
 	name,
 	// The current slot's steps are the lane's (its stored copy may be behind)
-	filled: i === currentSlot.value ? !!synthInstrument.value?.steps.some(Boolean) || bassLane.steps.some(Boolean) : slotHasSteps(patternSlots.value[i]),
+	filled: i === currentSlot.value
+		? !!synthInstrument.value?.steps.some(Boolean) || bassLane.steps.some(Boolean) || drums.rows.some((r) => r.steps.some(Boolean))
+		: slotHasSteps(patternSlots.value[i]),
 })));
 
 function laneHz() { return currentDefaultHz.value; }
@@ -3055,9 +3196,10 @@ function switchToSlot(to: number) {
 	const lane = synthInstrument.value;
 	if (!lane || to === currentSlot.value) return;
 	const slots = [...patternSlots.value];
-	slots[currentSlot.value] = slotFromLane(lane, laneHz(), bassLane);
+	slots[currentSlot.value] = slotFromLane(lane, laneHz(), bassLane, drums.rows);
 	loadIntoLane(lane, slots[to], stepLength.value, laneHz());
 	loadBassIntoLane(bassLane, slots[to], stepLength.value, bassHz());
+	drums.rows = drumRowsOf(slots[to], stepLength.value);
 	patternSlots.value = slots;
 	currentSlot.value = to;
 }
@@ -3078,8 +3220,8 @@ function copySlotTo(to: number) {
 	cancelQueued('slot');
 	const from = currentSlot.value;
 	const slots = [...patternSlots.value];
-	slots[from] = slotFromLane(lane, laneHz(), bassLane);
-	slots[to] = slotFromLane(lane, laneHz(), bassLane);
+	slots[from] = slotFromLane(lane, laneHz(), bassLane, drums.rows);
+	slots[to] = slotFromLane(lane, laneHz(), bassLane, drums.rows);
 	patternSlots.value = slots;
 	currentSlot.value = to; // the lane already holds the copy
 	trackEvent('pattern_copy', { from: SLOT_NAMES[from], to: SLOT_NAMES[to] });
@@ -3142,7 +3284,8 @@ const SCALE_LABELS: Record<string, string> = {
 const phoneCtx = reactive({
 	inst: synthInstrument,
 	// The machine the phone shows (PR 118; the top bar's RHY | BASS), and its lane
-	machine: computed({ get: () => machine.value, set: (m: 'rhythm' | 'bass') => { machine.value = m; } }),
+	// Drums isn't on the phone yet (the item's part 3): there it shows Rhythm
+	machine: computed({ get: () => (machine.value === 'drums' ? 'rhythm' : machine.value), set: (m: 'rhythm' | 'bass') => { machine.value = m; } }),
 	lane: computed(() => (bassChosen.value ? bassLane : synthInstrument.value)),
 	bass,
 	currentStep, isPlaying, tempo, swing, canUndo, canRedo,
@@ -3731,7 +3874,7 @@ async function recordSample() {
 	grid-template-rows: auto 1fr auto;
 	grid-template-areas: "title title title" "osc big big" "knobs knobs fx";
 }
-.ds-sound[data-bass] > .ds-section-title { grid-area: title; }
+.ds-sound[data-bass] > .ds-sound-head { grid-area: title; }
 .ds-sound[data-bass] .sound-row-1,
 .ds-sound[data-bass] .sound-row-2,
 .ds-sound[data-bass] .sound-row-3 > .sound-stack { display: none; }
@@ -3744,6 +3887,84 @@ async function recordSample() {
 /* One column: the tiles across, the screen, the knobs */
 @media (max-width: 719.98px) {
 	.ds-sound[data-bass] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "title" "osc" "big" "knobs"; }
+}
+/* The Drums machine's Sound (the plan's item 5): the four slot cards across, then the Sounds
+   shelf beside the pedals; under 1200 px the pedals are the Effects tab's */
+.ds-sound[data-drums] {
+	display: grid;
+	gap: 12px;
+	align-content: stretch;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	grid-template-rows: auto 1fr auto;
+	grid-template-areas: "title title" "slots slots" "shelf fx";
+}
+.ds-sound[data-drums] > .ds-sound-head { grid-area: title; }
+.ds-sound[data-drums] .sound-row-1,
+.ds-sound[data-drums] .sound-row-2,
+.ds-sound[data-drums] .sound-row-3 > .sound-stack { display: none; }
+.ds-sound[data-drums] .sound-row-3 { display: contents; }
+.ds-sound[data-drums] #effects-panel { grid-area: fx; }
+@media (max-width: 1199.98px) {
+	.ds-sound[data-drums] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "title" "slots" "shelf"; }
+	.ds-grid[data-tab="fx"] .ds-sound[data-drums] .ds-slots,
+	.ds-grid[data-tab="fx"] .ds-sound[data-drums] .ds-shelf { display: none; }
+	.ds-grid[data-tab="fx"] .ds-sound[data-drums] { grid-template-areas: "title" "fx"; }
+}
+
+/* The Sound section's head: its title, and on Rhythm's, Keep as drum at the right */
+.ds-sound-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.keep-drum {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: auto;
+	margin-right: 6px;
+}
+.keep-drum__cap {
+	font: 700 9px Cousine, ui-monospace, monospace;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+	color: var(--pt-text-dim, #b9a8d8);
+	margin-right: 4px;
+}
+.keep-drum__slot {
+	width: 22px;
+	height: 18px;
+	padding: 0;
+	font: 700 10px Cousine, ui-monospace, monospace;
+	border-bottom: 2px solid hsl(var(--h) 80% 60%);
+}
+.keep-drum__slot.busy {
+	animation: keep-pulse .6s ease-in-out infinite alternate;
+}
+@keyframes keep-pulse { to { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .keep-drum__slot.busy { animation: none; opacity: .6; } }
+
+/* Drums: their kits and patterns come in the machine's next part; the boxes keep their place */
+.transport-presets.is-hidden { visibility: hidden; }
+/* Narrower they're a row of their own: none at all */
+@media (max-width: 1199.98px) { .transport-presets.is-hidden { display: none; } }
+
+/* Drums: the Melody Maker has no notes to work on */
+.module.melody { position: relative; }
+.module.melody.is-off > :not(.melody-off-note) { opacity: .35; filter: grayscale(.6); }
+.melody-off-note {
+	position: absolute;
+	z-index: 2;
+	inset: 50% 12px auto;
+	transform: translateY(-50%);
+	margin: 0;
+	padding: 10px 14px;
+	border-radius: 8px;
+	background: var(--pt-inset, #1a1030);
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, .12), 0 6px 18px rgba(0, 0, 0, .45);
+	font: 700 11px Cousine, ui-monospace, monospace;
+	text-align: center;
+	color: var(--pt-text, #fff);
 }
 /* LAYOUT END */
 

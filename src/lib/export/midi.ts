@@ -8,6 +8,7 @@
 
 import { clampRatchet, ratchetPitches, stepSpan } from '../../audio/ratchet';
 import { bassPlan, type BassPattern } from '../../audio/bass';
+import type { DrumRow } from '../../audio/drums';
 
 export const PPQ = 480;              // ticks per quarter note
 export const STEP_TICKS = PPQ / 4;   // a 16th, one step
@@ -31,10 +32,16 @@ export type MidiPattern = {
 	// slid into the next steps), a slide's new pitch a new note where it arrives, Accent at
 	// velocity 127; with the chain, a pattern per bar as above
 	bass?: { pattern: BassPattern; barPatterns?: BassPattern[] };
+	// The Drums machine (the plan's item 5), on MIDI channel 10, the General MIDI drums: slot 1
+	// Kick 36, 2 Snare 38, 3 Cowbell 56 (Metal), 4 Closed hi-hat 42 (DRUM_NOTES), a 16th long;
+	// muted slots left out; with the chain, rows per bar as above
+	drums?: { rows: DrumRow[]; barRows?: DrumRow[][]; muted?: boolean[] };
 };
 
-// MIDI channel 2 (0-based 1): Bass
+// MIDI channel 2 (0-based 1): Bass; channel 10 (9): Drums
 const BASS_CHANNEL = 1;
+const DRUMS_CHANNEL = 9;
+export const DRUM_NOTES = [36, 38, 56, 42];
 
 export type MidiBarPattern = Pick<MidiPattern, 'active' | 'velocities' | 'pitches' | 'ratchets' | 'repeatNotes'>;
 
@@ -95,6 +102,27 @@ function bassEvents(p: MidiPattern, bars: number, swing: number): Event[] {
 	return out;
 }
 
+// Drums' hits, one note per hit, on channel 10
+function drumsEvents(p: MidiPattern, bars: number, swing: number): Event[] {
+	const n = p.stepsCount;
+	const out: Event[] = [];
+	for (let bar = 0; bar < bars; bar++) {
+		const rows = p.drums!.barRows?.length ? p.drums!.barRows[bar % p.drums!.barRows.length] : p.drums!.rows;
+		rows.forEach((row, slot) => {
+			if (p.drums!.muted?.[slot]) return;
+			for (let step = 0; step < n; step++) {
+				const vel = Math.max(0, Math.min(1, row.velocities[step] ?? 1));
+				if (!row.steps[step] || vel <= 0) continue;
+				const on = Math.round((bar * n + step) * STEP_TICKS + (step % 2 === 1 ? swing * STEP_TICKS : 0));
+				const note = DRUM_NOTES[slot] ?? 36;
+				out.push({ tick: on, order: 2, bytes: [0x90 | DRUMS_CHANNEL, note, Math.max(1, Math.min(127, Math.round(vel * 127)))] });
+				out.push({ tick: on + STEP_TICKS - 1, order: 1, bytes: [0x80 | DRUMS_CHANNEL, note, 0] });
+			}
+		});
+	}
+	return out;
+}
+
 export function patternToMidi(p: MidiPattern): Uint8Array {
 	const bars = Math.max(1, Math.round(p.bars));
 	const swing = Math.max(0, Math.min(0.5, p.swing || 0));
@@ -130,6 +158,7 @@ export function patternToMidi(p: MidiPattern): Uint8Array {
 	}
 
 	if (p.bass) events.push(...bassEvents(p, bars, swing));
+	if (p.drums) events.push(...drumsEvents(p, bars, swing));
 
 	const end = Math.max(bars * p.stepsCount * STEP_TICKS, ...events.map((e) => e.tick));
 	events.sort((a, b) => a.tick - b.tick || a.order - b.order);

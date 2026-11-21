@@ -18,12 +18,15 @@ export type SharePayload = {
     data: Record<string, unknown>;
 };
 
-// What a link carries: the project's settings without `ui` and without the recording (about
-// 128 kB, too big for a link: pads on the 'sample' wave play a sine there), and its name
+// What a link carries: the project's settings without `ui` and without the recordings (too big
+// for a link): the microphone's (about 128 kB: pads on the 'sample' wave play a sine there) and
+// the Drums machine's kept sounds (a slot playing one plays its own kit sound there); and its name
 export function buildSharePayload(name: string, data: any): SharePayload {
     const { ui: _ui, ...rest } = (data ?? {}) as Record<string, unknown>;
     const synth = rest.synth as Record<string, unknown> | undefined;
     if (synth && 'sample' in synth) rest.synth = { ...synth, sample: null };
+    const drums = rest.drums as Record<string, unknown> | undefined;
+    if (drums && Array.isArray(drums.kept)) rest.drums = { ...drums, kept: [] };
     // "Untitled" is no name (File → Open lists only named projects; the recipient's Save asks)
     const trimmed = (name ?? '').trim();
     const clean = trimmed.toLowerCase() === 'untitled' ? '' : trimmed;

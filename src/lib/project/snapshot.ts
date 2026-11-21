@@ -34,6 +34,7 @@ import { DEFAULT_PRE_DIVISION, isPreDivision, preDelayMs, preDivisionForMs } fro
 import { BASS_FIELDS, chainFrom, emptyChain, emptySlots, slotFromLane, slotIndexFrom, slotsFrom, type Chain, type Slots } from '../patterns/slots';
 import { applyBassSound, bassSoundSnapshot, BASS_LEVEL_DEFAULT, resetBassSound, type BassLane, type BassSettings } from '../machines/bass';
 import { BASS_MAX_HZ, BASS_MIN_HZ } from '../../audio/bass';
+import { applyDrums, drumsSnapshot, resetDrums, type Drums } from '../machines/drums';
 export type { Wave };
 
 // One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
@@ -118,6 +119,9 @@ export type ProjectState = {
 	// The Bass machine (src/lib/machines/bass.ts): its sound, and its lane (the current slot's
 	// Bass track as it's being edited, with the machine's mute and level), reactive
 	bass: { sound: BassSettings; lane: BassLane };
+	// The Drums machine (src/lib/machines/drums.ts): its slots, kept sounds, mute, level and
+	// Pedals, and its rows (the current slot's Drums track as it's being edited), reactive
+	drums: Drums;
 	// The rail's mixer (PR 116): Rhythm's Pedals, how much of it goes through the pedals 0..1
 	// (Bass's is its lane's `pedals`)
 	mixer: { rhythmPedals: Ref<number> };
@@ -388,7 +392,7 @@ export function buildSnapshot(st: ProjectState) {
 			slots: patternSlots.value.map((slot, idx) => {
 				if (idx !== currentSlot.value) return slot ? JSON.parse(JSON.stringify(slot)) : null;
 				const lane = instruments.value.find(i => i.name === 'synth-voice');
-				return lane ? slotFromLane(lane, currentDefaultHz.value, st.bass.lane) : null;
+				return lane ? slotFromLane(lane, currentDefaultHz.value, st.bass.lane, st.drums.rows) : null;
 			}),
 			chain: [...chain.value],
 			chainOn: chainOn.value,
@@ -402,6 +406,9 @@ export function buildSnapshot(st: ProjectState) {
 			pedals: st.bass.lane.pedals,
 			lane: Object.fromEntries(BASS_FIELDS.map((f) => [f, [...st.bass.lane[f]]])) as Record<(typeof BASS_FIELDS)[number], any[]>,
 		},
+
+		// The Drums machine: its slots, kept sounds, mute, level, Pedals and rows
+		drums: drumsSnapshot(st.drums),
 
 		// The rail's mixer: Rhythm's Pedals (Bass's is in `bass`)
 		mixer: { rhythm: { pedals: st.mixer.rhythmPedals.value } },
@@ -743,6 +750,11 @@ export function applySnapshot(st: ProjectState, s: any) {
 		resetBass(st, stepLength.value, bassHz);
 	}
 
+	// The Drums machine (the plan's item 5): a project saved before it has none (the kit in its
+	// slots, empty rows)
+	if (s.drums && typeof s.drums === 'object') applyDrums(st.drums, s.drums, stepLength.value);
+	else if (Array.isArray(s.instruments) && s.instruments.length) resetDrums(st.drums, stepLength.value);
+
 	// The rail's mixer (PR 116): a project from before plays Rhythm all through the pedals
 	const rp = s.mixer?.rhythm?.pedals;
 	if (typeof rp === 'number' && Number.isFinite(rp)) st.mixer.rhythmPedals.value = Math.min(1, Math.max(0, rp));
@@ -871,6 +883,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	chain.value = emptyChain();
 	chainOn.value = false;
 	resetBass(st, stepLength.value, bassDefaultHz(currentDefaultHz.value));
+	resetDrums(st.drums, stepLength.value);
 	st.mixer.rhythmPedals.value = 1;
 
 	// remove custom channels

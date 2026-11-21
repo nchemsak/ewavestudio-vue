@@ -27,7 +27,8 @@
         </div>
 
         <div class="pt-card bs-card bs-big" style="grid-area: big">
-            <div class="bs-screen">
+            <!-- A click plays the note it draws (only while stopped: DrumSequencer's auditionBass) -->
+            <button type="button" class="bs-screen" :aria-label="`Hear ${noteName}`" :title="`Click to hear ${noteName}`" @click="emit('preview')">
                 <svg viewBox="0 0 400 150" preserveAspectRatio="none" aria-hidden="true">
                     <path :d="paths.env" class="bs-env" />
                     <path :d="paths.wave" class="bs-wave" />
@@ -35,7 +36,7 @@
                 </svg>
                 <span class="bs-read">{{ waveName }}{{ sound.sub.value > 0 ? ' + SUB' : '' }} · {{ noteName }}</span>
                 <span class="bs-read r"><b class="cut">— CUTOFF {{ hzText(sound.cutoff.value) }}, ENV +{{ sound.envAmount.value.toFixed(1) }} OCT</b> · <b>- - LEVEL, DECAY {{ Math.round(sound.decayMs.value) }} MS</b></span>
-            </div>
+            </button>
         </div>
 
         <!-- The knobs written out one by one: MIDI learn's ids must each be on one knob in the source -->
@@ -99,6 +100,7 @@ const props = defineProps<{
     noteHz: number;   // the note drawn (the lane's first note, or the key's root)
     noteName: string;
 }>();
+const emit = defineEmits<{ (e: 'preview'): void }>();
 
 const TILES = [
     { id: 'saw', label: 'SAW', name: 'Saw', icon: 'M2 26 L20 4 L20 26 L39 4 L39 26 L58 4' },
@@ -216,6 +218,12 @@ const paths = computed(() => {
 }
 
 .bs-screen {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    cursor: pointer;
     --sp-bg: #0c1118;
     --sp-ink: #cfe0ff;
     --bs-cut: #ff7eb3;

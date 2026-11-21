@@ -15,6 +15,7 @@
 
 import { clampRatchet, clampRepeatNotes, type RepeatNotes } from '../../audio/ratchet';
 import type { BassPattern } from '../../audio/bass';
+import { DRUM_SLOTS, type DrumRow } from '../../audio/drums';
 
 export const SLOT_NAMES = ['A', 'B', 'C', 'D'] as const;
 export const SLOT_COUNT = SLOT_NAMES.length;
@@ -34,7 +35,9 @@ export type RhythmTrack = {
 // Accent, Slide and Tie (src/audio/bass.ts)
 export const BASS_FIELDS = ['steps', 'velocities', 'pitches', 'accents', 'slides', 'ties'] as const;
 export type BassTrack = BassPattern & { machine: 'bass' };
-export type PatternTrack = RhythmTrack | BassTrack; // more machines join this union
+// The Drums machine's track (the plan's item 5): a row per slot, its steps and velocities
+export type DrumsTrack = { machine: 'drums'; rows: DrumRow[] };
+export type PatternTrack = RhythmTrack | BassTrack | DrumsTrack; // more machines join this union
 export type PatternSlot = { tracks: PatternTrack[] };
 export type Slots = (PatternSlot | null)[];
 
@@ -71,9 +74,14 @@ export function bassTrackFrom(b: BassPattern): BassTrack {
 	};
 }
 
+/** The Drums rows as a track (copies) */
+export function drumsTrackFrom(rows: DrumRow[]): DrumsTrack {
+	return { machine: 'drums', rows: rows.map((r) => ({ steps: [...r.steps], velocities: [...r.velocities] })) };
+}
+
 /** The lane's pattern as a slot (copies, so editing the lane later doesn't change it), with
- * the Bass lane's when given */
-export function slotFromLane(lane: LaneLike, hz: number, bass?: BassPattern | null): PatternSlot {
+ * the Bass lane's and the Drums rows when given */
+export function slotFromLane(lane: LaneLike, hz: number, bass?: BassPattern | null, drums?: DrumRow[] | null): PatternSlot {
 	const n = lane.steps.length;
 	return {
 		tracks: [{
@@ -83,7 +91,7 @@ export function slotFromLane(lane: LaneLike, hz: number, bass?: BassPattern | nu
 			pitches: lane.pitches ? [...lane.pitches] : Array(n).fill(hz),
 			ratchets: lane.ratchets ? [...lane.ratchets] : Array(n).fill(1),
 			repeatNotes: lane.repeatNotes ? [...lane.repeatNotes] as RepeatNotes[] : Array(n).fill('same'),
-		} as PatternTrack, ...(bass ? [bassTrackFrom(bass)] : [])],
+		} as PatternTrack, ...(bass ? [bassTrackFrom(bass)] : []), ...(drums ? [drumsTrackFrom(drums)] : [])],
 	};
 }
 
@@ -95,6 +103,22 @@ export function rhythmOf(slot: PatternSlot | null | undefined): RhythmTrack | nu
 /** A slot's Bass track, or null */
 export function bassOf(slot: PatternSlot | null | undefined): BassTrack | null {
 	return (slot?.tracks.find((t) => t.machine === 'bass') as BassTrack | undefined) ?? null;
+}
+
+/** A slot's Drums track, or null */
+export function drumsOf(slot: PatternSlot | null | undefined): DrumsTrack | null {
+	return (slot?.tracks.find((t) => t.machine === 'drums') as DrumsTrack | undefined) ?? null;
+}
+
+/** Empty Drums rows: every step off, at full velocity */
+export function emptyDrumRows(n: number): DrumRow[] {
+	return Array.from({ length: DRUM_SLOTS }, () => ({ steps: Array(n).fill(false), velocities: Array(n).fill(1) }));
+}
+
+/** A slot's Drums rows (copies; empty ones for a slot without them) */
+export function drumRowsOf(slot: PatternSlot | null | undefined, n: number): DrumRow[] {
+	const t = drumsOf(slot);
+	return t ? drumsTrackFrom(t.rows).rows : emptyDrumRows(n);
 }
 
 /** An empty Bass track */
@@ -123,7 +147,7 @@ export function loadIntoLane(lane: LaneLike, slot: PatternSlot | null | undefine
 
 /** Whether a slot has any step on (its button shows it holds something) */
 export function slotHasSteps(slot: PatternSlot | null | undefined): boolean {
-	return !!slot?.tracks.some((t) => t.steps.some(Boolean));
+	return !!slot?.tracks.some((t) => (t.machine === 'drums' ? t.rows.some((r) => r.steps.some(Boolean)) : t.steps.some(Boolean)));
 }
 
 /** A slot with every Rhythm pitch passed through `f` (a key or scale change moves every slot) */
@@ -144,8 +168,18 @@ function list<T>(from: unknown, n: number, fill: T, each: (x: unknown) => T): T[
 }
 
 function trackFrom(t: any, n: number, hz: number, bassHz: number): PatternTrack | null {
-	if (!t || typeof t !== 'object' || !Array.isArray(t.steps)) return null;
 	const num = (d: number) => (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : d);
+	if (t && typeof t === 'object' && t.machine === 'drums') {
+		if (!Array.isArray(t.rows)) return null;
+		return {
+			machine: 'drums',
+			rows: Array.from({ length: DRUM_SLOTS }, (_, i) => ({
+				steps: list(t.rows[i]?.steps, n, false, (x) => x === true),
+				velocities: list(t.rows[i]?.velocities, n, 1, (x) => Math.min(1, Math.max(0, num(1)(x)))),
+			})),
+		};
+	}
+	if (!t || typeof t !== 'object' || !Array.isArray(t.steps)) return null;
 	if (t.machine === 'bass') {
 		const bool = (x: unknown) => x === true;
 		return {
@@ -236,6 +270,7 @@ export function cycleCell(value: number | null, back = false): number | null {
 // buildSnapshot writes it there), and with an empty pattern the same as a slot never used.
 
 function blankTrack(t: any): boolean {
+	if (t?.machine === 'drums') return Array.isArray(t.rows) && t.rows.every(blankTrack);
 	return !!t && Array.isArray(t.steps) && t.steps.every((s: unknown) => !s)
 		&& (t.velocities ?? []).every((v: unknown) => v === 1)
 		&& (t.ratchets ?? []).every((r: unknown) => r === 1)
@@ -251,14 +286,16 @@ export function comparableProject(data: any): any {
 	void current;
 	patterns.slots = patterns.slots.map((s: any) => {
 		if (!s || (Array.isArray(s.tracks) && s.tracks.every(blankTrack))) return null;
-		// An empty Bass track is the same as none (a slot from before Bass, or one Bass never played in)
-		return Array.isArray(s.tracks) ? { ...s, tracks: s.tracks.filter((t: any) => !(t?.machine === 'bass' && blankTrack(t))) } : s;
+		// An empty Bass or Drums track is the same as none (a slot from before them, or one they never played in)
+		return Array.isArray(s.tracks) ? { ...s, tracks: s.tracks.filter((t: any) => !((t?.machine === 'bass' || t?.machine === 'drums') && blankTrack(t))) } : s;
 	});
 	c.patterns = patterns;
 	const lane = Array.isArray(c.instruments) ? c.instruments.find((i: any) => i?.name === 'synth-voice') : null;
 	if (lane) for (const f of SLOT_FIELDS) delete lane[f];
 	// The Bass lane's pattern is in its slot too
 	if (c.bass?.lane) for (const f of BASS_FIELDS) delete c.bass.lane[f];
+	// So are the Drums rows
+	if (c.drums?.lane) delete c.drums.lane.rows;
 	return c;
 }
 
