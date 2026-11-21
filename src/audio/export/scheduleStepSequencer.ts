@@ -57,7 +57,12 @@ export type StepSequencerState = {
 
 	// The Bass machine (src/audio/bass.ts; missing: none): its voice, level, and pattern, or one
 	// per bar with the chain (as barPatterns). Not in a one-shot.
-	bass?: { voice: BassVoice; level: number; pattern: BassPattern; barPatterns?: BassPattern[] };
+	// `pedals`: how much of it goes through the pedals (missing: all)
+	bass?: { voice: BassVoice; level: number; pedals?: number; pattern: BassPattern; barPatterns?: BassPattern[] };
+	// The Rhythm machine's Pedals (missing: all of it through the pedals)
+	rhythmPedals?: number;
+	// One machine only (a machine's stem, PR 116): the other's notes aren't played (missing: both)
+	machine?: 'rhythm' | 'bass';
 
 	fx: {
 		delay: {
@@ -507,10 +512,30 @@ export function scheduleStepSequencer(
 	const stepDuration = secondsPerBeat / 4; // 16th notes
 	const chanVol = clamp01(state.channelVolume);
 
+	// The machines' buses, as live (liveEngine.ts, "Machine buses"): Pedals of each goes into
+	// the pedals (through the drive while it's on), the rest straight to the dry part
+	const driveIn = ctx.createGain();
+	if (driveEnabled) { driveIn.connect(driveDry); driveIn.connect(driveShaper); } else driveIn.connect(driveSum);
+	const machineBus = (pedals: number | undefined) => {
+		const p = clamp01(pedals ?? 1);
+		const bus = ctx.createGain();
+		const send = ctx.createGain();
+		const direct = ctx.createGain();
+		send.gain.value = p;
+		direct.gain.value = 1 - p;
+		bus.connect(send).connect(driveIn);
+		bus.connect(direct).connect(dryOut);
+		return bus;
+	};
+	const rhythmBus = machineBus(state.rhythmPedals);
+	const bassBus = machineBus(state.bass?.pedals);
+	const playRhythm = state.machine !== 'bass';
+	const playBass = state.machine !== 'rhythm';
+
 	// Where every note goes (note.ts builds it, as in the live engine)
 	const noteWiring: NoteWiring = {
 		ctx,
-		toneOut: driveEnabled ? [driveDry, driveShaper] : [driveSum],
+		toneOut: [rhythmBus],
 		noiseOut,
 		noiseBuffers,
 		sample: sampleBuffer(state.synth.sample ?? null),
@@ -519,7 +544,7 @@ export function scheduleStepSequencer(
 	};
 
 	// The Bass machine, as live: one note at a time, each cutting the one before
-	if (state.bass && !state.oneShot) {
+	if (state.bass && !state.oneShot && playBass) {
 		const b = state.bass;
 		let sounding: BassSounding | null = null;
 		for (let bar = 0; bar < bars; bar++) {
@@ -527,7 +552,7 @@ export function scheduleStepSequencer(
 			const barStart = ctx.currentTime + offsetSeconds + bar * state.stepsCount * stepDuration;
 			for (const note of bassNotesForBar(pat, state.stepsCount, barStart, stepDuration, clamp01(state.swing), clamp01(b.level))) {
 				sounding?.cut(note.time);
-				sounding = playBassNote(b.voice, note, { ctx, out: noteWiring.toneOut });
+				sounding = playBassNote(b.voice, note, { ctx, out: [bassBus] });
 			}
 		}
 	}
@@ -559,6 +584,9 @@ export function scheduleStepSequencer(
 
 		// REV with Next hit: this hit's swell lasts until the next step that's on
 		if (revGaps) openRev(revIrSeconds(swellSeconds('next', stepDuration, revGaps[stepIndex]), revPreS), t + revPreS);
+
+		// Bass's stem alone: REV's gates above still open as in the mix, but Rhythm doesn't play
+		if (!playRhythm) continue;
 
 		// One note, or a ratchet's 2–4 quick hits within the step, as in the live engine
 		const span = stepSpan(stepIndex, state.stepsCount, stepDuration, clamp01(state.swing));

@@ -21,7 +21,8 @@ export type BassSettings = {
 };
 
 // The lane being edited (the current slot's Bass track), as the pads read and write it
-export type BassLane = BassPattern & { muted: boolean; level: number };
+// `pedals`: how much of it goes through the pedals, 0..1 (the rail's Pedals knob)
+export type BassLane = BassPattern & { muted: boolean; level: number; pedals: number };
 
 // The factory sound: a fresh page and File → New
 export const BASS_DEFAULTS = {
@@ -52,7 +53,7 @@ export function emptyBassPattern(n: number, hz: number): BassPattern {
 }
 
 export function createBassLane(n: number, hz: number): BassLane {
-	return reactive({ ...emptyBassPattern(n, hz), muted: false, level: BASS_LEVEL_DEFAULT });
+	return reactive({ ...emptyBassPattern(n, hz), muted: false, level: BASS_LEVEL_DEFAULT, pedals: 1 });
 }
 
 /** The voice src/audio/bass.ts plays, from the settings now */

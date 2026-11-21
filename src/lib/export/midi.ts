@@ -7,6 +7,7 @@
 // lasts exactly the bars exported.
 
 import { clampRatchet, ratchetPitches, stepSpan } from '../../audio/ratchet';
+import { bassPlan, type BassPattern } from '../../audio/bass';
 
 export const PPQ = 480;              // ticks per quarter note
 export const STEP_TICKS = PPQ / 4;   // a 16th, one step
@@ -26,7 +27,14 @@ export type MidiPattern = {
 	// The chain (PR 111): one pattern per bar, bar b playing barPatterns[b % length] (its own
 	// steps, velocities, pitches and repeats); without it every bar plays the fields above
 	barPatterns?: MidiBarPattern[];
+	// The Bass machine (PR 116), on MIDI channel 2: each note as long as it's held (tied or
+	// slid into the next steps), a slide's new pitch a new note where it arrives, Accent at
+	// velocity 127; with the chain, a pattern per bar as above
+	bass?: { pattern: BassPattern; barPatterns?: BassPattern[] };
 };
+
+// MIDI channel 2 (0-based 1): Bass
+const BASS_CHANNEL = 1;
 
 export type MidiBarPattern = Pick<MidiPattern, 'active' | 'velocities' | 'pitches' | 'ratchets' | 'repeatNotes'>;
 
@@ -61,6 +69,32 @@ const u32 = (n: number) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0x
 const u16 = (n: number) => [(n >>> 8) & 0xff, n & 0xff];
 const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
 
+// Bass's notes (bassPlan(), as the engines play them), on its own channel
+function bassEvents(p: MidiPattern, bars: number, swing: number): Event[] {
+	const n = p.stepsCount;
+	const tickOf = (step: number) => step * STEP_TICKS + (step % 2 === 1 ? swing * STEP_TICKS : 0);
+	const out: Event[] = [];
+	for (let bar = 0; bar < bars; bar++) {
+		const b = p.bass!.barPatterns?.length ? p.bass!.barPatterns[bar % p.bass!.barPatterns.length] : p.bass!.pattern;
+		for (const hit of bassPlan(b, n)) {
+			if (!hit || hit.vel <= 0) continue;
+			const first = bar * n + hit.step;
+			const velocity = hit.accent ? 127 : Math.max(1, Math.min(126, Math.round(hit.vel * 110)));
+			// Its pitches in turn: the hit's, then each glide's from the step it arrives on
+			const segs = [{ at: 0, hz: hit.freq }, ...hit.glides.map((g) => ({ at: g.at, hz: g.freq }))];
+			segs.forEach((seg, k) => {
+				const on = Math.round(tickOf(first + seg.at));
+				const stop = k + 1 < segs.length ? tickOf(first + segs[k + 1].at) : tickOf(first + hit.steps);
+				const off = Math.max(on + 1, Math.round(stop) - 1);
+				const note = midiNoteOf(seg.hz);
+				out.push({ tick: on, order: 2, bytes: [0x90 | BASS_CHANNEL, note, velocity] });
+				out.push({ tick: off, order: 1, bytes: [0x80 | BASS_CHANNEL, note, 0] });
+			});
+		}
+	}
+	return out;
+}
+
 export function patternToMidi(p: MidiPattern): Uint8Array {
 	const bars = Math.max(1, Math.round(p.bars));
 	const swing = Math.max(0, Math.min(0.5, p.swing || 0));
@@ -94,6 +128,8 @@ export function patternToMidi(p: MidiPattern): Uint8Array {
 			}
 		}
 	}
+
+	if (p.bass) events.push(...bassEvents(p, bars, swing));
 
 	const end = Math.max(bars * p.stepsCount * STEP_TICKS, ...events.map((e) => e.tick));
 	events.sort((a, b) => a.tick - b.tick || a.order - b.order);

@@ -1013,7 +1013,7 @@ async function downloadFromFileMenu(page: Page, item: string) {
 
 type ExportChoices = {
 	bars?: 1 | 2 | 4 | 8; ending?: 'Loop' | 'With tail';
-	mix?: boolean; stems?: boolean; midi?: boolean; oneShot?: boolean; oneShotNote?: string; normalize?: boolean;
+	mix?: boolean; stems?: boolean; machineStems?: boolean; midi?: boolean; oneShot?: boolean; oneShotNote?: string; normalize?: boolean;
 };
 
 // File → Export audio…, with these choices (the rest as the dialog has them); the download
@@ -1024,7 +1024,7 @@ async function exportAudio(page: Page, c: ExportChoices) {
 	if (c.bars) await dialog.getByRole('group', { name: 'Bars' }).getByRole('button', { name: String(c.bars), exact: true }).click();
 	if (c.ending) await dialog.getByRole('group', { name: 'Ending' }).getByRole('button', { name: c.ending, exact: true }).click();
 	const boxes: [keyof ExportChoices, RegExp][] = [
-		['mix', /^Mix/], ['stems', /^Effects stems/], ['midi', /^MIDI file/], ['oneShot', /^One-shot at/], ['normalize', /^Normalize/],
+		['mix', /^Mix/], ['stems', /^Effects stems/], ['machineStems', /^Machine stems/], ['midi', /^MIDI file/], ['oneShot', /^One-shot at/], ['normalize', /^Normalize/],
 	];
 	for (const [key, name] of boxes) {
 		if (c[key] !== undefined) await dialog.getByRole('checkbox', { name }).setChecked(!!c[key]);
@@ -4744,7 +4744,7 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 	await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
 	await openSettings(page);
 	await expect(learn).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(43); // Bass's eight since PR 115
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(45); // Bass's eight since PR 115, the rail's Pedals since PR 116
 	await cutoff.click();
 	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
 	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');
@@ -6749,3 +6749,86 @@ test('the Bass machine: a project from before it opens with an empty Bass lane; 
 });
 
 // The Bass machine END
+
+// The rail's mixer (the plan's item 4, part 2a) START
+
+// Bass on steps 1, 5, 9 and 13 (and Rhythm on 1 and 9), a sound that rings, the reverb on
+async function importBassMix(page: Page, id: string, change: (d: any) => void = () => {}) {
+	await importChanged(page, id, (d) => {
+		const n = 16;
+		const lane = d.instruments.find((i: any) => i.name === 'synth-voice');
+		lane.steps = lane.steps.map((_: boolean, i: number) => i === 0 || i === 8);
+		d.bass = {
+			sound: { wave: 'saw', sub: 0.5, cutoff: 600, resonance: 0.3, envAmount: 2, decayMs: 300, accent: 0.6, slideMs: 60 },
+			muted: false, level: 0.8, pedals: 1,
+			lane: {
+				steps: Array.from({ length: n }, (_, i) => i % 4 === 0), velocities: Array(n).fill(1), pitches: Array(n).fill(55),
+				accents: Array(n).fill(false), slides: Array(n).fill(false), ties: Array(n).fill(false),
+			},
+		};
+		d.fx.reverb = { ...d.fx.reverb, enabled: true, mix: 0.6, decay: 1.5 };
+		change(d);
+	});
+}
+
+test('the rail mixer: each machine has a meter that lights while it plays, and Pedals; saved, an undo step', async ({ page }) => {
+	await importBassMix(page, 'Mixer');
+	await expect(page.locator('.mr-heads')).toContainText('Pedals');
+	const meter = (name: string) => railRow(page, name).getByRole('meter', { name: `${name} level meter` });
+	await expect(meter('Bass')).toHaveAttribute('aria-valuenow', '0');
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await expect.poll(async () => Number(await meter('Bass').getAttribute('aria-valuenow')), { timeout: 3000 }).toBeGreaterThan(2);
+	await expect.poll(async () => Number(await meter('Rhythm').getAttribute('aria-valuenow')), { timeout: 3000 }).toBeGreaterThan(0);
+	// Muted, its meter goes dark
+	await railRow(page, 'Bass').getByRole('switch', { name: 'Bass on' }).click();
+	await expect.poll(async () => Number(await meter('Bass').getAttribute('aria-valuenow')), { timeout: 4000 }).toBe(0);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await railRow(page, 'Bass').getByRole('switch', { name: 'Bass on' }).click();
+	await page.waitForTimeout(SETTLED);
+
+	// Pedals: Home turns it to none
+	const pedals = page.getByRole('slider', { name: 'Bass into the pedals' });
+	await expect(pedals).toHaveAttribute('aria-valuenow', '1');
+	await pedals.focus();
+	await page.keyboard.press('Home');
+	await pedals.blur();
+	await page.waitForTimeout(SETTLED);
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(saved.bass.pedals).toBe(0);
+	expect(saved.mixer.rhythm.pedals).toBe(1);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(pedals).toHaveAttribute('aria-valuenow', '1');
+});
+
+test('the rail mixer: Pedals at none keeps a machine out of the reverb; machine stems add up to the mix; Bass in the MIDI file', async ({ page }) => {
+	await setTempo(page, 120);
+	// Rhythm all through the pedals, Bass none of it
+	await importBassMix(page, 'Machines', (d) => { d.bass.pedals = 0; });
+	const zip = await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: true, machineStems: true, midi: true, oneShot: false, normalize: false });
+	const files = unzip(zip.bytes);
+	const f = (part: string) => files[Object.keys(files).find((k) => k.endsWith(`_${part}.wav`))!];
+	expect(Object.keys(files).filter((k) => k.endsWith('.wav')).map((k) => k.split('_').at(-1)).sort())
+		.toEqual(['bass.wav', 'dry.wav', 'mix.wav', 'reverb.wav', 'rhythm.wav']);
+	// The machine stems add up to the mix, sample for sample
+	for (const ch of [0, 1]) {
+		const mix = wavSamples(f('mix'), ch).samples;
+		const [r, b] = ['rhythm', 'bass'].map((p) => wavSamples(f(p), ch).samples);
+		let worst = 0;
+		for (let i = 0; i < mix.length; i++) worst = Math.max(worst, Math.abs(r[i] + b[i] - mix[i]));
+		expect(worst, `channel ${ch}`).toBeLessThan(1e-3);
+		expect(r.length).toBe(mix.length);
+	}
+	expect(wavPeak(f('bass'))).toBeGreaterThan(0.05);
+	// Bass's stem has no reverb: it's dry after its last note (step 13 starts at 1.5 s, a 0.3 s decay)
+	expect(wavWindow(f('bass'), 2.4, 2.9).peak).toBeLessThan(1e-4);
+	// ...while Rhythm's rings into the reverb after its last hit
+	expect(wavWindow(f('rhythm'), 1.9, 2.4).peak).toBeGreaterThan(1e-3);
+
+	// The MIDI file has Bass's four notes on channel 2
+	const midi = files[Object.keys(files).find((k) => k.endsWith('.mid'))!];
+	let bassOns = 0;
+	for (let i = 0; i < midi.length - 2; i++) if (midi[i] === 0x91 && midi[i + 1] === 33) bassOns++;
+	expect(bassOns).toBe(4);
+});
+
+// The rail's mixer END
