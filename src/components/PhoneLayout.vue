@@ -41,8 +41,7 @@
 		<div class="pl-pages">
 			<!-- Play -->
 			<section v-show="page === 'play'" class="pl-frame pl-play" aria-label="Play">
-				<DrumsMock v-if="drums" part="phone-pads" :variant="dphone" />
-				<div v-else class="pl-pads" role="group" aria-label="Steps" @pointermove="padMove">
+				<div class="pl-pads" role="group" aria-label="Steps" @pointermove="padMove">
 					<button v-for="(on, i) in (lane.steps as boolean[])" :key="i" type="button" class="pl-pad"
 						:class="{ on, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
 						:aria-pressed="!!on" :aria-label="padLabel(i)" :data-i="i"
@@ -63,7 +62,7 @@
 					<div class="pl-pick">
 						<div class="pl-stepper" role="group" aria-label="Sound">
 							<button type="button" class="pl-arr" aria-label="Previous sound" @click="stepSound(-1)">◂</button>
-							<button type="button" class="pl-val" aria-label="All sounds" @click="list = 'sound'"><span class="pl-cap" aria-hidden="true">{{ drums ? 'Kit' : 'Sound' }}</span>{{ soundName }}</button>
+							<button type="button" class="pl-val" aria-label="All sounds" @click="list = 'sound'"><span class="pl-cap" aria-hidden="true">Sound</span>{{ soundName }}</button>
 							<button type="button" class="pl-arr" aria-label="Next sound" @click="stepSound(1)">▸</button>
 						</div>
 						<button type="button" class="pl-icon pl-dice" aria-label="Random sound" title="Random sound" @click="rollSound">
@@ -94,7 +93,7 @@
 						</div>
 					</div>
 					<div class="pl-pick">
-						<div v-if="!drums" class="pl-mini" role="group" aria-label="Octave">
+						<div class="pl-mini" role="group" aria-label="Octave">
 							<button type="button" aria-label="Octave down" title="Every pad an octave down" @click="ctx.octave(-1)">↓</button>
 							<span>Oct</span>
 							<button type="button" aria-label="Octave up" title="Every pad an octave up" @click="ctx.octave(1)">↑</button>
@@ -111,8 +110,7 @@
 							@click="list = 'humanize'">Humanize</button>
 					</div>
 					<!-- Bass's four (PR 118): Cutoff, Reso, Env, Decay -->
-					<div v-if="drums" class="pl-macros"><DrumsMock part="phone-knobs" :variant="dphone" /></div>
-					<div v-else-if="bass" class="pl-macros">
+					<div v-if="bass" class="pl-macros">
 						<div class="pl-macro">
 							<Knob v-model="ctx.bass.cutoff" label="Cutoff" :min="40" :max="4000" :step="1" taper="log" size="small"
 								:value-text="hzText(ctx.bass.cutoff)" />
@@ -250,7 +248,6 @@
 <script setup lang="ts">
 import { ref, computed, provide, watch, onMounted, onBeforeUnmount } from 'vue';
 import Knob from './Knob.vue';
-import DrumsMock from './DrumsMock.vue';
 import ThemeToggle from './ThemeToggle.vue';
 import { SCALES, NOTE_TO_SEMITONE, midiToFreq, freqToMidiExact } from '../lib/melody/theory';
 import { VELOCITY_SHAPES, velocityShape, type VelocityShapeId } from '../lib/patterns/velocityShapes';
@@ -266,14 +263,10 @@ const lane = computed<any>(() => ctx.lane);
 // The desktop's panels shown here again must not take MIDI learn's links from the desktop's
 provide('noMidiLearn', true);
 
-// MOCKUPS ONLY: ?dphone=a|b|c adds Drums (DrumsMock.vue)
-const dphone = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('dphone') || '') : '';
-const drums = computed(() => (ctx.machine as string) === 'drums');
 const MACHINES = [
 	{ id: 'rhythm', name: 'Rhythm', short: 'RHY' },
 	{ id: 'bass', name: 'Bass', short: 'BASS' },
-	...(dphone ? [{ id: 'drums', name: 'Drums', short: 'DRUM' }] : []),
-] as any[];
+] as const;
 const BASS_FLAGS = [
 	{ id: 'accents', label: 'Accent', tip: 'Louder, the filter opening further' },
 	{ id: 'slides', label: 'Slide', tip: 'Glides into the next step\'s note' },
@@ -553,12 +546,6 @@ function hzText(hz: number) {
 	color: var(--pt-text, #fff);
 	background: rgba(255, 255, 255, .15);
 	box-shadow: inset 0 0 0 1px var(--hw-led, #5dffb0);
-}
-
-/* Three machines on the smallest phones (MOCKUP: Drums): the keys without their LEDs */
-@media (max-width: 599.98px) {
-	.pl-mkey { padding: 0 5px; }
-	.pl-mled { display: none; }
 }
 
 .pl-mled {

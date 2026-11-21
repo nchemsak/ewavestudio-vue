@@ -6,8 +6,7 @@
 		<PhoneLayout v-if="phoneActive" :ctx="phoneCtx">
 			<template #sound>
 				<!-- Bass shown (PR 118): its Sound section, compact, with a Mix group (Level, Pedals, the meter) -->
-				<DrumsMock v-if="drumsShown" part="phone-sound" :variant="drumsMock" />
-				<div v-else-if="bassChosen" class="pl-bass-sound">
+				<div v-if="bassChosen" class="pl-bass-sound">
 					<BassSound compact :sound="bass" :noteHz="bassScreenHz" :noteName="nearestNote(bassScreenHz)">
 						<template #mix>
 							<div class="bs-kgroup pl-mix" role="group" aria-label="Bass mix">
@@ -277,11 +276,6 @@
 						 1200 px; a row of their own under them narrower. -->
 					<div class="transport-presets">
 						<!-- While Bass is chosen they're Bass's (src/lib/machines/bassPresets.ts, PR 117) -->
-						<template v-if="drumsShown">
-							<PresetButtons title="Drum kits" dice-label="Random kit" :presets="DRUM_MOCK_KITS" active="kit" @choose="() => {}" @random="() => {}" />
-							<PresetButtons title="Drum patterns" dice-label="Random drum pattern" :presets="DRUM_MOCK_PATTERNS" active="backbeat" @choose="() => {}" @random="() => {}" />
-						</template>
-						<template v-else>
 						<PresetButtons v-if="!bassChosen" title="Sound presets" dice-label="Random sound" :presets="PRESETS" :active="activePresetId"
 							@choose="choosePreset" @random="rollRandomSound" />
 						<PresetButtons v-else title="Bass sounds" dice-label="Random bass sound" :presets="BASS_SOUNDS" :active="activeBassSoundId"
@@ -291,7 +285,6 @@
 							@random="rollRandomPattern" />
 						<PresetButtons v-else title="Bass patterns" dice-label="Random bass pattern" :presets="BASS_PATTERNS"
 							:active="activeBassPatternId" @choose="chooseBassPattern" @random="rollBassPattern" />
-						</template>
 					</div>
 
 					<!-- Play (+ the MIDI fallback) -->
@@ -320,7 +313,7 @@
 						<div class="mute-dot" :class="{ muted: bassChosen ? bassLane.muted : synthInstrument.muted }"
 							@click="onRailMute(machine)" role="button"
 							:title="(bassChosen ? bassLane.muted : synthInstrument.muted) ? 'Muted' : 'Playing'"></div>
-						<h2 class="pt-title">Step Sequencer<span class="ds-which"> · {{ drumsShown ? 'Drums' : bassChosen ? 'Bass' : 'Rhythm' }}</span></h2>
+						<h2 class="pt-title">Step Sequencer<span class="ds-which"> · {{ bassChosen ? 'Bass' : 'Rhythm' }}</span></h2>
 
 						<!-- No Vol knob while there's one lane (PR 92): the Volume knob is enough. The lane's
 							 volume (channelVolume) is still saved and played; it comes back as each
@@ -329,7 +322,7 @@
 						<!-- The Repeats brush: pick ×2–×4, then click or drag across pads to give them that
 						     many quick hits (a pad that has them already goes back to one). It stays
 						     picked until Esc, its lit button, or a click outside the pads' frame. -->
-						<div v-if="!bassChosen && !drumsShown" class="repeat-brush" role="group" aria-label="Repeats brush"
+						<div v-if="!bassChosen" class="repeat-brush" role="group" aria-label="Repeats brush"
 							title="Pick a number, then click or drag across pads to give them that many quick hits. Click a pad again for one hit. Esc, the lit button or a click elsewhere puts the brush down.">
 							<span class="repeat-brush__label" aria-hidden="true">Repeats</span>
 							<button v-for="n in BRUSH_COUNTS" :key="n" type="button" class="vel-btn hw-cap hw-cap-sm hw-led-left"
@@ -366,8 +359,7 @@
 					<div v-if="repeatBrush" class="brush-note" role="status">
 						Painting ×{{ repeatBrush }} repeats<span class="brush-note__how"> · Esc or click elsewhere to finish</span>
 					</div>
-					<DrumsMock v-if="drumsShown" part="pads" :variant="drumsMock" />
-					<BassPads v-else-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep"
+					<BassPads v-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep"
 						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
 						@open-pad-settings="({ index, anchorRect }) => openBassPad(index, anchorRect)" />
 					<SynthStepGrid v-else :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
@@ -395,10 +387,8 @@
 			</div>
 
 			<!-- Sound: three rows, each filled edge to edge -->
-			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title" :data-bass="bassChosen ? '' : undefined" :data-drums="drumsShown ? drumsMock : undefined">
-				<h2 id="sound-title" class="ds-section-title">Sound<span class="ds-which"> · {{ drumsShown ? 'Drums' : bassChosen ? 'Bass' : 'Rhythm' }}</span><DrumsMock v-if="drumsMock && !drumsShown && !bassChosen" part="keep" variant="" /></h2>
-				<DrumsMock v-if="drumsShown" part="sound" :variant="drumsMock" />
-				<DrumsMock v-if="drumsShown" part="shelf" :variant="drumsMock" />
+			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title" :data-bass="bassChosen ? '' : undefined">
+				<h2 id="sound-title" class="ds-section-title">Sound<span class="ds-which"> · {{ bassChosen ? 'Bass' : 'Rhythm' }}</span></h2>
 				<!-- The Bass machine's: wave tiles and Sub, its screen, its knobs; the pedals stay (the Effects card) -->
 				<BassSound v-show="bassChosen" :sound="bass" :noteHz="bassScreenHz" :noteName="nearestNote(bassScreenHz)" />
 
@@ -798,11 +788,6 @@ import { bassVoice, createBass, createBassLane } from '../lib/machines/bass';
 import { useLfoVisual } from '../composables/useLfoVisual';
 import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
-// MOCKUPS ONLY: ?drums=a|b|c (DrumsMock.vue), the Drums machine
-import DrumsMock from './DrumsMock.vue';
-const drumsMock = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('drums') || (new URLSearchParams(location.search).get('dphone') ? 'a' : '')) : '';
-const DRUM_MOCK_KITS = ['Kit', 'Tight', 'Deep', 'Tin', 'Room', 'Dust'].map((l) => ({ id: l.toLowerCase(), label: l, description: '' }));
-const DRUM_MOCK_PATTERNS = ['Four', 'Backbeat', 'Halftime', 'Breaks', 'Shuffle', 'Gallop'].map((l) => ({ id: l.toLowerCase(), label: l, description: '' }));
 import { BASS_PATTERNS, BASS_SOUNDS, bassPatternFrom, bassPatternKey, bassSoundKey, bassSoundOf, randomBassPattern, randomBassSound, type BassStep } from '../lib/machines/bassPresets';
 import BassPads from './BassPads.vue';
 import BassSound from './BassSound.vue';
@@ -906,9 +891,8 @@ const {
 // level). `machine` is the one the pads and the Sound section show (not saved).
 const bass = createBass();
 const bassLane = createBassLane(STEP_COUNT, 55);
-const machine = ref<'rhythm' | 'bass'>((drumsMock ? 'drums' : 'rhythm') as any);
+const machine = ref<'rhythm' | 'bass'>('rhythm');
 const bassChosen = computed(() => machine.value === 'bass');
-const drumsShown = computed(() => (machine.value as string) === 'drums'); // MOCKUPS ONLY
 // The rail's mixer (PR 116): how much of Rhythm goes through the pedals (Bass's is bassLane.pedals)
 const rhythmPedals = ref(1);
 
@@ -918,9 +902,6 @@ const railMachines = computed(() => {
 	return [
 		...(r ? [{ id: 'rhythm', name: 'Rhythm', steps: r.steps, pitches: r.pitches ?? [], velocities: r.velocities, muted: r.muted, level: r.channelVolume, pedals: rhythmPedals.value }] : []),
 		{ id: 'bass', name: 'Bass', steps: bassLane.steps, pitches: bassLane.pitches, velocities: bassLane.velocities, hueScale: 4, muted: bassLane.muted, level: bassLane.level, pedals: bassLane.pedals },
-		// MOCKUPS ONLY: the Drums row, its four slots stacked in each step
-		...(drumsMock ? [{ id: 'drums', name: 'Drums', steps: [], pitches: [], velocities: [], muted: false, level: 0.7, pedals: 1,
-			stack: Array.from({ length: 16 }, (_, i) => ((globalThis as any).__drumsMock ?? []).map((d: any) => (d.vel[i] > 0 ? d.hue : null))) }] : []),
 	];
 });
 function onRailMute(id: string) {
@@ -3158,25 +3139,18 @@ const SCALE_LABELS: Record<string, string> = {
 	none: '(no scale)', major: 'major', naturalMinor: 'minor', pentMajor: 'pentatonic major',
 	pentMinor: 'pentatonic minor', dorian: 'dorian', lydian: 'lydian', mixolydian: 'mixolydian',
 };
-// MOCKUPS ONLY: the tiny pads' view of Drums (any slot's hit, in the first such slot's colour)
-function drumsMockLane() {
-	const d = ((globalThis as any).__drumsMock ?? []) as any[];
-	const steps = Array.from({ length: 16 }, (_, i) => d.some((x) => x.vel[i] > 0));
-	const pitches = Array.from({ length: 16 }, (_, i) => d.find((x) => x.vel[i] > 0)?.hz ?? 220);
-	return { steps, pitches, velocities: Array(16).fill(1) };
-}
 const phoneCtx = reactive({
 	inst: synthInstrument,
 	// The machine the phone shows (PR 118; the top bar's RHY | BASS), and its lane
 	machine: computed({ get: () => machine.value, set: (m: 'rhythm' | 'bass') => { machine.value = m; } }),
-	lane: computed(() => (drumsShown.value ? drumsMockLane() : bassChosen.value ? bassLane : synthInstrument.value)),
+	lane: computed(() => (bassChosen.value ? bassLane : synthInstrument.value)),
 	bass,
 	currentStep, isPlaying, tempo, swing, canUndo, canRedo,
 	// The Sounds and Patterns steppers: the machine's own (Bass's while Bass is shown)
-	presets: computed(() => (drumsShown.value ? DRUM_MOCK_KITS : bassChosen.value ? BASS_SOUNDS : PRESETS)),
-	patterns: computed(() => (drumsShown.value ? DRUM_MOCK_PATTERNS : bassChosen.value ? BASS_PATTERNS : PATTERNS)),
-	activePresetId: computed(() => (drumsShown.value ? 'kit' : bassChosen.value ? activeBassSoundId.value : activePresetId.value)),
-	activePatternId: computed(() => (drumsShown.value ? 'backbeat' : bassChosen.value ? activeBassPatternId.value : activePatternId.value)),
+	presets: computed(() => (bassChosen.value ? BASS_SOUNDS : PRESETS)),
+	patterns: computed(() => (bassChosen.value ? BASS_PATTERNS : PATTERNS)),
+	activePresetId: computed(() => (bassChosen.value ? activeBassSoundId.value : activePresetId.value)),
+	activePatternId: computed(() => (bassChosen.value ? activeBassPatternId.value : activePatternId.value)),
 	keyRoot: computed(() => melodyUi.keyRoot),
 	keyScale: computed(() => melodyUi.keyScale),
 	keyScaleLabel: computed(() => SCALE_LABELS[melodyUi.keyScale] ?? melodyUi.keyScale),
@@ -3770,27 +3744,6 @@ async function recordSample() {
 /* One column: the tiles across, the screen, the knobs */
 @media (max-width: 719.98px) {
 	.ds-sound[data-bass] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "title" "osc" "big" "knobs"; }
-}
-.ds-sound .ds-section-title:has(.dm-keep) { display: flex; align-items: center; }
-.ds-sound[data-drums] .ds-which, .ds-sound .ds-section-title:has(.dm-keep) .ds-which { margin-left: .45em; }
-/* MOCKUPS ONLY (?drums=a|b|c): the Sound section as Drums': the slot cards beside the pedals */
-.ds-sound[data-drums] .ds-section-title { display: flex; align-items: center; }
-.ds-sound[data-drums] {
-	display: grid;
-	gap: 12px;
-	align-content: stretch;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-	grid-template-rows: auto 1fr auto;
-	grid-template-areas: "title title" "slots slots" "shelf fx";
-}
-.ds-sound[data-drums] > .ds-section-title { grid-area: title; }
-.ds-sound[data-drums] .sound-row-1,
-.ds-sound[data-drums] .sound-row-2,
-.ds-sound[data-drums] .sound-row-3 > .sound-stack { display: none; }
-.ds-sound[data-drums] .sound-row-3 { display: contents; }
-.ds-sound[data-drums] #effects-panel { grid-area: fx; }
-@media (max-width: 1199.98px) {
-	.ds-sound[data-drums] { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "slots" "shelf"; }
 }
 /* LAYOUT END */
 
