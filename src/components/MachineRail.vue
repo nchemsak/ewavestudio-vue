@@ -56,7 +56,11 @@
                         :value-text="`${Math.round(m.pedals * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
                 <div class="mr-cells" aria-hidden="true">
-                    <i v-for="(c, i) in m.cells" :key="i" :style="c.style"
+                    <template v-if="m.stack"><!-- MOCKUPS ONLY: Drums, its slots stacked in each step -->
+                        <i v-for="(col, i) in m.stack" :key="i" class="mr-stack" :class="{ beat: i % 4 === 0 }"><b v-for="(h, k) in col" :key="k"
+                            :style="h != null ? { background: `hsl(${h} 80% 58%)` } : undefined"></b></i>
+                    </template>
+                    <i v-else v-for="(c, i) in m.cells" :key="i" :style="c.style"
                         :class="{ on: c.on, beat: i % 4 === 0, now: playing && i === currentStep }"></i>
                 </div>
             </div>
@@ -98,6 +102,7 @@ export type RailMachine = {
     id: string; name: string;
     steps: boolean[]; pitches: number[]; velocities: number[]; hueScale?: number;
     muted: boolean; level: number; pedals: number;
+    stack?: (number | null)[][]; // MOCKUPS ONLY
 };
 
 const props = defineProps<{
@@ -400,6 +405,22 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
 .mr-cells i.now {
     outline: 1px solid #fff;
     outline-offset: 0;
+}
+
+/* MOCKUPS ONLY: Drums' stacked steps */
+.mr-cells i.mr-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: none;
+}
+.mr-stack b {
+    flex: 1;
+    border-radius: 1px;
+    background: rgba(255, 255, 255, 0.07);
+}
+.mr-stack.beat b {
+    background: rgba(255, 255, 255, 0.12);
 }
 
 /* Patterns A–D (PR 109; option A of PR 108's mockups): a caption, four caps and Copy */
