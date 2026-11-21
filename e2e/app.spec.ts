@@ -6199,6 +6199,94 @@ test.describe('Phone mode', () => {
 		expect(await page.getByRole('slider', { name: 'Decay', exact: true }).getAttribute('aria-valuenow')).toBe('400');
 	});
 
+	test('PR 118: Bass on the phone: RHY | BASS, its pads and marks, the hold sheet, four macros, Sound with Mix', async ({ page }) => {
+		const saved = async () => {
+			await page.getByRole('button', { name: 'Menu' }).click();
+			const menu = page.getByRole('dialog', { name: 'Menu' });
+			await menu.getByRole('button', { name: 'File ▾' }).click();
+			const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: 'Export file' }).click()]);
+			if (await menu.isVisible()) await menu.getByRole('button', { name: 'Close menu' }).click();
+			return JSON.parse(readFileSync((await download.path())!).toString('utf8')).data;
+		};
+		const machine = page.getByRole('radiogroup', { name: 'Machine' });
+		await expect(machine.getByRole('radio', { name: 'Rhythm' })).toHaveAttribute('aria-checked', 'true');
+		// A Rhythm step, so the Bass pads are seen to be Bass's own
+		await phonePads(page).nth(0).click();
+		await machine.getByRole('radio', { name: 'Bass' }).click();
+		await expect(machine.getByRole('radio', { name: 'Bass' })).toHaveAttribute('aria-checked', 'true');
+		await expect(phonePads(page).nth(0)).toHaveAttribute('aria-pressed', 'false');
+		// Bass's four macros instead of Rhythm's
+		for (const name of ['Cutoff', 'Reso', 'Env', 'Decay']) await expect(page.locator('.pl-play').getByRole('slider', { name, exact: true })).toBeVisible();
+		await expect(page.locator('.pl-play').getByRole('slider', { name: 'Sweep', exact: true })).toHaveCount(0);
+
+		// A tap turns a Bass step on, on A1
+		await phonePads(page).nth(4).click();
+		await expect(phonePads(page).nth(4)).toHaveAccessibleName('Step 5, A1');
+		await phonePads(page).nth(5).click();
+		// Holding a pad: notes in Bass's range, Accent, Slide and Tie (no Repeats)
+		await holdPad(page, 4);
+		const sheet = page.getByRole('dialog', { name: 'Step 5' });
+		await expect(sheet).toBeVisible();
+		await expect(sheet.getByRole('button', { name: '×3' })).toHaveCount(0);
+		for (const n of await sheet.locator('.pl-n').allTextContents()) expect(Number(n.replace(/\D/g, ''))).toBeLessThanOrEqual(3);
+		await sheet.getByRole('button', { name: 'Accent', exact: true }).click();
+		await sheet.getByRole('button', { name: 'Slide', exact: true }).click();
+		await expect(sheet.getByRole('button', { name: 'Slide', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await sheet.getByRole('button', { name: 'Done' }).click();
+		await expect(phonePads(page).nth(4).locator('.pl-acc')).toHaveText('ACC');
+		await expect(phonePads(page).nth(4).locator('.pl-link')).toHaveText('⤳');
+		// Tie takes Slide's place
+		await holdPad(page, 4);
+		await sheet.getByRole('button', { name: 'Tie', exact: true }).click();
+		await expect(sheet.getByRole('button', { name: 'Slide', exact: true })).toHaveAttribute('aria-pressed', 'false');
+		await sheet.getByRole('button', { name: 'Done' }).click();
+		await expect(phonePads(page).nth(4).locator('.pl-link')).toHaveText('═');
+
+		// A macro turns Bass's cutoff
+		const cutoff = page.locator('.pl-play').getByRole('slider', { name: 'Cutoff', exact: true });
+		await cutoff.focus();
+		await page.keyboard.press('End');
+		await expect(cutoff).toHaveAttribute('aria-valuenow', '4000');
+
+		// The steppers are Bass's presets
+		await page.getByRole('button', { name: 'Next sound' }).click();
+		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText('Sub');
+		await page.getByRole('button', { name: 'Next pattern' }).click();
+		await expect(page.getByRole('button', { name: 'All patterns' })).toContainText('Root');
+		await expect(phonePads(page).nth(0)).toHaveAttribute('aria-pressed', 'true');
+
+		// Sound: Bass's sound, and a Mix group with Level, Pedals and the meter
+		await page.getByRole('tab', { name: 'Sound' }).click();
+		const sound = page.locator('section[aria-label="Sound"]');
+		await expect(sound.getByRole('radio', { name: 'Saw' })).toBeVisible();
+		const mix = sound.getByRole('group', { name: 'Bass mix' });
+		await expect(mix.getByRole('meter', { name: 'Bass level meter' })).toBeVisible();
+		const pedals = mix.getByRole('slider', { name: 'Pedals', exact: true });
+		await pedals.focus();
+		await page.keyboard.press('Home');
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		await expect.poll(async () => Number(await mix.getByRole('meter').getAttribute('aria-valuenow')), { timeout: 5000 }).toBeGreaterThan(0);
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+
+		// Nothing scrolls on Bass's pages, at either size
+		for (const size of [{ width: 568, height: 320 }, { width: 844, height: 390 }]) {
+			await page.setViewportSize(size);
+			for (const [tab, label] of [['Pads', 'Play'], ['Sound', 'Sound']]) {
+				await page.getByRole('tab', { name: tab }).click();
+				const s = page.locator(`section[aria-label="${label}"]`);
+				expect(await s.evaluate((el) => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1), `${tab} at ${size.width}`).toBe(true);
+			}
+			const bar = page.locator('.pl-top');
+			expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+		}
+
+		// Saved: the Sub sound, Bass all round the pedals, Root's pattern in Bass's lane
+		const data = await saved();
+		expect(data.bass.sound.cutoff).toBe(140);
+		expect(data.bass.pedals).toBe(0);
+		expect(data.bass.lane.steps.filter(Boolean)).toHaveLength(4);
+	});
+
 	test('Export audio on a phone: bars and ending only, one normalized mix', async ({ page }) => {
 		await phonePads(page).nth(0).click();
 		await page.getByRole('button', { name: 'Menu' }).click();
