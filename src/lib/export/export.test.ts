@@ -20,7 +20,7 @@ function readMidi(bytes: Uint8Array) {
 	expect(end).toBe(bytes.length);
 	let at = 22, tick = 0, tempo = 0, endTick = -1;
 	const open = new Map<number, { on: number; velocity: number }>();
-	const notes: { on: number; off: number; note: number; velocity: number }[] = [];
+	const notes: { on: number; off: number; note: number; velocity: number; channel: number }[] = [];
 	const vlq = () => { let n = 0, b; do { b = bytes[at++]; n = (n << 7) | (b & 0x7f); } while (b & 0x80); return n; };
 	while (at < end) {
 		tick += vlq();
@@ -32,12 +32,13 @@ function readMidi(bytes: Uint8Array) {
 			if (type === 0x2f) endTick = tick;
 			at += len;
 		} else if ((status & 0xf0) === 0x90) {
-			open.set(bytes[at], { on: tick, velocity: bytes[at + 1] });
+			open.set((status & 0x0f) * 128 + bytes[at], { on: tick, velocity: bytes[at + 1] });
 			at += 2;
 		} else if ((status & 0xf0) === 0x80) {
-			const o = open.get(bytes[at])!;
-			notes.push({ on: o.on, off: tick, note: bytes[at], velocity: o.velocity });
-			open.delete(bytes[at]);
+			const key = (status & 0x0f) * 128 + bytes[at];
+			const o = open.get(key)!;
+			notes.push({ on: o.on, off: tick, note: bytes[at], velocity: o.velocity, channel: status & 0x0f });
+			open.delete(key);
 			at += 2;
 		} else throw new Error(`unexpected status ${status}`);
 	}
@@ -142,6 +143,19 @@ describe('the MIDI file', () => {
 		expect(m).toMatchObject({ format: 0, tracks: 1, ppq: PPQ, tempo: 500000 }); // 120 BPM
 		expect(m.endTick).toBe(4 * 16 * STEP_TICKS);
 		expect(m.notes.map(n => n.on)).toEqual([0, 1, 2, 3].map(b => b * 16 * STEP_TICKS));
+	});
+
+	it('Bass on channel 2: held while tied or slid, a slide arriving as a new note, Accent at 127', () => {
+		const flags = (on: number[]) => steps(on);
+		const pattern = {
+			steps: steps([0, 1, 4, 8]), velocities: Array(16).fill(0.5), pitches: Array.from({ length: 16 }, (_, i) => (i === 1 ? 110 : 55)),
+			accents: flags([8]), slides: flags([0]), ties: flags([4]),
+		};
+		const m = readMidi(patternToMidi({ ...base, active: steps([0]), bass: { pattern } }));
+		const bass = m.notes.filter((n) => n.channel === 1).map((n) => [n.on / STEP_TICKS, Math.round((n.off + 1) / STEP_TICKS), n.note, n.velocity]);
+		// A1 slides into A2 on step 2; step 5 tied through step 6; step 9 accented
+		expect(bass).toEqual([[0, 1, 33, 55], [1, 2, 45, 55], [4, 6, 33, 55], [8, 9, 33, 127]]);
+		expect(m.notes.filter((n) => n.channel === 0)).toHaveLength(1);
 	});
 
 	it('the chain: each bar plays its own pattern, round again', () => {

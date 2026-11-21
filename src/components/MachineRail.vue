@@ -25,6 +25,7 @@
 
         <!-- A click on a row (its name or its steps) picks the machine the pads and the Sound section show -->
         <div class="mr-rows" role="list">
+            <div class="mr-heads" aria-hidden="true"><span></span><span></span><span></span><span>Level</span><span>Pedals</span><span>Steps</span></div>
             <div v-for="m in rows" :key="m.id" class="mr-row" :class="{ 'is-chosen': m.id === chosen }" role="listitem"
                 @click="onRowClick(m.id, $event)">
                 <button type="button" class="mr-led" :class="{ lit: !m.muted }" role="switch" :aria-checked="!m.muted"
@@ -33,6 +34,9 @@
                 <button type="button" class="mr-name" :aria-pressed="m.id === chosen ? 'true' : 'false'"
                     :aria-label="`Show ${m.name}`" :title="m.id === chosen ? `The pads and Sound show ${m.name}` : `Show ${m.name} on the pads and in Sound`"
                     @click="emit('choose', m.id)">{{ m.name }}</button>
+                <!-- Its level as it plays: eight LEDs, the last two amber (meterLeds) -->
+                <span class="mr-meter" role="meter" :aria-label="`${m.name} level meter`" aria-valuemin="0" aria-valuemax="8"
+                    :aria-valuenow="lit[m.id] ?? 0"><b v-for="n in 8" :key="n" :class="{ on: n <= (lit[m.id] ?? 0), hot: n >= 7 }"></b></span>
                 <div class="mr-level">
                     <!-- One knob per machine in the source: MIDI learn's ids must each be on one knob -->
                     <Knob v-if="m.id === 'rhythm'" midi-id="synth.volume" :modelValue="m.level" @update:modelValue="(v: number) => emit('update:level', m.id, v)"
@@ -41,6 +45,15 @@
                     <Knob v-else midi-id="bass.level" :modelValue="m.level" @update:modelValue="(v: number) => emit('update:level', m.id, v)"
                         :label="`${m.name} level`" hideLabel size="mini"
                         :value-text="`${Math.round(m.level * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
+                </div>
+                <!-- Pedals: how much of it goes through the pedals; the rest skips them -->
+                <div class="mr-level" :title="`${m.name} into the pedals: ${Math.round(m.pedals * 100)}% (the rest skips the overdrive, delay and reverb)`">
+                    <Knob v-if="m.id === 'rhythm'" midi-id="synth.pedals" :modelValue="m.pedals" @update:modelValue="(v: number) => emit('update:pedals', m.id, v)"
+                        :label="`${m.name} into the pedals`" hideLabel size="mini"
+                        :value-text="`${Math.round(m.pedals * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
+                    <Knob v-else midi-id="bass.pedals" :modelValue="m.pedals" @update:modelValue="(v: number) => emit('update:pedals', m.id, v)"
+                        :label="`${m.name} into the pedals`" hideLabel size="mini"
+                        :value-text="`${Math.round(m.pedals * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
                 <div class="mr-cells" aria-hidden="true">
                     <i v-for="(c, i) in m.cells" :key="i" :style="c.style"
@@ -79,11 +92,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Knob from './Knob.vue';
 import { padHue } from '../lib/padColour';
 import { startScope, startSpectrogram } from './monitorViews';
+import { meterLeds } from '../lib/meter';
 
 export type RailMachine = {
     id: string; name: string;
     steps: boolean[]; pitches: number[]; velocities: number[]; hueScale?: number;
-    muted: boolean; level: number;
+    muted: boolean; level: number; pedals: number;
 };
 
 const props = defineProps<{
@@ -96,6 +110,7 @@ const props = defineProps<{
     chosen: string;         // the machine the pads and Sound show
     currentStep: number;
     playing: boolean;
+    meter?: (id: string) => number; // a machine's level now (the engine's machineLevel)
     slots: { name: string; filled: boolean }[]; // patterns A–D
     currentSlot: number;
     queuedSlot: number | null;  // waiting for the bar
@@ -108,6 +123,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'toggle-mute', id: string): void;
     (e: 'update:level', id: string, v: number): void;
+    (e: 'update:pedals', id: string, v: number): void;
     (e: 'choose', id: string): void;
     (e: 'choose-slot', index: number, now: boolean): void;
     (e: 'update:copyArmed', v: boolean): void;
@@ -153,6 +169,26 @@ function onRowClick(id: string, e: MouseEvent) {
     if ((e.target as HTMLElement).closest('.mr-led, .mr-name, .mr-level')) return;
     emit('choose', id);
 }
+
+// The meters: how many of the eight LEDs are lit, per machine, falling back smoothly. They
+// read the engine every frame while something sounds (active()), and go dark after.
+const lit = ref<Record<string, number>>({});
+const held: Record<string, number> = {};
+let meterFrame = 0;
+function meterLoop() {
+    meterFrame = requestAnimationFrame(meterLoop);
+    const next: Record<string, number> = {};
+    let changed = false;
+    for (const m of props.machines) {
+        const now = props.meter && props.active() ? props.meter(m.id) : 0;
+        held[m.id] = Math.max(now, (held[m.id] ?? 0) * 0.88);
+        next[m.id] = meterLeds(held[m.id]);
+        if (next[m.id] !== lit.value[m.id]) changed = true;
+    }
+    if (changed) lit.value = next;
+}
+onMounted(() => { meterFrame = requestAnimationFrame(meterLoop); });
+onBeforeUnmount(() => cancelAnimationFrame(meterFrame));
 
 const scopeEl = ref<HTMLCanvasElement | null>(null);
 const specEl = ref<HTMLCanvasElement | null>(null);
@@ -229,14 +265,53 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     gap: 5px;
 }
 
-.mr-row {
+.mr-row,
+.mr-heads {
     display: grid;
-    grid-template-columns: 14px 64px 30px minmax(0, 1fr);
+    grid-template-columns: 14px 46px 30px 30px 30px minmax(0, 1fr);
     align-items: center;
     gap: 8px;
     padding: 4px 8px;
     border-radius: 6px;
     background: var(--pt-inset, rgba(0, 0, 0, 0.3));
+}
+
+/* Captions over the knobs and the steps (PR 116) */
+.mr-heads {
+    padding: 0 8px;
+    font: 700 8px Cousine, ui-monospace, monospace;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--pt-text-dim, #b9a8d8);
+    text-align: center;
+}
+
+.mr-heads span:last-child {
+    text-align: left;
+}
+
+/* The meter: eight LEDs, green, the last two amber (PR 116; option L of the mockups) */
+.mr-meter {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 1px;
+    width: 30px;
+    height: 10px;
+}
+
+.mr-meter b {
+    border-radius: 1px;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.mr-meter b.on {
+    background: #3ddc97;
+    box-shadow: 0 0 3px #3ddc97;
+}
+
+.mr-meter b.on.hot {
+    background: #ffd166;
+    box-shadow: 0 0 3px #ffd166;
 }
 
 .mr-row.is-chosen {

@@ -1154,10 +1154,49 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   the row (the pedals are on the Effects tab); one column under 720 px. Kept mounted
   (`v-show`) so MIDI learn sees its seven knobs (`bass.*`; 43 learnable knobs with the rail's
   `bass.level`). The screen takes no drag yet.
-- **Not yet** (parts 2 and 3 of item 4): the presets boxes, Pattern Tools, the Melody Maker's
-  Generate and the hit behind the Envelope card are still Rhythm's while Bass is chosen; the
-  rail's mixer (an LED meter per machine, Pedals: how much goes through the pedals), a stem
-  per machine and Bass in the MIDI file; the phone (option P).
+- **The mixer** (PR 116, item 4's part 2a; option L's meter of the mockups): see "The rail's
+  mixer". **Not yet** (2b and 3): the presets boxes, Pattern Tools, the Melody Maker's Generate
+  and the hit behind the Envelope card are still Rhythm's while Bass is chosen; the phone
+  (option P).
+
+### The rail's mixer
+- PR 116 (the plan's item 4, part 2a). Each machine's row in the rail is a channel strip: its
+  LED (mute), name, an **LED meter**, **Level**, **Pedals** and its steps, under a row of
+  captions (`.mr-heads`: Level, Pedals, Steps).
+- **Machine buses** (`liveEngine.ts`, "Machine buses"; the export engine the same): each
+  machine's notes meet in a bus of its own (`rhythmBus`, `bassBus`). From it **Pedals** of it
+  goes into the pedals (`driveIn`: through the drive while it's on, round it while it's off,
+  crossfaded in 5 ms; then the delay and reverb as before) and the rest straight to
+  `preMaster`, round them. The lo-fi pedal, last in the chain, takes both. At full Pedals (the
+  default for both, and what a project from before gets) a machine sounds as it did. Rhythm's
+  noise layer, which always skipped the pedals, still does (`rhythmNoise` → `preMaster`).
+  Until PR 116 each note chose the drive's inputs itself (`toneOut`), so turning the drive on
+  only changed the notes after it; now a note that's ringing follows the switch too.
+- **The meter** (`.mr-meter`, `role="meter"`, "Bass level meter", `aria-valuenow` 0–8): eight
+  LEDs, 6 dB apart from −42 dBFS, the last two (−6, −3) amber (`meterLeds()` in
+  `src/lib/meter.ts`, unit-tested). Each bus feeds a small analyser (512 points; Rhythm's
+  noise layer too); `machineLevel(id)` is its peak times the Volume knob. The rail reads it
+  every frame (`meterLoop`) while something sounds (`active()`), the lit count falling back
+  12 % a frame, and only re-renders when a count changes.
+- **Pedals** (a mini knob per row, "Rhythm into the pedals" / "Bass into the pedals",
+  `synth.pedals` / `bass.pedals`, MIDI-learnable: 45 knobs; its title says what the rest
+  skips). Saved as `mixer.rhythm.pedals` and `bass.pedals` (0..1; a project from before: 1);
+  File → New: 1. Not part of a sound, so presets leave it.
+- **Machine stems** (the Export dialog's "Machine stems", `machineStems`): `_rhythm.wav` and
+  `_bass.wav` (while Bass plays: unmuted, a step on), each that machine alone through the
+  pedals (`state.machine` in `scheduleStepSequencer.ts`: the other's notes aren't played; REV's
+  gates still open as in the mix), without the lo-fi pedal's noise (`tapeNoise.seconds` 0),
+  which is `_tape.wav` of its own (unless the effects stems have it). With the mix's limiter
+  gains and Normalize's one gain, they add up to the mix, exactly while the overdrive and the
+  lo-fi pedal are off (both bend the sum, not each machine; the dialog's hint says "nearly"
+  then). The mix is rendered whenever they are.
+- **Bass in the MIDI file** (`bassEvents()` in `src/lib/export/midi.ts`, unit-tested): on MIDI
+  channel 2, from `bassPlan()`: each note as long as it's held (tied or slid into the next
+  steps), a slide's new pitch a new note from the step it arrives on, velocity × 110, Accent
+  at 127; with the chain, each bar's pattern.
+- Browser tests: the meters light while playing and go dark when muted, Pedals saved and an
+  undo step; an export with Bass at no Pedals (no reverb in its stem, Rhythm's ringing), the
+  machine stems adding up to the mix sample for sample, Bass's notes on channel 2.
 - Unit tests: `bass.test.ts` (the plan, timing, the note's shape), `bassView.test.ts`,
   `slots.test.ts` (the Bass track). Browser tests: the rail picks Bass, its pads and toggles,
   saved, undo; Bass alone in the export at its pitch, live, a slide that doesn't start again,
@@ -1272,7 +1311,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### MIDI learn
 - A controller's knobs turn the app's knobs. Learn (in the MIDI toolbar, once an input is
-  chosen) starts learn mode: the 43 learnable knobs (Bass's eight since PR 115; 31 after PR 77 made Unison's Voices keys, 33 with the tape pedal's two, 32 since PR 92 hid the Step Sequencer's Vol, 33 again with the sample's Length, PR 100, 34 with the reverb's PRE, PR 103, 35 with the rail's Rhythm level, PR 108, which is `synth.volume` again; the reverb's DECAY knob is SWELL while REV is on, PR 105) get a dashed outline and a badge ("CC 21",
+  chosen) starts learn mode: the 45 learnable knobs (the rail's two Pedals since PR 116, Bass's eight since PR 115; 31 after PR 77 made Unison's Voices keys, 33 with the tape pedal's two, 32 since PR 92 hid the Step Sequencer's Vol, 33 again with the sample's Length, PR 100, 34 with the reverb's PRE, PR 103, 35 with the rail's Rhythm level, PR 108, which is `synth.volume` again; the reverb's DECAY knob is SWELL while REV is on, PR 105) get a dashed outline and a badge ("CC 21",
   or "CC 7 ch 3" off channel 1) for the controller knob they follow, and a bar at the bottom of
   the screen says what to do (with Clear all and Done; a spacer under the page lets the last
   knobs scroll clear of it). Click a knob (or Enter on it) to arm it, then turn a controller
@@ -2290,11 +2329,9 @@ Grow into a small groovebox:
 
 4. **The Bass machine**, and the layout for machines (mockups done: K on the desktop, P on the
     phone; part 1 was PR 115, see "The Bass machine"). Left:
-    - **Part 2: the mixer and the rest of the desktop.** In the rail, per machine: an 8-LED level
-      meter and **Pedals** (how much of it goes through the pedals: Rhythm at full is today's
-      sound); a stem per machine in the export, and Bass in the MIDI file (its own channel); the
-      Sounds and Patterns boxes become Bass's while Bass is chosen (six bass sounds, six bass
-      patterns, their dice); Pattern Tools and the Melody Maker's Generate on the chosen machine.
+    - **Part 2b: the rest of the desktop** (2a, the mixer, was PR 116). The Sounds and Patterns
+      boxes become Bass's while Bass is chosen (six bass sounds, six bass patterns, their dice);
+      Pattern Tools and the Melody Maker's Generate on the chosen machine.
     - **Part 3: the phone** (option P): RHY | BASS keys in the top bar (the tabs shortened to
       their first letters at 568 px), Bass's pads with ACC, ⤳ and ═ marks, its hold sheet
       (notes, velocity, Accent, Slide, Tie), its four macros (Cutoff, Reso, Env, Decay), and its
@@ -2617,6 +2654,7 @@ Done:
 | 113 | The Rhythm machine's settings moved out of `DrumSequencer.vue` (the plan's item 3, part 2; nothing to see or hear): `createRhythm()` in `src/lib/machines/rhythm.ts` makes the synth lane's sound settings from one table of factory values (`RHYTHM_DEFAULTS`, which File → New and the presets put back), and `rhythmVoice()` gives the voice `note.ts` plays to both the live engine and the export. Until then each setting was declared on its own in `DrumSequencer.vue` and its factory value written again in `snapshot.ts`. |
 | 114 | A gentle limiter on the output (the plan's item 3, part 3, which finishes the groundwork for the machines): a brickwall at −1 dBFS after the Volume knob, with a 1.5 ms look-ahead and a 100 ms release (`src/audio/limiter.ts`); an AudioWorklet live, the same code on the export's mix, whose gains go onto every stem so they still add up. Below the ceiling it does nothing, so today's sounds play and export bit for bit as before. |
 | 115 | The Bass machine, part 1 (the plan's item 4; option K of four rounds of mockups, the phone's P for part 3): a second machine, its row in the rail (a click shows it on the pads and in Sound; its LED mutes it; its level). One note at a time, saw or square with a sub, a resonant low-pass with its envelope, per step Accent, Slide (glides into the next note, which doesn't start again) and Tie (holds through the next step), in both engines (`src/audio/bass.ts`); its pads with Accent, Slide and Tie rows (`BassPads.vue`), its Sound section (Saw \| Square and Sub, a big screen of a note, Filter and Note knobs beside the pedals, `BassSound.vue`); saved with the project and in each pattern slot (older projects: empty), following the key, MIDI-learnable, played by MIDI keys while chosen. |
+| 116 | The Bass machine, part 2a: the rail's mixer. Each machine's row has an 8-LED meter (lit while it plays) and **Pedals**, how much of it goes through the overdrive, delay and reverb (the rest skips them; full, as before, by default), on machine buses in both engines; the Export dialog's **Machine stems** (`_rhythm.wav`, `_bass.wav`, adding up to the mix); Bass in the MIDI file on channel 2 (held notes, slides, Accent at 127). Saved (`mixer.rhythm.pedals`, `bass.pedals`), MIDI-learnable (45 knobs). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

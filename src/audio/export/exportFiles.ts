@@ -35,6 +35,7 @@ export type ExportOptions = {
 	ending: Ending;
 	mix: boolean;
 	stems: boolean;      // dry, delay, reverb, noise, tape
+	machineStems?: boolean; // a file per machine, rhythm and bass (and the lo-fi pedal's noise)
 	midi: boolean;
 	oneShot: boolean;
 	oneShotHz: number;   // the one-shot's note
@@ -42,7 +43,7 @@ export type ExportOptions = {
 };
 
 export const DEFAULT_EXPORT_OPTIONS: Omit<ExportOptions, 'oneShotHz'> = {
-	play: 'pattern', bars: 1, ending: 'loop', mix: true, stems: false, midi: false, oneShot: false, normalize: true,
+	play: 'pattern', bars: 1, ending: 'loop', mix: true, stems: false, machineStems: false, midi: false, oneShot: false, normalize: true,
 };
 
 export const STEM_PARTS: ExportPart[] = ['dry', 'delay', 'reverb', 'noise', 'tape'];
@@ -127,21 +128,35 @@ export async function buildExportFiles(
 	const names = exportNames({ project: meta.project, bpm: state.bpm, key: meta.key, bars, ending: o.ending, chain });
 	const loopFrames = barFrames(bars, state.bpm, sr);
 	const seconds = loopFrames / sr + state.tailSeconds;
-	// The mix is rendered for the stems too: the output limiter's gains come from it
-	const parts: ExportPart[] = [...(o.mix || o.stems ? ['mix' as const] : []), ...(o.stems ? STEM_PARTS : [])];
-	const total = parts.length + (o.oneShot ? 1 : 0);
+	// What to render, each a file named `name`: the mix (rendered for the stems too: the output
+	// limiter's gains come from it), the effects stems, and the machine stems (PR 116): each
+	// machine alone through the pedals, without the lo-fi pedal's noise, which is a file of its
+	// own (the effects stems' 'tape'), so they add up to the mix (with the overdrive and the
+	// lo-fi pedal off exactly: both bend the sum, not each machine)
+	type Job = { name: string; part: ExportPart; machine?: 'rhythm' | 'bass' };
+	const stemNames = new Set<string>();
+	const jobs: Job[] = [];
+	if (o.mix || o.stems || o.machineStems) jobs.push({ name: 'mix', part: 'mix' });
+	if (o.stems) for (const p of STEM_PARTS) { jobs.push({ name: p, part: p }); stemNames.add(p); }
+	if (o.machineStems) {
+		jobs.push({ name: 'rhythm', part: 'mix', machine: 'rhythm' });
+		if (state.bass) jobs.push({ name: 'bass', part: 'mix', machine: 'bass' });
+		if (!o.stems) jobs.push({ name: 'tape', part: 'tape' });
+	}
+	const total = jobs.length + (o.oneShot ? 1 : 0);
 	let done = 0;
 	progress(done, total);
 
 	// The mix and stems: the same random numbers for each, so they match
 	const seed = Math.floor(Math.random() * 2 ** 32);
-	const rendered: { part: ExportPart; channels: Channels }[] = [];
-	for (const part of parts) {
+	const rendered: { part: string; channels: Channels }[] = [];
+	for (const job of jobs) {
+		const fade = o.ending === 'tail' ? TAPE_NOISE_FADE_S : 0;
 		rendered.push({
-			part,
+			part: job.name,
 			channels: await render({
-				...state, bars, part, random: seededRandom(seed),
-				tapeNoise: { fade: o.ending === 'tail' ? TAPE_NOISE_FADE_S : 0 },
+				...state, bars, part: job.part, machine: job.machine, random: seededRandom(seed),
+				tapeNoise: job.machine ? { seconds: 0, fade: 0 } : { fade },
 			}, seconds),
 		});
 		progress(++done, total);
@@ -162,7 +177,7 @@ export async function buildExportFiles(
 	const gains = mixed ? limiterGains(mixed.channels, sr) : null;
 	const audio = shaped
 		.map((a) => (gains ? { ...a, channels: applyGains(a.channels, gains) } : a))
-		.filter(({ part, channels }) => (part === 'mix' ? o.mix : part === 'dry' || peakOf(channels) > SILENT_PEAK));
+		.filter(({ part, channels }) => (part === 'mix' ? o.mix : part === 'dry' || part === 'rhythm' || peakOf(channels) > SILENT_PEAK));
 	const gain = o.normalize ? normalizeGain(peakOf(...audio.map((a) => a.channels))) : 1;
 	const files: ExportFile[] = audio.map((a) => ({
 		name: names.wav(a.part), data: wav(applyGain(a.channels, gain), sr), type: 'audio/wav',
@@ -177,6 +192,7 @@ export async function buildExportFiles(
 				active: state.pattern.active, velocities: state.pattern.velocities,
 				pitches: state.pattern.pitches, ratchets: state.pattern.ratchets,
 				repeatNotes: state.pattern.repeatNotes, repeatChord: state.pattern.repeatChord, name: meta.project,
+				bass: state.bass && { pattern: state.bass.pattern, barPatterns: state.bass.barPatterns },
 			}),
 		});
 	}

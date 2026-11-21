@@ -118,6 +118,9 @@ export type ProjectState = {
 	// The Bass machine (src/lib/machines/bass.ts): its sound, and its lane (the current slot's
 	// Bass track as it's being edited, with the machine's mute and level), reactive
 	bass: { sound: BassSettings; lane: BassLane };
+	// The rail's mixer (PR 116): Rhythm's Pedals, how much of it goes through the pedals 0..1
+	// (Bass's is its lane's `pedals`)
+	mixer: { rhythmPedals: Ref<number> };
 	melody: MelodyUi; // reactive
 	selectedWaveform: Ref<PadWave>;
 	// Resizes every lane's step arrays (and the noise mask) to the step count
@@ -396,8 +399,12 @@ export function buildSnapshot(st: ProjectState) {
 			sound: bassSoundSnapshot(st.bass.sound),
 			muted: st.bass.lane.muted,
 			level: st.bass.lane.level,
+			pedals: st.bass.lane.pedals,
 			lane: Object.fromEntries(BASS_FIELDS.map((f) => [f, [...st.bass.lane[f]]])) as Record<(typeof BASS_FIELDS)[number], any[]>,
 		},
+
+		// The rail's mixer: Rhythm's Pedals (Bass's is in `bass`)
+		mixer: { rhythm: { pedals: st.mixer.rhythmPedals.value } },
 
 		// melodyUi mirrors the Melody Maker panel, which reports every change through events
 		melody: {
@@ -729,10 +736,17 @@ export function applySnapshot(st: ProjectState, s: any) {
 		applyBassSound(st.bass.sound, s.bass.sound);
 		if (typeof s.bass.muted === 'boolean') st.bass.lane.muted = s.bass.muted;
 		if (typeof s.bass.level === 'number' && Number.isFinite(s.bass.level)) st.bass.lane.level = Math.min(1, Math.max(0, s.bass.level));
+		// Pedals (PR 116): a project from PR 115 has none, all through them as it played
+		st.bass.lane.pedals = typeof s.bass.pedals === 'number' && Number.isFinite(s.bass.pedals) ? Math.min(1, Math.max(0, s.bass.pedals)) : 1;
 		applyBassLane(st.bass.lane, s.bass.lane, stepLength.value, bassHz);
 	} else if (Array.isArray(s.instruments) && s.instruments.length) {
 		resetBass(st, stepLength.value, bassHz);
 	}
+
+	// The rail's mixer (PR 116): a project from before plays Rhythm all through the pedals
+	const rp = s.mixer?.rhythm?.pedals;
+	if (typeof rp === 'number' && Number.isFinite(rp)) st.mixer.rhythmPedals.value = Math.min(1, Math.max(0, rp));
+	else if (Array.isArray(s.instruments) && s.instruments.length) st.mixer.rhythmPedals.value = 1;
 
 	// Patterns A–D (PR 109): a project saved before them has its pattern in A, B–D empty. The
 	// current slot's pattern is the lane's (above), as it always was.
@@ -783,6 +797,7 @@ function resetBass(st: ProjectState, n: number, hz: number) {
 	const lane = st.bass.lane;
 	lane.muted = false;
 	lane.level = BASS_LEVEL_DEFAULT;
+	lane.pedals = 1;
 	lane.steps = Array(n).fill(false);
 	lane.velocities = Array(n).fill(1);
 	lane.pitches = Array(n).fill(hz);
@@ -856,6 +871,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	chain.value = emptyChain();
 	chainOn.value = false;
 	resetBass(st, stepLength.value, bassDefaultHz(currentDefaultHz.value));
+	st.mixer.rhythmPedals.value = 1;
 
 	// remove custom channels
 	for (let idx = instruments.value.length - 1; idx >= 0; idx--) {

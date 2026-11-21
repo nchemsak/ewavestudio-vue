@@ -199,6 +199,7 @@
 			<MachineRail v-if="synthInstrument" class="ds-rail" :analyser="analyser" :sampleRate="audioCtx.sampleRate"
 				:active="viewSource.active" :machines="railMachines" :chosen="machine"
 				:currentStep="currentStep" :playing="isPlaying" @toggle-mute="onRailMute" @update:level="onRailLevel"
+				@update:pedals="(id: string, v: number) => { if (id === 'bass') bassLane.pedals = v; else rhythmPedals = v; }" :meter="machineLevel"
 				@choose="(id: string) => { machine = id as any; }"
 				:slots="slotView" :currentSlot="currentSlot" :queuedSlot="queuedSlot" v-model:copyArmed="copyArmed"
 				@choose-slot="chooseSlot"
@@ -677,7 +678,7 @@
 		<ShareNotice :playing="isPlaying" @play="onSharePlay" />
 		<!-- File → Export audio… (src/audio/export/exportFiles.ts makes the files) -->
 		<ExportDialog :open="exportOpen" :options="exportOptions" :notes="oneShotNotes" :bpm="tempo"
-			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :chain="exportChain?.letters ?? null" :slotName="SLOT_NAMES[currentSlot]" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
+			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :chain="exportChain?.letters ?? null" :slotName="SLOT_NAMES[currentSlot]" :bassOn="!!exportState.bass" :bending="driveEnabled || tapeEnabled" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
 			@export="runExport" @close="exportOpen = false" />
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave" :hasSample="!!sample"
@@ -869,13 +870,15 @@ const bass = createBass();
 const bassLane = createBassLane(STEP_COUNT, 55);
 const machine = ref<'rhythm' | 'bass'>('rhythm');
 const bassChosen = computed(() => machine.value === 'bass');
+// The rail's mixer (PR 116): how much of Rhythm goes through the pedals (Bass's is bassLane.pedals)
+const rhythmPedals = ref(1);
 
 // The rail's rows (MachineRail.vue): Rhythm (the synth lane) and Bass
 const railMachines = computed(() => {
 	const r = synthInstrument.value;
 	return [
-		...(r ? [{ id: 'rhythm', name: 'Rhythm', steps: r.steps, pitches: r.pitches ?? [], velocities: r.velocities, muted: r.muted, level: r.channelVolume }] : []),
-		{ id: 'bass', name: 'Bass', steps: bassLane.steps, pitches: bassLane.pitches, velocities: bassLane.velocities, hueScale: 4, muted: bassLane.muted, level: bassLane.level },
+		...(r ? [{ id: 'rhythm', name: 'Rhythm', steps: r.steps, pitches: r.pitches ?? [], velocities: r.velocities, muted: r.muted, level: r.channelVolume, pedals: rhythmPedals.value }] : []),
+		{ id: 'bass', name: 'Bass', steps: bassLane.steps, pitches: bassLane.pitches, velocities: bassLane.velocities, hueScale: 4, muted: bassLane.muted, level: bassLane.level, pedals: bassLane.pedals },
 	];
 });
 function onRailMute(id: string) {
@@ -2137,8 +2140,11 @@ const exportState = computed<StepSequencerState>(() => {
 		bass: bassLane.muted || !bassLane.steps.some(Boolean) ? undefined : {
 			voice: bassVoice(bass),
 			level: bassLane.level,
+			pedals: bassLane.pedals,
 			pattern: bassPatternOf(bassLane),
 		},
+		// The rail's mixer: how much of Rhythm goes through the pedals
+		rhythmPedals: rhythmPedals.value,
 
 		sampleRate: audioCtx?.sampleRate || 48000,
 		tailSeconds: 5.0,
@@ -2224,6 +2230,7 @@ const projectState: ProjectState = {
 	},
 	instruments,
 	bass: { sound: bass, lane: bassLane },
+	mixer: { rhythmPedals },
 	patterns: { slots: patternSlots, current: currentSlot, chain, chainOn },
 	melody: melodyUi,
 	selectedWaveform,
@@ -2246,6 +2253,7 @@ const {
 	currentStep,
 	playSynthNote,
 	playBassNow,
+	machineLevel,
 	startLfoIfNeeded,
 	togglePlay,
 	hardStopSequencer,
@@ -2258,6 +2266,7 @@ const {
 	pattern: { lanes: instruments, stepLength, selectedWaveform, noiseMask, repeatChord },
 	rhythm,
 	bass: projectState.bass,
+	rhythmPedals,
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
 	reverb: projectState.fx.reverb,
@@ -2628,7 +2637,7 @@ async function runExport(options: ExportOptions) {
 		const chainNow = options.play === 'chain' ? exportChain.value : null;
 		// With the chain, Bass plays each cell's pattern too
 		const bassChain = chainNow && !bassLane.muted && chainNow.bassPatterns.some((p) => p.steps.some(Boolean))
-			? { voice: bassVoice(bass), level: bassLane.level, pattern: chainNow.bassPatterns[0], barPatterns: chainNow.bassPatterns }
+			? { voice: bassVoice(bass), level: bassLane.level, pedals: bassLane.pedals, pattern: chainNow.bassPatterns[0], barPatterns: chainNow.bassPatterns }
 			: undefined;
 		const files = await buildExportFiles({ ...exportState.value, barPatterns: chainNow?.patterns,
 			bass: chainNow ? bassChain : exportState.value.bass }, options, {

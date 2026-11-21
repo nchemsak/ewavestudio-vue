@@ -71,6 +71,11 @@
 						<span class="export-hint">{{ stemsText }}</span>
 					</label>
 					<label class="export-check">
+						<input type="checkbox" v-model="o.machineStems" />
+						<span>Machine stems</span>
+						<span class="export-hint">{{ machineStemsText }}</span>
+					</label>
+					<label class="export-check">
 						<input type="checkbox" v-model="o.midi" />
 						<span>MIDI file</span>
 						<span class="export-hint">{{ playChain ? 'the chain\'s notes' : 'the pattern\'s notes' }}, to play on any instrument</span>
@@ -98,7 +103,7 @@
 					<span class="export-hint export-status" aria-live="polite">{{ statusText }}</span>
 					<button class="pt-btn" type="button" :disabled="busy" @click="close">Cancel</button>
 					<button class="pt-btn export-go" type="button" :disabled="busy || fileCount === 0"
-						@click="emit('export', simple ? { ...o, mix: true, stems: false, midi: false, oneShot: false, normalize: true } : { ...o })">{{ busy ? 'Exporting…' : 'Export' }}</button>
+						@click="emit('export', simple ? { ...o, mix: true, stems: false, machineStems: false, midi: false, oneShot: false, normalize: true } : { ...o })">{{ busy ? 'Exporting…' : 'Export' }}</button>
 				</div>
 			</div>
 		</div>
@@ -123,6 +128,10 @@ const props = defineProps<{
 	lfoBars?: number;
 	chain?: string[] | null;                    // the chain's cells' letters, while one is filled (PR 111)
 	slotName?: string;                          // the pattern showing ("A")
+	bassOn?: boolean;                           // Bass plays (unmuted, a step on): its own machine stem
+	// Whether the overdrive or the lo-fi pedal is on: they bend the sum, so the machine stems
+	// then add up to the mix only nearly
+	bending?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -177,8 +186,18 @@ const stemsText = computed(() => {
 	return `${list(stems.value)}: they add up to the mix${off.length ? `; ${list([...off])} ${off.length === 1 ? 'is' : 'are'} off` : ''}`;
 });
 
+// The machine stems (PR 116): each machine on its own, through the pedals, and the lo-fi
+// pedal's noise as a file of its own (unless the effects stems have it already)
+const machineStems = computed(() => ['rhythm', ...(props.bassOn ? ['bass'] : []),
+	...(props.effectsOn.tape && !o.stems ? ['tape'] : [])]);
+const machineStemsText = computed(() => {
+	const sum = props.bending ? 'they add up to the mix nearly (the overdrive and lo-fi pedal bend the sum)' : 'they add up to the mix';
+	return props.bassOn ? `${list(machineStems.value)}: ${sum}` : 'rhythm only: Bass has no steps on, or is muted';
+});
+
 const fileCount = computed(() => props.simple ? 1 :
-	(o.mix ? 1 : 0) + (o.stems ? stems.value.length : 0) + (o.midi ? 1 : 0) + (o.oneShot ? 1 : 0));
+	(o.mix ? 1 : 0) + (o.stems ? stems.value.length : 0) + (o.machineStems ? machineStems.value.length : 0)
+	+ (o.midi ? 1 : 0) + (o.oneShot ? 1 : 0));
 
 const statusText = computed(() => {
 	if (props.busy) return `Rendering ${props.progress}…`;

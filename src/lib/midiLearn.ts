@@ -56,6 +56,9 @@ export const MIDI_KNOBS: Record<string, string> = {
 	'tape.wobble': 'Lo-fi wobble',
 	// The Bass machine (the plan's item 4): its level in the rail, and its Sound panel
 	'bass.level': 'Bass level',
+	// The rail's Pedals (PR 116): how much of each machine goes through the pedals
+	'synth.pedals': 'Rhythm into the pedals',
+	'bass.pedals': 'Bass into the pedals',
 	'bass.sub': 'Bass sub',
 	'bass.cutoff': 'Bass cutoff',
 	'bass.resonance': 'Bass resonance',

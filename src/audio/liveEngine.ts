@@ -71,8 +71,11 @@ export type LiveEngineSettings = {
 	};
 	// The synth lane's sound: the Rhythm machine's settings (src/lib/machines/rhythm.ts)
 	rhythm: RhythmSettings;
-	// The Bass machine (src/lib/machines/bass.ts): its sound and its lane (missing: none)
+	// The Bass machine (src/lib/machines/bass.ts): its sound and its lane, with its Pedals
+	// (missing: none)
 	bass?: { sound: BassSettings; lane: BassLane };
+	// The Rhythm machine's Pedals (how much of it goes through the pedals; missing: all of it)
+	rhythmPedals?: R<number>;
 	delay: {
 		enabled: R<boolean>;
 		time: R<number>;
@@ -423,6 +426,77 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	onMounted(initDriveNow);
 
 	// Drive END
+
+	// Machine buses START
+	// Each machine's notes meet in a bus of its own (the rail's mixer, PR 116). From it,
+	// Pedals of it goes through the pedals (the drive, then the delay and reverb) and the rest
+	// straight to preMaster, round them; the lo-fi pedal, last in the chain, takes both. At
+	// full Pedals a machine sounds as before. Each bus also feeds a small analyser, the rail's
+	// LED meter (machineLevel()); Rhythm's noise layer, which always skips the pedals, is
+	// metered with it.
+	// driveIn: what goes into the pedals, through the drive while it's on, round it while off
+	const driveIn = audioCtx.createGain();
+	const driveVia = audioCtx.createGain();
+	const driveRound = audioCtx.createGain();
+	driveIn.connect(driveVia);
+	driveVia.connect(driveDry);
+	driveVia.connect(driveShaper);
+	driveIn.connect(driveRound).connect(driveSum);
+	function applyDriveRoute(now = false) {
+		const on = driveEnabled.value;
+		const t = audioCtx.currentTime;
+		if (now) {
+			driveVia.gain.value = on ? 1 : 0;
+			driveRound.gain.value = on ? 0 : 1;
+		} else {
+			driveVia.gain.setTargetAtTime(on ? 1 : 0, t, 0.005);
+			driveRound.gain.setTargetAtTime(on ? 0 : 1, t, 0.005);
+		}
+	}
+	applyDriveRoute(true);
+	watch(driveEnabled, () => applyDriveRoute());
+
+	type MachineBus = { bus: GainNode; send: GainNode; direct: GainNode; meter: AnalyserNode; data: Float32Array<ArrayBuffer> };
+	function machineBus(pedals: () => number): MachineBus {
+		const bus = audioCtx.createGain();
+		const send = audioCtx.createGain();
+		const direct = audioCtx.createGain();
+		const meter = audioCtx.createAnalyser();
+		meter.fftSize = 512;
+		bus.connect(send).connect(driveIn);
+		bus.connect(direct).connect(preMaster);
+		bus.connect(meter);
+		const p = Math.max(0, Math.min(1, pedals()));
+		send.gain.value = p;
+		direct.gain.value = 1 - p;
+		return { bus, send, direct, meter, data: new Float32Array(meter.fftSize) };
+	}
+	function applyPedals(m: MachineBus, p: number) {
+		const v = Math.max(0, Math.min(1, p)), t = audioCtx.currentTime;
+		m.send.gain.setTargetAtTime(v, t, 0.01);
+		m.direct.gain.setTargetAtTime(1 - v, t, 0.01);
+	}
+	const rhythmPedals = () => s.rhythmPedals?.value ?? 1;
+	const bassPedals = () => s.bass?.lane.pedals ?? 1;
+	const rhythmBus = machineBus(rhythmPedals);
+	const bassBus = machineBus(bassPedals);
+	// Rhythm's noise layer: straight to preMaster, as ever, and into Rhythm's meter
+	const rhythmNoise = audioCtx.createGain();
+	rhythmNoise.connect(preMaster);
+	rhythmNoise.connect(rhythmBus.meter);
+	watch(rhythmPedals, (p) => applyPedals(rhythmBus, p));
+	watch(bassPedals, (p) => applyPedals(bassBus, p));
+
+	/** A machine's level now, its peak over the last ~10 ms (0..1 and over) */
+	function machineLevel(id: 'rhythm' | 'bass'): number {
+		const m = id === 'bass' ? bassBus : rhythmBus;
+		m.meter.getFloatTimeDomainData(m.data);
+		let peak = 0;
+		for (let i = 0; i < m.data.length; i++) peak = Math.max(peak, Math.abs(m.data[i]));
+		return peak * masterGain.gain.value;
+	}
+
+	// Machine buses END
 
 	// Reverb START
 
@@ -805,8 +879,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			addNoise: opts.addNoise, maxDuration: opts.maxDuration, decaySeconds: decayTime,
 		}, {
 			ctx: audioCtx,
-			toneOut: driveEnabled.value ? [driveDry, driveShaper] : [driveSum],
-			noiseOut: preMaster,
+			toneOut: [rhythmBus.bus],
+			noiseOut: rhythmNoise,
 			noiseBuffers,
 			sample: waveType === SAMPLE_WAVE ? sampleBuffer(s.rhythm.sample.value) : null,
 			lfo: lfoGain,
@@ -842,7 +916,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		bassSounding?.cut(note.time);
 		bassSounding = playBassNote(bassVoice(s.bass.sound), note, {
 			ctx: audioCtx,
-			out: driveEnabled.value ? [driveDry, driveShaper] : [driveSum],
+			out: [bassBus.bus],
 		});
 		if (s.tape.enabled.value && !isPlaying.value) holdTapeNoise(note.time, bassSounding.end);
 	}
@@ -1022,6 +1096,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		currentStep,
 		playSynthNote,
 		playBassNow,
+		machineLevel,
 		startLfoIfNeeded,
 		lfoNow,
 		soundingRecently,

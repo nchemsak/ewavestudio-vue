@@ -90,10 +90,11 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 		bass: {
 			sound: (() => { const b = createBass(); b.cutoff.value = 41; b.wave.value = 'square'; return b; })(),
 			lane: reactive({
-				muted: true, level: 0.1, steps: Array(STEPS).fill(true), velocities: Array(STEPS).fill(0.2),
+				muted: true, level: 0.1, pedals: 0.3, steps: Array(STEPS).fill(true), velocities: Array(STEPS).fill(0.2),
 				pitches: Array(STEPS).fill(40), accents: Array(STEPS).fill(true), slides: Array(STEPS).fill(true), ties: Array(STEPS).fill(true),
 			}),
 		},
+		mixer: { rhythmPedals: ref(0.2) },
 		patterns: { slots: ref<Slots>(emptySlots()), current: ref(0), chain: ref<Chain>(emptyChain()), chainOn: ref(false) },
 		melody: reactive({
 			keyRoot: 'C', keyScale: 'major', rangePreset: 'wide', arpPattern: 'down', arpRate: '1/16',
@@ -168,7 +169,8 @@ export function changeEverything(st: ProjectState) {
 	bs.wave.value = 'square'; bs.sub.value = 0.2; bs.cutoff.value = 900; bs.resonance.value = 0.9; bs.envAmount.value = 1.5;
 	bs.decayMs.value = 700; bs.accent.value = 0.3; bs.slideMs.value = 150;
 	const bl = st.bass.lane;
-	bl.muted = true; bl.level = 0.35;
+	bl.muted = true; bl.level = 0.35; bl.pedals = 0.45;
+	st.mixer.rhythmPedals.value = 0.7;
 	bl.steps = bl.steps.map((_, i) => i % 3 === 0);
 	bl.velocities = bl.velocities.map((_, i) => 0.4 + i / 50);
 	bl.pitches = bl.pitches.map((_, i) => 50 + i);
