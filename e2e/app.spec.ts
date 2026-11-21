@@ -6832,3 +6832,79 @@ test('the rail mixer: Pedals at none keeps a machine out of the reverb; machine 
 });
 
 // The rail's mixer END
+
+// The Bass machine, part 2b START
+
+test('Bass sounds and patterns: the transport\'s boxes are Bass\'s while Bass is shown; lit, the dice, one undo step', async ({ page }) => {
+	await expect(page.getByRole('button', { name: 'Kick', exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Show Bass' }).click();
+	await expect(page.getByRole('button', { name: 'Kick', exact: true })).toHaveCount(0);
+	await expect(page.getByText('Bass sounds')).toBeVisible();
+	await page.waitForTimeout(SETTLED);
+
+	const acid = page.getByRole('button', { name: 'Acid', exact: true });
+	await acid.click();
+	await expect(acid).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.getByRole('slider', { name: 'Reso', exact: true })).toHaveAttribute('aria-valuenow', '0.85');
+	const squelch = page.getByRole('button', { name: 'Squelch', exact: true });
+	await squelch.click();
+	await expect(squelch).toHaveAttribute('aria-pressed', 'true');
+	await expect(railRow(page, 'Bass').locator('.mr-cells i.on')).toHaveCount(13);
+	// Rhythm's pattern stayed empty
+	await expect(railRow(page, 'Rhythm').locator('.mr-cells i.on')).toHaveCount(0);
+	await page.waitForTimeout(SETTLED);
+	// A knob turned: unlit
+	const cutoff = page.getByRole('slider', { name: 'Cutoff', exact: true }).first();
+	await cutoff.focus();
+	await page.keyboard.press('ArrowUp');
+	await cutoff.blur();
+	await expect(acid).toHaveAttribute('aria-pressed', 'false');
+	await page.waitForTimeout(SETTLED);
+	// Undo: Acid lit again
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(acid).toHaveAttribute('aria-pressed', 'true');
+
+	// The dice: a new pattern, nothing lit
+	await page.getByRole('button', { name: 'Random bass pattern' }).click();
+	await expect(squelch).toHaveAttribute('aria-pressed', 'false');
+	await page.getByRole('button', { name: 'Random bass sound' }).click();
+	await expect(acid).toHaveAttribute('aria-pressed', 'false');
+
+	// Back to Rhythm: its boxes
+	await page.getByRole('button', { name: 'Show Rhythm' }).click();
+	await expect(page.getByRole('button', { name: 'Kick', exact: true })).toBeVisible();
+});
+
+test('Pattern Tools and Generate edit the machine shown: Bass\'s steps, its notes in its range', async ({ page }) => {
+	await turnOnPads(page, [0, 4]); // Rhythm
+	await page.getByRole('button', { name: 'Show Bass' }).click();
+	await page.getByRole('button', { name: 'Walk', exact: true }).click();
+	await page.waitForTimeout(SETTLED);
+	const bass = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	const before = (await bass()).bass.lane;
+
+	// Shift later: Bass's lists move a step, its slide too; Rhythm's don't
+	await page.getByRole('button', { name: 'Shift later' }).click();
+	await page.waitForTimeout(SETTLED);
+	const after = await bass();
+	expect(after.bass.lane.steps).toEqual([before.steps[15], ...before.steps.slice(0, 15)]);
+	expect(after.bass.lane.slides).toEqual([before.slides[15], ...before.slides.slice(0, 15)]);
+	expect(after.instruments.find((i: any) => i.name === 'synth-voice').steps.slice(0, 5)).toEqual([true, false, false, false, true]);
+
+	// Step Fills' All turns every Bass step on
+	await page.locator('.module.pattern-tools, .pattern-tools').first().getByRole('button', { name: 'All', exact: true }).click();
+	await expect(railRow(page, 'Bass').locator('.mr-cells i.on')).toHaveCount(16);
+
+	// Generate: new notes for Bass's pads, every one within 30–250 Hz
+	const card = page.locator('.module.melody');
+	await card.getByRole('button', { name: 'Generate melody' }).click();
+	await page.waitForTimeout(SETTLED);
+	const gen = await bass();
+	expect(gen.bass.lane.pitches.every((hz: number) => hz >= 30 && hz <= 250)).toBe(true);
+	// Narrow is two octaves down for Bass: its notes sit low (under 130 Hz), not at the top of its range
+	expect(Math.max(...gen.bass.lane.pitches)).toBeLessThan(130);
+	expect(new Set(gen.bass.lane.pitches.map((hz: number) => Math.round(hz))).size).toBeGreaterThan(1);
+	expect(gen.instruments.find((i: any) => i.name === 'synth-voice').pitches.every((hz: number) => hz >= 100)).toBe(true);
+});
+
+// The Bass machine, part 2b END
