@@ -6,7 +6,8 @@
 		<PhoneLayout v-if="phoneActive" :ctx="phoneCtx">
 			<template #sound>
 				<!-- Bass shown (PR 118): its Sound section, compact, with a Mix group (Level, Pedals, the meter) -->
-				<div v-if="bassChosen" class="pl-bass-sound">
+				<DrumsMock v-if="drumsShown" part="phone-sound" :variant="drumsMock" />
+				<div v-else-if="bassChosen" class="pl-bass-sound">
 					<BassSound compact :sound="bass" :noteHz="bassScreenHz" :noteName="nearestNote(bassScreenHz)">
 						<template #mix>
 							<div class="bs-kgroup pl-mix" role="group" aria-label="Bass mix">
@@ -799,7 +800,7 @@ import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
 // MOCKUPS ONLY: ?drums=a|b|c (DrumsMock.vue), the Drums machine
 import DrumsMock from './DrumsMock.vue';
-const drumsMock = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('drums') || '') : '';
+const drumsMock = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('drums') || (new URLSearchParams(location.search).get('dphone') ? 'a' : '')) : '';
 const DRUM_MOCK_KITS = ['Kit', 'Tight', 'Deep', 'Tin', 'Room', 'Dust'].map((l) => ({ id: l.toLowerCase(), label: l, description: '' }));
 const DRUM_MOCK_PATTERNS = ['Four', 'Backbeat', 'Halftime', 'Breaks', 'Shuffle', 'Gallop'].map((l) => ({ id: l.toLowerCase(), label: l, description: '' }));
 import { BASS_PATTERNS, BASS_SOUNDS, bassPatternFrom, bassPatternKey, bassSoundKey, bassSoundOf, randomBassPattern, randomBassSound, type BassStep } from '../lib/machines/bassPresets';
@@ -3157,18 +3158,25 @@ const SCALE_LABELS: Record<string, string> = {
 	none: '(no scale)', major: 'major', naturalMinor: 'minor', pentMajor: 'pentatonic major',
 	pentMinor: 'pentatonic minor', dorian: 'dorian', lydian: 'lydian', mixolydian: 'mixolydian',
 };
+// MOCKUPS ONLY: the tiny pads' view of Drums (any slot's hit, in the first such slot's colour)
+function drumsMockLane() {
+	const d = ((globalThis as any).__drumsMock ?? []) as any[];
+	const steps = Array.from({ length: 16 }, (_, i) => d.some((x) => x.vel[i] > 0));
+	const pitches = Array.from({ length: 16 }, (_, i) => d.find((x) => x.vel[i] > 0)?.hz ?? 220);
+	return { steps, pitches, velocities: Array(16).fill(1) };
+}
 const phoneCtx = reactive({
 	inst: synthInstrument,
 	// The machine the phone shows (PR 118; the top bar's RHY | BASS), and its lane
 	machine: computed({ get: () => machine.value, set: (m: 'rhythm' | 'bass') => { machine.value = m; } }),
-	lane: computed(() => (bassChosen.value ? bassLane : synthInstrument.value)),
+	lane: computed(() => (drumsShown.value ? drumsMockLane() : bassChosen.value ? bassLane : synthInstrument.value)),
 	bass,
 	currentStep, isPlaying, tempo, swing, canUndo, canRedo,
 	// The Sounds and Patterns steppers: the machine's own (Bass's while Bass is shown)
-	presets: computed(() => (bassChosen.value ? BASS_SOUNDS : PRESETS)),
-	patterns: computed(() => (bassChosen.value ? BASS_PATTERNS : PATTERNS)),
-	activePresetId: computed(() => (bassChosen.value ? activeBassSoundId.value : activePresetId.value)),
-	activePatternId: computed(() => (bassChosen.value ? activeBassPatternId.value : activePatternId.value)),
+	presets: computed(() => (drumsShown.value ? DRUM_MOCK_KITS : bassChosen.value ? BASS_SOUNDS : PRESETS)),
+	patterns: computed(() => (drumsShown.value ? DRUM_MOCK_PATTERNS : bassChosen.value ? BASS_PATTERNS : PATTERNS)),
+	activePresetId: computed(() => (drumsShown.value ? 'kit' : bassChosen.value ? activeBassSoundId.value : activePresetId.value)),
+	activePatternId: computed(() => (drumsShown.value ? 'backbeat' : bassChosen.value ? activeBassPatternId.value : activePatternId.value)),
 	keyRoot: computed(() => melodyUi.keyRoot),
 	keyScale: computed(() => melodyUi.keyScale),
 	keyScaleLabel: computed(() => SCALE_LABELS[melodyUi.keyScale] ?? melodyUi.keyScale),

@@ -100,6 +100,70 @@
         <p class="dm-shelf-note">Keep as drum (on Rhythm's Sound) puts a hit of Rhythm's sound here and in a slot. A lit name is in a slot.</p>
     </div>
 
+    <!-- PHONE: the Pads page's pads (?dphone=a|b|c) -->
+    <div v-else-if="part === 'phone-pads'" class="dp-pads" :data-v="variant">
+        <!-- b: half a bar at a time -->
+        <div v-if="variant === 'b'" class="dp-half" role="radiogroup" aria-label="Steps shown">
+            <button v-for="(h, k) in ['1–8', '9–16']" :key="h" type="button" role="radio" class="dp-halfkey" :class="{ on: half === k }"
+                :aria-checked="half === k ? 'true' : 'false'" @click="half = k">{{ h }}</button>
+            <span class="dp-half-note">follows the playhead while playing</span>
+        </div>
+        <!-- c: voice keys, then the picked voice on the big pads -->
+        <div v-if="variant === 'c'" class="dp-voices" role="radiogroup" aria-label="Drum voice">
+            <button v-for="(s, k) in slots" :key="s.id" type="button" role="radio" class="dp-voice" :class="{ on: pick.i === k }"
+                :style="{ '--h': s.hue }" :aria-checked="pick.i === k ? 'true' : 'false'" @click="pick.i = k">{{ s.name }}</button>
+        </div>
+        <div v-if="variant === 'c'" class="dp-big">
+            <button v-for="(v, i) in slots[pick.i].vel" :key="i" type="button" class="dp-bigpad" :class="{ on: v > 0, beat: i % 4 === 0 }"
+                :style="{ '--h': slots[pick.i].hue, '--v': `${Math.round(v * 100)}%` }" @click="slots[pick.i].vel[i] = v > 0 ? 0 : 1">
+                <span class="dp-n">{{ i + 1 }}</span><span class="dp-fill"></span>
+                <span class="dp-dots"><i v-for="(s, k) in slots" :key="s.id" :class="{ on: s.vel[i] > 0 }" :style="{ '--h': s.hue }"></i></span>
+            </button>
+        </div>
+        <!-- a and b: a row per voice -->
+        <template v-else>
+            <div v-for="(s, k) in slots" :key="s.id" class="dp-row" :class="{ picked: pick.i === k }" :style="{ '--h': s.hue }">
+                <button type="button" class="dp-name" :aria-pressed="pick.i === k ? 'true' : 'false'" @click="pick.i = k">{{ s.name }}</button>
+                <button v-for="i in shownSteps" :key="i" type="button" class="dp-cell"
+                    :class="{ on: s.vel[i] > 0, beat: i % 4 === 0 }" :style="s.vel[i] > 0 ? { '--v': `${Math.round(s.vel[i] * 100)}%` } : undefined"
+                    @click="s.vel[i] = s.vel[i] > 0 ? 0 : 1"><span class="dp-fill"></span><span v-if="variant === 'b'" class="dp-n">{{ i + 1 }}</span></button>
+            </div>
+        </template>
+    </div>
+
+    <!-- PHONE: the Pads page's knobs, the picked voice's -->
+    <div v-else-if="part === 'phone-knobs'" class="dp-knobs" :style="{ '--h': slots[pick.i].hue }">
+        <span class="dp-kcap">{{ slots[pick.i].name }}</span>
+        <span class="dp-k"><Knob v-model="slots[pick.i].tune" label="Tune" size="small" :min="-12" :max="12" :step="1" bipolar /><b>{{ slots[pick.i].tune > 0 ? '+' : '' }}{{ slots[pick.i].tune }} st</b></span>
+        <span class="dp-k"><Knob v-model="slots[pick.i].decay" label="Decay" size="small" :min="0.05" :max="1" :step="0.01" /><b>{{ Math.round(slots[pick.i].decay * 100) }}%</b></span>
+        <span class="dp-k"><Knob v-model="slots[pick.i].level" label="Level" size="small" :min="0" :max="1" :step="0.01" /><b>{{ Math.round(slots[pick.i].level * 100) }}%</b></span>
+    </div>
+
+    <!-- PHONE: the Sound page: a card per voice (tap the picture to hear it), and Mix -->
+    <div v-else-if="part === 'phone-sound'" class="dp-sound">
+        <div v-for="(s, k) in slots" :key="s.id" class="pt-card dp-slot" :style="{ '--h': s.hue }">
+            <div class="dm-slot-head">
+                <i class="dm-led" :class="{ lit: !s.muted }"></i>
+                <div class="dm-stepper"><button type="button" class="dm-arr" aria-label="Previous sound">◂</button><span class="dm-val">{{ s.name }}</span><button type="button" class="dm-arr" aria-label="Next sound">▸</button></div>
+            </div>
+            <button type="button" class="dm-screen dp-screen" :aria-label="`Hear ${s.name}`">
+                <svg viewBox="0 0 200 60" preserveAspectRatio="none" aria-hidden="true"><path :d="hitPath(s)" /></svg>
+                <span class="dm-read">{{ s.src.toUpperCase() }} · ▶</span>
+            </button>
+            <div class="dm-knobs">
+                <span class="dm-k"><Knob v-model="s.tune" :label="`${s.name} tune`" hideLabel size="mini" :min="-12" :max="12" :step="1" bipolar /><i>Tune</i></span>
+                <span class="dm-k"><Knob v-model="s.decay" :label="`${s.name} decay`" hideLabel size="mini" :min="0.05" :max="1" :step="0.01" /><i>Decay</i></span>
+                <span class="dm-k"><Knob v-model="s.level" :label="`${s.name} level`" hideLabel size="mini" :min="0" :max="1" :step="0.01" /><i>Level</i></span>
+            </div>
+        </div>
+        <div class="pt-card dp-mix" role="group" aria-label="Drums mix">
+            <span class="dm-shelf-cap">Mix</span>
+            <span class="dp-meter"><b v-for="n in 8" :key="n" :class="{ on: n <= 5, hot: n >= 7 }"></b></span>
+            <span class="dm-k"><Knob v-model="mix.level" label="Drums level" hideLabel size="mini" :min="0" :max="1" :step="0.01" /><i>Level</i></span>
+            <span class="dm-k"><Knob v-model="mix.pedals" label="Drums into the pedals" hideLabel size="mini" :min="0" :max="1" :step="0.01" /><i>Pedals</i></span>
+        </div>
+    </div>
+
     <!-- On Rhythm's Sound section: Keep as drum, then a slot -->
     <div v-else-if="part === 'keep'" class="dm-keep" role="group" aria-label="Keep as drum">
         <span class="dm-keep-cap">Keep as drum</span>
@@ -109,12 +173,17 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import Knob from './Knob.vue';
 import SynthStepGrid from './SynthStepGrid.vue';
 import { padHue } from '../lib/padColour';
 
-defineProps<{ part: 'pads' | 'sound' | 'keep' | 'shelf'; variant: string }>();
+const props = defineProps<{ part: 'pads' | 'sound' | 'keep' | 'shelf' | 'phone-pads' | 'phone-knobs' | 'phone-sound'; variant: string }>();
+const g0 = globalThis as any;
+const pick = (g0.__drumsPick ??= reactive({ i: 0 }));
+const half = ref(0);
+const shownSteps = computed(() => (props.variant === 'b' ? Array.from({ length: 8 }, (_, i) => i + half.value * 8) : Array.from({ length: 16 }, (_, i) => i)));
+const mix = reactive({ level: 0.7, pedals: 1 });
 
 const nowStep = -1;
 const KIT = [
@@ -582,6 +651,232 @@ function hitPath(s: any) {
     background: none;
     color: var(--pt-text-dim, #b9a8d8);
     font-size: 9px;
+}
+
+/* PHONE */
+.dp-pads {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-height: 0;
+    height: 100%;
+}
+
+.dp-row {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 46px repeat(16, minmax(0, 1fr));
+    gap: 3px;
+}
+
+.dp-pads[data-v="b"] .dp-row {
+    grid-template-columns: 52px repeat(8, minmax(0, 1fr));
+    gap: 5px;
+}
+
+.dp-name {
+    border: 0;
+    border-radius: 6px;
+    padding: 0 4px;
+    background: rgba(0, 0, 0, .25);
+    color: hsl(var(--h) 85% 72%);
+    font: 700 9px Cousine, ui-monospace, monospace;
+    text-align: left;
+}
+
+.dp-row.picked .dp-name {
+    background: hsl(var(--h) 60% 30% / .6);
+    box-shadow: inset 0 0 0 1px hsl(var(--h) 80% 60%);
+}
+
+.dp-cell,
+.dp-bigpad {
+    position: relative;
+    min-width: 0;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 5px;
+    background: rgba(0, 0, 0, .28);
+    overflow: hidden;
+}
+
+.dp-cell.beat,
+.dp-bigpad.beat {
+    background: rgba(255, 255, 255, .07);
+}
+
+.dp-cell.on,
+.dp-bigpad.on {
+    border-color: hsl(var(--h) 80% 60% / .8);
+}
+
+.dp-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0;
+    background: linear-gradient(to top, hsl(var(--h) 85% 55%), hsl(var(--h) 85% 68%));
+}
+
+.dp-cell.on .dp-fill,
+.dp-bigpad.on .dp-fill {
+    height: var(--v, 0%);
+}
+
+.dp-n {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    z-index: 1;
+    font: 700 8px Cousine, ui-monospace, monospace;
+    color: rgba(255, 255, 255, .55);
+}
+
+.dp-half,
+.dp-voices {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+}
+
+.dp-halfkey,
+.dp-voice {
+    height: 24px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, .06);
+    color: var(--pt-text-dim, #cbbde6);
+    font: 700 10px Cousine, ui-monospace, monospace;
+}
+
+.dp-halfkey.on {
+    color: #fff;
+    box-shadow: inset 0 0 0 1px var(--hw-led, #5dffb0);
+    background: rgba(255, 255, 255, .15);
+}
+
+.dp-voice {
+    flex: 1;
+    color: hsl(var(--h) 85% 72%);
+}
+
+.dp-voice.on {
+    background: hsl(var(--h) 60% 30% / .6);
+    box-shadow: inset 0 0 0 1px hsl(var(--h) 80% 60%);
+}
+
+.dp-half-note {
+    font: 9px Cousine, ui-monospace, monospace;
+    color: var(--pt-text-dim, #b9a8d8);
+    margin-left: 4px;
+}
+
+.dp-big {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-template-rows: 1fr 1fr;
+    gap: 6px;
+}
+
+.dp-dots {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2px;
+}
+
+.dp-dots i {
+    height: 4px;
+    border-radius: 1px;
+    background: rgba(0, 0, 0, .35);
+}
+
+.dp-dots i.on {
+    background: hsl(var(--h) 80% 70%);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .4);
+}
+
+.dp-knobs {
+    display: contents;
+}
+
+.dp-kcap {
+    font: 700 10px Cousine, ui-monospace, monospace;
+    color: hsl(var(--h) 85% 72%);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.dp-k {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.dp-k b {
+    font: 700 9px Cousine, ui-monospace, monospace;
+    color: var(--pt-text, #fff);
+}
+
+.dp-sound {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) 72px;
+    gap: 6px;
+    height: 100%;
+    min-height: 0;
+}
+
+.dp-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px;
+    min-height: 0;
+    border-top: 3px solid hsl(var(--h) 80% 60%);
+}
+
+.dp-screen {
+    border: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.dp-mix {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-around;
+    padding: 6px 4px;
+}
+
+.dp-meter {
+    display: flex;
+    gap: 2px;
+}
+
+.dp-meter b {
+    width: 4px;
+    height: 10px;
+    border-radius: 1px;
+    background: rgba(255, 255, 255, .1);
+}
+
+.dp-meter b.on {
+    background: var(--hw-led, #5dffb0);
+}
+
+.dp-meter b.hot.on {
+    background: #ffb347;
 }
 
 /* Keep as drum (Rhythm's Sound title) */
