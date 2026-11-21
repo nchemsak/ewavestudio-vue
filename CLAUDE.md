@@ -186,7 +186,8 @@ src/components/
   MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list and Learn
                          (and the MIDI learn bar, at the bottom of the screen)
   BassPads.vue, BassSound.vue  The Bass machine's pads (Accent, Slide and Tie rows) and Sound
-                         section (see "The Bass machine")
+                         section (see "The Bass machine"); `compact` on the phone's Sound page
+  LevelMeter.vue         Eight LEDs for a machine's level (the phone's Bass Mix group)
   MachineRail.vue        The machine rail, where the big screen was (PR 108): the scope and the
                          spectrogram (monitorViews.ts), a row per machine (see "The machine rail")
   TunerBadge.vue         The tuner in the Melody Maker screen's corner
@@ -1181,9 +1182,26 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   melody sits low, not at the top of Bass's range. Move: ↓ Oct / Oct ↑ move every Bass pad that
   stays in its range (not the key's octave, as Rhythm's do); Shift moves each step's lists
   together; Reverse keeps a slide or tie joining the same two notes (it now joins the step
-  before, which comes after). The phone's pages still edit Rhythm's (part 3).
-- **Not yet** (part 3): the phone (option P). The hit behind the Envelope card stays Rhythm's
-  (Bass's screen draws its own note).
+  before, which comes after). The phone's pages too since PR 118 (below).
+- **On the phone** (PR 118, part 3, which finishes item 4; option P of the mockups): a
+  **RHY | BASS** switch in phone mode's top bar (`.pl-machines`, a radiogroup "Machine",
+  before the tabs; it sets `machine`, as the rail's rows do). The tabs read P S M F K under
+  720 px (`.pl-ts`; named Pads, Sound... as before), so the bar still fits at 568 px. While
+  Bass is chosen (`phoneCtx.lane` is Bass's lane, `PhoneLayout`'s `lane`):
+  - **Pads**: Bass's pads, the tiny pads too, an **ACC** badge on an accented step and a mark
+    in the corner for what it does to the next step, **⤳** (slides into it) or **═** (tied
+    through it). A hold opens the note sheet with notes in Bass's range (30–250 Hz), Velocity,
+    and **Accent**, **Slide** and **Tie** (one or the other of the last two) in Repeats' place.
+    The Sound and Pattern steppers and their dice are Bass's presets (`chooseBassSound()`...);
+    Octave, Shift, Reverse and Humanize move Bass's pads (`onEditOctaveShift`, `onEditMove`).
+    The four macros are **Cutoff, Reso, Env, Decay** (Bass's own settings).
+  - **Sound**: `BassSound compact` (Saw | Square one over the other, Sub, the screen, and the
+    six knobs) with a **Mix** group in its knob card (its `mix` slot): the meter
+    (`LevelMeter.vue`, Bass's `machineLevel()`), **Level** and **Pedals** (Bass's lane's).
+  - **Key**: the Melody Maker edits Bass's pads, as on the desktop. **Mod** (the LFO and Noise)
+    stays Rhythm's, **FX** is everyone's.
+  Nothing scrolls at 568 × 320 or 844 × 390 (a browser test checks). The hit behind the Envelope
+  card stays Rhythm's (Bass's screen draws its own note).
 
 ### The rail's mixer
 - PR 116 (the plan's item 4, part 2a). Each machine's row in the rail is a channel strip: its
@@ -1639,6 +1657,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     ☰. It fits on one line from 568 px (the first iPhone SE) up (Play's word hidden under
     600 px; under 720 px the scope is 48 px wide and the tabs tighter: those rules came before
     the ones they change until PR 73, so they never applied).
+  - **RHY | BASS** (PR 118) in the top bar picks the machine the Pads, Sound and Key pages
+    show (see "The Bass machine", On the phone).
   - **Sound**, **Mod**, **FX** and **Key** pages are the desktop's own panels again (slots in
     DrumSequencer's `PHONE` section), so they write the same settings. **Brought up to date in
     PR 106** (they had fallen behind the desktop's redesigns), and **nothing scrolls at
@@ -2353,12 +2373,6 @@ into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 
 Grow into a small groovebox:
 
-4. **The Bass machine**, and the layout for machines (mockups done: K on the desktop, P on the
-    phone; part 1 was PR 115, 2a PR 116, 2b PR 117, see "The Bass machine"). Left:
-    - **Part 3: the phone** (option P): RHY | BASS keys in the top bar (the tabs shortened to
-      their first letters at 568 px), Bass's pads with ACC, ⤳ and ═ marks, its hold sheet
-      (notes, velocity, Accent, Slide, Tie), its four macros (Cutoff, Reso, Env, Decay), and its
-      Sound page with a Mix group (Level, Pedals, the meter).
 5. **The Drums machine.** Four slots × 16 steps. A slot holds one hit: the built-in kit (the
     Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
     drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
@@ -2679,6 +2693,7 @@ Done:
 | 115 | The Bass machine, part 1 (the plan's item 4; option K of four rounds of mockups, the phone's P for part 3): a second machine, its row in the rail (a click shows it on the pads and in Sound; its LED mutes it; its level). One note at a time, saw or square with a sub, a resonant low-pass with its envelope, per step Accent, Slide (glides into the next note, which doesn't start again) and Tie (holds through the next step), in both engines (`src/audio/bass.ts`); its pads with Accent, Slide and Tie rows (`BassPads.vue`), its Sound section (Saw \| Square and Sub, a big screen of a note, Filter and Note knobs beside the pedals, `BassSound.vue`); saved with the project and in each pattern slot (older projects: empty), following the key, MIDI-learnable, played by MIDI keys while chosen. |
 | 116 | The Bass machine, part 2a: the rail's mixer. Each machine's row has an 8-LED meter (lit while it plays) and **Pedals**, how much of it goes through the overdrive, delay and reverb (the rest skips them; full, as before, by default), on machine buses in both engines; the Export dialog's **Machine stems** (`_rhythm.wav`, `_bass.wav`, adding up to the mix); Bass in the MIDI file on channel 2 (held notes, slides, Accent at 127). Saved (`mixer.rhythm.pedals`, `bass.pedals`), MIDI-learnable (45 knobs). |
 | 117 | The Bass machine, part 2b: while Bass is shown, the transport's boxes are **Bass sounds** (Sub, Acid, Rubber, Pluck, Growl, Hollow) and **Bass patterns** (Root, Octaves, Offbeat, Gallop, Walk, Squelch, from the key's root), each with a dice and lit while it matches (`src/lib/machines/bassPresets.ts`); Pattern Tools (Step Fills, Humanize, Move) and the Melody Maker (Generate, its screen) edit Bass's pads, within its range, a melody two octaves down. |
+| 118 | The Bass machine, part 3, the phone (option P of the mockups), which finishes the plan's item 4: a RHY \| BASS switch in phone mode's top bar (the tabs read P S M F K under 720 px); with Bass chosen, the Pads page shows Bass's pads with ACC, ⤳ (slide) and ═ (tie) marks, a hold opens its notes, velocity, Accent, Slide and Tie, the steppers and dice are Bass's sounds and patterns, Octave, Shift and Humanize move Bass's pads, and the four macros are Cutoff, Reso, Env and Decay; the Sound page is Bass's (`BassSound` compact) with a Mix group (the meter, Level, Pedals); the Key page edits Bass's pads. Nothing scrolls at 568 × 320 or 844 × 390. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

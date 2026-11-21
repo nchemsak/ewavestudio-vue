@@ -5,7 +5,23 @@
 			 one below. Its Sound, FX and Key pages show the same panels again. -->
 		<PhoneLayout v-if="phoneActive" :ctx="phoneCtx">
 			<template #sound>
-				<div class="pl-sound">
+				<!-- Bass shown (PR 118): its Sound section, compact, with a Mix group (Level, Pedals, the meter) -->
+				<div v-if="bassChosen" class="pl-bass-sound">
+					<BassSound compact :sound="bass" :noteHz="bassScreenHz" :noteName="nearestNote(bassScreenHz)">
+						<template #mix>
+							<div class="bs-kgroup pl-mix" role="group" aria-label="Bass mix">
+								<span class="bs-kcap">Mix <LevelMeter :read="() => machineLevel('bass')" :active="viewSource.active" label="Bass level meter" /></span>
+								<div class="pl-mix-knobs">
+									<Knob v-model="bassLane.level" label="Level" :min="0" :max="1" :step="0.01" size="small"
+										:value-text="`${Math.round(bassLane.level * 100)}%`" />
+									<Knob v-model="bassLane.pedals" label="Pedals" :min="0" :max="1" :step="0.01" size="small"
+										:value-text="`${Math.round(bassLane.pedals * 100)}%`" />
+								</div>
+							</div>
+						</template>
+					</BassSound>
+				</div>
+				<div v-else class="pl-sound">
 					<div class="pl-sound-row">
 						<div class="module envelope">
 							<SectionWrap id="pl-envelope" title="Envelope" :modelValue="true">
@@ -133,17 +149,17 @@
 						<template #tools>
 							<MelodyModeSwitch v-model="melodyUi.mode" />
 						</template>
-						<MelodyMaker compact :key="`pl-melody-${resetNonce}`" :frequencies="padFrequencies"
-							:steps="steps" :min-freq="100" :max-freq="2000" :currentTheme="currentTheme"
-							:ratchets="synthInstrument?.ratchets" :repeat-notes="synthInstrument?.repeatNotes" :repeat-chord="repeatChord"
-							:swing="swing" :note-steps="noteSteps" :playView="playView" :tuner="viewSource"
+						<MelodyMaker compact :key="`pl-melody-${resetNonce}`" :frequencies="editPitches"
+							:steps="editSteps" :min-freq="editMinHz" :max-freq="editMaxHz" :octave-shift="bassChosen ? -2 : 0" :currentTheme="currentTheme"
+							:ratchets="bassChosen ? undefined : synthInstrument?.ratchets" :repeat-notes="bassChosen ? undefined : synthInstrument?.repeatNotes" :repeat-chord="repeatChord"
+							:swing="swing" :note-steps="bassChosen ? bassNoteSteps : noteSteps" :playView="playView" :tuner="viewSource"
 							:initial-key-root="melodyUi.keyRoot" :initial-key-scale="melodyUi.keyScale"
 							:initial-range-preset="melodyUi.rangePreset" :initial-arp-pattern="melodyUi.arpPattern"
 							:initial-arp-rate="melodyUi.arpRate" :initial-arp-octaves="melodyUi.arpOctaves"
 							:initial-arp-tones="melodyUi.arpTones" :initial-arp-skip="melodyUi.arpSkip"
 							:initial-mode="melodyUi.mode"
-							@update:frequencies="padFrequencies = $event" @update:steps="steps = $event"
-							@octave-shift="octaveShiftAllSkip($event)"
+							@update:frequencies="editPitches = $event" @update:steps="editSteps = $event"
+							@octave-shift="onEditOctaveShift($event)"
 							:queued-key="queuedKey" @key-chosen="onKeyChosen" @scale-chosen="onScaleChosen"
 							@mode-change="(v) => { melodyUi.mode = v }"
 							@key-root-change="(r) => { onKeyRootChange(r); melodyUi.keyRoot = r as any; }"
@@ -775,6 +791,7 @@ import PresetButtons from './PresetButtons.vue';
 import { BASS_PATTERNS, BASS_SOUNDS, bassPatternFrom, bassPatternKey, bassSoundKey, bassSoundOf, randomBassPattern, randomBassSound, type BassStep } from '../lib/machines/bassPresets';
 import BassPads from './BassPads.vue';
 import BassSound from './BassSound.vue';
+import LevelMeter from './LevelMeter.vue';
 import ExportDialog from './ExportDialog.vue';
 import ShareNotice from './ShareNotice.vue';
 import { buildExportFiles, renderHit, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from '../audio/export/exportFiles';
@@ -3124,12 +3141,20 @@ const SCALE_LABELS: Record<string, string> = {
 };
 const phoneCtx = reactive({
 	inst: synthInstrument,
+	// The machine the phone shows (PR 118; the top bar's RHY | BASS), and its lane
+	machine: computed({ get: () => machine.value, set: (m: 'rhythm' | 'bass') => { machine.value = m; } }),
+	lane: computed(() => (bassChosen.value ? bassLane : synthInstrument.value)),
+	bass,
 	currentStep, isPlaying, tempo, swing, canUndo, canRedo,
-	presets: PRESETS, patterns: PATTERNS, activePresetId, activePatternId,
+	// The Sounds and Patterns steppers: the machine's own (Bass's while Bass is shown)
+	presets: computed(() => (bassChosen.value ? BASS_SOUNDS : PRESETS)),
+	patterns: computed(() => (bassChosen.value ? BASS_PATTERNS : PATTERNS)),
+	activePresetId: computed(() => (bassChosen.value ? activeBassSoundId.value : activePresetId.value)),
+	activePatternId: computed(() => (bassChosen.value ? activeBassPatternId.value : activePatternId.value)),
 	keyRoot: computed(() => melodyUi.keyRoot),
 	keyScale: computed(() => melodyUi.keyScale),
 	keyScaleLabel: computed(() => SCALE_LABELS[melodyUi.keyScale] ?? melodyUi.keyScale),
-	minHz: MIN_PAD_HZ, maxHz: MAX_PAD_HZ,
+	minHz: editMinHz, maxHz: editMaxHz,
 	decayMs: ampEnvDecayMs,
 	cutoff: computed({
 		get: () => filterCutoff.value,
@@ -3154,16 +3179,20 @@ const phoneCtx = reactive({
 	togglePlay: onPlayClick,
 	undo,
 	redo,
-	choosePreset, randomSound: rollRandomSound, choosePattern, randomPattern: rollRandomPattern,
+	choosePreset: (id: string) => (bassChosen.value ? chooseBassSound(id) : choosePreset(id)),
+	randomSound: () => (bassChosen.value ? rollBassSound() : rollRandomSound()),
+	choosePattern: (id: string) => (bassChosen.value ? chooseBassPattern(id) : choosePattern(id)),
+	randomPattern: () => (bassChosen.value ? rollBassPattern() : rollRandomPattern()),
 	audition: auditionNote,
-	auditionPad,
+	auditionPad: (i: number, hz: number) => (bassChosen.value ? auditionBass(hz) : auditionPad(i, hz)),
 	noteName: nearestNote,
-	hue: padHue,
+	// The pads' colour of a note: Bass's drawn two octaves up, as on the desktop
+	hue: (hz: number) => padHue(bassChosen.value ? hz * 4 : hz),
 	fullLayout: () => setPhoneFull(true),
 	// Every pad an octave up or down (Pattern Tools' octave arrows)
-	octave: (delta: number) => onPatternOctaveShift(delta),
-	// Shift or reverse the pattern (Pattern Tools' Move)
-	move: (kind: MoveKind) => movePattern(kind),
+	octave: (delta: number) => onEditOctaveShift(delta),
+	// Shift or reverse the pattern (Pattern Tools' Move), the machine shown's
+	move: (kind: MoveKind) => onEditMove(kind),
 	// The menu's Reset: the pads as File → New has them (the Step Sequencer's Reset Pads), and
 	// with `sound` the factory sound too (as File → New, presets' starting point)
 	reset: (sound: boolean) => {
@@ -3719,6 +3748,19 @@ async function recordSample() {
 /* LAYOUT END */
 
 /* PHONE START: the phone layout's Sound, FX and Key pages (PhoneLayout.vue's slots) */
+/* Bass's Sound page (PR 118): the tiles, the screen, the knobs and Mix in one row */
+.pl-bass-sound {
+	display: grid;
+	grid-template-columns: minmax(96px, 0.7fr) minmax(0, 1.6fr) minmax(170px, 1fr);
+	grid-template-areas: "osc big knobs";
+	gap: 8px;
+	height: 100%;
+	min-height: 0;
+}
+.pl-bass-sound .pl-mix-knobs { display: flex; justify-content: space-evenly; }
+.pl-bass-sound .pl-mix { display: flex; flex-direction: column; gap: 2px; }
+.pl-bass-sound .pl-mix .bs-kcap { display: flex; align-items: center; gap: 6px; font: 700 9px Cousine, ui-monospace, monospace;
+	letter-spacing: .1em; text-transform: uppercase; color: var(--pt-text-dim, #b9a8d8); }
 .pl-sound {
 	display: grid;
 	gap: 8px;

@@ -6,7 +6,7 @@
      Slide), each with its value under it. The effects pedals beside them are the Rhythm
      machine's (DrumSequencer's Effects card). Grid areas: osc, big, knobs. -->
 <template>
-    <div class="bass-sound">
+    <div class="bass-sound" :class="{ compact }">
         <div class="pt-card bs-card bs-osc" style="grid-area: osc">
             <div class="bs-tiles" role="radiogroup" aria-label="Bass wave">
                 <button v-for="t in TILES" :key="t.id" type="button" class="bs-tile hw-cap" role="radio"
@@ -45,17 +45,17 @@
                 <div class="bs-kgrid">
                     <div class="bs-kcell">
                         <Knob midi-id="bass.cutoff" v-model="sound.cutoff.value" label="Cutoff" :value-text="`${Math.round(sound.cutoff.value)} Hz`"
-                            :min="40" :max="4000" :step="1" taper="log" size="medium" :useThemeArc="true" />
+                            :min="40" :max="4000" :step="1" taper="log" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
                         <span class="bs-kval">{{ Math.round(sound.cutoff.value) }} Hz</span>
                     </div>
                     <div class="bs-kcell">
                         <Knob midi-id="bass.resonance" v-model="sound.resonance.value" label="Reso" :value-text="pct(sound.resonance.value)"
-                            :min="0" :max="1" :step="0.01" size="medium" :useThemeArc="true" />
+                            :min="0" :max="1" :step="0.01" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
                         <span class="bs-kval">{{ pct(sound.resonance.value) }}</span>
                     </div>
                     <div class="bs-kcell">
                         <Knob midi-id="bass.envAmount" v-model="sound.envAmount.value" label="Env" :value-text="`+${sound.envAmount.value.toFixed(1)} octaves`"
-                            :min="0" :max="5" :step="0.1" size="medium" :useThemeArc="true" />
+                            :min="0" :max="5" :step="0.1" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
                         <span class="bs-kval">+{{ sound.envAmount.value.toFixed(1) }} oct</span>
                     </div>
                 </div>
@@ -65,21 +65,23 @@
                 <div class="bs-kgrid">
                     <div class="bs-kcell">
                         <Knob midi-id="bass.decay" v-model="sound.decayMs.value" label="Decay" :value-text="`${Math.round(sound.decayMs.value)} ms`"
-                            :min="30" :max="2000" :step="1" taper="log" size="medium" :useThemeArc="true" />
+                            :min="30" :max="2000" :step="1" taper="log" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
                         <span class="bs-kval">{{ Math.round(sound.decayMs.value) }} ms</span>
                     </div>
                     <div class="bs-kcell">
                         <Knob midi-id="bass.accent" v-model="sound.accent.value" label="Accent" :value-text="pct(sound.accent.value)"
-                            :min="0" :max="1" :step="0.01" size="medium" :useThemeArc="true" />
+                            :min="0" :max="1" :step="0.01" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
                         <span class="bs-kval">{{ pct(sound.accent.value) }}</span>
                     </div>
                     <div class="bs-kcell">
                         <Knob midi-id="bass.slide" v-model="sound.slideMs.value" label="Slide" :value-text="`${Math.round(sound.slideMs.value)} ms`"
-                            :min="10" :max="400" :step="1" taper="log" size="medium" :useThemeArc="true" />
+                            :min="10" :max="400" :step="1" taper="log" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
                         <span class="bs-kval">{{ Math.round(sound.slideMs.value) }} ms</span>
                     </div>
                 </div>
             </div>
+            <!-- Phone mode's Mix group (the rail's row, which the phone has no room for) -->
+            <slot name="mix" />
         </div>
     </div>
 </template>
@@ -93,6 +95,7 @@ import { ampAt, envOctAt, noteSamples, viewSeconds } from '../lib/bassView';
 
 const props = defineProps<{
     sound: BassSettings;
+    compact?: boolean; // phone mode's Sound page (PR 118): smaller knobs, a shorter screen
     noteHz: number;   // the note drawn (the lane's first note, or the key's root)
     noteName: string;
 }>();
@@ -328,6 +331,74 @@ const paths = computed(() => {
     color: var(--pt-text, #fff);
     opacity: .8;
     margin-top: 2px;
+}
+
+/* Phone mode (PR 118): one row, the tiles over each other, a shorter screen, smaller knobs */
+.compact .bs-tile {
+    padding: 5px 8px;
+    gap: 8px;
+}
+
+.compact .bs-tile svg {
+    width: 40px;
+    height: 22px;
+}
+
+.compact .bs-tiles {
+    gap: 6px;
+}
+
+.compact .bs-screen {
+    min-height: 0;
+}
+
+.compact .bs-knobcard {
+    flex-direction: column;
+    gap: 4px;
+}
+
+.compact .bs-card {
+    padding: 8px;
+}
+
+/* Compact wins over the one-column rules below (a phone is under 720 px wide) */
+.bass-sound.compact .bs-tiles {
+    grid-template-columns: 1fr !important;
+}
+
+.bass-sound.compact .bs-tile {
+    flex-direction: column !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    padding: 4px !important;
+    min-width: 0;
+}
+
+.bass-sound.compact .bs-tile svg {
+    width: 34px !important;
+    height: 18px !important;
+}
+
+.bass-sound.compact .bs-tile span {
+    font-size: 9px;
+}
+
+.bass-sound.compact .bs-subtile .bs-kcell {
+    transform: scale(0.85);
+}
+
+.bass-sound.compact .bs-osc {
+    padding: 6px;
+    overflow: hidden;
+}
+
+.bass-sound.compact .bs-read.r {
+    display: none;
+}
+
+.bass-sound.compact .bs-knobcard {
+    flex-direction: column !important;
+    justify-content: center;
 }
 
 /* Under 1200 px the knob card has the row: Filter beside Note */

@@ -10,13 +10,20 @@
 			<!-- A tiny copy of the 16 pads, on every page (PR 73): the steps that are on, in their
 				 notes' colours, the beats marked and the playing step outlined. Only to look at -->
 			<div class="pl-minipads" aria-hidden="true">
-				<span v-for="(on, i) in (ctx.inst.steps as boolean[])" :key="i" class="pl-mp"
+				<span v-for="(on, i) in (lane.steps as boolean[])" :key="i" class="pl-mp"
 					:class="{ on, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
-					:style="on ? { '--h': ctx.hue(ctx.inst.pitches[i]) } : undefined"></span>
+					:style="on ? { '--h': ctx.hue(lane.pitches[i]) } : undefined"></span>
+			</div>
+			<!-- The machine the pages show (PR 118, option P of the mockups): RHY | BASS -->
+			<div class="pl-machines" role="radiogroup" aria-label="Machine">
+				<button v-for="m in MACHINES" :key="m.id" type="button" role="radio" class="pl-mkey"
+					:class="{ on: ctx.machine === m.id }" :aria-checked="ctx.machine === m.id ? 'true' : 'false'"
+					:aria-label="m.name" @click="ctx.machine = m.id"><i class="pl-mled" aria-hidden="true"></i>{{ m.short }}</button>
 			</div>
 			<div class="pl-tabs" role="tablist" aria-label="Pages">
 				<button v-for="p in PAGES" :key="p.id" type="button" role="tab" class="pl-tab"
-					:class="{ on: page === p.id }" :aria-selected="page === p.id" @click="page = p.id">{{ p.label }}</button>
+					:class="{ on: page === p.id }" :aria-selected="page === p.id" :aria-label="p.label" @click="page = p.id"><span
+						class="pl-tl">{{ p.label }}</span><span class="pl-ts" aria-hidden="true">{{ p.label[0] }}</span></button>
 			</div>
 			<span class="pl-grow"></span>
 			<!-- Play / Stop, on every page -->
@@ -35,16 +42,19 @@
 			<!-- Play -->
 			<section v-show="page === 'play'" class="pl-frame pl-play" aria-label="Play">
 				<div class="pl-pads" role="group" aria-label="Steps" @pointermove="padMove">
-					<button v-for="(on, i) in (ctx.inst.steps as boolean[])" :key="i" type="button" class="pl-pad"
+					<button v-for="(on, i) in (lane.steps as boolean[])" :key="i" type="button" class="pl-pad"
 						:class="{ on, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
 						:aria-pressed="!!on" :aria-label="padLabel(i)" :data-i="i"
 						:style="on ? padStyle(i) : undefined"
 						@pointerdown="padDown(i, $event)" @click.prevent
 						@contextmenu.prevent @keydown.enter.prevent="toggleStep(i)">
 						<span class="pl-num">{{ i + 1 }}</span>
-						<span v-if="on && (ctx.inst.ratchets?.[i] ?? 1) > 1" class="pl-rat">×{{ ctx.inst.ratchets[i] }}{{ ctx.inst.repeatNotes?.[i] === 'up' ? '↑' : ctx.inst.repeatNotes?.[i] === 'down' ? '↓' : '' }}</span>
+						<span v-if="on && bass && lane.accents[i]" class="pl-rat pl-acc">ACC</span>
+						<span v-if="bass && lane.ties[i]" class="pl-link" title="Held through the next step">═</span>
+						<span v-else-if="bass && lane.slides[i] && lane.steps[(i + 1) % lane.steps.length]" class="pl-link" title="Slides into the next note">⤳</span>
+						<span v-if="on && !bass && (ctx.inst.ratchets?.[i] ?? 1) > 1" class="pl-rat">×{{ ctx.inst.ratchets[i] }}{{ ctx.inst.repeatNotes?.[i] === 'up' ? '↑' : ctx.inst.repeatNotes?.[i] === 'down' ? '↓' : '' }}</span>
 						<span v-if="on" class="pl-fill"></span>
-						<span v-if="on" class="pl-note">{{ ctx.noteName(ctx.inst.pitches[i]) }}</span>
+						<span v-if="on" class="pl-note">{{ ctx.noteName(lane.pitches[i]) }}</span>
 					</button>
 				</div>
 				<div class="pl-side">
@@ -99,7 +109,30 @@
 							title="Shape the steps' velocities (the Filter's VEL switch needs softer steps)"
 							@click="list = 'humanize'">Humanize</button>
 					</div>
-					<div class="pl-macros">
+					<!-- Bass's four (PR 118): Cutoff, Reso, Env, Decay -->
+					<div v-if="bass" class="pl-macros">
+						<div class="pl-macro">
+							<Knob v-model="ctx.bass.cutoff" label="Cutoff" :min="40" :max="4000" :step="1" taper="log" size="small"
+								:value-text="hzText(ctx.bass.cutoff)" />
+							<span class="pl-mv">{{ hzText(ctx.bass.cutoff) }}</span>
+						</div>
+						<div class="pl-macro">
+							<Knob v-model="ctx.bass.resonance" label="Reso" :min="0" :max="1" :step="0.01" size="small"
+								:value-text="`${Math.round(ctx.bass.resonance * 100)}%`" />
+							<span class="pl-mv">{{ Math.round(ctx.bass.resonance * 100) }}%</span>
+						</div>
+						<div class="pl-macro">
+							<Knob v-model="ctx.bass.envAmount" label="Env" :min="0" :max="5" :step="0.1" size="small"
+								:value-text="`+${ctx.bass.envAmount.toFixed(1)} octaves`" />
+							<span class="pl-mv">+{{ ctx.bass.envAmount.toFixed(1) }} oct</span>
+						</div>
+						<div class="pl-macro">
+							<Knob v-model="ctx.bass.decayMs" label="Decay" :min="30" :max="2000" :step="1" taper="log" size="small"
+								:value-text="`${Math.round(ctx.bass.decayMs)} ms`" />
+							<span class="pl-mv">{{ Math.round(ctx.bass.decayMs) }} ms</span>
+						</div>
+					</div>
+					<div v-else class="pl-macros">
 						<div class="pl-macro">
 							<Knob v-model="ctx.decayMs" label="Decay" :min="50" :max="2000" :step="1" taper="log" size="small"
 								:value-text="`${Math.round(ctx.decayMs)} ms`" />
@@ -152,13 +185,19 @@
 			</div>
 			<div class="pl-notes">
 				<button v-for="n in pickerNotes" :key="n.hz" type="button" class="pl-n"
-					:class="{ cur: ctx.inst.steps[held] && Math.abs(n.hz - ctx.inst.pitches[held]) < 0.5 }"
+					:class="{ cur: lane.steps[held] && Math.abs(n.hz - lane.pitches[held]) < 0.5 }"
 					:style="{ '--h': ctx.hue(n.hz) }" @click="pickNote(held, n.hz)">{{ n.name }}</button>
 			</div>
 			<div class="pl-row">
 				<label class="pl-cap" :for="`pl-vel`">Velocity</label>
 				<input id="pl-vel" class="pl-vel" type="range" min="0.05" max="1" step="0.01"
-					:value="ctx.inst.velocities[held]" @input="setVelocity(held, +($event.target as HTMLInputElement).value)">
+					:value="lane.velocities[held]" @input="setVelocity(held, +($event.target as HTMLInputElement).value)">
+				<!-- Bass: Accent, Slide and Tie (a step's Slide and Tie are one or the other) -->
+				<template v-if="bass">
+					<button v-for="t in BASS_FLAGS" :key="t.id" type="button" class="pt-btn pl-small"
+						:aria-pressed="lane[t.id][held] ? 'true' : 'false'" :title="t.tip" @click="toggleFlag(t.id, held)">{{ t.label }}</button>
+				</template>
+				<template v-else>
 				<span class="pl-cap">Repeats</span>
 				<button v-for="r in [1, 2, 3, 4]" :key="r" type="button" class="pt-btn pl-small"
 					:aria-pressed="(ctx.inst.ratchets?.[held] ?? 1) === r" @click="setRatchet(held, r)">×{{ r }}</button>
@@ -167,6 +206,7 @@
 					:aria-label="`Repeat notes: ${notesName(held)}`" :disabled="(ctx.inst.ratchets?.[held] ?? 1) < 2"
 					title="What the repeats play: the pad's note, or up or down the key's chord"
 					@click="cycleNotes(held)">{{ notesName(held) }}</button>
+				</template>
 			</div>
 		</div>
 
@@ -215,9 +255,30 @@ import { SWING_STOPS, TRIPLET_SWING, nextStop } from '../lib/knobDetents';
 
 const props = defineProps<{ ctx: any }>();
 const ctx = props.ctx;
+// The machine shown (PR 118): its lane is what the pads, the tiny pads, the hold sheet and
+// Humanize read and write (Rhythm's synth lane, or Bass's); repeats are Rhythm's only
+const bass = computed(() => ctx.machine === 'bass');
+const lane = computed<any>(() => ctx.lane);
 
 // The desktop's panels shown here again must not take MIDI learn's links from the desktop's
 provide('noMidiLearn', true);
+
+const MACHINES = [
+	{ id: 'rhythm', name: 'Rhythm', short: 'RHY' },
+	{ id: 'bass', name: 'Bass', short: 'BASS' },
+] as const;
+const BASS_FLAGS = [
+	{ id: 'accents', label: 'Accent', tip: 'Louder, the filter opening further' },
+	{ id: 'slides', label: 'Slide', tip: 'Glides into the next step\'s note' },
+	{ id: 'ties', label: 'Tie', tip: 'Holds the note through the next step' },
+] as const;
+// A Bass step's Accent, Slide or Tie; Slide and Tie are one or the other
+function toggleFlag(id: 'accents' | 'slides' | 'ties', i: number) {
+	const l = lane.value;
+	l[id] = replace(l[id], i, !l[id][i]);
+	const other = id === 'slides' ? 'ties' : id === 'ties' ? 'slides' : null;
+	if (other && l[id][i] && l[other][i]) l[other] = replace(l[other], i, false);
+}
 
 const PAGES = [
 	{ id: 'play', label: 'Pads' },
@@ -240,7 +301,7 @@ function doReset(sound: boolean) {
 }
 const list = ref<null | 'sound' | 'pattern' | 'humanize'>(null);
 // Humanize: a velocity shape for all 16 steps, one undo step
-function humanize(id: VelocityShapeId) { ctx.inst.velocities = velocityShape(id, ctx.inst.velocities.length); }
+function humanize(id: VelocityShapeId) { lane.value.velocities = velocityShape(id, lane.value.velocities.length); }
 
 // Swipe left or right between pages (not from a knob, a slider or an open sheet)
 let swipe: null | { x: number; y: number } = null;
@@ -321,11 +382,11 @@ function padMove(e: PointerEvent) {
 	const i = el ? Number(el.dataset.i) : -1;
 	if (i < 0 || i === press.last) return;
 	if (press.paint === null) {
-		press.paint = !ctx.inst.steps[press.i];
+		press.paint = !lane.value.steps[press.i];
 		setStepOn(press.i, press.paint);
 	}
 	press.last = i;
-	if (!!ctx.inst.steps[i] !== press.paint) setStepOn(i, press.paint);
+	if (!!lane.value.steps[i] !== press.paint) setStepOn(i, press.paint);
 }
 function padUp() {
 	stopHold();
@@ -383,11 +444,11 @@ onMounted(() => { scopeFrame = requestAnimationFrame(drawScope); });
 onBeforeUnmount(() => cancelAnimationFrame(scopeFrame));
 
 const replace = (arr: any[], i: number, v: any) => arr.map((x, j) => (j === i ? v : x));
-function setStepOn(i: number, on: boolean) { ctx.inst.steps = replace(ctx.inst.steps, i, on); }
-function toggleStep(i: number) { setStepOn(i, !ctx.inst.steps[i]); }
-function setVelocity(i: number, v: number) { ctx.inst.velocities = replace(ctx.inst.velocities, i, v); }
+function setStepOn(i: number, on: boolean) { lane.value.steps = replace(lane.value.steps, i, on); }
+function toggleStep(i: number) { setStepOn(i, !lane.value.steps[i]); }
+function setVelocity(i: number, v: number) { lane.value.velocities = replace(lane.value.velocities, i, v); }
 function setRatchet(i: number, r: number) {
-	const cur = ctx.inst.ratchets ?? Array(ctx.inst.steps.length).fill(1);
+	const cur = ctx.inst.ratchets ?? Array(lane.value.steps.length).fill(1);
 	ctx.inst.ratchets = replace(cur, i, r);
 }
 const NOTES_CYCLE = ['same', 'up', 'down'] as const;
@@ -398,8 +459,8 @@ function cycleNotes(i: number) {
 	ctx.inst.repeatNotes = replace(ctx.inst.repeatNotes, i, NOTES_CYCLE[(Math.max(0, cur) + 1) % 3]);
 }
 function pickNote(i: number, hz: number) {
-	ctx.inst.pitches = replace(ctx.inst.pitches, i, hz);
-	if (!ctx.inst.steps[i]) setStepOn(i, true);
+	lane.value.pitches = replace(lane.value.pitches, i, hz);
+	if (!lane.value.steps[i]) setStepOn(i, true);
 	ctx.auditionPad(i, hz); // as the pad plays it (its wave, noise, repeats), only while stopped
 }
 
@@ -411,7 +472,7 @@ const scaleText = computed(() => `${ctx.keyRoot} ${ctx.keyScaleLabel}`);
 const pickerNotes = computed(() => {
 	if (held.value === null) return [];
 	const root = NOTE_TO_SEMITONE[ctx.keyRoot] ?? 9;
-	const center = Math.round(freqToMidiExact(ctx.inst.pitches[held.value] || 220));
+	const center = Math.round(freqToMidiExact(lane.value.pitches[held.value] || 220));
 	const all: number[] = [];
 	for (let m = center - 24; m <= center + 24; m++) {
 		const hz = midiToFreq(m);
@@ -426,10 +487,10 @@ const pickerNotes = computed(() => {
 });
 
 function padStyle(i: number) {
-	return { '--h': ctx.hue(ctx.inst.pitches[i]), '--v': `${Math.round((ctx.inst.velocities[i] ?? 1) * 100)}%` };
+	return { '--h': ctx.hue(lane.value.pitches[i]), '--v': `${Math.round((lane.value.velocities[i] ?? 1) * 100)}%` };
 }
 function padLabel(i: number) {
-	return ctx.inst.steps[i] ? `Step ${i + 1}, ${ctx.noteName(ctx.inst.pitches[i])}` : `Step ${i + 1}`;
+	return lane.value.steps[i] ? `Step ${i + 1}, ${ctx.noteName(lane.value.pitches[i])}` : `Step ${i + 1}`;
 }
 function hzText(hz: number) {
 	return hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${Math.round(hz)} Hz`;
@@ -455,6 +516,84 @@ function hzText(hz: number) {
 	user-select: none;
 	-webkit-user-select: none;
 	-webkit-touch-callout: none;
+}
+
+/* The machine switch (PR 118): two keys, the chosen one lit */
+.pl-machines {
+	display: flex;
+	gap: 2px;
+	padding: 2px;
+	border-radius: 9px;
+	background: rgba(0, 0, 0, .35);
+	flex: none;
+}
+
+.pl-mkey {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	height: 30px;
+	padding: 0 7px;
+	border: 0;
+	border-radius: 7px;
+	font: 700 10px Cousine, ui-monospace, monospace;
+	letter-spacing: .05em;
+	color: var(--pt-text-dim, #cbbde6);
+	background: rgba(255, 255, 255, .05);
+}
+
+.pl-mkey.on {
+	color: var(--pt-text, #fff);
+	background: rgba(255, 255, 255, .15);
+	box-shadow: inset 0 0 0 1px var(--hw-led, #5dffb0);
+}
+
+.pl-mled {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--hw-led-off, #2c3a33);
+}
+
+.pl-mkey.on .pl-mled {
+	background: var(--hw-led, #5dffb0);
+	box-shadow: 0 0 5px var(--hw-led, #5dffb0);
+}
+
+/* A tab's short name (its first letter) on a narrow phone, so the machine switch fits */
+.pl-ts {
+	display: none;
+}
+
+@media (max-width: 719.98px) {
+	.pl-tl {
+		display: none;
+	}
+
+	.pl-ts {
+		display: inline;
+	}
+}
+
+/* Bass's marks on its pads: ACC on an accented step; ⤳ a slide into the next, ═ a tie */
+.pl-acc {
+	background: var(--hw-led, #5dffb0) !important;
+	color: #10091c !important;
+}
+
+.pl-link {
+	position: absolute;
+	right: 4px;
+	bottom: 4px;
+	z-index: 3;
+	min-width: 22px;
+	padding: 0 3px;
+	border-radius: 5px;
+	background: rgba(0, 0, 0, .55);
+	font: 700 13px/1.15 Cousine, ui-monospace, monospace;
+	text-align: center;
+	color: var(--hw-led, #5dffb0);
+	pointer-events: none;
 }
 
 /* top bar */
