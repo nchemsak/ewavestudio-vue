@@ -14,10 +14,12 @@ describe('share links', () => {
         const { name, data } = await readShare(code);
         expect(name).toBe('My beat');
         expect(data.ui).toBeUndefined();
-        // The recording stays behind (too big for a link)
+        // The recordings stay behind (too big for a link): the sample, and Drums' kept sounds
         expect(snap.synth.sample).not.toBeNull();
         expect(data.synth.sample).toBeNull();
-        const { ui: _ui, ...rest } = JSON.parse(JSON.stringify({ ...snap, synth: { ...snap.synth, sample: null } }));
+        expect(snap.drums.kept.length).toBeGreaterThan(0);
+        expect(data.drums.kept).toEqual([]);
+        const { ui: _ui, ...rest } = JSON.parse(JSON.stringify({ ...snap, synth: { ...snap.synth, sample: null }, drums: { ...snap.drums, kept: [] } }));
         expect(data).toEqual(rest);
 
         // Applied to fresh settings it gives the same project (ui aside)
@@ -25,6 +27,8 @@ describe('share links', () => {
         applySnapshot(other, data);
         const back: any = buildSnapshot(other);
         delete back.ui;
+        // A Drums slot that played a kept sound plays its own kit sound there (slot 4: Hat)
+        rest.drums.slots[3].sound = 'kit:hat';
         expect(back).toEqual(rest);
     });
 

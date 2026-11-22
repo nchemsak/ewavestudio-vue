@@ -35,7 +35,7 @@ export type ExportOptions = {
 	ending: Ending;
 	mix: boolean;
 	stems: boolean;      // dry, delay, reverb, noise, tape
-	machineStems?: boolean; // a file per machine, rhythm and bass (and the lo-fi pedal's noise)
+	machineStems?: boolean; // a file per machine, rhythm, bass and drums (and the lo-fi pedal's noise)
 	midi: boolean;
 	oneShot: boolean;
 	oneShotHz: number;   // the one-shot's note
@@ -124,7 +124,11 @@ export async function buildExportFiles(
 	// through; otherwise the pattern showing, o.bars times over
 	const chain = o.play === 'chain' && !!state.barPatterns?.length;
 	const bars = chain ? state.barPatterns!.length : o.bars;
-	state = chain ? state : { ...state, barPatterns: undefined, bass: state.bass && { ...state.bass, barPatterns: undefined } };
+	state = chain ? state : {
+		...state, barPatterns: undefined,
+		bass: state.bass && { ...state.bass, barPatterns: undefined },
+		drums: state.drums && { ...state.drums, barRows: undefined },
+	};
 	const names = exportNames({ project: meta.project, bpm: state.bpm, key: meta.key, bars, ending: o.ending, chain });
 	const loopFrames = barFrames(bars, state.bpm, sr);
 	const seconds = loopFrames / sr + state.tailSeconds;
@@ -133,7 +137,7 @@ export async function buildExportFiles(
 	// machine alone through the pedals, without the lo-fi pedal's noise, which is a file of its
 	// own (the effects stems' 'tape'), so they add up to the mix (with the overdrive and the
 	// lo-fi pedal off exactly: both bend the sum, not each machine)
-	type Job = { name: string; part: ExportPart; machine?: 'rhythm' | 'bass' };
+	type Job = { name: string; part: ExportPart; machine?: 'rhythm' | 'bass' | 'drums' };
 	const stemNames = new Set<string>();
 	const jobs: Job[] = [];
 	if (o.mix || o.stems || o.machineStems) jobs.push({ name: 'mix', part: 'mix' });
@@ -141,6 +145,7 @@ export async function buildExportFiles(
 	if (o.machineStems) {
 		jobs.push({ name: 'rhythm', part: 'mix', machine: 'rhythm' });
 		if (state.bass) jobs.push({ name: 'bass', part: 'mix', machine: 'bass' });
+		if (state.drums) jobs.push({ name: 'drums', part: 'mix', machine: 'drums' });
 		if (!o.stems) jobs.push({ name: 'tape', part: 'tape' });
 	}
 	const total = jobs.length + (o.oneShot ? 1 : 0);
@@ -193,6 +198,7 @@ export async function buildExportFiles(
 				pitches: state.pattern.pitches, ratchets: state.pattern.ratchets,
 				repeatNotes: state.pattern.repeatNotes, repeatChord: state.pattern.repeatChord, name: meta.project,
 				bass: state.bass && { pattern: state.bass.pattern, barPatterns: state.bass.barPatterns },
+				drums: state.drums && { rows: state.drums.rows, barRows: state.drums.barRows, muted: state.drums.slots.map((sl) => sl.muted) },
 			}),
 		});
 	}

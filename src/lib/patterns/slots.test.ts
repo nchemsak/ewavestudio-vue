@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bassOf, emptyBass, loadBassIntoLane, chainCells, chainFrom, comparableProject, cycleCell, emptyChain, emptyRhythm, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, rhythmOf, slotFromLane, slotHasSteps, slotIndexFrom, slotsFrom, SLOT_COUNT } from './slots';
+import { bassOf, emptyBass, loadBassIntoLane, chainCells, chainFrom, comparableProject, cycleCell, emptyChain, emptyRhythm, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, rhythmOf, slotFromLane, slotHasSteps, slotIndexFrom, slotsFrom, SLOT_COUNT, drumRowsOf, emptyDrumRows, type RhythmTrack } from './slots';
 import { applySnapshot, buildSnapshot } from '../project/snapshot';
 import { STEPS, asSaved, changeEverything, fresh } from '../project/testState';
 
@@ -22,7 +22,7 @@ describe('pattern slots', () => {
 			ratchets: l.ratchets, repeatNotes: l.repeatNotes,
 		});
 		l.steps[1] = true; // editing the lane later leaves the slot alone
-		expect(slot.tracks[0].steps[1]).toBe(false);
+		expect((slot.tracks[0] as RhythmTrack).steps[1]).toBe(false);
 		expect(slotHasSteps(slot)).toBe(true);
 	});
 
@@ -62,7 +62,7 @@ describe('pattern slots', () => {
 
 describe('pattern slots in a project', () => {
 	it('File → New: four empty slots, A playing', () => {
-		expect(asSaved(fresh()).patterns).toEqual({ current: 0, slots: [{ tracks: [emptyRhythm(STEPS, 220), emptyBass(STEPS, 55)] }, null, null, null], chain: emptyChain(), chainOn: false });
+		expect(asSaved(fresh()).patterns).toEqual({ current: 0, slots: [{ tracks: [emptyRhythm(STEPS, 220), emptyBass(STEPS, 55), { machine: 'drums', rows: emptyDrumRows(STEPS) }] }, null, null, null], chain: emptyChain(), chainOn: false });
 	});
 
 	it('the saved current slot is the lane as it is now', () => {
@@ -137,9 +137,10 @@ describe('which slot is showing is not a change', () => {
 		// Switch to B as the app does: the lane into C, B into the lane
 		const lane = st.instruments.value.find(i => i.name === 'synth-voice')!;
 		const slots = [...st.patterns.slots.value];
-		slots[2] = slotFromLane(lane, 220, st.bass.lane);
+		slots[2] = slotFromLane(lane, 220, st.bass.lane, st.drums.rows);
 		loadIntoLane(lane, slots[1], STEPS, 220);
 		loadBassIntoLane(st.bass.lane, slots[1], STEPS, 55);
+		st.drums.rows = drumRowsOf(slots[1], STEPS);
 		st.patterns.slots.value = slots;
 		st.patterns.current.value = 1;
 		const after = asSaved(st);
@@ -188,5 +189,42 @@ describe('the Bass machine in the slots', () => {
 		const b = emptyBass(4, 55);
 		b.steps[2] = true;
 		expect(slotHasSteps({ tracks: [emptyRhythm(4, 220), b] })).toBe(true);
+	});
+});
+
+describe('the Drums machine in the slots', () => {
+	const rows = () => emptyDrumRows(STEPS).map((r, k) => ({ steps: r.steps.map((_, i) => i === k * 2), velocities: r.velocities.map(() => 0.7) }));
+	const lane = { steps: Array(STEPS).fill(false), velocities: Array(STEPS).fill(1) };
+
+	it('a slot keeps a Drums track: four rows, copied', () => {
+		const r = rows();
+		const slot = slotFromLane(lane, 220, null, r);
+		r[0].steps[0] = false; // editing the rows later leaves the slot alone
+		expect(drumRowsOf(slot, STEPS)[0].steps[0]).toBe(true);
+		expect(drumRowsOf(slot, STEPS)[3].steps[6]).toBe(true);
+		expect(slotHasSteps(slot)).toBe(true);
+		expect(drumRowsOf(null, STEPS)).toEqual(emptyDrumRows(STEPS));
+	});
+
+	it('a saved Drums track loads, fitted to the bar; a damaged one is dropped', () => {
+		const saved = JSON.parse(JSON.stringify([{ tracks: [{ machine: 'drums', rows: [{ steps: [true], velocities: [2] }] }] },
+			{ tracks: [{ machine: 'drums', rows: 'no' }] }]));
+		const slots = slotsFrom(saved, STEPS, 220);
+		const r = drumRowsOf(slots[0], STEPS);
+		expect(r).toHaveLength(4);
+		expect(r[0].steps).toHaveLength(STEPS);
+		expect(r[0].steps[0]).toBe(true);
+		expect(r[0].velocities[0]).toBe(1);
+		expect(slots[1]).toBeNull();
+	});
+
+	it('an empty Drums track is the same as none (a slot from before Drums isn\'t an edit)', () => {
+		const st = fresh();
+		const before = asSaved(st);
+		const withEmpty = JSON.parse(JSON.stringify(before));
+		withEmpty.patterns.slots[0].tracks = withEmpty.patterns.slots[0].tracks.filter((t: any) => t.machine !== 'drums');
+		expect(comparableProject(withEmpty)).toEqual(comparableProject(before));
+		st.drums.rows = rows();
+		expect(comparableProject(asSaved(st))).not.toEqual(comparableProject(before));
 	});
 });

@@ -12,6 +12,11 @@ export default defineConfig({
   // googleAnalytics(): the gtag snippet; serviceWorker(): dist/sw.js, for installing the app and
   // using it offline. Both in builds only (not `npm run dev`).
   plugins: [vue(), googleAnalytics(), serviceWorker()],
+  // The app is one page that needs all of its code at once (a groovebox: every machine is on the
+  // panel), so one main chunk is expected; the Drums machine's kit data (src/audio/drumKitData.ts)
+  // is split out and loaded when first needed. Vite warns over 500 kB; the main chunk passed that
+  // with the Drums machine (520 kB, 176 kB gzipped), so the warning starts at 640 kB.
+  build: { chunkSizeWarningLimit: 640 },
   css: {
     preprocessorOptions: {
       scss: {

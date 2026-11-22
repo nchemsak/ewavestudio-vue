@@ -19,6 +19,8 @@ import { createPingPong } from "../pingPong";
 import { createTape, tapeSettings, type TapeMode } from "../tape";
 import { sampleBuffer, type SampleData } from "../sample";
 import { bassNotesForBar, playBassNote, type BassPattern, type BassSounding, type BassVoice } from "../bass";
+import { DRUM_SLOTS, drumHitsForBar, playDrumHit, type DrumRow, type DrumSounding } from "../drums";
+import { soundBuffer } from "../drumKit";
 
 export type StepPattern = {
 	active: boolean[];
@@ -59,10 +61,17 @@ export type StepSequencerState = {
 	// per bar with the chain (as barPatterns). Not in a one-shot.
 	// `pedals`: how much of it goes through the pedals (missing: all)
 	bass?: { voice: BassVoice; level: number; pedals?: number; pattern: BassPattern; barPatterns?: BassPattern[] };
+	// The Drums machine (src/audio/drums.ts; missing: none): each slot's recording and settings,
+	// the machine's level and Pedals, and its rows, or one set per bar with the chain (as
+	// barPatterns). Not in a one-shot.
+	drums?: {
+		slots: { data: SampleData | null; tune: number; decay: number; level: number; muted: boolean }[];
+		level: number; pedals?: number; rows: DrumRow[]; barRows?: DrumRow[][];
+	};
 	// The Rhythm machine's Pedals (missing: all of it through the pedals)
 	rhythmPedals?: number;
-	// One machine only (a machine's stem, PR 116): the other's notes aren't played (missing: both)
-	machine?: 'rhythm' | 'bass';
+	// One machine only (a machine's stem, PR 116): the others' notes aren't played (missing: all)
+	machine?: 'rhythm' | 'bass' | 'drums';
 
 	fx: {
 		delay: {
@@ -529,8 +538,10 @@ export function scheduleStepSequencer(
 	};
 	const rhythmBus = machineBus(state.rhythmPedals);
 	const bassBus = machineBus(state.bass?.pedals);
-	const playRhythm = state.machine !== 'bass';
-	const playBass = state.machine !== 'rhythm';
+	const drumsBus = machineBus(state.drums?.pedals);
+	const playRhythm = !state.machine || state.machine === 'rhythm';
+	const playBass = !state.machine || state.machine === 'bass';
+	const playDrums = !state.machine || state.machine === 'drums';
 
 	// Where every note goes (note.ts builds it, as in the live engine)
 	const noteWiring: NoteWiring = {
@@ -553,6 +564,26 @@ export function scheduleStepSequencer(
 			for (const note of bassNotesForBar(pat, state.stepsCount, barStart, stepDuration, clamp01(state.swing), clamp01(b.level))) {
 				sounding?.cut(note.time);
 				sounding = playBassNote(b.voice, note, { ctx, out: [bassBus] });
+			}
+		}
+	}
+
+	// The Drums machine, as live: each slot one hit at a time, a new hit cutting its last
+	if (state.drums && !state.oneShot && playDrums) {
+		const d = state.drums;
+		const buffers = d.slots.map((sl) => soundBuffer(sl.data));
+		const muted = d.slots.map((sl) => sl.muted);
+		const sounding: (DrumSounding | null)[] = Array(DRUM_SLOTS).fill(null);
+		for (let bar = 0; bar < bars; bar++) {
+			const rows = d.barRows?.length ? d.barRows[bar % d.barRows.length] : d.rows;
+			const barStart = ctx.currentTime + offsetSeconds + bar * state.stepsCount * stepDuration;
+			for (const hit of drumHitsForBar(rows, muted, state.stepsCount, barStart, stepDuration, clamp01(state.swing))) {
+				const sl = d.slots[hit.slot], buffer = buffers[hit.slot];
+				if (!sl || !buffer) continue;
+				sounding[hit.slot]?.cut(hit.time);
+				sounding[hit.slot] = playDrumHit(ctx, buffer, {
+					time: hit.time, amp: hit.vel * clamp01(sl.level) * clamp01(d.level), tune: sl.tune, decay: sl.decay,
+				}, [drumsBus]);
 			}
 		}
 	}
@@ -585,7 +616,7 @@ export function scheduleStepSequencer(
 		// REV with Next hit: this hit's swell lasts until the next step that's on
 		if (revGaps) openRev(revIrSeconds(swellSeconds('next', stepDuration, revGaps[stepIndex]), revPreS), t + revPreS);
 
-		// Bass's stem alone: REV's gates above still open as in the mix, but Rhythm doesn't play
+		// Another machine's stem alone: REV's gates above still open as in the mix, but Rhythm doesn't play
 		if (!playRhythm) continue;
 
 		// One note, or a ratchet's 2–4 quick hits within the step, as in the live engine

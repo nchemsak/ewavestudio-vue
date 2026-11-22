@@ -66,6 +66,20 @@ export const MIDI_KNOBS: Record<string, string> = {
 	'bass.decay': 'Bass decay',
 	'bass.accent': 'Bass accent',
 	'bass.slide': 'Bass slide time',
+	'drums.level': 'Drums level',
+	'drums.pedals': 'Drums into the pedals',
+	'drums.1.tune': 'Drum slot 1 tune',
+	'drums.1.decay': 'Drum slot 1 decay',
+	'drums.1.level': 'Drum slot 1 level',
+	'drums.2.tune': 'Drum slot 2 tune',
+	'drums.2.decay': 'Drum slot 2 decay',
+	'drums.2.level': 'Drum slot 2 level',
+	'drums.3.tune': 'Drum slot 3 tune',
+	'drums.3.decay': 'Drum slot 3 decay',
+	'drums.3.level': 'Drum slot 3 level',
+	'drums.4.tune': 'Drum slot 4 tune',
+	'drums.4.decay': 'Drum slot 4 decay',
+	'drums.4.level': 'Drum slot 4 level',
 };
 
 export function ccKey(channel: number, controller: number): CcKey {

@@ -24,6 +24,9 @@ import { playNote } from './note';
 import { rhythmVoice, type RhythmSettings } from '../lib/machines/rhythm';
 import { bassVoice, type BassLane, type BassSettings } from '../lib/machines/bass';
 import { bassNoteFromHit, bassPlan, playBassNote, type BassNote, type BassSounding } from './bass';
+import { DRUM_SLOTS, playDrumHit, type DrumSounding } from './drums';
+import { loadDrumKit, drumKitNow, soundBuffer } from './drumKit';
+import { slotData, type Drums } from '../lib/machines/drums';
 import { lfoWaveAt } from './lfo';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
@@ -74,6 +77,9 @@ export type LiveEngineSettings = {
 	// The Bass machine (src/lib/machines/bass.ts): its sound and its lane, with its Pedals
 	// (missing: none)
 	bass?: { sound: BassSettings; lane: BassLane };
+	// The Drums machine (src/lib/machines/drums.ts): its slots, sounds, rows, mute, level and
+	// Pedals (missing: none)
+	drums?: Drums;
 	// The Rhythm machine's Pedals (how much of it goes through the pedals; missing: all of it)
 	rhythmPedals?: R<number>;
 	delay: {
@@ -478,18 +484,21 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	}
 	const rhythmPedals = () => s.rhythmPedals?.value ?? 1;
 	const bassPedals = () => s.bass?.lane.pedals ?? 1;
+	const drumsPedals = () => s.drums?.pedals ?? 1;
 	const rhythmBus = machineBus(rhythmPedals);
 	const bassBus = machineBus(bassPedals);
+	const drumsBus = machineBus(drumsPedals);
 	// Rhythm's noise layer: straight to preMaster, as ever, and into Rhythm's meter
 	const rhythmNoise = audioCtx.createGain();
 	rhythmNoise.connect(preMaster);
 	rhythmNoise.connect(rhythmBus.meter);
 	watch(rhythmPedals, (p) => applyPedals(rhythmBus, p));
 	watch(bassPedals, (p) => applyPedals(bassBus, p));
+	watch(drumsPedals, (p) => applyPedals(drumsBus, p));
 
 	/** A machine's level now, its peak over the last ~10 ms (0..1 and over) */
-	function machineLevel(id: 'rhythm' | 'bass'): number {
-		const m = id === 'bass' ? bassBus : rhythmBus;
+	function machineLevel(id: 'rhythm' | 'bass' | 'drums'): number {
+		const m = id === 'bass' ? bassBus : id === 'drums' ? drumsBus : rhythmBus;
 		m.meter.getFloatTimeDomainData(m.data);
 		let peak = 0;
 		for (let i = 0; i < m.data.length; i++) peak = Math.max(peak, Math.abs(m.data[i]));
@@ -929,6 +938,49 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// Bass voice END
 
+	// Drums voice START
+	// Each slot plays a recording (src/audio/drums.ts), one hit at a time: a new hit on a slot
+	// cuts its last one. Through the machine's bus, as the other machines. The kit loads a
+	// moment after the page opens (drumKit.ts); a kit sound before then is silent.
+	loadDrumKit().catch((err) => console.warn('The drum kit could not be loaded:', err));
+	const drumsSounding: (DrumSounding | null)[] = Array(DRUM_SLOTS).fill(null);
+
+	/** One hit of `slot` at `time`, `vel` its velocity (the slot's and the machine's level apply) */
+	function playDrum(slot: number, time: number, vel: number) {
+		const d = s.drums;
+		const sl = d?.slots[slot];
+		if (!d || !sl) return;
+		const buffer = soundBuffer(slotData(d, slot, drumKitNow()));
+		if (!buffer) return;
+		lastNoteAt = performance.now();
+		drumsSounding[slot]?.cut(time);
+		drumsSounding[slot] = playDrumHit(audioCtx, buffer, {
+			time, amp: Math.max(0, vel) * sl.level * d.level, tune: sl.tune, decay: sl.decay,
+		}, [drumsBus.bus]);
+		if (s.tape.enabled.value && !isPlaying.value) holdTapeNoise(time, drumsSounding[slot]!.end);
+	}
+
+	/** A slot's hit now, at full velocity (a click on its picture) */
+	async function playDrumNow(slot: number) {
+		await loadDrumKit().catch(() => null);
+		if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
+		playDrum(slot, audioCtx.currentTime + 0.003, 1);
+	}
+
+	/** Any recording now, as a slot would play it (the shelf's sounds): full velocity, at the machine's level */
+	async function playDrumSound(data: { data: string; sampleRate: number } | null) {
+		if (data && data.data === '') return;
+		if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
+		const buffer = soundBuffer(data);
+		if (!buffer) return;
+		lastNoteAt = performance.now();
+		const t = audioCtx.currentTime + 0.003;
+		const h = playDrumHit(audioCtx, buffer, { time: t, amp: (s.drums?.level ?? 0.6), tune: 0, decay: 1 }, [drumsBus.bus]);
+		if (s.tape.enabled.value && !isPlaying.value) holdTapeNoise(t, h.end);
+	}
+
+	// Drums voice END
+
 	// Samples START (only the hidden drum lanes use these)
 
 	function playBuffer(buffer: AudioBuffer, time: number, amp = 1) {
@@ -1054,6 +1106,17 @@ export function useLiveEngine(s: LiveEngineSettings) {
 				}
 			}
 
+			// The Drums machine: each slot whose row has this step on
+			const dr = s.drums;
+			if (dr && !dr.muted) {
+				const t = startTime + (stepIndex % 2 === 1 ? stepDuration * swing.value : 0);
+				dr.rows.forEach((row, slot) => {
+					if (dr.slots[slot]?.muted || !row.steps[stepIndex]) return;
+					const vel = row.velocities[stepIndex] ?? 1;
+					if (vel > 0) playDrum(slot, t, vel);
+				});
+			}
+
 			currentStep.value = stepIndex;
 			stepIndex = (stepIndex + 1) % stepLength.value;
 			startTime += stepDuration;
@@ -1096,6 +1159,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		currentStep,
 		playSynthNote,
 		playBassNow,
+		playDrumNow,
+		playDrumSound,
 		machineLevel,
 		startLfoIfNeeded,
 		lfoNow,

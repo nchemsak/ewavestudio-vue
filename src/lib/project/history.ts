@@ -4,7 +4,9 @@
 // applies the one undo/redo returns.
 //
 // Entries are stored as JSON text: a cheap deep copy that nothing can change afterwards, and
-// a cheap way to tell whether anything changed.
+// a cheap way to tell whether anything changed. A long string (a recording: the microphone's
+// sample, the Drums machine's kept sounds) is stored once, in a pool, and each entry holds a
+// short reference to it, so 100 undo steps don't hold 100 copies of every recording.
 
 export type History<T> = {
 	// Forget everything; `state` becomes the only entry (a project was opened, imported or made)
@@ -28,16 +30,32 @@ export type History<T> = {
 };
 
 export const DEFAULT_HISTORY_LIMIT = 100;
+// Strings at least this long go into the pool
+export const POOLED_LENGTH = 2048;
+// A pooled string's stand-in in an entry (no saved string starts with a NUL)
+const REF = '\u0000pool:';
 
 export function createHistory<T>(limit = DEFAULT_HISTORY_LIMIT): History<T> {
 	let entries: string[] = [];
 	let index = -1; // the entry the settings are at
+	// The pool: each long string once, and its number. It only grows: a project rarely has
+	// more than a few recordings, and opening another starts a fresh history (clear/reset).
+	let pool: string[] = [];
+	let pooled = new Map<string, number>();
 
-	const encode = (s: T) => JSON.stringify(s);
-	const decode = (s: string) => JSON.parse(s) as T;
+	const encode = (s: T) => JSON.stringify(s, (_k, v) => {
+		if (typeof v !== 'string' || v.length < POOLED_LENGTH) return v;
+		let n = pooled.get(v);
+		if (n === undefined) { n = pool.length; pool.push(v); pooled.set(v, n); }
+		return REF + n;
+	});
+	const decode = (s: string) => JSON.parse(s, (_k, v) =>
+		(typeof v === 'string' && v.startsWith(REF) ? pool[Number(v.slice(REF.length))] : v)) as T;
+	const forget = () => { pool = []; pooled = new Map(); };
 
 	return {
 		reset(state) {
+			forget();
 			entries = [encode(state)];
 			index = 0;
 		},
@@ -83,6 +101,7 @@ export function createHistory<T>(limit = DEFAULT_HISTORY_LIMIT): History<T> {
 		canUndo: () => index > 0,
 		canRedo: () => index >= 0 && index < entries.length - 1,
 		clear() {
+			forget();
 			entries = [];
 			index = -1;
 		},
