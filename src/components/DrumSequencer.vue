@@ -295,7 +295,13 @@
 					<div class="transport-presets">
 						<!-- While Bass is chosen they're Bass's (src/lib/machines/bassPresets.ts, PR 117); while
 							 Drums is, its kits and patterns (src/lib/machines/drumPresets.ts) -->
-						<template v-if="drumsChosen">
+						<template v-if="driftChosen">
+							<PresetButtons title="Drift sounds" dice-label="Random drift sound" :presets="DRIFT_SOUNDS" :active="activeDriftSoundId"
+								@choose="chooseDriftSound" @random="rollDriftSound" />
+							<PresetButtons title="Progressions" dice-label="Random progression" :presets="DRIFT_PROGRESSIONS"
+								:active="activeDriftProgressionId" @choose="chooseDriftProgression" @random="rollDriftProgression" />
+						</template>
+						<template v-else-if="drumsChosen">
 							<PresetButtons title="Drum kits" dice-label="Random kit" :presets="DRUM_KITS" :active="activeDrumKitId"
 								@choose="chooseDrumKit" @random="rollDrumKit" />
 							<PresetButtons title="Drum patterns" dice-label="Random drum pattern" :presets="DRUM_PATTERNS"
@@ -750,6 +756,8 @@ import DrumSound from './DrumSound.vue';
 import DriftPads from './DriftPads.vue';
 import DriftSound from './DriftSound.vue';
 import { createDrift, driftVoice, togglePlate, type Drift } from '../lib/machines/drift';
+import { DRIFT_PROGRESSIONS, DRIFT_SOUNDS, driftProgressionKey, driftSoundKey, progressionChords, randomDriftProgression, randomDriftSound } from '../lib/machines/driftPresets';
+import type { DriftVoice } from '../audio/drift';
 import { chordLabel, driftHasNotes, heldInBar, plateHz as driftPlateHzOf, platePitchClasses, plateSemitones, plateSpelling, driftRootMidi } from '../audio/drift';
 import { createDrums, hitToSound, keepSound, slotData, slotSound, soundName, type Drums } from '../lib/machines/drums';
 import { soundHue } from '../lib/machines/drumColours';
@@ -1076,6 +1084,49 @@ function driftExport() {
 		voice: driftVoice(drift), level: drift.level, pedals: drift.pedals, length: drift.length,
 		chords: drift.chords.map((r) => [...r]), plateHz: [...driftPlateHz.value],
 	};
+}
+// Drift's sounds and progressions (the plan's item 6, part 2; src/lib/machines/driftPresets.ts):
+// while Drift is chosen the boxes are its. A sound sets Drift's sound only; a progression its
+// bars (how many, and each one's plates). One undo step each; a button is lit while Drift's sound
+// or bars are exactly its. While stopped, either plays bar 1's chord (a progression picks bar 1).
+const activeDriftSoundId = computed<string | null>(() => {
+	const key = driftSoundKey(driftVoice(drift));
+	return DRIFT_SOUNDS.find((p) => driftSoundKey(p.sound) === key)?.id ?? null;
+});
+const activeDriftProgressionId = computed<string | null>(() => {
+	const key = driftProgressionKey(drift.length, drift.chords);
+	return DRIFT_PROGRESSIONS.find((p) => driftProgressionKey(p.length, progressionChords(p.bars)) === key)?.id ?? null;
+});
+function setDriftSound(v: DriftVoice) {
+	Object.assign(drift, v);
+	nextTick(() => previewDrift());
+}
+function setDriftProgression(length: number, bars: number[][]) {
+	drift.length = length;
+	drift.chords = progressionChords(bars);
+	driftPick.value = 0;
+	nextTick(() => previewDrift(0));
+}
+function chooseDriftSound(id: string) {
+	const p = DRIFT_SOUNDS.find((x) => x.id === id);
+	if (!p) return;
+	setDriftSound(p.sound);
+	trackEvent('drift_sound_select', { sound: id });
+}
+function rollDriftSound() {
+	setDriftSound(randomDriftSound());
+	trackEvent('drift_sound_random');
+}
+function chooseDriftProgression(id: string) {
+	const p = DRIFT_PROGRESSIONS.find((x) => x.id === id);
+	if (!p) return;
+	setDriftProgression(p.length, p.bars);
+	trackEvent('drift_progression_select', { progression: id });
+}
+function rollDriftProgression() {
+	const p = randomDriftProgression();
+	setDriftProgression(p.length, p.bars);
+	trackEvent('drift_progression_random');
 }
 // DRIFT MACHINE END
 
