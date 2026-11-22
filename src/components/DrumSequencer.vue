@@ -274,9 +274,16 @@
 					<!-- Sounds and Patterns, side by side: ready-made sounds (src/lib/presets/) and
 						 patterns (src/lib/patterns/), each with a dice. Between the knobs and Play from
 						 1200 px; a row of their own under them narrower. -->
-					<!-- Drums' kits and patterns come in the machine's next part; meanwhile the boxes keep their place -->
-					<div class="transport-presets" :class="{ 'is-hidden': drumsChosen }" :inert="drumsChosen || undefined">
-						<!-- While Bass is chosen they're Bass's (src/lib/machines/bassPresets.ts, PR 117) -->
+					<div class="transport-presets">
+						<!-- While Bass is chosen they're Bass's (src/lib/machines/bassPresets.ts, PR 117); while
+							 Drums is, its kits and patterns (src/lib/machines/drumPresets.ts) -->
+						<template v-if="drumsChosen">
+							<PresetButtons title="Drum kits" dice-label="Random kit" :presets="DRUM_KITS" :active="activeDrumKitId"
+								@choose="chooseDrumKit" @random="rollDrumKit" />
+							<PresetButtons title="Drum patterns" dice-label="Random drum pattern" :presets="DRUM_PATTERNS"
+								:active="activeDrumPatternId" @choose="chooseDrumPattern" @random="rollDrumPattern" />
+						</template>
+						<template v-else>
 						<PresetButtons v-if="!bassChosen" title="Sound presets" dice-label="Random sound" :presets="PRESETS" :active="activePresetId"
 							@choose="choosePreset" @random="rollRandomSound" />
 						<PresetButtons v-else title="Bass sounds" dice-label="Random bass sound" :presets="BASS_SOUNDS" :active="activeBassSoundId"
@@ -286,6 +293,7 @@
 							@random="rollRandomPattern" />
 						<PresetButtons v-else title="Bass patterns" dice-label="Random bass pattern" :presets="BASS_PATTERNS"
 							:active="activeBassPatternId" @choose="chooseBassPattern" @random="rollBassPattern" />
+						</template>
 					</div>
 
 					<!-- Play (+ the MIDI fallback) -->
@@ -612,111 +620,6 @@
 			</section>
 			<!-- LAYOUT END -->
 
-			<!-- Bottom Sequencer -->
-			<!-- <section class="pt-panel ds-sequencer">
-				<h2 class="pt-title">Sequencer</h2>
-				<div class="accordion" id="seqAccordion">
-					<div class="accordion-item">
-						<h2 class="accordion-header">
-							<button type="button" class="accordion-button" :class="{ collapsed: !seqOpen }"
-								@click="seqOpen = !seqOpen" :aria-expanded="seqOpen ? 'true' : 'false'"
-								aria-controls="seqPanel">Pattern</button>
-						</h2>
-
-						<div id="seqPanel" class="accordion-collapse collapse" :class="{ show: seqOpen }">
-							<div class="accordion-body p-3">
-								<section class="channels-section">
-									<div v-for="inst in orderedChannels" :key="inst.key || inst.name"
-										class="mb-3 channel-wrap">
-										<template v-if="inst.isAddButton">
-											<div class="d-flex align-items-center">
-												<button class="pt-btn pt-accent-cool" @click="addCustomChannel">+ Add
-													Channel</button>
-											</div>
-										</template>
-
-										<template v-else>
-											<div class="d-flex align-items-center gap-2 mb-1">
-												<div class="mute-dot" :class="{ muted: inst.muted }"
-													@click="toggleMute(inst.name)" role="button"
-													:title="inst.muted ? 'Muted' : 'Playing'"></div>
-
-												<div class="channel-label d-flex align-items-center gap-1">
-													<template v-if="!inst.isEditingName">
-														<strong @click="editLabel(inst)"
-															@mouseenter="hoveredLabel = inst.name"
-															@mouseleave="hoveredLabel = null" class="position-relative">
-															{{ inst.label }}
-															<span v-if="hoveredLabel === inst.name"
-																class="custom-tooltip">Click to rename</span>
-														</strong>
-													</template>
-													<template v-else>
-														<input v-model="inst.label" @blur="stopEditingLabel(inst)"
-															@keydown.enter.prevent="stopEditingLabel(inst)"
-															class="form-control form-control-sm"
-															style="max-width: 150px;" :ref="el => inst.inputRef = el" />
-													</template>
-												</div>
-
-												<div class="ms-auto d-flex align-items-center gap-2 channel-actions">
-													<button v-if="inst.isCustom" class="pt-btn pt-btn-sm"
-														@click="triggerFilePicker(inst)">Upload</button>
-													<input class="d-none" :id="`file-${inst.name}`" type="file"
-														accept="audio/*" @change="loadUserSample($event, inst)" />
-													<button v-if="canDelete(inst.name)"
-														class="pt-btn pt-btn-sm pt-danger"
-														@click="deleteChannel(inst.name)">Delete</button>
-												</div>
-											</div>
-
-											<div class="position-relative text-center mb-2">
-												<Knob v-model="inst.channelVolume" :min="0" :max="1" :step="0.01"
-													size="small" label="Vol" color="#8E44AD"
-													@knobStart="activeKnob = `vol-${inst.name}`"
-													@knobEnd="activeKnob = null" />
-												<span v-if="activeKnob === `vol-${inst.name}`" class="custom-tooltip">
-													{{ Math.round(inst.channelVolume * 100) }}%
-												</span>
-											</div>
-
-											<div class="d-flex pad-row">
-												<div class="padTEST-grid">
-													<div v-for="(active, index) in inst.steps" :key="index"
-														class="padTESTwrap"
-														@mouseenter="hoveredPad = `${inst.name}-${index}`"
-														@mouseleave="hoveredPad = null">
-														<div class="pad-step-num">{{ index + 1 }}</div>
-
-														<div :class="['padTEST', 'liquid', { selected: active }, { playing: index === currentStep }]"
-															@mousedown="handleMouseDown($event, inst.name, index)"
-															@mouseenter="handleMouseEnter(inst.name, index)"
-															@dragstart.prevent :style="getPadStyle(inst, index)"></div>
-
-														<div v-if="active && hoveredPad === `${inst.name}-${index}`"
-															class="hover-slider volume-slider">
-															<input type="range" min="0" max="1" step="0.01"
-																v-model.number="inst.velocities[index]"
-																@mousedown="activeVolumePad = `${inst.name}-${index}`"
-																@mouseup="activeVolumePad = null"
-																@touchstart="activeVolumePad = `${inst.name}-${index}`"
-																@touchend="activeVolumePad = null" />
-															<span v-if="activeVolumePad === `${inst.name}-${index}`"
-																class="custom-tooltip">
-																{{ Math.round(inst.velocities[index] * 100) }}%
-															</span>
-														</div>
-													</div>
-												</div>
-											</div>
-										</template>
-									</div>
-								</section>
-							</div>
-						</div>
-					</div>
-				</div>
-			</section> -->
 		</div>
 		<!-- A share link's project just opened: press Play (ShareNotice.vue) -->
 		<ShareNotice :playing="isPlaying" @play="onSharePlay" />
@@ -818,6 +721,7 @@ import DrumPads from './DrumPads.vue';
 import DrumSound from './DrumSound.vue';
 import { createDrums, hitToSound, keepSound, slotData, slotSound, soundName, type Drums } from '../lib/machines/drums';
 import { soundHue } from '../lib/machines/drumColours';
+import { DRUM_KITS, DRUM_PATTERNS, drumKitKey, drumRowsFrom, drumRowsKey, kitSlots, randomDrumKit, randomDrumPattern } from '../lib/machines/drumPresets';
 import { loadDrumKit } from '../audio/drumKit';
 import type { DrumRow, KitId } from '../audio/drums';
 import LevelMeter from './LevelMeter.vue';
@@ -1410,8 +1314,6 @@ function midiToNamePref(m: number, mode: AccidentalMode = accidentalMode.value) 
 
 onMounted(() => {
 
-	window.addEventListener('mouseup', handleMouseUp);
-
 	window.addEventListener('keydown', onGlobalKeydown, { capture: true });
 	window.addEventListener('keyup', onGlobalKeyup, { capture: true });
 	window.addEventListener('mouseup', stopTempoRepeat);
@@ -1419,7 +1321,6 @@ onMounted(() => {
 
 });
 onBeforeUnmount(() => {
-	window.removeEventListener('mouseup', handleMouseUp);
 	window.removeEventListener('keydown', onGlobalKeydown, { capture: true } as any);
 	window.removeEventListener('keyup', onGlobalKeyup, { capture: true } as any);
 
@@ -1478,7 +1379,6 @@ const swing = ref(0);
 const swingText = computed(() => `${Math.round(swing.value * 100)}%${Math.abs(swing.value - TRIPLET_SWING) < 1e-9 ? ' (triplet)' : ''}`);
 const activeKnob = ref(null);
 const hoveredPad = ref(null);
-const hoveredLabel = ref(null);
 
 const selectedWaveform = ref<PadWave>("sine");
 const waves = WAVE_IDS;
@@ -1606,42 +1506,6 @@ function isNoteInRange(octave, semitone) {
 
 const instruments = ref<Instrument[]>([
 	{
-		name: 'kick',
-		label: 'Kick',
-		type: 'sample',
-		isCustom: false,
-		isEditingName: false,
-		buffer: null,
-		muted: false,
-		channelVolume: 0.5,
-		steps: Array(stepLength.value).fill(false),
-		velocities: Array(stepLength.value).fill(1.0),
-	},
-	{
-		name: 'snare',
-		label: 'Snare',
-		type: 'sample',
-		isCustom: false,
-		isEditingName: false,
-		buffer: null,
-		muted: false,
-		channelVolume: 0.5,
-		steps: Array(stepLength.value).fill(false),
-		velocities: Array(stepLength.value).fill(1.0),
-	},
-	{
-		name: 'hihat',
-		label: 'Hi-Hat',
-		type: 'sample',
-		isCustom: false,
-		isEditingName: false,
-		buffer: null,
-		muted: false,
-		channelVolume: 0.5,
-		steps: Array(stepLength.value).fill(false),
-		velocities: Array(stepLength.value).fill(1.0),
-	},
-	{
 		name: 'synth-voice',
 		label: 'Percussion Synth',
 		type: 'synth',
@@ -1657,14 +1521,6 @@ const instruments = ref<Instrument[]>([
 		repeatNotes: Array(stepLength.value).fill('same'), // what the hits play (ratchet.ts)
 	},
 ]);
-
-const DEFAULT_CHANNELS = new Set(['kick', 'snare', 'hihat', 'synth-voice']);
-function canDelete(name: string) { return !DEFAULT_CHANNELS.has(name); }
-
-function triggerFilePicker(inst: any) {
-	const input = document.getElementById(`file-${inst.name}`) as HTMLInputElement | null;
-	input?.click();
-}
 
 const synthInstrument = computed(() => instruments.value.find(i => i.name === 'synth-voice'));
 
@@ -1797,25 +1653,6 @@ const availableOctaves = computed(() => {
 		}
 	}
 	return octs;
-});
-
-//  sampler channels only (kick/snare/hihat + customs) with the “Add Channel” row
-const ADD_ROW = { key: 'add-row', isAddButton: true } as const;
-
-const orderedChannels = computed(() => {
-	const byName = (n: string) => instruments.value.find(i => i.name === n);
-	const kick = byName('kick');
-	const snare = byName('snare');
-	const hihat = byName('hihat');
-	const customs = instruments.value.filter(i => i.isCustom);
-
-	const rows: any[] = [];
-	if (kick) rows.push(kick);
-	if (snare) rows.push(snare);
-	if (hihat) rows.push(hihat);
-	rows.push(...customs);
-	rows.push(ADD_ROW); // Add Channel always after customs
-	return rows;
 });
 
 // Global Octave controls
@@ -2400,7 +2237,6 @@ const {
 	startLfoIfNeeded,
 	togglePlay,
 	hardStopSequencer,
-	loadSample,
 	lfoNow,
 	soundingRecently,
 	barPosition,
@@ -2599,86 +2435,8 @@ const displayHz = computed(() =>
 	(Math.round(currentPadHz.value * 100) / 100).toFixed(2)
 );
 
-function editLabel(instrument) {
-	instrument.isEditingName = true;
-
-	nextTick(() => {
-		const el = instrument.inputRef;
-		if (el) {
-			el.focus();
-			const val = el.value;
-			el.setSelectionRange(val.length, val.length);
-		}
-	});
-}
-
-function stopEditingLabel(instrument) {
-	instrument.isEditingName = false;
-	hoveredLabel.value = null;
-}
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
-
-function addCustomChannel() {
-	const id = Date.now();
-	const customIndex = instruments.value.filter(i => i.isCustom).length + 1;
-
-	instruments.value.push({
-		name: `custom-${id}`,
-		label: `Custom ${customIndex}`,
-		type: 'sample',
-		isCustom: true,
-		isEditingName: false,
-		buffer: null,
-		muted: false,
-		channelVolume: 0.5,
-		steps: Array(stepLength.value).fill(false),
-		velocities: Array(stepLength.value).fill(1.0),
-	});
-
-	// Prompt for a file right away
-	nextTick(() => {
-		const input = document.getElementById(`file-custom-${id}`) as HTMLInputElement | null;
-		input?.click();
-	});
-}
-
-function deleteChannel(name: string) {
-	if (!canDelete(name)) return;
-	const index = instruments.value.findIndex(i => i.name === name);
-	if (index !== -1) {
-		const label = instruments.value[index].label || name;
-		const confirmed = confirm(`Delete "${label}"?`);
-		if (confirmed) instruments.value.splice(index, 1);
-	}
-}
-
-function loadUserSample(event: Event, instrument: any) {
-	const input = event.target as HTMLInputElement;
-	const file = input.files?.[0];
-	if (!file) return;
-
-	instrument.label = file.name.replace(/\.[^/.]+$/, '');
-
-	const reader = new FileReader();
-	reader.onload = async () => {
-		try {
-			const arr = reader.result as ArrayBuffer;
-			instrument.buffer = await audioCtx.decodeAudioData(arr);
-		} catch (err) {
-			console.error('Error decoding audio', err);
-		} finally {
-			input.value = ''; // allow reselection of same file
-		}
-	};
-	reader.readAsArrayBuffer(file);
-}
-
-
-function togglePad(instrumentName, index) {
-	const instrument = instruments.value.find(i => i.name === instrumentName);
-	if (instrument) instrument.steps[index] = !instrument.steps[index];
-}
 
 // GOOGLE ANALYTICS BEGIN
 function onPlayClick() {
@@ -2825,76 +2583,6 @@ async function runExport(options: ExportOptions) {
 function toggleMute(instrumentName) {
 	const inst = instruments.value.find(i => i.name === instrumentName);
 	if (inst) inst.muted = !inst.muted;
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-// click and drag START
-
-const isMouseDown = ref(false);
-const dragMode = ref(null); // 'on' or 'off'
-
-function handleMouseDown(event, instrumentName, index) {
-	if (event.target.closest('.hover-slider input[type="range"]')) {
-		return; // Don't toggle pad if user is adjusting the slider
-	}
-	event.preventDefault(); // prevents browser drag behavior
-	isMouseDown.value = true;
-	const inst = instruments.value.find(i => i.name === instrumentName);
-	if (inst) {
-		dragMode.value = !inst.steps[index] ? 'on' : 'off';
-		inst.steps[index] = dragMode.value === 'on';
-	}
-}
-
-function handleMouseEnter(instrumentName, index) {
-	if (!isMouseDown.value) return;
-	const inst = instruments.value.find(i => i.name === instrumentName);
-	if (inst) inst.steps[index] = dragMode.value === 'on';
-}
-
-function handleMouseUp() {
-	isMouseDown.value = false;
-	dragMode.value = null;
-}
-
-// click and drag END
-
-// -----------------------------------------------------------------------------------------------------------------------------------------
-
-// The hidden drum lanes' samples (public/audio/*.mp3) are fetched only once one of those lanes
-// has a step on (an older project), not on every visit: their UI is hidden, so normally none has.
-let samplesRequested = false;
-watch(() => instruments.value.some(i => i.type !== 'synth' && !i.isCustom && i.steps?.some(Boolean)), (needed) => {
-	if (!needed || samplesRequested) return;
-	samplesRequested = true;
-	loadAllSamples();
-}, { immediate: true });
-
-async function loadAllSamples() {
-	for (const instrument of instruments.value) {
-		if (instrument.type === 'synth' || instrument.isCustom) continue;
-		const path = `audio/${instrument.name}.mp3`;
-		try {
-			instrument.buffer = await loadSample(path);
-		} catch (err) {
-			console.warn(`Sample load failed for ${instrument.name}:`, err);
-		}
-	}
-}
-
-// The pads' colour for a pitch, blue→red (src/lib/padColour.ts)
-function hueFor(hz: number, lo = MIN_PAD_HZ, hi = MAX_PAD_HZ) {
-	return padHue(hz, lo, hi);
-}
-
-function getPadStyle(instrument: any, index: number) {
-	if (!instrument.steps[index]) return { '--pad-on': 0 };
-
-	const pct = Math.round(instrument.velocities[index] * 100);
-	const hue = instrument.pitches ? hueFor(instrument.pitches[index] || MIN_PAD_HZ)
-		: 210;
-	return { '--vol': pct, '--heat-h': hue, '--pad-on': 1 };
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------------------
@@ -3069,6 +2757,39 @@ function chooseBassPattern(id: string) {
 function rollBassPattern() {
 	applyBassSteps(randomBassPattern());
 	trackEvent('bass_pattern_random');
+}
+
+// The Drums machine's kits and patterns (the plan's item 5, part 2;
+// src/lib/machines/drumPresets.ts): while Drums is chosen the boxes are its. A kit sets the
+// four slots' sounds, Tune, Decay and Level (not their mutes, not the kept sounds); a pattern
+// the four rows. One undo step each. A button is lit while the slots or rows are exactly its.
+const activeDrumKitId = computed<string | null>(() => {
+	const key = drumKitKey(drums.slots);
+	return DRUM_KITS.find((p) => drumKitKey(kitSlots(p, drums.slots)) === key)?.id ?? null;
+});
+const activeDrumPatternId = computed<string | null>(() => {
+	const key = drumRowsKey(drums.rows);
+	return DRUM_PATTERNS.find((p) => drumRowsKey(drumRowsFrom(p.rows, stepLength.value)) === key)?.id ?? null;
+});
+function chooseDrumKit(id: string) {
+	const p = DRUM_KITS.find((x) => x.id === id);
+	if (!p) return;
+	drums.slots = kitSlots(p, drums.slots);
+	trackEvent('drums_kit_select', { kit: id });
+}
+function rollDrumKit() {
+	drums.slots = kitSlots({ id: 'random', label: '', description: '', slots: randomDrumKit() }, drums.slots);
+	trackEvent('drums_kit_random');
+}
+function chooseDrumPattern(id: string) {
+	const p = DRUM_PATTERNS.find((x) => x.id === id);
+	if (!p) return;
+	drums.rows = drumRowsFrom(p.rows, stepLength.value);
+	trackEvent('drums_pattern_select', { pattern: id });
+}
+function rollDrumPattern() {
+	drums.rows = drumRowsFrom(randomDrumPattern(), stepLength.value);
+	trackEvent('drums_pattern_random');
 }
 
 // Pattern Tools and the Melody Maker edit the machine shown (PR 117): Rhythm's lane, or Bass's
@@ -3944,10 +3665,6 @@ async function recordSample() {
 @keyframes keep-pulse { to { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .keep-drum__slot.busy { animation: none; opacity: .6; } }
 
-/* Drums: their kits and patterns come in the machine's next part; the boxes keep their place */
-.transport-presets.is-hidden { visibility: hidden; }
-/* Narrower they're a row of their own: none at all */
-@media (max-width: 1199.98px) { .transport-presets.is-hidden { display: none; } }
 
 /* Drums: the Melody Maker has no notes to work on */
 .module.melody { position: relative; }

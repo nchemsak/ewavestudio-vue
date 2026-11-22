@@ -6,7 +6,7 @@
 // Graph: per-note synth voices → drive (dry + shaper → tone, optionally through the bit
 // crusher, → driveSum). From driveSum two paths run in parallel: delay (dry + wet, feedback loop with
 // tone filters; plain or ping-pong) and a reverb send (tone filter → pre-delay → convolver → wet gain). Both go to preMaster, and so do the
-// noise layer and the sample lanes, which bypass drive, delay and reverb. From preMaster
+// noise layer, which bypasses drive, delay and reverb. From preMaster
 // everything goes through the tape pedal (tape.ts), or round it while it's off, to masterGain
 // → the output limiter (limiter.ts) → destination. The views' analysers are tapped from masterGain through a 10 Hz high-pass.
 //
@@ -60,7 +60,6 @@ export type LiveLane = {
 	waveforms?: string[];
 	ratchets?: number[]; // per step: 1 hit, or 2–4 quick hits (ratchet.ts)
 	repeatNotes?: string[]; // per step: what the hits play, 'same' | 'up' | 'down' (ratchet.ts)
-	buffer?: AudioBuffer | null;
 };
 
 export type LiveEngineSettings = {
@@ -981,31 +980,6 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// Drums voice END
 
-	// Samples START (only the hidden drum lanes use these)
-
-	function playBuffer(buffer: AudioBuffer, time: number, amp = 1) {
-		const source = audioCtx.createBufferSource();
-		source.buffer = buffer;
-		const gain = audioCtx.createGain();
-		gain.gain.setValueAtTime(Math.max(0.0001, amp), time); // no master volume here
-		source.connect(gain).connect(preMaster);
-		source.start(time);
-	}
-
-	async function loadSample(url: string) {
-		try {
-			const res = await fetch(url);
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const data = await res.arrayBuffer();
-			return await audioCtx.decodeAudioData(data);
-		} catch (err) {
-			console.error(`Failed to load or decode sample: ${url}`, err);
-			return null;
-		}
-	}
-
-	// Samples END
-
 	// Sequencer clock START
 
 	// Every tick schedules the steps that start within the next SCHEDULE_AHEAD_S seconds. The
@@ -1089,8 +1063,6 @@ export function useLiveEngine(s: LiveEngineSettings) {
 							playSynthNote(hitHz[k] ?? pitch, amp, safeDecay, hit.time, wf, { addNoise: padNoiseOn, vel, maxDuration: hit.maxDuration });
 						});
 
-					} else if (inst.buffer) {
-						playBuffer(inst.buffer, t, amp);
 					}
 				}
 			});
@@ -1168,6 +1140,5 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		barPosition,
 		togglePlay,
 		hardStopSequencer,
-		loadSample,
 	};
 }

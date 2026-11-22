@@ -30,11 +30,7 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 	const selectedKeyRoot = ref<KeyRoot>('C');
 	const globalOctaveOffset = ref(2);
 	const instruments = ref<Instrument[]>([
-		lane('kick', 'sample', { buffer: { fake: 'decoded kick' } as any }),
-		lane('snare', 'sample'),
-		lane('hihat', 'sample'),
 		lane('synth-voice', 'synth', { pitches: Array(STEPS).fill(1), waveforms: Array(STEPS).fill('square'), ratchets: Array(STEPS).fill(2), repeatNotes: Array(STEPS).fill('same') }),
-		lane('custom-1', 'sample', { isCustom: true }),
 	]);
 	const noiseMask = ref<boolean[]>(Array(STEPS).fill(false));
 	const resize = <T,>(arr: T[], fill: T) =>

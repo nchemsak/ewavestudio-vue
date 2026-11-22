@@ -49,24 +49,21 @@ describe('factory defaults (File → New)', () => {
 		expect(snap.ui).toEqual({ currentTheme: '', stepLength: STEPS, collapsibleState: {}, seqOpen: false });
 	});
 
-	it('clears every lane, removes custom lanes, and tunes untouched pads to the default key', () => {
+	it('clears the synth lane and tunes untouched pads to the default key', () => {
 		const st = fresh();
-		expect(st.instruments.value.map(i => i.name)).toEqual(['kick', 'snare', 'hihat', 'synth-voice']);
+		expect(st.instruments.value.map(i => i.name)).toEqual(['synth-voice']);
 		for (const inst of st.instruments.value) {
 			expect(inst.muted).toBe(false);
 			expect(inst.channelVolume).toBe(0.5);
 			expect(inst.steps).toEqual(Array(STEPS).fill(false));
 			expect(inst.velocities).toEqual(Array(STEPS).fill(1));
 		}
-		const synth = st.instruments.value[3];
+		const synth = st.instruments.value[0];
 		// A at the default octave: the key is reset before the pads are
 		expect(synth.pitches).toEqual(Array(STEPS).fill(220));
 		expect(synth.waveforms).toEqual(Array(STEPS).fill('sine'));
 		expect(synth.ratchets).toEqual(Array(STEPS).fill(1)); // one hit per step
 		expect(synth.repeatNotes).toEqual(Array(STEPS).fill('same')); // repeats play the pad's note
-		expect(st.instruments.value[0].ratchets).toBeUndefined(); // sample lanes have none
-		expect(st.instruments.value[0].pitches).toBeUndefined(); // sample lanes have no pitches
-		expect(st.instruments.value[0].buffer).toEqual({ fake: 'decoded kick' }); // keeps its sample
 	});
 });
 
@@ -341,23 +338,30 @@ describe('saving and loading a project', () => {
 		expect(st.synth.noise.mask.value).toEqual(Array(STEPS).fill(false));
 	});
 
-	it('loads lanes by name, keeps their samples, and adds saved custom lanes', () => {
+	it('an old project\'s sample lanes: not loaded, their steps go into the Drums rows (PR 120)', () => {
 		const st = fresh();
+		const on = (...k: number[]) => Array.from({ length: STEPS }, (_, i) => k.includes(i));
 		applySnapshot(st, {
 			instruments: [
-				{ name: 'kick', label: 'Big Kick', muted: true, channelVolume: 0.2, steps: [true] },
+				{ name: 'kick', label: 'Big Kick', muted: true, channelVolume: 0.2, steps: on(0, 8), velocities: [0.5] },
+				{ name: 'snare', steps: on(4, 12) },
+				{ name: 'hihat', steps: on(2) },
 				{ name: 'custom-9', label: 'Clap', isCustom: true, steps: Array(STEPS).fill(true) },
-				{ name: 'from-the-future', label: 'Unknown', isCustom: false },
+				{ name: 'synth-voice', steps: on(1) },
 			],
 		});
-		const kick = st.instruments.value[0];
-		expect(kick).toMatchObject({ label: 'Big Kick', muted: true, channelVolume: 0.2, steps: [true] });
-		expect(kick.buffer).toEqual({ fake: 'decoded kick' });
+		expect(st.instruments.value.map(i => i.name)).toEqual(['synth-voice']);
+		expect(st.instruments.value[0].steps).toEqual(on(1));
+		const rows = st.drums.rows;
+		expect(rows[0].steps).toEqual(on(0, 8));
+		expect(rows[0].velocities.slice(0, 2)).toEqual([0.5, 1]);
+		expect(rows[1].steps).toEqual(on(4, 12));
+		expect(rows[2].steps).toEqual(on());
+		expect(rows[3].steps).toEqual(on(2));
+		expect(st.drums.slots.map(s => s.muted)).toEqual([true, false, false, false]);
 
-		expect(st.instruments.value.map(i => i.name)).toEqual(['kick', 'snare', 'hihat', 'synth-voice', 'custom-9']);
-		expect(st.instruments.value[4]).toMatchObject({
-			label: 'Clap', type: 'sample', isCustom: true, buffer: null, channelVolume: 0.5,
-			velocities: Array(STEPS).fill(1),
-		});
+		// A project that has the Drums machine keeps its own rows
+		applySnapshot(st, { instruments: [{ name: 'kick', steps: on(5) }], drums: { lane: { rows: [] } } });
+		expect(st.drums.rows[0].steps).toEqual(on());
 	});
 });

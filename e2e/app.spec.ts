@@ -1703,7 +1703,7 @@ test("the first visit opens a starter beat; File → New stays empty; no drum sa
 	await expect(first.locator('.pad-row .padTEST.selected')).toHaveCount(0);
 	expect(settings(await projectData(first))).toEqual(settings(factory));
 
-	// The hidden drum lanes' samples weren't downloaded
+	// No mp3 is downloaded (the old drum lanes' samples are gone since PR 120)
 	expect(requested.filter((u) => /\.mp3(\?|$)/.test(u))).toEqual([]);
 	await ctx.close();
 });
@@ -7014,8 +7014,9 @@ test('the Drums machine: four rows on the pads; steps, velocity by dragging, mut
 	await expect(page.locator('.step-card .ds-which')).toHaveText(' · Drums');
 	for (const n of ['Kick', 'Snare', 'Metal', 'Hat']) await expect(page.getByRole('group', { name: `${n} steps` }).getByRole('button', { name: /, step / })).toHaveCount(16);
 	await expect(page.getByRole('group', { name: 'Repeats brush' })).toHaveCount(0);
-	// The preset boxes wait for the kits and patterns (the item's part 2)
-	await expect(page.getByRole('group', { name: 'Sound presets' })).toBeHidden();
+	// The preset boxes are Drums' kits and patterns (the item's part 2)
+	await expect(page.getByRole('group', { name: 'Sound presets' })).toHaveCount(0);
+	await expect(page.getByRole('group', { name: 'Drum kits' })).toBeVisible();
 	// The Melody Maker has nothing to do here; Pattern Tools' octave arrows neither
 	await expect(page.getByText('The Melody Maker works on Rhythm and Bass')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Octave up' }).first()).toBeDisabled();
@@ -7178,6 +7179,86 @@ test('the Drums machine: a project from before it opens with the kit and empty r
 	await expect(page.getByRole('group', { name: 'Kick steps' }).locator('.dp-cell[aria-pressed="true"]')).toHaveCount(0);
 	// Nothing changed by opening it: no unsaved dot
 	await expect(page.locator('.pc-primary')).toHaveText('Saved');
+});
+
+test('Drum kits and Drum patterns: the transport\'s boxes while Drums is shown; lit, the dice, one undo step each', async ({ page }) => {
+	await page.getByRole('button', { name: 'Show Drums' }).click();
+	const kits = page.getByRole('group', { name: 'Drum kits' });
+	const patterns = page.getByRole('group', { name: 'Drum patterns' });
+	await expect(kits).toBeVisible();
+	await expect(patterns).toBeVisible();
+	// A fresh page plays the kit as it comes: Kit is lit; no pattern yet
+	await expect(kits.getByRole('button', { name: 'Kit', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await expect(patterns.locator('[aria-pressed="true"]')).toHaveCount(0);
+	await page.waitForTimeout(SETTLED);
+
+	// A kit: the slots' Tune, Decay and Level; a slot's mute kept
+	await page.getByRole('switch', { name: 'Metal on' }).first().click();
+	const deep = kits.getByRole('button', { name: 'Deep', exact: true });
+	await deep.click();
+	await expect(deep).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.getByRole('slider', { name: 'Kick tune' })).toHaveAttribute('aria-valuenow', '-5');
+	await expect(page.getByRole('slider', { name: 'Metal tune' })).toHaveAttribute('aria-valuenow', '-7');
+	await expect(page.getByRole('switch', { name: 'Metal on' }).first()).toHaveAttribute('aria-checked', 'false');
+	await page.waitForTimeout(SETTLED);
+
+	// A pattern: the rows, the kit untouched
+	const breaks = patterns.getByRole('button', { name: 'Breaks', exact: true });
+	await breaks.click();
+	await expect(breaks).toHaveAttribute('aria-pressed', 'true');
+	const on = (row: string) => page.getByRole('group', { name: `${row} steps` }).locator('.dp-cell[aria-pressed="true"]');
+	await expect(on('Kick')).toHaveCount(3);
+	await expect(on('Snare')).toHaveCount(4);
+	await expect(on('Hat')).toHaveCount(10);
+	await expect(deep).toHaveAttribute('aria-pressed', 'true');
+	// Rhythm's pattern stayed empty
+	await expect(railRow(page, 'Rhythm').locator('.mr-cells i.on')).toHaveCount(0);
+	await page.waitForTimeout(SETTLED);
+
+	// A step changed: unlit; Undo lights it again
+	await page.getByRole('button', { name: 'Kick, step 2', exact: true }).click();
+	await expect(breaks).toHaveAttribute('aria-pressed', 'false');
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(breaks).toHaveAttribute('aria-pressed', 'true');
+	// One more undo: the kit as it was, the pattern too stays (separate steps)
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(on('Kick')).toHaveCount(0);
+	await expect(deep).toHaveAttribute('aria-pressed', 'true');
+
+	// The dice: a new kit and a new pattern, nothing lit; a kick on step 1
+	await page.getByRole('button', { name: 'Random kit' }).click();
+	await page.getByRole('button', { name: 'Random drum pattern' }).click();
+	// (the random kit may have put another sound in slot 1, which names its row: the first row)
+	await expect(page.getByRole('group', { name: / steps$/ }).first().locator('.dp-cell').first()).toHaveAttribute('aria-pressed', 'true');
+	await expect(patterns.locator('[aria-pressed="true"]')).toHaveCount(0);
+
+	// Back to Rhythm: its boxes
+	await page.getByRole('button', { name: 'Show Rhythm' }).click();
+	await expect(page.getByRole('group', { name: 'Sound presets' })).toBeVisible();
+});
+
+test('the old hidden drum lanes: a project from before the Drums machine gets their steps in its rows', async ({ page }) => {
+	await importChanged(page, 'Old lanes', (d) => {
+		delete d.drums;
+		for (const s of d.patterns.slots) if (s) s.tracks = s.tracks.filter((t: any) => t.machine !== 'drums');
+		const steps = (...k: number[]) => Array.from({ length: 16 }, (_, i) => k.includes(i));
+		d.instruments.push(
+			{ name: 'kick', label: 'Kick', type: 'sample', isCustom: false, muted: false, channelVolume: 0.5, steps: steps(0, 8), velocities: Array(16).fill(1) },
+			{ name: 'hihat', label: 'Hi-Hat', type: 'sample', isCustom: false, muted: false, channelVolume: 0.5, steps: steps(2, 6), velocities: Array(16).fill(1) },
+		);
+	});
+	await page.getByRole('button', { name: 'Show Drums' }).click();
+	const on = (row: string) => page.getByRole('group', { name: `${row} steps` }).locator('.dp-cell[aria-pressed="true"]');
+	await expect(on('Kick')).toHaveCount(2);
+	await expect(on('Hat')).toHaveCount(2);
+	await expect(on('Snare')).toHaveCount(0);
+	// Saved, there are no lanes but the synth's
+	await page.waitForTimeout(SETTLED);
+	const data = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(data.instruments.map((i: any) => i.name)).toEqual(['synth-voice']);
+	expect(data.drums.lane.rows[0].steps.slice(0, 9)).toEqual([true, false, false, false, false, false, false, false, true]);
 });
 
 // The Drums machine END
