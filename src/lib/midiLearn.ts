@@ -80,6 +80,17 @@ export const MIDI_KNOBS: Record<string, string> = {
 	'drums.4.tune': 'Drum slot 4 tune',
 	'drums.4.decay': 'Drum slot 4 decay',
 	'drums.4.level': 'Drum slot 4 level',
+	// The Drift machine (the plan's item 6): the rail's level and reverb send, the X/Y pad's two
+	// mini knobs and its Sound panel
+	'drift.level': 'Drift level',
+	'drift.pedals': 'Drift into the reverb',
+	'drift.cutoff': 'Drift filter',
+	'drift.spread': 'Drift spread',
+	'drift.voices': 'Drift voices',
+	'drift.drift': 'Drift drift',
+	'drift.wave': 'Drift wave',
+	'drift.attack': 'Drift attack',
+	'drift.release': 'Drift release',
 };
 
 export function ccKey(channel: number, controller: number): CcKey {

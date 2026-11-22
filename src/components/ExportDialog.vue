@@ -54,6 +54,11 @@
 					The LFO's cycle takes {{ lfoBars }} bars, so a {{ bars }}-bar loop won't repeat smoothly{{ lfoFit && !playChain ? '.' : ': With tail, or the LFO\'s RETRIG, avoids that.' }}
 					<button v-if="lfoFit && !playChain" type="button" class="pt-btn pt-btn-sm" @click="o.bars = lfoFit">Use {{ lfoFit }} bars</button>
 				</p>
+				<!-- Drift's chords take longer than the loop, or don't fit it -->
+				<p v-if="driftUneven" class="export-note export-drift-note">
+					Drift's chords take {{ driftBars }} bars, so a {{ bars }}-bar loop won't repeat them all{{ !playChain ? '.' : ': With tail avoids the jump.' }}
+					<button v-if="!playChain" type="button" class="pt-btn pt-btn-sm" @click="o.bars = driftBars as any">Use {{ driftBars }} bars</button>
+				</p>
 
 				<!-- On a phone (phone mode): just the mix, normalized; the rest is for a computer -->
 				<p v-if="simple" class="export-note">One WAV file of the mix, as loud as it can go without clipping.
@@ -129,6 +134,11 @@ const props = defineProps<{
 	chain?: string[] | null;                    // the chain's cells' letters, while one is filled (PR 111)
 	slotName?: string;                          // the pattern showing ("A")
 	bassOn?: boolean;                           // Bass plays (unmuted, a step on): its own machine stem
+	// The other machines that play (unmuted, something on), each a machine stem; given, it's
+	// used instead of bassOn
+	machinesOn?: string[];
+	// Bars Drift's chords take (4 or 8) while it plays, else 0
+	driftBars?: number;
 	// Whether the overdrive or the lo-fi pedal is on: they bend the sum, so the machine stems
 	// then add up to the mix only nearly
 	bending?: boolean;
@@ -149,6 +159,8 @@ watch(() => props.open, async (isOpen) => {
 	if (!props.chain) o.play = 'pattern';
 	// A loop starts out at least as long as the LFO's cycle, when one of the lengths fits it
 	if (!playChain.value && lfoUneven.value && lfoFit.value && lfoFit.value > o.bars) o.bars = lfoFit.value;
+	// And at least as long as Drift's chords
+	if (!playChain.value && driftUneven.value && driftBars.value > o.bars) o.bars = driftBars.value as any;
 	await nextTick();
 	panel.value?.focus();
 }, { immediate: true });
@@ -188,12 +200,17 @@ const stemsText = computed(() => {
 
 // The machine stems (PR 116): each machine on its own, through the pedals, and the lo-fi
 // pedal's noise as a file of its own (unless the effects stems have it already)
-const machineStems = computed(() => ['rhythm', ...(props.bassOn ? ['bass'] : []),
+const others = computed(() => props.machinesOn ?? (props.bassOn ? ['bass'] : []));
+const machineStems = computed(() => ['rhythm', ...others.value,
 	...(props.effectsOn.tape && !o.stems ? ['tape'] : [])]);
 const machineStemsText = computed(() => {
 	const sum = props.bending ? 'they add up to the mix nearly (the overdrive and lo-fi pedal bend the sum)' : 'they add up to the mix';
-	return props.bassOn ? `${list(machineStems.value)}: ${sum}` : 'rhythm only: Bass has no steps on, or is muted';
+	return others.value.length ? `${list(machineStems.value)}: ${sum}` : 'rhythm only: the other machines are muted or have nothing on';
 });
+
+// A loop shorter than Drift's chords, or not a whole number of them
+const driftBars = computed(() => props.driftBars ?? 0);
+const driftUneven = computed(() => o.ending === 'loop' && driftBars.value > 1 && bars.value % driftBars.value !== 0);
 
 const fileCount = computed(() => props.simple ? 1 :
 	(o.mix ? 1 : 0) + (o.stems ? stems.value.length : 0) + (o.machineStems ? machineStems.value.length : 0)

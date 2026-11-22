@@ -35,6 +35,7 @@ import { BASS_FIELDS, chainFrom, emptyChain, emptySlots, slotFromLane, slotIndex
 import { applyBassSound, bassSoundSnapshot, BASS_LEVEL_DEFAULT, resetBassSound, type BassLane, type BassSettings } from '../machines/bass';
 import { BASS_MAX_HZ, BASS_MIN_HZ } from '../../audio/bass';
 import { applyDrums, drumsSnapshot, resetDrums, type Drums } from '../machines/drums';
+import { applyDrift, driftSnapshot, resetDrift, type Drift } from '../machines/drift';
 export type { Wave };
 
 // The synth lane, 'synth-voice' (the Rhythm machine's pattern as it's being edited). Saved as
@@ -121,6 +122,9 @@ export type ProjectState = {
 	// The Drums machine (src/lib/machines/drums.ts): its slots, kept sounds, mute, level and
 	// Pedals, and its rows (the current slot's Drums track as it's being edited), reactive
 	drums: Drums;
+	// The Drift machine (src/lib/machines/drift.ts): its sound, mute, level, Pedals (its reverb
+	// send) and chords (the project's, not a pattern slot's), reactive
+	drift: Drift;
 	// The rail's mixer (PR 116): Rhythm's Pedals, how much of it goes through the pedals 0..1
 	// (Bass's is its lane's `pedals`)
 	mixer: { rhythmPedals: Ref<number> };
@@ -408,6 +412,9 @@ export function buildSnapshot(st: ProjectState) {
 
 		// The Drums machine: its slots, kept sounds, mute, level, Pedals and rows
 		drums: drumsSnapshot(st.drums),
+
+		// The Drift machine: its sound, mute, level, Pedals, length and chords
+		drift: driftSnapshot(st.drift),
 
 		// The rail's mixer: Rhythm's Pedals (Bass's is in `bass`)
 		mixer: { rhythm: { pedals: st.mixer.rhythmPedals.value } },
@@ -740,6 +747,10 @@ export function applySnapshot(st: ProjectState, s: any) {
 		drumsFromOldLanes(st.drums, s.instruments, stepLength.value);
 	}
 
+	// The Drift machine (the plan's item 6): a project saved before it has none (nothing held)
+	if (s.drift && typeof s.drift === 'object') applyDrift(st.drift, s.drift);
+	else if (Array.isArray(s.instruments) && s.instruments.length) resetDrift(st.drift);
+
 	// The rail's mixer (PR 116): a project from before plays Rhythm all through the pedals
 	const rp = s.mixer?.rhythm?.pedals;
 	if (typeof rp === 'number' && Number.isFinite(rp)) st.mixer.rhythmPedals.value = Math.min(1, Math.max(0, rp));
@@ -869,6 +880,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	chainOn.value = false;
 	resetBass(st, stepLength.value, bassDefaultHz(currentDefaultHz.value));
 	resetDrums(st.drums, stepLength.value);
+	resetDrift(st.drift);
 	st.mixer.rhythmPedals.value = 1;
 
 	selectedWaveform.value = 'sine';

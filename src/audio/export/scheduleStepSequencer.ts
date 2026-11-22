@@ -21,6 +21,8 @@ import { sampleBuffer, type SampleData } from "../sample";
 import { bassNotesForBar, playBassNote, type BassPattern, type BassSounding, type BassVoice } from "../bass";
 import { DRUM_SLOTS, drumHitsForBar, playDrumHit, type DrumRow, type DrumSounding } from "../drums";
 import { soundBuffer } from "../drumKit";
+import { createDriftFilter, driftRuns, playDriftNote, type DriftVoice } from "../drift";
+import { seededRandom } from "../../lib/random";
 
 export type StepPattern = {
 	active: boolean[];
@@ -68,10 +70,15 @@ export type StepSequencerState = {
 		slots: { data: SampleData | null; tune: number; decay: number; level: number; muted: boolean }[];
 		level: number; pedals?: number; rows: DrumRow[]; barRows?: DrumRow[][];
 	};
+	// The Drift machine (src/audio/drift.ts; missing: none): its voice, level, Pedals (its reverb
+	// send), and chords (a bar's plates, repeating every `length` bars, counted from the first
+	// bar across the chain), each plate's pitch. `loop`: the bars repeat (a seamless loop), so a
+	// plate held at the end and at the start carries on round. Not in a one-shot.
+	drift?: { voice: DriftVoice; level: number; pedals: number; length: number; chords: boolean[][]; plateHz: number[]; loop?: boolean };
 	// The Rhythm machine's Pedals (missing: all of it through the pedals)
 	rhythmPedals?: number;
 	// One machine only (a machine's stem, PR 116): the others' notes aren't played (missing: all)
-	machine?: 'rhythm' | 'bass' | 'drums';
+	machine?: 'rhythm' | 'bass' | 'drums' | 'drift';
 
 	fx: {
 		delay: {
@@ -134,6 +141,9 @@ export type ExportPart = 'mix' | 'dry' | 'delay' | 'reverb' | 'noise' | 'tape';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// A Drift note held round a seamless loop's end fades out past the end, and in at the start, over this
+const LOOP_SEAM_S = 0.05;
 
 function clamp01(x: number) {
 	return Math.max(0, Math.min(1, x));
@@ -585,6 +595,37 @@ export function scheduleStepSequencer(
 					time: hit.time, amp: hit.vel * clamp01(sl.level) * clamp01(d.level), tune: sl.tune, decay: sl.decay,
 				}, [drumsBus]);
 			}
+		}
+	}
+
+	// The Drift machine, as live: its notes through its filter, all of it to the dry part and
+	// Pedals of it into the reverb (skipping the overdrive and the delay). A plate held through
+	// several bars is one note; each fades in over Attack and out over Release. In a seamless
+	// loop a note held round the loop's end starts at full level and, past the end, fades out
+	// quickly over the start it folds onto. Its random numbers are its own (a fixed seed), so the
+	// other machines' are the same with Drift or without it.
+	if (state.drift && !state.oneShot && (!state.machine || state.machine === 'drift')) {
+		const d = state.drift;
+		const barS = state.stepsCount * stepDuration;
+		const t0 = ctx.currentTime + offsetSeconds;
+		const filter = createDriftFilter(ctx, d.voice.cutoff);
+		const level = ctx.createGain();
+		level.gain.value = clamp01(d.level);
+		const send = ctx.createGain();
+		send.gain.value = clamp01(d.pedals);
+		filter.connect(level);
+		level.connect(dryOut);
+		level.connect(send).connect(reverbToneFilter);
+		const driftRandom = seededRandom(6);
+		const attackS = d.voice.attack * barS, releaseS = d.voice.release * barS;
+		for (const run of driftRuns(d.chords, d.length, bars, !!d.loop)) {
+			const note = playDriftNote(ctx, d.voice, {
+				freq: d.plateHz[run.plate] ?? 220,
+				time: t0 + run.start * barS,
+				amp: 1,
+				attackS: run.carriedIn ? LOOP_SEAM_S : attackS,
+			}, filter, driftRandom);
+			note.release(t0 + run.end * barS, run.carriedOut ? LOOP_SEAM_S : releaseS);
 		}
 	}
 

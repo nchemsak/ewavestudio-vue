@@ -42,6 +42,9 @@
                     <Knob v-if="m.id === 'rhythm'" midi-id="synth.volume" :modelValue="m.level" @update:modelValue="(v: number) => emit('update:level', m.id, v)"
                         :label="`${m.name} level`" hideLabel size="mini"
                         :value-text="`${Math.round(m.level * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
+                    <Knob v-else-if="m.id === 'drift'" midi-id="drift.level" :modelValue="m.level" @update:modelValue="(v: number) => emit('update:level', m.id, v)"
+                        :label="`${m.name} level`" hideLabel size="mini"
+                        :value-text="`${Math.round(m.level * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                     <Knob v-else-if="m.id === 'drums'" midi-id="drums.level" :modelValue="m.level" @update:modelValue="(v: number) => emit('update:level', m.id, v)"
                         :label="`${m.name} level`" hideLabel size="mini"
                         :value-text="`${Math.round(m.level * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
@@ -50,8 +53,12 @@
                         :value-text="`${Math.round(m.level * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
                 <!-- Pedals: how much of it goes through the pedals; the rest skips them -->
-                <div class="mr-level" :title="`${m.name} into the pedals: ${Math.round(m.pedals * 100)}% (the rest skips the overdrive, delay and reverb)`">
-                    <Knob v-if="m.id === 'rhythm'" midi-id="synth.pedals" :modelValue="m.pedals" @update:modelValue="(v: number) => emit('update:pedals', m.id, v)"
+                <div class="mr-level" :title="m.id === 'drift' ? `Drift into the reverb: ${Math.round(m.pedals * 100)}% (Drift skips the overdrive and delay)` : `${m.name} into the pedals: ${Math.round(m.pedals * 100)}% (the rest skips the overdrive, delay and reverb)`">
+                    <!-- Drift goes straight to the reverb: its Pedals is its reverb send -->
+                    <Knob v-if="m.id === 'drift'" midi-id="drift.pedals" :modelValue="m.pedals" @update:modelValue="(v: number) => emit('update:pedals', m.id, v)"
+                        label="Drift into the reverb" hideLabel size="mini"
+                        :value-text="`${Math.round(m.pedals * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
+                    <Knob v-else-if="m.id === 'rhythm'" midi-id="synth.pedals" :modelValue="m.pedals" @update:modelValue="(v: number) => emit('update:pedals', m.id, v)"
                         :label="`${m.name} into the pedals`" hideLabel size="mini"
                         :value-text="`${Math.round(m.pedals * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                     <Knob v-else-if="m.id === 'drums'" midi-id="drums.pedals" :modelValue="m.pedals" @update:modelValue="(v: number) => emit('update:pedals', m.id, v)"
@@ -61,9 +68,13 @@
                         :label="`${m.name} into the pedals`" hideLabel size="mini"
                         :value-text="`${Math.round(m.pedals * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
-                <div class="mr-cells" aria-hidden="true">
-                    <!-- Drums: its slots stacked in each step -->
-                    <template v-if="m.stack">
+                <div class="mr-cells" aria-hidden="true" :class="{ 'mr-barcells': m.bars }"
+                    :style="m.bars ? { gridTemplateColumns: `repeat(${m.bars.length}, minmax(0, 1fr))` } : undefined">
+                    <!-- Drift: a cell per bar, its chord's name, the bar playing outlined -->
+                    <template v-if="m.bars">
+                        <i v-for="(c, i) in m.bars" :key="i" class="mr-bar" :class="{ on: !!c, now: playing && i === m.barNow }">{{ c || '·' }}</i>
+                    </template>
+                    <template v-else-if="m.stack">
                         <i v-for="(col, i) in m.stack" :key="i" class="mr-stack" :class="{ beat: i % 4 === 0, now: playing && i === currentStep }"><b
                             v-for="(h, k) in col" :key="k" :style="h != null ? { background: `hsl(${h} 80% 58%)` } : undefined"></b></i>
                     </template>
@@ -111,6 +122,9 @@ export type RailMachine = {
     muted: boolean; level: number; pedals: number;
     // Drums (the plan's item 5): per step, each slot's colour where its row is on, else null
     stack?: (number | null)[][];
+    // Drift (the plan's item 6): each bar's chord's name ('' for nothing held), and the bar playing
+    bars?: string[];
+    barNow?: number;
 };
 
 const props = defineProps<{
@@ -240,13 +254,13 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 5px; /* 8 until PR 122 (Drift's row) */
 }
 
 .mr-screen {
     position: relative;
     flex: 1 1 0;
-    min-height: 32px; /* 44 until PR 110: the chain's row takes the room beside the tablet's transport */
+    min-height: 26px; /* 44 until PR 110 (the chain's row), 32 until PR 122 (Drift's row) */
     border-radius: 6px;
     background: var(--mr-lcd-bg);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 2px 10px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(0, 0, 0, 0.45);
@@ -275,7 +289,7 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
 .mr-rows {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 3px; /* 5 until PR 122 (Drift's row) */
 }
 
 .mr-row,
@@ -431,6 +445,30 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
 
 .mr-stack.beat b {
     background: rgba(255, 255, 255, 0.12);
+}
+
+/* Drift's bars: a cell each, its chord's name */
+.mr-cells i.mr-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 700 8px/1 Cousine, ui-monospace, monospace;
+    font-style: normal;
+    color: var(--pt-text-dim, #b9a8d8);
+    background: rgba(255, 255, 255, .06);
+    border-radius: 2px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.mr-cells i.mr-bar.on {
+    color: var(--pt-text, #fff);
+    background: rgba(255, 255, 255, .13);
+}
+
+.mr-cells i.mr-bar.now {
+    outline: 1px solid var(--hw-led, #5dffb0);
+    outline-offset: 0;
 }
 
 /* Patterns A–D (PR 109; option A of PR 108's mockups): a caption, four caps and Copy */

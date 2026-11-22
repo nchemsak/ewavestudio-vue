@@ -8,6 +8,7 @@ import { emptyChain, emptyRhythm, emptySlots, type Chain, type Slots } from '../
 import { ref, reactive, computed } from 'vue';
 import { createBass } from '../machines/bass';
 import { createDrums } from '../machines/drums';
+import { createDrift } from '../machines/drift';
 import {
 	buildSnapshot,
 	resetToFactoryDefaults,
@@ -92,6 +93,7 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 			}),
 		},
 		drums: (() => { const d = createDrums(STEPS); d.level = 0.15; return d; })(),
+		drift: (() => { const d = createDrift(); d.level = 0.12; d.voices = 7; return d; })(),
 		mixer: { rhythmPedals: ref(0.2) },
 		patterns: { slots: ref<Slots>(emptySlots()), current: ref(0), chain: ref<Chain>(emptyChain()), chainOn: ref(false) },
 		melody: reactive({
@@ -181,6 +183,11 @@ export function changeEverything(st: ProjectState) {
 	dr.slots = dr.slots.map((sl, i) => ({ sound: i === 3 ? 'kept:5' : i === 0 ? 'kit:hat' : sl.sound, tune: i - 3, decay: 0.3 + i / 10, level: 0.2 + i / 10, muted: i === 1 }));
 	dr.muted = true; dr.level = 0.33; dr.pedals = 0.4;
 	dr.rows = dr.rows.map((r, k) => ({ steps: r.steps.map((_, i) => (i + k) % 3 === 0), velocities: r.velocities.map((_, i) => 0.3 + (i + k) / 40) }));
+	// The Drift machine: every setting, and chords in all 8 bars
+	const df = st.drift;
+	df.voices = 3; df.drift = 0.9; df.wave = 0.1; df.spread = 0.2; df.cutoff = 600; df.attack = 2.5; df.release = 0.5;
+	df.muted = true; df.level = 0.4; df.pedals = 0.25; df.length = 8;
+	df.chords = df.chords.map((r, b) => r.map((_, k) => (b + k) % 2 === 0));
 	// Patterns A–D: C is playing (the lane above), B holds another pattern
 	st.patterns.current.value = 2;
 	const b = emptyRhythm(STEPS, 330);

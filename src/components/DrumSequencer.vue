@@ -233,7 +233,7 @@
 			<MachineRail v-if="synthInstrument" class="ds-rail" :analyser="analyser" :sampleRate="audioCtx.sampleRate"
 				:active="viewSource.active" :machines="railMachines" :chosen="machine"
 				:currentStep="currentStep" :playing="isPlaying" @toggle-mute="onRailMute" @update:level="onRailLevel"
-				@update:pedals="(id: string, v: number) => { if (id === 'drums') drums.pedals = v; else if (id === 'bass') bassLane.pedals = v; else rhythmPedals = v; }" :meter="machineLevel"
+				@update:pedals="(id: string, v: number) => { if (id === 'drift') drift.pedals = v; else if (id === 'drums') drums.pedals = v; else if (id === 'bass') bassLane.pedals = v; else rhythmPedals = v; }" :meter="machineLevel"
 				@choose="(id: string) => { machine = id as any; }"
 				:slots="slotView" :currentSlot="currentSlot" :queuedSlot="queuedSlot" v-model:copyArmed="copyArmed"
 				@choose-slot="chooseSlot"
@@ -337,9 +337,9 @@
 			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
 				<div class="pt-subheader step-sequencer-subheader">
 					<div class="channel-caption d-flex align-items-center gap-2">
-						<div class="mute-dot" :class="{ muted: drumsChosen ? drums.muted : bassChosen ? bassLane.muted : synthInstrument.muted }"
+						<div class="mute-dot" :class="{ muted: machineMuted }"
 							@click="onRailMute(machine)" role="button"
-							:title="(drumsChosen ? drums.muted : bassChosen ? bassLane.muted : synthInstrument.muted) ? 'Muted' : 'Playing'"></div>
+							:title="machineMuted ? 'Muted' : 'Playing'"></div>
 						<h2 class="pt-title">Step Sequencer<span class="ds-which"> · {{ machineName }}</span></h2>
 
 						<!-- No Vol knob while there's one lane (PR 92): the Volume knob is enough. The lane's
@@ -372,7 +372,7 @@
 							<div v-if="machine === 'rhythm'" class="mm-opt" role="menuitem" @click.stop="clearRepeats()">
 								<span>Clear Repeats</span>
 							</div>
-							<div class="mm-reset" role="menuitem" @click.stop="drumsChosen ? resetDrumPads() : bassChosen ? resetBassPads() : resetSynthPadsToDefaults()">
+							<div class="mm-reset" role="menuitem" @click.stop="driftChosen ? resetDriftPads() : drumsChosen ? resetDrumPads() : bassChosen ? resetBassPads() : resetSynthPadsToDefaults()">
 								Reset Pads
 							</div>
 						</div>
@@ -386,7 +386,10 @@
 					<div v-if="repeatBrush" class="brush-note" role="status">
 						Painting ×{{ repeatBrush }} repeats<span class="brush-note__how"> · Esc or click elsewhere to finish</span>
 					</div>
-					<DrumPads v-if="drumsChosen" :rows="drums.rows" :slots="drums.slots" :names="drumNames" :sources="drumSources"
+					<DriftPads v-if="driftChosen" :plates="driftPlates" :chords="drift.chords" :length="drift.length" :labels="driftLabels"
+						:picked="driftPick" :playing="isPlaying ? driftBarNow : -1"
+						@toggle="toggleDriftPlate" @pick="pickDriftBar" @length="(n: number) => { drift.length = n; }" />
+					<DrumPads v-else-if="drumsChosen" :rows="drums.rows" :slots="drums.slots" :names="drumNames" :sources="drumSources"
 						:hues="drumHues" :picked="drumPick" :current-step="currentStep" @update:rows="setDrumRows"
 						@pick="(k: number) => { drumPick = k; }" @toggle-mute="toggleDrumSlotMute" />
 					<BassPads v-else-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep"
@@ -417,7 +420,7 @@
 			</div>
 
 			<!-- Sound: three rows, each filled edge to edge -->
-			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title" :data-bass="bassChosen ? '' : undefined" :data-drums="drumsChosen ? '' : undefined">
+			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title" :data-bass="bassChosen ? '' : undefined" :data-drums="drumsChosen ? '' : undefined" :data-drift="driftChosen ? '' : undefined">
 				<div class="ds-sound-head">
 					<h2 id="sound-title" class="ds-section-title">Sound<span class="ds-which"> · {{ machineName }}</span></h2>
 					<!-- Keep as drum (the plan's item 5): one hit of Rhythm's sound into a Drums slot -->
@@ -432,6 +435,10 @@
 				</div>
 				<!-- The Drums machine's: a card per slot, and the Sounds shelf beside the pedals. Kept
 					 mounted (v-show) so MIDI learn sees its knobs -->
+				<!-- The Drift machine's: the X/Y pad, the swarm's screen, its knobs. Kept mounted (v-show) so
+					 MIDI learn sees its knobs -->
+				<DriftSound v-show="driftChosen" :drift="drift" :notes="driftNotes" :bar="driftPick" :chord="driftLabels[driftPick] ?? ''"
+					@preview="previewDrift()" />
 				<DrumSound v-show="drumsChosen" :drums="drums" :kit="drumKit" :picked="drumPick" :playing="isPlaying"
 					@preview="previewDrum" @preview-sound="previewDrumSound" />
 				<!-- The Bass machine's: wave tiles and Sub, its screen, its knobs; the pedals stay (the Effects card) -->
@@ -593,9 +600,10 @@
 			<section id="compose-panel" class="ds-section ds-compose" aria-labelledby="compose-title">
 				<h2 id="compose-title" class="ds-section-title">Compose</h2>
 
-				<div class="module pattern-tools">
+				<div class="module pattern-tools" :class="{ 'is-off': driftChosen }">
+					<p v-if="driftChosen" class="melody-off-note">Pattern Tools work on the step machines: Drift's plates and bars are on its pads.</p>
 					<!-- On Drums, Step Fills and Humanize work on the picked row, named in the title -->
-					<SectionWrap id="pattern-tools" :title="drumsChosen ? `Pattern Tools · ${drumNames[drumPick]}` : 'Pattern Tools'" v-model="collapsibleState['pattern-tools']">
+					<SectionWrap id="pattern-tools" :title="drumsChosen ? `Pattern Tools · ${drumNames[drumPick]}` : 'Pattern Tools'" v-model="collapsibleState['pattern-tools']" :inert="driftChosen || undefined">
 						<PatternTools :steps="editSteps" :velocities="editVelocities" :currentTheme="currentTheme" :nudge="humanizeNudge"
 							:noOctave="drumsChosen"
 							@update:steps="editSteps = $event" @update:velocities="editVelocities = $event"
@@ -604,7 +612,9 @@
 				</div>
 
 				<!-- Drums: the Melody Maker has no notes to work on, so it's dimmed, with a note -->
-				<div class="module melody" :class="{ 'is-off': drumsChosen }">
+				<!-- Drift: its plates are the key's chord, so the keyboard and Scale stay live (they move
+					 the plates); Generate, which writes steps, is dimmed -->
+				<div class="module melody" :class="{ 'is-off': drumsChosen, 'drift-key': driftChosen }">
 					<p v-if="drumsChosen" class="melody-off-note">The Melody Maker works on Rhythm and Bass: pick one in the rail.</p>
 					<!-- Its options are on the card since PR 68 (no ⋯ menu) -->
 					<SectionWrap id="melody" title="Melody Maker" v-model="collapsibleState['melody']" :inert="drumsChosen || undefined">
@@ -643,7 +653,7 @@
 		<ShareNotice :playing="isPlaying" @play="onSharePlay" />
 		<!-- File → Export audio… (src/audio/export/exportFiles.ts makes the files) -->
 		<ExportDialog :open="exportOpen" :options="exportOptions" :notes="oneShotNotes" :bpm="tempo"
-			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :chain="exportChain?.letters ?? null" :slotName="SLOT_NAMES[currentSlot]" :bassOn="!!exportState.bass" :bending="driveEnabled || tapeEnabled" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
+			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :chain="exportChain?.letters ?? null" :slotName="SLOT_NAMES[currentSlot]" :bassOn="!!exportState.bass" :machinesOn="exportMachines" :driftBars="exportState.drift ? drift.length : 0" :bending="driveEnabled || tapeEnabled" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
 			@export="runExport" @close="exportOpen = false" />
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave" :hasSample="!!sample"
@@ -665,7 +675,7 @@ import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, DEFAULT_TEMPO, followDelayS
 import { DEFAULT_PRE_DIVISION, followPreDelay } from '../audio/reverb/preDelay';
 import { DEFAULT_SWELL } from '../audio/reverb/reverse';
 import { TEMPO_DETENTS, SWING_DETENTS, TRIPLET_SWING } from '../lib/knobDetents';
-import { shortestInterval, transposePitches, remapScale, nearestRootHz, patternCenterHz, chordPitchClasses } from '../lib/melody/theory';
+import { shortestInterval, transposePitches, remapScale, nearestRootHz, patternCenterHz, chordPitchClasses, type KeyScale } from '../lib/melody/theory';
 import DriveEffect from './modules/DriveEffect.vue';
 import UnisonEffect from './modules/UnisonEffect.vue';
 import LFOGroup from './modules/LFOGroup.vue';
@@ -737,6 +747,10 @@ import BassPads from './BassPads.vue';
 import BassSound from './BassSound.vue';
 import DrumPads from './DrumPads.vue';
 import DrumSound from './DrumSound.vue';
+import DriftPads from './DriftPads.vue';
+import DriftSound from './DriftSound.vue';
+import { createDrift, driftVoice, togglePlate, type Drift } from '../lib/machines/drift';
+import { chordLabel, driftHasNotes, heldInBar, plateHz as driftPlateHzOf, platePitchClasses, plateSemitones, plateSpelling, driftRootMidi } from '../audio/drift';
 import { createDrums, hitToSound, keepSound, slotData, slotSound, soundName, type Drums } from '../lib/machines/drums';
 import { soundHue } from '../lib/machines/drumColours';
 import { DRUM_KITS, DRUM_PATTERNS, drumKitKey, drumRowsFrom, drumRowsKey, kitSlots, randomDrumKit, randomDrumPattern } from '../lib/machines/drumPresets';
@@ -842,10 +856,12 @@ const {
 // level). `machine` is the one the pads and the Sound section show (not saved).
 const bass = createBass();
 const bassLane = createBassLane(STEP_COUNT, 55);
-const machine = ref<'rhythm' | 'bass' | 'drums'>('rhythm');
+const machine = ref<'rhythm' | 'bass' | 'drums' | 'drift'>('rhythm');
 const bassChosen = computed(() => machine.value === 'bass');
 const drumsChosen = computed(() => machine.value === 'drums');
-const machineName = computed(() => ({ rhythm: 'Rhythm', bass: 'Bass', drums: 'Drums' })[machine.value]);
+const driftChosen = computed(() => machine.value === 'drift');
+const machineMuted = computed(() => (driftChosen.value ? drift.muted : drumsChosen.value ? drums.muted : bassChosen.value ? bassLane.muted : !!synthInstrument.value?.muted));
+const machineName = computed(() => ({ rhythm: 'Rhythm', bass: 'Bass', drums: 'Drums', drift: 'Drift' })[machine.value]);
 // The rail's mixer (PR 116): how much of Rhythm goes through the pedals (Bass's is bassLane.pedals)
 const rhythmPedals = ref(1);
 
@@ -858,10 +874,14 @@ const railMachines = computed(() => {
 		// Drums: its four rows stacked in each step, each in its sound's colour
 		{ id: 'drums', name: 'Drums', steps: [], pitches: [], velocities: [], muted: drums.muted, level: drums.level, pedals: drums.pedals,
 			stack: Array.from({ length: stepLength.value }, (_, i) => drums.rows.map((r, k) => (r.steps[i] && !drums.slots[k]?.muted ? drumHues.value[k] : null))) },
+		// Drift: a cell per bar, its chord's name, the bar playing outlined
+		{ id: 'drift', name: 'Drift', steps: [], pitches: [], velocities: [], muted: drift.muted, level: drift.level, pedals: drift.pedals,
+			bars: driftLabels.value, barNow: driftBarNow.value },
 	];
 });
 function onRailMute(id: string) {
-	if (id === 'drums') drums.muted = !drums.muted;
+	if (id === 'drift') drift.muted = !drift.muted;
+	else if (id === 'drums') drums.muted = !drums.muted;
 	else if (id === 'bass') bassLane.muted = !bassLane.muted;
 	else if (synthInstrument.value) toggleMute(synthInstrument.value.name);
 }
@@ -904,7 +924,8 @@ function resetBassPads() {
 	});
 }
 function onRailLevel(id: string, v: number) {
-	if (id === 'drums') drums.level = v;
+	if (id === 'drift') drift.level = v;
+	else if (id === 'drums') drums.level = v;
 	else if (id === 'bass') bassLane.level = v;
 	else if (synthInstrument.value) synthInstrument.value.channelVolume = v;
 }
@@ -1002,6 +1023,61 @@ function drumsExport(barRows?: DrumRow[][]) {
 	};
 }
 // DRUMS MACHINE END
+
+// DRIFT MACHINE START
+// The Drift machine (the plan's item 6; src/lib/machines/drift.ts, src/audio/drift.ts): six
+// plates, the key's chord in thirds, and a chord per bar (4 or 8 bars, the project's, counted
+// from Play across the chain). The bar the plates edit (not saved) is driftPick.
+const drift: Drift = createDrift();
+const driftPick = ref(0);
+// Each plate's pitch, name and colour in the key (the Melody Maker's key and scale)
+const driftPlateHz = computed(() => driftPlateHzOf(melodyUi.keyRoot, melodyUi.keyScale as KeyScale));
+const driftNames = computed(() => plateSpelling(platePitchClasses(melodyUi.keyRoot, melodyUi.keyScale as KeyScale), accidentalMode.value));
+const DEGREES = ['1', '3', '5', '7', '9', '11'];
+const driftPlates = computed(() => {
+	const r = driftRootMidi(melodyUi.keyRoot);
+	return plateSemitones(melodyUi.keyScale as KeyScale).map((st, k) => {
+		const m = r + st;
+		return { name: driftNames.value[m % 12], octave: `${driftNames.value[m % 12]}${Math.floor(m / 12) - 1}`, deg: DEGREES[k], hue: padHue(driftPlateHz.value[k] * 2) };
+	});
+});
+// Each bar's chord's name ('' for nothing held)
+const driftLabels = computed(() => {
+	const pcs = platePitchClasses(melodyUi.keyRoot, melodyUi.keyScale as KeyScale);
+	return Array.from({ length: drift.length }, (_, b) =>
+		chordLabel(heldInBar(drift.chords, drift.length, b).flatMap((on, k) => (on ? [pcs[k]] : [])), driftNames.value));
+});
+// The notes of the bar the plates edit (the swarm's screen)
+const driftNotes = computed(() => heldInBar(drift.chords, drift.length, driftPick.value)
+	.flatMap((on, k) => (on ? [{ hz: driftPlateHz.value[k], hue: driftPlates.value[k].hue }] : [])));
+// A shorter length keeps the picked bar inside it
+watch(() => drift.length, (n) => { if (driftPick.value >= n) driftPick.value = 0; });
+function toggleDriftPlate(bar: number, plate: number) {
+	togglePlate(drift, bar, plate);
+	nextTick(() => previewDrift(bar));
+}
+function pickDriftBar(bar: number) {
+	driftPick.value = bar;
+	previewDrift(bar);
+}
+// While stopped, a bar's chord (a plate or a bar clicked, the screen)
+function previewDrift(bar = driftPick.value) {
+	if (!isPlaying.value) previewDriftBar(bar);
+}
+// The ⋯ menu's Reset Pads, for Drift: nothing held in any bar
+function resetDriftPads() {
+	stepsAdvanced.open = false;
+	drift.chords = drift.chords.map((r) => r.map(() => false));
+}
+// For the export: unless it's muted or holds nothing
+function driftExport() {
+	if (drift.muted || !driftHasNotes(drift.chords, drift.length)) return undefined;
+	return {
+		voice: driftVoice(drift), level: drift.level, pedals: drift.pedals, length: drift.length,
+		chords: drift.chords.map((r) => [...r]), plateHz: [...driftPlateHz.value],
+	};
+}
+// DRIFT MACHINE END
 
 const showVelocity = ref(false);
 const showPitch = ref(false);
@@ -2152,11 +2228,14 @@ const exportState = computed<StepSequencerState>(() => {
 		},
 		// The Drums machine, unless it's muted or has nothing to play
 		drums: drumsExport(),
+		// The Drift machine, unless it's muted or holds nothing
+		drift: driftExport(),
 		// The rail's mixer: how much of Rhythm goes through the pedals
 		rhythmPedals: rhythmPedals.value,
 
 		sampleRate: audioCtx?.sampleRate || 48000,
-		tailSeconds: 5.0,
+		// Long enough for Drift's Release (and the reverb after it)
+		tailSeconds: Math.max(5, drift.release * (stepsCount * 60 / tempo.value / 4) + 3),
 	};
 });
 
@@ -2240,6 +2319,7 @@ const projectState: ProjectState = {
 	instruments,
 	bass: { sound: bass, lane: bassLane },
 	drums,
+	drift,
 	mixer: { rhythmPedals },
 	patterns: { slots: patternSlots, current: currentSlot, chain, chainOn },
 	melody: melodyUi,
@@ -2265,6 +2345,8 @@ const {
 	playBassNow,
 	playDrumNow,
 	playDrumSound,
+	previewDriftBar,
+	driftBarNow,
 	machineLevel,
 	startLfoIfNeeded,
 	togglePlay,
@@ -2278,6 +2360,8 @@ const {
 	rhythm,
 	bass: projectState.bass,
 	drums,
+	drift,
+	driftPlateHz,
 	rhythmPedals,
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
@@ -2511,6 +2595,9 @@ const oneShotNotes = computed(() => notesInRange(MIN_PAD_HZ, MAX_PAD_HZ).map((n)
 // lengths; 0 while it moves nothing, or with RETRIG (each note starts its own, so any loop fits)
 const exportLfoBars = computed(() => (lfoEnabled.value && lfoDepth.value > 0 && !lfoRetrigger.value)
 	? lfoAlignBars(lfoDivision.value) : 0);
+
+// The other machines that play, each a machine stem
+const exportMachines = computed(() => (['bass', 'drums', 'drift'] as const).filter((m) => !!exportState.value[m]));
 
 const exportEffectsOn = computed(() => ({
 	delay: delayEnabled.value && delayMix.value > 0,
@@ -3034,6 +3121,9 @@ const SCALE_LABELS: Record<string, string> = {
 	none: '(no scale)', major: 'major', naturalMinor: 'minor', pentMajor: 'pentatonic major',
 	pentMinor: 'pentatonic minor', dorian: 'dorian', lydian: 'lydian', mixolydian: 'mixolydian',
 };
+// Phone mode has no Drift page yet (part 3 of the plan's item 6): it shows Rhythm instead
+watch(phoneActive, (on) => { if (on && machine.value === 'drift') machine.value = 'rhythm'; }, { immediate: true });
+
 const phoneCtx = reactive({
 	inst: synthInstrument,
 	// The machine the phone shows (PR 118; the top bar's RHY | BASS | DRUM, PR 121), and its lane
@@ -3674,6 +3764,31 @@ async function recordSample() {
 	.ds-grid[data-tab="fx"] .ds-sound[data-drums] { grid-template-areas: "title" "fx"; }
 }
 
+/* The Drift machine's Sound (the plan's item 6): the X/Y pad beside the swarm's screen, then its
+   knobs beside the pedals; under 1200 px the pedals are the Effects tab's */
+.ds-sound[data-drift] {
+	display: grid;
+	gap: 12px;
+	align-content: stretch;
+	grid-template-columns: 220px minmax(0, 1fr) minmax(0, 407px);
+	grid-template-rows: auto 1fr auto;
+	grid-template-areas: "title title title" "xy swarm swarm" "knobs knobs fx";
+}
+.ds-sound[data-drift] > .ds-sound-head { grid-area: title; }
+.ds-sound[data-drift] .sound-row-1,
+.ds-sound[data-drift] .sound-row-2,
+.ds-sound[data-drift] .sound-row-3 > .sound-stack { display: none; }
+.ds-sound[data-drift] .sound-row-3 { display: contents; }
+.ds-sound[data-drift] #effects-panel { grid-area: fx; }
+@media (max-width: 1199.98px) {
+	.ds-sound[data-drift] { grid-template-areas: "title title title" "xy swarm swarm" "knobs knobs knobs"; }
+	.ds-grid[data-tab="fx"] .ds-sound[data-drift] :deep(.df-card) { display: none; }
+	.ds-grid[data-tab="fx"] .ds-sound[data-drift] { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "fx"; }
+}
+@media (max-width: 719.98px) {
+	.ds-sound[data-drift] { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "xy" "swarm" "knobs"; }
+}
+
 /* The Sound section's head: its title, and on Rhythm's, Keep as drum at the right */
 .ds-sound-head {
 	display: flex;
@@ -3711,6 +3826,10 @@ async function recordSample() {
 /* Drums: the Melody Maker has no notes to work on */
 .module.melody { position: relative; }
 .module.melody.is-off > :not(.melody-off-note) { opacity: .35; filter: grayscale(.6); }
+/* Drift: the key and scale move its plates; Generate writes steps, so it's dimmed */
+.module.melody.drift-key :deep(.mm-gen-bar) { opacity: .35; filter: grayscale(.6); pointer-events: none; }
+.module.pattern-tools.is-off > :not(.melody-off-note) { opacity: .35; filter: grayscale(.6); }
+.module.pattern-tools.is-off { position: relative; }
 .melody-off-note {
 	position: absolute;
 	z-index: 2;
