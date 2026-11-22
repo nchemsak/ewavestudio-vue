@@ -9,6 +9,7 @@
 import { clampRatchet, ratchetPitches, stepSpan } from '../../audio/ratchet';
 import { bassPlan, type BassPattern } from '../../audio/bass';
 import type { DrumRow } from '../../audio/drums';
+import { driftRuns } from '../../audio/drift';
 
 export const PPQ = 480;              // ticks per quarter note
 export const STEP_TICKS = PPQ / 4;   // a 16th, one step
@@ -36,11 +37,16 @@ export type MidiPattern = {
 	// Kick 36, 2 Snare 38, 3 Cowbell 56 (Metal), 4 Closed hi-hat 42 (DRUM_NOTES), a 16th long;
 	// muted slots left out; with the chain, rows per bar as above
 	drums?: { rows: DrumRow[]; barRows?: DrumRow[][]; muted?: boolean[] };
+	// The Drift machine (the plan's item 6), on MIDI channel 3: each plate held through a run of
+	// bars one note, from its first bar's start to its last bar's end (driftRuns), velocity 90
+	drift?: { chords: boolean[][]; length: number; plateHz: number[] };
 };
 
 // MIDI channel 2 (0-based 1): Bass; channel 10 (9): Drums
 const BASS_CHANNEL = 1;
 const DRUMS_CHANNEL = 9;
+// MIDI channel 3 (0-based 2): Drift
+const DRIFT_CHANNEL = 2;
 export const DRUM_NOTES = [36, 38, 56, 42];
 
 export type MidiBarPattern = Pick<MidiPattern, 'active' | 'velocities' | 'pitches' | 'ratchets' | 'repeatNotes'>;
@@ -123,6 +129,19 @@ function drumsEvents(p: MidiPattern, bars: number, swing: number): Event[] {
 	return out;
 }
 
+// Drift's held notes, one per run of bars, on its own channel
+function driftEvents(p: MidiPattern, bars: number): Event[] {
+	const d = p.drift!;
+	const barTicks = p.stepsCount * STEP_TICKS;
+	const out: Event[] = [];
+	for (const run of driftRuns(d.chords, d.length, bars, false)) {
+		const note = midiNoteOf(d.plateHz[run.plate] ?? 220);
+		out.push({ tick: run.start * barTicks, order: 2, bytes: [0x90 | DRIFT_CHANNEL, note, 90] });
+		out.push({ tick: run.end * barTicks - 1, order: 1, bytes: [0x80 | DRIFT_CHANNEL, note, 0] });
+	}
+	return out;
+}
+
 export function patternToMidi(p: MidiPattern): Uint8Array {
 	const bars = Math.max(1, Math.round(p.bars));
 	const swing = Math.max(0, Math.min(0.5, p.swing || 0));
@@ -159,6 +178,7 @@ export function patternToMidi(p: MidiPattern): Uint8Array {
 
 	if (p.bass) events.push(...bassEvents(p, bars, swing));
 	if (p.drums) events.push(...drumsEvents(p, bars, swing));
+	if (p.drift) events.push(...driftEvents(p, bars));
 
 	const end = Math.max(bars * p.stepsCount * STEP_TICKS, ...events.map((e) => e.tick));
 	events.sort((a, b) => a.tick - b.tick || a.order - b.order);

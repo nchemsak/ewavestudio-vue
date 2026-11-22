@@ -27,6 +27,8 @@ import { bassNoteFromHit, bassPlan, playBassNote, type BassNote, type BassSoundi
 import { DRUM_SLOTS, playDrumHit, type DrumSounding } from './drums';
 import { loadDrumKit, drumKitNow, soundBuffer } from './drumKit';
 import { slotData, type Drums } from '../lib/machines/drums';
+import { clampCutoff, createDriftFilter, FILTER_GLIDE_S, heldInBar, playDriftNote, type DriftSounding } from './drift';
+import { driftVoice, type Drift } from '../lib/machines/drift';
 import { lfoWaveAt } from './lfo';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
@@ -79,6 +81,10 @@ export type LiveEngineSettings = {
 	// The Drums machine (src/lib/machines/drums.ts): its slots, sounds, rows, mute, level and
 	// Pedals (missing: none)
 	drums?: Drums;
+	// The Drift machine (src/lib/machines/drift.ts): its sound, mute, level, Pedals (its reverb
+	// send), length and chords, and each plate's pitch in the key (missing: none)
+	drift?: Drift;
+	driftPlateHz?: R<number[]>;
 	// The Rhythm machine's Pedals (how much of it goes through the pedals; missing: all of it)
 	rhythmPedals?: R<number>;
 	delay: {
@@ -494,10 +500,20 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	watch(rhythmPedals, (p) => applyPedals(rhythmBus, p));
 	watch(bassPedals, (p) => applyPedals(bassBus, p));
 	watch(drumsPedals, (p) => applyPedals(drumsBus, p));
+	// Drift goes straight to the reverb (src/audio/drift.ts): all of it to preMaster, and Pedals of
+	// it into the reverb's send (connected in its section, below), skipping the drive and delay.
+	// Its notes meet in its one slow filter, then a gain for its level and mute.
+	const driftFilter = createDriftFilter(audioCtx, s.drift?.cutoff ?? 1800);
+	const driftGate = audioCtx.createGain();
+	driftGate.gain.value = s.drift && !s.drift.muted ? s.drift.level : 0;
+	driftFilter.connect(driftGate);
+	const driftBus = machineBus(() => 0);
+	driftBus.direct.gain.value = 1;
+	driftGate.connect(driftBus.bus);
 
 	/** A machine's level now, its peak over the last ~10 ms (0..1 and over) */
-	function machineLevel(id: 'rhythm' | 'bass' | 'drums'): number {
-		const m = id === 'bass' ? bassBus : id === 'drums' ? drumsBus : rhythmBus;
+	function machineLevel(id: 'rhythm' | 'bass' | 'drums' | 'drift'): number {
+		const m = id === 'bass' ? bassBus : id === 'drums' ? drumsBus : id === 'drift' ? driftBus : rhythmBus;
 		m.meter.getFloatTimeDomainData(m.data);
 		let peak = 0;
 		for (let i = 0; i < m.data.length; i++) peak = Math.max(peak, Math.abs(m.data[i]));
@@ -980,6 +996,116 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	// Drums voice END
 
+	// Drift voice START
+	// Held notes (src/audio/drift.ts), one per plate held, each a swarm of oscillators through
+	// the machine's filter. A chord per bar: at each bar line the notes of the bar before that
+	// it doesn't hold fade out over Release, and the ones it adds fade in over Attack; a note
+	// both bars hold carries on. Kept by pitch, so a new key moves the notes too.
+	const driftSounding = new Map<string, DriftSounding>();
+	let driftPreviewNotes: DriftSounding[] = [];
+	let driftBarCount = -1; // the bar (since Play) whose chord is playing, −1 while stopped
+	const driftBarNow = ref(-1); // the chord playing, 0..length−1 (the rail outlines it), −1 while stopped
+	const barSeconds = () => (stepLength.value * 60) / tempo.value / 4;
+	const driftKey = (hz: number) => hz.toFixed(2);
+	// The send into the reverb (its tone filter, as the drive's sum goes into it)
+	driftBus.bus.connect(driftBus.send);
+	driftBus.send.disconnect();
+	driftBus.send.connect(reverbToneFilter);
+	driftBus.send.gain.value = s.drift?.pedals ?? 0.6;
+	watch(() => s.drift?.pedals ?? 0, (p) => driftBus.send.gain.setTargetAtTime(Math.max(0, Math.min(1, p)), audioCtx.currentTime, 0.01));
+	watch(() => [s.drift?.level ?? 0, s.drift?.muted ?? true], () => {
+		const d = s.drift;
+		driftGate.gain.setTargetAtTime(d && !d.muted ? d.level : 0, audioCtx.currentTime, 0.02);
+	});
+	watch(() => s.drift?.cutoff ?? 1800, (hz) => driftFilter.frequency.setTargetAtTime(clampCutoff(hz), audioCtx.currentTime, FILTER_GLIDE_S));
+	watch(() => [s.drift?.spread ?? 0, s.drift?.drift ?? 0], () => {
+		const d = s.drift;
+		if (!d) return;
+		const t = audioCtx.currentTime;
+		for (const n of [...driftSounding.values(), ...driftPreviewNotes]) if (!n.released) n.update(d, t);
+	});
+
+	/** The pitches bar `bar` (since Play) holds: none while muted */
+	function driftTargets(bar: number): number[] {
+		const d = s.drift;
+		if (!d || d.muted) return [];
+		const hz = s.driftPlateHz?.value ?? [];
+		return heldInBar(d.chords, d.length, bar).flatMap((on, k) => (on && hz[k] ? [hz[k]] : []));
+	}
+
+	/** From `time` on, the notes held are `pitches`: the others fade out, the new ones fade in */
+	function driftHold(time: number, pitches: number[], releaseS = (s.drift?.release ?? 1) * barSeconds()) {
+		const d = s.drift;
+		if (!d) return;
+		const want = new Map(pitches.map((hz) => [driftKey(hz), hz]));
+		for (const [k, n] of driftSounding) {
+			if (want.has(k)) continue;
+			n.release(time, releaseS);
+			driftSounding.delete(k);
+		}
+		const voice = driftVoice(d);
+		for (const [k, hz] of want) {
+			if (driftSounding.has(k)) continue;
+			driftSounding.set(k, playDriftNote(audioCtx, voice, { freq: hz, time, amp: 1, attackS: d.attack * barSeconds() }, driftFilter));
+		}
+		if (want.size) lastNoteAt = performance.now();
+	}
+
+	// A bar line while playing (from schedule(), about 100 ms ahead)
+	function driftBar(bar: number, time: number) {
+		const d = s.drift;
+		if (!d) return;
+		releaseDriftPreview(time);
+		driftBarCount = bar;
+		driftBarNow.value = bar % Math.max(1, d.length);
+		driftHold(time, driftTargets(bar));
+	}
+
+	// An edit while playing (a plate, the length, the key, the mute): the bar playing follows it now
+	watch(() => [s.drift?.chords, s.drift?.length, s.driftPlateHz?.value, s.drift?.muted], () => {
+		if (!isPlaying.value || driftBarCount < 0 || !s.drift) return;
+		driftBarNow.value = driftBarCount % Math.max(1, s.drift.length);
+		driftHold(audioCtx.currentTime + 0.01, driftTargets(driftBarCount));
+	}, { deep: true });
+
+	function releaseDriftPreview(at: number, seconds = 0.3) {
+		for (const n of driftPreviewNotes) n.release(at, seconds);
+		driftPreviewNotes = [];
+	}
+
+	/** Stop: every note fades out, over Release but 1.5 s at most */
+	function stopDrift() {
+		const t = audioCtx.currentTime;
+		driftHold(t, [], Math.min(1.5, (s.drift?.release ?? 1) * barSeconds()));
+		driftBarCount = -1;
+		driftBarNow.value = -1;
+	}
+
+	/** A bar's chord now, while stopped (a plate or a bar clicked): it fades in quickly, holds a
+	 * moment and fades out */
+	async function previewDriftBar(bar: number) {
+		const d = s.drift;
+		if (!d || isPlaying.value) return;
+		if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
+		const t = audioCtx.currentTime + 0.01;
+		releaseDriftPreview(t);
+		const hz = s.driftPlateHz?.value ?? [];
+		const pitches = heldInBar(d.chords, d.length, bar).flatMap((on, k) => (on && hz[k] ? [hz[k]] : []));
+		if (!pitches.length || d.muted) return;
+		const voice = driftVoice(d);
+		const attack = Math.min(0.4, d.attack * barSeconds());
+		const hold = 1.2, release = Math.min(1.5, d.release * barSeconds());
+		driftPreviewNotes = pitches.map((freq) => {
+			const n = playDriftNote(audioCtx, voice, { freq, time: t, amp: 1, attackS: attack }, driftFilter);
+			n.release(t + attack + hold, release);
+			return n;
+		});
+		lastNoteAt = performance.now();
+		if (s.tape.enabled.value) holdTapeNoise(t, t + attack + hold + release);
+	}
+
+	// Drift voice END
+
 	// Sequencer clock START
 
 	// Every tick schedules the steps that start within the next SCHEDULE_AHEAD_S seconds. The
@@ -993,6 +1119,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 	function hardStopSequencer() {
 		sequencerTicker.stop();
+		stopDrift();
 		openRevAtRest(); // REV: the gate for a note with no next hit
 		isPlaying.value = false;
 		currentStep.value = -1;
@@ -1032,6 +1159,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 				// begins (every 4 bars for a 4-bar rate, every bar for 1/8), so it moves with
 				// the pattern (and comes back into step after a tempo change)
 				if (barCount % lfoAlignBars(lfoDivision.value) === 0) restartLfoAt(startTime);
+				// Drift: this bar's chord (its bars counted from Play, across the chain)
+				driftBar(barCount, startTime);
 				barCount++;
 			}
 			lanes.value.forEach(inst => {
@@ -1133,6 +1262,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		playBassNow,
 		playDrumNow,
 		playDrumSound,
+		previewDriftBar,
+		driftBarNow,
 		machineLevel,
 		startLfoIfNeeded,
 		lfoNow,

@@ -229,8 +229,8 @@ async function setTempo(page: Page, bpm: number) {
 test('loads as version 2 with the synth lane and the machine rail', async ({ page }) => {
 	await expect(page).toHaveTitle('Ephemeral Wave Synth 2');
 	await expect(rail(page)).toBeVisible();
-	await expect(rail(page).locator('.mr-row')).toHaveCount(3); // Rhythm, Bass (PR 115) and Drums (PR 119)
-	await expect(rail(page).locator('.mr-name')).toHaveText(['Rhythm', 'Bass', 'Drums']);
+	await expect(rail(page).locator('.mr-row')).toHaveCount(4); // Rhythm, Bass (PR 115), Drums (PR 119) and Drift (PR 122)
+	await expect(rail(page).locator('.mr-name')).toHaveText(['Rhythm', 'Bass', 'Drums', 'Drift']);
 	await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
 });
 
@@ -313,7 +313,7 @@ test('the machine rail: its screens draw while something plays, and Rhythm mutes
 	await turnOnPads(page, [0, 4, 8, 12]);
 	await expect(rail(page).locator('.mr-cells i.on')).toHaveCount(4);
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
-	await expect(rail(page).locator('.mr-cells i.now')).toHaveCount(3); // one per row
+	await expect(rail(page).locator('.mr-cells i.now')).toHaveCount(4); // one per row (Drift's: the bar playing)
 	await page.waitForTimeout(1500);
 	expect(await painted(spec), 'the spectrogram draws the notes').toBeGreaterThan(0.005);
 	expect(await painted(scope), 'the scope draws the wave').toBeGreaterThan(0.002);
@@ -7385,3 +7385,190 @@ test('the old hidden drum lanes: a project from before the Drums machine gets th
 });
 
 // The Drums machine END
+
+// The Drift machine START (the plan's item 6)
+
+// A project with Drift's chords: per bar, the plates held (0–5: in A minor A3 C4 E4 G4 B4 D5)
+async function importDrift(page: Page, id: string, bars: number[][], change: (d: any) => void = () => { }) {
+	await importChanged(page, id, (d) => {
+		d.drift.chords = Array.from({ length: 8 }, (_, b) => Array.from({ length: 6 }, (_, k) => (bars[b] ?? []).includes(k)));
+		change(d);
+	});
+}
+
+test('the Drift machine: six plates in the key, a chord a bar (4 or 8), named on the pads and in the rail; saved, one undo step each, not a pattern slot\'s', async ({ page }) => {
+	await page.getByRole('button', { name: 'Show Drift' }).click();
+	await expect(page.locator('.step-card .ds-which')).toHaveText(' · Drift');
+	await expect(page.locator('#sound-title')).toContainText('Drift');
+	const plates = page.getByRole('group', { name: /^Plates, bar / });
+	// A minor's chord in thirds: A C E G B D
+	await expect(plates.locator('.dr-plate-name')).toHaveText(['AA3', 'CC4', 'EE4', 'GG4', 'BB4', 'DD5']);
+	const bars = page.getByRole('radiogroup', { name: 'Bar the plates edit' }).getByRole('radio');
+	await expect(bars).toHaveCount(4);
+	await expect(page.getByRole('group', { name: 'Repeats brush' })).toHaveCount(0);
+	// Pattern Tools work on the step machines; the Melody Maker's key stays live (it moves the plates)
+	await expect(page.getByText('Pattern Tools work on the step machines')).toBeVisible();
+	await page.waitForTimeout(SETTLED);
+
+	const plate = (n: string) => plates.getByRole('button', { name: new RegExp(`^${n} \\(`) });
+	// Bar 1: A C E, bar 2: C E G, each named
+	for (const n of ['A', 'C', 'E']) await plate(n).click();
+	await page.waitForTimeout(SETTLED);
+	await bars.nth(1).click();
+	await expect(plates).toHaveAttribute('aria-label', 'Plates, bar 2');
+	for (const n of ['C', 'E', 'G']) await plate(n).click();
+	await expect(plate('G')).toHaveAttribute('aria-pressed', 'true');
+	await expect(bars.nth(0)).toHaveAccessibleName('Bar 1: Am');
+	await expect(bars.nth(1)).toHaveAccessibleName('Bar 2: C');
+	await expect(railRow(page, 'Drift').locator('.mr-bar')).toHaveText(['Am', 'C', '·', '·']);
+	await page.waitForTimeout(SETTLED);
+	// Bar 2 a 7th chord; then undo takes it back (one step)
+	await plate('B').click();
+	await expect(bars.nth(1)).toHaveAccessibleName('Bar 2: Cmaj7');
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(bars.nth(1)).toHaveAccessibleName('Bar 2: C');
+
+	// 8 bars
+	await page.getByRole('radio', { name: '8 bars' }).click();
+	await expect(bars).toHaveCount(8);
+	await expect(railRow(page, 'Drift').locator('.mr-bar')).toHaveCount(8);
+	// The X/Y pad's knobs, and the swarm's
+	await page.getByRole('slider', { name: 'Drift spread' }).focus();
+	await page.keyboard.press('End');
+	await page.getByRole('slider', { name: 'Attack' }).focus();
+	await page.keyboard.press('ArrowUp');
+	await page.waitForTimeout(SETTLED);
+
+	// A pattern slot doesn't change Drift (its chords are the project's)
+	await page.getByRole('button', { name: 'Pattern B' }).click();
+	await expect(bars.nth(0)).toHaveAccessibleName('Bar 1: Am');
+	await page.getByRole('button', { name: 'Pattern A' }).click();
+
+	const data = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(data.drift.length).toBe(8);
+	expect(data.drift.chords[0]).toEqual([true, true, true, false, false, false]);
+	expect(data.drift.chords[1]).toEqual([false, true, true, true, false, false]);
+	expect(data.drift.sound).toMatchObject({ spread: 1, attack: 1.25, voices: 5 });
+
+	// A new key moves the plates: C minor's chord is C Eb G Bb D F (flats: a letter each), bar 1
+	// holds C Eb G now
+	await page.locator('.ds-compose .mm-kb').getByRole('radio', { name: 'C', exact: true }).click();
+	await expect(plates.locator('.dr-plate-name')).toHaveText(['CC3', 'EbEb3', 'GG3', 'BbBb3', 'DD4', 'FF4']);
+	await expect(bars.nth(0)).toHaveAccessibleName('Bar 1: Cm');
+
+	// File → New: nothing held, 4 bars
+	await chooseFromFileMenu(page, 'New');
+	await page.getByRole('button', { name: 'Show Drift' }).click();
+	await expect(bars).toHaveCount(4);
+	await expect(bars.nth(0)).toHaveAccessibleName('Bar 1: nothing held');
+});
+
+test('the Drift machine plays: held notes carry over the bar line, fade out over Release, its stem and MIDI channel 3; a seamless loop; live, muted from the rail', async ({ page }) => {
+	await setTempo(page, 120); // a bar is 2 s
+	// A held through bars 1 and 2, E in bar 1 only; nothing in bars 3 and 4. Fast fades: a
+	// quarter of a bar (0.5 s), no reverb send; a soft wave, the voices together (for its pitch)
+	await importDrift(page, 'Drift alone', [[0, 2], [0]], (d) => {
+		Object.assign(d.drift.sound, { attack: 0.25, release: 0.25, wave: 0, spread: 0, drift: 0 });
+		d.drift.pedals = 0;
+	});
+	const zip = await exportAudio(page, { bars: 4, ending: 'With tail', mix: true, stems: false, machineStems: true, midi: true, oneShot: false, normalize: false });
+	const files = unzip(zip.bytes);
+	const f = (part: string) => files[Object.keys(files).find((k) => k.endsWith(`_${part}.wav`))!];
+	expect(Object.keys(files).filter((k) => k.endsWith('.wav')).map((k) => k.split('_').at(-1)).sort()).toEqual(['drift.wav', 'mix.wav', 'rhythm.wav']);
+	const mix = f('mix');
+	// It fades in over the first 0.5 s, then holds
+	expect(wavWindow(mix, 0, 0.05).rms).toBeLessThan(wavWindow(mix, 1, 1.5).rms * 0.3);
+	expect(wavWindow(mix, 1, 1.5).peak).toBeGreaterThan(0.05);
+	// Bar 2 holds A alone: E fades out over 0.5 s, A carries on (no dip at the bar line)
+	const before = wavWindow(mix, 1.9, 2).rms, at = wavWindow(mix, 2, 2.05).rms, after = wavWindow(mix, 2.9, 3.4).rms;
+	expect(at).toBeGreaterThan(before * 0.6);
+	expect(after).toBeLessThan(before * 0.95);
+	expect(after).toBeGreaterThan(before * 0.3);
+	// A alone in bar 2: at its pitch (220 Hz, the swarm a few cents either way)
+	expect(wavPitchHz(mix, 3, 3.8)).toBeGreaterThan(214);
+	expect(wavPitchHz(mix, 3, 3.8)).toBeLessThan(226);
+	// Silent once A has faded (bars 3 and 4)
+	expect(wavWindow(mix, 4.6, 7.9).peak).toBeLessThan(0.002);
+	// The drift stem is all of it
+	const d = wavSamples(f('drift')).samples, m = wavSamples(mix).samples;
+	let worst = 0;
+	for (let i = 0; i < m.length; i++) worst = Math.max(worst, Math.abs(d[i] - m[i]));
+	expect(worst).toBeLessThan(1e-3);
+	// The MIDI file: A3 (57) for two bars and E4 (64) for one, on channel 3
+	const midi = files[Object.keys(files).find((k) => k.endsWith('.mid'))!];
+	const ons = (note: number) => { let c = 0; for (let i = 0; i < midi.length - 2; i++) if (midi[i] === 0x92 && midi[i + 1] === note && midi[i + 2] > 0) c++; return c; };
+	expect([ons(57), ons(64)]).toEqual([1, 1]);
+
+	// A seamless loop of 2 bars with A held in both: it starts at full level (carried round the end)
+	await importDrift(page, 'Drift loop', [[0], [0]], (d) => {
+		Object.assign(d.drift.sound, { attack: 1, release: 0.25 });
+		d.drift.pedals = 0;
+		d.drift.length = 4;
+		d.drift.chords[2] = d.drift.chords[3] = Array(6).fill(false);
+	});
+	const loop = await exportAudio(page, { bars: 2, ending: 'Loop', mix: true, stems: false, machineStems: false, midi: false, oneShot: false, normalize: false });
+	expect(wavWindow(loop.bytes, 0.05, 0.3).rms).toBeGreaterThan(wavWindow(loop.bytes, 2, 3).rms * 0.7);
+
+	// Live: it plays; the rail's LED mutes it; Stop fades it
+	await importDrift(page, 'Drift live', [[0, 2, 4], [0, 2, 4]], (d) => { d.drift.sound.attack = 0.25; });
+	await page.getByRole('button', { name: 'Show Drift' }).click();
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await page.waitForTimeout(600);
+	expect(await page.evaluate(() => (window as any).__peakOver(800) as Promise<number>)).toBeGreaterThan(0.03);
+	await expect(railRow(page, 'Drift').locator('.mr-bar.now')).toHaveCount(1);
+	await railRow(page, 'Drift').getByRole('switch', { name: 'Drift on' }).click();
+	await page.waitForTimeout(400);
+	expect(await page.evaluate(() => (window as any).__swingOver(600) as Promise<number>)).toBeLessThan(0.002);
+	await railRow(page, 'Drift').getByRole('switch', { name: 'Drift on' }).click();
+	await page.waitForTimeout(600);
+	expect(await page.evaluate(() => (window as any).__peakOver(500) as Promise<number>)).toBeGreaterThan(0.03);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await page.waitForTimeout(1800);
+	expect(await page.evaluate(() => (window as any).__swingOver(500) as Promise<number>)).toBeLessThan(0.002);
+
+	// Stopped, the swarm's screen plays the bar's chord
+	await page.getByRole('button', { name: 'Hear Asus2', exact: true }).click();
+	expect(await page.evaluate(() => (window as any).__peakOver(800) as Promise<number>)).toBeGreaterThan(0.02);
+});
+
+test('the Drift machine: a project from before it opens with nothing held, and the export dialog fits a loop to its bars', async ({ page }) => {
+	await importChanged(page, 'Before Drift', (d) => { delete d.drift; });
+	await page.getByRole('button', { name: 'Show Drift' }).click();
+	await expect(page.getByRole('radiogroup', { name: 'Bar the plates edit' }).getByRole('radio')).toHaveCount(4);
+	await expect(railRow(page, 'Drift').locator('.mr-bar.on')).toHaveCount(0);
+
+	await importDrift(page, 'Drift fit', [[0], [1], [2], [3]]);
+	await chooseFromFileMenu(page, 'Export audio…');
+	const dialog = page.getByRole('dialog', { name: 'Export audio' });
+	// The dialog opens on 4 bars (Drift's chords), and says so for a shorter loop
+	await expect(dialog.getByRole('group', { name: 'Bars' }).getByRole('button', { name: '4', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await dialog.getByRole('group', { name: 'Bars' }).getByRole('button', { name: '2', exact: true }).click();
+	await expect(dialog.getByText("Drift's chords take 4 bars")).toBeVisible();
+	await dialog.getByRole('button', { name: 'Use 4 bars' }).click();
+	await expect(dialog.getByText("Drift's chords take 4 bars")).toBeHidden();
+	await expect(dialog.getByText(/rhythm and drift: they add up/)).toBeVisible();
+});
+
+test('the Drift machine goes straight to the reverb: its Pedals is its send, the delay never hears it, and the effects stems still add up', async ({ page }) => {
+	await setTempo(page, 120);
+	await importDrift(page, 'Drift reverb', [[0, 2]], (d) => {
+		Object.assign(d.drift.sound, { attack: 0.25, release: 0.25 });
+		d.drift.pedals = 1;
+		Object.assign(d.fx.reverb, { enabled: true, mix: 0.6, decay: 2, reverse: false });
+		Object.assign(d.fx.delay, { enabled: true, mix: 0.5 });
+	});
+	const zip = await exportAudio(page, { bars: 4, ending: 'With tail', mix: true, stems: true, machineStems: false, midi: false, oneShot: false, normalize: false });
+	const files = unzip(zip.bytes);
+	const f = (part: string) => files[Object.keys(files).find((k) => k.endsWith(`_${part}.wav`))!];
+	expect(wavWindow(f('reverb'), 0.5, 3).peak).toBeGreaterThan(0.01);
+	// The delay is on, but only Drift plays: no echoes
+	const delay = Object.keys(files).find((k) => k.endsWith('_delay.wav'));
+	if (delay) expect(wavPeak(files[delay])).toBeLessThan(1e-4);
+	const m = wavSamples(f('mix')).samples, dry = wavSamples(f('dry')).samples, rev = wavSamples(f('reverb')).samples;
+	let worst = 0;
+	for (let i = 0; i < m.length; i++) worst = Math.max(worst, Math.abs(dry[i] + rev[i] - m[i]));
+	expect(worst).toBeLessThan(1e-3);
+});
+
+// The Drift machine END
