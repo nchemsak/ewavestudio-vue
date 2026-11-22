@@ -1389,7 +1389,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   under 720 px.
 - **Pattern Tools** are dimmed on Drift (a note says why). **The Melody Maker stays live** (its
   key and scale move the plates), with only Generate dimmed.
-- **The rail**: a Drift row, a cell per bar with its chord's name, the bar playing outlined; its
+- **The rail**: a Drift row (its screens may shrink to 26 px and its gaps are 3 and 5 px, so it's
+  still as tall as the transport and the pads at 1600 px), a cell per bar with its chord's name, the bar playing outlined; its
   Level and Pedals (the reverb send) and meter. MIDI learn: `drift.level`, `drift.pedals`,
   `drift.cutoff`, `drift.spread`, `drift.voices`, `drift.drift`, `drift.wave`, `drift.attack`,
   `drift.release` (68 knobs).

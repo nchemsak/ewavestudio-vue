@@ -254,13 +254,13 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 5px; /* 8 until PR 122 (Drift's row) */
 }
 
 .mr-screen {
     position: relative;
     flex: 1 1 0;
-    min-height: 32px; /* 44 until PR 110: the chain's row takes the room beside the tablet's transport */
+    min-height: 26px; /* 44 until PR 110 (the chain's row), 32 until PR 122 (Drift's row) */
     border-radius: 6px;
     background: var(--mr-lcd-bg);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 2px 10px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(0, 0, 0, 0.45);
@@ -289,7 +289,7 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
 .mr-rows {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 3px; /* 5 until PR 122 (Drift's row) */
 }
 
 .mr-row,
