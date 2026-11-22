@@ -37,14 +37,14 @@ import { BASS_MAX_HZ, BASS_MIN_HZ } from '../../audio/bass';
 import { applyDrums, drumsSnapshot, resetDrums, type Drums } from '../machines/drums';
 export type { Wave };
 
-// One sequencer lane. Only 'synth-voice' is visible; the sample lanes are hidden (see CLAUDE.md).
+// The synth lane, 'synth-voice' (the Rhythm machine's pattern as it's being edited). Saved as
+// the snapshot's `instruments` list, which held the hidden sample lanes too until PR 120.
 export type Instrument = {
 	name: string;
 	label: string;
 	type: 'synth' | 'sample';
 	isCustom: boolean;
 	isEditingName?: boolean;
-	buffer?: AudioBuffer | null;
 	muted: boolean;
 	channelVolume: number;
 	steps: boolean[];
@@ -53,7 +53,6 @@ export type Instrument = {
 	waveforms?: string[];
 	ratchets?: number[]; // per step: 1 hit, or 2–4 quick hits (src/audio/ratchet.ts); synth lane only
 	repeatNotes?: string[]; // per step: what the repeats play, 'same' | 'up' | 'down' (ratchet.ts); synth lane only
-	inputRef?: HTMLInputElement | null;
 };
 
 // Melody Maker settings (MelodyMaker.vue reports each change; see CLAUDE.md)
@@ -714,25 +713,8 @@ export function applySnapshot(st: ProjectState, s: any) {
 					: Array(inst.repeatNotes.length).fill('same');
 			}
 		});
-
-		// If there are saved *custom* instruments that don't exist yet, append them
-		s.instruments.forEach((from: any) => {
-			const exists = instruments.value.find(i => i.name === from.name);
-			if (!exists && from.isCustom) {
-				instruments.value.push({
-					name: from.name,
-					label: from.label ?? from.name,
-					type: 'sample',
-					isCustom: true,
-					isEditingName: false,
-					buffer: null,
-					muted: !!from.muted,
-					channelVolume: typeof from.channelVolume === 'number' ? from.channelVolume : 0.5,
-					steps: Array.isArray(from.steps) ? [...from.steps] : Array(stepLength.value).fill(false),
-					velocities: Array.isArray(from.velocities) ? [...from.velocities] : Array(stepLength.value).fill(1),
-				} as any);
-			}
-		});
+		// The old sample lanes (kick, snare, hihat and user-loaded ones, hidden since long before
+		// PR 120 removed them) aren't loaded: their steps go into the Drums rows below
 	}
 
 
@@ -753,7 +735,10 @@ export function applySnapshot(st: ProjectState, s: any) {
 	// The Drums machine (the plan's item 5): a project saved before it has none (the kit in its
 	// slots, empty rows)
 	if (s.drums && typeof s.drums === 'object') applyDrums(st.drums, s.drums, stepLength.value);
-	else if (Array.isArray(s.instruments) && s.instruments.length) resetDrums(st.drums, stepLength.value);
+	else if (Array.isArray(s.instruments) && s.instruments.length) {
+		resetDrums(st.drums, stepLength.value);
+		drumsFromOldLanes(st.drums, s.instruments, stepLength.value);
+	}
 
 	// The rail's mixer (PR 116): a project from before plays Rhythm all through the pedals
 	const rp = s.mixer?.rhythm?.pedals;
@@ -886,12 +871,26 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	resetDrums(st.drums, stepLength.value);
 	st.mixer.rhythmPedals.value = 1;
 
-	// remove custom channels
-	for (let idx = instruments.value.length - 1; idx >= 0; idx--) {
-		if ((instruments.value[idx] as any).isCustom) instruments.value.splice(idx, 1);
-	}
-
 	selectedWaveform.value = 'sine';
+}
+
+// The old hidden sample lanes (removed in PR 120): a project from before the Drums machine whose
+// kick, snare or hihat lane has steps on gets them in the Drums rows (Kick, Snare, Hat), with
+// their velocities and mutes; the custom lanes' samples were never saved, so they're dropped
+const OLD_LANE_ROWS: Record<string, number> = { kick: 0, snare: 1, hihat: 3 };
+export function drumsFromOldLanes(drums: Drums, lanes: any[], n: number) {
+	for (const lane of lanes) {
+		const row = OLD_LANE_ROWS[lane?.name];
+		if (row === undefined || !Array.isArray(lane.steps) || !lane.steps.some(Boolean)) continue;
+		drums.rows[row] = {
+			steps: Array.from({ length: n }, (_, i) => lane.steps[i] === true),
+			velocities: Array.from({ length: n }, (_, i) => {
+				const v = lane.velocities?.[i];
+				return typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
+			}),
+		};
+		if (lane.muted === true) drums.slots[row].muted = true;
+	}
 }
 
 // The sound back to its defaults: every synth and effect setting, except what belongs to the

@@ -20,9 +20,9 @@ curve, one hit of the sound behind the Envelope card's, and a tuner in the Melod
 that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
 saved in IndexedDB with JSON import and export, and share links (the project in the URL); undo/redo; it installs as an app that
 works offline (a PWA); and a phone held sideways gets a layout of its own (phone mode).
-Earlier versions also had sample drum lanes (kick, snare, hihat and user-loaded samples).
-Their UI is commented out and they are no longer part of the app, but some of their code
-remains (see "Dead code").
+Earlier versions also had sample drum lanes (kick, snare, hihat and user-loaded samples),
+hidden for years; PR 120 removed them and their code (the Drums machine took their place, and
+an older project's steps on them open in its rows).
 
 Design intent: a percussion synthesizer in the spirit of the Moog DFAM and Behringer Edge
 (sounds shaped by short envelopes on pitch, filter and level, played by a step sequencer), but
@@ -269,6 +269,7 @@ src/lib/export/          Export helpers (pure, unit-tested): audio.ts (loop fold
                          trimming, normalizing), midi.ts (MIDI file), zip.ts, names.ts
 src/lib/random.ts        Seeded random numbers (export stems; tests)
 src/lib/machines/drums.ts  The Drums machine: its slots, kept sounds, rows, saving, Keep as drum
+src/lib/machines/drumPresets.ts  The Drums machine's kits and patterns, and their dice
 src/lib/machines/drumColours.ts  Each drum sound's colour on the pads' scale
 src/lib/machines/bass.ts  The Bass machine: its settings as refs, factory values, its lane
 src/lib/bassView.ts      What the Bass machine's screen draws (pure)
@@ -319,8 +320,6 @@ src/assets/styles/       _bootstrap-custom.scss (the Bootstrap parts in use, the
                          and all global SCSS (themes are in _themes.scss, the buttons' look in
                          _hardware.scss: see "Buttons" under Conventions). _sequencer.scss and
                          _keyboard.scss are not built (main.scss doesn't load them)
-public/audio/            kick.mp3, snare.mp3, hihat.mp3: only used by the hidden drum lanes,
-                         fetched only once one of them has a step on (since PR 87)
 public/images/           Background textures/GIFs referenced from SCSS via ../images/
                          (circleWave.gif and retroSpeaker.gif only from the unbuilt _sequencer.scss)
 public/manifest.json, public/icons/  The web app manifest and its icons (the sun from
@@ -346,8 +345,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   From `driveSum` two paths run in parallel: delay (dry + wet, with a feedback loop and tone
   filters; the plain delay or the ping-pong one, each with its own send) and a reverb send
   (tone filter → pre-delay → convolver → wet gain; with REV, after the pre-delay a gate and a
-  reversed convolver per swell length → its own wet gain). Both go to `preMaster`, and so do the noise layer (and
-  the hidden sample lanes), which bypass drive, delay and reverb. From `preMaster` everything
+  reversed convolver per swell length → its own wet gain). Both go to `preMaster`, and so does the noise layer, which bypasses drive, delay and reverb. From `preMaster` everything
   goes through the tape pedal, or round it while it's off (see "The tape pedal"), to
   `masterGain` (the Volume knob) → the output limiter → `output` → destination. The views are tapped from `masterGain` through a 10 Hz high-pass
   (`viewTap`, PR 108, so the drive's DC offset doesn't show): `analyser` (2048 points) for the
@@ -1260,14 +1258,27 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (Kick at first), named in the card's title ("Pattern Tools · Snare"); Shift and Reverse move
   **every row**; the octave arrows are greyed out (`noOctave`). **The Melody Maker is dimmed**
   (inert) with a note: "The Melody Maker works on Rhythm and Bass: pick one in the rail."
-- **The transport's boxes** are hidden while Drums is shown (Drum kits and Drum patterns are
-  part 2); from 1200 px they keep their place, narrower they're gone.
+- **Drum kits and Drum patterns** (PR 120, part 2; `src/lib/machines/drumPresets.ts`,
+  unit-tested): while Drums is shown the transport's boxes are **Drum kits** (Kit, Tight, Deep,
+  Tin, Boom, Click, and a dice "Random kit") and **Drum patterns** (Four, Backbeat, Halftime,
+  Breaks, Electro, Gallop, and "Random drum pattern"). A kit sets the four slots' sounds (the
+  frozen kit's only), Tune, Decay and Level, never the slots' mutes, the kept sounds or the
+  rows (`kitSlots()`); **Kit** is the factory kit, so a fresh page lights it. A pattern sets the
+  four rows only (`drumRowsFrom()`: per row its hits, a step and a velocity). One undo step
+  each; a button is lit while the slots or rows are exactly the preset's (`drumKitKey()`,
+  `drumRowsKey()`, compared live, as Bass's). The dice: a kit (each slot its own sound 80 % of
+  the time, else another of the kit's, Tune within a fifth, the kick a little lower, Decay
+  25–100 %, Level kept heard; on the knobs' steps) and a beat (a kick idea always on step 1,
+  the snare on 2 and 4 or on 3 for half-time with the odd ghost note, the hat in eighths,
+  sixteenths or off-beats accented on the beat, the metal now and then on an off-beat).
+  Analytics `drums_kit_select`, `drums_kit_random`, `drums_pattern_select`,
+  `drums_pattern_random`.
 - **Saved** as the snapshot's `drums` { slots: [{ sound, tune, decay, level, muted }], kept:
   [{ id: 'kept:N', name, data, sampleRate }], muted, level, pedals, lane: { rows } } (a slot's
   `sound` is 'kit:kick'… or a kept id; one that's gone plays its own kit sound), and in each
   pattern slot as a track `{ machine: 'drums', rows: [{ steps, velocities }] × 4 }`
   (`drumRowsOf()`, `drumsTrackFrom()` in `slots.ts`; a slot switch, Copy and the chain carry it;
-  an empty one compares as none). A project from before: the kit, empty rows; File → New the
+  an empty one compares as none). A project from before: the kit, empty rows (or the old hidden lanes' steps, PR 120); File → New the
   same. **Share links leave the kept sounds out** (too big), so their slots play their kit
   sounds there.
 - **Export**: in the mix; the machine stems' `_drums.wav`; the chain (each cell's rows); the MIDI
@@ -2098,8 +2109,12 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (one-shot flag that ProjectControls sets to reset the UI on New Project), `seqOpen`, `ui-theme`,
   `midi-map` (MIDI learn's links, see "MIDI learn"), `mm-generated` (Generate has been
   pressed: no more hint, see "Melody Maker").
-- `instruments[]` still contains the hidden kick, snare and hihat lanes (normally with no
-  steps on). Keep them so saved projects stay compatible.
+- `instruments[]` holds only the synth lane (`synth-voice`) since PR 120, which removed the
+  hidden kick, snare, hihat and custom sample lanes. An older project's lanes of those names
+  aren't loaded: if it has no `drums` group, their steps, velocities and mutes go into the Drums
+  rows (kick → Kick, snare → Snare, hihat → Hat; `drumsFromOldLanes()` in `snapshot.ts`); a
+  custom lane's sample was never saved, so it's dropped. The list stays a list so saved projects
+  stay compatible.
 - Melody Maker settings (key, scale, range, what Generate makes (`mode`: `random` or `arp`;
   older projects keep the current one), arp pattern, rate, octaves, tones and Skip) live in
   `melodyUi`. `MelodyMaker.vue` reports each change with an event, and follows `melodyUi`
@@ -2357,12 +2372,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   live in DrumSequencer and ProjectControls.
 
 ## Dead code
-The old drum and custom-sample lanes are hidden but their code remains: the commented-out
-"Bottom Sequencer" block in `DrumSequencer.vue`'s template, and script code that only served
-it, such as `orderedChannels`, `addCustomChannel`, `deleteChannel`, `loadUserSample`, and
-`loadAllSamples` (which downloads `public/audio/*.mp3`, since PR 87 only once a drum lane has a
-step on, from an older project; before, on every visit). The maintainer
-may bring the drums back, so keep this code unless asked to remove it.
+The old drum and custom-sample lanes (hidden for years: a commented-out "Bottom Sequencer"
+block, their channel code, `loadAllSamples` and `public/audio/*.mp3`) were removed in PR 120;
+the Drums machine replaces them (see "The Drums machine"). A few unused bits remain: `seqOpen`
+(the old sequencer accordion's state, still saved under `ui`), `Instrument`'s `type` and
+`isCustom` fields (saved).
 
 Old components, scripts and images that nothing used were deleted in the cleanup batch; if one
 is ever needed again (for example `ComputerKeyboard.vue`'s computer-keyboard note map), get it
@@ -2457,16 +2471,14 @@ into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 Grow into a small groovebox:
 
 5. **The Drums machine** (mockups done: A on the desktop, D1 with D2's halves under about 700 px
-    on the phone; part 1 was PR 119, see "The Drums machine"). Left: **part 2**, Drum kits and
-    Drum patterns in the transport's boxes (each with a dice), and the hidden sample lanes, their
-    code and the three mp3 files removed; **part 3**, the phone (DRUM beside RHY | BASS, the
+    on the phone; part 1 was PR 119, part 2 PR 120, see "The Drums machine"). Left: **part 3**,
+    the phone (DRUM beside RHY | BASS, the
     machine keys without LEDs under 600 px; four rows of 16, or of 8 with 1–8 | 9–16 under about
     700 px; a tap on a row's name picks it for Humanize and the three knobs, Tune, Decay and
     Level; the Sound page's cards with Mix). The item as agreed: Four slots × 16 steps. A slot holds one hit: the built-in kit (the
     Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
     drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
-    light work for a phone. It replaces the hidden sample lanes: their playback code is reused,
-    the rest and the three mp3 files go (see "Dead code").
+    light work for a phone. It replaced the hidden sample lanes (removed in PR 120).
 6. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
     touch plates, one slow filter, joystick and short sequencer are worth borrowing; its
     per-voice knobs and microtonal tuning are not). Six plates, one per note of the key's
@@ -2784,6 +2796,7 @@ Done:
 | 117 | The Bass machine, part 2b: while Bass is shown, the transport's boxes are **Bass sounds** (Sub, Acid, Rubber, Pluck, Growl, Hollow) and **Bass patterns** (Root, Octaves, Offbeat, Gallop, Walk, Squelch, from the key's root), each with a dice and lit while it matches (`src/lib/machines/bassPresets.ts`); Pattern Tools (Step Fills, Humanize, Move) and the Melody Maker (Generate, its screen) edit Bass's pads, within its range, a melody two octaves down. |
 | 118 | The Bass machine, part 3, the phone (option P of the mockups), which finishes the plan's item 4: a RHY \| BASS switch in phone mode's top bar (the tabs read P S M F K under 720 px); with Bass chosen, the Pads page shows Bass's pads with ACC, ⤳ (slide) and ═ (tie) marks, a hold opens its notes, velocity, Accent, Slide and Tie, the steppers and dice are Bass's sounds and patterns, Octave, Shift and Humanize move Bass's pads, and the four macros are Cutoff, Reso, Env and Decay; the Sound page is Bass's (`BassSound` compact) with a Mix group (the meter, Level, Pedals); the Key page edits Bass's pads. Nothing scrolls at 568 × 320 or 844 × 390. |
 | 119 | The Drums machine, part 1 (the plan's item 5; option A of the mockups): four slots × 16 steps, each slot one recorded hit with Tune, Decay and Level, in both engines (`src/audio/drums.ts`); the frozen kit (Kick, Snare, Metal, Hat, rendered from the presets by `scripts/render-drum-kit.mjs`, a chunk of its own); its pads (a row per slot, velocity by dragging a lit step, the picked row for Step Fills and Humanize), its Sound section (a card per slot whose picture plays it, the Sounds shelf), **Keep as drum** on Rhythm's Sound (a hit of Rhythm's sound into a slot), its rail row; saved and in each pattern slot, in the export (its machine stem, MIDI channel 10). The Melody Maker is dimmed on Drums. Bass's screen plays its note when clicked. The undo history keeps each recording once. |
+| 120 | The Drums machine, part 2: while Drums is shown, the transport's boxes are **Drum kits** (Kit, Tight, Deep, Tin, Boom, Click: the four slots' sounds, Tune, Decay and Level) and **Drum patterns** (Four, Backbeat, Halftime, Breaks, Electro, Gallop: the four rows), each with a dice and lit while it matches (`src/lib/machines/drumPresets.ts`). The hidden sample lanes (kick, snare, hihat and custom ones), their code and the three mp3 files removed; an older project's steps on them open in the Drums rows. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
