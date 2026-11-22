@@ -4,9 +4,10 @@
      can play, a picture of its hit, which plays it when clicked while stopped, and Tune, Decay
      and Level), then the Sounds shelf beside the pedals: the kit's four, and the sounds kept
      from Rhythm (Keep as drum, on Rhythm's Sound), each to hear with a click, a kept one with ✕
-     to delete it. A lit sound is in a slot. -->
+     to delete it. A lit sound is in a slot. `compact` (phone mode's Sound page, PR 121): the four
+     cards and the `mix` slot (the machine's meter, Level and Pedals), no shelf. -->
 <template>
-    <div class="drum-sound">
+    <div class="drum-sound" :class="{ compact }">
         <div class="ds-slots" style="grid-area: slots">
             <div v-for="(sl, k) in drums.slots" :key="k" class="pt-card dsl" :class="{ picked: k === picked }"
                 :style="{ '--h': hues[k] }" role="group" :aria-label="`Drum slot ${k + 1}`">
@@ -50,9 +51,10 @@
                     </span>
                 </div>
             </div>
+            <div v-if="compact && $slots.mix" class="pt-card dsl dsl-mix"><slot name="mix" /></div>
         </div>
 
-        <div class="pt-card ds-shelf" style="grid-area: shelf" role="group" aria-label="Drum sounds">
+        <div v-if="!compact" class="pt-card ds-shelf" style="grid-area: shelf" role="group" aria-label="Drum sounds">
             <div class="ds-shelf-head"><h3 class="pt-title">Sounds</h3><span>Click to hear one. A slot's ◂ ▸ steps through them.</span></div>
             <div class="ds-group">
                 <span class="ds-cap">Kit</span>
@@ -93,6 +95,7 @@ const props = defineProps<{
     kit: Record<KitId, SampleData> | null;
     picked: number;
     playing: boolean;
+    compact?: boolean;
 }>();
 const emit = defineEmits<{
     (e: 'preview', slot: number): void;
@@ -438,5 +441,30 @@ const keptChips = computed(() => props.drums.kept.map((k) => ({
     .ds-slots {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+}
+
+/* Compact (phone mode's Sound page): the four cards and Mix across, filling the page's height */
+.compact .ds-slots {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+    gap: 6px;
+    height: 100%;
+}
+
+.compact .dsl {
+    padding: 6px;
+    gap: 4px;
+}
+
+.compact .dsl-screen {
+    min-height: 40px;
+}
+
+.compact .dsl-arr {
+    width: 18px;
+}
+
+.compact .dsl-mix {
+    border-top-color: transparent;
+    justify-content: center;
 }
 </style>
