@@ -15,7 +15,7 @@ unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher s
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
 arpeggio in a key and scale; a new key or scale moves the pattern with it); four patterns per
 project (A–D, with Copy) and a chain that plays them in order; a machine rail (a small scope and
-spectrogram, and a row per machine: Rhythm and Bass so far), the live spectrum behind the Filter card's
+spectrogram, and a row per machine: Rhythm, Bass and Drums), the live spectrum behind the Filter card's
 curve, one hit of the sound behind the Envelope card's, and a tuner in the Melody Maker; six built-in sounds that set the sound (not the pattern) and six built-in patterns
 that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
 saved in IndexedDB with JSON import and export, and share links (the project in the URL); undo/redo; it installs as an app that
@@ -1286,7 +1286,25 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   hi-hat 42; `DRUM_NOTES` in `midi.ts`), muted slots left out. Not in the one-shot.
 - **The rail**: a Drums row, its four rows stacked in each step (`stack` on `RailMachine`), its
   Level and Pedals (`drums.level`, `drums.pedals`: MIDI learn's 59 knobs) and meter.
-- **Not on the phone yet** (part 3): phone mode shows Rhythm while Drums is chosen.
+- **On the phone** (PR 121, part 3, which finishes item 5; option D1 of the mockups, with D2's
+  halves on a small phone): **DRUM** beside RHY | BASS in phone mode's top bar (the machine keys
+  lose their LEDs under 600 px, so the three fit at 568 px). While Drums is chosen:
+  - **Pads**: four rows (`.pl-drums`), each its LED (mutes the slot), its name (a tap **picks
+    the row**, outlined) and its steps in its sound's colour, the fill its velocity. A tap turns
+    a step on or off, a finger drawn along a row paints it (the first step decides, as on the
+    other machines' pads; it stays in its row), and a hold opens its **Velocity** (and turns it
+    on), with Off. Under 700 px a row shows eight steps at a time, **1–8 | 9–16** above the rows
+    (a radiogroup "Steps shown"; the half the playing step is in has a dot), the steps
+    numbered. The steppers and their dice are **Drum kits** (its caption reads Kit) and **Drum
+    patterns**; Shift and Reverse move every row; Humanize shapes the picked row (`phoneCtx.lane`
+    is `drumPickedRow`, Pattern Tools' `editSteps` / `editVelocities`); the octave arrows are
+    greyed out. The macros: the picked row's name, then its slot's **Tune, Decay, Level**. The
+    tiny pads in the top bar show each step's first unmuted row that's on, in its colour.
+  - **Sound**: `DrumSound compact` (the four slot cards across, their pictures playing their
+    hits while stopped, no Sounds shelf), with a **Mix** card (the meter, Level, Pedals).
+  - **Key**: the Melody Maker dimmed with its note, as on the desktop. **Mod** stays Rhythm's,
+    **FX** is everyone's.
+  Nothing scrolls at 568 × 320 or 844 × 390 (a browser test checks).
 - Unit tests: `drums.test.ts` (the hit's timing, a bar's hits), `machines/drums.test.ts` (the
   kit in the slots, stepping, keeping, the shelf full, deleting, saving, `hitToSound`),
   `slots.test.ts` (the Drums track), `export.test.ts` (channel 10). Browser tests: the pads,
@@ -1748,8 +1766,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     ☰. It fits on one line from 568 px (the first iPhone SE) up (Play's word hidden under
     600 px; under 720 px the scope is 48 px wide and the tabs tighter: those rules came before
     the ones they change until PR 73, so they never applied).
-  - **RHY | BASS** (PR 118) in the top bar picks the machine the Pads, Sound and Key pages
-    show (see "The Bass machine", On the phone).
+  - **RHY | BASS | DRUM** (PR 118, DRUM since PR 121) in the top bar picks the machine the
+    Pads, Sound and Key pages show (see "The Bass machine" and "The Drums machine", On the
+    phone).
   - **Sound**, **Mod**, **FX** and **Key** pages are the desktop's own panels again (slots in
     DrumSequencer's `PHONE` section), so they write the same settings. **Brought up to date in
     PR 106** (they had fallen behind the desktop's redesigns), and **nothing scrolls at
@@ -2470,15 +2489,6 @@ into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 
 Grow into a small groovebox:
 
-5. **The Drums machine** (mockups done: A on the desktop, D1 with D2's halves under about 700 px
-    on the phone; part 1 was PR 119, part 2 PR 120, see "The Drums machine"). Left: **part 3**,
-    the phone (DRUM beside RHY | BASS, the
-    machine keys without LEDs under 600 px; four rows of 16, or of 8 with 1–8 | 9–16 under about
-    700 px; a tap on a row's name picks it for Humanize and the three knobs, Tune, Decay and
-    Level; the Sound page's cards with Mix). The item as agreed: Four slots × 16 steps. A slot holds one hit: the built-in kit (the
-    Kick, Snare and Metal presets, frozen) or a sound made on Rhythm and kept with "Keep as
-    drum" (the one-shot render); Tune and Decay per slot. A slot plays a recording, which is
-    light work for a phone. It replaced the hidden sample lanes (removed in PR 120).
 6. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
     touch plates, one slow filter, joystick and short sequencer are worth borrowing; its
     per-voice knobs and microtonal tuning are not). Six plates, one per note of the key's
@@ -2797,6 +2807,7 @@ Done:
 | 118 | The Bass machine, part 3, the phone (option P of the mockups), which finishes the plan's item 4: a RHY \| BASS switch in phone mode's top bar (the tabs read P S M F K under 720 px); with Bass chosen, the Pads page shows Bass's pads with ACC, ⤳ (slide) and ═ (tie) marks, a hold opens its notes, velocity, Accent, Slide and Tie, the steppers and dice are Bass's sounds and patterns, Octave, Shift and Humanize move Bass's pads, and the four macros are Cutoff, Reso, Env and Decay; the Sound page is Bass's (`BassSound` compact) with a Mix group (the meter, Level, Pedals); the Key page edits Bass's pads. Nothing scrolls at 568 × 320 or 844 × 390. |
 | 119 | The Drums machine, part 1 (the plan's item 5; option A of the mockups): four slots × 16 steps, each slot one recorded hit with Tune, Decay and Level, in both engines (`src/audio/drums.ts`); the frozen kit (Kick, Snare, Metal, Hat, rendered from the presets by `scripts/render-drum-kit.mjs`, a chunk of its own); its pads (a row per slot, velocity by dragging a lit step, the picked row for Step Fills and Humanize), its Sound section (a card per slot whose picture plays it, the Sounds shelf), **Keep as drum** on Rhythm's Sound (a hit of Rhythm's sound into a slot), its rail row; saved and in each pattern slot, in the export (its machine stem, MIDI channel 10). The Melody Maker is dimmed on Drums. Bass's screen plays its note when clicked. The undo history keeps each recording once. |
 | 120 | The Drums machine, part 2: while Drums is shown, the transport's boxes are **Drum kits** (Kit, Tight, Deep, Tin, Boom, Click: the four slots' sounds, Tune, Decay and Level) and **Drum patterns** (Four, Backbeat, Halftime, Breaks, Electro, Gallop: the four rows), each with a dice and lit while it matches (`src/lib/machines/drumPresets.ts`). The hidden sample lanes (kick, snare, hihat and custom ones), their code and the three mp3 files removed; an older project's steps on them open in the Drums rows. |
+| 121 | The Drums machine, part 3, the phone (option D1 of the mockups, D2's halves on a small phone), which finishes the plan's item 5: DRUM beside RHY \| BASS (the machine keys without LEDs under 600 px); with Drums chosen, the Pads page has its four rows (a tap, a finger drawn along a row, a hold for Velocity; a tap on a row's name picks it), eight steps at a time with 1–8 \| 9–16 under 700 px, the Drum kits and Drum patterns steppers, Humanize on the picked row and its slot's Tune, Decay and Level as the knobs; the Sound page has the four slot cards with a Mix card; the Key page dims the Melody Maker. Nothing scrolls at 568 × 320 or 844 × 390. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

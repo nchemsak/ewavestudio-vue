@@ -5,8 +5,24 @@
 			 one below. Its Sound, FX and Key pages show the same panels again. -->
 		<PhoneLayout v-if="phoneActive" :ctx="phoneCtx">
 			<template #sound>
+				<!-- Drums shown (PR 121): its four slot cards, compact, with a Mix group (Level, Pedals, the meter) -->
+				<div v-if="drumsChosen" class="pl-drum-sound">
+					<DrumSound compact :drums="drums" :kit="drumKit" :picked="drumPick" :playing="isPlaying"
+						@preview="previewDrum" @preview-sound="previewDrumSound">
+						<template #mix>
+							<div class="pl-dmix" role="group" aria-label="Drums mix">
+								<span class="bs-kcap">Mix</span>
+								<LevelMeter :read="() => machineLevel('drums')" :active="viewSource.active" label="Drums level meter" />
+								<Knob v-model="drums.level" label="Level" :min="0" :max="1" :step="0.01" size="small"
+									:value-text="`${Math.round(drums.level * 100)}%`" />
+								<Knob v-model="drums.pedals" label="Pedals" :min="0" :max="1" :step="0.01" size="small"
+									:value-text="`${Math.round(drums.pedals * 100)}%`" />
+							</div>
+						</template>
+					</DrumSound>
+				</div>
 				<!-- Bass shown (PR 118): its Sound section, compact, with a Mix group (Level, Pedals, the meter) -->
-				<div v-if="bassChosen" class="pl-bass-sound">
+				<div v-else-if="bassChosen" class="pl-bass-sound">
 					<BassSound compact :sound="bass" :noteHz="bassScreenHz" :noteName="nearestNote(bassScreenHz)" @preview="auditionBass(bassScreenHz)">
 						<template #mix>
 							<div class="bs-kgroup pl-mix" role="group" aria-label="Bass mix">
@@ -143,8 +159,10 @@
 				</div>
 			</template>
 			<template #key>
-				<div class="module melody pl-melody">
-					<SectionWrap id="pl-melody" title="Melody Maker" :modelValue="true">
+				<!-- Drums (PR 121): dimmed with a note, as on the desktop -->
+				<div class="module melody pl-melody" :class="{ 'is-off': drumsChosen }">
+					<p v-if="drumsChosen" class="melody-off-note">The Melody Maker works on Rhythm and Bass: pick RHY or BASS.</p>
+					<SectionWrap id="pl-melody" title="Melody Maker" :modelValue="true" :inert="drumsChosen || undefined">
 						<!-- What Generate makes; Generate is the card's last line (PR 82) -->
 						<template #tools>
 							<MelodyModeSwitch v-model="melodyUi.mode" />
@@ -906,6 +924,20 @@ const drumHues = computed(() => drums.slots.map((_, k) => soundHue(slotSound(dru
 const drumNames = computed(() => drums.slots.map((_, k) => soundName(slotSound(drums, k), drums.kept)));
 const drumSources = computed(() => drums.slots.map((_, k) => (slotSound(drums, k).startsWith('kit:') ? 'Kit' : 'Kept')));
 function setDrumRows(rows: DrumRow[]) { drums.rows = rows; }
+// One step of a row on or off (and its velocity), a new row as the desktop's pads make one
+function setDrumCell(k: number, i: number, c: { on: boolean; vel?: number }) {
+	drums.rows = drums.rows.map((r, j) => (j !== k ? r : {
+		steps: r.steps.map((s, x) => (x === i ? c.on : s)),
+		velocities: c.vel == null ? r.velocities : r.velocities.map((v, x) => (x === i ? c.vel! : v)),
+	}));
+}
+// The picked row as a lane (phone mode's Humanize): its steps and velocities, Pattern Tools' way
+const drumPickedRow = reactive({
+	get steps() { return editSteps.value; },
+	set steps(v: boolean[]) { editSteps.value = v; },
+	get velocities() { return editVelocities.value; },
+	set velocities(v: number[]) { editVelocities.value = v; },
+});
 function toggleDrumSlotMute(k: number) {
 	drums.slots = drums.slots.map((s, j) => (j === k ? { ...s, muted: !s.muted } : s));
 }
@@ -3004,17 +3036,27 @@ const SCALE_LABELS: Record<string, string> = {
 };
 const phoneCtx = reactive({
 	inst: synthInstrument,
-	// The machine the phone shows (PR 118; the top bar's RHY | BASS), and its lane
-	// Drums isn't on the phone yet (the item's part 3): there it shows Rhythm
-	machine: computed({ get: () => (machine.value === 'drums' ? 'rhythm' : machine.value), set: (m: 'rhythm' | 'bass') => { machine.value = m; } }),
-	lane: computed(() => (bassChosen.value ? bassLane : synthInstrument.value)),
+	// The machine the phone shows (PR 118; the top bar's RHY | BASS | DRUM, PR 121), and its lane
+	// (Drums': its picked row, as Pattern Tools has it, for Humanize)
+	machine,
+	lane: computed(() => (drumsChosen.value ? drumPickedRow : bassChosen.value ? bassLane : synthInstrument.value)),
 	bass,
+	// Drums (PR 121): its rows, its slots, the picked row and its slot's Tune, Decay and Level
+	drumRows: computed(() => drums.rows),
+	drumSlots: computed(() => drums.slots),
+	drumNames, drumHues,
+	drumPick,
+	drumSlot: computed(() => drums.slots[drumPick.value]),
+	setDrumStep: (k: number, i: number, on: boolean) => setDrumCell(k, i, { on }),
+	// A held step's velocity turns it on too (as a held pad's note does)
+	setDrumVelocity: (k: number, i: number, v: number) => setDrumCell(k, i, { on: true, vel: v }),
+	toggleDrumMute: toggleDrumSlotMute,
 	currentStep, isPlaying, tempo, swing, canUndo, canRedo,
-	// The Sounds and Patterns steppers: the machine's own (Bass's while Bass is shown)
-	presets: computed(() => (bassChosen.value ? BASS_SOUNDS : PRESETS)),
-	patterns: computed(() => (bassChosen.value ? BASS_PATTERNS : PATTERNS)),
-	activePresetId: computed(() => (bassChosen.value ? activeBassSoundId.value : activePresetId.value)),
-	activePatternId: computed(() => (bassChosen.value ? activeBassPatternId.value : activePatternId.value)),
+	// The Sounds and Patterns steppers: the machine's own (Bass's while Bass is shown, Drums' kits and patterns)
+	presets: computed(() => (drumsChosen.value ? DRUM_KITS : bassChosen.value ? BASS_SOUNDS : PRESETS)),
+	patterns: computed(() => (drumsChosen.value ? DRUM_PATTERNS : bassChosen.value ? BASS_PATTERNS : PATTERNS)),
+	activePresetId: computed(() => (drumsChosen.value ? activeDrumKitId.value : bassChosen.value ? activeBassSoundId.value : activePresetId.value)),
+	activePatternId: computed(() => (drumsChosen.value ? activeDrumPatternId.value : bassChosen.value ? activeBassPatternId.value : activePatternId.value)),
 	keyRoot: computed(() => melodyUi.keyRoot),
 	keyScale: computed(() => melodyUi.keyScale),
 	keyScaleLabel: computed(() => SCALE_LABELS[melodyUi.keyScale] ?? melodyUi.keyScale),
@@ -3043,10 +3085,10 @@ const phoneCtx = reactive({
 	togglePlay: onPlayClick,
 	undo,
 	redo,
-	choosePreset: (id: string) => (bassChosen.value ? chooseBassSound(id) : choosePreset(id)),
-	randomSound: () => (bassChosen.value ? rollBassSound() : rollRandomSound()),
-	choosePattern: (id: string) => (bassChosen.value ? chooseBassPattern(id) : choosePattern(id)),
-	randomPattern: () => (bassChosen.value ? rollBassPattern() : rollRandomPattern()),
+	choosePreset: (id: string) => (drumsChosen.value ? chooseDrumKit(id) : bassChosen.value ? chooseBassSound(id) : choosePreset(id)),
+	randomSound: () => (drumsChosen.value ? rollDrumKit() : bassChosen.value ? rollBassSound() : rollRandomSound()),
+	choosePattern: (id: string) => (drumsChosen.value ? chooseDrumPattern(id) : bassChosen.value ? chooseBassPattern(id) : choosePattern(id)),
+	randomPattern: () => (drumsChosen.value ? rollDrumPattern() : bassChosen.value ? rollBassPattern() : rollRandomPattern()),
 	audition: auditionNote,
 	auditionPad: (i: number, hz: number) => (bassChosen.value ? auditionBass(hz) : auditionPad(i, hz)),
 	noteName: nearestNote,
@@ -3705,6 +3747,11 @@ async function recordSample() {
 	height: 100%;
 	align-content: center;
 }
+/* Drums' Sound page (PR 121): the four slot cards and Mix in one row */
+.pl-drum-sound { height: 100%; min-height: 0; }
+.pl-dmix { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pl-dmix .bs-kcap { font: 700 9px Cousine, ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase;
+	color: var(--pt-text-dim, #b9a8d8); }
 
 .pl-sound-row {
 	display: flex;

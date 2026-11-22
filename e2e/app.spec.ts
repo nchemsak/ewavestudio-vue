@@ -6287,6 +6287,125 @@ test.describe('Phone mode', () => {
 		expect(data.bass.lane.steps.filter(Boolean)).toHaveLength(4);
 	});
 
+	test('PR 121: Drums on the phone: DRUM, its rows (tap, paint, hold), the picked row\'s knobs and Humanize, kits and patterns, Sound with Mix, halves on a small phone', async ({ page }) => {
+		const saved = async () => {
+			await page.getByRole('button', { name: 'Menu' }).click();
+			const menu = page.getByRole('dialog', { name: 'Menu' });
+			await menu.getByRole('button', { name: 'File ▾' }).click();
+			const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: 'Export file' }).click()]);
+			if (await menu.isVisible()) await menu.getByRole('button', { name: 'Close menu' }).click();
+			return JSON.parse(readFileSync((await download.path())!).toString('utf8')).data;
+		};
+		const machine = page.getByRole('radiogroup', { name: 'Machine' });
+		await machine.getByRole('radio', { name: 'Drums' }).click();
+		await expect(machine.getByRole('radio', { name: 'Drums' })).toHaveAttribute('aria-checked', 'true');
+		const play = page.locator('.pl-play');
+		const row = (n: string) => play.getByRole('group', { name: `${n} steps` });
+		const cell = (n: string, i: number) => play.getByRole('button', { name: `${n}, step ${i}`, exact: true });
+		for (const n of ['Kick', 'Snare', 'Metal', 'Hat']) await expect(row(n).locator('.pl-dcell')).toHaveCount(16);
+		await expect(page.locator('.pl-pad')).toHaveCount(0);
+		// A drum has no note: the octave arrows are greyed out
+		await expect(play.getByRole('button', { name: 'Octave up' })).toBeDisabled();
+
+		// The steppers are Drums' kits and patterns
+		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText('Kit');
+		await page.getByRole('button', { name: 'Next sound' }).click();
+		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText('Tight');
+		await page.getByRole('button', { name: 'Next pattern' }).click();
+		await expect(page.getByRole('button', { name: 'All patterns' })).toContainText('Four');
+		await expect(row('Kick').locator('.pl-dcell[aria-pressed="true"]')).toHaveCount(4);
+		await page.waitForTimeout(SETTLED);
+
+		// A tap turns a step on; a finger drawn along a row paints it
+		await cell('Kick', 2).click();
+		await expect(cell('Kick', 2)).toHaveAttribute('aria-pressed', 'true');
+		const box = async (i: number) => (await cell('Kick', i).boundingBox())!;
+		const [b6, b7, b8] = [await box(6), await box(7), await box(8)];
+		await page.mouse.move(b6.x + b6.width / 2, b6.y + b6.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(b7.x + b7.width / 2, b7.y + b7.height / 2, { steps: 3 });
+		await page.mouse.move(b8.x + b8.width / 2, b8.y + b8.height / 2, { steps: 3 });
+		await page.mouse.up();
+		for (const i of [6, 7, 8]) await expect(cell('Kick', i)).toHaveAttribute('aria-pressed', 'true');
+		await expect(cell('Snare', 8)).toHaveAttribute('aria-pressed', 'false'); // the paint stays in its row
+		// Holding a step: its velocity (and it's on)
+		const s3 = (await cell('Snare', 3).boundingBox())!;
+		await page.mouse.move(s3.x + s3.width / 2, s3.y + s3.height / 2);
+		await page.mouse.down();
+		await page.waitForTimeout(600);
+		await page.mouse.up();
+		const sheet = page.getByRole('dialog', { name: 'Snare, step 3' });
+		await expect(sheet).toBeVisible();
+		await sheet.getByLabel('Velocity').fill('0.4');
+		await sheet.getByRole('button', { name: 'Done' }).click();
+		await expect(cell('Snare', 3)).toHaveAttribute('aria-pressed', 'true');
+		await expect(cell('Snare', 3)).toHaveAttribute('style', /--v: 40%/);
+
+		// A tap on a row's name picks it: the knobs are its slot's, Humanize shapes its velocities
+		await play.getByRole('button', { name: 'Pick Snare' }).click();
+		await expect(play.getByRole('button', { name: 'Pick Snare' })).toHaveAttribute('aria-pressed', 'true');
+		await expect(play.locator('.pl-dpicked')).toContainText('Snare');
+		const tune = play.getByRole('slider', { name: 'Tune', exact: true });
+		await tune.focus();
+		await page.keyboard.press('End');
+		await expect(tune).toHaveAttribute('aria-valuenow', '12');
+		await page.getByRole('button', { name: 'Humanize' }).click();
+		await page.getByRole('dialog', { name: 'Humanize' }).getByRole('button', { name: 'Ramp' }).click();
+		// The row's LED mutes its slot
+		await play.getByRole('switch', { name: 'Metal on' }).click();
+		await expect(play.getByRole('switch', { name: 'Metal on' })).toHaveAttribute('aria-checked', 'false');
+
+		// Sound: the four slot cards, and a Mix group with Level, Pedals and the meter
+		await page.getByRole('tab', { name: 'Sound' }).click();
+		const sound = page.locator('section[aria-label="Sound"]');
+		await expect(sound.getByRole('group', { name: 'Drum slot 4' })).toBeVisible();
+		await expect(sound.getByRole('group', { name: 'Drum sounds' })).toHaveCount(0);
+		const mix = sound.getByRole('group', { name: 'Drums mix' });
+		const level = mix.getByRole('slider', { name: 'Level', exact: true });
+		await level.focus();
+		await page.keyboard.press('End');
+		await expect(level).toHaveAttribute('aria-valuenow', '1');
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		await expect.poll(async () => Number(await mix.getByRole('meter', { name: 'Drums level meter' }).getAttribute('aria-valuenow')), { timeout: 5000 }).toBeGreaterThan(0);
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+		// Key: the Melody Maker dimmed, with the note
+		await page.getByRole('tab', { name: 'Key' }).click();
+		await expect(page.locator('section[aria-label="Key"]').getByText('The Melody Maker works on Rhythm and Bass')).toBeVisible();
+
+		// A small phone: eight steps at a time, 1–8 | 9–16; the machine keys without LEDs; nothing scrolls
+		await page.setViewportSize({ width: 568, height: 320 });
+		await page.getByRole('tab', { name: 'Pads' }).click();
+		await expect(row('Kick').locator('.pl-dcell')).toHaveCount(8);
+		await expect(cell('Kick', 9)).toHaveCount(0);
+		await page.getByRole('radio', { name: '9–16' }).click();
+		await expect(cell('Kick', 9)).toHaveAttribute('aria-pressed', 'true');
+		await expect(cell('Kick', 1)).toHaveCount(0);
+		await expect(machine.locator('.pl-mled').first()).toBeHidden();
+		for (const size of [{ width: 568, height: 320 }, { width: 844, height: 390 }]) {
+			await page.setViewportSize(size);
+			for (const [tab, label] of [['Pads', 'Play'], ['Sound', 'Sound'], ['Key', 'Key']]) {
+				await page.getByRole('tab', { name: tab }).click();
+				const s = page.locator(`section[aria-label="${label}"]`);
+				expect(await s.evaluate((el) => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1), `${tab} at ${size.width}`).toBe(true);
+			}
+			const bar = page.locator('.pl-top');
+			expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `top bar at ${size.width}`).toBe(true);
+		}
+
+		// Saved: the Tight kit with Snare tuned up, Metal muted; Four with the taps and the paint;
+		// Snare's velocities Ramp's, Kick's untouched
+		const data = await saved();
+		expect(data.drums.slots[1].tune).toBe(12);
+		expect(data.drums.slots[2].muted).toBe(true);
+		expect(data.drums.slots[0].tune).toBe(2); // Tight's kick
+		const on = (k: number) => data.drums.lane.rows[k].steps.map((x: boolean, i: number) => (x ? i : -1)).filter((i: number) => i >= 0);
+		expect(on(0)).toEqual([0, 1, 4, 5, 6, 7, 8, 12]);
+		expect(on(1)).toEqual([2, 4, 12]);
+		expect(data.drums.lane.rows[1].velocities[7]).toBeLessThan(0.3);
+		expect(data.drums.lane.rows[0].velocities[7]).toBe(1);
+		expect(data.drums.level).toBe(1);
+	});
+
 	test('Export audio on a phone: bars and ending only, one normalized mix', async ({ page }) => {
 		await phonePads(page).nth(0).click();
 		await page.getByRole('button', { name: 'Menu' }).click();

@@ -10,11 +10,11 @@
 			<!-- A tiny copy of the 16 pads, on every page (PR 73): the steps that are on, in their
 				 notes' colours, the beats marked and the playing step outlined. Only to look at -->
 			<div class="pl-minipads" aria-hidden="true">
-				<span v-for="(on, i) in (lane.steps as boolean[])" :key="i" class="pl-mp"
-					:class="{ on, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
-					:style="on ? { '--h': ctx.hue(lane.pitches[i]) } : undefined"></span>
+				<span v-for="(h, i) in minis" :key="i" class="pl-mp"
+					:class="{ on: h !== null, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
+					:style="h !== null ? { '--h': h } : undefined"></span>
 			</div>
-			<!-- The machine the pages show (PR 118, option P of the mockups): RHY | BASS -->
+			<!-- The machine the pages show (PR 118, option P of the mockups): RHY | BASS | DRUM (PR 121) -->
 			<div class="pl-machines" role="radiogroup" aria-label="Machine">
 				<button v-for="m in MACHINES" :key="m.id" type="button" role="radio" class="pl-mkey"
 					:class="{ on: ctx.machine === m.id }" :aria-checked="ctx.machine === m.id ? 'true' : 'false'"
@@ -41,7 +41,33 @@
 		<div class="pl-pages">
 			<!-- Play -->
 			<section v-show="page === 'play'" class="pl-frame pl-play" aria-label="Play">
-				<div class="pl-pads" role="group" aria-label="Steps" @pointermove="padMove">
+				<!-- Drums (PR 121, option D1 of the mockups, D2's halves on a narrow phone): a row per
+					 slot, its LED (mutes the slot) and its name (a tap picks the row: Humanize and the
+					 knobs work on it), then its steps; under 700 px eight at a time, 1–8 | 9–16 -->
+				<div v-if="drums" class="pl-drums" :class="{ narrow }" role="group" aria-label="Drum steps" @pointermove="padMove">
+					<div v-if="narrow" class="pl-halves" role="radiogroup" aria-label="Steps shown">
+						<button v-for="h in [0, 1]" :key="h" type="button" role="radio" class="pl-half"
+							:class="{ on: half === h, now: ctx.isPlaying && Math.floor(ctx.currentStep / 8) === h }"
+							:aria-checked="half === h ? 'true' : 'false'" @click="half = h">{{ h ? '9–16' : '1–8' }}</button>
+					</div>
+					<div v-for="(row, k) in ctx.drumRows" :key="k" class="pl-drow" :class="{ picked: k === ctx.drumPick }"
+						:style="{ '--h': ctx.drumHues[k] }" role="group" :aria-label="`${ctx.drumNames[k]} steps`">
+						<div class="pl-dhead">
+							<button type="button" class="pl-dled" :class="{ lit: !ctx.drumSlots[k].muted }" role="switch"
+								:aria-checked="!ctx.drumSlots[k].muted ? 'true' : 'false'" :aria-label="`${ctx.drumNames[k]} on`"
+								@click="ctx.toggleDrumMute(k)"><i aria-hidden="true"></i></button>
+							<button type="button" class="pl-dname" :aria-pressed="k === ctx.drumPick ? 'true' : 'false'"
+								:aria-label="`Pick ${ctx.drumNames[k]}`" @click="ctx.drumPick = k">{{ ctx.drumNames[k] }}</button>
+						</div>
+						<button v-for="i in shownSteps" :key="i" type="button" class="pl-dcell"
+							:class="{ on: row.steps[i], beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep, dim: ctx.drumSlots[k].muted }"
+							:style="row.steps[i] ? { '--v': `${Math.round((row.velocities[i] ?? 1) * 100)}%` } : undefined"
+							:aria-pressed="row.steps[i] ? 'true' : 'false'" :aria-label="`${ctx.drumNames[k]}, step ${i + 1}`"
+							:data-r="k" :data-i="i" @pointerdown="padDown(i, $event, +k)" @click.prevent @contextmenu.prevent
+							@keydown.enter.prevent="setOn(+k, i, !row.steps[i])"><span class="pl-dfill"></span><span class="pl-dnum">{{ i + 1 }}</span></button>
+					</div>
+				</div>
+				<div v-else class="pl-pads" role="group" aria-label="Steps" @pointermove="padMove">
 					<button v-for="(on, i) in (lane.steps as boolean[])" :key="i" type="button" class="pl-pad"
 						:class="{ on, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
 						:aria-pressed="!!on" :aria-label="padLabel(i)" :data-i="i"
@@ -62,7 +88,7 @@
 					<div class="pl-pick">
 						<div class="pl-stepper" role="group" aria-label="Sound">
 							<button type="button" class="pl-arr" aria-label="Previous sound" @click="stepSound(-1)">◂</button>
-							<button type="button" class="pl-val" aria-label="All sounds" @click="list = 'sound'"><span class="pl-cap" aria-hidden="true">Sound</span>{{ soundName }}</button>
+							<button type="button" class="pl-val" aria-label="All sounds" @click="list = 'sound'"><span class="pl-cap" aria-hidden="true">{{ drums ? 'Kit' : 'Sound' }}</span>{{ soundName }}</button>
 							<button type="button" class="pl-arr" aria-label="Next sound" @click="stepSound(1)">▸</button>
 						</div>
 						<button type="button" class="pl-icon pl-dice" aria-label="Random sound" title="Random sound" @click="rollSound">
@@ -94,9 +120,9 @@
 					</div>
 					<div class="pl-pick">
 						<div class="pl-mini" role="group" aria-label="Octave">
-							<button type="button" aria-label="Octave down" title="Every pad an octave down" @click="ctx.octave(-1)">↓</button>
+							<button type="button" aria-label="Octave down" title="Every pad an octave down" :disabled="drums" @click="ctx.octave(-1)">↓</button>
 							<span>Oct</span>
-							<button type="button" aria-label="Octave up" title="Every pad an octave up" @click="ctx.octave(1)">↑</button>
+							<button type="button" aria-label="Octave up" title="Every pad an octave up" :disabled="drums" @click="ctx.octave(1)">↑</button>
 						</div>
 						<!-- Move (PR 88): Pattern Tools' rotate and reverse -->
 						<div class="pl-mini pl-move" role="group" aria-label="Shift and reverse">
@@ -109,8 +135,27 @@
 							title="Shape the steps' velocities (the Filter's VEL switch needs softer steps)"
 							@click="list = 'humanize'">Humanize</button>
 					</div>
+					<!-- Drums (PR 121): the picked row's name, then its slot's Tune, Decay and Level -->
+					<div v-if="drums" class="pl-macros pl-dmacros" :style="{ '--h': ctx.drumHues[ctx.drumPick] }">
+						<div class="pl-macro pl-dpicked"><span class="pl-cap">Row</span><b>{{ ctx.drumNames[ctx.drumPick] }}</b></div>
+						<div class="pl-macro">
+							<Knob v-model="ctx.drumSlot.tune" label="Tune" :min="DRUM_RANGES.tune[0]" :max="DRUM_RANGES.tune[1]" :step="1" bipolar size="small"
+								:value-text="`${ctx.drumSlot.tune > 0 ? '+' : ''}${ctx.drumSlot.tune} st`" />
+							<span class="pl-mv">{{ ctx.drumSlot.tune > 0 ? '+' : '' }}{{ ctx.drumSlot.tune }} st</span>
+						</div>
+						<div class="pl-macro">
+							<Knob v-model="ctx.drumSlot.decay" label="Decay" :min="DRUM_RANGES.decay[0]" :max="DRUM_RANGES.decay[1]" :step="0.01" size="small"
+								:value-text="`${Math.round(ctx.drumSlot.decay * 100)}%`" />
+							<span class="pl-mv">{{ Math.round(ctx.drumSlot.decay * 100) }}%</span>
+						</div>
+						<div class="pl-macro">
+							<Knob v-model="ctx.drumSlot.level" label="Level" :min="DRUM_RANGES.level[0]" :max="DRUM_RANGES.level[1]" :step="0.01" size="small"
+								:value-text="`${Math.round(ctx.drumSlot.level * 100)}%`" />
+							<span class="pl-mv">{{ Math.round(ctx.drumSlot.level * 100) }}%</span>
+						</div>
+					</div>
 					<!-- Bass's four (PR 118): Cutoff, Reso, Env, Decay -->
-					<div v-if="bass" class="pl-macros">
+					<div v-else-if="bass" class="pl-macros">
 						<div class="pl-macro">
 							<Knob v-model="ctx.bass.cutoff" label="Cutoff" :min="40" :max="4000" :step="1" taper="log" size="small"
 								:value-text="hzText(ctx.bass.cutoff)" />
@@ -177,7 +222,20 @@
 
 		<!-- A held pad: its note (the key's scale over two octaves), velocity and repeats -->
 		<div v-if="held !== null" class="pl-scrim" @click="held = null"></div>
-		<div v-if="held !== null" class="pl-sheet pl-picker" role="dialog" :aria-label="`Step ${held + 1}`">
+		<!-- A held drum step (PR 121): its velocity -->
+		<div v-if="held !== null && heldRow >= 0" class="pl-sheet pl-picker" role="dialog" :aria-label="`${ctx.drumNames[heldRow]}, step ${held + 1}`">
+			<div class="pl-row">
+				<span class="pl-cap pl-grow">{{ ctx.drumNames[heldRow] }} · Step {{ held + 1 }}</span>
+				<button type="button" class="pt-btn pl-small" @click="setOn(heldRow, held, false); held = null">Off</button>
+				<button type="button" class="pt-btn pl-small" @click="held = null">Done</button>
+			</div>
+			<div class="pl-row">
+				<label class="pl-cap" for="pl-dvel">Velocity</label>
+				<input id="pl-dvel" class="pl-vel" type="range" min="0.05" max="1" step="0.01"
+					:value="ctx.drumRows[heldRow].velocities[held]" @input="ctx.setDrumVelocity(heldRow, held, +($event.target as HTMLInputElement).value)">
+			</div>
+		</div>
+		<div v-if="held !== null && heldRow < 0" class="pl-sheet pl-picker" role="dialog" :aria-label="`Step ${held + 1}`">
 			<div class="pl-row">
 				<span class="pl-cap pl-grow">Step {{ held + 1 }} · {{ scaleText }}</span>
 				<button type="button" class="pt-btn pl-small" @click="setStepOn(held, false); held = null">Off</button>
@@ -252,13 +310,41 @@ import ThemeToggle from './ThemeToggle.vue';
 import { SCALES, NOTE_TO_SEMITONE, midiToFreq, freqToMidiExact } from '../lib/melody/theory';
 import { VELOCITY_SHAPES, velocityShape, type VelocityShapeId } from '../lib/patterns/velocityShapes';
 import { SWING_STOPS, TRIPLET_SWING, nextStop } from '../lib/knobDetents';
+import { DRUM_RANGES } from '../audio/drums';
 
 const props = defineProps<{ ctx: any }>();
 const ctx = props.ctx;
 // The machine shown (PR 118): its lane is what the pads, the tiny pads, the hold sheet and
 // Humanize read and write (Rhythm's synth lane, or Bass's); repeats are Rhythm's only
 const bass = computed(() => ctx.machine === 'bass');
+// Drums (PR 121): its rows instead of the pads; `lane` is then its picked row (Humanize)
+const drums = computed(() => ctx.machine === 'drums');
 const lane = computed<any>(() => ctx.lane);
+
+// The tiny pads: each step's colour, or null while it's off (Drums: its first unmuted row that's on)
+const minis = computed<(number | null)[]>(() => {
+	if (drums.value) {
+		const rows = ctx.drumRows as { steps: boolean[] }[];
+		return (rows[0]?.steps ?? []).map((_, i) => {
+			const k = rows.findIndex((r, j) => r.steps[i] && !ctx.drumSlots[j]?.muted);
+			return k < 0 ? null : ctx.drumHues[k];
+		});
+	}
+	return (lane.value.steps as boolean[]).map((on, i) => (on ? ctx.hue(lane.value.pitches[i]) : null));
+});
+
+// Drums' steps on a narrow phone (under 700 px): eight at a time, 1–8 | 9–16
+const narrowQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 699.98px)') : null;
+const narrow = ref(!!narrowQuery?.matches);
+const onNarrow = (e: MediaQueryListEvent) => { narrow.value = e.matches; };
+onMounted(() => narrowQuery?.addEventListener('change', onNarrow));
+onBeforeUnmount(() => narrowQuery?.removeEventListener('change', onNarrow));
+const half = ref(0);
+const shownSteps = computed(() => {
+	const n = (ctx.drumRows?.[0]?.steps.length ?? 16) as number;
+	const all = Array.from({ length: n }, (_, i) => i);
+	return narrow.value ? all.slice(half.value * 8, half.value * 8 + 8) : all;
+});
 
 // The desktop's panels shown here again must not take MIDI learn's links from the desktop's
 provide('noMidiLearn', true);
@@ -266,6 +352,7 @@ provide('noMidiLearn', true);
 const MACHINES = [
 	{ id: 'rhythm', name: 'Rhythm', short: 'RHY' },
 	{ id: 'bass', name: 'Bass', short: 'BASS' },
+	{ id: 'drums', name: 'Drums', short: 'DRUM' },
 ] as const;
 const BASS_FLAGS = [
 	{ id: 'accents', label: 'Accent', tip: 'Louder, the filter opening further' },
@@ -307,7 +394,7 @@ function humanize(id: VelocityShapeId) { lane.value.velocities = velocityShape(i
 let swipe: null | { x: number; y: number } = null;
 function swipeStart(e: PointerEvent) {
 	const t = e.target as HTMLElement;
-	swipe = t.closest('[role="slider"], input, .pl-sheet, .pl-menu, .pl-pads') ? null : { x: e.clientX, y: e.clientY };
+	swipe = t.closest('[role="slider"], input, .pl-sheet, .pl-menu, .pl-pads, .pl-drums') ? null : { x: e.clientX, y: e.clientY };
 }
 function swipeEnd(e: PointerEvent) {
 	if (!swipe) return;
@@ -360,15 +447,23 @@ function rollPattern() { patternRolled.value = true; ctx.randomPattern(); }
 // pads paints them all the way the first one went (on, or off), as a drag does on the desktop.
 // A touch keeps sending its moves to the pad it began on, so that pad lets go of it.
 const HOLD_MS = 400;
+// A drum step is a row's (r ≥ 0); the other machines' pads have r = −1. Painting stays in its row.
 const held = ref<number | null>(null);
+const heldRow = ref(-1);
 let holdTimer: ReturnType<typeof setTimeout> | null = null;
-let press: null | { i: number; x: number; y: number; held: boolean; paint: boolean | null; last: number } = null;
-function padDown(i: number, e: PointerEvent) {
+let press: null | { r: number; i: number; x: number; y: number; held: boolean; paint: boolean | null; last: number } = null;
+const isOn = (r: number, i: number) => !!(r < 0 ? lane.value.steps[i] : ctx.drumRows[r].steps[i]);
+function setOn(r: number, i: number, on: boolean) {
+	if (r < 0) setStepOn(i, on);
+	else ctx.setDrumStep(r, i, on);
+}
+function padDown(i: number, e: PointerEvent, r = -1) {
 	(e.target as Element).releasePointerCapture?.(e.pointerId);
-	press = { i, x: e.clientX, y: e.clientY, held: false, paint: null, last: i };
+	press = { r, i, x: e.clientX, y: e.clientY, held: false, paint: null, last: i };
 	holdTimer = setTimeout(() => {
 		if (!press || press.paint !== null) return;
 		press.held = true;
+		heldRow.value = r;
 		held.value = i;
 		navigator.vibrate?.(10);
 	}, HOLD_MS);
@@ -378,19 +473,20 @@ function padDown(i: number, e: PointerEvent) {
 function padMove(e: PointerEvent) {
 	if (!press || press.held) return;
 	if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > 12) stopHold();
-	const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pl-pad') as HTMLElement | null;
+	const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pl-pad, .pl-dcell') as HTMLElement | null;
 	const i = el ? Number(el.dataset.i) : -1;
-	if (i < 0 || i === press.last) return;
+	const r = el?.dataset.r != null ? Number(el.dataset.r) : -1;
+	if (i < 0 || i === press.last || r !== press.r) return;
 	if (press.paint === null) {
-		press.paint = !lane.value.steps[press.i];
-		setStepOn(press.i, press.paint);
+		press.paint = !isOn(press.r, press.i);
+		setOn(press.r, press.i, press.paint);
 	}
 	press.last = i;
-	if (!!lane.value.steps[i] !== press.paint) setStepOn(i, press.paint);
+	if (isOn(r, i) !== press.paint) setOn(r, i, press.paint);
 }
 function padUp() {
 	stopHold();
-	if (press && !press.held && press.paint === null) toggleStep(press.i);
+	if (press && !press.held && press.paint === null) setOn(press.r, press.i, !isOn(press.r, press.i));
 	padCancel();
 }
 function stopHold() {
@@ -594,6 +690,205 @@ function hzText(hz: number) {
 	text-align: center;
 	color: var(--hw-led, #5dffb0);
 	pointer-events: none;
+}
+
+/* The machine keys lose their LEDs on a small phone (PR 121), so three fit */
+@media (max-width: 599.98px) {
+	.pl-mled {
+		display: none;
+	}
+
+	.pl-mkey {
+		padding: 0 6px;
+	}
+}
+
+/* Drums' rows (PR 121): its LED and name, then its steps */
+.pl-drums {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	min-height: 0;
+	min-width: 0;
+}
+
+.pl-halves {
+	display: flex;
+	gap: 2px;
+	align-self: flex-end;
+	padding: 2px;
+	border-radius: 8px;
+	background: rgba(0, 0, 0, .3);
+	flex: none;
+}
+
+.pl-half {
+	height: 22px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: 6px;
+	font: 700 10px Cousine, ui-monospace, monospace;
+	color: var(--pt-text-dim, #cbbde6);
+	background: transparent;
+}
+
+.pl-half.on {
+	color: var(--pt-text, #fff);
+	background: rgba(255, 255, 255, .15);
+	box-shadow: inset 0 0 0 1px var(--hw-led, #5dffb0);
+}
+
+/* The half the playing step is in: a dot after its name */
+.pl-half.now::after {
+	content: "";
+	display: inline-block;
+	width: 5px;
+	height: 5px;
+	margin-left: 5px;
+	border-radius: 50%;
+	vertical-align: middle;
+	background: var(--pl-now);
+}
+
+.pl-drow {
+	flex: 1;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: 74px repeat(16, minmax(0, 1fr));
+	gap: 3px;
+}
+
+.pl-drums.narrow .pl-drow {
+	grid-template-columns: 74px repeat(8, minmax(0, 1fr));
+	gap: 5px;
+}
+
+.pl-dhead {
+	display: flex;
+	align-items: stretch;
+	min-width: 0;
+	border-radius: 7px;
+	background: var(--pt-inset);
+	box-shadow: inset 3px 0 0 hsl(var(--h) 80% 60%);
+}
+
+.pl-drow.picked .pl-dhead {
+	box-shadow: inset 3px 0 0 hsl(var(--h) 80% 60%), inset 0 0 0 1px hsl(var(--h) 80% 60% / .8);
+}
+
+.pl-dled {
+	flex: none;
+	width: 22px;
+	display: grid;
+	place-items: center;
+	padding: 0 0 0 3px;
+	border: 0;
+	background: none;
+}
+
+.pl-dled i {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--hw-led-off, #2c3a33);
+}
+
+.pl-dled.lit i {
+	background: var(--hw-led, #5dffb0);
+	box-shadow: 0 0 5px var(--hw-led, #5dffb0);
+}
+
+.pl-dname {
+	flex: 1;
+	min-width: 0;
+	padding: 0 4px 0 0;
+	border: 0;
+	background: none;
+	text-align: left;
+	font: 700 10px Cousine, ui-monospace, monospace;
+	color: hsl(var(--h) 85% 72%);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pl-dcell {
+	position: relative;
+	overflow: hidden;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 5px;
+	background: var(--pad-bg, var(--pt-surface-2));
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+	touch-action: none;
+}
+
+.pl-dcell.beat {
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+}
+
+.pl-dcell.dim {
+	opacity: .45;
+}
+
+.pl-dfill {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 0;
+}
+
+.pl-dcell.on .pl-dfill {
+	height: var(--v, 100%);
+	background: linear-gradient(180deg, hsl(var(--h) var(--pp-sat) var(--pp-lit)), hsl(var(--h) var(--pp-sat) calc(var(--pp-lit) - 12%)));
+}
+
+.pl-dcell.now {
+	outline: 2px solid var(--pl-now);
+	outline-offset: -2px;
+	filter: brightness(1.3);
+}
+
+/* Step numbers on the 8-step halves only, where they say which half shows */
+.pl-dnum {
+	display: none;
+}
+
+.pl-drums.narrow .pl-dnum {
+	display: block;
+	position: absolute;
+	top: 2px;
+	left: 4px;
+	z-index: 1;
+	font-size: 8px;
+	color: var(--pt-muted);
+}
+
+.pl-drums.narrow .pl-dcell.on .pl-dnum {
+	color: rgba(255, 255, 255, .8);
+}
+
+/* The picked row's name, before its knobs */
+.pl-dpicked {
+	align-content: center;
+	gap: 2px;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.pl-dpicked b {
+	font-size: 11px;
+	color: hsl(var(--h) 85% 72%);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+.pl-mini button:disabled {
+	opacity: .35;
 }
 
 /* top bar */
