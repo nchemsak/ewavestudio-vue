@@ -6410,6 +6410,131 @@ test.describe('Phone mode', () => {
 		expect(data.drums.level).toBe(1);
 	});
 
+	test('Drift on the phone (option C): the plates 3 × 2 over its bars, Copy, Bars, the X/Y pad, its sounds and progressions, Sound with Mix', async ({ page }) => {
+		const saved = async () => {
+			await page.getByRole('button', { name: 'Menu' }).click();
+			const menu = page.getByRole('dialog', { name: 'Menu' });
+			await menu.getByRole('button', { name: 'File ▾' }).click();
+			const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: 'Export file' }).click()]);
+			if (await menu.isVisible()) await menu.getByRole('button', { name: 'Close menu' }).click();
+			return JSON.parse(readFileSync((await download.path())!).toString('utf8')).data;
+		};
+		const machine = page.getByRole('radiogroup', { name: 'Machine' });
+		await machine.getByRole('radio', { name: 'Drift' }).click();
+		await expect(machine.getByRole('radio', { name: 'Drift' })).toHaveAttribute('aria-checked', 'true');
+		const play = page.locator('.pl-play');
+		const plate = (name: string) => play.getByRole('button', { name: new RegExp(`^${name} \\(\\d+\\) in bar`) });
+		const bar = (n: number) => play.getByRole('radio', { name: new RegExp(`^Bar ${n}:`) });
+		// The plates 3 × 2, big enough to play; no step pads, no knobs: the X/Y pad in their place
+		await expect(play.locator('.pdr-plate')).toHaveCount(6);
+		await expect(page.locator('.pl-pad')).toHaveCount(0);
+		const box = (await play.locator('.pdr-plate').first().boundingBox())!;
+		expect(box.width).toBeGreaterThanOrEqual(120);
+		expect(box.height).toBeGreaterThanOrEqual(100);
+		await expect(play.locator('.df-xy')).toBeVisible();
+		await expect(play.getByRole('slider')).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'All patterns' })).toContainText('None');
+		await expect(bar(1)).toContainText('tap a plate');
+
+		// Bar 1: A, C, E is Am; Copy puts it into bar 2 and picks it; one undo step
+		for (const n of ['A', 'C', 'E']) await plate(n).click();
+		await expect(bar(1)).toHaveAccessibleName('Bar 1: Am');
+		await expect(page.getByRole('button', { name: 'All patterns' })).toContainText('Own');
+		await page.waitForTimeout(600);
+		const copy = play.getByRole('button', { name: 'Copy → 2' });
+		await copy.click();
+		await expect(bar(2)).toHaveAccessibleName('Bar 2: Am');
+		await expect(bar(2)).toHaveAttribute('aria-checked', 'true');
+		await expect(plate('C')).toHaveAttribute('aria-pressed', 'true');
+		// Bar 1's notes carry on into bar 2: three dashes run off its edge
+		await expect(bar(1).locator('.pdr-dots i.carry')).toHaveCount(3);
+		await page.waitForTimeout(600);
+		await page.getByRole('button', { name: 'Undo' }).click();
+		await expect(bar(2)).toHaveAccessibleName('Bar 2: nothing held');
+		await expect(bar(1)).toHaveAccessibleName('Bar 1: Am');
+		await page.getByRole('button', { name: 'Redo' }).click();
+		await expect(bar(2)).toHaveAccessibleName('Bar 2: Am');
+		// Then one note changed: A to G, C E G is C
+		await plate('A').click();
+		await plate('G').click();
+		await expect(bar(2)).toHaveAccessibleName('Bar 2: C');
+		await expect(bar(1).locator('.pdr-dots i.carry')).toHaveCount(2);
+		// Nothing after the last bar to copy into
+		await bar(4).click();
+		await expect(play.getByRole('button', { name: /^Copy/ })).toBeDisabled();
+
+		// Bars 4 | 8
+		await play.getByRole('radio', { name: '8 bars' }).click();
+		await expect(play.locator('.pdr-bar')).toHaveCount(8);
+		await expect(play.getByRole('button', { name: 'Copy → 5' })).toBeEnabled();
+		await page.waitForTimeout(600);
+
+		// The X/Y pad: the filter across, the spread up; a drag is one undo step
+		const xy = (await play.locator('.df-xy').boundingBox())!;
+		await page.mouse.move(xy.x + xy.width * 0.5, xy.y + xy.height * 0.5);
+		await page.mouse.down();
+		await page.mouse.move(xy.x + xy.width * 0.8, xy.y + xy.height * 0.3, { steps: 5 });
+		await page.mouse.move(xy.x + xy.width - 1, xy.y + 1, { steps: 5 });
+		await page.mouse.up();
+		await page.waitForTimeout(600);
+		let data = await saved();
+		expect(data.drift.sound.cutoff).toBeGreaterThan(7500);
+		expect(data.drift.sound.spread).toBeGreaterThan(0.95);
+		expect(data.drift.length).toBe(8);
+		expect(data.drift.chords[0]).toEqual([true, true, true, false, false, false]);
+		await page.getByRole('button', { name: 'Undo' }).click();
+		data = await saved();
+		expect(data.drift.sound.cutoff).toBe(1800);
+		expect(data.drift.sound.spread).toBe(0.6);
+		expect(data.drift.length).toBe(8);
+
+		// The steppers are Drift's sounds and progressions; a progression picks bar 1
+		await page.getByRole('button', { name: 'Next pattern' }).click();
+		await expect(page.getByRole('button', { name: 'All patterns' })).toContainText('Hold');
+		await expect(bar(1)).toHaveAttribute('aria-checked', 'true');
+		await page.getByRole('button', { name: 'Next sound' }).click();
+		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText('Strings');
+		// It plays, and the tiny pads outline the bar playing
+		await page.getByRole('button', { name: 'Play', exact: true }).click();
+		expect(await page.evaluate(() => (window as any).__peakOver(2500) as Promise<number>)).toBeGreaterThan(0.02);
+		await expect(page.locator('.pl-mp.now').first()).toBeVisible();
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+
+		// Sound: the swarm and its knobs with Filter and Spread (no second X/Y pad), and Mix
+		await page.getByRole('tab', { name: 'Sound' }).click();
+		const sound = page.locator('section[aria-label="Sound"]');
+		for (const name of ['Voices', 'Drift', 'Wave', 'Filter', 'Spread', 'Attack', 'Release', 'Level', 'Reverb'])
+			await expect(sound.getByRole('slider', { name, exact: true })).toBeVisible();
+		await expect(sound.getByRole('meter', { name: 'Drift level meter' })).toBeVisible();
+		await expect(sound.locator('.df-xy')).toHaveCount(0);
+		// Key: the Melody Maker live (its key moves the plates), Generate dimmed
+		await page.getByRole('tab', { name: 'Key' }).click();
+		await expect(page.locator('section[aria-label="Key"] .module.melody')).toHaveClass(/drift-key/);
+
+		// The first iPhone SE: 8 bars four at a time (1–4 | 5–8), the half following the picked bar;
+		// the plates still a good size; nothing scrolls, the top bar's four machines fit
+		await page.setViewportSize({ width: 568, height: 320 });
+		await page.getByRole('tab', { name: 'Pads' }).click();
+		await play.getByRole('radio', { name: '8 bars' }).click();
+		await expect(play.locator('.pdr-bar')).toHaveCount(4);
+		await play.getByRole('radio', { name: '5–8' }).click();
+		await expect(bar(5)).toBeVisible();
+		await expect(bar(1)).toHaveCount(0);
+		const small = (await play.locator('.pdr-plate').first().boundingBox())!;
+		expect(small.width).toBeGreaterThanOrEqual(80);
+		expect(small.height).toBeGreaterThanOrEqual(80);
+		for (const size of [{ width: 568, height: 320 }, { width: 844, height: 390 }]) {
+			await page.setViewportSize(size);
+			for (const [tab, label] of [['Pads', 'Play'], ['Sound', 'Sound'], ['Key', 'Key']]) {
+				await page.getByRole('tab', { name: tab }).click();
+				const sec = page.locator(`section[aria-label="${label}"]`);
+				expect(await sec.evaluate((el) => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1), `${tab} at ${size.width}`).toBe(true);
+			}
+			const top = page.locator('.pl-top');
+			expect(await top.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `top bar at ${size.width}`).toBe(true);
+		}
+	});
+
 	test('Export audio on a phone: bars and ending only, one normalized mix', async ({ page }) => {
 		await phonePads(page).nth(0).click();
 		await page.getByRole('button', { name: 'Menu' }).click();

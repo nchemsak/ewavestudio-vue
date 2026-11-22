@@ -6,7 +6,26 @@
 		<PhoneLayout v-if="phoneActive" :ctx="phoneCtx">
 			<template #sound>
 				<!-- Drums shown (PR 121): its four slot cards, compact, with a Mix group (Level, Pedals, the meter) -->
-				<div v-if="drumsChosen" class="pl-drum-sound">
+				<!-- Drift shown (part 3): its Sound section, compact (the swarm's screen, its knobs with Filter and
+					 Spread: the X/Y pad is on the Pads page), with a Mix group (the meter, Level, Reverb: the rail's Pedals) -->
+				<div v-if="driftChosen" class="pl-drift-sound">
+					<DriftSound compact :drift="drift" :notes="driftNotes" :bar="driftPick" :chord="driftLabels[driftPick] ?? ''"
+						@preview="previewDrift()">
+						<template #mix>
+							<div class="df-kgroup pl-dfmix" role="group" aria-label="Drift mix">
+								<span class="df-kcap">Mix</span>
+								<LevelMeter :read="() => machineLevel('drift')" :active="viewSource.active" label="Drift level meter" />
+								<div class="pl-mix-knobs">
+									<Knob v-model="drift.level" label="Level" :min="0" :max="1" :step="0.01" size="small"
+										:value-text="`${Math.round(drift.level * 100)}%`" />
+									<Knob v-model="drift.pedals" label="Reverb" :min="0" :max="1" :step="0.01" size="small"
+										:value-text="`${Math.round(drift.pedals * 100)}%`" />
+								</div>
+							</div>
+						</template>
+					</DriftSound>
+				</div>
+				<div v-else-if="drumsChosen" class="pl-drum-sound">
 					<DrumSound compact :drums="drums" :kit="drumKit" :picked="drumPick" :playing="isPlaying"
 						@preview="previewDrum" @preview-sound="previewDrumSound">
 						<template #mix>
@@ -160,7 +179,7 @@
 			</template>
 			<template #key>
 				<!-- Drums (PR 121): dimmed with a note, as on the desktop -->
-				<div class="module melody pl-melody" :class="{ 'is-off': drumsChosen }">
+				<div class="module melody pl-melody" :class="{ 'is-off': drumsChosen, 'drift-key': driftChosen }">
 					<p v-if="drumsChosen" class="melody-off-note">The Melody Maker works on Rhythm and Bass: pick RHY or BASS.</p>
 					<SectionWrap id="pl-melody" title="Melody Maker" :modelValue="true" :inert="drumsChosen || undefined">
 						<!-- What Generate makes; Generate is the card's last line (PR 82) -->
@@ -755,7 +774,7 @@ import DrumPads from './DrumPads.vue';
 import DrumSound from './DrumSound.vue';
 import DriftPads from './DriftPads.vue';
 import DriftSound from './DriftSound.vue';
-import { createDrift, driftVoice, togglePlate, type Drift } from '../lib/machines/drift';
+import { createDrift, driftVoice, togglePlate, copyToNextBar, type Drift } from '../lib/machines/drift';
 import { DRIFT_PROGRESSIONS, DRIFT_SOUNDS, driftProgressionKey, driftSoundKey, progressionChords, randomDriftProgression, randomDriftSound } from '../lib/machines/driftPresets';
 import type { DriftVoice } from '../audio/drift';
 import { chordLabel, driftHasNotes, heldInBar, plateHz as driftPlateHzOf, platePitchClasses, plateSemitones, plateSpelling, driftRootMidi } from '../audio/drift';
@@ -1127,6 +1146,14 @@ function rollDriftProgression() {
 	const p = randomDriftProgression();
 	setDriftProgression(p.length, p.bars);
 	trackEvent('drift_progression_random');
+}
+// Phone mode's Copy (part 3): the picked bar's plates into the next bar, which it then picks
+// (and plays, while stopped); one undo step. Nothing after the last bar.
+function copyDriftBar() {
+	const to = copyToNextBar(drift, driftPick.value);
+	if (to < 0) return;
+	driftPick.value = to;
+	nextTick(() => previewDrift(to));
 }
 // DRIFT MACHINE END
 
@@ -3172,8 +3199,6 @@ const SCALE_LABELS: Record<string, string> = {
 	none: '(no scale)', major: 'major', naturalMinor: 'minor', pentMajor: 'pentatonic major',
 	pentMinor: 'pentatonic minor', dorian: 'dorian', lydian: 'lydian', mixolydian: 'mixolydian',
 };
-// Phone mode has no Drift page yet (part 3 of the plan's item 6): it shows Rhythm instead
-watch(phoneActive, (on) => { if (on && machine.value === 'drift') machine.value = 'rhythm'; }, { immediate: true });
 
 const phoneCtx = reactive({
 	inst: synthInstrument,
@@ -3192,12 +3217,18 @@ const phoneCtx = reactive({
 	// A held step's velocity turns it on too (as a held pad's note does)
 	setDrumVelocity: (k: number, i: number, v: number) => setDrumCell(k, i, { on: true, vel: v }),
 	toggleDrumMute: toggleDrumSlotMute,
+	// Drift (part 3 of the plan's item 6): its plates, bars, the bar the plates edit, the bar
+	// playing, and Copy (the picked bar into the next)
+	drift,
+	driftPlates, driftLabels, driftPick,
+	driftPlaying: computed(() => (isPlaying.value ? driftBarNow.value : -1)),
+	toggleDriftPlate, pickDriftBar, copyDriftBar,
 	currentStep, isPlaying, tempo, swing, canUndo, canRedo,
 	// The Sounds and Patterns steppers: the machine's own (Bass's while Bass is shown, Drums' kits and patterns)
-	presets: computed(() => (drumsChosen.value ? DRUM_KITS : bassChosen.value ? BASS_SOUNDS : PRESETS)),
-	patterns: computed(() => (drumsChosen.value ? DRUM_PATTERNS : bassChosen.value ? BASS_PATTERNS : PATTERNS)),
-	activePresetId: computed(() => (drumsChosen.value ? activeDrumKitId.value : bassChosen.value ? activeBassSoundId.value : activePresetId.value)),
-	activePatternId: computed(() => (drumsChosen.value ? activeDrumPatternId.value : bassChosen.value ? activeBassPatternId.value : activePatternId.value)),
+	presets: computed(() => (driftChosen.value ? DRIFT_SOUNDS : drumsChosen.value ? DRUM_KITS : bassChosen.value ? BASS_SOUNDS : PRESETS)),
+	patterns: computed(() => (driftChosen.value ? DRIFT_PROGRESSIONS : drumsChosen.value ? DRUM_PATTERNS : bassChosen.value ? BASS_PATTERNS : PATTERNS)),
+	activePresetId: computed(() => (driftChosen.value ? activeDriftSoundId.value : drumsChosen.value ? activeDrumKitId.value : bassChosen.value ? activeBassSoundId.value : activePresetId.value)),
+	activePatternId: computed(() => (driftChosen.value ? activeDriftProgressionId.value : drumsChosen.value ? activeDrumPatternId.value : bassChosen.value ? activeBassPatternId.value : activePatternId.value)),
 	keyRoot: computed(() => melodyUi.keyRoot),
 	keyScale: computed(() => melodyUi.keyScale),
 	keyScaleLabel: computed(() => SCALE_LABELS[melodyUi.keyScale] ?? melodyUi.keyScale),
@@ -3226,10 +3257,10 @@ const phoneCtx = reactive({
 	togglePlay: onPlayClick,
 	undo,
 	redo,
-	choosePreset: (id: string) => (drumsChosen.value ? chooseDrumKit(id) : bassChosen.value ? chooseBassSound(id) : choosePreset(id)),
-	randomSound: () => (drumsChosen.value ? rollDrumKit() : bassChosen.value ? rollBassSound() : rollRandomSound()),
-	choosePattern: (id: string) => (drumsChosen.value ? chooseDrumPattern(id) : bassChosen.value ? chooseBassPattern(id) : choosePattern(id)),
-	randomPattern: () => (drumsChosen.value ? rollDrumPattern() : bassChosen.value ? rollBassPattern() : rollRandomPattern()),
+	choosePreset: (id: string) => (driftChosen.value ? chooseDriftSound(id) : drumsChosen.value ? chooseDrumKit(id) : bassChosen.value ? chooseBassSound(id) : choosePreset(id)),
+	randomSound: () => (driftChosen.value ? rollDriftSound() : drumsChosen.value ? rollDrumKit() : bassChosen.value ? rollBassSound() : rollRandomSound()),
+	choosePattern: (id: string) => (driftChosen.value ? chooseDriftProgression(id) : drumsChosen.value ? chooseDrumPattern(id) : bassChosen.value ? chooseBassPattern(id) : choosePattern(id)),
+	randomPattern: () => (driftChosen.value ? rollDriftProgression() : drumsChosen.value ? rollDrumPattern() : bassChosen.value ? rollBassPattern() : rollRandomPattern()),
 	audition: auditionNote,
 	auditionPad: (i: number, hz: number) => (bassChosen.value ? auditionBass(hz) : auditionPad(i, hz)),
 	noteName: nearestNote,
@@ -3919,6 +3950,12 @@ async function recordSample() {
 }
 /* Drums' Sound page (PR 121): the four slot cards and Mix in one row */
 .pl-drum-sound { height: 100%; min-height: 0; }
+/* Drift's Sound page (part 3), its Mix group in the knobs' row */
+.pl-drift-sound { height: 100%; min-height: 0; }
+.pl-dfmix { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pl-dfmix .pl-mix-knobs { display: flex; gap: 6px; }
+.pl-dfmix .df-kcap { font: 700 9px Cousine, ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase;
+	color: var(--pt-text-dim, #b9a8d8); align-self: flex-start; }
 .pl-dmix { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .pl-dmix .bs-kcap { font: 700 9px Cousine, ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase;
 	color: var(--pt-text-dim, #b9a8d8); }

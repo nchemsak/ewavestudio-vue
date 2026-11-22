@@ -11,7 +11,7 @@
 				 notes' colours, the beats marked and the playing step outlined. Only to look at -->
 			<div class="pl-minipads" aria-hidden="true">
 				<span v-for="(h, i) in minis" :key="i" class="pl-mp"
-					:class="{ on: h !== null, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
+					:class="{ on: h !== null, beat: i % 4 === 0, now: drift ? Math.floor(i / (16 / ctx.drift.length)) === ctx.driftPlaying : ctx.isPlaying && i === ctx.currentStep }"
 					:style="h !== null ? { '--h': h } : undefined"></span>
 			</div>
 			<!-- The machine the pages show (PR 118, option P of the mockups): RHY | BASS | DRUM (PR 121) -->
@@ -44,7 +44,12 @@
 				<!-- Drums (PR 121, option D1 of the mockups, D2's halves on a narrow phone): a row per
 					 slot, its LED (mutes the slot) and its name (a tap picks the row: Humanize and the
 					 knobs work on it), then its steps; under 700 px eight at a time, 1–8 | 9–16 -->
-				<div v-if="drums" class="pl-drums" :class="{ narrow }" role="group" aria-label="Drum steps" @pointermove="padMove">
+				<!-- Drift (the plan's item 6, part 3; option C of the mockups): the plates 3 × 2 over its
+					 bars (DriftPhonePads.vue) -->
+				<DriftPhonePads v-if="drift" :plates="ctx.driftPlates" :chords="ctx.drift.chords" :length="ctx.drift.length"
+					:labels="ctx.driftLabels" :picked="ctx.driftPick" :playing="ctx.driftPlaying"
+					@toggle="(b: number, k: number) => ctx.toggleDriftPlate(b, k)" @pick="(b: number) => ctx.pickDriftBar(b)" />
+				<div v-else-if="drums" class="pl-drums" :class="{ narrow }" role="group" aria-label="Drum steps" @pointermove="padMove">
 					<div v-if="narrow" class="pl-halves" role="radiogroup" aria-label="Steps shown">
 						<button v-for="h in [0, 1]" :key="h" type="button" role="radio" class="pl-half"
 							:class="{ on: half === h, now: ctx.isPlaying && Math.floor(ctx.currentStep / 8) === h }"
@@ -98,7 +103,7 @@
 					<div class="pl-pick">
 						<div class="pl-stepper" role="group" aria-label="Pattern">
 							<button type="button" class="pl-arr" aria-label="Previous pattern" @click="stepPattern(-1)">◂</button>
-							<button type="button" class="pl-val" aria-label="All patterns" @click="list = 'pattern'"><span class="pl-cap" aria-hidden="true">Pattern</span>{{ patternName }}</button>
+							<button type="button" class="pl-val" aria-label="All patterns" @click="list = 'pattern'"><span class="pl-cap" aria-hidden="true">{{ drift ? 'Chords' : 'Pattern' }}</span>{{ patternName }}</button>
 							<button type="button" class="pl-arr" aria-label="Next pattern" @click="stepPattern(1)">▸</button>
 						</div>
 						<button type="button" class="pl-icon pl-dice" aria-label="Random pattern" title="Random pattern" @click="rollPattern">
@@ -118,7 +123,21 @@
 							<button type="button" aria-label="More swing" @click="ctx.swing = nextStop(ctx.swing, SWING_STOPS, 1)">+</button>
 						</div>
 					</div>
-					<div class="pl-pick">
+					<!-- Drift: how many bars, and Copy (the picked bar into the next, which it picks), in
+						 the place of Oct, Move and Humanize (no steps) -->
+					<div v-if="drift" class="pl-pick">
+						<div class="pl-mini pl-bars" role="radiogroup" aria-label="Drift bars">
+							<span>Bars</span>
+							<button v-for="n in [4, 8]" :key="n" type="button" role="radio" :class="{ on: ctx.drift.length === n }"
+								:aria-checked="ctx.drift.length === n ? 'true' : 'false'" :aria-label="`${n} bars`"
+								@click="ctx.drift.length = n">{{ n }}</button>
+						</div>
+						<button type="button" class="pl-mini pl-hum pl-copy" :disabled="ctx.driftPick + 1 >= ctx.drift.length"
+							:title="ctx.driftPick + 1 >= ctx.drift.length ? 'The last bar: nothing after it to copy into'
+								: `Bar ${ctx.driftPick + 1}'s chord into bar ${ctx.driftPick + 2}, then edit that one`"
+							@click="ctx.copyDriftBar()">Copy → {{ Math.min(ctx.driftPick + 2, ctx.drift.length) }}</button>
+					</div>
+					<div v-else class="pl-pick">
 						<div class="pl-mini" role="group" aria-label="Octave">
 							<button type="button" aria-label="Octave down" title="Every pad an octave down" :disabled="drums" @click="ctx.octave(-1)">↓</button>
 							<span>Oct</span>
@@ -136,7 +155,10 @@
 							@click="list = 'humanize'">Humanize</button>
 					</div>
 					<!-- Drums (PR 121): the picked row's name, then its slot's Tune, Decay and Level -->
-					<div v-if="drums" class="pl-macros pl-dmacros" :style="{ '--h': ctx.drumHues[ctx.drumPick] }">
+					<!-- Drift: the X/Y pad in the knobs' place (the filter across, the spread up), as the
+						 Solar 42F's joystick; Attack and Release are on the Sound page -->
+					<div v-if="drift" class="pl-macros pl-xybox"><DriftXYPad class="pl-xy" :drift="ctx.drift" /></div>
+					<div v-else-if="drums" class="pl-macros pl-dmacros" :style="{ '--h': ctx.drumHues[ctx.drumPick] }">
 						<div class="pl-macro pl-dpicked"><span class="pl-cap">Row</span><b>{{ ctx.drumNames[ctx.drumPick] }}</b></div>
 						<div class="pl-macro">
 							<Knob v-model="ctx.drumSlot.tune" label="Tune" :min="DRUM_RANGES.tune[0]" :max="DRUM_RANGES.tune[1]" :step="1" bipolar size="small"
@@ -307,6 +329,8 @@
 import { ref, computed, provide, watch, onMounted, onBeforeUnmount } from 'vue';
 import Knob from './Knob.vue';
 import ThemeToggle from './ThemeToggle.vue';
+import DriftPhonePads from './DriftPhonePads.vue';
+import DriftXYPad from './DriftXYPad.vue';
 import { SCALES, NOTE_TO_SEMITONE, midiToFreq, freqToMidiExact } from '../lib/melody/theory';
 import { VELOCITY_SHAPES, velocityShape, type VelocityShapeId } from '../lib/patterns/velocityShapes';
 import { SWING_STOPS, TRIPLET_SWING, nextStop } from '../lib/knobDetents';
@@ -319,10 +343,20 @@ const ctx = props.ctx;
 const bass = computed(() => ctx.machine === 'bass');
 // Drums (PR 121): its rows instead of the pads; `lane` is then its picked row (Humanize)
 const drums = computed(() => ctx.machine === 'drums');
+// Drift (part 3): its plates and bars instead of the pads, Bars and Copy, the X/Y pad
+const drift = computed(() => ctx.machine === 'drift');
 const lane = computed<any>(() => ctx.lane);
 
 // The tiny pads: each step's colour, or null while it's off (Drums: its first unmuted row that's on)
 const minis = computed<(number | null)[]>(() => {
+	// Drift: its bars across the 16 (each bar 16 / length of them), in its lowest plate's colour
+	if (drift.value) {
+		const n = ctx.drift.length, per = 16 / n;
+		return Array.from({ length: 16 }, (_, i) => {
+			const k = (ctx.drift.chords[Math.floor(i / per)] ?? []).findIndex((on: boolean) => on);
+			return k < 0 ? null : ctx.driftPlates[k].hue;
+		});
+	}
 	if (drums.value) {
 		const rows = ctx.drumRows as { steps: boolean[] }[];
 		return (rows[0]?.steps ?? []).map((_, i) => {
@@ -353,6 +387,7 @@ const MACHINES = [
 	{ id: 'rhythm', name: 'Rhythm', short: 'RHY' },
 	{ id: 'bass', name: 'Bass', short: 'BASS' },
 	{ id: 'drums', name: 'Drums', short: 'DRUM' },
+	{ id: 'drift', name: 'Drift', short: 'DRIFT' },
 ] as const;
 const BASS_FLAGS = [
 	{ id: 'accents', label: 'Accent', tip: 'Louder, the filter opening further' },
@@ -394,7 +429,7 @@ function humanize(id: VelocityShapeId) { lane.value.velocities = velocityShape(i
 let swipe: null | { x: number; y: number } = null;
 function swipeStart(e: PointerEvent) {
 	const t = e.target as HTMLElement;
-	swipe = t.closest('[role="slider"], input, .pl-sheet, .pl-menu, .pl-pads, .pl-drums') ? null : { x: e.clientX, y: e.clientY };
+	swipe = t.closest('[role="slider"], input, .pl-sheet, .pl-menu, .pl-pads, .pl-drums, .pl-drift, .df-xy') ? null : { x: e.clientX, y: e.clientY };
 }
 function swipeEnd(e: PointerEvent) {
 	if (!swipe) return;
@@ -410,13 +445,19 @@ const soundRolled = ref(false);
 const patternRolled = ref(false);
 const lastSound = ref(-1);
 const lastPattern = ref(-1);
+// "Random" belongs to the machine whose dice rolled it, not the next one shown
+watch(() => ctx.machine, () => { soundRolled.value = false; patternRolled.value = false; lastSound.value = -1; lastPattern.value = -1; });
 const soundName = computed(() => {
 	const p = ctx.presets.find((x: any) => x.id === ctx.activePresetId);
 	return p ? p.label : soundRolled.value ? 'Random' : 'Sound';
 });
 const patternName = computed(() => {
 	const p = ctx.patterns.find((x: any) => x.id === ctx.activePatternId);
-	return p ? p.label : patternRolled.value ? 'Random' : 'Pattern';
+	if (p) return p.label;
+	if (patternRolled.value) return 'Random';
+	// Drift's bars that aren't a progression: your own, or nothing held yet
+	if (drift.value) return (ctx.drift.chords as boolean[][]).slice(0, ctx.drift.length).some((r) => r.some(Boolean)) ? 'Own' : 'None';
+	return 'Pattern';
 });
 function chooseSound(id: string) {
 	soundRolled.value = false;
@@ -692,15 +733,50 @@ function hzText(hz: number) {
 	pointer-events: none;
 }
 
-/* The machine keys lose their LEDs on a small phone (PR 121), so three fit */
-@media (max-width: 599.98px) {
-	.pl-mled {
-		display: none;
-	}
+/* The machine keys: no LEDs under 900 px, so four fit (PR 121 took them off under 600 for
+   three; Drift, part 3, made it four); under 600 tighter keys and a narrower scope */
+@media (max-width: 899.98px) {
+	.pl-mled { display: none; }
+	.pl-mkey { padding: 0 6px; }
+}
 
-	.pl-mkey {
-		padding: 0 6px;
-	}
+@media (max-width: 599.98px) {
+	.pl-mkey { padding: 0 3px; letter-spacing: 0; }
+	.pl-top .pl-scope { width: 32px; }
+	/* The spacer's gap: there's no room left over to push Play right */
+	.pl-top .pl-grow { display: none; }
+}
+
+/* Drift's Bars 4 | 8 and Copy */
+.pl-mini.pl-bars {
+	grid-template-columns: 1fr 34px 34px;
+	padding-right: 2px;
+}
+
+.pl-bars button {
+	height: 23px;
+	font: 700 13px Cousine, ui-monospace, monospace;
+	border-radius: 7px;
+}
+
+.pl-bars button.on {
+	background: rgba(255, 255, 255, .15);
+	box-shadow: inset 0 0 0 1px var(--hw-led, #5dffb0);
+}
+
+.pl-copy:disabled {
+	opacity: .45;
+}
+
+/* Drift's X/Y pad, filling the knobs' box */
+.pl-macros.pl-xybox {
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr);
+	place-items: stretch;
+}
+
+.pl-xy {
+	min-height: 0;
 }
 
 /* Drums' rows (PR 121): its LED and name, then its steps */
