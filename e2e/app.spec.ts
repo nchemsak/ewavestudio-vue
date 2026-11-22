@@ -4578,7 +4578,11 @@ test('the output limiter keeps a loud sound under −1 dBFS, live and exported, 
 	const project = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8'));
 	const d = project.data;
 	d.transport.volume = 1;
-	Object.assign(d.synth.noise, { enabled: true, amount: 1, color: 0 });
+	// White noise: every hit starts its noise buffer at the beginning, and each export (and the
+	// live engine) draws a new buffer, so brown noise's opening, which wanders slowly, was loud
+	// enough to reach the ceiling only now and then (the mix's peak 0.52–0.89 over 15 runs, on
+	// main too); white is near full scale within its first samples, so it reaches it every time
+	Object.assign(d.synth.noise, { enabled: true, amount: 1, color: 0.5 });
 	d.instruments.find((l: any) => l.type === 'synth').channelVolume = 1;
 	await page.locator('input[type="file"][accept="application/json"]').setInputFiles({
 		name: 'loud.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)),

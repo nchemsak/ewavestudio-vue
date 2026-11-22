@@ -408,8 +408,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   and the hit behind the Envelope card are limited on their own (`limit()`), before Normalize.
   Not switchable: nothing to see. Unit tests (`limiter.test.ts`: nothing done under the
   ceiling, a loud sine kept under it smoothly and steadily, the release, stems adding up, live
-  as exported); a browser test (brown noise at full Amount, which peaks at about 2.5: under
-  −1 dBFS live, in the mix, the stems adding up, the one-shot; 1.18 without the limiter).
+  as exported); a browser test (noise at full Amount: under −1 dBFS live, in the mix, the stems
+  adding up, the one-shot; 1.18 without the limiter). White noise since PR 121: every hit starts
+  its noise buffer at its beginning, and each export draws a new buffer, so brown noise's slowly
+  wandering opening reached the ceiling only now and then and the test failed now and then.
 - Pitch envelope (`pitchEnv.ts`; panel `PitchEnvModule.vue`, the "Pitch" card next to Envelope
   and Filter): each note starts Amount semitones up, down or at a random offset, as an offset in cents on the
   oscillator's `detune` that decays exponentially (`setTargetAtTime`, time constant Decay / 4,
