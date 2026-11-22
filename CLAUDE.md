@@ -279,6 +279,7 @@ src/lib/machines/drums.ts  The Drums machine: its slots, kept sounds, rows, savi
 src/lib/machines/drumPresets.ts  The Drums machine's kits and patterns, and their dice
 src/lib/machines/drumColours.ts  Each drum sound's colour on the pads' scale
 src/lib/machines/drift.ts  The Drift machine: its settings (reactive), saving, a plate toggled
+src/lib/machines/driftPresets.ts  The Drift machine's sounds and progressions, and their dice
 src/lib/driftView.ts     What the Drift machine's swarm screen draws (pure)
 src/lib/machines/bass.ts  The Bass machine: its settings as refs, factory values, its lane
 src/lib/bassView.ts      What the Bass machine's screen draws (pure)
@@ -1399,8 +1400,27 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `applyDrift()`: values kept in their ranges, damaged chords nothing held). A project from
   before: nothing held, the factory sound; File → New the same. Not a sound setting: presets
   don't touch it. Share links include it. Undo covers it.
-- **Not yet** (the item's parts 2 and 3): Drift sounds and Progressions in the transport's boxes
-  (with their dice), and the phone (phone mode shows Rhythm when Drift was chosen).
+- **Drift sounds and Progressions** (PR 123, part 2; `src/lib/machines/driftPresets.ts`,
+  unit-tested): while Drift is shown the transport's boxes are **Drift sounds** (Strings, Haze,
+  Choir, Glass, Tide, Dust, and a dice "Random drift sound") and **Progressions** (Hold, Rise,
+  Fall, Sway, Wander, Circle, and "Random progression"). A sound sets Drift's sound only (Voices,
+  Drift, Wave, Spread, Filter, Attack, Release; never its level, Pedals, mute or bars); a
+  progression its bars only (Wander and Circle are 8 bars, the rest 4; the bars after its length
+  emptied) and picks bar 1. Progressions are written as plates (`progressionChords()`), so they
+  play in any key and scale: three plates in a row are a triad, `[0,1,2]` the key's own chord,
+  `[1,2,3]` a third up, `[2,3,4]` a fifth up, `[3,4,5]` a seventh up (in A minor Am, C, Em, G:
+  Rise), and neighbouring triads share two notes, which carry on. While stopped, a sound or a
+  progression plays bar 1's chord (or the picked bar's, for a sound). One undo step each; a button
+  is lit while Drift's sound or bars are exactly its (`driftSoundKey()`, `driftProgressionKey()`,
+  compared live). A fresh page lights nothing (the factory sound isn't one of the six, and
+  nothing is held). The dice: a sound (every setting within a range that keeps it a pad: Filter
+  400–5000 Hz on a log scale, Attack 0.25–3 bars, Release 0.5–3; on the knobs' steps) and a
+  progression (4 bars, or 8 a third of the time, starting on the key's chord, each next chord a
+  neighbouring triad three times in four, else a leap, a 7th added to some, never the same chord
+  twice in a row). Every sound on a four-note chord peaks between 0.25 and 0.45 (a browser test
+  checks they're heard and under the limiter). Analytics `drift_sound_select`,
+  `drift_sound_random`, `drift_progression_select`, `drift_progression_random`.
+- **Not yet** (the item's part 3): the phone (phone mode shows Rhythm when Drift was chosen).
 - Unit tests: `drift.test.ts` (the plates, their spelling, chord names, the runs, a loop's carried
   notes, the swarm), `machines/drift.test.ts`, `driftView.test.ts`, the snapshot round trip.
   Browser tests: the plates and bars (names, the rail, 8 bars, undo, saved, not a slot's, a new
@@ -2595,8 +2615,8 @@ Grow into a small groovebox:
     in bars; no steps: its sequencer counts bars, a chord per bar for 4 or 8 bars, across the
     pattern chain; straight to the reverb. Part 1 was PR 122 (option A of the mockups: the
     sound in both engines, the plates and bars, the Sound section, the rail's row, saving, the
-    export); still to do: part 2, Drift sounds and Progressions in the transport's boxes (with
-    their dice); part 3, the phone.
+    export); part 2 was PR 123 (Drift sounds and Progressions in the transport's boxes, with their
+    dice); still to do: part 3, the phone.
 7. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
     the maintainer wants some maintenance, each as its own PR.
 
@@ -2909,6 +2929,7 @@ Done:
 | 119 | The Drums machine, part 1 (the plan's item 5; option A of the mockups): four slots × 16 steps, each slot one recorded hit with Tune, Decay and Level, in both engines (`src/audio/drums.ts`); the frozen kit (Kick, Snare, Metal, Hat, rendered from the presets by `scripts/render-drum-kit.mjs`, a chunk of its own); its pads (a row per slot, velocity by dragging a lit step, the picked row for Step Fills and Humanize), its Sound section (a card per slot whose picture plays it, the Sounds shelf), **Keep as drum** on Rhythm's Sound (a hit of Rhythm's sound into a slot), its rail row; saved and in each pattern slot, in the export (its machine stem, MIDI channel 10). The Melody Maker is dimmed on Drums. Bass's screen plays its note when clicked. The undo history keeps each recording once. |
 | 120 | The Drums machine, part 2: while Drums is shown, the transport's boxes are **Drum kits** (Kit, Tight, Deep, Tin, Boom, Click: the four slots' sounds, Tune, Decay and Level) and **Drum patterns** (Four, Backbeat, Halftime, Breaks, Electro, Gallop: the four rows), each with a dice and lit while it matches (`src/lib/machines/drumPresets.ts`). The hidden sample lanes (kick, snare, hihat and custom ones), their code and the three mp3 files removed; an older project's steps on them open in the Drums rows. |
 | 122 | The Drift machine, part 1 (the plan's item 6; option A of three mockups, with a smaller X/Y pad): six plates, the key's chord in thirds, and a chord a bar for 4 or 8 bars (the project's, from Play across the chain); each held note a swarm of 3–7 drifting voices through one slow filter, fading in over Attack and out over Release (in bars), a note two bars share carrying on, in both engines (`src/audio/drift.ts`); straight to the reverb (its Pedals is the send). Its pads (`DriftPads.vue`), its Sound section (an X/Y pad for Filter and Spread, the swarm's screen, Voices, Drift, Wave, Attack, Release: `DriftSound.vue`), a rail row naming each bar's chord; saved, MIDI-learnable (68 knobs), in the export (a seamless loop carrying held notes round, its machine stem, MIDI channel 3, the dialog fitting a loop to its bars). |
+| 123 | The Drift machine, part 2: while Drift is shown, the transport's boxes are **Drift sounds** (Strings, Haze, Choir, Glass, Tide, Dust: Drift's sound only) and **Progressions** (Hold, Rise, Fall, Sway, Wander, Circle: its bars, 4 or 8, written as plates so they play in any key), each with a dice (a pad-like sound; a progression from the key's chord moving mostly by neighbouring triads) and lit while it matches; while stopped, a choice plays bar 1's chord (`src/lib/machines/driftPresets.ts`). |
 | 121 | The Drums machine, part 3, the phone (option D1 of the mockups, D2's halves on a small phone), which finishes the plan's item 5: DRUM beside RHY \| BASS (the machine keys without LEDs under 600 px); with Drums chosen, the Pads page has its four rows (a tap, a finger drawn along a row, a hold for Velocity; a tap on a row's name picks it), eight steps at a time with 1–8 \| 9–16 under 700 px, the Drum kits and Drum patterns steppers, Humanize on the picked row and its slot's Tune, Decay and Level as the knobs; the Sound page has the four slot cards with a Mix card; the Key page dims the Melody Maker. Nothing scrolls at 568 × 320 or 844 × 390. |
 
 ## Testing a PR

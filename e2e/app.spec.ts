@@ -7571,4 +7571,91 @@ test('the Drift machine goes straight to the reverb: its Pedals is its send, the
 	expect(worst).toBeLessThan(1e-3);
 });
 
+test('Drift sounds and Progressions: the transport\'s boxes while Drift is shown; lit, the dice, one undo step each', async ({ page }) => {
+	await page.getByRole('button', { name: 'Show Drift' }).click();
+	const sounds = page.getByRole('group', { name: 'Drift sounds' });
+	const progs = page.getByRole('group', { name: 'Progressions' });
+	await expect(sounds).toBeVisible();
+	await expect(progs).toBeVisible();
+	await expect(page.getByRole('group', { name: 'Sound presets' })).toHaveCount(0);
+	// A fresh page: the factory sound and nothing held, so nothing is lit
+	await expect(sounds.locator('[aria-pressed="true"]')).toHaveCount(0);
+	await expect(progs.locator('[aria-pressed="true"]')).toHaveCount(0);
+	await page.waitForTimeout(SETTLED);
+	const bars = page.getByRole('radiogroup', { name: 'Bar the plates edit' }).getByRole('radio');
+
+	// A progression: its bars, from the key (A minor); the sound untouched
+	const rise = progs.getByRole('button', { name: 'Rise', exact: true });
+	await rise.click();
+	await expect(rise).toHaveAttribute('aria-pressed', 'true');
+	await expect(bars).toHaveCount(4);
+	for (const [i, name] of ['Am', 'C', 'Em', 'G'].entries()) await expect(bars.nth(i)).toHaveAccessibleName(`Bar ${i + 1}: ${name}`);
+	await expect(railRow(page, 'Drift').locator('.mr-bar')).toHaveText(['Am', 'C', 'Em', 'G']);
+	await expect(page.getByRole('slider', { name: 'Voices' })).toHaveAttribute('aria-valuenow', '5');
+	await page.waitForTimeout(SETTLED);
+	// Eight bars
+	await progs.getByRole('button', { name: 'Wander', exact: true }).click();
+	await expect(bars).toHaveCount(8);
+	await expect(bars.nth(7)).toHaveAccessibleName(/^Bar 8: /);
+	await page.waitForTimeout(SETTLED);
+
+	// A sound: Drift's knobs; the bars untouched
+	const glass = sounds.getByRole('button', { name: 'Glass', exact: true });
+	await glass.click();
+	await expect(glass).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.getByRole('slider', { name: 'Voices' })).toHaveAttribute('aria-valuenow', '3');
+	await expect(page.getByRole('slider', { name: 'Drift filter' })).toHaveAttribute('aria-valuenow', '6000');
+	await expect(progs.getByRole('button', { name: 'Wander', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	// Rhythm's sound wasn't touched: no Rhythm preset lit, its pads still off
+	await expect(railRow(page, 'Rhythm').locator('.mr-cells i.on')).toHaveCount(0);
+	await page.waitForTimeout(SETTLED);
+
+	// A knob turned: unlit; Undo lights it again (one step)
+	await page.getByRole('slider', { name: 'Release' }).focus();
+	await page.keyboard.press('ArrowUp');
+	await expect(glass).toHaveAttribute('aria-pressed', 'false');
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(glass).toHaveAttribute('aria-pressed', 'true');
+	// One more: back to Rise
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(rise).toHaveAttribute('aria-pressed', 'true');
+
+	// The dice: a new sound (nothing lit) and a progression starting on the key's chord
+	await page.getByRole('button', { name: 'Random drift sound' }).click();
+	await expect(sounds.locator('[aria-pressed="true"]')).toHaveCount(0);
+	const voices = Number(await page.getByRole('slider', { name: 'Voices' }).getAttribute('aria-valuenow'));
+	expect(voices).toBeGreaterThanOrEqual(3);
+	expect(voices).toBeLessThanOrEqual(7);
+	await page.getByRole('button', { name: 'Random progression' }).click();
+	await expect(bars.nth(0)).toHaveAccessibleName('Bar 1: Am');
+	expect([4, 8]).toContain(await bars.count());
+
+	// Saved with the project
+	await page.waitForTimeout(SETTLED);
+	const data = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(data.drift.chords[0]).toEqual([true, true, true, false, false, false]);
+	expect(data.drift.sound.voices).toBe(voices);
+});
+
+test('every Drift sound is heard and stays under the limiter, on a four-note chord', async ({ page }) => {
+	await setTempo(page, 120);
+	await importDrift(page, 'Drift sounds loud', [[0, 1, 2, 3], [0, 1, 2, 3]], (d) => { d.drift.pedals = 0; });
+	await page.getByRole('button', { name: 'Show Drift' }).click();
+	const peaks: Record<string, number> = {};
+	for (const name of ['Strings', 'Haze', 'Choir', 'Glass', 'Tide', 'Dust']) {
+		await page.getByRole('group', { name: 'Drift sounds' }).getByRole('button', { name, exact: true }).click();
+		const wav = (await exportAudio(page, { bars: 2, ending: 'With tail', mix: true, stems: false, machineStems: false, midi: false, oneShot: false, normalize: false })).bytes;
+		peaks[name] = wavPeak(wav);
+	}
+	for (const [name, peak] of Object.entries(peaks)) {
+		expect(peak, `${name}: ${peak}`).toBeGreaterThan(0.05);
+		expect(peak, `${name}: ${peak}`).toBeLessThan(0.9);
+	}
+	console.log('Drift sounds, peaks:', JSON.stringify(peaks));
+});
+
 // The Drift machine END
