@@ -61,12 +61,9 @@
                         :label="`${m.name} into the pedals`" hideLabel size="mini"
                         :value-text="`${Math.round(m.pedals * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
-                <div class="mr-cells" aria-hidden="true" :style="m.bars ? { gridTemplateColumns: `repeat(${m.bars.length}, minmax(0, 1fr))` } : undefined">
+                <div class="mr-cells" aria-hidden="true">
                     <!-- Drums: its slots stacked in each step -->
-                    <template v-if="m.bars"><!-- MOCKUPS ONLY: Drift, a chord per bar -->
-                        <i v-for="(c, i) in m.bars" :key="i" class="mr-bar" :class="{ now: i === 1 }">{{ c }}</i>
-                    </template>
-                    <template v-else-if="m.stack">
+                    <template v-if="m.stack">
                         <i v-for="(col, i) in m.stack" :key="i" class="mr-stack" :class="{ beat: i % 4 === 0, now: playing && i === currentStep }"><b
                             v-for="(h, k) in col" :key="k" :style="h != null ? { background: `hsl(${h} 80% 58%)` } : undefined"></b></i>
                     </template>
@@ -114,7 +111,6 @@ export type RailMachine = {
     muted: boolean; level: number; pedals: number;
     // Drums (the plan's item 5): per step, each slot's colour where its row is on, else null
     stack?: (number | null)[][];
-    bars?: string[]; // MOCKUPS ONLY: Drift's chords per bar
 };
 
 const props = defineProps<{
@@ -435,23 +431,6 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
 
 .mr-stack.beat b {
     background: rgba(255, 255, 255, 0.12);
-}
-
-/* MOCKUPS ONLY: Drift's chords per bar */
-.mr-cells i.mr-bar {
-    grid-column: span 1;
-    font: 700 8px/1 Cousine, ui-monospace, monospace;
-    font-style: normal;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 255, 255, .08);
-    color: var(--pt-text, #fff);
-    border-radius: 2px;
-    overflow: hidden;
-}
-.mr-cells i.mr-bar.now {
-    outline: 1px solid var(--hw-led, #5dffb0);
 }
 
 /* Patterns A–D (PR 109; option A of PR 108's mockups): a caption, four caps and Copy */

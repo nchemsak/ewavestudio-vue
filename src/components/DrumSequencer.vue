@@ -295,11 +295,7 @@
 					<div class="transport-presets">
 						<!-- While Bass is chosen they're Bass's (src/lib/machines/bassPresets.ts, PR 117); while
 							 Drums is, its kits and patterns (src/lib/machines/drumPresets.ts) -->
-						<template v-if="driftShown"><!-- MOCKUPS ONLY -->
-							<PresetButtons title="Drift sounds" dice-label="Random drift sound" :presets="DRIFT_MOCK_SOUNDS" active="strings" @choose="() => {}" @random="() => {}" />
-							<PresetButtons title="Progressions" dice-label="Random progression" :presets="DRIFT_MOCK_PROGS" active="rise" @choose="() => {}" @random="() => {}" />
-						</template>
-						<template v-else-if="drumsChosen">
+						<template v-if="drumsChosen">
 							<PresetButtons title="Drum kits" dice-label="Random kit" :presets="DRUM_KITS" :active="activeDrumKitId"
 								@choose="chooseDrumKit" @random="rollDrumKit" />
 							<PresetButtons title="Drum patterns" dice-label="Random drum pattern" :presets="DRUM_PATTERNS"
@@ -390,8 +386,7 @@
 					<div v-if="repeatBrush" class="brush-note" role="status">
 						Painting ×{{ repeatBrush }} repeats<span class="brush-note__how"> · Esc or click elsewhere to finish</span>
 					</div>
-					<DriftMock v-if="driftShown" part="pads" :variant="driftMock" />
-					<DrumPads v-else-if="drumsChosen" :rows="drums.rows" :slots="drums.slots" :names="drumNames" :sources="drumSources"
+					<DrumPads v-if="drumsChosen" :rows="drums.rows" :slots="drums.slots" :names="drumNames" :sources="drumSources"
 						:hues="drumHues" :picked="drumPick" :current-step="currentStep" @update:rows="setDrumRows"
 						@pick="(k: number) => { drumPick = k; }" @toggle-mute="toggleDrumSlotMute" />
 					<BassPads v-else-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep"
@@ -422,7 +417,7 @@
 			</div>
 
 			<!-- Sound: three rows, each filled edge to edge -->
-			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title" :data-bass="bassChosen ? '' : undefined" :data-drums="drumsChosen ? '' : undefined" :data-drift="driftShown ? driftMock : undefined">
+			<section id="sound-panel" class="ds-section ds-sound" aria-labelledby="sound-title" :data-bass="bassChosen ? '' : undefined" :data-drums="drumsChosen ? '' : undefined">
 				<div class="ds-sound-head">
 					<h2 id="sound-title" class="ds-section-title">Sound<span class="ds-which"> · {{ machineName }}</span></h2>
 					<!-- Keep as drum (the plan's item 5): one hit of Rhythm's sound into a Drums slot -->
@@ -437,7 +432,6 @@
 				</div>
 				<!-- The Drums machine's: a card per slot, and the Sounds shelf beside the pedals. Kept
 					 mounted (v-show) so MIDI learn sees its knobs -->
-				<DriftMock v-if="driftShown" part="sound" :variant="driftMock" />
 				<DrumSound v-show="drumsChosen" :drums="drums" :kit="drumKit" :picked="drumPick" :playing="isPlaying"
 					@preview="previewDrum" @preview-sound="previewDrumSound" />
 				<!-- The Bass machine's: wave tiles and Sub, its screen, its knobs; the pedals stay (the Effects card) -->
@@ -742,12 +736,6 @@ import { BASS_PATTERNS, BASS_SOUNDS, bassPatternFrom, bassPatternKey, bassSoundK
 import BassPads from './BassPads.vue';
 import BassSound from './BassSound.vue';
 import DrumPads from './DrumPads.vue';
-// MOCKUPS ONLY: ?drift=a|b|c (DriftMock.vue), the Drift machine
-import DriftMock from './DriftMock.vue';
-import { mock as driftState, chordName as driftChordName } from './driftMockState';
-const driftMock = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('drift') || '') : '';
-const DRIFT_MOCK_SOUNDS = ['Strings', 'Haze', 'Choir', 'Glass', 'Tide', 'Dust'].map((l) => ({ id: l.toLowerCase(), label: l, description: '' }));
-const DRIFT_MOCK_PROGS = ['Hold', 'Rise', 'Fall', 'Sway', 'Wander', 'Circle'].map((l) => ({ id: l.toLowerCase(), label: l, description: '' }));
 import DrumSound from './DrumSound.vue';
 import { createDrums, hitToSound, keepSound, slotData, slotSound, soundName, type Drums } from '../lib/machines/drums';
 import { soundHue } from '../lib/machines/drumColours';
@@ -854,11 +842,10 @@ const {
 // level). `machine` is the one the pads and the Sound section show (not saved).
 const bass = createBass();
 const bassLane = createBassLane(STEP_COUNT, 55);
-const machine = ref<'rhythm' | 'bass' | 'drums'>((driftMock ? 'drift' : 'rhythm') as any);
+const machine = ref<'rhythm' | 'bass' | 'drums'>('rhythm');
 const bassChosen = computed(() => machine.value === 'bass');
 const drumsChosen = computed(() => machine.value === 'drums');
-const machineName = computed(() => ({ rhythm: 'Rhythm', bass: 'Bass', drums: 'Drums', drift: 'Drift' } as any)[machine.value]);
-const driftShown = computed(() => (machine.value as string) === 'drift'); // MOCKUPS ONLY
+const machineName = computed(() => ({ rhythm: 'Rhythm', bass: 'Bass', drums: 'Drums' })[machine.value]);
 // The rail's mixer (PR 116): how much of Rhythm goes through the pedals (Bass's is bassLane.pedals)
 const rhythmPedals = ref(1);
 
@@ -871,10 +858,6 @@ const railMachines = computed(() => {
 		// Drums: its four rows stacked in each step, each in its sound's colour
 		{ id: 'drums', name: 'Drums', steps: [], pitches: [], velocities: [], muted: drums.muted, level: drums.level, pedals: drums.pedals,
 			stack: Array.from({ length: stepLength.value }, (_, i) => drums.rows.map((r, k) => (r.steps[i] && !drums.slots[k]?.muted ? drumHues.value[k] : null))) },
-		// MOCKUPS ONLY: the Drift row, its chords per bar
-		...(driftMock ? [{ id: 'drift', name: 'Drift', steps: [], pitches: [], velocities: [], muted: false, level: 0.6, pedals: 0.7,
-			bars: driftState.bars.slice(0, driftState.length)
-				.map((b: any) => (driftMock === 'c' ? ['Am', 'C', 'Dm', 'Em', 'F', 'G'][b.chord] : driftChordName(b.held))) }] : []),
 	];
 });
 function onRailMute(id: string) {
@@ -3690,31 +3673,6 @@ async function recordSample() {
 	.ds-grid[data-tab="fx"] .ds-sound[data-drums] .ds-shelf { display: none; }
 	.ds-grid[data-tab="fx"] .ds-sound[data-drums] { grid-template-areas: "title" "fx"; }
 }
-
-/* MOCKUPS ONLY (?drift=a|b|c): the Drift machine's Sound */
-.ds-sound[data-drift] {
-	display: grid;
-	gap: 12px;
-	align-content: stretch;
-	grid-template-columns: 250px minmax(0, 1fr) 410px;
-	grid-template-rows: auto 1fr auto;
-	grid-template-areas: "title title title" "xy swarm swarm" "knobs knobs fx";
-}
-.ds-sound[data-drift="b"] {
-	grid-template-columns: minmax(0, 1fr) 410px;
-	grid-template-areas: "title title" "plates xy" "knobs fx";
-}
-.ds-sound[data-drift="c"] {
-	grid-template-columns: minmax(0, 1fr) 410px;
-	grid-template-areas: "title title" "swarm swarm" "knobs fx";
-}
-.ds-sound[data-drift] > .ds-sound-head { grid-area: title; }
-.ds-sound[data-drift] .sound-row-1,
-.ds-sound[data-drift] .sound-row-2,
-.ds-sound[data-drift] .sound-row-3 > .sound-stack { display: none; }
-.ds-sound[data-drift] .sound-row-3 { display: contents; }
-.ds-sound[data-drift] #effects-panel { grid-area: fx; }
-.ds-sound[data-drift] .ds-slots, .ds-sound[data-drift] .ds-shelf { display: none !important; }
 
 /* The Sound section's head: its title, and on Rhythm's, Keep as drum at the right */
 .ds-sound-head {
