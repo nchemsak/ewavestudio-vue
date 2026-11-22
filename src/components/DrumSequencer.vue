@@ -6,7 +6,8 @@
 		<PhoneLayout v-if="phoneActive" :ctx="phoneCtx">
 			<template #sound>
 				<!-- Drums shown (PR 121): its four slot cards, compact, with a Mix group (Level, Pedals, the meter) -->
-				<!-- MOCKUP: Drift shown: its Sound section (the X/Y pad, the swarm, its knobs) with a Mix group -->
+				<!-- Drift shown (part 3): its Sound section, compact (the swarm's screen, its knobs with Filter and
+					 Spread: the X/Y pad is on the Pads page), with a Mix group (the meter, Level, Reverb: the rail's Pedals) -->
 				<div v-if="driftChosen" class="pl-drift-sound">
 					<DriftSound compact :drift="drift" :notes="driftNotes" :bar="driftPick" :chord="driftLabels[driftPick] ?? ''"
 						@preview="previewDrift()">
@@ -773,7 +774,7 @@ import DrumPads from './DrumPads.vue';
 import DrumSound from './DrumSound.vue';
 import DriftPads from './DriftPads.vue';
 import DriftSound from './DriftSound.vue';
-import { createDrift, driftVoice, togglePlate, type Drift } from '../lib/machines/drift';
+import { createDrift, driftVoice, togglePlate, copyToNextBar, type Drift } from '../lib/machines/drift';
 import { DRIFT_PROGRESSIONS, DRIFT_SOUNDS, driftProgressionKey, driftSoundKey, progressionChords, randomDriftProgression, randomDriftSound } from '../lib/machines/driftPresets';
 import type { DriftVoice } from '../audio/drift';
 import { chordLabel, driftHasNotes, heldInBar, plateHz as driftPlateHzOf, platePitchClasses, plateSemitones, plateSpelling, driftRootMidi } from '../audio/drift';
@@ -1145,6 +1146,14 @@ function rollDriftProgression() {
 	const p = randomDriftProgression();
 	setDriftProgression(p.length, p.bars);
 	trackEvent('drift_progression_random');
+}
+// Phone mode's Copy (part 3): the picked bar's plates into the next bar, which it then picks
+// (and plays, while stopped); one undo step. Nothing after the last bar.
+function copyDriftBar() {
+	const to = copyToNextBar(drift, driftPick.value);
+	if (to < 0) return;
+	driftPick.value = to;
+	nextTick(() => previewDrift(to));
 }
 // DRIFT MACHINE END
 
@@ -3190,10 +3199,6 @@ const SCALE_LABELS: Record<string, string> = {
 	none: '(no scale)', major: 'major', naturalMinor: 'minor', pentMajor: 'pentatonic major',
 	pentMinor: 'pentatonic minor', dorian: 'dorian', lydian: 'lydian', mixolydian: 'mixolydian',
 };
-// Phone mode has no Drift page yet (part 3 of the plan's item 6): it shows Rhythm instead
-// MOCKUPS ONLY: ?driftphone=a|b|c shows Drift on the phone (DriftPhoneMock.vue)
-const driftPhoneMock = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('driftphone') || '') : '';
-watch(phoneActive, (on) => { if (on && machine.value === 'drift' && !driftPhoneMock) machine.value = 'rhythm'; }, { immediate: true });
 
 const phoneCtx = reactive({
 	inst: synthInstrument,
@@ -3212,11 +3217,12 @@ const phoneCtx = reactive({
 	// A held step's velocity turns it on too (as a held pad's note does)
 	setDrumVelocity: (k: number, i: number, v: number) => setDrumCell(k, i, { on: true, vel: v }),
 	toggleDrumMute: toggleDrumSlotMute,
-	// MOCKUP: Drift (its plates, bars, the picked bar, the bar playing)
+	// Drift (part 3 of the plan's item 6): its plates, bars, the bar the plates edit, the bar
+	// playing, and Copy (the picked bar into the next)
 	drift,
 	driftPlates, driftLabels, driftPick,
 	driftPlaying: computed(() => (isPlaying.value ? driftBarNow.value : -1)),
-	toggleDriftPlate, pickDriftBar, previewDrift,
+	toggleDriftPlate, pickDriftBar, copyDriftBar,
 	currentStep, isPlaying, tempo, swing, canUndo, canRedo,
 	// The Sounds and Patterns steppers: the machine's own (Bass's while Bass is shown, Drums' kits and patterns)
 	presets: computed(() => (driftChosen.value ? DRIFT_SOUNDS : drumsChosen.value ? DRUM_KITS : bassChosen.value ? BASS_SOUNDS : PRESETS)),
@@ -3944,7 +3950,7 @@ async function recordSample() {
 }
 /* Drums' Sound page (PR 121): the four slot cards and Mix in one row */
 .pl-drum-sound { height: 100%; min-height: 0; }
-/* MOCKUP: Drift's Sound page, its Mix group in the knobs' row */
+/* Drift's Sound page (part 3), its Mix group in the knobs' row */
 .pl-drift-sound { height: 100%; min-height: 0; }
 .pl-dfmix { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .pl-dfmix .pl-mix-knobs { display: flex; gap: 6px; }

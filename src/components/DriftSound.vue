@@ -8,18 +8,9 @@
      uses only the reverb (the rail's Pedals is its send). Grid areas: xy, swarm, knobs. -->
 <template>
     <div class="drift-sound" :class="{ compact }">
-        <div class="pt-card df-card df-xycard" style="grid-area: xy">
-            <div ref="xyEl" class="df-xy" aria-hidden="true" :title="`Drag: the filter across (${hzText(drift.cutoff)}), the spread up (${pct(drift.spread)})`"
-                @pointerdown="xyDown" @pointermove="xyMove" @pointerup="xyUp" @pointercancel="xyUp">
-                <span class="df-xy-grid"></span>
-                <span class="df-xy-glow" :style="dotStyle"></span>
-                <span class="df-xy-cross v" :style="{ left: dotStyle.left }"></span>
-                <span class="df-xy-cross h" :style="{ bottom: dotStyle.bottom }"></span>
-                <span class="df-xy-dot" :style="dotStyle"></span>
-                <span class="df-xy-lab x">FILTER {{ hzText(drift.cutoff).toUpperCase() }} →</span>
-                <span class="df-xy-lab y">SPREAD {{ pct(drift.spread) }} →</span>
-            </div>
-            <div v-if="!compact" class="df-minis">
+        <div v-if="!compact" class="pt-card df-card df-xycard" style="grid-area: xy">
+            <DriftXYPad :drift="drift" />
+            <div class="df-minis">
                 <span class="df-mini">
                     <Knob midi-id="drift.cutoff" v-model="drift.cutoff" label="Drift filter" :value-text="hzText(drift.cutoff)"
                         :min="CUT[0]" :max="CUT[1]" :step="1" taper="log" size="mini" hideLabel :useThemeArc="true" />
@@ -80,6 +71,23 @@
                     </div>
                 </div>
             </div>
+            <!-- Phone mode: the X/Y pad is on its Pads page, so Filter and Spread are knobs here (no
+                 midi-id: each is on the desktop's mini knob, and phone mode takes no links) -->
+            <div v-if="compact" class="df-kgroup" role="group" aria-label="Drift tone">
+                <span class="df-kcap">Tone</span>
+                <div class="df-kgrid two">
+                    <div class="df-kcell">
+                        <Knob v-model="drift.cutoff" label="Filter" :value-text="hzText(drift.cutoff)"
+                            :min="CUT[0]" :max="CUT[1]" :step="1" taper="log" size="small" :useThemeArc="true" />
+                        <span class="df-kval">{{ hzText(drift.cutoff) }}</span>
+                    </div>
+                    <div class="df-kcell">
+                        <Knob v-model="drift.spread" label="Spread" :value-text="pct(drift.spread)"
+                            :min="0" :max="1" :step="0.01" size="small" :useThemeArc="true" />
+                        <span class="df-kval">{{ pct(drift.spread) }}</span>
+                    </div>
+                </div>
+            </div>
             <div class="df-kgroup" role="group" aria-label="Drift fades, in bars">
                 <span class="df-kcap">In bars</span>
                 <div class="df-kgrid two">
@@ -102,8 +110,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue';
+import { computed, useId } from 'vue';
 import Knob from './Knob.vue';
+import DriftXYPad from './DriftXYPad.vue';
 import { DRIFT_RANGES } from '../audio/drift';
 import type { Drift } from '../lib/machines/drift';
 import { envelopePath, fadeStops, swarmLines, VIEW_H, VIEW_W } from '../lib/driftView';
@@ -113,7 +122,7 @@ const props = defineProps<{
     notes: { hz: number; hue: number }[]; // the bar's held notes
     bar: number;                          // the bar the plates edit
     chord: string;                        // its chord's name ('' for nothing)
-    compact?: boolean;                    // phone mode's Sound page: no mini knobs, small knobs in a row
+    compact?: boolean;                    // phone mode's Sound page: no X/Y pad (it's on the Pads page), Filter and Spread knobs
 }>();
 const emit = defineEmits<{ (e: 'preview'): void }>();
 
@@ -130,33 +139,6 @@ const lines = computed(() => swarmLines(props.drift, props.notes));
 const env = computed(() => envelopePath(props.drift));
 const stops = computed(() => fadeStops(props.drift));
 
-// The X/Y pad: the filter across (log), the spread up
-const logPos = (hz: number) => Math.log(hz / CUT[0]) / Math.log(CUT[1] / CUT[0]);
-const dotStyle = computed(() => ({
-    left: `${(logPos(props.drift.cutoff) * 100).toFixed(2)}%`,
-    bottom: `${(props.drift.spread * 100).toFixed(2)}%`,
-}));
-const xyEl = ref<HTMLElement | null>(null);
-let dragging = false;
-function xySet(e: PointerEvent) {
-    const r = xyEl.value?.getBoundingClientRect();
-    if (!r) return;
-    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    const y = Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height));
-    props.drift.cutoff = Math.round(CUT[0] * (CUT[1] / CUT[0]) ** x);
-    props.drift.spread = Math.round(y * 100) / 100;
-}
-function xyDown(e: PointerEvent) {
-    dragging = true;
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    xySet(e);
-}
-function xyMove(e: PointerEvent) {
-    if (dragging) xySet(e);
-}
-function xyUp() {
-    dragging = false;
-}
 </script>
 
 <style scoped>
@@ -164,12 +146,12 @@ function xyUp() {
     display: contents;
 }
 
-/* Phone mode's Sound page: the X/Y pad and the swarm over a row of knobs */
+/* Phone mode's Sound page (part 3): the swarm's screen over a row of knobs */
 .drift-sound.compact {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
-    grid-template-areas: "xy swarm" "knobs knobs";
+    grid-template-areas: "swarm" "knobs";
     gap: 6px;
     height: 100%;
     min-height: 0;
@@ -180,7 +162,6 @@ function xyUp() {
     min-height: 0;
 }
 
-.compact .df-xy,
 .compact .df-screen {
     min-height: 0;
 }
@@ -189,7 +170,19 @@ function xyUp() {
     flex-direction: row;
     justify-content: space-evenly;
     align-items: flex-start;
-    gap: 10px;
+    gap: 8px;
+}
+
+/* The smallest phones: the knob groups closer, their values smaller */
+@media (max-width: 639.98px) {
+    .compact .df-knobcard {
+        gap: 2px;
+        padding: 4px;
+    }
+
+    .compact .df-kgrid {
+        gap: 0;
+    }
 }
 
 .compact .df-kgrid.two {
@@ -201,100 +194,6 @@ function xyUp() {
     flex-direction: column;
     min-width: 0;
     gap: 8px;
-}
-
-/* The X/Y pad */
-.df-xy {
-    --sp-bg: #0c1118;
-    --sp-ink: #cfe0ff;
-    position: relative;
-    flex: 1 1 auto;
-    min-height: 140px;
-    border-radius: 8px;
-    background: var(--sp-bg);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 2px 12px rgba(0, 0, 0, .6);
-    overflow: hidden;
-    cursor: crosshair;
-    touch-action: none;
-}
-
-.theme-analog .df-xy,
-.theme-analog .df-screen {
-    --sp-bg: #160f05;
-    --sp-ink: #ffcf8a;
-}
-
-.theme-synthwave .df-xy,
-.theme-synthwave .df-screen {
-    --sp-bg: #2a0f52;
-    --sp-ink: #e8dcff;
-}
-
-.df-xy-grid {
-    position: absolute;
-    inset: 0;
-    background-image:
-        linear-gradient(to right, color-mix(in oklab, var(--sp-ink) 12%, transparent) 1px, transparent 1px),
-        linear-gradient(to top, color-mix(in oklab, var(--sp-ink) 12%, transparent) 1px, transparent 1px);
-    background-size: 25% 25%;
-}
-
-.df-xy-cross {
-    position: absolute;
-    background: color-mix(in oklab, var(--sp-ink) 40%, transparent);
-}
-
-.df-xy-cross.v {
-    top: 0;
-    bottom: 0;
-    width: 1px;
-}
-
-.df-xy-cross.h {
-    left: 0;
-    right: 0;
-    height: 1px;
-}
-
-.df-xy-glow {
-    position: absolute;
-    width: 70px;
-    height: 70px;
-    margin: 0 0 -35px -35px;
-    border-radius: 50%;
-    background: radial-gradient(circle, color-mix(in oklab, var(--hw-led, #5dffb0) 35%, transparent), transparent 70%);
-}
-
-.df-xy-dot {
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    margin: 0 0 -8px -8px;
-    border-radius: 50%;
-    background: var(--hw-led, #5dffb0);
-    box-shadow: 0 0 10px var(--hw-led, #5dffb0), inset 0 -2px 3px rgba(0, 0, 0, .3);
-}
-
-.df-xy-lab {
-    position: absolute;
-    font: 700 8px Cousine, ui-monospace, monospace;
-    letter-spacing: .06em;
-    color: var(--sp-ink);
-    opacity: .85;
-    white-space: nowrap;
-    pointer-events: none;
-}
-
-.df-xy-lab.x {
-    bottom: 4px;
-    right: 6px;
-}
-
-.df-xy-lab.y {
-    top: 50%;
-    left: 6px;
-    transform-origin: 0 0;
-    transform: rotate(-90deg) translate(-50%, 0);
 }
 
 .df-minis {
@@ -317,6 +216,16 @@ function xyUp() {
 }
 
 /* The swarm's screen */
+.theme-analog .df-screen {
+    --sp-bg: #160f05;
+    --sp-ink: #ffcf8a;
+}
+
+.theme-synthwave .df-screen {
+    --sp-bg: #2a0f52;
+    --sp-ink: #e8dcff;
+}
+
 .df-screen {
     --sp-bg: #0c1118;
     --sp-ink: #cfe0ff;

@@ -193,7 +193,10 @@ src/components/
   MidiToolbar.vue        "MIDI Controller": Enable MIDI button, then the input list and Learn
                          (and the MIDI learn bar, at the bottom of the screen)
   DriftPads.vue, DriftSound.vue  The Drift machine's pads (six plates, its bars) and Sound section
-                         (the X/Y pad, the swarm's screen, its knobs; see "The Drift machine")
+                         (the X/Y pad, the swarm's screen, its knobs; see "The Drift machine");
+                         `compact` on the phone's Sound page
+  DriftXYPad.vue         Drift's X/Y pad (Filter across, Spread up): DriftSound's and the phone's
+  DriftPhonePads.vue     Phone mode's Pads page for Drift: the plates 3 × 2 over its bars
   DrumPads.vue, DrumSound.vue  The Drums machine's pads (a row per slot) and Sound section
                          (the slot cards and the Sounds shelf; see "The Drums machine")
   BassPads.vue, BassSound.vue  The Bass machine's pads (Accent, Slide and Tie rows) and Sound
@@ -1420,7 +1423,35 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   twice in a row). Every sound on a four-note chord peaks between 0.25 and 0.45 (a browser test
   checks they're heard and under the limiter). Analytics `drift_sound_select`,
   `drift_sound_random`, `drift_progression_select`, `drift_progression_random`.
-- **Not yet** (the item's part 3): the phone (phone mode shows Rhythm when Drift was chosen).
+- **On the phone** (PR 124, part 3, which finishes item 6; option C of three mockups: A was the
+  desktop's six plates across, B a grid of a row per plate and a column per bar). **DRIFT** is a
+  fourth machine key in phone mode's top bar (the keys lose their LEDs under 900 px, and under
+  600 px are tighter, with a 32 px scope and no spacer, so the four fit at 568 px). While Drift is
+  chosen:
+  - **Pads** (`DriftPhonePads.vue`): the six plates **3 × 2 at every size** (about 180 × 120 px
+    at 844 × 390, 90 × 99 at 568 × 320), over the bars. As on the desktop a tap on a bar picks the
+    bar the plates edit (and plays it while stopped), a tap on a plate holds it there or lets it
+    go. Each bar its chord's name and its plates as dashes at its right edge; **a dash that runs
+    off the edge** is a note that carries on into the next bar without starting again (the last
+    bar's round into bar 1: `carriesOn()` in `src/lib/machines/drift.ts`). The picked bar, while
+    empty, says "tap a plate". 8 bars are two rows of 4, or on a short screen (under 360 px tall)
+    **four at a time, 1–4 | 5–8**, the half following the picked bar, so the plates keep their
+    size; under 700 px a bar's number is tucked into its corner so "Cmaj7" fits. The steppers are
+    **Drift sounds** and **Chords** (the Progressions; it reads "Own" for bars that aren't one,
+    "None" with nothing held), with their dice. In the place of Oct, Move and Humanize: **Bars
+    4 | 8** and **Copy → N** (the picked bar's plates into the next bar, which it picks and plays
+    while stopped; `copyToNextBar()`; disabled on the last bar; one undo step; phone only for
+    now). In the knobs' place, the **X/Y pad** (`DriftXYPad.vue`, the desktop's, moved out of
+    DriftSound: the filter across, the spread up; one undo step a drag; the dot grows under a
+    finger). The tiny pads in the top bar show the bars (each 16 / length of them, in its lowest
+    plate's colour), the bar playing outlined.
+  - **Sound**: `DriftSound compact`: the swarm's screen over one row of knobs, Swarm (Voices,
+    Drift, Wave), **Tone** (Filter, Spread: the X/Y pad is the Pads page's), In bars (Attack,
+    Release) and a **Mix** group (the meter, Level, **Reverb**: the rail's Pedals, its send).
+  - **Key**: the Melody Maker live (its key and scale move the plates), Generate dimmed, as on the
+    desktop. **Mod** stays Rhythm's, **FX** is everyone's.
+  Nothing scrolls at 568 × 320 or 844 × 390 (a browser test checks). A stepper's "Random" no longer
+  carries over to the next machine shown.
 - Unit tests: `drift.test.ts` (the plates, their spelling, chord names, the runs, a loop's carried
   notes, the swarm), `machines/drift.test.ts`, `driftView.test.ts`, the snapshot round trip.
   Browser tests: the plates and bars (names, the rail, 8 bars, undo, saved, not a slot's, a new
@@ -1884,7 +1915,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     ☰. It fits on one line from 568 px (the first iPhone SE) up (Play's word hidden under
     600 px; under 720 px the scope is 48 px wide and the tabs tighter: those rules came before
     the ones they change until PR 73, so they never applied).
-  - **RHY | BASS | DRUM** (PR 118, DRUM since PR 121) in the top bar picks the machine the
+  - **RHY | BASS | DRUM | DRIFT** (PR 118, DRUM since PR 121, DRIFT since PR 124) in the top bar picks the machine the
     Pads, Sound and Key pages show (see "The Bass machine" and "The Drums machine", On the
     phone).
   - **Sound**, **Mod**, **FX** and **Key** pages are the desktop's own panels again (slots in
@@ -2605,18 +2636,9 @@ Scale), PR 103 (the reverb's pre-delay), PR 104 (PRE in note values), PR 105 (RE
 reverb), PR 106 (phone mode brought up to date) PR 107 (the desktop view on a phone) and PR 108 (the big screen spread around, the machine rail). After PR 103 the maintainer asked about a "pre-reverb" (a reversed reverb swelling
 into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 
-Grow into a small groovebox:
+The groovebox (items 3–6: the groundwork, then the Bass, Drums and Drift machines) is done
+(PRs 112–124). Next:
 
-6. **The Drift machine** (strings, ambience; after the Elta Solar 42F, whose swarm voices,
-    touch plates, one slow filter, joystick and short sequencer are worth borrowing; its
-    per-voice knobs and microtonal tuning are not). Six plates, one per note of the key's
-    chord; a touched plate latches a small swarm of detuned oscillators, fading in over a bar
-    or more; an X/Y pad (the filter one way, the swarm's spread the other); Attack and Release
-    in bars; no steps: its sequencer counts bars, a chord per bar for 4 or 8 bars, across the
-    pattern chain; straight to the reverb. Part 1 was PR 122 (option A of the mockups: the
-    sound in both engines, the plates and bars, the Sound section, the rail's row, saving, the
-    export); part 2 was PR 123 (Drift sounds and Progressions in the transport's boxes, with their
-    dice); still to do: part 3, the phone.
 7. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
     the maintainer wants some maintenance, each as its own PR.
 
@@ -2931,6 +2953,7 @@ Done:
 | 122 | The Drift machine, part 1 (the plan's item 6; option A of three mockups, with a smaller X/Y pad): six plates, the key's chord in thirds, and a chord a bar for 4 or 8 bars (the project's, from Play across the chain); each held note a swarm of 3–7 drifting voices through one slow filter, fading in over Attack and out over Release (in bars), a note two bars share carrying on, in both engines (`src/audio/drift.ts`); straight to the reverb (its Pedals is the send). Its pads (`DriftPads.vue`), its Sound section (an X/Y pad for Filter and Spread, the swarm's screen, Voices, Drift, Wave, Attack, Release: `DriftSound.vue`), a rail row naming each bar's chord; saved, MIDI-learnable (68 knobs), in the export (a seamless loop carrying held notes round, its machine stem, MIDI channel 3, the dialog fitting a loop to its bars). |
 | 123 | The Drift machine, part 2: while Drift is shown, the transport's boxes are **Drift sounds** (Strings, Haze, Choir, Glass, Tide, Dust: Drift's sound only) and **Progressions** (Hold, Rise, Fall, Sway, Wander, Circle: its bars, 4 or 8, written as plates so they play in any key), each with a dice (a pad-like sound; a progression from the key's chord moving mostly by neighbouring triads) and lit while it matches; while stopped, a choice plays bar 1's chord (`src/lib/machines/driftPresets.ts`). |
 | 121 | The Drums machine, part 3, the phone (option D1 of the mockups, D2's halves on a small phone), which finishes the plan's item 5: DRUM beside RHY \| BASS (the machine keys without LEDs under 600 px); with Drums chosen, the Pads page has its four rows (a tap, a finger drawn along a row, a hold for Velocity; a tap on a row's name picks it), eight steps at a time with 1–8 \| 9–16 under 700 px, the Drum kits and Drum patterns steppers, Humanize on the picked row and its slot's Tune, Decay and Level as the knobs; the Sound page has the four slot cards with a Mix card; the Key page dims the Melody Maker. Nothing scrolls at 568 × 320 or 844 × 390. |
+| 124 | The Drift machine, part 3, the phone (option C of three mockups), which finishes the plan's item 6: DRIFT beside RHY \| BASS \| DRUM (the keys without LEDs under 900 px); with Drift chosen, the Pads page has the six plates 3 × 2 over its bars (a tap on a bar picks it, on a plate holds it; a dash running off a bar's edge for a note that carries on; 1–4 \| 5–8 for 8 bars on a short screen), Drift sounds and Chords on the steppers, **Bars 4 \| 8** and **Copy → N** (a bar into the next, phone only for now), and the X/Y pad in the knobs' place (`DriftXYPad.vue`, shared with the desktop); the Sound page has the swarm's screen with Swarm, Tone (Filter, Spread), In bars and Mix (Level, Reverb); the Key page dims Generate. Nothing scrolls at 568 × 320 or 844 × 390. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -114,3 +114,21 @@ export function applyDrift(d: Drift, s: any) {
 export function togglePlate(d: Drift, bar: number, plate: number) {
 	d.chords = d.chords.map((r, b) => (b === bar ? r.map((on, k) => (k === plate ? !on : on)) : r));
 }
+
+/** The phone's Copy (part 3): bar `bar`'s plates into the next bar, which it returns (−1 from the last bar: nothing copied) */
+export function copyToNextBar(d: Drift, bar: number): number {
+	const to = bar + 1;
+	if (bar < 0 || to >= d.length) return -1;
+	d.chords = d.chords.map((r, b) => (b === to ? [...d.chords[bar]] : r));
+	return to;
+}
+
+/**
+ * Which plates of bar `bar` carry on into the next bar (held in both, so one note that doesn't
+ * start again: driftRuns()); the last bar's go round into bar 1, as they do while playing
+ */
+export function carriesOn(chords: boolean[][], length: number, bar: number): boolean[] {
+	const n = Math.max(1, length);
+	const now = chords[bar] ?? [], next = chords[(bar + 1) % n] ?? [];
+	return Array.from({ length: DRIFT_PLATES }, (_, k) => n > 1 && !!now[k] && !!next[k]);
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyDrift, chordsFrom, createDrift, driftSnapshot, DRIFT_DEFAULTS, resetDrift, togglePlate } from './drift';
+import { applyDrift, chordsFrom, createDrift, driftSnapshot, DRIFT_DEFAULTS, resetDrift, togglePlate, copyToNextBar, carriesOn } from './drift';
 
 describe('the Drift machine\'s settings', () => {
 	it('start at the factory sound, nothing held, 4 bars', () => {
@@ -39,5 +39,33 @@ describe('the Drift machine\'s settings', () => {
 		resetDrift(d);
 		expect(d.voices).toBe(DRIFT_DEFAULTS.voices);
 		expect(d.chords[0][0]).toBe(false);
+	});
+});
+
+describe('the phone\'s Copy and the carried notes', () => {
+	it('copies a bar into the next and says which, never past the last bar', () => {
+		const d = createDrift();
+		togglePlate(d, 0, 0);
+		togglePlate(d, 0, 2);
+		togglePlate(d, 1, 5);
+		expect(copyToNextBar(d, 0)).toBe(1);
+		expect(d.chords[1]).toEqual([true, false, true, false, false, false]);
+		expect(d.chords[0]).toEqual([true, false, true, false, false, false]);
+		expect(d.chords[1]).not.toBe(d.chords[0]);
+		expect(copyToNextBar(d, d.length - 1)).toBe(-1);
+		d.length = 8;
+		expect(copyToNextBar(d, 3)).toBe(4);
+	});
+	it('marks the plates held into the next bar, the last bar round to the first', () => {
+		const d = createDrift();
+		togglePlate(d, 0, 0);
+		togglePlate(d, 1, 0);
+		togglePlate(d, 1, 1);
+		togglePlate(d, 3, 1);
+		togglePlate(d, 0, 1);
+		expect(carriesOn(d.chords, 4, 0)).toEqual([true, true, false, false, false, false]);
+		expect(carriesOn(d.chords, 4, 1)).toEqual([false, false, false, false, false, false]);
+		expect(carriesOn(d.chords, 4, 3)).toEqual([false, true, false, false, false, false]);
+		expect(carriesOn(d.chords, 1, 0)).toEqual([false, false, false, false, false, false]);
 	});
 });
