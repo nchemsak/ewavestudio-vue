@@ -7,7 +7,7 @@
      value under it. The pedals beside them are everyone's (DrumSequencer's Effects card); Drift
      uses only the reverb (the rail's Pedals is its send). Grid areas: xy, swarm, knobs. -->
 <template>
-    <div class="drift-sound">
+    <div class="drift-sound" :class="{ compact }">
         <div class="pt-card df-card df-xycard" style="grid-area: xy">
             <div ref="xyEl" class="df-xy" aria-hidden="true" :title="`Drag: the filter across (${hzText(drift.cutoff)}), the spread up (${pct(drift.spread)})`"
                 @pointerdown="xyDown" @pointermove="xyMove" @pointerup="xyUp" @pointercancel="xyUp">
@@ -19,7 +19,7 @@
                 <span class="df-xy-lab x">FILTER {{ hzText(drift.cutoff).toUpperCase() }} →</span>
                 <span class="df-xy-lab y">SPREAD {{ pct(drift.spread) }} →</span>
             </div>
-            <div class="df-minis">
+            <div v-if="!compact" class="df-minis">
                 <span class="df-mini">
                     <Knob midi-id="drift.cutoff" v-model="drift.cutoff" label="Drift filter" :value-text="hzText(drift.cutoff)"
                         :min="CUT[0]" :max="CUT[1]" :step="1" taper="log" size="mini" hideLabel :useThemeArc="true" />
@@ -65,17 +65,17 @@
                 <div class="df-kgrid">
                     <div class="df-kcell">
                         <Knob midi-id="drift.voices" v-model="drift.voices" label="Voices" :value-text="`${drift.voices} voices`"
-                            :min="3" :max="7" :step="1" size="medium" :useThemeArc="true" />
+                            :min="3" :max="7" :step="1" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
                         <span class="df-kval">{{ drift.voices }}</span>
                     </div>
                     <div class="df-kcell">
                         <Knob midi-id="drift.drift" v-model="drift.drift" label="Drift" :value-text="pct(drift.drift)"
-                            :min="0" :max="1" :step="0.01" size="medium" :useThemeArc="true" />
+                            :min="0" :max="1" :step="0.01" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
                         <span class="df-kval">{{ pct(drift.drift) }}</span>
                     </div>
                     <div class="df-kcell">
                         <Knob midi-id="drift.wave" v-model="drift.wave" label="Wave" :value-text="waveText(drift.wave)"
-                            :min="0" :max="1" :step="0.01" size="medium" :useThemeArc="true" />
+                            :min="0" :max="1" :step="0.01" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
                         <span class="df-kval">{{ waveText(drift.wave) }}</span>
                     </div>
                 </div>
@@ -85,16 +85,18 @@
                 <div class="df-kgrid two">
                     <div class="df-kcell">
                         <Knob midi-id="drift.attack" v-model="drift.attack" label="Attack" :value-text="barsText(drift.attack)"
-                            :min="0.25" :max="4" :step="0.25" :detents="[1, 2]" size="medium" :useThemeArc="true" />
+                            :min="0.25" :max="4" :step="0.25" :detents="[1, 2]" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
                         <span class="df-kval">{{ barsText(drift.attack) }}</span>
                     </div>
                     <div class="df-kcell">
                         <Knob midi-id="drift.release" v-model="drift.release" label="Release" :value-text="barsText(drift.release)"
-                            :min="0.25" :max="4" :step="0.25" :detents="[1, 2]" size="medium" :useThemeArc="true" />
+                            :min="0.25" :max="4" :step="0.25" :detents="[1, 2]" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
                         <span class="df-kval">{{ barsText(drift.release) }}</span>
                     </div>
                 </div>
             </div>
+            <!-- The phone's Mix group (Level, the reverb send, the meter) -->
+            <slot name="mix" />
         </div>
     </div>
 </template>
@@ -111,6 +113,7 @@ const props = defineProps<{
     notes: { hz: number; hue: number }[]; // the bar's held notes
     bar: number;                          // the bar the plates edit
     chord: string;                        // its chord's name ('' for nothing)
+    compact?: boolean;                    // phone mode's Sound page: no mini knobs, small knobs in a row
 }>();
 const emit = defineEmits<{ (e: 'preview'): void }>();
 
@@ -159,6 +162,38 @@ function xyUp() {
 <style scoped>
 .drift-sound {
     display: contents;
+}
+
+/* Phone mode's Sound page: the X/Y pad and the swarm over a row of knobs */
+.drift-sound.compact {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas: "xy swarm" "knobs knobs";
+    gap: 6px;
+    height: 100%;
+    min-height: 0;
+}
+
+.compact .df-card {
+    padding: 6px;
+    min-height: 0;
+}
+
+.compact .df-xy,
+.compact .df-screen {
+    min-height: 0;
+}
+
+.compact .df-knobcard {
+    flex-direction: row;
+    justify-content: space-evenly;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.compact .df-kgrid.two {
+    grid-template-columns: repeat(2, 1fr);
 }
 
 .df-card {

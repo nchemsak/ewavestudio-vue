@@ -11,11 +11,11 @@
 				 notes' colours, the beats marked and the playing step outlined. Only to look at -->
 			<div class="pl-minipads" aria-hidden="true">
 				<span v-for="(h, i) in minis" :key="i" class="pl-mp"
-					:class="{ on: h !== null, beat: i % 4 === 0, now: ctx.isPlaying && i === ctx.currentStep }"
+					:class="{ on: h !== null, beat: i % 4 === 0, now: drift ? Math.floor(i / (16 / ctx.drift.length)) === ctx.driftPlaying : ctx.isPlaying && i === ctx.currentStep }"
 					:style="h !== null ? { '--h': h } : undefined"></span>
 			</div>
 			<!-- The machine the pages show (PR 118, option P of the mockups): RHY | BASS | DRUM (PR 121) -->
-			<div class="pl-machines" role="radiogroup" aria-label="Machine">
+			<div class="pl-machines" :class="{ four: MACHINES.length > 3 }" role="radiogroup" aria-label="Machine">
 				<button v-for="m in MACHINES" :key="m.id" type="button" role="radio" class="pl-mkey"
 					:class="{ on: ctx.machine === m.id }" :aria-checked="ctx.machine === m.id ? 'true' : 'false'"
 					:aria-label="m.name" @click="ctx.machine = m.id"><i class="pl-mled" aria-hidden="true"></i>{{ m.short }}</button>
@@ -44,7 +44,9 @@
 				<!-- Drums (PR 121, option D1 of the mockups, D2's halves on a narrow phone): a row per
 					 slot, its LED (mutes the slot) and its name (a tap picks the row: Humanize and the
 					 knobs work on it), then its steps; under 700 px eight at a time, 1–8 | 9–16 -->
-				<div v-if="drums" class="pl-drums" :class="{ narrow }" role="group" aria-label="Drum steps" @pointermove="padMove">
+				<!-- MOCKUP: Drift (?driftphone=a|b|c) -->
+				<DriftPhoneMock v-if="drift" part="pads" :ctx="ctx" :variant="driftphone" />
+				<div v-else-if="drums" class="pl-drums" :class="{ narrow }" role="group" aria-label="Drum steps" @pointermove="padMove">
 					<div v-if="narrow" class="pl-halves" role="radiogroup" aria-label="Steps shown">
 						<button v-for="h in [0, 1]" :key="h" type="button" role="radio" class="pl-half"
 							:class="{ on: half === h, now: ctx.isPlaying && Math.floor(ctx.currentStep / 8) === h }"
@@ -98,7 +100,7 @@
 					<div class="pl-pick">
 						<div class="pl-stepper" role="group" aria-label="Pattern">
 							<button type="button" class="pl-arr" aria-label="Previous pattern" @click="stepPattern(-1)">◂</button>
-							<button type="button" class="pl-val" aria-label="All patterns" @click="list = 'pattern'"><span class="pl-cap" aria-hidden="true">Pattern</span>{{ patternName }}</button>
+							<button type="button" class="pl-val" aria-label="All patterns" @click="list = 'pattern'"><span class="pl-cap" aria-hidden="true">{{ drift ? 'Chords' : 'Pattern' }}</span>{{ patternName }}</button>
 							<button type="button" class="pl-arr" aria-label="Next pattern" @click="stepPattern(1)">▸</button>
 						</div>
 						<button type="button" class="pl-icon pl-dice" aria-label="Random pattern" title="Random pattern" @click="rollPattern">
@@ -118,7 +120,8 @@
 							<button type="button" aria-label="More swing" @click="ctx.swing = nextStop(ctx.swing, SWING_STOPS, 1)">+</button>
 						</div>
 					</div>
-					<div class="pl-pick">
+					<DriftPhoneMock v-if="drift" part="side" :ctx="ctx" :variant="driftphone" />
+					<div v-else class="pl-pick">
 						<div class="pl-mini" role="group" aria-label="Octave">
 							<button type="button" aria-label="Octave down" title="Every pad an octave down" :disabled="drums" @click="ctx.octave(-1)">↓</button>
 							<span>Oct</span>
@@ -136,7 +139,8 @@
 							@click="list = 'humanize'">Humanize</button>
 					</div>
 					<!-- Drums (PR 121): the picked row's name, then its slot's Tune, Decay and Level -->
-					<div v-if="drums" class="pl-macros pl-dmacros" :style="{ '--h': ctx.drumHues[ctx.drumPick] }">
+					<DriftPhoneMock v-if="drift" part="macros" :ctx="ctx" :variant="driftphone" />
+					<div v-else-if="drums" class="pl-macros pl-dmacros" :style="{ '--h': ctx.drumHues[ctx.drumPick] }">
 						<div class="pl-macro pl-dpicked"><span class="pl-cap">Row</span><b>{{ ctx.drumNames[ctx.drumPick] }}</b></div>
 						<div class="pl-macro">
 							<Knob v-model="ctx.drumSlot.tune" label="Tune" :min="DRUM_RANGES.tune[0]" :max="DRUM_RANGES.tune[1]" :step="1" bipolar size="small"
@@ -307,6 +311,7 @@
 import { ref, computed, provide, watch, onMounted, onBeforeUnmount } from 'vue';
 import Knob from './Knob.vue';
 import ThemeToggle from './ThemeToggle.vue';
+import DriftPhoneMock from './DriftPhoneMock.vue';
 import { SCALES, NOTE_TO_SEMITONE, midiToFreq, freqToMidiExact } from '../lib/melody/theory';
 import { VELOCITY_SHAPES, velocityShape, type VelocityShapeId } from '../lib/patterns/velocityShapes';
 import { SWING_STOPS, TRIPLET_SWING, nextStop } from '../lib/knobDetents';
@@ -319,10 +324,21 @@ const ctx = props.ctx;
 const bass = computed(() => ctx.machine === 'bass');
 // Drums (PR 121): its rows instead of the pads; `lane` is then its picked row (Humanize)
 const drums = computed(() => ctx.machine === 'drums');
+// MOCKUPS ONLY: ?driftphone=a|b|c adds Drift (DriftPhoneMock.vue)
+const driftphone = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('driftphone') || '') : '';
+const drift = computed(() => ctx.machine === 'drift');
 const lane = computed<any>(() => ctx.lane);
 
 // The tiny pads: each step's colour, or null while it's off (Drums: its first unmuted row that's on)
 const minis = computed<(number | null)[]>(() => {
+	// MOCKUP: Drift's bars across the 16 (each bar 16 / length of them), in its lowest plate's colour
+	if (drift.value) {
+		const n = ctx.drift.length, per = 16 / n;
+		return Array.from({ length: 16 }, (_, i) => {
+			const k = (ctx.drift.chords[Math.floor(i / per)] ?? []).findIndex((on: boolean) => on);
+			return k < 0 ? null : ctx.driftPlates[k].hue;
+		});
+	}
 	if (drums.value) {
 		const rows = ctx.drumRows as { steps: boolean[] }[];
 		return (rows[0]?.steps ?? []).map((_, i) => {
@@ -353,7 +369,8 @@ const MACHINES = [
 	{ id: 'rhythm', name: 'Rhythm', short: 'RHY' },
 	{ id: 'bass', name: 'Bass', short: 'BASS' },
 	{ id: 'drums', name: 'Drums', short: 'DRUM' },
-] as const;
+	...(driftphone ? [{ id: 'drift', name: 'Drift', short: 'DRIFT' }] : []),
+] as any[];
 const BASS_FLAGS = [
 	{ id: 'accents', label: 'Accent', tip: 'Louder, the filter opening further' },
 	{ id: 'slides', label: 'Slide', tip: 'Glides into the next step\'s note' },
@@ -394,7 +411,7 @@ function humanize(id: VelocityShapeId) { lane.value.velocities = velocityShape(i
 let swipe: null | { x: number; y: number } = null;
 function swipeStart(e: PointerEvent) {
 	const t = e.target as HTMLElement;
-	swipe = t.closest('[role="slider"], input, .pl-sheet, .pl-menu, .pl-pads, .pl-drums') ? null : { x: e.clientX, y: e.clientY };
+	swipe = t.closest('[role="slider"], input, .pl-sheet, .pl-menu, .pl-pads, .pl-drums, .dpm, .dpm-xy') ? null : { x: e.clientX, y: e.clientY };
 }
 function swipeEnd(e: PointerEvent) {
 	if (!swipe) return;
@@ -701,6 +718,16 @@ function hzText(hz: number) {
 	.pl-mkey {
 		padding: 0 6px;
 	}
+}
+
+/* MOCKUP: four machines (Drift): no LEDs under 900 px; tighter keys and a narrower scope under 600 */
+@media (max-width: 899.98px) {
+	.pl-machines.four .pl-mled { display: none; }
+}
+
+@media (max-width: 599.98px) {
+	.pl-machines.four .pl-mkey { padding: 0 4px; letter-spacing: 0; }
+	.phone-layout:has(.pl-machines.four) .pl-scope { width: 36px; }
 }
 
 /* Drums' rows (PR 121): its LED and name, then its steps */
