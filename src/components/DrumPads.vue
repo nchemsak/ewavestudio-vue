@@ -208,27 +208,47 @@ function down(k: number, i: number, e: PointerEvent) {
     box-shadow: inset 0 0 0 1px hsl(var(--h) 80% 60%);
 }
 
+/* The cells are the pads' rubber (PR 127, the silicone look): standing 3 px proud on a lip,
+   lit from inside in the sound's colour as high as the velocity, sinking while held */
 .dp-cell {
     position: relative;
     height: 52px;
     padding: 0;
-    border: 1px solid rgba(255, 255, 255, .08);
-    border-radius: 6px;
-    background: rgba(0, 0, 0, .28);
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, .5);
+    border: 0;
+    border-radius: 7px;
+    background:
+        radial-gradient(120% 70% at 50% 0%, rgba(255, 255, 255, .09), transparent 60%),
+        linear-gradient(180deg, #363142 0%, #27232f 100%);
+    box-shadow:
+        0 3px 0 #15121c,
+        0 5px 7px rgba(0, 0, 0, .5),
+        inset 0 1px 0 rgba(255, 255, 255, .14);
     overflow: hidden;
     cursor: pointer;
     touch-action: none;
+    transition: transform 70ms ease-out, box-shadow 70ms ease-out;
 }
 
+/* Each beat's cell a shade lighter rubber */
 .dp-cell.beat {
-    background: rgba(255, 255, 255, .06);
+    background:
+        radial-gradient(120% 70% at 50% 0%, rgba(255, 255, 255, .12), transparent 60%),
+        linear-gradient(180deg, #423c50 0%, #2f2a3a 100%);
 }
 
 .dp-cell.on {
-    border-color: hsl(var(--h) 80% 60% / .8);
-    box-shadow: 0 0 10px hsl(var(--h) 90% 60% / .35);
-    cursor: ns-resize;
+    box-shadow:
+        0 3px 0 #15121c,
+        0 5px 10px hsl(var(--h) 90% 55% / .35),
+        inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+
+.dp-cell:active {
+    transform: translateY(2px);
+    box-shadow:
+        0 1px 0 #15121c,
+        0 2px 3px rgba(0, 0, 0, .6),
+        inset 0 2px 4px rgba(0, 0, 0, .45);
 }
 
 .dp-cell.now {
@@ -242,15 +262,25 @@ function down(k: number, i: number, e: PointerEvent) {
 
 .dp-fill {
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 0;
-    background: linear-gradient(to top, hsl(var(--h) 85% 55%), hsl(var(--h) 85% 68%));
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(90% 55% at 50% 100%, hsl(var(--h) 95% 72% / .85), transparent 75%),
+        linear-gradient(to top,
+            hsl(var(--h) 80% 55% / .9) 0%,
+            hsl(var(--h) 80% 55% / .55) calc(var(--v, 100%) - 12%),
+            transparent calc(var(--v, 100%) + 4%));
 }
 
 .dp-cell.on .dp-fill {
-    height: var(--v, 100%);
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dp-cell {
+        transition: none;
+    }
 }
 
 .dp-cell:focus-visible {

@@ -9,7 +9,7 @@
                         aria-label="Pad settings">
                         ⋮
                     </button>
-                    <div v-if="showIndices" class="pad-step-num">{{ index + 1 }}</div>
+                    <div v-if="showIndices" class="pad-step-num" :class="{ beat: index % 4 === 0 }">{{ index + 1 }}</div>
                 </div>
 
                 <div class="padTESTwrap" @mouseenter="hovered = index" @mouseleave="hovered = null">
@@ -18,7 +18,8 @@
                         'liquid',
                         { selected: active },
                         { playing: index === currentStep },
-                        { 'has-noise': noiseOn(index) }
+                        { 'has-noise': noiseOn(index) },
+                        { pressed: pressedIndex === index }
                     ]" @pointerdown="onPointerDown($event, index)" @dragstart.prevent :data-pad="index"
                         :style="padStyle(index)" role="button" :aria-pressed="active ? 'true' : 'false'"
                         :aria-label="padLabel(index, active)" :tabindex="index === focusIndex ? 0 : -1"
@@ -172,6 +173,8 @@ function clone<T>(arr: T[]): T[] {
 // turns the pad on or off. With the Repeats brush, a press paints at once, as before.
 const VEL_DRAG_PX = 80;
 const velDrag = ref<number | null>(null);
+// The pad under a held press: it shows pressed in (painting, the one the pointer is on)
+const pressedIndex = ref<number | null>(null);
 let press: { index: number; x: number; y: number; lit: boolean; from: number; mode: 'vel' | 'paint' | null; last: number } | null = null;
 
 function onPointerDown(evt: PointerEvent, index: number) {
@@ -189,6 +192,7 @@ function onPointerDown(evt: PointerEvent, index: number) {
     } else {
         press = { index, x: evt.clientX, y: evt.clientY, lit: !!props.steps[index], from: props.velocities[index] ?? 1, mode: null, last: index };
     }
+    pressedIndex.value = index;
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp, { once: true });
     window.addEventListener('pointercancel', onPointerCancel, { once: true });
@@ -234,6 +238,7 @@ function onPointerMove(ev: PointerEvent) {
     const i = padAt(ev.clientX, ev.clientY);
     if (i === null || i === press.last) return;
     press.last = i;
+    pressedIndex.value = i;
     if (dragMode.value === 'brush' || dragMode.value === 'unbrush') paintRepeats(i);
     else setStep(i, dragMode.value === 'on');
 }
@@ -250,6 +255,7 @@ function onPointerUp() {
     window.removeEventListener('pointercancel', onPointerCancel);
     if (press && !press.mode) setStep(press.index, !props.steps[press.index]);
     press = null;
+    pressedIndex.value = null;
     velDrag.value = null;
     isMouseDown.value = false;
     dragMode.value = null;
@@ -545,18 +551,16 @@ const nearestNote = props.nearestNote;
     cursor: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M3 2v15.5l4.2-3.8 2.9 6.8 2.7-1.2-2.9-6.6H15z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='12.5' y='17.5' width='19' height='13' rx='4' fill='%2315101f' stroke='%23fff' stroke-width='1.2'/%3E%3Ctext x='22' y='27.6' font-family='Arial%2CHelvetica%2Csans-serif' font-size='10' font-weight='700' fill='%23fff' text-anchor='middle'%3E%C3%974%3C/text%3E%3C/svg%3E") 3 2, copy;
 }
 
+/* The note's name printed under its pad (PR 127: in a black pill until then) */
 .note-chip {
     position: absolute;
     left: 50%;
-    bottom: -6px;
+    bottom: -4px;
     transform: translate(-50%, 100%);
-    padding: 2px 6px;
-    font-size: 10px;
+    padding: 2px 0;
+    font: 700 10px Cousine, ui-monospace, monospace;
     line-height: 1;
-    border-radius: 6px;
-    background: rgba(0, 0, 0, .65);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, .12);
+    color: var(--pt-text, #e6defa);
     pointer-events: none;
     white-space: nowrap;
     z-index: 1000;
@@ -566,39 +570,56 @@ const nearestNote = props.nearestNote;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     min-height: 26px;
+    margin-bottom: 4px;
 }
 
+/* The step's number printed on the panel, each beat's brighter (PR 127: in a black pill
+   until then) */
 .pad-head .pad-step-num {
     position: static;
     transform: none;
     top: auto;
     left: auto;
-    font-size: 10px;
+    font: 400 10px Cousine, ui-monospace, monospace;
     line-height: 1;
-    padding: 2px 6px;
-    border-radius: 6px;
-    background: rgba(0, 0, 0, .65);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, .12);
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--pt-text-dim, rgba(220, 210, 255, .6));
     pointer-events: none;
 }
 
+.pad-head .pad-step-num.beat {
+    color: var(--pt-text, #fff);
+    font-weight: 700;
+}
+
+/* The ⋮: a small dark cap, dimmed until its pad is hovered */
 .pad-head .pad-settings-dot {
     position: static;
-    width: 18px;
-    height: 18px;
-    border-radius: 8px;
-    border: 1px solid #2a2f42;
-    background: rgba(15, 18, 26, .78);
-    color: #c9d4ff;
-    font-size: 13px;
+    width: 22px;
+    height: 14px;
+    padding: 0;
+    border-radius: 4px;
+    border: 0;
+    background: linear-gradient(180deg, #2c2838, #1e1b28);
+    box-shadow: 0 1px 0 #0d0b12, inset 0 1px 0 rgba(255, 255, 255, .08);
+    color: #a99cc8;
+    font-size: 11px;
     line-height: 1;
     display: grid;
     place-items: center;
     cursor: pointer;
-    transition: opacity .15s ease, transform .15s ease, background .15s ease;
+    opacity: .55;
+    transition: opacity .15s ease;
+}
+
+@media (pointer: coarse) {
+    .pad-head .pad-settings-dot {
+        opacity: 1;
+    }
 }
 
 /* A finger's ⋮ (PR 107): the desktop view on a phone held upright */

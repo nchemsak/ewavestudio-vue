@@ -693,7 +693,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - A browser test drags each screen and checks the knobs' values, one undo step for a filter
   drag, the keys, and the cards' heights.
 
-### The pads (PR 127, the plan's item 9, part 1)
+### The pads (PR 127, the plan's item 9)
 - **A press decides by its first move** (`onPointerDown()` in `SynthStepGrid.vue`, Rhythm's and
   Bass's pads; `down()` in `DrumPads.vue`): **up or down on a lit pad sets its velocity** (a pad's
   height, 80 px, is the whole range on Rhythm and Bass; 60 px on Drums), its fill following and a
@@ -707,8 +707,18 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   menu, the maintainer's call) and the Step Sequencer's ⋯ menu (Individual Pad Sliders, Clear
   Repeats, Reset Pads). **Reset** is a small red cap at the header's right end (the machine shown,
   one undo step), Clear Repeats the Repeats brush's **×1**.
-- The pads look as they did; their look (more like real pads that press in) is the item's part 2,
-  mockups first.
+- **The look** (option A of three mockups, "silicone"; B was backlit acrylic in wells, C flat
+  soft-touch pads with an LED edge and a velocity meter; the first round, tall pads as high as the
+  card, pads with rows of Repeats and Notes caps, and Drums' flat cells everywhere, was turned
+  down): matte rubber pads standing on a darker lip (5 px on Rhythm's and Bass's, `.padTEST` in
+  `_drumSequencer.scss`; 3 px on Drums' cells; 3 and 2 px on the phone's pads and drum cells), with
+  a fine grain and a soft top light; a lit pad glows from inside in its note's colour, as high as
+  its velocity, its edge soft; held down it sinks onto its lip (`.pressed`, from `pressedIndex` in
+  `SynthStepGrid.vue`, the pad under the pointer while painting; `:active` on Drums' and the
+  phone's). The same rubber in every theme (fixed colours, as the caps are dark in every theme).
+  The step numbers are printed on the panel (each beat's brighter) and the note names under the
+  pads, no longer in black pills; the ⋮ is a small dark cap, dimmed until its pad is hovered
+  (always lit on a touch screen). No size changed.
 
 ### Pad settings (the ⋮ popover)
 - `PadSettingsPopover.vue`, opened by a pad's ⋮ (`openPadSettings()` in `DrumSequencer.vue`):
@@ -2673,17 +2683,11 @@ beat, the reverse-reverb swell (REV, PR 105, covers its use), Fit the window (it
 useful half of it), and REV on the sample (unclear what it was for); Google Play moved to Not
 now. Small dependency updates ride along with any PR (npm update within the current majors).
 
-9. **The pads redesigned, part 2: their look** (part 1, how they're played, was PR 127). Mockups
-    first, at today's size: pads that look as real as possible, to be touched, adjusted and
-    pressed in, with a modern design. PR 127's first mockups (tall pads as high as the card,
-    pads with rows of Repeats and Notes caps, Drums' flat cells everywhere) were turned down,
-    the tall pads most (the maintainer's call). **The pads card one height** whichever machine
-    is shown, so the rail beside it stays put, is still open: growing Rhythm's pads to Drums'
-    height is what made the tall pads; centring them in a fixed card, or leaving it to item 10,
-    are the other ways.
-10. **A steady right side**: whatever still moves when switching machines after item 9 (the
-    rail's scope and spectrogram, the Melody Maker's notes, the Compose column) stays the same
-    size.
+10. **A steady right side**: whatever still moves when switching machines (the Step Sequencer
+    card, 189 px on Rhythm and about 320 on Bass and Drums, so the rail beside it, its scope and
+    spectrogram, and the Sound and Compose sections under it) stays the same size. Item 9's "one
+    height" moved here (PR 127): growing Rhythm's pads to Drums' height made the tall pads the
+    maintainer turned down; centring them in a fixed card is the other way.
 11. **A preview of Rhythm's hit**: a small clickable picture of the hit beside Keep as drum in
     Rhythm's Sound title (what Keep would save), playing it while stopped, as Bass's screen
     and the Drums slots' pictures do. A small mockup.
@@ -2993,7 +2997,7 @@ Done:
 | 124 | The Drift machine, part 3, the phone (option C of three mockups), which finishes the plan's item 6: DRIFT beside RHY \| BASS \| DRUM (the keys without LEDs under 900 px); with Drift chosen, the Pads page has the six plates 3 × 2 over its bars (a tap on a bar picks it, on a plate holds it; a dash running off a bar's edge for a note that carries on; 1–4 \| 5–8 for 8 bars on a short screen), Drift sounds and Chords on the steppers, **Bars 4 \| 8** and **Copy → N** (a bar into the next, phone only for now), and the X/Y pad in the knobs' place (`DriftXYPad.vue`, shared with the desktop); the Sound page has the swarm's screen with Swarm, Tone (Filter, Spread), In bars and Mix (Level, Reverb); the Key page dims Generate. Nothing scrolls at 568 × 320 or 844 × 390. |
 | 125 | Fixes from the maintainer's list after PR 124 (whose plan it also records: the reverb, the pads, a steady layout, FX and Solo, waves per pattern, a PHONE switch): File → Open's list stays open for a mouse heading to it diagonally (it closed as the mouse crossed Save as…; `src/lib/menuAim.ts`); the Melody Maker's chosen key is filled in a deep green with a white letter (the mint ring hardly showed on a white key); its corner badge names **the note the pattern plays**, as written, bigger and without cents, or Drift's chord (`NoteBadge.vue`; the tuner it replaces listened, and unison, FM and the sweep led it astray); flat keys' note names fixed (E was missing from the list, so E read F and B had no name). Dependencies updated within their majors (Vite 7.3.8, Vue 3.5.46, Sass 1.108...). |
 | 126 | The reverb pedal, three knobs and REV (the plan's item 8): PRE went (a project's pre-delay no longer plays, and isn't saved again; 67 MIDI-learnable knobs), and REV moved off the ribbon into its corner beside TONE, as CRUSH and PING PONG; REV's **Next hit follows every machine's hits** through the pedals (Rhythm's steps, Bass's notes, Drums' hits, each while unmuted with Pedals above 0; `pedalHitSteps()` in `reverse.ts`, both engines), so with Rhythm empty a swell rises into the next drum or bass hit. |
-| 127 | The pads, part 1 (the plan's item 9): a lit pad dragged up or down sets its velocity (a readout while dragging), a sideways drag paints pads on or off, on Rhythm, Bass and Drums (the first move decides; Drums couldn't paint), and arrows up and down change a focused pad's velocity; the hover sliders and the Step Sequencer's ⋯ menu went: Clear Repeats is the Repeats brush's **×1**, Reset Pads a red **Reset** cap in the header. The pads look as they did (their look is part 2). |
+| 127 | The pads (the plan's item 9): a lit pad dragged up or down sets its velocity (a readout while dragging), a sideways drag paints pads on or off, on Rhythm, Bass and Drums (the first move decides; Drums couldn't paint), and arrows up and down change a focused pad's velocity; the hover sliders and the Step Sequencer's ⋯ menu went: Clear Repeats is the Repeats brush's **×1**, Reset Pads a red **Reset** cap in the header; the pads, Drums' cells and the phone's are **silicone** (option A of three mockups, after a first round turned down): rubber pads on a lip, lit from inside as high as their velocity, sinking while held, the step numbers and note names printed, no black pills. "One height" moved to item 10. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
