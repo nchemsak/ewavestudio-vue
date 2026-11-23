@@ -572,7 +572,7 @@ const nearestNote = props.nearestNote;
     align-items: center;
     gap: 2px;
     min-height: 26px;
-    margin-bottom: 4px;
+    margin-bottom: 5px; /* the card as tall as before PR 127, so the rail beside it lines up */
 }
 
 /* The step's number printed on the panel, each beat's brighter (PR 127: in a black pill
