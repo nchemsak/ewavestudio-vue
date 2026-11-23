@@ -180,7 +180,6 @@ function onPointerDown(evt: PointerEvent, index: number) {
     evt.preventDefault();
     isMouseDown.value = true;
     focusIndex.value = index; // Tab comes back to the last pad used
-    padEls[index]?.focus({ preventScroll: true });
     try { (evt.currentTarget as HTMLElement).releasePointerCapture?.(evt.pointerId); } catch { /* */ }
 
     if (props.repeatBrush) {
