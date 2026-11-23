@@ -261,10 +261,9 @@ src/audio/
   sample.ts              The recorded sound, the 'sample' wave: kept as base64 PCM, trimmed, and
                          played at a note's pitch (see "Sample a sound")
   reverb/generateIr.ts   Algorithmic impulse response for the ConvolverNode
-  reverb/preDelay.ts     The reverb's pre-delay (PRE): its note values, their time at the tempo
-                         (followPreDelay), its label (see "Effect switches")
   reverb/reverse.ts      REV, the reverb backwards: SWELL's lengths, the gap to the next hit,
-                         the reversed impulse response (see "Effect switches")
+                         every machine's hits through the pedals (pedalHitSteps), the reversed
+                         impulse response (see "Effect switches")
   export/scheduleStepSequencer.ts  Separate offline engine used for audio export
   export/exportFiles.ts  The Export audio dialog's files: renders, loops, stems, one-shot; and
                          renderHit(), the hit behind the Envelope card
@@ -362,7 +361,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Graph: per-note synth voices → drive (dry + shaper → tone → [bit crusher] → `driveSum`).
   From `driveSum` two paths run in parallel: delay (dry + wet, with a feedback loop and tone
   filters; the plain delay or the ping-pong one, each with its own send) and a reverb send
-  (tone filter → pre-delay → convolver → wet gain; with REV, after the pre-delay a gate and a
+  (tone filter → convolver → wet gain; with REV, after the tone filter a gate and a
   reversed convolver per swell length → its own wet gain). Both go to `preMaster`, and so does the noise layer, which bypasses drive, delay and reverb. From `preMaster` everything
   goes through the tape pedal, or round it while it's off (see "The tape pedal"), to
   `masterGain` (the Volume knob) → the output limiter → `output` → destination. The views are tapped from `masterGain` through a 10 Hz high-pass
@@ -760,63 +759,52 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   delay's same echo. The switch moves the send between the two delays, so echoes already
   ringing in the other carry on. Browser tests check the echoes' sides live (per-channel
   probes, `__channelPeaksOver`) and in the export, and that the crusher quantizes live.
-- **PRE** on the reverb (PR 103; note values since PR 104; `src/audio/reverb/preDelay.ts`,
-  both engines): a `DelayNode` on the reverb send, between its tone filter and the convolver,
-  so the hit stays dry and clear before the tail starts. It's inside the reverb's stem, so the
-  stems still add up. The knob (`reverb.preDelay`, "Reverb pre-delay", MIDI-learnable; 34
-  learnable knobs) is the pedal's fourth, in the grid's corner that was empty beside TONE
-  (`'tone pre'`), so the pedal keeps its size.
-  **Note values at the tempo** (PR 104, the maintainer's call: PR 103's knob was 0–250 ms with
-  soft notches at 1/64 and 1/32, whose mint ticks hardly showed on the pale pedals): like the
-  delay's TIME, one position per value with a dot each (`markersOnly`), **Off, 1/64, 1/32,
-  1/16T, 1/16, 1/16., 1/8** (`PRE_DIVISIONS`; 0, 31, 63, 83, 125, 188 and 250 ms at 120 BPM),
-  reading "1/16 · 125 ms". Longer than 1/8 sounds like an echo. Saved as
-  `fx.reverb.preDivision`, with its time as `fx.reverb.preDelay` in ms (what the engines read):
-  `followPreDelay()` in `DrumSequencer.vue` keeps the time at the value and the tempo,
-  synchronously, and `applySnapshot()` works it out on every load, so a saved time can't
-  disagree with the knob. A project from before PR 103 gets Off; one from PR 103, with only ms,
-  the nearest value at its tempo (`preDivisionForMs()`). The DelayNodes are 1.5 s long (1/8 at
-  20 BPM). `soundKey()` leaves the ms out (it follows the tempo), so a tempo change keeps a
-  preset lit. A sound setting: presets and File → New put it back to Off, and the Sounds dice
-  picks 1/64–1/16 in two of five rolls with the reverb (drawn after the tape, so earlier rolls
-  are the same sound). The hit behind the Envelope card renders that much longer. Live, a change glides
-  the delay time (30 ms), bending the send's pitch for a moment, as a delay's TIME does.
+- **PRE** on the reverb (a pre-delay before the convolver, PR 103, in note values since PR 104)
+  **went in PR 126** (the plan's item 8, the maintainer's call: PRE, not TONE, which darkens
+  the tail and is what the presets set). The pedal is three knobs and REV: DECAY · MIX / TONE ·
+  REV (`'tone sw'`, REV in PRE's corner, as the delay's and the overdrive's switches). A
+  project's `fx.reverb.preDivision` and `preDelay` are ignored (not saved again), and a MIDI
+  link to `reverb.preDelay` is dropped on load. The Sounds dice still draws PRE's numbers and
+  drops them, so every roll is the sound it was otherwise. `src/audio/reverb/preDelay.ts` is in
+  git history. A browser test checks the three knobs, REV beside TONE, and that a project saved
+  with PRE at 1/8 exports its reverb starting with the hit.
   **Notches and dots on the pedals** (PR 104): a knob's notch ticks and position dots are in
   dark ink on the pedals' pale faces (`--knob-detent`, `--knob-marker` and their `-on` /
   `-active` colours, set with the pedals' ink in `_themes.scss`); the panel's mint and violet
   all but vanished there. The delay's TIME keeps its own violet and yellow dots.
-  A browser test checks the knob (its values, greyed out while off, saved, following the tempo,
-  one undo step) and the export (the reverb stem starts 250 ms later at 1/8, 120 BPM, the dry
-  one doesn't move, the stems add up).
 
 - **REV** on the reverb (PR 105; the plan's item after PR 104; `src/audio/reverb/reverse.ts`,
   both engines): the reverb backwards. After each hit the reverb rises instead of decaying,
   then cuts off, so the hit is "sucked into" the next one. The swell comes after its hit, so it
   needs no look-ahead: it works live, in the export, with MIDI notes and inside the reverb's
   stem (the stems still add up). The "pre-reverb" that swells *before* a hit stays a Maybe.
-  - **The switch** (option A of three mockups: B beside a shorter treadle, C between the
-    knobs): a `PedalSwitch` ("REV", "Reverse reverb") on the ribbon under the LED, its caption
-    in the ribbon's light letters, the name moved down 30 px; greyed out while the pedal is
-    off. The phone's tall pedal has it on the ribbon too since PR 106 (in the face's top-right
-    corner before).
+  - **The switch**: a `PedalSwitch` ("REV", "Reverse reverb") on the face, in the corner beside
+    TONE where PRE was (PR 126; the desktop's and the phone's pedals); greyed out while the
+    pedal is off. From PR 105 to 125 it was on the ribbon under the LED (option A of three
+    mockups).
   - **SWELL**: while REV is on the DECAY knob reads SWELL (the maintainer's call) and steps
     through **Next hit, 1 step, 2 steps, 1 beat, 2 beats** (`SWELLS`; saved as
     `fx.reverb.swell`: `'next'`, `'1/16'`, `'1/8'`, `'1/4'`, `'1/2'`), one position each with a
     dot; DECAY keeps its own value meanwhile. One `<Knob midi-id="reverb.decay">` whose range
     switches, so a controller linked to DECAY sets SWELL while REV is on.
-  - **Next hit** (the default): each hit's swell lasts until the next step that's on, round
-    the bar's end (a lone hit a bar swells for the bar), swing included (`nextHitGaps()`, from
-    the pattern as it is when the step is scheduled; a step's repeats share its one swell). The
+  - **Next hit** (the default): each hit's swell lasts until the next hit, round the bar's end
+    (a lone hit a bar swells for the bar), swing included (`nextHitGaps()`, from the patterns
+    as they are when the step is scheduled; a step's repeats share its one swell). **A hit is
+    any machine's that goes through the pedals** (PR 126; until then only Rhythm's steps, so
+    with Rhythm empty nothing swelled): Rhythm's steps, the steps a Bass note starts on (not
+    those tied or slid into), any unmuted Drums slot's steps, each machine while it's unmuted
+    and its Pedals is above 0 (`pedalHitSteps()` in `reverse.ts`, unit-tested; both engines,
+    the export per bar with the chain's patterns). Drift has no hits (held chords). The
     engines keep one reversed impulse response per length in whole ms (`revKey()`), each
-    behind a gate after PRE; a hit opens its own gate (3 ms glide) as it reaches it (its time
-    plus PRE) and shuts the others, and a convolver whose gate shuts plays on, so a swell
+    behind a gate; a hit opens its own gate (3 ms glide) as it reaches it and shuts the others, and a convolver whose gate shuts plays on, so a swell
     already rising finishes. Live, `revForStep()` from `schedule()`; up to 10 chains, the
     longest-unused dropped. A note with no next hit swells for a beat (`FALLBACK_STEPS`): MIDI
-    notes and previews while stopped (that gate is open at rest, `openRevAtRest()`), the
-    one-shot and the hit behind the Envelope card (the export state's `oneShot`).
+    notes and previews while stopped (that gate is open at rest, `openRevAtRest()`; the export
+    opens it at its start too, as live), the one-shot and the hit behind the Envelope card (the
+    export state's `oneShot`).
   - **Fixed lengths**: one gate open all the time.
-  - **PRE is taken off** the impulse response's length (`revIrSeconds()`, 20 ms to 6 s), so the
-    swell still ends on time.
+  - The impulse response is the swell's length, 20 ms to 6 s (`revIrSeconds()`; until PR 126
+    less PRE).
   - **The impulse response** (`reverseIrChannels()`): smoothed noise rising from −60 dB to full
     over its length, its last 4 ms faded (no click), two channels, fixed random numbers, the
     same energy whatever its length, times `REV_LEVEL` (0.075), measured against the plain
@@ -824,11 +812,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     5 at 120 BPM, REV's reverb stem 0.023 RMS, the plain one's 0.023.
   - Saved as `fx.reverb.reverse` (older projects off) and `fx.reverb.swell` (unknown: Next
     hit); a sound setting, so presets and File → New put it off; the Sounds dice turns it on in
-    two of five rolls with the reverb (mostly Next hit; drawn last). MIX, TONE and PRE apply
+    two of five rolls with the reverb (mostly Next hit; drawn last). MIX and TONE apply
     as to the plain reverb; DECAY's value is kept but unused while REV is on.
-  - Browser tests: the switch on the ribbon, SWELL's values, saving and undo; the export (each
-    swell rising into the next hit where the plain reverb decays, about as loud, the stems
-    adding up); live (a hit's swell stopping where the next hit would be).
+  - Browser tests: the switch, SWELL's values, saving and undo; the export (each swell rising
+    into the next hit where the plain reverb decays, about as loud, the stems adding up; with
+    Rhythm empty, into the Drums machine's next hit); live (a hit's swell stopping where the next hit would be).
 
 ### The tape pedal (named lo-fi since PR 99)
 - **Named lo-fi** (PR 99, the maintainer's call: it has a vinyl mode, and "tape" reads as a tape
@@ -1405,7 +1393,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   still as tall as the transport and the pads at 1600 px), a cell per bar with its chord's name, the bar playing outlined; its
   Level and Pedals (the reverb send) and meter. MIDI learn: `drift.level`, `drift.pedals`,
   `drift.cutoff`, `drift.spread`, `drift.voices`, `drift.drift`, `drift.wave`, `drift.attack`,
-  `drift.release` (68 knobs).
+  `drift.release` (68 knobs; 67 since PR 126 took PRE off the reverb).
 - **Saved** as the snapshot's `drift` { sound: { voices, drift, wave, spread, cutoff, attack,
   release }, muted, level, pedals, length, chords: 8 bars × 6 booleans } (`driftSnapshot()`,
   `applyDrift()`: values kept in their ranges, damaged chords nothing held). A project from
@@ -1621,7 +1609,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### MIDI learn
 - A controller's knobs turn the app's knobs. Learn (in the MIDI toolbar, once an input is
-  chosen) starts learn mode: the 68 learnable knobs (Drift's 9 since PR 122: the rail's Level and Pedals, the X/Y pad's Filter and Spread, Voices, Drift, Wave, Attack and Release; Drums' 14 since PR 119: each slot's Tune, Decay and Level, and the rail's Level and Pedals; the rail's two Pedals since PR 116, Bass's eight since PR 115; 31 after PR 77 made Unison's Voices keys, 33 with the tape pedal's two, 32 since PR 92 hid the Step Sequencer's Vol, 33 again with the sample's Length, PR 100, 34 with the reverb's PRE, PR 103, 35 with the rail's Rhythm level, PR 108, which is `synth.volume` again; the reverb's DECAY knob is SWELL while REV is on, PR 105) get a dashed outline and a badge ("CC 21",
+  chosen) starts learn mode: the 67 learnable knobs (the reverb's PRE gone since PR 126; Drift's 9 since PR 122: the rail's Level and Pedals, the X/Y pad's Filter and Spread, Voices, Drift, Wave, Attack and Release; Drums' 14 since PR 119: each slot's Tune, Decay and Level, and the rail's Level and Pedals; the rail's two Pedals since PR 116, Bass's eight since PR 115; 31 after PR 77 made Unison's Voices keys, 33 with the tape pedal's two, 32 since PR 92 hid the Step Sequencer's Vol, 33 again with the sample's Length, PR 100, 34 with the reverb's PRE, PR 103, 35 with the rail's Rhythm level, PR 108, which is `synth.volume` again; the reverb's DECAY knob is SWELL while REV is on, PR 105) get a dashed outline and a badge ("CC 21",
   or "CC 7 ch 3" off channel 1) for the controller knob they follow, and a bar at the bottom of
   the screen says what to do (with Clear all and Done; a spacer under the page lets the last
   knobs scroll clear of it). Click a knob (or Enter on it) to arm it, then turn a controller
@@ -2664,11 +2652,6 @@ beat, the reverse-reverb swell (REV, PR 105, covers its use), Fit the window (it
 useful half of it), and REV on the sample (unclear what it was for); Google Play moved to Not
 now. Small dependency updates ride along with any PR (npm update within the current majors).
 
-8. **The reverb pedal, three knobs and REV** (the maintainer's call: PRE goes, not TONE, which
-    darkens the tail and is what the presets set). DECAY · MIX / TONE · REV, REV in PRE's corner
-    on the face, as the delay's and the overdrive's switches; a project's PRE no longer plays.
-    And REV's **Next hit follows every machine's hits** through the pedals (today only Rhythm's
-    steps time a swell, so with Rhythm empty there's nothing to swell into).
 9. **The pads redesigned** (mockups first): **drag a lit pad up or down for its velocity**, as on
     Drums, and **a sideways drag paints** pads on or off, on Rhythm, Bass and Drums (the first
     move decides; Drums can't paint today); arrows up and down on a focused pad for velocity.
@@ -2989,6 +2972,7 @@ Done:
 | 121 | The Drums machine, part 3, the phone (option D1 of the mockups, D2's halves on a small phone), which finishes the plan's item 5: DRUM beside RHY \| BASS (the machine keys without LEDs under 600 px); with Drums chosen, the Pads page has its four rows (a tap, a finger drawn along a row, a hold for Velocity; a tap on a row's name picks it), eight steps at a time with 1–8 \| 9–16 under 700 px, the Drum kits and Drum patterns steppers, Humanize on the picked row and its slot's Tune, Decay and Level as the knobs; the Sound page has the four slot cards with a Mix card; the Key page dims the Melody Maker. Nothing scrolls at 568 × 320 or 844 × 390. |
 | 124 | The Drift machine, part 3, the phone (option C of three mockups), which finishes the plan's item 6: DRIFT beside RHY \| BASS \| DRUM (the keys without LEDs under 900 px); with Drift chosen, the Pads page has the six plates 3 × 2 over its bars (a tap on a bar picks it, on a plate holds it; a dash running off a bar's edge for a note that carries on; 1–4 \| 5–8 for 8 bars on a short screen), Drift sounds and Chords on the steppers, **Bars 4 \| 8** and **Copy → N** (a bar into the next, phone only for now), and the X/Y pad in the knobs' place (`DriftXYPad.vue`, shared with the desktop); the Sound page has the swarm's screen with Swarm, Tone (Filter, Spread), In bars and Mix (Level, Reverb); the Key page dims Generate. Nothing scrolls at 568 × 320 or 844 × 390. |
 | 125 | Fixes from the maintainer's list after PR 124 (whose plan it also records: the reverb, the pads, a steady layout, FX and Solo, waves per pattern, a PHONE switch): File → Open's list stays open for a mouse heading to it diagonally (it closed as the mouse crossed Save as…; `src/lib/menuAim.ts`); the Melody Maker's chosen key is filled in a deep green with a white letter (the mint ring hardly showed on a white key); its corner badge names **the note the pattern plays**, as written, bigger and without cents, or Drift's chord (`NoteBadge.vue`; the tuner it replaces listened, and unison, FM and the sweep led it astray); flat keys' note names fixed (E was missing from the list, so E read F and B had no name). Dependencies updated within their majors (Vite 7.3.8, Vue 3.5.46, Sass 1.108...). |
+| 126 | The reverb pedal, three knobs and REV (the plan's item 8): PRE went (a project's pre-delay no longer plays, and isn't saved again; 67 MIDI-learnable knobs), and REV moved off the ribbon into its corner beside TONE, as CRUSH and PING PONG; REV's **Next hit follows every machine's hits** through the pedals (Rhythm's steps, Bass's notes, Drums' hits, each while unmuted with Pedals above 0; `pedalHitSteps()` in `reverse.ts`, both engines), so with Rhythm empty a swell rises into the next drum or bass hit. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

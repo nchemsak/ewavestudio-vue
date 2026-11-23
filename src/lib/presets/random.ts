@@ -124,9 +124,9 @@ export function randomPreset(rng: Rng = Math.random): SynthPreset {
 	// pedal is the same sound, with or without it.
 	if (chance(0.25)) fx.tape = { enabled: true, age: between(0.15, 0.7, 0.01), wobble: between(0.1, 0.6, 0.01), mode: chance(0.7) ? 'tape' : 'vinyl' };
 
-	// The reverb's pre-delay, in two of five rolls with the reverb: a short gap before the tail
-	// (1/64 to 1/16 at the tempo). Drawn after the tape, so every roll from before it stays the same.
-	if (fx.reverb && chance(0.4)) fx.reverb.preDivision = pick(['1/64', '1/32', '1/16T', '1/16']);
+	// Where the reverb's pre-delay was drawn (PR 103; PRE went in PR 126): the draws stay, unused,
+	// so every roll after them (REV's) is the same sound as before
+	if (fx.reverb && chance(0.4)) pick(['1/64', '1/32', '1/16T', '1/16']);
 
 	// REV, now and then with the reverb: the reverb backwards, mostly swelling into the next hit.
 	// Drawn last, so every roll from before it stays the same.

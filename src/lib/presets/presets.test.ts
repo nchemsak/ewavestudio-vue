@@ -6,7 +6,6 @@ import { buildSnapshot, resetSoundToFactoryDefaults } from '../project/snapshot'
 import { STEPS, fresh, asSaved, changeEverything, leaves } from '../project/testState';
 import { WAVE_IDS } from '../../audio/waves';
 import { isDelayDivision } from '../delaySync';
-import { isPreDivision } from '../../audio/reverb/preDelay';
 import { isSwell } from '../../audio/reverb/reverse';
 import { VELOCITY_SWITCH_AMOUNT } from '../../audio/velocity';
 import { LFO_DEPTH_MAX } from '../../audio/lfo';
@@ -87,7 +86,6 @@ function expectValid(p: (typeof PRESETS)[number], where: string) {
 		if (path === 'synth.fm.ratio') expect([1, 1.5, 2, null], at).toContain(v);
 		if (path === 'synth.pitchEnv.mode') expect(['up', 'down', 'random'], at).toContain(v);
 		if (path === 'fx.delay.division') expect(isDelayDivision(v), at).toBe(true);
-		if (path === 'fx.reverb.preDivision') expect(isPreDivision(v), at).toBe(true);
 		if (path === 'fx.reverb.swell') expect(isSwell(v), at).toBe(true);
 	}
 }
@@ -118,7 +116,7 @@ const presetLeaves = (p: (typeof PRESETS)[number]) => {
 const soundLeaves = (snap: any) => {
 	const all = leaves({ synth: snap.synth, fx: snap.fx });
 	return Object.fromEntries(Object.entries(all).filter(([path]) =>
-		!/^synth\.tuning\.|^synth\.sample(Length)?\b|^synth\.noise\.(mask|type)$|^fx\.delay\.time$|^fx\.reverb\.preDelay$/.test(path)));
+		!/^synth\.tuning\.|^synth\.sample(Length)?\b|^synth\.noise\.(mask|type)$|^fx\.delay\.time$/.test(path)));
 };
 
 describe('the preset library', () => {
@@ -349,7 +347,6 @@ describe('the dice (a random sound)', () => {
 			delay: share(p => !!p.fx?.delay),
 			drive: share(p => !!p.fx?.drive),
 			tape: share(p => !!p.fx?.tape),
-			preDelay: share(p => !!p.fx?.reverb?.preDivision),
 			reverse: share(p => !!p.fx?.reverb?.reverse),
 		};
 		for (const [part, s] of Object.entries(parts)) {

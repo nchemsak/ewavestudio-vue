@@ -24,14 +24,14 @@ describe('the hit (behind the Envelope card)', () => {
 		expect(hitSeconds(sound({ delay: [true, 0.375, 0.3, 0], reverb: [true, 3, 0] }))).toBeCloseTo(0.62, 5);
 		expect(hitSeconds(sound({ reverb: [true, 2, 0.3] }))).toBeCloseTo(0.62 + 2.4, 5);
 		expect(hitSeconds(sound({ reverb: [true, 8, 0.5], delay: [true, 1, 0.9, 0.5] }))).toBe(HIT_MAX_S);
-		// REV: its swell instead of the decay (a beat at 120 BPM for Next hit, as for one note), PRE before it
-		const rev = (swell: string, preDelay = 0) => {
+		// REV: its swell instead of the decay (a beat at 120 BPM for Next hit, as for one note)
+		const rev = (swell: string) => {
 			const s = sound({ reverb: [true, 3, 0.3] });
-			Object.assign(s.fx.reverb, { reverse: true, swell, preDelay });
+			Object.assign(s.fx.reverb, { reverse: true, swell });
 			return { ...s, bpm: 120 };
 		};
 		expect(hitSeconds(rev('next'))).toBeCloseTo(0.62 + 0.5, 5);
-		expect(hitSeconds(rev('1/2', 125))).toBeCloseTo(0.62 + 1 + 0.125, 5);
+		expect(hitSeconds(rev('1/2'))).toBeCloseTo(0.62 + 1, 5);
 	});
 
 	it('columns draw the wave itself near the start and its envelope further on', () => {

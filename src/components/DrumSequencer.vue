@@ -171,8 +171,8 @@
 						v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 					<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 						v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone"
-						v-model:pre-division="reverbPreDivision" v-model:reverse="reverbReverse"
-						v-model:swell="reverbSwell" :tempo="tempo" />
+						v-model:reverse="reverbReverse"
+						v-model:swell="reverbSwell" />
 					<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
 						v-model:mode="tapeMode" :playing="isPlaying" />
 				</div>
@@ -609,8 +609,8 @@
 									v-model:driveMix="driveMix" v-model:crush="driveCrush" />
 								<ReverbEffect :showToggle="true" :audioCtx="audioCtx" v-model:enabled="reverbEnabled"
 									v-model:mix="reverbMix" v-model:decay="reverbDecay" v-model:tone="reverbTone"
-									v-model:pre-division="reverbPreDivision" v-model:reverse="reverbReverse"
-									v-model:swell="reverbSwell" :tempo="tempo" />
+									v-model:reverse="reverbReverse"
+									v-model:swell="reverbSwell" />
 								<!-- The tape pedal, last in the chain: a low deck under the three pedals
 								     (option C of three mockups; the phone's FX page has it as a pedal) -->
 								<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
@@ -697,7 +697,6 @@ import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick, computed, m
 import Knob from './Knob.vue';
 import DelayEffect from './modules/DelayEffect.vue';
 import { DEFAULT_DELAY_DIVISION, DEFAULT_DELAY_TIME, DEFAULT_TEMPO, followDelaySync } from '../lib/delaySync';
-import { DEFAULT_PRE_DIVISION, followPreDelay } from '../audio/reverb/preDelay';
 import { DEFAULT_SWELL } from '../audio/reverb/reverse';
 import { TEMPO_DETENTS, SWING_DETENTS, TRIPLET_SWING } from '../lib/knobDetents';
 import { shortestInterval, transposePitches, remapScale, nearestRootHz, patternCenterHz, chordPitchClasses, type KeyScale } from '../lib/melody/theory';
@@ -2107,11 +2106,6 @@ const reverbDecay = ref(1.4);
 
 // 0 = dark, 1 = bright
 const reverbTone = ref(0.6);      // normalized tone control
-// PRE: a note value at the tempo ('Off', '1/16' …) and its time in ms, which follows the tempo
-// (src/audio/reverb/preDelay.ts)
-const reverbPreDivision = ref(DEFAULT_PRE_DIVISION);
-const reverbPreDelay = ref(0);
-followPreDelay({ tempo, division: reverbPreDivision, ms: reverbPreDelay });
 // REV: the reverb backwards, each swell SWELL long (src/audio/reverb/reverse.ts)
 const reverbReverse = ref(false);
 const reverbSwell = ref(DEFAULT_SWELL);
@@ -2284,8 +2278,6 @@ const exportState = computed<StepSequencerState>(() => {
 				mix: reverbMix.value,
 				decay: reverbDecay.value,
 				tone: reverbTone.value,
-				preDivision: reverbPreDivision.value,
-				preDelay: reverbPreDelay.value,
 				reverse: reverbReverse.value,
 				swell: reverbSwell.value,
 			},
@@ -2391,7 +2383,7 @@ const projectState: ProjectState = {
 			pingPong: delayPingPong,
 		},
 		drive: { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix, crush: driveCrush },
-		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone, preDivision: reverbPreDivision, preDelay: reverbPreDelay, reverse: reverbReverse, swell: reverbSwell },
+		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone, reverse: reverbReverse, swell: reverbSwell },
 		tape: { enabled: tapeEnabled, age: tapeAge, wobble: tapeWobble, mode: tapeMode },
 	},
 	instruments,
@@ -5132,31 +5124,6 @@ async function recordSample() {
 		grid-row: 3;
 		justify-self: center;
 	}
-}
-
-/* REV (option A of three mockups: B was beside a shorter treadle, C between the knobs): a mini
-   switch on the ribbon, under the LED, its caption in the ribbon's light letters; the name
-   moves down to make room */
-.fx-pair.pedalboard :deep(.reverb-pedal .pedal-switch.rev-switch) {
-	position: absolute;
-	left: 0;
-	top: 26px;
-	right: auto;
-	width: 24px;
-	z-index: 1;
-}
-
-.fx-pair.pedalboard :deep(.reverb-pedal .pedal-switch.rev-switch .ps-label) {
-	color: rgba(255, 255, 255, 0.93);
-	min-height: 0;
-}
-
-.fx-pair.pedalboard :deep(.reverb-pedal .pedal-switch.rev-switch:disabled .ps-label) {
-	color: rgba(255, 255, 255, 0.6);
-}
-
-.fx-pair.pedalboard :deep(.reverb-pedal .effect-label) {
-	margin-top: 30px;
 }
 
 /* The phone's FX page (PR 106): the same pedals, kept tall (236 px; it has the height to

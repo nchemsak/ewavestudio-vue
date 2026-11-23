@@ -11,8 +11,7 @@
 
 import { playNote, type NoteWiring, type VoiceSettings } from "../note";
 import { generateReverbIR } from "../reverb/generateIr";
-import { clampPreDelayMs, PRE_DELAY_MAX_MS } from "../reverb/preDelay";
-import { DEFAULT_SWELL, isSwell, nextHitGaps, revIrSeconds, revKey, reverseIrChannels, swellSeconds } from "../reverb/reverse";
+import { DEFAULT_SWELL, isSwell, nextHitGaps, pedalHitSteps, revIrSeconds, revKey, reverseIrChannels, stepTime, swellSeconds } from "../reverb/reverse";
 import { ratchetHits, ratchetPitches, stepSpan } from "../ratchet";
 import { createCrusher } from "../crusher";
 import { createPingPong } from "../pingPong";
@@ -105,7 +104,6 @@ export type StepSequencerState = {
 			mix: number;      // 0..1
 			decay: number;    // seconds
 			tone: number;     // 0..1 (dark→bright)
-			preDelay?: number; // ms before the tail starts (missing: 0)
 			reverse?: boolean; // REV: the reverb backwards (reverb/reverse.ts; missing: off)
 			swell?: string;    // REV's length: 'next' (until the next hit) or a fixed one
 		};
@@ -412,13 +410,8 @@ export function scheduleStepSequencer(
 	reverbToneFilter.type = "lowpass";
 	const reverbConvolver = ctx.createConvolver();
 	const reverbWet = ctx.createGain();
-	// PRE: the send waits before the convolver (reverb/preDelay.ts), inside the reverb's stem
-	const reverbPreDelay = ctx.createDelay(PRE_DELAY_MAX_MS / 1000 + 0.01);
-	reverbPreDelay.delayTime.value = reverbEnabled ? clampPreDelayMs(rev.preDelay) / 1000 : 0;
-
 	driveSum.connect(reverbToneFilter);
-	reverbToneFilter.connect(reverbPreDelay);
-	reverbPreDelay.connect(reverbConvolver);
+	reverbToneFilter.connect(reverbConvolver);
 	reverbConvolver.connect(reverbWet);
 
 	if (reverbEnabled) {
@@ -442,12 +435,11 @@ export function scheduleStepSequencer(
 		reverbToneFilter.frequency.value = 20000;
 	}
 
-	// REV (reverb/reverse.ts): the reverb backwards instead, as live: after PRE, one reversed
+	// REV (reverb/reverse.ts): the reverb backwards instead, as live: one reversed
 	// impulse response per swell length behind a gate, each hit opening its own as it reaches
 	// it. Inside the reverb's stem.
 	const revOn = reverbEnabled && rev.reverse === true;
 	const revSwell = isSwell(rev.swell) ? rev.swell : DEFAULT_SWELL;
-	const revPreS = clampPreDelayMs(rev.preDelay) / 1000;
 	const revGates = new Map<number, GainNode>();
 	const revWet = ctx.createGain(); // MIX, as the plain reverb's
 	revWet.gain.value = clamp01(rev.mix);
@@ -464,7 +456,7 @@ export function scheduleStepSequencer(
 			const buf = ctx.createBuffer(2, chs[0].length, sr);
 			chs.forEach((d, i) => buf.copyToChannel(d as Float32Array<ArrayBuffer>, i));
 			conv.buffer = buf;
-			reverbPreDelay.connect(gate).connect(conv).connect(revWet);
+			reverbToneFilter.connect(gate).connect(conv).connect(revWet);
 			revGates.set(key, gate);
 		}
 		return { key, gate };
@@ -476,16 +468,10 @@ export function scheduleStepSequencer(
 	if (revOn) {
 		reverbWet.gain.value = 0; // the plain reverb is off while REV plays it backwards
 		const stepS = 60 / state.bpm / 4;
-		// SWELL's fixed length, or a beat for one note: open from the start (Next hit: per hit, below)
-		if (revSwell !== 'next' || state.oneShot) {
-			openRev(revIrSeconds(swellSeconds(revSwell, stepS, null), revPreS), ctx.currentTime + offsetSeconds);
-		}
+		// SWELL's fixed length, or a beat (for one note, and with Next hit until the first hit, as
+		// live, where that gate is open at rest): open from the start (Next hit: per hit, below)
+		openRev(revIrSeconds(swellSeconds(revSwell, stepS, null)), ctx.currentTime + offsetSeconds);
 	}
-	// Each bar's own gaps (with the chain, each pattern's: a swell at its end comes round to
-	// its own first hit, not the next bar's)
-	const revGapsFor = (pat: StepPattern) => revOn && revSwell === 'next' && !state.oneShot
-		? nextHitGaps(pat.active.slice(0, state.stepsCount).map(Boolean), 60 / state.bpm / 4, clamp01(state.swing))
-		: null;
 
 	// -------------------------------------------------------------------------
 	// Connect FX to master
@@ -629,6 +615,29 @@ export function scheduleStepSequencer(
 		}
 	}
 
+	// REV with Next hit, as live: each bar's hits through the pedals, every machine's
+	// (pedalHitSteps; with the chain, each bar's own patterns, so a swell at a bar's end comes
+	// round to its own first hit, not the next bar's). Whatever is rendered (one machine's stem
+	// too), the gates open as in the mix, so the stems still add up.
+	if (revOn && revSwell === 'next' && !state.oneShot) {
+		const n = state.stepsCount, swingNow = clamp01(state.swing);
+		for (let bar = 0; bar < bars; bar++) {
+			const pat = patternForBar(state, bar);
+			const b = state.bass, d = state.drums;
+			const hits = pedalHitSteps({
+				rhythm: { steps: pat.active.slice(0, n).map(Boolean), velocities: pat.velocities, pedals: state.rhythmPedals },
+				bass: b ? { pattern: b.barPatterns?.length ? b.barPatterns[bar % b.barPatterns.length] : b.pattern, pedals: b.pedals } : undefined,
+				drums: d ? { rows: d.barRows?.length ? d.barRows[bar % d.barRows.length] : d.rows, slotMuted: d.slots.map((sl) => sl.muted), pedals: d.pedals } : undefined,
+			}, n);
+			const gaps = nextHitGaps(hits, stepDuration, swingNow);
+			const barStart = ctx.currentTime + offsetSeconds + bar * n * stepDuration;
+			gaps.forEach((gap, i) => {
+				if (gap == null) return;
+				openRev(revIrSeconds(swellSeconds('next', stepDuration, gap)), barStart + stepTime(i, stepDuration, swingNow));
+			});
+		}
+	}
+
 	// The pattern, `bars` times over (with the chain, each bar its own pattern)
 	for (let bar = 0; bar < bars; bar++) {
 	const pat = patternForBar(state, bar);
@@ -636,7 +645,6 @@ export function scheduleStepSequencer(
 	const velArr = pat.velocities;
 	const pitchArr = pat.pitches;
 	const waveArr = pat.waveforms;
-	const revGaps = revGapsFor(pat);
 	for (let stepIndex = 0; stepIndex < state.stepsCount; stepIndex++) {
 		if (!steps[stepIndex]) continue;
 
@@ -654,10 +662,7 @@ export function scheduleStepSequencer(
 
 		const padNoiseOn = noiseState.mask?.[stepIndex] ?? true;
 
-		// REV with Next hit: this hit's swell lasts until the next step that's on
-		if (revGaps) openRev(revIrSeconds(swellSeconds('next', stepDuration, revGaps[stepIndex]), revPreS), t + revPreS);
-
-		// Another machine's stem alone: REV's gates above still open as in the mix, but Rhythm doesn't play
+		// Another machine's stem alone: Rhythm doesn't play
 		if (!playRhythm) continue;
 
 		// One note, or a ratchet's 2–4 quick hits within the step, as in the live engine
