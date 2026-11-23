@@ -359,7 +359,7 @@
 			</section>
 
 			<!-- Step Sequencer -->
-			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
+			<section class="pt-card step-card ds-steps" v-if="synthInstrument" :data-pads="padsMock || undefined">
 				<div class="pt-subheader step-sequencer-subheader">
 					<div class="channel-caption d-flex align-items-center gap-2">
 						<div class="mute-dot" :class="{ muted: machineMuted }"
@@ -383,33 +383,17 @@
 						</div>
 					</div>
 
-					<div class="pt-header-tools step-menu-anchor">
-						<button class="pt-info-icon" aria-label="Advanced options"
-							@click="stepsAdvanced.open = !stepsAdvanced.open">⋯</button>
-						<div v-if="stepsAdvanced.open" class="mm-menu is-local" @click.stop>
-							<div class="mm-menu-title">Advanced Options</div>
-							<div class="mm-opt" role="menuitem" @click="togglePadSliders()">
-								<span>Individual Pad Sliders</span>
-								<button class="mm-switch" :class="{ on: padSlidersOn }"><span
-										class="kn"></span></button>
-							</div>
-							<div class="pt-rule" aria-hidden="true"></div>
-							<div v-if="machine === 'rhythm'" class="mm-opt" role="menuitem" @click.stop="clearRepeats()">
-								<span>Clear Repeats</span>
-							</div>
-							<div class="mm-reset" role="menuitem" @click.stop="driftChosen ? resetDriftPads() : drumsChosen ? resetDrumPads() : bassChosen ? resetBassPads() : resetSynthPadsToDefaults()">
-								Reset Pads
-							</div>
-						</div>
-					</div>
-					<div v-if="stepsAdvanced.open" class="mm-overlay" @click="stepsAdvanced.open = false"></div>
+					<!-- Reset Pads (PR 127: the ⋯ menu went): the machine shown's pads, one undo step -->
+					<button type="button" class="steps-reset hw-cap hw-cap-sm pt-danger" :title="`Reset ${machineName}'s pads`"
+						:aria-label="`Reset ${machineName}'s pads`"
+						@click="driftChosen ? resetDriftPads() : drumsChosen ? resetDrumPads() : bassChosen ? resetBassPads() : resetSynthPadsToDefaults()">Reset</button>
 				</div>
 
 				<!-- While the Repeats brush is picked: a dashed frame round the pads, and a tag on
 				     it saying so and how to finish (neither changes the layout) -->
 				<div class="step-card__grid" :class="{ 'is-brushing': !!repeatBrush }">
 					<div v-if="repeatBrush" class="brush-note" role="status">
-						Painting ×{{ repeatBrush }} repeats<span class="brush-note__how"> · Esc or click elsewhere to finish</span>
+						{{ repeatBrush === 1 ? 'Clearing repeats' : `Painting ×${repeatBrush} repeats` }}<span class="brush-note__how"> · Esc or click elsewhere to finish</span>
 					</div>
 					<DriftPads v-if="driftChosen" :plates="driftPlates" :chords="drift.chords" :length="drift.length" :labels="driftLabels"
 						:picked="driftPick" :playing="isPlaying ? driftBarNow : -1"
@@ -417,7 +401,7 @@
 					<DrumPads v-else-if="drumsChosen" :rows="drums.rows" :slots="drums.slots" :names="drumNames" :sources="drumSources"
 						:hues="drumHues" :picked="drumPick" :current-step="currentStep" @update:rows="setDrumRows"
 						@pick="(k: number) => { drumPick = k; }" @toggle-mute="toggleDrumSlotMute" />
-					<BassPads v-else-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep"
+					<BassPads v-else-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep" :look="padsMock"
 						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
 						@open-pad-settings="({ index, anchorRect }) => openBassPad(index, anchorRect)" />
 					<SynthStepGrid v-else :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
@@ -425,7 +409,8 @@
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
 						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
 						:waveforms="(synthInstrument as any).waveforms" v-model:ratchets="synthInstrument.ratchets"
-						:repeatNotes="synthInstrument.repeatNotes" :repeatBrush="repeatBrush"
+						:repeatNotes="synthInstrument.repeatNotes" @update:repeatNotes="(v: string[]) => (synthInstrument.repeatNotes = v)" :repeatBrush="repeatBrush"
+						:look="padsMock" :show-rows="padsMock === 'b'" head-name="Rhythm" :head-sub="selectedWaveform"
 						:defaultWave="selectedWaveform" :noiseMask="noiseMask"
 						:noiseTint="noiseHexFromMorph(noiseColor)" noise-mode="static" :noise-alpha="0.32"
 						:noise-fps="14" :noise-speed="40" :noise-enabled="noiseEnabled" :pepper-alpha="0.2"
@@ -770,6 +755,8 @@ import { BASS_PATTERNS, BASS_SOUNDS, bassPatternFrom, bassPatternKey, bassSoundK
 import BassPads from './BassPads.vue';
 import BassSound from './BassSound.vue';
 import DrumPads from './DrumPads.vue';
+// MOCKUPS ONLY: ?pads=a|b|c, the pads redesigned (the plan's item 9)
+const padsMock = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('pads') || '') : '';
 import DrumSound from './DrumSound.vue';
 import DriftPads from './DriftPads.vue';
 import DriftSound from './DriftSound.vue';
@@ -1265,7 +1252,7 @@ function openStepsAdvanced(e: MouseEvent) {
 
 // The Repeats brush (Step Sequencer header): while set, clicking or dragging across pads gives
 // them that many hits (SynthStepGrid). Not saved; File → New puts it down.
-const BRUSH_COUNTS = [2, 3, 4] as const;
+const BRUSH_COUNTS = [1, 2, 3, 4] as const;
 const repeatBrush = ref<number | null>(null);
 function toggleRepeatBrush(n: number) {
 	repeatBrush.value = repeatBrush.value === n ? null : n;
@@ -4370,6 +4357,28 @@ async function recordSample() {
 
 .ds-steps {
 	position: relative;
+}
+
+/* MOCKUPS ONLY (?pads=a|b|c): one height whichever machine is shown, the tallest's (Drums') */
+@media (min-width: 1200px) {
+	.ds-steps[data-pads] {
+		min-height: 330px;
+	}
+
+	.ds-steps[data-pads] :deep(.dr-plates) {
+		min-height: 168px;
+	}
+
+	.ds-steps[data-pads] :deep(.dr-bar) {
+		min-height: 44px;
+	}
+}
+
+.steps-reset {
+	margin-left: auto;
+	padding: 2px 10px;
+	font-size: 10px;
+	letter-spacing: .06em;
 }
 
 .step-menu-anchor {
