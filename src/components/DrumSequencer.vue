@@ -383,33 +383,17 @@
 						</div>
 					</div>
 
-					<div class="pt-header-tools step-menu-anchor">
-						<button class="pt-info-icon" aria-label="Advanced options"
-							@click="stepsAdvanced.open = !stepsAdvanced.open">⋯</button>
-						<div v-if="stepsAdvanced.open" class="mm-menu is-local" @click.stop>
-							<div class="mm-menu-title">Advanced Options</div>
-							<div class="mm-opt" role="menuitem" @click="togglePadSliders()">
-								<span>Individual Pad Sliders</span>
-								<button class="mm-switch" :class="{ on: padSlidersOn }"><span
-										class="kn"></span></button>
-							</div>
-							<div class="pt-rule" aria-hidden="true"></div>
-							<div v-if="machine === 'rhythm'" class="mm-opt" role="menuitem" @click.stop="clearRepeats()">
-								<span>Clear Repeats</span>
-							</div>
-							<div class="mm-reset" role="menuitem" @click.stop="driftChosen ? resetDriftPads() : drumsChosen ? resetDrumPads() : bassChosen ? resetBassPads() : resetSynthPadsToDefaults()">
-								Reset Pads
-							</div>
-						</div>
-					</div>
-					<div v-if="stepsAdvanced.open" class="mm-overlay" @click="stepsAdvanced.open = false"></div>
+					<!-- Reset Pads (PR 127: the ⋯ menu went): the machine shown's pads, one undo step -->
+					<button type="button" class="steps-reset hw-cap hw-cap-sm pt-danger" :title="`Reset ${machineName}'s pads`"
+						:aria-label="`Reset ${machineName}'s pads`"
+						@click="driftChosen ? resetDriftPads() : drumsChosen ? resetDrumPads() : bassChosen ? resetBassPads() : resetSynthPadsToDefaults()">Reset</button>
 				</div>
 
 				<!-- While the Repeats brush is picked: a dashed frame round the pads, and a tag on
 				     it saying so and how to finish (neither changes the layout) -->
 				<div class="step-card__grid" :class="{ 'is-brushing': !!repeatBrush }">
 					<div v-if="repeatBrush" class="brush-note" role="status">
-						Painting ×{{ repeatBrush }} repeats<span class="brush-note__how"> · Esc or click elsewhere to finish</span>
+						{{ repeatBrush === 1 ? 'Clearing repeats' : `Painting ×${repeatBrush} repeats` }}<span class="brush-note__how"> · Esc or click elsewhere to finish</span>
 					</div>
 					<DriftPads v-if="driftChosen" :plates="driftPlates" :chords="drift.chords" :length="drift.length" :labels="driftLabels"
 						:picked="driftPick" :playing="isPlaying ? driftBarNow : -1"
@@ -418,12 +402,12 @@
 						:hues="drumHues" :picked="drumPick" :current-step="currentStep" @update:rows="setDrumRows"
 						@pick="(k: number) => { drumPick = k; }" @toggle-mute="toggleDrumSlotMute" />
 					<BassPads v-else-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep"
-						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
+						:nearestNote="nearestNote"
 						@open-pad-settings="({ index, anchorRect }) => openBassPad(index, anchorRect)" />
 					<SynthStepGrid v-else :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
-						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
+						:nearestNote="nearestNote"
 						:waveforms="(synthInstrument as any).waveforms" v-model:ratchets="synthInstrument.ratchets"
 						:repeatNotes="synthInstrument.repeatNotes" :repeatBrush="repeatBrush"
 						:defaultWave="selectedWaveform" :noiseMask="noiseMask"
@@ -1156,8 +1140,6 @@ function copyDriftBar() {
 }
 // DRIFT MACHINE END
 
-const showVelocity = ref(false);
-const showPitch = ref(false);
 
 const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 	getUi?: () => any;
@@ -1265,7 +1247,7 @@ function openStepsAdvanced(e: MouseEvent) {
 
 // The Repeats brush (Step Sequencer header): while set, clicking or dragging across pads gives
 // them that many hits (SynthStepGrid). Not saved; File → New puts it down.
-const BRUSH_COUNTS = [2, 3, 4] as const;
+const BRUSH_COUNTS = [1, 2, 3, 4] as const;
 const repeatBrush = ref<number | null>(null);
 function toggleRepeatBrush(n: number) {
 	repeatBrush.value = repeatBrush.value === n ? null : n;
@@ -1348,11 +1330,6 @@ function closeOverlays() {
 	for (const k in info) (info as any)[k].open = false;
 }
 
-const padSlidersOn = computed({
-	get: () => showVelocity.value && showPitch.value,
-	set: (v: boolean) => { showVelocity.value = v; showPitch.value = v; }
-});
-function togglePadSliders() { padSlidersOn.value = !padSlidersOn.value; }
 
 // PANEL MENU END
 
@@ -2791,8 +2768,6 @@ function resetUiToFactoryDefaults() {
 
 	resetToFactoryDefaults(projectState);
 
-	showVelocity.value = false;
-	showPitch.value = false;
 
 	// Close any open menus/popovers, and put the Repeats brush down
 	fxAdvanced.open = false;
@@ -4370,6 +4345,13 @@ async function recordSample() {
 
 .ds-steps {
 	position: relative;
+}
+
+.steps-reset {
+	margin-left: auto;
+	padding: 2px 10px;
+	font-size: 10px;
+	letter-spacing: .06em;
 }
 
 .step-menu-anchor {

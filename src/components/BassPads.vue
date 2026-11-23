@@ -11,7 +11,7 @@
                 :steps="lane.steps" @update:steps="(v: boolean[]) => (lane.steps = v)"
                 :velocities="lane.velocities" @update:velocities="(v: number[]) => (lane.velocities = v)"
                 :pitches="shownPitches" @update:pitches="(v: number[]) => (lane.pitches = v.map((hz) => hz / HUE))"
-                :nearestNote="(hz: number) => nearestNote(hz / HUE)" :showVelocity="showVelocity" :showPitch="showPitch"
+                :nearestNote="(hz: number) => nearestNote(hz / HUE)"
                 :waveforms="waves" :ratchets="ones" :repeatNotes="sames" :repeatBrush="null" :defaultWave="wave === 'square' ? 'square' : 'sawtooth'"
                 :noiseMask="offs" noiseTint="#fff" noise-mode="static" :noise-alpha="0" :noise-fps="14" :noise-speed="40"
                 :noise-enabled="false" :pepper-alpha="0" :pepper-scale="6" :lfoView="null"
@@ -48,8 +48,6 @@ const props = defineProps<{
     wave: BassWave;
     currentStep: number;
     nearestNote: (hz: number) => string;
-    showVelocity?: boolean;
-    showPitch?: boolean;
 }>();
 const emit = defineEmits<{
     (e: 'open-pad-settings', payload: { name: string; index: number; anchorRect: DOMRect }): void;
@@ -143,6 +141,10 @@ function toggle(id: 'accents' | 'slides' | 'ties', i: number) {
     top: -2px;
     height: 20px;
     overflow: visible;
+    /* from just after this note's name to just before the next one's (PR 127: the names are
+       printed now, not in pills) */
+    left: calc(50% + 12px);
+    width: calc(100% - 20px);
 }
 
 .bp-link.slide path {

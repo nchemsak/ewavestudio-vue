@@ -895,13 +895,24 @@ function hzText(hz: number) {
 	padding: 0;
 	border: 0;
 	border-radius: 5px;
-	background: var(--pad-bg, var(--pt-surface-2));
-	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+	/* The desktop's rubber (PR 127): on a 2 px lip, sinking while held */
+	background:
+		radial-gradient(120% 70% at 50% 0%, rgba(255, 255, 255, .09), transparent 60%),
+		linear-gradient(180deg, #363142 0%, #27232f 100%);
+	box-shadow: 0 2px 0 #15121c, inset 0 1px 0 rgba(255, 255, 255, .12);
 	touch-action: none;
+	transition: transform 70ms ease-out;
 }
 
 .pl-dcell.beat {
-	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+	background:
+		radial-gradient(120% 70% at 50% 0%, rgba(255, 255, 255, .12), transparent 60%),
+		linear-gradient(180deg, #423c50 0%, #2f2a3a 100%);
+}
+
+.pl-dcell:active {
+	transform: translateY(2px);
+	box-shadow: inset 0 2px 3px rgba(0, 0, 0, .45);
 }
 
 .pl-dcell.dim {
@@ -1216,14 +1227,23 @@ function hzText(hz: number) {
 	border: 0;
 	padding: 0;
 	border-radius: 8px;
-	background: var(--pad-bg, var(--pt-surface-2));
-	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), 0 3px 8px rgba(0, 0, 0, .35);
+	/* The desktop's rubber (PR 127): standing on a 3 px lip, sinking while held */
+	background:
+		radial-gradient(120% 70% at 50% 0%, rgba(255, 255, 255, .10), transparent 60%),
+		linear-gradient(180deg, #3a3546 0%, #2a2634 55%, #24202d 100%);
+	box-shadow: 0 3px 0 #15121c, 0 5px 8px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .16);
+	transition: transform 70ms ease-out, box-shadow 70ms ease-out;
 	color: #fff;
 	font: inherit;
 	display: flex;
 	align-items: flex-end;
 	justify-content: center;
 	touch-action: none;
+}
+
+.pl-pad:active {
+	transform: translateY(3px);
+	box-shadow: 0 0 0 #15121c, inset 0 2px 4px rgba(0, 0, 0, .45);
 }
 
 .pl-pad.beat::after {
@@ -1297,7 +1317,8 @@ function hzText(hz: number) {
 	right: 0;
 	bottom: 0;
 	height: var(--v);
-	background: linear-gradient(180deg, hsl(var(--h) var(--pp-sat) var(--pp-lit)), hsl(var(--h) var(--pp-sat) calc(var(--pp-lit) - 12%)));
+	background: linear-gradient(180deg, hsl(var(--h) var(--pp-sat) var(--pp-lit) / .55), hsl(var(--h) var(--pp-sat) var(--pp-lit) / .9) 30%, hsl(var(--h) var(--pp-sat) calc(var(--pp-lit) - 12%)));
+	box-shadow: 0 -6px 10px hsl(var(--h) var(--pp-sat) var(--pp-lit) / .35); /* the light inside the rubber */
 }
 
 .pl-note {

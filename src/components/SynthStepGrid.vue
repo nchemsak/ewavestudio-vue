@@ -9,7 +9,7 @@
                         aria-label="Pad settings">
                         ⋮
                     </button>
-                    <div v-if="showIndices" class="pad-step-num">{{ index + 1 }}</div>
+                    <div v-if="showIndices" class="pad-step-num" :class="{ beat: index % 4 === 0 }">{{ index + 1 }}</div>
                 </div>
 
                 <div class="padTESTwrap" @mouseenter="hovered = index" @mouseleave="hovered = null">
@@ -18,12 +18,13 @@
                         'liquid',
                         { selected: active },
                         { playing: index === currentStep },
-                        { 'has-noise': noiseOn(index) }
-                    ]" @mousedown="onMouseDown($event, index)" @mouseenter="onMouseEnter(index)" @dragstart.prevent
+                        { 'has-noise': noiseOn(index) },
+                        { pressed: pressedIndex === index }
+                    ]" @pointerdown="onPointerDown($event, index)" @dragstart.prevent :data-pad="index"
                         :style="padStyle(index)" role="button" :aria-pressed="active ? 'true' : 'false'"
                         :aria-label="padLabel(index, active)" :tabindex="index === focusIndex ? 0 : -1"
                         :ref="(el) => { padEls[index] = el as HTMLElement }" @keydown="onPadKeydown($event, index)"
-                        @focus="focusIndex = index">
+                        @focus="focusIndex = index" :title="active ? `Drag up or down: ${Math.round((velocities[index] ?? 1) * 100)}%` : undefined">
                         <div v-if="noiseOn(index)" class="noise-overlay" :class="[`mode-${noiseMode}`]"
                             :style="noiseStyle(index)" aria-hidden="true">
                             <div v-if="noiseMode === 'static'" class="grain" />
@@ -68,25 +69,13 @@
                     <!-- The LFO bending this note's pitch (LFO target Pitch) -->
                     <LfoBendMark v-if="active && lfoView" :view="lfoView" />
 
+                    <!-- While its velocity is dragged: how loud -->
+                    <div v-if="velDrag === index" class="vel-readout" aria-hidden="true">{{ Math.round((velocities[index] ?? 1) * 100) }}%</div>
+
                     <div v-if="active" class="note-chip">
                         {{ nearestNote(pitches[index]) }}
                     </div>
 
-                    <div v-if="active && hovered === index && props.showVelocity && !repeatBrush" class="hover-slider volume-slider">
-                        <input type="range" min="0" max="1" step="0.01" :value="velocities[index]"
-                            @input="updateVelocity(index, $event)" @mousedown="activeVol = index"
-                            @mouseup="activeVol = null" @touchstart="activeVol = index" @touchend="activeVol = null" />
-                        <span v-if="activeVol === index" class="custom-tooltip">
-                            {{ Math.round(velocities[index] * 100) }}%
-                        </span>
-                    </div>
-
-                    <div v-if="active && hovered === index && props.showPitch && !repeatBrush" class="hover-slider pitch-slider">
-                        <input :min="minHz" :max="maxHz" step="1" type="range" :value="pitches[index]"
-                            @input="updatePitch(index, $event)" @mousedown="activePitch = index"
-                            @mouseup="activePitch = null" @touchstart="activePitch = index"
-                            @touchend="activePitch = null" />
-                    </div>
                 </div>
             </div>
         </div>
@@ -117,8 +106,6 @@ const props = withDefaults(
         nearestNote: NoteNameFn;
 
         showIndices?: boolean;
-        showVelocity?: boolean;
-        showPitch?: boolean;
 
         waveforms?: PadWave[];
         defaultWave?: PadWave;
@@ -151,8 +138,6 @@ const props = withDefaults(
     }>(),
     {
         showIndices: true,
-        showVelocity: true,
-        showPitch: true,
         noiseMode: 'wash',
         noiseFps: 12,
         noiseSpeed: 60,
@@ -175,8 +160,6 @@ const isMouseDown = ref(false);
 // Repeats brush, the brush's hits or back to one
 const dragMode = ref<'on' | 'off' | 'brush' | 'unbrush' | null>(null);
 const hovered = ref<number | null>(null);
-const activeVol = ref<number | null>(null);
-const activePitch = ref<number | null>(null);
 
 const uid = Math.random().toString(36).slice(2);
 
@@ -184,38 +167,98 @@ function clone<T>(arr: T[]): T[] {
     return arr.slice();
 }
 
-function onMouseDown(evt: MouseEvent, index: number) {
-    if ((evt.target as HTMLElement).closest('.hover-slider input')) return;
+// A press on a pad (PR 127, the plan's item 9): the first move decides. Up or down on a lit pad
+// sets its velocity (VEL_DRAG_PX, a pad's height, the whole range), its fill following; sideways paints every pad
+// the pointer crosses the way the first one went, on or off; no move at all is a click, which
+// turns the pad on or off. With the Repeats brush, a press paints at once, as before.
+const VEL_DRAG_PX = 80;
+const velDrag = ref<number | null>(null);
+// The pad under a held press: it shows pressed in (painting, the one the pointer is on)
+const pressedIndex = ref<number | null>(null);
+let press: { index: number; x: number; y: number; lit: boolean; from: number; mode: 'vel' | 'paint' | null; last: number } | null = null;
+
+function onPointerDown(evt: PointerEvent, index: number) {
+    if (evt.button !== 0) return;
+    if ((evt.target as HTMLElement).closest('.pad-settings-dot')) return;
     evt.preventDefault();
     isMouseDown.value = true;
     focusIndex.value = index; // Tab comes back to the last pad used
+    try { (evt.currentTarget as HTMLElement).releasePointerCapture?.(evt.pointerId); } catch { /* */ }
 
     if (props.repeatBrush) {
         dragMode.value = ratchetFor(index) === props.repeatBrush ? 'unbrush' : 'brush';
         paintRepeats(index);
-        window.addEventListener('mouseup', onMouseUp, { once: true });
-        return;
+        press = { index, x: evt.clientX, y: evt.clientY, lit: false, from: 0, mode: 'paint', last: index };
+    } else {
+        press = { index, x: evt.clientX, y: evt.clientY, lit: !!props.steps[index], from: props.velocities[index] ?? 1, mode: null, last: index };
     }
-
-    const next = !props.steps[index];
-    dragMode.value = next ? 'on' : 'off';
-
-    const out = clone(props.steps);
-    out[index] = next;
-    emit('update:steps', out);
-
-    window.addEventListener('mouseup', onMouseUp, { once: true });
+    pressedIndex.value = index;
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp, { once: true });
+    window.addEventListener('pointercancel', onPointerCancel, { once: true });
 }
 
-function onMouseEnter(index: number) {
-    if (!isMouseDown.value || !dragMode.value) return;
-    if (dragMode.value === 'brush' || dragMode.value === 'unbrush') {
-        paintRepeats(index);
+function padAt(x: number, y: number): number | null {
+    const el = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest('[data-pad]') as HTMLElement | null;
+    if (!el || !padEls.includes(el)) return null;
+    return Number(el.dataset.pad);
+}
+
+function setStep(i: number, on: boolean) {
+    if (props.steps[i] === on) return;
+    const out = clone(props.steps);
+    out[i] = on;
+    emit('update:steps', out);
+}
+
+function onPointerMove(ev: PointerEvent) {
+    if (!press) return;
+    if (ev.buttons === 0) { onPointerUp(); return; } // a release the page never heard
+    if (!press.mode) {
+        const dx = ev.clientX - press.x, dy = ev.clientY - press.y;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < 4) return;
+        if (press.lit && Math.abs(dy) > Math.abs(dx)) {
+            press.mode = 'vel';
+            velDrag.value = press.index;
+        } else {
+            press.mode = 'paint';
+            dragMode.value = press.lit ? 'off' : 'on';
+            setStep(press.index, dragMode.value === 'on');
+        }
+    }
+    if (press.mode === 'vel') {
+        const v = Math.round(Math.min(1, Math.max(0.05, press.from + (press.y - ev.clientY) / VEL_DRAG_PX)) * 100) / 100;
+        if (v !== props.velocities[press.index]) {
+            const out = clone(props.velocities);
+            out[press.index] = v;
+            emit('update:velocities', out);
+        }
         return;
     }
-    const out = clone(props.steps);
-    out[index] = dragMode.value === 'on';
-    emit('update:steps', out);
+    const i = padAt(ev.clientX, ev.clientY);
+    if (i === null || i === press.last) return;
+    press.last = i;
+    pressedIndex.value = i;
+    if (dragMode.value === 'brush' || dragMode.value === 'unbrush') paintRepeats(i);
+    else setStep(i, dragMode.value === 'on');
+}
+
+// The browser took the touch (a scroll): nothing was clicked
+function onPointerCancel() {
+    if (press && !press.mode) press = null;
+    onPointerUp();
+}
+
+function onPointerUp() {
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerCancel);
+    if (press && !press.mode) setStep(press.index, !props.steps[press.index]);
+    press = null;
+    pressedIndex.value = null;
+    velDrag.value = null;
+    isMouseDown.value = false;
+    dragMode.value = null;
 }
 
 // The Repeats brush on one pad: the brush's hits, turning the pad on (a repeat on a silent step
@@ -241,11 +284,6 @@ function brushPreview(index: number): number | null {
     const brush = props.repeatBrush;
     if (!brush || hovered.value !== index || isMouseDown.value) return null;
     return ratchetFor(index) === brush ? 1 : brush;
-}
-
-function onMouseUp() {
-    isMouseDown.value = false;
-    dragMode.value = null;
 }
 
 // keyboard
@@ -292,6 +330,17 @@ function onPadKeydown(e: KeyboardEvent, index: number) {
                 emit('update:steps', out);
             }
             return;
+        case 'ArrowUp':
+        case 'ArrowDown': {
+            // A lit pad's velocity, 5 % a press (Shift: 25 %)
+            e.preventDefault();
+            if (!props.steps[index]) return;
+            const d = (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 0.25 : 0.05);
+            const out = clone(props.velocities);
+            out[index] = Math.round(Math.min(1, Math.max(0.05, (out[index] ?? 1) + d)) * 100) / 100;
+            emit('update:velocities', out);
+            return;
+        }
         case 'ArrowRight': to = Math.min(last, index + 1); break;
         case 'ArrowLeft': to = Math.max(0, index - 1); break;
         case 'Home': to = 0; break;
@@ -301,23 +350,6 @@ function onPadKeydown(e: KeyboardEvent, index: number) {
     e.preventDefault();
     focusIndex.value = to;
     padEls[to]?.focus();
-}
-
-function updateVelocity(i: number, e: Event) {
-    const v = Math.min(1, Math.max(0, Number((e.target as HTMLInputElement).value)));
-    const out = clone(props.velocities);
-    out[i] = v;
-    emit('update:velocities', out);
-}
-
-function updatePitch(i: number, e: Event) {
-    const v = Math.min(
-        props.maxHz,
-        Math.max(props.minHz, Number((e.target as HTMLInputElement).value)),
-    );
-    const out = clone(props.pitches);
-    out[i] = v;
-    emit('update:pitches', out);
 }
 
 function emitOpenSettings(index: number, evt: MouseEvent) {
@@ -383,6 +415,16 @@ const nearestNote = props.nearestNote;
 </script>
 
 <style scoped>
+/* A finger on a lit pad drags its velocity (the page doesn't scroll from it); on an unlit one it
+   scrolls the page up and down, and paints sideways */
+.padTEST {
+    touch-action: pan-y;
+}
+
+.padTEST.selected {
+    touch-action: none;
+}
+
 /* Keyboard focus only (a mouse click doesn't show it), like the app's buttons */
 .padTEST:focus {
     outline: none;
@@ -493,6 +535,10 @@ const nearestNote = props.nearestNote;
     cursor: copy;
 }
 
+.brushing[data-brush="1"] .padTEST {
+    cursor: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M3 2v15.5l4.2-3.8 2.9 6.8 2.7-1.2-2.9-6.6H15z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='12.5' y='17.5' width='19' height='13' rx='4' fill='%2315101f' stroke='%23fff' stroke-width='1.2'/%3E%3Ctext x='22' y='27.6' font-family='Arial%2CHelvetica%2Csans-serif' font-size='10' font-weight='700' fill='%23fff' text-anchor='middle'%3E%C3%971%3C/text%3E%3C/svg%3E") 3 2, copy;
+}
+
 .brushing[data-brush="2"] .padTEST {
     cursor: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M3 2v15.5l4.2-3.8 2.9 6.8 2.7-1.2-2.9-6.6H15z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='12.5' y='17.5' width='19' height='13' rx='4' fill='%2315101f' stroke='%23fff' stroke-width='1.2'/%3E%3Ctext x='22' y='27.6' font-family='Arial%2CHelvetica%2Csans-serif' font-size='10' font-weight='700' fill='%23fff' text-anchor='middle'%3E%C3%972%3C/text%3E%3C/svg%3E") 3 2, copy;
 }
@@ -505,18 +551,16 @@ const nearestNote = props.nearestNote;
     cursor: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M3 2v15.5l4.2-3.8 2.9 6.8 2.7-1.2-2.9-6.6H15z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='12.5' y='17.5' width='19' height='13' rx='4' fill='%2315101f' stroke='%23fff' stroke-width='1.2'/%3E%3Ctext x='22' y='27.6' font-family='Arial%2CHelvetica%2Csans-serif' font-size='10' font-weight='700' fill='%23fff' text-anchor='middle'%3E%C3%974%3C/text%3E%3C/svg%3E") 3 2, copy;
 }
 
+/* The note's name printed under its pad (PR 127: in a black pill until then) */
 .note-chip {
     position: absolute;
     left: 50%;
-    bottom: -6px;
+    bottom: -4px;
     transform: translate(-50%, 100%);
-    padding: 2px 6px;
-    font-size: 10px;
+    padding: 2px 0;
+    font: 700 10px Cousine, ui-monospace, monospace;
     line-height: 1;
-    border-radius: 6px;
-    background: rgba(0, 0, 0, .65);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, .12);
+    color: var(--pt-text, #e6defa);
     pointer-events: none;
     white-space: nowrap;
     z-index: 1000;
@@ -526,39 +570,56 @@ const nearestNote = props.nearestNote;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     min-height: 26px;
+    margin-bottom: 5px; /* the card as tall as before PR 127, so the rail beside it lines up */
 }
 
+/* The step's number printed on the panel, each beat's brighter (PR 127: in a black pill
+   until then) */
 .pad-head .pad-step-num {
     position: static;
     transform: none;
     top: auto;
     left: auto;
-    font-size: 10px;
+    font: 400 10px Cousine, ui-monospace, monospace;
     line-height: 1;
-    padding: 2px 6px;
-    border-radius: 6px;
-    background: rgba(0, 0, 0, .65);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, .12);
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--pt-text-dim, rgba(220, 210, 255, .6));
     pointer-events: none;
 }
 
+.pad-head .pad-step-num.beat {
+    color: var(--pt-text, #fff);
+    font-weight: 700;
+}
+
+/* The ⋮: a small dark cap, dimmed until its pad is hovered */
 .pad-head .pad-settings-dot {
     position: static;
-    width: 18px;
-    height: 18px;
-    border-radius: 8px;
-    border: 1px solid #2a2f42;
-    background: rgba(15, 18, 26, .78);
-    color: #c9d4ff;
-    font-size: 13px;
+    width: 22px;
+    height: 14px;
+    padding: 0;
+    border-radius: 4px;
+    border: 0;
+    background: linear-gradient(180deg, #2c2838, #1e1b28);
+    box-shadow: 0 1px 0 #0d0b12, inset 0 1px 0 rgba(255, 255, 255, .08);
+    color: #a99cc8;
+    font-size: 11px;
     line-height: 1;
     display: grid;
     place-items: center;
     cursor: pointer;
-    transition: opacity .15s ease, transform .15s ease, background .15s ease;
+    opacity: .55;
+    transition: opacity .15s ease;
+}
+
+@media (pointer: coarse) {
+    .pad-head .pad-settings-dot {
+        opacity: 1;
+    }
 }
 
 /* A finger's ⋮ (PR 107): the desktop view on a phone held upright */
@@ -748,6 +809,22 @@ const nearestNote = props.nearestNote;
         noise-shift var(--noise-anim-dur, 1s) steps(var(--noise-fps, 12)) infinite,
         noise-pan calc(1000ms * (60 / var(--noise-speed, 60))) linear infinite;
     filter: contrast(115%);
+}
+
+
+/* While a pad's velocity is dragged: how loud */
+.vel-readout {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, .75);
+    color: #fff;
+    font: 700 11px ui-monospace, monospace;
+    pointer-events: none;
 }
 
 /* all other visuals in SCSS (_drumSequencer.scss) */
