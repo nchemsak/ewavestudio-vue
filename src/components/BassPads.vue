@@ -141,6 +141,10 @@ function toggle(id: 'accents' | 'slides' | 'ties', i: number) {
     top: -2px;
     height: 20px;
     overflow: visible;
+    /* from just after this note's name to just before the next one's (PR 127: the names are
+       printed now, not in pills) */
+    left: calc(50% + 12px);
+    width: calc(100% - 20px);
 }
 
 .bp-link.slide path {
