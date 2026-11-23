@@ -32,7 +32,7 @@ export function hitSeconds(state: Pick<StepSequencerState, 'synth' | 'fx'> & { b
 	const r = state.fx.reverb;
 	// REV swells for SWELL's length (a beat for Next hit: one hit has no next) instead of decaying
 	if (r.enabled && r.mix > 0) {
-		s += (r.preDelay ?? 0) / 1000 + (r.reverse ? swellSeconds(r.swell ?? 'next', 60 / (state.bpm || 120) / 4, null) : r.decay * 1.2);
+		s += (r.reverse ? swellSeconds(r.swell ?? 'next', 60 / (state.bpm || 120) / 4, null) : r.decay * 1.2);
 	}
 	return Math.min(HIT_MAX_S, Math.max(0.3, s + 0.2));
 }

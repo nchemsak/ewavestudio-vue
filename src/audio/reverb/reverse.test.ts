@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-	FALLBACK_STEPS, isSwell, nextHitGaps, revIrSeconds, revKey, reverseIrChannels, REV_FADE_S, REV_MAX_S, REV_MIN_S,
+	FALLBACK_STEPS, isSwell, nextHitGaps, pedalHitSteps, revIrSeconds, revKey, reverseIrChannels, REV_FADE_S, REV_MAX_S, REV_MIN_S,
 	stepTime, swellLabel, swellSeconds, SWELLS,
 } from './reverse';
 
@@ -41,10 +41,36 @@ describe('REV: the reversed reverb', () => {
 		expect(swellSeconds('next', STEP, null)).toBe(FALLBACK_STEPS * STEP);
 	});
 
-	it('takes PRE off the impulse response, within its limits', () => {
-		expect(revIrSeconds(0.5, 0.125)).toBe(0.375);
-		expect(revIrSeconds(0.1, 0.25)).toBe(REV_MIN_S);
-		expect(revIrSeconds(60, 0)).toBe(REV_MAX_S);
+	it("counts every machine's hits that go through the pedals", () => {
+		const off = Array(16).fill(false);
+		const bass = (steps: boolean[], extra: Partial<Record<'slides' | 'ties', boolean[]>> = {}) => ({
+			steps, pitches: Array(16).fill(55), velocities: Array(16).fill(1),
+			accents: [...off], slides: extra.slides ?? [...off], ties: extra.ties ?? [...off],
+		});
+		const rows = (...each: boolean[][]) => [0, 1, 2, 3].map((k) => ({ steps: each[k] ?? [...off], velocities: Array(16).fill(1) }));
+		const hitsAt = (h: boolean[]) => h.flatMap((v, i) => (v ? [i] : []));
+		// Rhythm alone: its steps (a step at velocity 0 isn't a hit)
+		expect(hitsAt(pedalHitSteps({ rhythm: { steps: on(0, 8), velocities: [1, 1, 1, 1, 1, 1, 1, 1, 0] } }, 16))).toEqual([0]);
+		// Rhythm empty: Bass's notes and Drums' hits time the swells
+		const all = pedalHitSteps({
+			rhythm: { steps: on() },
+			bass: { pattern: bass(on(2, 3, 10), { slides: on(2) }) }, // the note on 3 is slid into: not a hit
+			drums: { rows: rows(on(0), on(4, 12)) },
+		}, 16);
+		expect(hitsAt(all)).toEqual([0, 2, 4, 10, 12]);
+		// A muted machine, a muted slot, or one with no Pedals doesn't count
+		expect(hitsAt(pedalHitSteps({
+			rhythm: { steps: on(1), muted: true },
+			bass: { pattern: bass(on(2)), pedals: 0 },
+			drums: { rows: rows(on(0), on(4)), slotMuted: [true, false, false, false] },
+		}, 16))).toEqual([4]);
+		expect(hitsAt(pedalHitSteps({ drums: { rows: rows(on(4)), muted: true } }, 16))).toEqual([]);
+	});
+
+	it('keeps the impulse response within its limits', () => {
+		expect(revIrSeconds(0.375)).toBe(0.375);
+		expect(revIrSeconds(0.001)).toBe(REV_MIN_S);
+		expect(revIrSeconds(60)).toBe(REV_MAX_S);
 		expect(revKey(0.3751)).toBe(375);
 	});
 

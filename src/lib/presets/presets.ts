@@ -87,12 +87,10 @@ export function soundKey(s: any): string {
 	const { tuning, noise, randomWaves, sample, sampleLength, ...synth } = s.synth;
 	const { mask, type, ...noiseRest } = noise ?? {};
 	const { time, ...delay } = s.fx.delay ?? {};
-	// PRE's ms follows the tempo (its note value is the setting), so a tempo change keeps the light
-	const { preDelay, ...reverb } = s.fx.reverb ?? {};
 	const lane = Array.isArray(s.instruments) ? s.instruments.find((i: any) => i?.name === 'synth-voice') : null;
 	return JSON.stringify({
 		synth: { ...synth, noise: noiseRest },
-		fx: { ...s.fx, delay: delay.sync ? delay : { ...delay, time }, reverb },
+		fx: { ...s.fx, delay: delay.sync ? delay : { ...delay, time } },
 		wave: s.selectedWaveform,
 		padWaves: lane?.waveforms ?? null,
 	});

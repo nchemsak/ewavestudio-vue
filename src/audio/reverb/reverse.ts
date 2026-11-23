@@ -4,15 +4,20 @@
 // and with the stems (it's the reverb's stem).
 //
 // How long a swell lasts is SWELL (the DECAY knob while REV is on, its caption reading SWELL):
-// - Next hit (the default): each hit's swell lasts until the next step that's on, round the
-//   bar's end too (one hit a bar swells for the whole bar). The engines keep one reversed
-//   impulse response per length in use, each behind a gate, and open the hit's own gate as the
-//   hit reaches it (after PRE). A note with no next hit (a MIDI note or a preview while
-//   stopped, the one-shot, the screen's hit at rest) swells for a beat.
+// - Next hit (the default): each hit's swell lasts until the next hit, round the bar's end too
+//   (one hit a bar swells for the whole bar). A hit is any machine's that goes through the
+//   pedals (PR 126; until then only Rhythm's steps): Rhythm's steps, Bass's notes and Drums'
+//   hits, each machine while it's heard and its Pedals is above 0 (`pedalHitSteps()`). Drift
+//   has no hits (its chords are held). The engines keep one reversed impulse response per
+//   length in use, each behind a gate, and open the hit's own gate as the hit reaches it. A
+//   note with no next hit (a MIDI note or a preview while stopped, the one-shot, the hit
+//   behind the Envelope card) swells for a beat.
 // - Fixed lengths: 1 step, 2 steps, 1 beat, 2 beats, for a steadier pulse.
-// PRE is taken off the impulse response's length, so the swell still ends on time.
 //
 // This file is pure (unit-tested): the lengths, the timing and the impulse response's samples.
+
+import { bassPlan, type BassPattern } from '../bass';
+import type { DrumRow } from '../drums';
 
 export type SwellOption = { id: string; label: string; steps: number | null }; // steps: 1/16 notes
 
@@ -66,9 +71,43 @@ export function swellSeconds(id: string, stepS: number, gapS?: number | null): n
 	return gapS != null && gapS > 0 ? gapS : FALLBACK_STEPS * stepS;
 }
 
-// The impulse response's length: the swell less PRE, so the swell still ends on time
-export function revIrSeconds(swellS: number, preS: number): number {
-	return Math.max(REV_MIN_S, Math.min(REV_MAX_S, swellS - Math.max(0, preS)));
+// The impulse response's length: the swell's, within its limits
+export function revIrSeconds(swellS: number): number {
+	return Math.max(REV_MIN_S, Math.min(REV_MAX_S, swellS));
+}
+
+// What REV's Next hit counts as a hit: a machine's, while it's heard and some of it goes
+// through the pedals (Pedals above 0; missing: all of it). Each list is per step.
+export type RevMachines = {
+	rhythm?: { steps: readonly boolean[]; velocities?: readonly number[]; muted?: boolean; pedals?: number };
+	bass?: { pattern: BassPattern; muted?: boolean; pedals?: number };
+	drums?: { rows: readonly DrumRow[]; slotMuted?: readonly boolean[]; muted?: boolean; pedals?: number };
+};
+
+const throughPedals = (m: { muted?: boolean; pedals?: number } | undefined) =>
+	!!m && !m.muted && (m.pedals ?? 1) > 0;
+
+// Per step of a bar of n, whether any machine has a hit there that goes through the pedals:
+// Rhythm's steps that are on (at a velocity above 0), the steps a Bass note starts on (not
+// those it's tied or slid into: bassPlan), and any unmuted Drums slot's steps that are on
+export function pedalHitSteps(m: RevMachines, n: number): boolean[] {
+	const hits = Array<boolean>(n).fill(false);
+	const r = m.rhythm;
+	if (throughPedals(r)) {
+		for (let i = 0; i < n; i++) if (r.steps[i] && (r.velocities?.[i] ?? 1) > 0) hits[i] = true;
+	}
+	const b = m.bass;
+	if (throughPedals(b)) {
+		bassPlan(b.pattern, n).forEach((h, i) => { if (h && h.vel > 0) hits[i] = true; });
+	}
+	const d = m.drums;
+	if (throughPedals(d)) {
+		d.rows.forEach((row, slot) => {
+			if (d.slotMuted?.[slot] || !row) return;
+			for (let i = 0; i < n; i++) if (row.steps[i] && (row.velocities[i] ?? 1) > 0) hits[i] = true;
+		});
+	}
+	return hits;
 }
 
 // The reversed response's level, measured against the plain reverb (whose convolver normalizes

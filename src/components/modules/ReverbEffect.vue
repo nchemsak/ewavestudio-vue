@@ -35,27 +35,17 @@
 					</span>
 				</div>
 
-				<!-- PRE: the pre-delay before the tail starts, a note value at the tempo (Off … 1/8), one
-				     position each, as the delay's TIME -->
-				<div class="knob-cell pre">
-					<Knob midi-id="reverb.preDelay" :value-text="preLabel" v-model="preKnob" label="PRE" :min="0" :max="1" :step="preStep" size="small"
-						:disabled="!localEnabled" :color="color" :showMarkers="true" :markers="preMarkers"
-						:markersOnly="true" :markersOffsetDeg="-90" @knobStart="activeKnob = 'pre'"
-						@knobEnd="activeKnob = null" />
-					<span v-if="activeKnob === 'pre'" class="custom-tooltip">
-						{{ preLabel }}
-					</span>
-				</div>
+				<!-- REV (PR 126): in the corner beside TONE, where PRE was (the delay's and the
+				     overdrive's switches sit there too). PR 105 had it on the ribbon, under the LED. -->
+				<PedalSwitch :model-value="reverse" label="REV" aria-label="Reverse reverb" class="rev-switch"
+					title="Reverse: each hit's reverb swells into the next hit" :disabled="!localEnabled"
+					@update:model-value="emit('update:reverse', $event)" />
 			</div>
 
 			<div class="panel-seam" aria-hidden="true"></div>
 
 			<div class="panel-bottom">
 				<div class="effect-label">reverb</div>
-				<!-- REV (option A of three mockups): on the ribbon, under the LED -->
-				<PedalSwitch :model-value="reverse" label="REV" aria-label="Reverse reverb" class="rev-switch"
-					title="Reverse: each hit's reverb swells into the next hit" :disabled="!localEnabled"
-					@update:model-value="emit('update:reverse', $event)" />
 				<button class="footswitch" type="button" :aria-pressed="localEnabled" aria-label="Reverb pedal"
 					@click="localEnabled = !localEnabled" @keydown.space.prevent="localEnabled = !localEnabled"
 					@keydown.enter.prevent="localEnabled = !localEnabled" />
@@ -70,7 +60,6 @@ import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
 import PedalSwitch from './PedalSwitch.vue';
 import { DEFAULT_SWELL, SWELLS } from '../../audio/reverb/reverse';
-import { DEFAULT_PRE_DIVISION, preDelayLabel, PRE_DIVISIONS } from '../../audio/reverb/preDelay';
 
 const props = withDefaults(defineProps<{
 	showToggle?: boolean;
@@ -78,8 +67,6 @@ const props = withDefaults(defineProps<{
 	mix: number;
 	decay: number;
 	tone: number;          // 0 = dark, 1 = bright
-	preDivision?: string;  // PRE's note value ('Off', '1/16' …)
-	tempo?: number;        // BPM, for PRE's time
 	reverse?: boolean;     // REV: the reverb backwards (src/audio/reverb/reverse.ts)
 	swell?: string;        // REV's length: 'next' or a fixed one
 	audioCtx?: AudioContext;
@@ -88,8 +75,6 @@ const props = withDefaults(defineProps<{
 	showToggle: true,
 	color: '#7c9bff',
 	tone: 0.5,
-	preDivision: DEFAULT_PRE_DIVISION,
-	tempo: 120,
 	reverse: false,
 	swell: DEFAULT_SWELL
 });
@@ -99,7 +84,6 @@ const emit = defineEmits<{
 	(e: 'update:mix', v: number): void;
 	(e: 'update:decay', v: number): void;
 	(e: 'update:tone', v: number): void;
-	(e: 'update:preDivision', v: string): void;
 	(e: 'update:reverse', v: boolean): void;
 	(e: 'update:swell', v: string): void;
 }>();
@@ -109,19 +93,8 @@ const localMix = ref<number>(props.mix);
 const localDecay = ref<number>(props.decay);
 const localTone = ref<number>(props.tone);
 
-const activeKnob = ref<null | 'mix' | 'decay' | 'tone' | 'pre'>(null);
+const activeKnob = ref<null | 'mix' | 'decay' | 'tone'>(null);
 
-// PRE: one knob position per note value
-const preMarkers = PRE_DIVISIONS.map((_, i) => i / (PRE_DIVISIONS.length - 1));
-const preStep = 1 / (PRE_DIVISIONS.length - 1);
-const preIndex = computed(() => Math.max(0, PRE_DIVISIONS.findIndex((d) => d.label === props.preDivision)));
-const preKnob = computed<number>({
-	get: () => preIndex.value / (PRE_DIVISIONS.length - 1),
-	set: (v: number) => {
-		const i = Math.max(0, Math.min(PRE_DIVISIONS.length - 1, Math.round(v * (PRE_DIVISIONS.length - 1))));
-		if (i !== preIndex.value) emit('update:preDivision', PRE_DIVISIONS[i].label);
-	},
-});
 // SWELL (DECAY while REV is on): one knob position per length
 const swellMarkers = SWELLS.map((_, i) => i / (SWELLS.length - 1));
 const swellStep = 1 / (SWELLS.length - 1);
@@ -143,8 +116,6 @@ const decayKnob = computed<number>({
 	},
 });
 const decayText = computed(() => (props.reverse ? swellText.value : `${localDecay.value.toFixed(2)} s`));
-
-const preLabel = computed(() => preDelayLabel(props.tempo, PRE_DIVISIONS[preIndex.value].label));
 
 const toneLabel = computed(() => {
 	const t = localTone.value;
@@ -175,7 +146,7 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 .panel-top {
 	position: relative;
 	border-radius: 8px 8px 0 0;
-	padding: 12px 0px 2px; /* 10px before PRE; the four knobs need the room */
+	padding: 12px 0px 2px;
 
 	background: linear-gradient(var(--pedal-hi, #ccc5b4), var(--pedal-lo, #a39277));
 
@@ -189,7 +160,7 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	grid-template-areas:
 		"led   led"
 		"decay   mix"
-		"tone  pre";
+		"tone  sw";
 	row-gap: 4px;
 	align-items: center;
 	justify-items: center;
@@ -225,27 +196,10 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	grid-area: tone;
 }
 
-.pre {
-	grid-area: pre;
-}
-
-/* REV, outside a pedalboard: in the face's top-right corner. The Effects card and the phone's
-   FX page (since PR 106) put it on the ribbon, under the LED (DrumSequencer's EFFECTS PEDALS
-   styles) */
-.reverb-pedal {
-	position: relative;
-}
-
+/* REV: in TONE's row, beside it */
 .reverb-pedal .rev-switch {
-	position: absolute;
-	top: 6px;
-	right: 2px;
-	bottom: auto;
-	width: 30px;
-}
-
-.reverb-pedal .rev-switch :deep(.ps-label) {
-	min-height: 0;
+	position: static;
+	grid-area: sw;
 }
 
 .knob-cell {
@@ -271,8 +225,7 @@ watch(() => props.tone, v => { if (v !== localTone.value) localTone.value = v; }
 	user-select: none;
 }
 
-.tone .custom-tooltip,
-.pre .custom-tooltip {
+.tone .custom-tooltip {
 	top: initial;
 	bottom: -18px;
 }
