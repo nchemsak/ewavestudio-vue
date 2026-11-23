@@ -2,7 +2,8 @@
 <!-- The Drums machine's pads (the plan's item 5; option A of the mockups): a row per slot, its
      LED (a click mutes the slot), its name (a click picks the row: Pattern Tools' Step Fills and
      Humanize, and the slot's card, work on it) and its 16 steps. A click turns a step on or off;
-     a lit step dragged up or down sets its velocity, its fill showing how loud. Each change is
+     a lit step dragged up or down sets its velocity, its fill showing how loud; a drag sideways
+     paints the row's steps on or off (PR 127). Each change is
      one undo step (a drag too: the pointer is held). Under 640 px a row's steps are two rows of 8. -->
 <template>
     <div class="drum-pads">
@@ -25,7 +26,8 @@
                 :style="on ? { '--v': `${Math.round((row.velocities[i] ?? 1) * 100)}%` } : undefined"
                 :aria-pressed="on ? 'true' : 'false'" :aria-label="`${names[k]}, step ${i + 1}`"
                 :title="on ? `${names[k]}, step ${i + 1}: ${Math.round((row.velocities[i] ?? 1) * 100)}% (drag up or down)` : `${names[k]}, step ${i + 1}`"
-                @pointerdown="down(k, i, $event)" @keydown.enter.prevent="toggle(k, i)" @keydown.space.stop
+                @pointerdown="down(k, i, $event)" @keydown.enter.prevent="toggle(k, i)"
+                @keydown.up.prevent="nudge(k, i, $event.shiftKey ? 0.25 : 0.05)" @keydown.down.prevent="nudge(k, i, $event.shiftKey ? -0.25 : -0.05)" @keydown.space.stop
                 @click.prevent><span class="dp-fill"></span></button>
         </div>
     </div>
@@ -60,30 +62,64 @@ function toggle(k: number, i: number) {
     setRow(k, (r) => ({ ...r, steps: r.steps.map((s, j) => (j === i ? !s : s)) }));
 }
 
-// A click toggles; a drag up or down on a lit step sets its velocity (60 px: the whole range)
+// Up and down on a focused lit step: its velocity, 5 % a press (Shift: 25 %)
+function nudge(k: number, i: number, d: number) {
+    if (!props.rows[k].steps[i]) return;
+    const v = Math.round(Math.min(1, Math.max(0.05, (props.rows[k].velocities[i] ?? 1) + d)) * 100) / 100;
+    setRow(k, (r) => ({ ...r, velocities: r.velocities.map((x, j) => (j === i ? v : x)) }));
+}
+
+// A press on a step (PR 127): the first move decides. Up or down on a lit step sets its velocity
+// (60 px: the whole range); sideways paints the steps of its row the pointer crosses the way the
+// first one went, on or off (it stays in its row); no move at all is a click, which toggles.
 const DRAG_PX = 60;
 function down(k: number, i: number, e: PointerEvent) {
     if (e.button !== 0) return;
     const row = props.rows[k];
     const lit = row.steps[i];
     const from = row.velocities[i] ?? 1;
-    const y0 = e.clientY;
-    let dragged = false;
+    const x0 = e.clientX, y0 = e.clientY;
+    let mode: 'vel' | 'paint' | null = null;
+    let paintOn = false;
+    let last = i;
     const el = e.currentTarget as HTMLElement;
     try { el.setPointerCapture(e.pointerId); } catch { /* */ }
-    const move = (ev: PointerEvent) => {
-        if (!lit) return;
-        const dy = y0 - ev.clientY;
-        if (!dragged && Math.abs(dy) < 4) return;
-        dragged = true;
-        const v = Math.round(Math.min(1, Math.max(0.05, from + dy / DRAG_PX)) * 100) / 100;
-        if (v !== props.rows[k].velocities[i]) setRow(k, (r) => ({ ...r, velocities: r.velocities.map((x, j) => (j === i ? v : x)) }));
+    const setStep = (j: number, on: boolean) => {
+        if (props.rows[k].steps[j] !== on) setRow(k, (r) => ({ ...r, steps: r.steps.map((s, m) => (m === j ? on : s)) }));
     };
-    const up = () => {
+    const move = (ev: PointerEvent) => {
+        const dx = ev.clientX - x0, dy = y0 - ev.clientY;
+        if (!mode) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) < 4) return;
+            if (lit && Math.abs(dy) > Math.abs(dx)) mode = 'vel';
+            else {
+                mode = 'paint';
+                paintOn = !lit;
+                setStep(i, paintOn);
+            }
+        }
+        if (mode === 'vel') {
+            const v = Math.round(Math.min(1, Math.max(0.05, from + dy / DRAG_PX)) * 100) / 100;
+            if (v !== props.rows[k].velocities[i]) setRow(k, (r) => ({ ...r, velocities: r.velocities.map((x, j) => (j === i ? v : x)) }));
+            return;
+        }
+        // The step of this row under the pointer, by its column
+        const cells = el.parentElement?.querySelectorAll<HTMLElement>('.dp-cell');
+        if (!cells) return;
+        let j = -1;
+        cells.forEach((c, m) => {
+            const r = c.getBoundingClientRect();
+            if (ev.clientX >= r.left - 2 && ev.clientX <= r.right + 2) j = m;
+        });
+        if (j < 0 || j === last) return;
+        last = j;
+        setStep(j, paintOn);
+    };
+    const up = (ev: PointerEvent) => {
         el.removeEventListener('pointermove', move);
         el.removeEventListener('pointerup', up);
         el.removeEventListener('pointercancel', up);
-        if (!dragged) toggle(k, i);
+        if (!mode && ev.type === 'pointerup') toggle(k, i);
     };
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', up);

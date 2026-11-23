@@ -1,22 +1,15 @@
 <!-- src/components/SynthStepGrid.vue -->
 <template>
-    <div class="d-flex pad-row" :class="look ? `look-${look}` : null">
-        <!-- MOCKUPS ONLY (?pads=c): a head column, as the Drums machine's rows have -->
-        <div v-if="look === 'c'" class="c-head">
-            <div class="c-head-nums" aria-hidden="true"></div>
-            <div class="c-head-name"><i class="c-led"></i><b>{{ headName }}</b><small>{{ headSub }}</small></div>
-            <div v-if="showRows" class="c-head-row">Repeats</div>
-            <div v-if="showRows" class="c-head-row">Notes</div>
-        </div>
+    <div class="d-flex pad-row">
         <!-- One Tab stop for all pads: the arrow keys move between them, Enter turns one on or off -->
         <div class="padTEST-grid" :class="{ brushing: !!repeatBrush }" :data-brush="repeatBrush || null" data-equal-cols role="group" aria-label="Steps">
             <div v-for="(active, index) in steps" :key="index" class="pad-col" @mouseleave="hovered = null">
                 <div class="pad-head">
-                    <button v-if="look !== 'a' && look !== 'c'" class="pad-settings-dot" @mousedown.stop @click.stop="emitOpenSettings(index, $event)"
+                    <button class="pad-settings-dot" @mousedown.stop @click.stop="emitOpenSettings(index, $event)"
                         aria-label="Pad settings">
                         ⋮
                     </button>
-                    <div v-if="showIndices" class="pad-step-num" :class="{ beat: index % 4 === 0 }">{{ index + 1 }}</div>
+                    <div v-if="showIndices" class="pad-step-num">{{ index + 1 }}</div>
                 </div>
 
                 <div class="padTESTwrap" @mouseenter="hovered = index" @mouseleave="hovered = null">
@@ -75,9 +68,6 @@
                     <!-- The LFO bending this note's pitch (LFO target Pitch) -->
                     <LfoBendMark v-if="active && lfoView" :view="lfoView" />
 
-                    <!-- The pad's ⋮ in its corner (?pads=a|c) -->
-                    <button v-if="look === 'a' || look === 'c'" class="pad-corner-dots" @pointerdown.stop @click.stop="emitOpenSettings(index, $event)"
-                        aria-label="Pad settings">⋮</button>
                     <!-- While its velocity is dragged: how loud -->
                     <div v-if="velDrag === index" class="vel-readout" aria-hidden="true">{{ Math.round((velocities[index] ?? 1) * 100) }}%</div>
 
@@ -86,21 +76,6 @@
                     </div>
 
                 </div>
-            </div>
-        </div>
-        <!-- MOCKUPS ONLY (?pads=b): Rhythm's per-step settings as rows of caps, as Bass's -->
-        <div v-if="showRows" class="rhy-rows">
-            <div class="rhy-row" role="group" aria-label="Repeats">
-                <span class="rhy-cap">Repeats <small>hits in the step</small></span>
-                <button v-for="(active, index) in steps" :key="index" type="button" class="row-cap hw-cap hw-cap-sm"
-                    :class="{ 'hw-down': ratchetFor(index) > 1, off: !active }"
-                    :aria-label="`Repeats on step ${index + 1}: ${ratchetFor(index)}`" @click="cycleRatchet(index)">×{{ ratchetFor(index) }}</button>
-            </div>
-            <div class="rhy-row" role="group" aria-label="Repeat notes">
-                <span class="rhy-cap">Notes <small>same, up or down the chord</small></span>
-                <button v-for="(active, index) in steps" :key="index" type="button" class="row-cap hw-cap hw-cap-sm"
-                    :class="{ 'hw-down': notesArrow(index) !== '', off: !active || ratchetFor(index) < 2 }"
-                    :aria-label="`Repeat notes on step ${index + 1}`" @click="cycleNotes(index)">{{ notesArrow(index) || '·' }}</button>
             </div>
         </div>
     </div>
@@ -130,8 +105,6 @@ const props = withDefaults(
         nearestNote: NoteNameFn;
 
         showIndices?: boolean;
-        showVelocity?: boolean;
-        showPitch?: boolean;
 
         waveforms?: PadWave[];
         defaultWave?: PadWave;
@@ -161,17 +134,9 @@ const props = withDefaults(
 
         // The LFO visualizer (LfoBendMark on each lit pad)
         lfoView?: LfoView | null;
-
-        // MOCKUPS ONLY: ?pads=a|b|c
-        look?: string;
-        showRows?: boolean;
-        headName?: string;
-        headSub?: string;
     }>(),
     {
         showIndices: true,
-        showVelocity: true,
-        showPitch: true,
         noiseMode: 'wash',
         noiseFps: 12,
         noiseSpeed: 60,
@@ -186,7 +151,6 @@ const emit = defineEmits<{
     (e: 'update:velocities', v: number[]): void;
     (e: 'update:pitches', v: number[]): void;
     (e: 'update:ratchets', v: number[]): void;
-    (e: 'update:repeatNotes', v: string[]): void;
     (e: 'open-pad-settings', payload: { name: string; index: number; anchorRect: DOMRect }): void;
 }>();
 
@@ -203,16 +167,16 @@ function clone<T>(arr: T[]): T[] {
 }
 
 // A press on a pad (PR 127, the plan's item 9): the first move decides. Up or down on a lit pad
-// sets its velocity (VEL_DRAG_PX the whole range), its fill following; sideways paints every pad
+// sets its velocity (VEL_DRAG_PX, a pad's height, the whole range), its fill following; sideways paints every pad
 // the pointer crosses the way the first one went, on or off; no move at all is a click, which
 // turns the pad on or off. With the Repeats brush, a press paints at once, as before.
-const VEL_DRAG_PX = 100;
+const VEL_DRAG_PX = 80;
 const velDrag = ref<number | null>(null);
 let press: { index: number; x: number; y: number; lit: boolean; from: number; mode: 'vel' | 'paint' | null; last: number } | null = null;
 
 function onPointerDown(evt: PointerEvent, index: number) {
     if (evt.button !== 0) return;
-    if ((evt.target as HTMLElement).closest('.hover-slider input, .pad-corner-dots')) return;
+    if ((evt.target as HTMLElement).closest('.pad-settings-dot')) return;
     evt.preventDefault();
     isMouseDown.value = true;
     focusIndex.value = index; // Tab comes back to the last pad used
@@ -228,7 +192,7 @@ function onPointerDown(evt: PointerEvent, index: number) {
     }
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp, { once: true });
-    window.addEventListener('pointercancel', onPointerUp, { once: true });
+    window.addEventListener('pointercancel', onPointerCancel, { once: true });
 }
 
 function padAt(x: number, y: number): number | null {
@@ -275,30 +239,21 @@ function onPointerMove(ev: PointerEvent) {
     else setStep(i, dragMode.value === 'on');
 }
 
+// The browser took the touch (a scroll): nothing was clicked
+function onPointerCancel() {
+    if (press && !press.mode) press = null;
+    onPointerUp();
+}
+
 function onPointerUp() {
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
-    window.removeEventListener('pointercancel', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerCancel);
     if (press && !press.mode) setStep(press.index, !props.steps[press.index]);
     press = null;
     velDrag.value = null;
     isMouseDown.value = false;
     dragMode.value = null;
-}
-
-// MOCKUPS ONLY (?pads=b|c): the rows' caps
-function cycleRatchet(i: number) {
-    if (!props.ratchets) return;
-    const out = clone(props.ratchets);
-    out[i] = (ratchetFor(i) % 4) + 1;
-    emit('update:ratchets', out);
-    if (out[i] > 1) setStep(i, true);
-}
-function cycleNotes(i: number) {
-    const cur = props.repeatNotes?.[i] ?? 'same';
-    const out = props.repeatNotes ? clone(props.repeatNotes) : Array(props.steps.length).fill('same');
-    out[i] = cur === 'same' ? 'up' : cur === 'up' ? 'down' : 'same';
-    emit('update:repeatNotes', out);
 }
 
 // The Repeats brush on one pad: the brush's hits, turning the pad on (a repeat on a silent step
@@ -455,6 +410,16 @@ const nearestNote = props.nearestNote;
 </script>
 
 <style scoped>
+/* A finger on a lit pad drags its velocity (the page doesn't scroll from it); on an unlit one it
+   scrolls the page up and down, and paints sideways */
+.padTEST {
+    touch-action: pan-y;
+}
+
+.padTEST.selected {
+    touch-action: none;
+}
+
 /* Keyboard focus only (a mouse click doesn't show it), like the app's buttons */
 .padTEST:focus {
     outline: none;
@@ -563,6 +528,10 @@ const nearestNote = props.nearestNote;
    turns pads on and off (PR 74; it was `copy`, an arrow with a small plus) */
 .brushing .padTEST {
     cursor: copy;
+}
+
+.brushing[data-brush="1"] .padTEST {
+    cursor: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M3 2v15.5l4.2-3.8 2.9 6.8 2.7-1.2-2.9-6.6H15z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='12.5' y='17.5' width='19' height='13' rx='4' fill='%2315101f' stroke='%23fff' stroke-width='1.2'/%3E%3Ctext x='22' y='27.6' font-family='Arial%2CHelvetica%2Csans-serif' font-size='10' font-weight='700' fill='%23fff' text-anchor='middle'%3E%C3%971%3C/text%3E%3C/svg%3E") 3 2, copy;
 }
 
 .brushing[data-brush="2"] .padTEST {
@@ -823,40 +792,7 @@ const nearestNote = props.nearestNote;
 }
 
 
-/* ===== MOCKUPS ONLY: ?pads=a|b|c (the plan's item 9) ===== */
-.pad-corner-dots {
-    position: absolute;
-    bottom: 3px;
-    right: 3px;
-    z-index: 4;
-    width: 18px;
-    height: 20px;
-    padding: 0;
-    border: 1px solid rgba(255, 255, 255, .14);
-    border-radius: 6px;
-    background: rgba(10, 12, 20, .7);
-    color: #dfe5ff;
-    font-size: 13px;
-    line-height: 1;
-    display: grid;
-    place-items: center;
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity .12s ease;
-}
-
-.padTESTwrap:hover .pad-corner-dots,
-.pad-corner-dots:focus-visible,
-.padTESTwrap:focus-within .pad-corner-dots {
-    opacity: 1;
-}
-
-@media (pointer: coarse) {
-    .pad-corner-dots {
-        opacity: .85;
-    }
-}
-
+/* While a pad's velocity is dragged: how loud */
 .vel-readout {
     position: absolute;
     left: 50%;
@@ -869,205 +805,6 @@ const nearestNote = props.nearestNote;
     color: #fff;
     font: 700 11px ui-monospace, monospace;
     pointer-events: none;
-}
-
-/* A and C: the step's number alone over each pad, the beats brighter, as Drums' */
-.look-a .pad-head,
-.look-c .pad-head {
-    min-height: 0;
-    margin-bottom: 6px;
-}
-
-.look-a .pad-head .pad-step-num,
-.look-c .pad-head .pad-step-num {
-    background: none;
-    border: 0;
-    padding: 0;
-    font: 400 10px Cousine, ui-monospace, monospace;
-    color: var(--pt-text-dim, #b9a8d8);
-    opacity: .75;
-}
-
-.look-a .pad-head .pad-step-num.beat,
-.look-c .pad-head .pad-step-num.beat {
-    font-weight: 700;
-    color: #fff;
-    opacity: 1;
-}
-
-/* The note's name inside the pad, at its top; the repeats under it */
-.look-a .note-chip,
-.look-c .note-chip {
-    top: 6px;
-    bottom: auto;
-    transform: translateX(-50%);
-    z-index: 3;
-    background: rgba(0, 0, 0, .45);
-}
-
-.look-a .wave-badge,
-.look-c .wave-badge {
-    left: 4px;
-    transform: none;
-}
-
-.look-a .ratchet-badge,
-.look-c .ratchet-badge {
-    top: 26px;
-}
-
-/* A: the pads as they are, taller */
-.look-a :deep(.padTEST) {
-    height: 236px;
-}
-
-/* B: the pads as they are, shorter, and rows of caps under them */
-.look-b :deep(.padTEST) {
-    height: 128px;
-}
-
-.look-b .note-chip {
-    bottom: auto;
-    top: 6px;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, .45);
-}
-
-.look-b .ratchet-badge {
-    top: 26px;
-}
-
-.look-b {
-    flex-wrap: wrap;
-}
-
-.rhy-rows {
-    flex: 0 0 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 12px;
-}
-
-.rhy-row {
-    display: grid;
-    grid-template-columns: repeat(16, minmax(0, 1fr));
-    column-gap: 8px;
-    row-gap: 2px;
-}
-
-.rhy-cap {
-    grid-column: 1 / -1;
-    padding-left: 4px;
-    font: 700 9px Cousine, ui-monospace, monospace;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: var(--pt-text-dim, #b9a8d8);
-}
-
-.rhy-cap small {
-    font-weight: 400;
-    text-transform: none;
-    letter-spacing: 0;
-    opacity: .8;
-    margin-left: 4px;
-}
-
-.row-cap {
-    justify-self: center;
-    width: 100%;
-    max-width: 36px;
-    height: 20px;
-    padding: 0;
-    font: 700 10px Cousine, ui-monospace, monospace;
-}
-
-.row-cap.off {
-    opacity: .4;
-}
-
-
-/* C: flat cells, as the Drums machine's, with a head column, so the steps sit where Drums'
-   do whichever machine is shown */
-.look-c {
-    padding-right: 0 !important;
-    flex-wrap: nowrap !important;
-}
-
-.look-c :deep(.padTEST-grid) {
-    flex: 1 1 auto;
-}
-
-.c-head {
-    flex: 0 0 96px;
-    display: flex;
-    flex-direction: column;
-    padding-right: 8px;
-}
-
-.c-head-nums {
-    height: 16px;
-}
-
-.c-head-name {
-    flex: 1 1 auto;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
-    padding-left: 22px;
-    position: relative;
-    font: 700 12px Cousine, ui-monospace, monospace;
-    color: #fff;
-}
-
-.c-head-name small {
-    font-size: 9px;
-    font-weight: 400;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    opacity: .7;
-}
-
-.c-led {
-    position: absolute;
-    left: 4px;
-    top: calc(50% - 5px);
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--hw-led, #5dffb0);
-    box-shadow: 0 0 6px var(--hw-led, #5dffb0);
-}
-
-.look-c :deep(.padTEST-grid) {
-    gap: 6px;
-}
-
-.look-c :deep(.padTEST) {
-    height: 228px;
-    border-radius: 6px;
-    background: rgba(8, 6, 20, .55);
-    border: 1px solid rgba(255, 255, 255, .07);
-    box-shadow: none;
-}
-
-.look-c .pad-col:nth-child(4n + 1) :deep(.padTEST) {
-    background: rgba(255, 255, 255, .07);
-}
-
-.look-c :deep(.padTEST)::after {
-    box-shadow: none;
-}
-
-.look-c :deep(.padTEST.selected) {
-    border-color: hsla(var(--heat-h, 210), 85%, 65%, .7);
-    box-shadow: none;
-}
-
-.look-c :deep(.padTEST.playing) {
-    outline: 2px solid #fff;
-    outline-offset: -2px;
 }
 
 /* all other visuals in SCSS (_drumSequencer.scss) */

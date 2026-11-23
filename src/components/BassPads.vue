@@ -5,17 +5,16 @@
      arc glides into the next note, a bar holds it), then three rows of toggles: Accent, Slide
      and Tie. A step's Slide and Tie are one or the other. Each click is one undo step. -->
 <template>
-    <div class="bass-pads" :class="look ? `look-${look}` : null">
+    <div class="bass-pads">
         <div class="bp-grid-wrap">
             <SynthStepGrid name="bass" :current-step="currentStep" :min-hz="BASS_MIN_HZ * HUE" :max-hz="BASS_MAX_HZ * HUE"
                 :steps="lane.steps" @update:steps="(v: boolean[]) => (lane.steps = v)"
                 :velocities="lane.velocities" @update:velocities="(v: number[]) => (lane.velocities = v)"
                 :pitches="shownPitches" @update:pitches="(v: number[]) => (lane.pitches = v.map((hz) => hz / HUE))"
-                :nearestNote="(hz: number) => nearestNote(hz / HUE)" :showVelocity="showVelocity" :showPitch="showPitch"
+                :nearestNote="(hz: number) => nearestNote(hz / HUE)"
                 :waveforms="waves" :ratchets="ones" :repeatNotes="sames" :repeatBrush="null" :defaultWave="wave === 'square' ? 'square' : 'sawtooth'"
                 :noiseMask="offs" noiseTint="#fff" noise-mode="static" :noise-alpha="0" :noise-fps="14" :noise-speed="40"
                 :noise-enabled="false" :pepper-alpha="0" :pepper-scale="6" :lfoView="null"
-                :look="look" head-name="Bass" :head-sub="wave === 'square' ? 'Square' : 'Saw'"
                 @open-pad-settings="(p: any) => emit('open-pad-settings', p)" />
             <div class="bp-links" aria-hidden="true">
                 <span v-for="(l, i) in links" :key="i" class="bp-link-cell">
@@ -49,9 +48,6 @@ const props = defineProps<{
     wave: BassWave;
     currentStep: number;
     nearestNote: (hz: number) => string;
-    showVelocity?: boolean;
-    showPitch?: boolean;
-    look?: string; // MOCKUPS ONLY: ?pads=a|b|c
 }>();
 const emit = defineEmits<{
     (e: 'open-pad-settings', payload: { name: string; index: number; anchorRect: DOMRect }): void;
@@ -116,33 +112,6 @@ function toggle(id: 'accents' | 'slides' | 'ties', i: number) {
 </script>
 
 <style scoped>
-/* MOCKUPS ONLY: ?pads=a|b|c. The pads shorter, as the rows take the rest of the card */
-.bass-pads.look-a :deep(.padTEST),
-.bass-pads.look-b :deep(.padTEST),
-.bass-pads.look-c :deep(.padTEST) {
-    height: 104px;
-}
-
-.bass-pads.look-b :deep(.padTEST) {
-    height: 92px;
-}
-
-.bass-pads.look-c .bp-row,
-.bass-pads.look-c .bp-links {
-    margin-left: 96px;
-}
-
-.bass-pads.look-c .bp-row {
-    padding-right: 0;
-    column-gap: 6px;
-}
-
-.bass-pads.look-c .bp-tog {
-    width: 100%;
-    max-width: none;
-    border-radius: 5px;
-}
-
 .bp-grid-wrap {
     position: relative;
 }

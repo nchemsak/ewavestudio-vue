@@ -4152,8 +4152,7 @@ test("a step's Repeats play quick hits within the step, live and in WAV exports"
 	await setRepeats(4, '×4');
 	expect(JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data
 		.instruments.find((l: any) => l.name === 'synth-voice').ratchets[4]).toBe(4);
-	await page.locator('.step-menu-anchor .pt-info-icon').click();
-	await page.getByRole('menuitem', { name: 'Reset Pads' }).click();
+	await page.getByRole('button', { name: "Reset Rhythm's pads" }).click();
 	await expect(page.locator('.ratchet-badge')).toHaveCount(0);
 });
 
@@ -4206,6 +4205,87 @@ test("the Repeats brush shows it's picked (a frame, a tag, its own cursor), and 
 	// So the next click on a pad turns it off, as without the brush
 	await pads(page).nth(0).click();
 	await expect(pads(page).nth(0)).toHaveAttribute('aria-pressed', 'false');
+});
+
+// The pads (PR 127, the plan's item 9): a drag up or down for velocity, sideways to paint
+test('the pads: a lit pad dragged up or down sets its velocity, a sideways drag paints, arrows too; no sliders, no ⋯ menu, Reset in the header', async ({ page }) => {
+	const lane = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data
+		.instruments.find((l: any) => l.name === 'synth-voice');
+	const centre = async (i: number) => { const b = (await pads(page).nth(i).boundingBox())!; return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+	await expect(page.locator('.step-card .pt-info-icon')).toHaveCount(0);
+	await expect(page.getByRole('menuitem', { name: 'Individual Pad Sliders' })).toHaveCount(0);
+
+	// A click turns a pad on; a drag down on it makes it softer (a readout while dragging), and leaves it on
+	await pads(page).nth(4).click();
+	await expect(pads(page).nth(4)).toHaveAttribute('aria-pressed', 'true');
+	await page.waitForTimeout(SETTLED);
+	const p = await centre(4);
+	await page.mouse.move(p.x, p.y);
+	await page.mouse.down();
+	await page.mouse.move(p.x, p.y + 20, { steps: 5 });
+	await expect(page.locator('.vel-readout')).toHaveText('75%');
+	await page.mouse.move(p.x, p.y + 40, { steps: 5 });
+	await expect(page.locator('.vel-readout')).toHaveText('50%');
+	await page.mouse.up();
+	await expect(page.locator('.vel-readout')).toHaveCount(0);
+	await expect(pads(page).nth(4)).toHaveAttribute('aria-pressed', 'true');
+	expect((await lane()).velocities[4]).toBe(0.5);
+	await expect(page.locator('.hover-slider')).toHaveCount(0);
+	// One undo step for the drag
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo' }).click();
+	expect((await lane()).velocities[4]).toBe(1);
+
+	// A drag up on a pad that's off paints instead (it can't have a velocity): sideways too
+	const a = await centre(0), b = await centre(3);
+	await page.mouse.move(a.x, a.y);
+	await page.mouse.down();
+	await page.mouse.move(b.x, b.y, { steps: 12 });
+	await page.mouse.up();
+	expect((await lane()).steps.slice(0, 6)).toEqual([true, true, true, true, true, false]);
+	// ...and off again, from a lit pad
+	await page.mouse.move(b.x, b.y);
+	await page.mouse.down();
+	await page.mouse.move(a.x, a.y, { steps: 12 });
+	await page.mouse.up();
+	expect((await lane()).steps.slice(0, 6)).toEqual([false, false, false, false, true, false]);
+
+	// Arrows on the focused lit pad: 5 % a press, Shift 25 %
+	await pads(page).nth(4).focus();
+	await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('Shift+ArrowDown');
+	expect((await lane()).velocities[4]).toBe(0.7);
+	await pads(page).nth(4).focus(); // the File menu took it
+	await page.keyboard.press('ArrowUp');
+	expect((await lane()).velocities[4]).toBe(0.75);
+
+	// Reset in the header: the machine shown's pads, one undo step
+	await page.getByRole('button', { name: "Reset Rhythm's pads" }).click();
+	expect((await lane()).steps.every((x: boolean) => !x)).toBe(true);
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('button', { name: 'Undo' }).click();
+	expect((await lane()).steps[4]).toBe(true);
+	await page.getByRole('button', { name: 'Show Bass' }).click();
+	await expect(page.getByRole('button', { name: "Reset Bass's pads" })).toBeVisible();
+	await page.getByRole('button', { name: 'Show Drums' }).click();
+	await expect(page.getByRole('button', { name: "Reset Drums's pads" })).toBeVisible();
+
+	// Drums: a sideways drag paints the row it started in
+	const step = (row: string, i: number) => page.getByRole('button', { name: `${row}, step ${i}`, exact: true });
+	const s1 = (await step('Snare', 2).boundingBox())!, s2 = (await step('Snare', 6).boundingBox())!;
+	await page.mouse.move(s1.x + s1.width / 2, s1.y + s1.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(s2.x + s2.width / 2, s2.y + s2.height / 2 + 30, { steps: 12 }); // drifting into the row under it
+	await page.mouse.up();
+	for (const i of [2, 3, 4, 5, 6]) await expect(step('Snare', i)).toHaveAttribute('aria-pressed', 'true');
+	for (const i of [1, 7]) await expect(step('Snare', i)).toHaveAttribute('aria-pressed', 'false');
+	for (const i of [2, 6]) await expect(step('Metal', i)).toHaveAttribute('aria-pressed', 'false');
+	// Arrows set a lit step's velocity
+	await step('Snare', 3).focus();
+	await page.keyboard.press('Shift+ArrowDown');
+	await expect(step('Snare', 3)).toHaveAttribute('title', /75%/);
+	await page.getByRole('button', { name: "Reset Drums's pads" }).click();
+	await expect(step('Snare', 3)).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('the Repeats brush gives every pad it crosses that many hits, and takes them off again', async ({ page }) => {
@@ -4267,9 +4347,15 @@ test('the Repeats brush gives every pad it crosses that many hits, and takes the
 	await expect(pads(page).nth(5)).toHaveAttribute('aria-pressed', 'false');
 	await expect(badge(5)).toHaveText('×2'); // its repeats stay for when it's back on
 
-	// ⋯ → Clear Repeats: every pad back to one hit
-	await page.locator('.step-menu-anchor .pt-info-icon').click();
-	await page.getByRole('menuitem', { name: 'Clear Repeats' }).click();
+	// The ×1 brush (Clear Repeats until PR 127): every pad it crosses back to one hit
+	await page.getByRole('button', { name: 'Repeats brush ×1' }).click();
+	await expect(page.locator('.step-card__grid').getByRole('status')).toContainText('Clearing repeats');
+	const first = (await pads(page).nth(0).boundingBox())!, last = (await pads(page).nth(15).boundingBox())!;
+	await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(last.x + last.width / 2, last.y + last.height / 2, { steps: 30 });
+	await page.mouse.up();
+	await page.mouse.move(5, 5);
 	await expect(page.locator('.ratchet-badge')).toHaveCount(0);
 	expect((await ratchets()).every((n) => n === 1)).toBe(true);
 });

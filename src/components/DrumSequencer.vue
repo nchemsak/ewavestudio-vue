@@ -359,7 +359,7 @@
 			</section>
 
 			<!-- Step Sequencer -->
-			<section class="pt-card step-card ds-steps" v-if="synthInstrument" :data-pads="padsMock || undefined">
+			<section class="pt-card step-card ds-steps" v-if="synthInstrument">
 				<div class="pt-subheader step-sequencer-subheader">
 					<div class="channel-caption d-flex align-items-center gap-2">
 						<div class="mute-dot" :class="{ muted: machineMuted }"
@@ -401,16 +401,15 @@
 					<DrumPads v-else-if="drumsChosen" :rows="drums.rows" :slots="drums.slots" :names="drumNames" :sources="drumSources"
 						:hues="drumHues" :picked="drumPick" :current-step="currentStep" @update:rows="setDrumRows"
 						@pick="(k: number) => { drumPick = k; }" @toggle-mute="toggleDrumSlotMute" />
-					<BassPads v-else-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep" :look="padsMock"
-						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
+					<BassPads v-else-if="bassChosen" :lane="bassLane" :wave="bass.wave.value" :current-step="currentStep"
+						:nearestNote="nearestNote"
 						@open-pad-settings="({ index, anchorRect }) => openBassPad(index, anchorRect)" />
 					<SynthStepGrid v-else :name="synthInstrument.name" :current-step="currentStep" :min-hz="MIN_PAD_HZ"
 						:max-hz="MAX_PAD_HZ" v-model:steps="synthInstrument.steps"
 						v-model:velocities="synthInstrument.velocities" v-model:pitches="synthInstrument.pitches"
-						:nearestNote="nearestNote" :showVelocity="showVelocity" :showPitch="showPitch"
+						:nearestNote="nearestNote"
 						:waveforms="(synthInstrument as any).waveforms" v-model:ratchets="synthInstrument.ratchets"
-						:repeatNotes="synthInstrument.repeatNotes" @update:repeatNotes="(v: string[]) => (synthInstrument.repeatNotes = v)" :repeatBrush="repeatBrush"
-						:look="padsMock" :show-rows="padsMock === 'b'" head-name="Rhythm" :head-sub="selectedWaveform"
+						:repeatNotes="synthInstrument.repeatNotes" :repeatBrush="repeatBrush"
 						:defaultWave="selectedWaveform" :noiseMask="noiseMask"
 						:noiseTint="noiseHexFromMorph(noiseColor)" noise-mode="static" :noise-alpha="0.32"
 						:noise-fps="14" :noise-speed="40" :noise-enabled="noiseEnabled" :pepper-alpha="0.2"
@@ -755,8 +754,6 @@ import { BASS_PATTERNS, BASS_SOUNDS, bassPatternFrom, bassPatternKey, bassSoundK
 import BassPads from './BassPads.vue';
 import BassSound from './BassSound.vue';
 import DrumPads from './DrumPads.vue';
-// MOCKUPS ONLY: ?pads=a|b|c, the pads redesigned (the plan's item 9)
-const padsMock = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('pads') || '') : '';
 import DrumSound from './DrumSound.vue';
 import DriftPads from './DriftPads.vue';
 import DriftSound from './DriftSound.vue';
@@ -1143,8 +1140,6 @@ function copyDriftBar() {
 }
 // DRIFT MACHINE END
 
-const showVelocity = ref(false);
-const showPitch = ref(false);
 
 const melodyRef = ref<(InstanceType<typeof MelodyMaker> & {
 	getUi?: () => any;
@@ -1335,11 +1330,6 @@ function closeOverlays() {
 	for (const k in info) (info as any)[k].open = false;
 }
 
-const padSlidersOn = computed({
-	get: () => showVelocity.value && showPitch.value,
-	set: (v: boolean) => { showVelocity.value = v; showPitch.value = v; }
-});
-function togglePadSliders() { padSlidersOn.value = !padSlidersOn.value; }
 
 // PANEL MENU END
 
@@ -2778,8 +2768,6 @@ function resetUiToFactoryDefaults() {
 
 	resetToFactoryDefaults(projectState);
 
-	showVelocity.value = false;
-	showPitch.value = false;
 
 	// Close any open menus/popovers, and put the Repeats brush down
 	fxAdvanced.open = false;
@@ -4357,21 +4345,6 @@ async function recordSample() {
 
 .ds-steps {
 	position: relative;
-}
-
-/* MOCKUPS ONLY (?pads=a|b|c): one height whichever machine is shown, the tallest's (Drums') */
-@media (min-width: 1200px) {
-	.ds-steps[data-pads] {
-		min-height: 330px;
-	}
-
-	.ds-steps[data-pads] :deep(.dr-plates) {
-		min-height: 168px;
-	}
-
-	.ds-steps[data-pads] :deep(.dr-bar) {
-		min-height: 44px;
-	}
 }
 
 .steps-reset {
