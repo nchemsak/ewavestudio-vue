@@ -3688,10 +3688,12 @@ test('PR 93: one accent: lit keys, the chosen key and the mute dot in the LEDs\'
 		expect(await style('.ds-grid .uni-unit .sp-key.on', 'color'), theme).toBe(led);
 		expect(await style('.ds-grid .lk-key.on', 'color'), theme).toBe(led);
 		expect(await style('.ds-steps .mute-dot', 'background-color'), theme).toBe(led);
-		// The Melody Maker's key: a ring, not the wash; the white key keeps its own white
+		// The Melody Maker's key: filled in a deep shade of the LEDs' green, a white letter (PR 125;
+		// PR 93's ring hardly showed on white), not the wash
 		const key = '.ds-grid .mm-kb .kb-white.is-active';
-		expect(await style(key, 'box-shadow'), theme).toContain(led);
+		expect(await style(key, 'background-image'), theme).toContain('linear-gradient');
 		expect(await style(key, 'background-image'), theme).not.toContain('radial-gradient');
+		expect(await style(`${key} .wlabel`, 'color'), theme).toBe('rgb(255, 255, 255)');
 		// The Waveforms card has the other cards' background
 		expect(await style('.ds-grid .generators .pt-card', 'background-image'), theme)
 			.toBe(await style('.ds-grid .fm-unit', 'background-image'));
