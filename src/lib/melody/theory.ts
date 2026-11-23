@@ -35,6 +35,18 @@ export const freqToMidiExact = (hz: number) => 69 + 12 * Math.log2(hz / 440);
 
 const mod12 = (n: number) => ((n % 12) + 12) % 12;
 
+// Note names, sharps or flats (a flat key spells with flats: Bb, not A#)
+export const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+export const FLAT_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+const FLAT_KEYS = new Set(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb']);
+/** Whether a key is spelled with flats (F and the flat keys) */
+export const keyPrefersFlats = (key: string) => key.includes('b') || FLAT_KEYS.has(key);
+/** A MIDI note's name with its octave, the app's way (A3 = 220 Hz = MIDI 57) */
+export const midiNoteName = (m: number, flats = false) =>
+	`${(flats ? FLAT_NAMES : SHARP_NAMES)[mod12(Math.round(m))]}${Math.floor(Math.round(m) / 12) - 1}`;
+/** The nearest note's name to a frequency */
+export const hzNoteName = (hz: number, flats = false) => midiNoteName(freqToMidiExact(hz), flats);
+
 // From one key to another the shorter way round: −5…+6 semitones (a tritone goes up)
 export function shortestInterval(from: string, to: string): number {
 	const d = mod12((NOTE_TO_SEMITONE[to] ?? 0) - (NOTE_TO_SEMITONE[from] ?? 0));
