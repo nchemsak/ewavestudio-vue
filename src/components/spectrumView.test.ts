@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { bandLevel, holdPeaks, strongestNoteHz, noteOf, NOTE_MIN_LEVEL, SKIP_BINS } from './spectrumView';
+import { bandLevel, holdPeaks, SKIP_BINS } from './spectrumView';
 
-const BIN_HZ = 48000 / 2048; // an analyser of 2048 points at 48 kHz (the tuner's has 8192)
+const BIN_HZ = 48000 / 2048; // an analyser of 2048 points at 48 kHz
 
 describe('reading the spectrum', () => {
 	it("a band's level is its loudest bin, skipping only DC (the views' tap is high-passed, PR 108)", () => {
@@ -21,23 +21,5 @@ describe('reading the spectrum', () => {
 		expect([...held]).toEqual([200, 90]);
 		holdPeaks(held, [0, 0], 10);
 		expect([...held]).toEqual([190, 80]);
-	});
-
-	it('finds the strongest note, between bins, and nothing in silence', () => {
-		// A3 (220 Hz) falls between bins 9 (211 Hz) and 10 (234 Hz)
-		const bins = new Uint8Array(1024);
-		bins[8] = 100; bins[9] = 230; bins[10] = 200; bins[11] = 90;
-		const hz = strongestNoteHz(bins, BIN_HZ)!;
-		expect(hz).toBeGreaterThan(9 * BIN_HZ);
-		expect(hz).toBeLessThan(10 * BIN_HZ);
-		expect(noteOf(hz).name).toBe('A3');
-		expect(strongestNoteHz(new Uint8Array(1024).fill(NOTE_MIN_LEVEL - 1), BIN_HZ)).toBeNull();
-	});
-
-	it("names notes as the app does (A3 = 220 Hz), with how far off they are", () => {
-		expect(noteOf(220)).toEqual({ name: 'A3', cents: 0 });
-		expect(noteOf(440 * Math.pow(2, 1 / 12))).toEqual({ name: 'A#4', cents: 0 });
-		expect(noteOf(440 * Math.pow(2, 1 / 12), true).name).toBe('Bb4');
-		expect(noteOf(225).cents).toBe(39);
 	});
 });

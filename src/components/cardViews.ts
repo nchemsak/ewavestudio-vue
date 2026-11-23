@@ -1,13 +1,13 @@
 // src/components/cardViews.ts
 // The big screen's views, spread around the cards (PR 108, the plan's item 1): the live
 // spectrum drawn faintly behind the Filter card's curve, one hit of the sound behind the
-// Envelope card's curve, and the tuner in the Melody Maker's screen (TunerBadge.vue). Each is
+// Envelope card's curve (the tuner in the Melody Maker's screen until PR 125). Each is
 // drawn on the card's own axis (src/lib/shapeViews.ts), so the curve you drag sits on what you
 // hear. The pure helpers are tested in cardViews.test.ts.
 
 import { padHue } from '../lib/padColour';
 import { xFreq, ENV_MAX_MS } from '../lib/shapeViews';
-import { bandLevel, holdPeaks, strongestNoteHz, noteOf } from './spectrumView';
+import { bandLevel, holdPeaks } from './spectrumView';
 import { hitColumns, type HitPicture } from './hitView';
 
 // What the views read: the fine analyser (liveEngine.ts, 8192 points behind a 10 Hz
@@ -57,14 +57,6 @@ export function hitHeights(hit: Pick<HitPicture, 'channels' | 'sampleRate' | 'hz
 	}
 	if (peak > 0) for (let c = 0; c < cols; c++) out[c] /= peak;
 	return out;
-}
-
-// The tuner's reading: the strongest note, its name (sharps or flats, as the key), and how far
-// off in cents; null when nothing clear sounds
-export function tunerReading(bins: ArrayLike<number>, binHz: number, flats = false): { name: string; cents: number; hz: number } | null {
-	const hz = strongestNoteHz(bins, binHz);
-	if (!hz) return null;
-	return { ...noteOf(hz, flats), hz };
 }
 
 // Helpers END

@@ -636,12 +636,12 @@ test('the spectrogram draws a note in its pad\'s colour', async ({ page }) => {
 	expect(near / hues.length).toBeGreaterThan(0.6);
 });
 
-test('the spectrum behind the Filter card\'s curve draws a played note at its frequency, in its pad\'s colour; the tuner names it', async ({ page }) => {
+test('the spectrum behind the Filter card\'s curve draws a played note at its frequency, in its pad\'s colour; the note badge names it', async ({ page }) => {
 	await turnOnPads(page, [0, 4, 8, 12]); // A3, 220 Hz, the default sine
 	const spectrum = page.locator('.ds-sound .filter-card canvas.filter-spectrum');
 	await expect(spectrum).toBeVisible();
-	const tuner = page.locator('.ds-compose .tuner-badge');
-	await expect(tuner).not.toHaveClass(/\bon\b/); // nothing heard yet
+	const badge = page.locator('.ds-compose .note-badge');
+	await expect(badge).not.toHaveClass(/\bon\b/); // nothing playing yet
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
 	await page.waitForTimeout(800);
 	// The column at 220 Hz on the card's 20 Hz–20 kHz log axis, and one at 40 Hz (the old
@@ -667,15 +667,67 @@ test('the spectrum behind the Filter card\'s curve draws a played note at its fr
 	expect(reading.length, 'the note is drawn there').toBeGreaterThan(10);
 	const near = reading.filter((h) => Math.abs(h - padHue(220)) <= 14).length;
 	expect(near / reading.length).toBeGreaterThan(0.6);
-	// The tuner in the Melody Maker's screen: A3, nearly in tune
-	await expect(tuner).toHaveClass(/\bon\b/);
-	await expect(tuner.locator('b')).toHaveText('A3');
-	const cents = Number((await tuner.locator('.tb-cents').textContent())!.replace('−', '-').replace(/[±¢+]/g, ''));
-	expect(Math.abs(cents)).toBeLessThanOrEqual(10);
+	// The note badge in the Melody Maker's screen (PR 125): the written note, A3, no cents
+	await expect(badge).toHaveClass(/\bon\b/);
+	await expect(badge).toHaveText('A3');
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
-	// Once quiet, the columns fall away and the tuner fades
+	// Once quiet, the columns fall away and the badge fades
 	await expect.poll(async () => (await hues(220)).length, { timeout: 5000 }).toBe(0);
-	await expect(tuner).not.toHaveClass(/\bon\b/, { timeout: 4000 });
+	await expect(badge).not.toHaveClass(/\bon\b/, { timeout: 4000 });
+});
+
+test('PR 125: File → Open\'s list stays open for a mouse heading to it diagonally, over Save as…; it closes going straight down', async ({ page }) => {
+	await page.getByRole('button', { name: 'File ▾' }).click();
+	const open = page.locator('.pc-has-sub');
+	const list = page.locator('.pc-open-submenu');
+	const saveAs = page.getByRole('menuitem', { name: 'Save as…' });
+	const o = (await open.boundingBox())!;
+	await page.mouse.move(o.x + 30, o.y + o.height / 2);
+	await expect(list).toBeVisible();
+	// Down and to the right, crossing Save as… on the way to the list
+	const l = (await list.boundingBox())!;
+	const sa = (await saveAs.boundingBox())!;
+	const steps = 8;
+	const from = { x: o.x + 30, y: o.y + o.height / 2 }, to = { x: l.x + 20, y: Math.min(l.y + l.height - 10, sa.y + sa.height + 40) };
+	for (let k = 1; k <= steps; k++) {
+		await page.mouse.move(from.x + ((to.x - from.x) * k) / steps, from.y + ((to.y - from.y) * k) / steps);
+		await expect(list).toBeVisible();
+	}
+	// Back on the row, then straight down onto Save as…: the list closes
+	await page.mouse.move(o.x + 30, o.y + o.height / 2);
+	await expect(list).toBeVisible();
+	await page.mouse.move(o.x + 30, sa.y + sa.height / 2, { steps: 3 });
+	await expect(list).toBeHidden();
+	// Left there (a pause on a row that isn't toward the list) it stays closed
+	await page.waitForTimeout(700);
+	await expect(list).toBeHidden();
+});
+
+test('PR 125: the note badge names the written notes, steady with FM and unison on; Drift shows its chord', async ({ page }) => {
+	const badge = page.locator('.ds-compose .note-badge');
+	await patternsBox(page).getByRole('button', { name: 'Bassline', exact: true }).click();
+	// FM and unison bend and smear what's heard; the badge names what's written
+	await page.getByRole('switch', { name: 'FM' }).click();
+	await page.getByRole('switch', { name: 'Unison' }).click();
+	const written = new Set((await pads(page).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? '')))
+		.map((n) => n.split(', ')[1]).filter(Boolean));
+	expect(written.size).toBeGreaterThan(1);
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	const seen = new Set<string>();
+	for (let k = 0; k < 20; k++) {
+		await page.waitForTimeout(120);
+		const t = (await badge.textContent())?.trim();
+		if (t) seen.add(t);
+	}
+	expect([...seen].every((n) => written.has(n)), `${[...seen]} within ${[...written]}`).toBe(true);
+	expect(seen.size).toBeGreaterThan(1);
+	await expect(badge).not.toContainText('¢');
+	// Drift shown: the chord playing
+	await page.getByRole('button', { name: 'Show Drift' }).click();
+	await page.getByRole('group', { name: 'Progressions', exact: true }).getByRole('button', { name: 'Rise', exact: true }).click();
+	await expect(badge).toHaveText(/^(Am|C|Em|G)$/, { timeout: 5000 });
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await expect(badge).not.toHaveClass(/\bon\b/, { timeout: 4000 });
 });
 
 test('knobs work from the keyboard', async ({ page }) => {
@@ -3636,10 +3688,12 @@ test('PR 93: one accent: lit keys, the chosen key and the mute dot in the LEDs\'
 		expect(await style('.ds-grid .uni-unit .sp-key.on', 'color'), theme).toBe(led);
 		expect(await style('.ds-grid .lk-key.on', 'color'), theme).toBe(led);
 		expect(await style('.ds-steps .mute-dot', 'background-color'), theme).toBe(led);
-		// The Melody Maker's key: a ring, not the wash; the white key keeps its own white
+		// The Melody Maker's key: filled in a deep shade of the LEDs' green, a white letter (PR 125;
+		// PR 93's ring hardly showed on white), not the wash
 		const key = '.ds-grid .mm-kb .kb-white.is-active';
-		expect(await style(key, 'box-shadow'), theme).toContain(led);
+		expect(await style(key, 'background-image'), theme).toContain('linear-gradient');
 		expect(await style(key, 'background-image'), theme).not.toContain('radial-gradient');
+		expect(await style(`${key} .wlabel`, 'color'), theme).toBe('rgb(255, 255, 255)');
 		// The Waveforms card has the other cards' background
 		expect(await style('.ds-grid .generators .pt-card', 'background-image'), theme)
 			.toBe(await style('.ds-grid .fm-unit', 'background-image'));

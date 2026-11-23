@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { spectrumColumns, columnHeight, hitHeights, tunerReading, UNDER_MIN_LEVEL } from './cardViews';
+import { spectrumColumns, columnHeight, hitHeights, UNDER_MIN_LEVEL } from './cardViews';
 import { freqX, timeX, ENV_MAX_MS } from '../lib/shapeViews';
 
 const SR = 48000;
@@ -38,15 +38,5 @@ describe('the views in the cards (PR 108)', () => {
 		expect(h[Math.floor(end) - 3]).toBeGreaterThan(0.9);
 		expect(h[Math.ceil(end) + 3]).toBe(0);
 		expect(h[cols - 1]).toBe(0);
-	});
-
-	it('the tuner names the strongest note, with flats when the key wants them', () => {
-		const bins = new Uint8Array(4096);
-		const b = 233.08 / BIN_HZ; // A#3 / Bb3
-		bins[Math.floor(b)] = 200; bins[Math.ceil(b)] = 200;
-		expect(tunerReading(bins, BIN_HZ)?.name).toBe('A#3');
-		expect(tunerReading(bins, BIN_HZ, true)?.name).toBe('Bb3');
-		expect(Math.abs(tunerReading(bins, BIN_HZ)!.cents)).toBeLessThan(15);
-		expect(tunerReading(new Uint8Array(4096), BIN_HZ)).toBeNull();
 	});
 });

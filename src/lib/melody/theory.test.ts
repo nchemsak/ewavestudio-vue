@@ -118,3 +118,21 @@ describe('the note a key plays', () => {
 		expect(midi(patternCenterHz(pads, [false, false, false, false]))).toBe(60);
 	});
 });
+
+import { hzNoteName, midiNoteName, keyPrefersFlats } from './theory';
+describe('note names', () => {
+	it('names every note of an octave, in sharps and in flats', () => {
+		expect([...Array(12)].map((_, i) => midiNoteName(60 + i))).toEqual(['C4', 'C#4', 'D4', 'D#4', 'E4', 'F4', 'F#4', 'G4', 'G#4', 'A4', 'A#4', 'B4']);
+		expect([...Array(12)].map((_, i) => midiNoteName(60 + i, true))).toEqual(['C4', 'Db4', 'D4', 'Eb4', 'E4', 'F4', 'Gb4', 'G4', 'Ab4', 'A4', 'Bb4', 'B4']);
+	});
+	it('names a frequency by its nearest note, A3 at 220 Hz', () => {
+		expect(hzNoteName(220)).toBe('A3');
+		expect(hzNoteName(225)).toBe('A3');
+		expect(hzNoteName(233.08, true)).toBe('Bb3');
+		expect(hzNoteName(55)).toBe('A1');
+	});
+	it('spells the flat keys with flats', () => {
+		expect(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb'].every(keyPrefersFlats)).toBe(true);
+		expect(['C', 'G', 'D', 'A', 'E', 'B', 'F#'].some(keyPrefersFlats)).toBe(false);
+	});
+});

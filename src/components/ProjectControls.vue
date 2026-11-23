@@ -170,6 +170,7 @@ import { storageKey } from '../lib/storage/namespace';
 import { usePwa } from '../composables/usePwa';
 import { usePhoneMode } from '../composables/usePhoneMode';
 import { comparableProject } from '../lib/patterns/slots';
+import { headingFor } from '../lib/menuAim';
 
 const TITLE_MAX_CHARS = 28;
 const store = useProjectStore();
@@ -256,14 +257,48 @@ function openSub(visible: boolean) {
 function onSubPointerEnter(e: PointerEvent) {
     // Only auto-open on mouse hover, not touch/pen.
     if (e.pointerType === 'touch' || e.pointerType === 'pen') return;
+    stopAim();
     openSub(true);
+}
+
+// Leaving "Open ▸" on the way to its list ("menu aim"): a mouse moved diagonally down and right
+// crosses the rows under it (Save as…) before it reaches the list, so the list stays open while
+// the pointer is still heading for it: inside the triangle between where it left the row and the
+// list's left edge, for up to AIM_MS. Anywhere else, or once that time is up, it closes.
+const AIM_MS = 600;
+let aimFrom: { x: number; y: number } | null = null;
+let aimTimer: ReturnType<typeof setTimeout> | null = null;
+function stopAim() {
+    if (aimTimer) clearTimeout(aimTimer);
+    aimTimer = null;
+    aimFrom = null;
+    document.removeEventListener('pointermove', onAimMove);
+}
+function headingForList(x: number, y: number) {
+    const r = openMenu.value?.getBoundingClientRect();
+    if (!r || !aimFrom) return false;
+    return headingFor(x, y, aimFrom, r);
+}
+function onAimMove(e: PointerEvent) {
+    if (!headingForList(e.clientX, e.clientY)) {
+        stopAim();
+        openSub(false);
+    }
 }
 
 function onSubPointerLeave(e: PointerEvent) {
     // Only auto-close on mouse hover, not touch/pen.
     if (e.pointerType === 'touch' || e.pointerType === 'pen') return;
-    openSub(false);
+    // Left into the list itself (it sits inside the row's element): nothing to do
+    const to = e.relatedTarget as Node | null;
+    if (to && openMenu.value?.contains(to)) return;
+    stopAim();
+    aimFrom = { x: e.clientX, y: e.clientY };
+    if (!showOpen.value || !headingForList(e.clientX + 1, e.clientY)) { aimFrom = null; openSub(false); return; }
+    document.addEventListener('pointermove', onAimMove);
+    aimTimer = setTimeout(() => { stopAim(); openSub(false); }, AIM_MS);
 }
+onUnmounted(stopAim);
 
 async function openProject(id: string) {
     try {

@@ -18,7 +18,7 @@ input, and MIDI learn (a controller's knobs turn the app's); a melody maker (ran
 arpeggio in a key and scale; a new key or scale moves the pattern with it); four patterns per
 project (A–D, with Copy) and a chain that plays them in order; a machine rail (a small scope and
 spectrogram, and a row per machine: Rhythm, Bass and Drums), the live spectrum behind the Filter card's
-curve, one hit of the sound behind the Envelope card's, and a tuner in the Melody Maker; six built-in sounds that set the sound (not the pattern) and six built-in patterns
+curve, one hit of the sound behind the Envelope card's, and the note playing in the Melody Maker; six built-in sounds that set the sound (not the pattern) and six built-in patterns
 that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
 saved in IndexedDB with JSON import and export, and share links (the project in the URL); undo/redo; it installs as an app that
 works offline (a PWA); and a phone held sideways gets a layout of its own (phone mode).
@@ -75,6 +75,10 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   by editing `dist/sw.js` and `dist/index.html` (the preview server reads files on every
   request) and puts them back afterwards.
   Google Analytics is stubbed out. Before the first local run: `npx playwright install chromium`.
+  `@playwright/test` stays at 1.63 for now (PR 125 updated the rest within their majors): 1.65
+  wants Chromium 159, and Claude's cloud sessions have only 1.63's browser (Chromium 153) and
+  can't download another, so they couldn't run the browser tests. The Checks install whatever
+  the lockfile's version wants. Move it with the major upgrades (the plan's item 15).
 - **No linter yet.** Current ESLint and typescript-eslint releases depend on `minimatch` 10,
   which has a moderate advisory (GHSA-g3hv-75wg-m249) that only `minimatch` 11 fixes. Adding
   them now would make `npm install` report 14 vulnerabilities. Add ESLint once they move to
@@ -204,7 +208,7 @@ src/components/
   LevelMeter.vue         Eight LEDs for a machine's level (the phone's Bass Mix group)
   MachineRail.vue        The machine rail, where the big screen was (PR 108): the scope and the
                          spectrogram (monitorViews.ts), a row per machine (see "The machine rail")
-  TunerBadge.vue         The tuner in the Melody Maker screen's corner
+  NoteBadge.vue          The note playing (or Drift's chord) in the Melody Maker screen's corner
   WaveButton.vue, WaveIcon.vue  A wave's big tile (Waveforms panel) and small line icon (pads)
   RandomWaveTile.vue     The Waveforms card's Random: a tall tile that rolls the pads' waves and
                          shows their mix (see "Layout" under Conventions)
@@ -216,9 +220,9 @@ src/components/
   ShapePad.vue           A card's screen that you drag (Envelope, Pitch, Filter, FM, Unison), and
                          those cards' shared styles (see "The shape cards")
   cardViews.ts           The views in the cards: the spectrum behind Filter's curve, the hit
-                         behind Envelope's, the tuner's reading (pure helpers and drawing)
+                         behind Envelope's (pure helpers and drawing)
   monitorViews.ts        The rail's scope and spectrogram (pure helpers and drawing loops)
-  spectrumView.ts        Reading the spectrum: a band's level, peak hold, the strongest note
+  spectrumView.ts        Reading the spectrum: a band's level, peak hold
   hitView.ts             The hit: how long to render it, its columns, its length and peak
   LfoModKnob.vue         A Knob that draws the LFO visualizer's dot and arc itself (the Volume knob)
   Knob.vue, KnobGroup.vue, WaveButton.vue, PtSelect.vue, InfoPopover.vue, SectionWrap.vue, ...
@@ -309,6 +313,7 @@ src/lib/melody/roll.ts   What the Melody Maker's screen draws: the pattern (each
                          sounds), what Generate would change, the note that's playing (pure)
 src/lib/melody/arp.ts    The arpeggio on the pads: where Rate puts notes, the cycle fitted to
                          the bar (pure; see "Melody Maker")
+src/lib/menuAim.ts       File → Open's list kept open for a mouse heading to it (pure; see "Saving")
 src/lib/knobDetents.ts   Knob notches: the drag's travel with a hold at each, and the Tempo and
                          Swing notches (pure; see "Knobs" under Conventions)
 src/lib/midiLearn.ts     MIDI learn's bookkeeping (pure): the learnable knobs (MIDI_KNOBS) and
@@ -363,7 +368,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `masterGain` (the Volume knob) → the output limiter → `output` → destination. The views are tapped from `masterGain` through a 10 Hz high-pass
   (`viewTap`, PR 108, so the drive's DC offset doesn't show): `analyser` (2048 points) for the
   rail's scope and spectrogram and phone mode's tiny scope, and `fineAnalyser` (8192 points,
-  about 6 Hz a bin) for the spectrum behind the Filter card and the tuner.
+  about 6 Hz a bin) for the spectrum behind the Filter card (and the tuner until PR 125).
 - Scheduler: `schedule()` runs every 25 ms, driven by a ticker in a small Web Worker
   (`src/audio/ticker.ts`), so playback keeps going in background tabs; it falls back to
   `setInterval` if a worker can't be created. Each run schedules the steps that start within
@@ -1092,12 +1097,15 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   rest, as on the big screen) and renders again once the sound has been still for 120 ms
   (`HIT_SETTLE_MS`; one render at a time, a change during one renders once more after it);
   not in phone mode. A screen reader gets "Hit: A3 Sine, 420 ms, peak −11.7 dB" from the card.
-- **The tuner** (`TunerBadge.vue`, MelodyMaker's `tuner` prop; on the phone's Key page too): in
-  the Melody Maker screen's bottom-right corner, the strongest note heard (`tunerReading()`:
-  `strongestNoteHz()` between 50 Hz and 4 kHz, refined between bins by a parabola; sharps or
-  flats as the key), its cents and a needle (green within 5 ¢). It shows while a note is heard
-  (the pads, MIDI notes) and 0.6 s after, then fades; it changes at most ten times a second, so
-  only the badge redraws. The big screen's tuner showed the pad's set pitch; this one listens.
+- **The note badge** (PR 125, `NoteBadge.vue`; on the phone's Key page too): in the Melody Maker
+  screen's bottom-right corner, **the note the pattern plays now, as written**: the hit under
+  the playhead (`playingHit`: Rhythm's or Bass's pad, a repeat's own note), named in the key's
+  spelling (`hzNoteName()` in `theory.ts`), 18 px, held until the next hit and faded once
+  playing stops; while Drift is shown, **its chord** (MelodyMaker's `chord` prop, the bar
+  playing's name). It's for playing along on another instrument. From PR 108 to 124 it was a
+  tuner (`TunerBadge.vue`) that listened to the output, with cents and a needle: unison, FM
+  and the pitch sweep led it astray, and the app is always in tune, so the cents told nothing;
+  it showed MIDI notes and previews too, which the badge doesn't (nothing is playing).
 - The Pitch card's sweep and the filter's response are drawn by their own cards (PR 77), which
   is why the envelope and filter views went with the screen.
 
@@ -1704,9 +1712,13 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     a repeat's hits are); the screen cuts so notes don't overlap.
   - The **scale's dots** on the white keys are 9 px with a dark ring (PR 80: the LED's pale
     green, 6 px, hardly showed on white), in a deeper shade of the LEDs' colour (the accent from
-    PR 80 to 92); the black keys keep the LED dot. **The key the pattern is in** has a ring in
-    the LEDs' colour, its own white or black kept (PR 93; it was filled with the pink wash),
-    and a key waiting for the bar a ghost of that ring.
+    PR 80 to 92); the black keys keep the LED dot. **The key the pattern is in** is filled, a deep
+    shade of the LEDs' colour with a white letter, and pressed down (PR 125: PR 93's mint ring
+    hardly showed on a white key; before PR 93 it was filled with the pink wash), and a key
+    waiting for the bar has a pulsing ghost in the LEDs' colour. **The flat names** (PR 125):
+    the card's list of flat note names lacked E until then, so in a flat key (F, Bb, Eb…) E
+    read F, F read Gb and B had no name (the pool's readout); the names are `theory.ts`'s now
+    (`midiNoteName()`, `keyPrefersFlats()`, unit-tested).
   - The chosen maker's panel (Melody | Arpeggio is in the header), both in one grid cell so
     the card never changes height: Melody's note (what Generate does); the arpeggio's
     Pattern and Tones steppers over Rate (1/8 | 1/16) and Skip (Octaves is beside Scale).
@@ -2234,6 +2246,12 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `isContinued`, which `useUndoHistory` and the bar queue check; opening or creating a
   project clears it), and a key waiting for the bar still comes. File → New with Shift held
   (an older, hidden way to copy) still makes an unnamed copy.
+- **File → Open's list** (PR 125; `src/lib/menuAim.ts`, unit-tested): it opens beside its row
+  on a mouse hover and closes when the mouse leaves, except while the mouse is heading for it:
+  inside the triangle between where it left the row and the list's left edge, for up to
+  600 ms (a "menu aim", as Amazon's menus do). Until then a mouse moved down and right from
+  Open crossed Save as… on the way and closed the list. A move anywhere else closes it at
+  once. A browser test moves diagonally (open all the way) and straight down (closed).
 - **Share links** (PR 84; `src/lib/storage/share.ts`, unit-tested): File → **Share link…**
   packs the project as it is now (unsaved changes included) into the link's fragment,
   `/studio2/#p=<code>`, which is never sent to the server, so it works on static hosting. The
@@ -2637,10 +2655,47 @@ reverb), PR 106 (phone mode brought up to date) PR 107 (the desktop view on a ph
 into each hit, the Maybe below); REV is the part of it that needs no look-ahead.
 
 The groovebox (items 3–6: the groundwork, then the Bass, Drums and Drift machines) is done
-(PRs 112–124). Next:
+(PRs 112–124).
 
-7. **Major-version upgrades** (Vite 8, Pinia 4; Vite 8 most likely with Vitest 5), whenever
-    the maintainer wants some maintenance, each as its own PR.
+**The maintainer's list after PR 124** (agreed in PR 125's chat, with Claude's pushback taken
+in): fixes first, then the reverb, the pads, a steady layout, then the mixer and the rest.
+Removed from the plan at the same time: dragging notes on the Melody Maker's screen, Photo →
+beat, the reverse-reverb swell (REV, PR 105, covers its use), Fit the window (item 10 is the
+useful half of it), and REV on the sample (unclear what it was for); Google Play moved to Not
+now. Small dependency updates ride along with any PR (npm update within the current majors).
+
+8. **The reverb pedal, three knobs and REV** (the maintainer's call: PRE goes, not TONE, which
+    darkens the tail and is what the presets set). DECAY · MIX / TONE · REV, REV in PRE's corner
+    on the face, as the delay's and the overdrive's switches; a project's PRE no longer plays.
+    And REV's **Next hit follows every machine's hits** through the pedals (today only Rhythm's
+    steps time a swell, so with Rhythm empty there's nothing to swell into).
+9. **The pads redesigned** (mockups first): **drag a lit pad up or down for its velocity**, as on
+    Drums, and **a sideways drag paints** pads on or off, on Rhythm, Bass and Drums (the first
+    move decides; Drums can't paint today); arrows up and down on a focused pad for velocity.
+    The pads' velocity and pitch sliders go, and with them the **Step Sequencer's ⋯ menu**:
+    Individual Pad Sliders goes, Clear Repeats becomes a **×1** on the Repeats brush, Reset Pads a
+    small red **Reset** cap in the header (every machine; one undo step). The keyboard stays in
+    a pad's ⋮ menu (the maintainer's call: one place for a pad's settings, not a second pop-up
+    from the note's name). **The pads card one height** whichever machine is shown (the
+    tallest's; each machine's pads fill it), so the rail beside it stays put.
+10. **A steady right side**: whatever still moves when switching machines after item 9 (the
+    rail's scope and spectrogram, the Melody Maker's notes, the Compose column) stays the same
+    size.
+11. **A preview of Rhythm's hit**: a small clickable picture of the hit beside Keep as drum in
+    Rhythm's Sound title (what Keep would save), playing it while stopped, as Bass's screen
+    and the Drums slots' pictures do. A small mockup.
+12. **FX and Solo per machine**: on each rail row, an **FX** cap (off: the machine dry, round
+    every pedal, the lo-fi one too; the Pedals knob keeps its value, as Mute keeps Level) and
+    **Solo**. A mockup of the row.
+13. **Waves and noise per pattern** (Rhythm): each slot A–D keeps its pads' waves and noise
+    switches, as it keeps its steps and pitches; a wave tile, Random and a pad's ⋮ menu change
+    the slot showing; **a Sound preset sets all four**; older projects copy theirs into every
+    slot.
+14. **A PHONE switch on the lo-fi pedal** (a band-pass about 300 Hz–3.4 kHz, mono; linear, so
+    the stems still add up), a mini switch like CRUSH.
+15. **Major-version upgrades** (Vite 8, Pinia 4, Vitest 5; Playwright too, see "Commands"), each as
+    its own PR, last, or sooner if Vite 7 stops getting fixes or `npm audit` needs a new major.
+    TypeScript 7 waits until `vue-tsc` supports it.
 
 Put off after PR 93 (the maintainer's call: back to them after some of the items above):
 - **Patterns A–D and the chain on the phone** (the maintainer's call after PR 109: later).
@@ -2659,34 +2714,17 @@ Put off after PR 93 (the maintainer's call: back to them after some of the items
     synth people gather and to the sites that cover free browser instruments. Claude's part: a
     Support link in the gear menu, an analytics event for a visitor who comes back within a
     week, and a first free pack of one-shots made with the app. Nothing is charged for.
-- **Fit the window without scrolling** (put off after PR 70; moved up in the review; put off
-  again after PR 93 until the sequencer stops growing, since the machines will change its
-  size): the panel is 1,356 px tall at 1600 px wide, so the pads scroll away on most laptops.
-  Centred vertically when it fits: tighten spacing (the screen's margins, the gaps between
-  sections; the desktop's pedals got short footswitches in PR 90), then scale the frame down
-  to fit short windows (with a floor). Measure at the maintainer's screen and common laptop
-  sizes, once the machines' rail is there (item 4).
 - **Record a take** (put off after PR 93, for now). A REC cap beside Play records what's heard,
   knob moves included, to a WAV (the output captured without loss, in a worklet), and stops
   with Stop. Export renders the pattern as set; it can't capture a filter sweep that's
   performed.
 
 Maybe (the maintainer's answer in the review, or earlier; ask before starting one):
-- **A reverse-reverb swell** ("pre-reverb", from the brainstorm after PR 99): a reversed tail
-  that rises into each hit (REV, PR 105, swells after a hit into the next, which needs no
-  look-ahead; this would swell before the first hit too, and is best left until after the
-  machines' groundwork, item 3, where one function builds a note for both engines). A hit's swell starts before the hit, so it needs the pattern ahead
-  of the live engine's 100 ms lookahead: easy in the export (render, reverse, place), harder
-  live (schedule each hit's swell from the pattern a bar ahead, so a change takes a bar). The
-  PR 34 "reverse swell" variation was dropped as DAW work; this would be a pedal setting.
 - **Kit export:** in Export audio, every lit pad as its own one-shot, and sixteen rolls of the
   Sounds dice as sixteen one-shots.
 - **Slide and Tie per step** (a pad's ⋮ menu): Slide glides into the next note, Tie holds a
   note through the next step. The Acid preset and the Bass machine want them.
 - **Last step:** a pattern length of 1–16 (a marker dragged along the pads); 12 steps is 3/4.
-- **Photo → beat:** a photo's sixteen columns become the pads (colour → note, by the pads' own
-  colour scale; brightness → velocity; the darkest columns off; snapped to the key), and maybe
-  the sound too. All in the browser.
 - **Word seed:** a word typed seeds both dice, so the same word always gives the same sound and
   pattern; maybe four sliders that steer the roll (dark–bright, soft–hard, sparse–busy,
   dry–wet).
@@ -2696,10 +2734,6 @@ Maybe (the maintainer's answer in the review, or earlier; ask before starting on
   A-E-I-O-U, an LFO target.
 - **Orbit:** the row of notes repeats every 5, 6 or 7 steps while the rhythm stays at 16.
 - **Tilt and shake** on the phone: tilt to sweep Tone, shake to roll the dice.
-- **Google Play** (on hold below), once the launch shows phone use.
-- **Drag notes on the Melody Maker's screen** (from the brainstorm after PR 77): up or down,
-  snapping to the scale, one undo step, a preview while stopped, using the shape cards' drag
-  code. It's a second editor for the pads' pitches, and fiddly on a 110 px screen.
 - **Octave arrows at the edges** (the maintainer isn't sure). `octaveShiftAllSkip()` moves each
   pad on its own and skips those that would leave 100–2000 Hz, so a pattern near an edge gets
   squashed (its intervals change); it also moves `globalOctaveOffset` when pads were skipped.
@@ -2730,8 +2764,12 @@ Not now (looked into after PR 37):
   already bring the sounds into FL Studio.
 - **Apple's App Store.** $99 a year, a Mac (or a paid cloud build) to build it, Apple turns
   down apps that are a wrapped website, iPhones have no Web MIDI (it would need native code),
-  and the silent switch mutes web audio unless handled. Google Play is the easier store (on
-  hold below).
+  and the silent switch mutes web audio unless handled. Google Play is the easier store
+  (below).
+- **Google Play** (on hold after phone mode, PR 45; moved here after PR 124, the maintainer's call, until the launch shows phone use): the PWA wrapped
+  as a Trusted Web Activity (PWABuilder or Bubblewrap; Web MIDI still works), a $25 developer
+  account, `/.well-known/assetlinks.json` on the main site, and for a new personal account a
+  closed test with 12 testers for 14 days first. The wrapped app could open in landscape.
 
 Dropped in PR 34 (the maintainer and Claude agreed): export stems by register (bass / top
 notes) or by wave, and "arrangement variations" (sparse, half-time, build, fill, wash, reverse
@@ -2770,10 +2808,6 @@ On hold (ask the maintainer before starting; put on hold after PR 33, "not now")
   animated cables from the LFO to what it moves (Cutoff, the Pulse tile, the pads), swaying a
   little, never over a control, still with `prefers-reduced-motion`. They depend on where
   things sit.
-- **Google Play** (after phone mode, PR 45, works well; the maintainer's call): the PWA wrapped
-  as a Trusted Web Activity (PWABuilder or Bubblewrap; Web MIDI still works), a $25 developer
-  account, `/.well-known/assetlinks.json` on the main site, and for a new personal account a
-  closed test with 12 testers for 14 days first. The wrapped app could open in landscape.
 - **The logo** (skipped for now after PR 42, the maintainer's call; the last part of the
   layout project, whose mockups, C1 layout, Sounds and Patterns, and spectrogram in the pads'
   colours were PR 41): a new or more balanced logo, now that the preset boxes have settled. It
@@ -2954,6 +2988,7 @@ Done:
 | 123 | The Drift machine, part 2: while Drift is shown, the transport's boxes are **Drift sounds** (Strings, Haze, Choir, Glass, Tide, Dust: Drift's sound only) and **Progressions** (Hold, Rise, Fall, Sway, Wander, Circle: its bars, 4 or 8, written as plates so they play in any key), each with a dice (a pad-like sound; a progression from the key's chord moving mostly by neighbouring triads) and lit while it matches; while stopped, a choice plays bar 1's chord (`src/lib/machines/driftPresets.ts`). |
 | 121 | The Drums machine, part 3, the phone (option D1 of the mockups, D2's halves on a small phone), which finishes the plan's item 5: DRUM beside RHY \| BASS (the machine keys without LEDs under 600 px); with Drums chosen, the Pads page has its four rows (a tap, a finger drawn along a row, a hold for Velocity; a tap on a row's name picks it), eight steps at a time with 1–8 \| 9–16 under 700 px, the Drum kits and Drum patterns steppers, Humanize on the picked row and its slot's Tune, Decay and Level as the knobs; the Sound page has the four slot cards with a Mix card; the Key page dims the Melody Maker. Nothing scrolls at 568 × 320 or 844 × 390. |
 | 124 | The Drift machine, part 3, the phone (option C of three mockups), which finishes the plan's item 6: DRIFT beside RHY \| BASS \| DRUM (the keys without LEDs under 900 px); with Drift chosen, the Pads page has the six plates 3 × 2 over its bars (a tap on a bar picks it, on a plate holds it; a dash running off a bar's edge for a note that carries on; 1–4 \| 5–8 for 8 bars on a short screen), Drift sounds and Chords on the steppers, **Bars 4 \| 8** and **Copy → N** (a bar into the next, phone only for now), and the X/Y pad in the knobs' place (`DriftXYPad.vue`, shared with the desktop); the Sound page has the swarm's screen with Swarm, Tone (Filter, Spread), In bars and Mix (Level, Reverb); the Key page dims Generate. Nothing scrolls at 568 × 320 or 844 × 390. |
+| 125 | Fixes from the maintainer's list after PR 124 (whose plan it also records: the reverb, the pads, a steady layout, FX and Solo, waves per pattern, a PHONE switch): File → Open's list stays open for a mouse heading to it diagonally (it closed as the mouse crossed Save as…; `src/lib/menuAim.ts`); the Melody Maker's chosen key is filled in a deep green with a white letter (the mint ring hardly showed on a white key); its corner badge names **the note the pattern plays**, as written, bigger and without cents, or Drift's chord (`NoteBadge.vue`; the tuner it replaces listened, and unison, FM and the sweep led it astray); flat keys' note names fixed (E was missing from the list, so E read F and B had no name). Dependencies updated within their majors (Vite 7.3.8, Vue 3.5.46, Sass 1.108...). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

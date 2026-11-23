@@ -95,8 +95,9 @@
                 </svg>
                 <span class="mm-read mm-read--l" aria-hidden="true">{{ keyRoot }} {{ scaleShort }}</span>
                 <span class="mm-read mm-read--r" aria-hidden="true">{{ screenNote }}</span>
-                <!-- The tuner: the note heard and how far off (the big screen's F4 until PR 108) -->
-                <TunerBadge v-if="tuner" :source="tuner" :flats="preferFlat" />
+                <!-- The note playing, as written (or Drift's chord), to play along with (PR 125;
+                     a tuner that listened until then) -->
+                <NoteBadge :note="badgeNote" />
                 <!-- Until Generate is first pressed (in this browser), the screen says to press it -->
                 <div v-if="showHint" class="mm-hint-lcd" aria-hidden="true">
                     <span class="mm-hint-box">
@@ -171,15 +172,14 @@
 </template>
 
 <script setup lang="ts">
-import TunerBadge from './TunerBadge.vue';
-import type { ViewSource } from './cardViews';
+import NoteBadge from './NoteBadge.vue';
 import { ref, computed, watch, defineExpose, onMounted, onBeforeUnmount, useId } from 'vue';
 import { padHue } from '../lib/padColour';
 import { rollY, rootOctavesHz, rollNotes, ghostNotes, rollSegments, soundingKey, type RollNote } from '../lib/melody/roll';
 import RollPlayhead from './RollPlayhead.vue';
 import { generatedOnce, noteGenerated } from '../composables/useFirstGenerate';
 import type { PlayView } from '../composables/usePlayhead';
-import { ROOTS, SCALES, NOTE_TO_SEMITONE } from '../lib/melody/theory';
+import { ROOTS, SCALES, NOTE_TO_SEMITONE, hzNoteName, keyPrefersFlats, midiNoteName } from '../lib/melody/theory';
 import { arpSlots, arpSequence, arpRateFrom, type ArpRate } from '../lib/melody/arp';
 
 // The arpeggio's tones: Chord (1-3-5), 7th chord (1-3-5-7; PR 68, in place of the ⋯ menu's
@@ -228,8 +228,9 @@ const props = defineProps<{
     // Phone mode's Key page (PR 106): the keyboard, Scale and the maker's settings in a column
     // beside the screen and Generate, so the card fits 568 × 320 without scrolling
     compact?: boolean;
-    // The tuner in the screen's corner (PR 108; TunerBadge.vue): what it reads
-    tuner?: ViewSource | null;
+    // Drift shown (PR 125): the chord playing for the badge in the screen's corner (null while
+    // nothing sounds), instead of the pattern's note
+    chord?: string | null;
 }>();
 
 /*  Defaults  */
@@ -284,17 +285,10 @@ const NATURALS: Array<{
         { n: 'B', hasSharp: false }
     ];
 
-const SHARP_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
-const FLAT_NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
-const FLAT_KEYS = new Set(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb']);
-const preferFlat = computed(
-    () => keyRoot.value.includes('b') || FLAT_KEYS.has(keyRoot.value)
-);
-const NAMES = computed(() =>
-    preferFlat.value ? FLAT_NOTE_NAMES : SHARP_NOTE_NAMES
-);
-const midiToName = (m: number) =>
-    `${NAMES.value[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
+// Names in the key's spelling (theory.ts; the flat names here lacked E until PR 125, so a flat
+// key's E read F, F read Gb... and B had none)
+const preferFlat = computed(() => keyPrefersFlats(keyRoot.value));
+const midiToName = (m: number) => midiNoteName(m, preferFlat.value);
 
 type PresetKey = 'low' | 'mid' | 'high' | 'wide';
 const PRESETS: Record<PresetKey, { minOct: number; maxOct: number; label: string }> = {
@@ -421,6 +415,17 @@ const segments = computed(() => rollSegments({
 }));
 // It reads the playhead every frame, but only changes (and redraws the card) from hit to hit
 const playingHit = computed(() => soundingKey(segments.value, props.playView?.pos ?? null));
+// The badge in the screen's corner: the note of the hit playing, held until the next hit (a gap
+// between short notes keeps it), gone once playing stops; or Drift's chord, when given
+const lastHitNote = ref<string | null>(null);
+watch(playingHit, (k) => {
+    if (!k) return;
+    const s = segments.value.find((x) => `${x.i}:${x.k}` === k);
+    if (s) lastHitNote.value = hzNoteName(s.hz, preferFlat.value);
+});
+const stopped = computed(() => props.playView?.pos == null);
+watch(stopped, (st) => { if (st) lastHitNote.value = null; });
+const badgeNote = computed(() => (props.chord !== undefined ? props.chord : stopped.value ? null : lastHitNote.value));
 const roll = computed(() => {
     const lo = props.minFreq ?? 100, hi = props.maxFreq ?? 2000;
     const y = (hz: number) => rollY(hz, lo, hi, ROLL_H);
@@ -1440,19 +1445,26 @@ defineExpose({ getUi, setUi, generate });
         0 6px 14px rgb(0 0 0 / 0.22);
 }
 
-/* The key the pattern is in: a ring in the LEDs' colour (PR 93; the wash until then, which
+/* The key the pattern is in: filled, a deep shade of the LEDs' colour with a white letter, and
+   pressed down (PR 125: PR 93's mint ring hardly showed on a white key; the wash before it
    took the accent from Generate) */
-.kb-white.is-active {
+.kb-white.is-active,
+.kb-black.is-active {
+    --kb-on: color-mix(in oklab, var(--hw-led) 46%, #04140c);
+    background: linear-gradient(180deg, color-mix(in oklab, var(--kb-on) 88%, #fff), var(--kb-on)) padding-box;
+    border-color: color-mix(in oklab, var(--kb-on) 70%, #000);
+    transform: translateY(2px);
     box-shadow:
-        inset 0 0 0 3px var(--hw-led),
-        inset 0 0 14px color-mix(in oklab, var(--hw-led), transparent 55%),
-        0 2px 0 rgb(0 0 0 / 0.5),
-        0 8px 18px rgb(0 0 0 / 0.28);
+        inset 0 0 0 2px color-mix(in oklab, var(--hw-led) 80%, #fff),
+        inset 0 -6px 12px rgb(0 0 0 / 0.25),
+        0 0 12px color-mix(in oklab, var(--hw-led), transparent 45%),
+        0 1px 0 rgb(0 0 0 / 0.5);
 }
 
 .kb-white.is-active .wlabel {
-    color: #10131a;
+    color: #fff;
     font-size: 1rem;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
 }
 
 .kb-white .wlabel {
@@ -1494,17 +1506,10 @@ defineExpose({ getUi, setUi, generate });
     z-index: 2;
 }
 
-.kb-black.is-active {
-    box-shadow:
-        inset 0 0 0 3px var(--hw-led),
-        inset 0 0 14px color-mix(in oklab, var(--hw-led), transparent 55%),
-        0 2px 0 rgb(0 0 0 / 0.8),
-        0 8px 16px rgb(0 0 0 / 0.4);
-}
-
 .kb-black.is-active .blabel {
-    color: var(--hw-led);
+    color: #fff;
     font-size: 1rem;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
 }
 
 .kb-cell.has-sharp {
