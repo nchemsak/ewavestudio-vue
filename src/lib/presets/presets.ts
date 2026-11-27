@@ -13,6 +13,7 @@
 //
 // Like snapshot.ts, this only reads and writes the settings' refs, so it's unit-tested in Node.
 
+import { setSlotWaves } from '../patterns/slots';
 import {
 	applySnapshot,
 	buildSnapshot,
@@ -68,9 +69,11 @@ export function applyPreset(st: ProjectState, preset: SynthPreset) {
 		fx: merge(base.fx, preset.fx),
 		selectedWaveform: preset.wave,
 	});
-	// The wave on every pad, as clicking its tile does
+	// The wave on every pad, as clicking its tile does, in every pattern slot (each keeps its
+	// own waves since the plan's item 13; the lane is the current one's)
 	const lane = synthLane(st);
 	if (lane) lane.waveforms = Array(st.ui.stepLength.value).fill(preset.wave);
+	if (st.patterns?.slots) st.patterns.slots.value = setSlotWaves(st.patterns.slots.value, preset.wave, st.ui.stepLength.value);
 }
 
 // Apply END

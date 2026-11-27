@@ -5565,6 +5565,73 @@ test('Patterns A–D: each slot keeps its own pattern; Copy; a key moves every s
 	for (const n of ['A', 'B', 'C', 'D']) await expect(slotButton(page, n)).toHaveClass(/empty/);
 });
 
+test("item 13: each pattern slot keeps its pads' waves and noise; a sound preset sets every slot's waves; the chain exports each bar's noise", async ({ page }) => {
+	const tile = (name: string) => page.getByRole('radio', { name, exact: true });
+	const lit = page.locator('.ds-grid .wave-row [role="radio"][aria-checked="true"]');
+	const noiseCard = page.locator('.module.noise');
+	const saved = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	const offbeats = Array.from({ length: 16 }, (_, i) => i % 4 === 2);
+
+	// A: pad 1 on Square, noise on the offbeats only (pad 1 has none)
+	await turnOnPads(page, [0]);
+	await tile('SQUARE').click();
+	await noiseCard.getByRole('button', { name: 'Offbeats' }).click();
+	await expect(page.getByRole('button', { name: 'Toggle noise' })).toHaveAttribute('aria-pressed', 'true');
+
+	// B, never used: every pad on the main wave (Square), noise on every pad; then Saw
+	await slotButton(page, 'B').click();
+	await expect(lit).toHaveCount(1);
+	await expect(tile('SQUARE')).toHaveAttribute('aria-checked', 'true');
+	await turnOnPads(page, [0]);
+	await tile('SAW').click();
+	let data = await saved();
+	expect(data.synth.noise.mask).toEqual(Array(16).fill(true));
+
+	// Back to A: its own waves and noise
+	await slotButton(page, 'A').click();
+	await expect(tile('SQUARE')).toHaveAttribute('aria-checked', 'true');
+	data = await saved();
+	expect(data.synth.noise.mask).toEqual(offbeats);
+	const [a, b] = data.patterns.slots.map((s: any) => s?.tracks[0]);
+	expect(a.waveforms).toEqual(Array(16).fill('square'));
+	expect(a.noise).toEqual(offbeats);
+	expect(b.waveforms).toEqual(Array(16).fill('sawtooth'));
+	expect(b.noise).toEqual(Array(16).fill(true));
+
+	// The chain A B: bar 1's hit has no noise, bar 2's has (each bar its own slot's mask)
+	await chainCell(page, 1).click();
+	await chainCell(page, 2).click();
+	await chainCell(page, 2).click();
+	await page.locator('.mr-chain').getByRole('switch', { name: 'Chain' }).click();
+	const files = unzip((await exportAudio(page, { ending: 'With tail', mix: true, stems: true, midi: false, oneShot: false, normalize: false })).bytes);
+	const noise = files[Object.keys(files).find((n) => n.endsWith('_noise.wav'))!];
+	expect(noise).toBeTruthy();
+	const bar1 = wavWindow(noise, 0, 0.2).peak, bar2 = wavWindow(noise, 2, 2.2).peak; // 120 BPM: a bar is 2 s
+	expect(bar2).toBeGreaterThan(0.005);
+	expect(bar1).toBeLessThan(bar2 / 20);
+
+	// A sound preset sets every slot's waves, and leaves their noise
+	await page.locator('.pt-btn[title^="Bell:"]').click();
+	await expect(tile('GLASS')).toHaveAttribute('aria-checked', 'true');
+	await slotButton(page, 'B').click();
+	await expect(tile('GLASS')).toHaveAttribute('aria-checked', 'true');
+	data = await saved();
+	expect(data.synth.noise.mask).toEqual(Array(16).fill(true));
+	expect(data.patterns.slots[0].tracks[0].waveforms).toEqual(Array(16).fill('glass'));
+	expect(data.patterns.slots[0].tracks[0].noise).toEqual(offbeats);
+
+	// A project saved before item 13: every slot gets the project's waves and noise
+	await importChanged(page, 'Before 13', (d) => {
+		d.instruments.find((i: any) => i.name === 'synth-voice').waveforms = Array(16).fill('organ');
+		d.synth.noise.mask = offbeats;
+		for (const s of d.patterns.slots) if (s) for (const t of s.tracks) { delete t.waveforms; delete t.noise; }
+	});
+	await slotButton(page, 'A').click();
+	await expect(tile('ORGAN')).toHaveAttribute('aria-checked', 'true');
+	data = await saved();
+	expect(data.synth.noise.mask).toEqual(offbeats);
+});
+
 test('Patterns A–D: while playing, a slot waits for the next bar (a ghost); Shift+click is at once; Stop applies it', async ({ page }) => {
 	// A: pad 1; B: pad 9. 120 BPM: a bar is 2 s
 	await turnOnPads(page, [0]);

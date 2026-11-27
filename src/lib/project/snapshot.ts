@@ -390,7 +390,7 @@ export function buildSnapshot(st: ProjectState) {
 			slots: patternSlots.value.map((slot, idx) => {
 				if (idx !== currentSlot.value) return slot ? JSON.parse(JSON.stringify(slot)) : null;
 				const lane = instruments.value.find(i => i.name === 'synth-voice');
-				return lane ? slotFromLane(lane, currentDefaultHz.value, st.bass.lane, st.drums.rows) : null;
+				return lane ? slotFromLane(lane, currentDefaultHz.value, st.bass.lane, st.drums.rows, noiseMask.value) : null;
 			}),
 			chain: [...chain.value],
 			chainOn: chainOn.value,
@@ -750,9 +750,12 @@ export function applySnapshot(st: ProjectState, s: any) {
 	else if (Array.isArray(s.instruments) && s.instruments.length) resetMix(st.mixer.mix);
 
 	// Patterns A–D (PR 109): a project saved before them has its pattern in A, B–D empty. The
-	// current slot's pattern is the lane's (above), as it always was.
+	// current slot's pattern is the lane's (above), as it always was. A slot saved before slots
+	// kept their own waves and noise (the plan's item 13) gets the project's, which were shared.
 	if (s.patterns && typeof s.patterns === 'object') {
-		patternSlots.value = slotsFrom(s.patterns.slots, stepLength.value, currentDefaultHz.value, bassHz);
+		const synthLane = instruments.value.find((i: any) => i.name === 'synth-voice') as any;
+		patternSlots.value = slotsFrom(s.patterns.slots, stepLength.value, currentDefaultHz.value, bassHz,
+			{ waveforms: synthLane?.waveforms ?? null, noise: noiseMask.value ?? null });
 		currentSlot.value = slotIndexFrom(s.patterns.current);
 		// The chain (PR 110): a project from PR 109 has none
 		chain.value = chainFrom(s.patterns.chain);

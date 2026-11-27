@@ -167,6 +167,17 @@ describe('applying a preset', () => {
 		}
 	});
 
+	it('puts its wave on every pattern slot\'s pads, leaving their noise and the slots never used', () => {
+		const st = fresh();
+		changeEverything(st); // B has its own waves and noise
+		const noiseB = (st.patterns.slots.value[1]!.tracks[0] as any).noise;
+		applyPreset(st, PRESETS[2]);
+		const b = st.patterns.slots.value[1]!.tracks[0] as any;
+		expect(b.waveforms).toEqual(Array(STEPS).fill(PRESETS[2].wave));
+		expect(b.noise).toEqual(noiseB);
+		expect(st.patterns.slots.value[0]).toBeNull();
+	});
+
 	it('leaves the pattern, tempo, swing, volume, key and Melody Maker alone', () => {
 		const st = fresh();
 		changeEverything(st);

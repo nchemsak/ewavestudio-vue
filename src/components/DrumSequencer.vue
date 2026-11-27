@@ -2716,8 +2716,8 @@ const exportEffectsOn = computed(() => ({
 }));
 
 // The chain for the Export dialog (PR 111): each filled cell's pattern, in order (the slot
-// showing from the lane; a slot never used is an empty bar), with the pads' shared waves and
-// the key's chord; and its cells' letters ("A A B A")
+// showing from the lane; a slot never used is an empty bar), with its own waves and noise
+// (item 13) and the key's chord; and its cells' letters ("A A B A")
 const exportChain = computed(() => {
 	const lane = synthInstrument.value;
 	if (!lane || !chainUsable.value) return null;
@@ -2726,11 +2726,12 @@ const exportChain = computed(() => {
 	const bassPatterns = cells.map((slotIdx) => bassPatternOf(slotIdx === currentSlot.value ? bassLane
 		: bassOf(patternSlots.value[slotIdx]) ?? emptyBass(n, bassHz())));
 	const patterns = cells.map((slotIdx) => {
-		const t = rhythmOf(slotIdx === currentSlot.value ? slotFromLane(lane, laneHz()) : patternSlots.value[slotIdx])
-			?? emptyRhythm(n, laneHz());
+		const t = rhythmOf(slotIdx === currentSlot.value ? slotFromLane(lane, laneHz(), null, null, noiseMask.value) : patternSlots.value[slotIdx])
+			?? emptyRhythm(n, laneHz(), selectedWaveform.value);
 		return {
 			active: isHeard('rhythm') ? [...t.steps] : t.steps.map(() => false), velocities: [...t.velocities], pitches: [...t.pitches],
-			waveforms: Array.from({ length: n }, (_, i) => (lane as any).waveforms?.[i] ?? selectedWaveform.value),
+			waveforms: Array.from({ length: n }, (_, i) => t.waveforms?.[i] ?? selectedWaveform.value),
+			noise: Array.from({ length: n }, (_, i) => t.noise?.[i] ?? true),
 			ratchets: [...t.ratchets], repeatNotes: [...t.repeatNotes], repeatChord: repeatChord.value,
 		};
 	});
@@ -3116,8 +3117,9 @@ function runQueued() {
 // PATTERN SLOTS START
 // Patterns A–D (the plan's item 2, part 1; src/lib/patterns/slots.ts): four patterns per
 // project, under the machine rail's rows (option A of PR 108's mockups). A slot holds the
-// steps, velocities, pitches and repeats; the sound, the pads' waves and the noise mask are
-// shared. The synth lane is always the current slot being edited, so everything that reads or
+// steps, velocities, pitches and repeats, and (the plan's item 13) the pads' waves and which
+// get noise: a wave tile, Random, a pad's ⋮ menu and the Noise card's pad buttons change the
+// slot showing, a sound preset every slot's waves. The rest of the sound is shared. The synth lane is always the current slot being edited, so everything that reads or
 // changes the pattern (the pads, Pattern Tools, Generate, the pattern presets, the engines,
 // the export) works on the current slot as it did on the one pattern.
 //
@@ -3143,8 +3145,11 @@ function switchToSlot(to: number) {
 	const lane = synthInstrument.value;
 	if (!lane || to === currentSlot.value) return;
 	const slots = [...patternSlots.value];
-	slots[currentSlot.value] = slotFromLane(lane, laneHz(), bassLane, drums.rows);
-	loadIntoLane(lane, slots[to], stepLength.value, laneHz());
+	slots[currentSlot.value] = slotFromLane(lane, laneHz(), bassLane, drums.rows, noiseMask.value);
+	// The slot's own waves and noise mask too (the plan's item 13); a slot never used: every pad
+	// on the main wave, with noise
+	const mask = loadIntoLane(lane, slots[to], stepLength.value, laneHz(), selectedWaveform.value);
+	noiseMask.value = mask ?? Array(stepLength.value).fill(true);
 	loadBassIntoLane(bassLane, slots[to], stepLength.value, bassHz());
 	drums.rows = drumRowsOf(slots[to], stepLength.value);
 	patternSlots.value = slots;
@@ -3167,8 +3172,8 @@ function copySlotTo(to: number) {
 	cancelQueued('slot');
 	const from = currentSlot.value;
 	const slots = [...patternSlots.value];
-	slots[from] = slotFromLane(lane, laneHz(), bassLane, drums.rows);
-	slots[to] = slotFromLane(lane, laneHz(), bassLane, drums.rows);
+	slots[from] = slotFromLane(lane, laneHz(), bassLane, drums.rows, noiseMask.value);
+	slots[to] = slotFromLane(lane, laneHz(), bassLane, drums.rows, noiseMask.value);
 	patternSlots.value = slots;
 	currentSlot.value = to; // the lane already holds the copy
 	trackEvent('pattern_copy', { from: SLOT_NAMES[from], to: SLOT_NAMES[to] });

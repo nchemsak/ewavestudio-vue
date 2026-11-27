@@ -31,6 +31,7 @@ export type StepPattern = {
 	ratchets?: number[]; // per step: 1 hit, or 2–4 quick hits (ratchet.ts)
 	repeatNotes?: string[]; // per step: what the hits play, 'same' | 'up' | 'down' (ratchet.ts)
 	repeatChord?: number[]; // the key's chord, pitch classes, which Up/Down step through
+	noise?: boolean[]; // per step: may it add noise? (a chain's bar, its slot's; missing: synth.noise.mask)
 };
 
 /** The pattern bar `bar` plays: the chain's, or the one pattern */
@@ -673,7 +674,7 @@ export function scheduleStepSequencer(
 		const barStart = bar * state.stepsCount * stepDuration;
 		const t = ctx.currentTime + offsetSeconds + barStart + stepIndex * stepDuration + swingOffset;
 
-		const padNoiseOn = noiseState.mask?.[stepIndex] ?? true;
+		const padNoiseOn = (pat.noise ?? noiseState.mask)?.[stepIndex] ?? true;
 
 		// Another machine's stem alone: Rhythm doesn't play
 		if (!playRhythm) continue;

@@ -197,6 +197,9 @@ export function changeEverything(st: ProjectState) {
 	b.pitches = b.pitches.map((_, i) => 200 + 10 * i);
 	b.ratchets = b.ratchets.map((_, i) => (i % 2) + 1);
 	b.repeatNotes = b.repeatNotes.map((_, i) => (i % 2 ? 'up' : 'same'));
+	// Its own waves and noise (the plan's item 13)
+	b.waveforms = b.steps.map((_, i) => (i % 2 ? 'square' : 'glass'));
+	b.noise = b.steps.map((_, i) => i % 4 !== 1);
 	st.patterns.slots.value = [null, { tracks: [b] }, null, null];
 	st.patterns.chain.value = [2, 2, 1, 2, null, 3, null, null];
 	st.patterns.chainOn.value = true;
