@@ -305,6 +305,40 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     display: flex;
     flex-direction: column;
     gap: 3px; /* 5 until PR 122 (Drift's row) */
+    container-type: inline-size;
+}
+
+/* A narrow rail (rows under 310 px: beside the transport on a tablet, 720–1199 px): the meter
+   and the steps go on a second line, under the LED and name and under the knobs and caps, so the
+   steps keep a usable width (PR 130: with FX and S on one line they had none) */
+@container (max-width: 309px) {
+    .mr-rows .mr-row {
+        grid-template-columns: 14px minmax(0, 1fr) 28px 28px 22px 18px;
+        grid-template-areas: "led name level pedals fx solo" "meter meter steps steps steps steps";
+        row-gap: 3px;
+        gap: 3px 5px;
+        padding: 4px 6px;
+    }
+
+    .mr-rows .mr-heads {
+        grid-template-columns: 14px minmax(0, 1fr) 28px 28px 22px 18px;
+        gap: 5px;
+        padding: 0 6px;
+    }
+
+    .mr-rows .mr-heads span:nth-child(3),
+    .mr-rows .mr-heads span:last-child {
+        display: none;
+    }
+
+    .mr-row > .mr-led { grid-area: led; }
+    .mr-row > .mr-name { grid-area: name; }
+    .mr-row > .mr-meter { grid-area: meter; }
+    .mr-row > .mr-level:nth-child(4) { grid-area: level; }
+    .mr-row > .mr-level:nth-child(5) { grid-area: pedals; }
+    .mr-row > .mr-fx { grid-area: fx; }
+    .mr-row > .mr-solo { grid-area: solo; }
+    .mr-row > .mr-cells { grid-area: steps; height: 10px; }
 }
 
 .mr-row,

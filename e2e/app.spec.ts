@@ -7357,6 +7357,7 @@ test('the rail mixer: Pedals at none keeps a machine out of the reverb; machine 
 // FX and Solo per machine (the plan's item 12): two caps on each rail row
 test('FX and Solo: caps on each rail row; saved, one undo step each, File → New puts them back', async ({ page }) => {
 	await importBassMix(page, 'FX and Solo');
+	await page.waitForTimeout(SETTLED); // a new project's first moments are its starting point, not an undo step
 	const fx = (name: string) => railRow(page, name).getByRole('switch', { name: `${name} FX` });
 	const solo = (name: string) => railRow(page, name).getByRole('switch', { name: `Solo ${name}` });
 	for (const name of ['Rhythm', 'Bass', 'Drums', 'Drift']) {

@@ -1533,8 +1533,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - **FX and Solo** (PR 130, the plan's item 12; option A of three mockups: B stacked the two as
   thin caps in one column, C put S beside the LED and FX as a badge on the Pedals knob): two caps
   on each row between Pedals and the steps (`.mr-fx`, `.mr-solo`, `role="switch"`, "Bass FX",
-  "Solo Bass"; the row's gaps 6 px, 8 before, so the steps are narrower: about 145 px at 1600,
-  46 at 1024). **FX** is down and lit while the machine goes through the pedals as its Pedals
+  "Solo Bass"; the row's gaps 6 px, 8 before, so the steps are narrower: about 145 px at 1600).
+  **A narrow rail** (rows under 310 px, a container query on `.mr-rows`: beside the transport from
+  720 to 1199 px) puts each row's meter and steps on a second line, under the name and under the
+  knobs and caps (about 111 px of steps; with the caps on one line they had none at 820 px, and
+  the page scrolled sideways), so the rail is 380 px tall there (328 before). **FX** is down and lit while the machine goes through the pedals as its Pedals
   says; up, it plays **dry, round every pedal, the lo-fi one too**: its bus goes straight to
   `masterGain` (`around` in `machineBus()`, crossfaded in 10 ms; Rhythm's noise layer too, Drift's
   reverb send shut), and its Pedals knob keeps its value. **S** (its letter amber while down):
