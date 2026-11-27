@@ -1281,6 +1281,17 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   −1 dBFS, cut where it fades (1.5 s at most), and `keepSound()` puts it on the shelf as
   "Kept N" and in that slot; the caption says "Kept as Kept 2, in Drums slot 3" for 3.5 s. One
   undo step. Analytics `drums_keep` (with `slot`).
+  **The hit Keep would save** (PR 129, the plan's item 11; option A of three mockups: B was a
+  small screen with the note and length, C a cap with ▶ and them): a chip between the caption and
+  the caps (`.keep-hit`, 58 × 18 px like the Drums shelf's, an arrow → to the caps), the hit in
+  its pad's colour on the screens' colours. It's rendered with the hit behind the Envelope card
+  (`renderKeepHit()` beside `keepAsDrum()` in `DrumSequencer.vue`: dry, through
+  `hitToSound()`, so exactly what Keep saves), only while Rhythm is shown (back on Rhythm a
+  changed sound renders again). A click plays it while stopped, as a Drums slot plays it
+  (`playDrumSound()`; while playing it does nothing, its title says so); its name says the note
+  and length ("Hear the hit Keep would save: A3 Sine, 420 ms"). The head keeps its height. A
+  browser test checks it plays, its length is the kept sound's, a new sound redraws it, and it's
+  silent while playing.
 - **The pads** (`DrumPads.vue`): a row per slot, its LED (mutes the slot), its name and where it
   came from (Kit, Kept; a click **picks the row**, outlined), then its 16 steps in the sound's
   colour (`drumColours.ts`: the kit's from where each sits on the pads' blue-to-red scale, a
@@ -2692,9 +2703,6 @@ beat, the reverse-reverb swell (REV, PR 105, covers its use), Fit the window (it
 useful half of it), and REV on the sample (unclear what it was for); Google Play moved to Not
 now. Small dependency updates ride along with any PR (npm update within the current majors).
 
-11. **A preview of Rhythm's hit**: a small clickable picture of the hit beside Keep as drum in
-    Rhythm's Sound title (what Keep would save), playing it while stopped, as Bass's screen
-    and the Drums slots' pictures do. A small mockup.
 12. **FX and Solo per machine**: on each rail row, an **FX** cap (off: the machine dry, round
     every pedal, the lo-fi one too; the Pedals knob keeps its value, as Mute keeps Level) and
     **Solo**. A mockup of the row.
@@ -3003,6 +3011,7 @@ Done:
 | 126 | The reverb pedal, three knobs and REV (the plan's item 8): PRE went (a project's pre-delay no longer plays, and isn't saved again; 67 MIDI-learnable knobs), and REV moved off the ribbon into its corner beside TONE, as CRUSH and PING PONG; REV's **Next hit follows every machine's hits** through the pedals (Rhythm's steps, Bass's notes, Drums' hits, each while unmuted with Pedals above 0; `pedalHitSteps()` in `reverse.ts`, both engines), so with Rhythm empty a swell rises into the next drum or bass hit. |
 | 127 | The pads (the plan's item 9): a lit pad dragged up or down sets its velocity (a readout while dragging), a sideways drag paints pads on or off, on Rhythm, Bass and Drums (the first move decides; Drums couldn't paint), and arrows up and down change a focused pad's velocity; the hover sliders and the Step Sequencer's ⋯ menu went: Clear Repeats is the Repeats brush's **×1**, Reset Pads a red **Reset** cap in the header; the pads, Drums' cells and the phone's are **silicone** (option A of three mockups, after a first round turned down): rubber pads on a lip, lit from inside as high as their velocity, sinking while held, the step numbers and note names printed, no black pills. "One height" moved to item 10. |
 | 128 | A steady right side (the plan's item 10): switching machines moves nothing. Over 640 px the Step Sequencer card is as tall on every machine (321 px, Drums'; it was 189 on Rhythm, 236 on Drift, about 320 on Bass and Drums), the pads centred under its header, so the rail beside it, its screens and everything under it stay put; from 1200 px Sound and Compose are as tall on every machine (763 px, Rhythm's Sound), the others' middle row (Bass's screen, the Drums slots' pictures, Drift's X/Y pad and swarm) taking the difference. A phone held upright keeps each machine's own height. |
+| 129 | A preview of Rhythm's hit (the plan's item 11; option A of three mockups): a chip between Keep as drum and its four caps draws the hit Keep would save (dry, mono, cut where it fades: what a Drums slot gets), in its pad's colour, redrawn as the sound changes, and plays it when clicked while stopped, as the Drums slots' pictures do; its name gives the note and length. The Sound title keeps its height. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

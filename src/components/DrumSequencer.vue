@@ -435,6 +435,13 @@
 					<!-- Keep as drum (the plan's item 5): one hit of Rhythm's sound into a Drums slot -->
 					<div v-if="machine === 'rhythm'" class="keep-drum" role="group" aria-label="Keep as drum">
 						<span class="keep-drum__cap" aria-hidden="true">{{ keptNote || 'Keep as drum' }}</span>
+						<!-- The hit Keep would save (the plan's item 11, option A of three mockups): a chip like
+						     the Drums shelf's, which plays it while stopped, and an arrow to the slots -->
+						<button type="button" class="keep-hit" :style="{ '--h': keepHitHue }" :aria-label="keepHitLabel"
+							:title="keepHitTitle" @click="auditionKeepHit()">
+							<svg viewBox="0 0 200 60" preserveAspectRatio="none" aria-hidden="true"><path :d="keepHit?.path ?? 'M0 30 L200 30'" /></svg>
+						</button>
+						<span class="keep-hit__arrow" aria-hidden="true">→</span>
 						<button v-for="(n, k) in drumNames" :key="k" type="button" class="hw-cap hw-cap-sm keep-drum__slot"
 							:class="{ busy: keepingDrum === k }" :style="{ '--h': drumHues[k] }" :disabled="keepingDrum != null"
 							:aria-label="`Keep as drum in slot ${k + 1}`"
@@ -709,7 +716,7 @@ import { LFO_DEPTH_MAX, LFO_DEFAULT_DEPTH, type LfoTarget } from '../audio/lfo';
 import { clampRatchet, ratchetHits, ratchetPitches, clampRepeatNotes, type RepeatNotes } from '../audio/ratchet';
 import { UNISON_VOICES_MAX, UNISON_VOICES_MIN } from '../audio/unison';
 import { PULSE_WIDTH_MIN, PULSE_WIDTH_MAX, RANDOM_WAVE_IDS, WAVE_IDS, WAVE_LABELS, padWaveLabel, type PadWave } from '../audio/waves';
-import { encodeSample, sampleSeconds, SAMPLE_LENGTH_DEFAULT, SAMPLE_ROOT_HZ, SAMPLE_WAVE } from '../audio/sample';
+import { decodeSample, encodeSample, sampleSeconds, SAMPLE_LENGTH_DEFAULT, SAMPLE_ROOT_HZ, SAMPLE_WAVE, type SampleData } from '../audio/sample';
 import MelodyMaker from './MelodyMaker.vue';
 import RandomWaveTile from './RandomWaveTile.vue';
 import SampleTile from './SampleTile.vue';
@@ -1000,9 +1007,7 @@ async function keepAsDrum(k: number) {
 	try {
 		// Dry, as the kit is: the Drums machine has its own way into the delay, reverb and lo-fi
 		// pedal (the drive stays: it's part of the hit's tone)
-		const st = exportState.value;
-		const state = { ...st, fx: { ...st.fx, delay: { ...st.fx.delay, enabled: false }, reverb: { ...st.fx.reverb, enabled: false },
-			...(st.fx.tape ? { tape: { ...st.fx.tape, enabled: false } } : {}) } };
+		const state = dryState(exportState.value);
 		const hz = hitHz.value, wave = selectedWaveform.value;
 		const sound = hitToSound(await renderHit(state, hz, wave, hitSeconds(state, wave, hz)), state.sampleRate);
 		if (!sound) { showKeptNote('That sound is silent: nothing kept'); return; }
@@ -1014,6 +1019,45 @@ async function keepAsDrum(k: number) {
 	} finally {
 		keepingDrum.value = null;
 	}
+}
+// Dry, as the kit is: the Drums machine has its own way into the delay, reverb and lo-fi pedal
+function dryState(st: any) {
+	return { ...st, fx: { ...st.fx, delay: { ...st.fx.delay, enabled: false }, reverb: { ...st.fx.reverb, enabled: false },
+		...(st.fx.tape ? { tape: { ...st.fx.tape, enabled: false } } : {}) } };
+}
+// The hit Keep would save (the plan's item 11): rendered with the hit behind the Envelope card,
+// dry, as hitToSound() makes it (mono, −1 dBFS, cut where it fades); its picture, note and length.
+// The chip in Rhythm's Sound title draws it and plays it, while stopped, as a Drums slot would
+const keepHit = shallowRef<{ sound: SampleData; path: string; name: string; length: string } | null>(null);
+const keepHitHue = computed(() => padHue(hitHz.value));
+const keepHitLabel = computed(() => (keepHit.value ? `Hear the hit Keep would save: ${keepHit.value.name}, ${keepHit.value.length}` : 'Hear the hit Keep would save'));
+const keepHitTitle = computed(() => (isPlaying.value ? 'The hit Keep would save (stop to hear it)' : 'Click to hear the hit Keep would save'));
+function keepHitPath(x: Float32Array, cols = 60) {
+	const h: number[] = [];
+	for (let c = 0; c < cols; c++) {
+		let m = 0;
+		const a = Math.floor((c / cols) * x.length), b = Math.max(a + 1, Math.floor(((c + 1) / cols) * x.length));
+		for (let i = a; i < b; i++) m = Math.max(m, Math.abs(x[i] ?? 0));
+		h.push(Math.min(1, m / 0.891));
+	}
+	const w = 200 / cols;
+	let top = 'M0 30', bottom = '';
+	h.forEach((v, c) => { top += ` L${(c * w).toFixed(1)} ${(30 - v * 27).toFixed(1)}`; });
+	for (let c = cols - 1; c >= 0; c--) bottom += ` L${(c * w).toFixed(1)} ${(30 + h[c] * 27).toFixed(1)}`;
+	return `${top} L200 30${bottom} Z`;
+}
+let keepHitDirty = false;
+async function renderKeepHit(st: any, hz: number, wave: any, name: string) {
+	keepHitDirty = false;
+	const dry = dryState(st);
+	const sound = hitToSound(await renderHit(dry, hz, wave, hitSeconds(dry, wave, hz)), dry.sampleRate);
+	if (!sound) { keepHit.value = null; return; }
+	const x = decodeSample(sound.data);
+	keepHit.value = { sound, path: keepHitPath(x), name, length: formatLength((x.length / sound.sampleRate) * 1000) };
+}
+function auditionKeepHit() {
+	if (isPlaying.value || !keepHit.value) return;
+	playDrumSound(keepHit.value.sound);
 }
 function showKeptNote(text: string) {
 	keptNote.value = text;
@@ -3283,6 +3327,8 @@ async function renderHitNow() {
 		const name = `${nearestNote(hz)} ${padWaveLabel(wave)}`;
 		hitPicture.value = { channels, sampleRate: state.sampleRate, hz, title: name };
 		hitText.value = `Hit: ${name}, ${formatLength((channels[0].length / state.sampleRate) * 1000)}, peak ${formatPeak(peakOf(channels))}`;
+		if (machine.value === 'rhythm') await renderKeepHit(state, hz, wave, name);
+		else keepHitDirty = true;
 	} catch (err) {
 		console.warn('The hit could not be rendered:', err);
 	} finally {
@@ -3305,6 +3351,8 @@ watch(() => [synthInstrument.value ? exportState.value : null, selectedWaveform.
 });
 onBeforeUnmount(() => { if (hitTimer) clearTimeout(hitTimer); });
 watch(hitWanted, (wanted) => { if (wanted && hitDirty) renderHitNow(); });
+// The chip's hit is rendered only while Rhythm is shown: back on Rhythm, render it if the sound changed
+watch(machine, (m) => { if (m === 'rhythm' && keepHitDirty && hitWanted.value) renderHitNow(); });
 onMounted(() => { if (hitWanted.value) renderHitNow(); });
 
 // THE HIT END
@@ -3896,6 +3944,31 @@ async function recordSample() {
 	animation: keep-pulse .6s ease-in-out infinite alternate;
 }
 @keyframes keep-pulse { to { opacity: .45; } }
+/* The hit Keep would save (the plan's item 11): a chip like the Drums shelf's, in the screens'
+   colours, its hit in its pad's colour; 18 px tall, as the caps, so the head keeps its height */
+.keep-hit {
+	--sp-bg: #0c1118;
+	width: 58px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: 5px;
+	background: var(--sp-bg);
+	box-shadow: inset 0 0 0 1px hsl(var(--h) 80% 60% / .45);
+	overflow: hidden;
+	cursor: pointer;
+}
+.theme-synthwave .keep-hit { --sp-bg: #2a0f52; }
+.theme-analog .keep-hit { --sp-bg: #160f05; }
+.keep-hit svg { display: block; width: 100%; height: 100%; }
+.keep-hit path {
+	fill: hsl(var(--h) 85% 62% / .5);
+	stroke: hsl(var(--h) 85% 72%);
+	stroke-width: 1;
+	vector-effect: non-scaling-stroke;
+}
+.keep-hit:hover path { fill: hsl(var(--h) 85% 66% / .75); }
+.keep-hit__arrow { font: 700 11px Cousine, ui-monospace, monospace; color: var(--pt-text-dim, #b9a8d8); margin: 0 2px; }
 @media (prefers-reduced-motion: reduce) { .keep-drum__slot.busy { animation: none; opacity: .6; } }
 
 
