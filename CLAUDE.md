@@ -1575,15 +1575,21 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   letter in the LEDs' colour, an empty slot's letter dim) and **Copy**. The `PATTERN SLOTS`
   section of `DrumSequencer.vue`; `src/lib/patterns/slots.ts` (unit-tested).
 - **A slot holds the pattern**: which steps are on, their velocities, pitches, repeats and what
-  the repeats play (`SLOT_FIELDS`). The sound, the pads' waves (a sound preset sets them) and
-  the noise mask (the Noise card's) are shared by every slot, so Move's shift moves the waves
-  and the noise for every slot.
+  the repeats play, and since PR 131 (the plan's item 13) **the pads' waves and which pads get
+  noise** (the noise mask) (`SLOT_FIELDS`, and the track's `noise`). A wave tile, Random, a
+  pad's ⋮ menu, a new recording, the Noise card's pad buttons and Move change the slot showing;
+  **a sound preset (and the Sounds dice) puts its wave on every slot's pads** (`setSlotWaves()`
+  in `applyPreset()`), leaving their noise. The rest of the sound, the Noise card's switch,
+  Color and Amount included, is shared. Live, the lane's `waveforms` and `noiseMask` are the
+  current slot's, so the engine needs nothing new; the export's chain gives each bar its slot's
+  waves and noise (`StepPattern.noise`, read before `synth.noise.mask`).
 - **The synth lane is the current slot as it's being edited**: the pads, Pattern Tools,
   Generate, the pattern presets and their dice, the engines, the export (audio and MIDI: the
   slot showing, or the chain since PR 111) and the share link read and write the lane as before.
   Picking another slot (`switchToSlot()`) copies the lane into the current slot's entry, then
-  the chosen slot into the lane (`slotFromLane()`, `loadIntoLane()`; a slot never used loads as
-  an empty pattern: steps off, full velocity, the key's root, one hit, Same).
+  the chosen slot into the lane (`slotFromLane()`, `loadIntoLane()`, which returns the slot's
+  noise mask for `noiseMask`; a slot never used loads as an empty pattern: steps off, full
+  velocity, the key's root, one hit, Same, every pad on the main wave with noise).
 - **While playing, a slot waits for the next bar's step 1** (the bar queue, kind `'slot'`, see
   "Changes at the bar"), with a pulsing ghost on its cap (`.is-queued`, steady with
   `prefers-reduced-motion`) and a title saying so; stopped, or with Shift+click, at once; Stop
@@ -1596,7 +1602,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   `moveToKey()` and `onScaleChosen()`): the key is the project's. Pattern Tools' octave arrows,
   Move, Humanize, Generate and the pattern presets change the current slot only.
 - **Saved** as `patterns: { current, slots }`, each slot `{ tracks: [{ machine: 'rhythm',
-  steps, velocities, pitches, ratchets, repeatNotes }] }` or null for a slot never used: a list
+  steps, velocities, pitches, ratchets, repeatNotes, waveforms, noise }] }` or null for a slot
+  never used (a Rhythm track saved before PR 131 has no `waveforms` or `noise`: `slotsFrom()`
+  gives it the project's, the lane's waves and `synth.noise.mask`, which every slot shared): a list
   of tracks from the start, so the machines add a track without a second change to saved
   projects. `buildSnapshot()` writes the lane into the current slot, so a saved project's
   current slot always matches its lane; `applySnapshot()` checks the slots (`slotsFrom()`: a
@@ -1607,8 +1615,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - **Which slot is showing isn't an edit** (PR 110, for the chain, which switches slots every
   bar): picking a slot makes no undo step and doesn't light the unsaved dot (PR 109 made it an
   undo step). Undo and the dot compare `comparableProject()` (`slots.ts`): the snapshot without
-  `patterns.current`, without the synth lane's pattern fields (they're in the current slot
-  too), and with an empty pattern the same as a slot never used. A state that differs from the
+  `patterns.current`, without the synth lane's pattern fields and `synth.noise.mask` (they're in
+  the current slot too), and with an empty pattern the same as a slot never used (every pad on
+  one wave, with noise, as one loads: so waves mixed or noise taken off an empty pattern count). A state that differs from the
   undo history's current entry only in that overwrites the entry (`replaceCurrent`) instead of
   adding one, so an undo still lands on the slot that was showing. The slot showing is still
   saved with the next Save.
@@ -2152,7 +2161,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### Presets (the Sounds box)
 - A preset sets the sound only: the synth and effect settings, the main wave and every pad's
-  wave (as clicking a wave tile does). Never the pattern (steps, velocities, pitches, the noise
+  wave (as clicking a wave tile does), in every pattern slot (PR 131). Never the pattern (steps, velocities, pitches, the noise
   mask), the key and octave, tempo, swing, volume or Melody Maker.
 - `src/lib/presets/library.ts` lists each preset as only what it changes from the factory
   sound. `applyPreset()` (`presets.ts`) first puts the whole sound back to factory
@@ -2203,8 +2212,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   as before) or **Chain**: the chain once through, a bar per filled cell (empty cells skipped),
   so Bars gives way to "3, a bar per cell" and the cells' letters ("A B A"). It opens on Chain
   while Chain is on in the app, else on Pattern. `exportChain` in `DrumSequencer.vue` gives each
-  cell's pattern (the slot showing from the lane; a slot never used is an empty bar) with the
-  pads' shared waves and the key's chord, as the engine's `barPatterns` (bar b plays
+  cell's pattern (the slot showing from the lane; a slot never used is an empty bar) with its
+  own waves and noise (PR 131) and the key's chord, as the engine's `barPatterns` (bar b plays
   `barPatterns[b % length]`, `patternForBar()` in `scheduleStepSequencer.ts`) and the MIDI file's
   (`patternToMidi()`'s `barPatterns`). Loop folds the chain's tail onto its first bar, so the
   chain repeats seamlessly; With tail rings out after its last. Stems add up as before. REV's
@@ -2730,10 +2739,6 @@ beat, the reverse-reverb swell (REV, PR 105, covers its use), Fit the window (it
 useful half of it), and REV on the sample (unclear what it was for); Google Play moved to Not
 now. Small dependency updates ride along with any PR (npm update within the current majors).
 
-13. **Waves and noise per pattern** (Rhythm): each slot A–D keeps its pads' waves and noise
-    switches, as it keeps its steps and pitches; a wave tile, Random and a pad's ⋮ menu change
-    the slot showing; **a Sound preset sets all four**; older projects copy theirs into every
-    slot.
 14. **A PHONE switch on the lo-fi pedal** (a band-pass about 300 Hz–3.4 kHz, mono; linear, so
     the stems still add up), a mini switch like CRUSH.
 15. **Major-version upgrades** (Vite 8, Pinia 4, Vitest 5; Playwright too, see "Commands"), each as
@@ -3037,6 +3042,7 @@ Done:
 | 128 | A steady right side (the plan's item 10): switching machines moves nothing. Over 640 px the Step Sequencer card is as tall on every machine (321 px, Drums'; it was 189 on Rhythm, 236 on Drift, about 320 on Bass and Drums), the pads centred under its header, so the rail beside it, its screens and everything under it stay put; from 1200 px Sound and Compose are as tall on every machine (763 px, Rhythm's Sound), the others' middle row (Bass's screen, the Drums slots' pictures, Drift's X/Y pad and swarm) taking the difference. A phone held upright keeps each machine's own height. |
 | 129 | A preview of Rhythm's hit (the plan's item 11; option A of three mockups): a chip between Keep as drum and its four caps draws the hit Keep would save (dry, mono, cut where it fades: what a Drums slot gets), in its pad's colour, redrawn as the sound changes, and plays it when clicked while stopped, as the Drums slots' pictures do; its name gives the note and length. The Sound title keeps its height. |
 | 130 | FX and Solo per machine (the plan's item 12; option A of three mockups): two caps on each rail row between Pedals and the steps. **FX** up plays the machine dry, round every pedal, the lo-fi one too (its Pedals keeps its value); **S** solos it (while any is soloed only the soloed are heard; the others' rows dim), live, in the export, its stems and the MIDI file (`src/lib/machines/mix.ts`). Saved as `mixer.fx` and `mixer.solo` (older projects: FX on, no solo), one undo step each, File → New puts them back. Rhythm's mute now applies to the export too. |
+| 131 | Waves and noise per pattern (the plan's item 13): each pattern slot A–D keeps its pads' waves and which pads get noise, as it keeps its steps; a wave tile, Random, a pad's ⋮ menu, a recording and the Noise card's pad buttons change the slot showing, a slot never used opens on the main wave with noise everywhere, and a sound preset (or the Sounds dice) sets every slot's waves. The chain's export plays each bar's own waves and noise. A project saved before gives every slot its shared waves and noise. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

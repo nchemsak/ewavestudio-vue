@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bassOf, emptyBass, loadBassIntoLane, chainCells, chainFrom, comparableProject, cycleCell, emptyChain, emptyRhythm, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, rhythmOf, slotFromLane, slotHasSteps, slotIndexFrom, slotsFrom, SLOT_COUNT, drumRowsOf, emptyDrumRows, type RhythmTrack } from './slots';
+import { bassOf, emptyBass, loadBassIntoLane, chainCells, chainFrom, comparableProject, cycleCell, emptyChain, emptyRhythm, emptySlots, loadIntoLane, mapSlotPitches, nextChainCell, rhythmOf, slotFromLane, slotHasSteps, slotIndexFrom, slotsFrom, setSlotWaves, SLOT_COUNT, drumRowsOf, emptyDrumRows, type RhythmTrack } from './slots';
 import { applySnapshot, buildSnapshot } from '../project/snapshot';
 import { STEPS, asSaved, changeEverything, fresh } from '../project/testState';
 
@@ -15,29 +15,61 @@ const lane = () => ({
 describe('pattern slots', () => {
 	it('a slot is a copy of the lane, as a list of tracks', () => {
 		const l = lane();
-		const slot = slotFromLane(l, 220);
+		const noise = Array.from({ length: 16 }, (_, i) => i % 2 === 0);
+		const slot = slotFromLane(l, 220, null, null, noise);
 		expect(slot.tracks).toHaveLength(1);
 		expect(slot.tracks[0]).toEqual({
 			machine: 'rhythm', steps: l.steps, velocities: l.velocities, pitches: l.pitches,
-			ratchets: l.ratchets, repeatNotes: l.repeatNotes,
+			ratchets: l.ratchets, repeatNotes: l.repeatNotes, waveforms: l.waveforms, noise,
 		});
+		noise[0] = false;
+		expect((slot.tracks[0] as RhythmTrack).noise![0]).toBe(true);
 		l.steps[1] = true; // editing the lane later leaves the slot alone
 		expect((slot.tracks[0] as RhythmTrack).steps[1]).toBe(false);
 		expect(slotHasSteps(slot)).toBe(true);
 	});
 
-	it('loads a slot into the lane, and an unused slot as an empty pattern; the waves stay', () => {
+	it('loads a slot into the lane with its waves and noise, and an unused slot as an empty pattern on the main wave', () => {
 		const l = lane();
-		const saved = slotFromLane(lane(), 220);
-		loadIntoLane(l, null, 16, 330);
+		const noise = Array.from({ length: 16 }, (_, i) => i % 3 === 0);
+		const saved = slotFromLane({ ...lane(), waveforms: Array.from({ length: 16 }, (_, i) => (i % 2 ? 'glass' : 'saw')) }, 220, null, null, noise);
+		const mask = loadIntoLane(l, null, 16, 330, 'organ');
 		expect(l.steps.every(s => !s)).toBe(true);
 		expect(l.pitches.every(p => p === 330)).toBe(true);
 		expect(l.ratchets.every(r => r === 1)).toBe(true);
 		expect(l.repeatNotes.every(n => n === 'same')).toBe(true);
-		expect(l.waveforms.every(w => w === 'square')).toBe(true);
-		loadIntoLane(l, saved, 16, 330);
+		expect(l.waveforms.every(w => w === 'organ')).toBe(true);
+		expect(mask).toEqual(Array(16).fill(true));
+		expect(loadIntoLane(l, saved, 16, 330)).toEqual(noise);
 		expect(l.steps).toEqual(lane().steps);
 		expect(l.pitches).toEqual(lane().pitches);
+		expect(l.waveforms[1]).toBe('glass');
+		// A slot saved without waves (none given to slotsFrom) leaves the lane's
+		const old = { tracks: [{ ...rhythmOf(saved)!, waveforms: undefined, noise: undefined }] };
+		l.waveforms = Array(16).fill('pulse');
+		expect(loadIntoLane(l, old, 16, 330)).toBeNull();
+		expect(l.waveforms[1]).toBe('pulse');
+	});
+
+	it('a sound preset puts every used slot on its wave; unused slots stay unused', () => {
+		const slots = [slotFromLane(lane(), 220), null, { tracks: [emptyBass(16, 55)] }, slotFromLane(lane(), 220)];
+		const out = setSlotWaves(slots, 'hollow', 16);
+		expect(rhythmOf(out[0])!.waveforms).toEqual(Array(16).fill('hollow'));
+		expect(rhythmOf(out[3])!.waveforms).toEqual(Array(16).fill('hollow'));
+		expect(out[1]).toBeNull();
+		expect(out[2]).toEqual(slots[2]);
+		expect(rhythmOf(slots[0])!.waveforms![0]).toBe('square'); // a copy
+	});
+
+	it('a slot saved before slots kept their waves and noise gets the project\'s', () => {
+		const old = { tracks: [{ machine: 'rhythm', steps: [true, false, true, false] }] };
+		const own = { tracks: [{ machine: 'rhythm', steps: [true], waveforms: ['glass', 7], noise: [false] }] };
+		const shared = { waveforms: ['saw', 'square', 'saw', 'square'], noise: [true, false, false, true] };
+		const slots = slotsFrom([old, own], 4, 220, 55, shared);
+		expect(rhythmOf(slots[0])!.waveforms).toEqual(shared.waveforms);
+		expect(rhythmOf(slots[0])!.noise).toEqual(shared.noise);
+		expect(rhythmOf(slots[1])!.waveforms).toEqual(['glass', 'sine', 'sine', 'sine']);
+		expect(rhythmOf(slots[1])!.noise).toEqual([false, true, true, true]);
 	});
 
 	it('moves a slot\'s pitches (a key change), leaving null slots null', () => {
@@ -62,7 +94,7 @@ describe('pattern slots', () => {
 
 describe('pattern slots in a project', () => {
 	it('File → New: four empty slots, A playing', () => {
-		expect(asSaved(fresh()).patterns).toEqual({ current: 0, slots: [{ tracks: [emptyRhythm(STEPS, 220), emptyBass(STEPS, 55), { machine: 'drums', rows: emptyDrumRows(STEPS) }] }, null, null, null], chain: emptyChain(), chainOn: false });
+		expect(asSaved(fresh()).patterns).toEqual({ current: 0, slots: [{ tracks: [emptyRhythm(STEPS, 220, 'sine'), emptyBass(STEPS, 55), { machine: 'drums', rows: emptyDrumRows(STEPS) }] }, null, null, null], chain: emptyChain(), chainOn: false });
 	});
 
 	it('the saved current slot is the lane as it is now', () => {
@@ -74,6 +106,9 @@ describe('pattern slots in a project', () => {
 		expect(snap.patterns.slots[2].tracks[0].steps).toEqual(synth.steps);
 		expect(snap.patterns.slots[2].tracks[0].pitches).toEqual(synth.pitches);
 		expect(snap.patterns.slots[1].tracks[0].pitches[1]).toBe(210);
+		// Its waves and noise mask too (the plan's item 13)
+		expect(snap.patterns.slots[2].tracks[0].waveforms).toEqual(synth.waveforms);
+		expect(snap.patterns.slots[2].tracks[0].noise).toEqual(snap.synth.noise.mask);
 	});
 
 	it('round trip, and a project saved before them gets empty slots with A playing', () => {
@@ -137,8 +172,8 @@ describe('which slot is showing is not a change', () => {
 		// Switch to B as the app does: the lane into C, B into the lane
 		const lane = st.instruments.value.find(i => i.name === 'synth-voice')!;
 		const slots = [...st.patterns.slots.value];
-		slots[2] = slotFromLane(lane, 220, st.bass.lane, st.drums.rows);
-		loadIntoLane(lane, slots[1], STEPS, 220);
+		slots[2] = slotFromLane(lane, 220, st.bass.lane, st.drums.rows, st.synth.noise.mask.value);
+		st.synth.noise.mask.value = loadIntoLane(lane, slots[1], STEPS, 220) ?? Array(STEPS).fill(true);
 		loadBassIntoLane(st.bass.lane, slots[1], STEPS, 55);
 		st.drums.rows = drumRowsOf(slots[1], STEPS);
 		st.patterns.slots.value = slots;
@@ -150,11 +185,32 @@ describe('which slot is showing is not a change', () => {
 		expect(comparableProject(asSaved(st))).not.toEqual(comparableProject(before));
 	});
 
+	it('the slot showing\'s waves and noise are edits', () => {
+		const st = fresh();
+		changeEverything(st);
+		const before = comparableProject(asSaved(st));
+		const lane = st.instruments.value.find(i => i.name === 'synth-voice')! as any;
+		lane.waveforms = [...lane.waveforms]; lane.waveforms[3] = lane.waveforms[3] === 'saw' ? 'organ' : 'saw';
+		expect(comparableProject(asSaved(st))).not.toEqual(before);
+		const st2 = fresh();
+		changeEverything(st2);
+		st2.synth.noise.mask.value = st2.synth.noise.mask.value.map((x) => !x);
+		expect(comparableProject(asSaved(st2))).not.toEqual(before);
+	});
+
 	it('an empty pattern compares the same as a slot never used', () => {
 		const st = fresh();
 		const a = asSaved(st);
 		st.patterns.slots.value = [null, { tracks: [emptyRhythm(STEPS, 220)] }, null, null];
 		expect(comparableProject(asSaved(st))).toEqual(comparableProject(a));
+		// as it loads: every pad on one wave, with noise
+		st.patterns.slots.value = [null, { tracks: [emptyRhythm(STEPS, 220, 'glass')] }, null, null];
+		expect(comparableProject(asSaved(st))).toEqual(comparableProject(a));
+		// Mixed waves or a pad without noise are something to keep
+		const mixed = emptyRhythm(STEPS, 220, 'glass');
+		mixed.waveforms![2] = 'saw';
+		st.patterns.slots.value = [null, { tracks: [mixed] }, null, null];
+		expect(comparableProject(asSaved(st))).not.toEqual(comparableProject(a));
 	});
 });
 
