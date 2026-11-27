@@ -38,6 +38,7 @@ import { createCrusher, loadCrusher, setCrusher } from './crusher';
 import { createLimiter, loadLimiter } from './limiter';
 import { createPingPong } from './pingPong';
 import { createTape, tapeSettings, type TapeMode } from './tape';
+import { dry, heard, type MachineId, type MachineMix } from '../lib/machines/mix';
 import { clampUnisonVoices, unisonPhase } from './unison';
 import {
 	divisionToHz,
@@ -86,6 +87,8 @@ export type LiveEngineSettings = {
 	driftPlateHz?: R<number[]>;
 	// The Rhythm machine's Pedals (how much of it goes through the pedals; missing: all of it)
 	rhythmPedals?: R<number>;
+	// Each machine's FX and Solo (the rail's caps, src/lib/machines/mix.ts; missing: FX on, no solo)
+	mix?: MachineMix;
 	delay: {
 		enabled: R<boolean>;
 		time: R<number>;
@@ -466,48 +469,73 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	applyDriveRoute(true);
 	watch(driveEnabled, () => applyDriveRoute());
 
-	type MachineBus = { bus: GainNode; send: GainNode; direct: GainNode; meter: AnalyserNode; data: Float32Array<ArrayBuffer> };
-	function machineBus(pedals: () => number): MachineBus {
+	// FX off (the rail's FX cap, the plan's item 12): the machine plays dry, round every pedal,
+	// the lo-fi one too: its bus goes straight to masterGain (`around`), crossfaded in 10 ms; its
+	// Pedals keeps its value for when FX is back on
+	const machineDry = (id: MachineId) => !!s.mix && dry(id, s.mix);
+	type MachineBus = { bus: GainNode; send: GainNode; direct: GainNode; around: GainNode; meter: AnalyserNode; data: Float32Array<ArrayBuffer> };
+	function machineBus(pedals: () => number, isDry: () => boolean): MachineBus {
 		const bus = audioCtx.createGain();
 		const send = audioCtx.createGain();
 		const direct = audioCtx.createGain();
+		const around = audioCtx.createGain();
 		const meter = audioCtx.createAnalyser();
 		meter.fftSize = 512;
 		bus.connect(send).connect(driveIn);
 		bus.connect(direct).connect(preMaster);
+		bus.connect(around).connect(masterGain);
 		bus.connect(meter);
-		const p = Math.max(0, Math.min(1, pedals()));
-		send.gain.value = p;
-		direct.gain.value = 1 - p;
-		return { bus, send, direct, meter, data: new Float32Array(meter.fftSize) };
+		const p = Math.max(0, Math.min(1, pedals())), d = isDry();
+		send.gain.value = d ? 0 : p;
+		direct.gain.value = d ? 0 : 1 - p;
+		around.gain.value = d ? 1 : 0;
+		return { bus, send, direct, around, meter, data: new Float32Array(meter.fftSize) };
 	}
-	function applyPedals(m: MachineBus, p: number) {
+	function applyPedals(m: MachineBus, p: number, isDry: boolean) {
 		const v = Math.max(0, Math.min(1, p)), t = audioCtx.currentTime;
-		m.send.gain.setTargetAtTime(v, t, 0.01);
-		m.direct.gain.setTargetAtTime(1 - v, t, 0.01);
+		m.send.gain.setTargetAtTime(isDry ? 0 : v, t, 0.01);
+		m.direct.gain.setTargetAtTime(isDry ? 0 : 1 - v, t, 0.01);
+		m.around.gain.setTargetAtTime(isDry ? 1 : 0, t, 0.01);
 	}
 	const rhythmPedals = () => s.rhythmPedals?.value ?? 1;
 	const bassPedals = () => s.bass?.lane.pedals ?? 1;
 	const drumsPedals = () => s.drums?.pedals ?? 1;
-	const rhythmBus = machineBus(rhythmPedals);
-	const bassBus = machineBus(bassPedals);
-	const drumsBus = machineBus(drumsPedals);
-	// Rhythm's noise layer: straight to preMaster, as ever, and into Rhythm's meter
+	const rhythmBus = machineBus(rhythmPedals, () => machineDry('rhythm'));
+	const bassBus = machineBus(bassPedals, () => machineDry('bass'));
+	const drumsBus = machineBus(drumsPedals, () => machineDry('drums'));
+	// Rhythm's noise layer: straight to preMaster, as ever (round it with Rhythm's FX off), and
+	// into Rhythm's meter
 	const rhythmNoise = audioCtx.createGain();
-	rhythmNoise.connect(preMaster);
+	const noiseDirect = audioCtx.createGain();
+	const noiseAround = audioCtx.createGain();
+	rhythmNoise.connect(noiseDirect).connect(preMaster);
+	rhythmNoise.connect(noiseAround).connect(masterGain);
+	noiseDirect.gain.value = machineDry('rhythm') ? 0 : 1;
+	noiseAround.gain.value = machineDry('rhythm') ? 1 : 0;
 	rhythmNoise.connect(rhythmBus.meter);
-	watch(rhythmPedals, (p) => applyPedals(rhythmBus, p));
-	watch(bassPedals, (p) => applyPedals(bassBus, p));
-	watch(drumsPedals, (p) => applyPedals(drumsBus, p));
+	watch([rhythmPedals, () => machineDry('rhythm')], ([p, d]) => {
+		applyPedals(rhythmBus, p as number, d as boolean);
+		const t = audioCtx.currentTime;
+		noiseDirect.gain.setTargetAtTime(d ? 0 : 1, t, 0.01);
+		noiseAround.gain.setTargetAtTime(d ? 1 : 0, t, 0.01);
+	});
+	watch([bassPedals, () => machineDry('bass')], ([p, d]) => applyPedals(bassBus, p as number, d as boolean));
+	watch([drumsPedals, () => machineDry('drums')], ([p, d]) => applyPedals(drumsBus, p as number, d as boolean));
+	// Solo (the rail's S cap): while any machine is soloed, only the soloed ones are heard
+	const machineHeard = (id: MachineId) => {
+		const muted = id === 'rhythm' ? !!lanes.value.find(l => l.type === 'synth')?.muted
+			: id === 'bass' ? !!s.bass?.lane.muted : id === 'drums' ? !!s.drums?.muted : !!s.drift?.muted;
+		return s.mix ? heard(id, muted, s.mix.solo) : !muted;
+	};
 	// Drift goes straight to the reverb (src/audio/drift.ts): all of it to preMaster, and Pedals of
 	// it into the reverb's send (connected in its section, below), skipping the drive and delay.
 	// Its notes meet in its one slow filter, then a gain for its level and mute.
 	const driftFilter = createDriftFilter(audioCtx, s.drift?.cutoff ?? 1800);
 	const driftGate = audioCtx.createGain();
-	driftGate.gain.value = s.drift && !s.drift.muted ? s.drift.level : 0;
+	driftGate.gain.value = s.drift && machineHeard('drift') ? s.drift.level : 0;
 	driftFilter.connect(driftGate);
-	const driftBus = machineBus(() => 0);
-	driftBus.direct.gain.value = 1;
+	const driftBus = machineBus(() => 0, () => machineDry('drift'));
+	driftBus.direct.gain.value = machineDry('drift') ? 0 : 1;
 	driftGate.connect(driftBus.bus);
 
 	/** A machine's level now, its peak over the last ~10 ms (0..1 and over) */
@@ -718,9 +746,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const inst = lanes.value.find(l => l.type === 'synth');
 		const bl = s.bass?.lane, dr = s.drums;
 		const hits = pedalHitSteps({
-			rhythm: inst ? { steps: inst.steps.slice(0, n).map(Boolean), velocities: inst.velocities, muted: inst.muted, pedals: rhythmPedals() } : undefined,
-			bass: bl ? { pattern: bl, muted: bl.muted, pedals: bassPedals() } : undefined,
-			drums: dr ? { rows: dr.rows, slotMuted: dr.slots.map(sl => sl.muted), muted: dr.muted, pedals: drumsPedals() } : undefined,
+			rhythm: inst ? { steps: inst.steps.slice(0, n).map(Boolean), velocities: inst.velocities, muted: !machineHeard('rhythm'), pedals: machineDry('rhythm') ? 0 : rhythmPedals() } : undefined,
+			bass: bl ? { pattern: bl, muted: !machineHeard('bass'), pedals: machineDry('bass') ? 0 : bassPedals() } : undefined,
+			drums: dr ? { rows: dr.rows, slotMuted: dr.slots.map(sl => sl.muted), muted: !machineHeard('drums'), pedals: machineDry('drums') ? 0 : drumsPedals() } : undefined,
 		}, n);
 		if (!hits[stepIdx]) return;
 		const gap = nextHitGaps(hits, revStepS(), swing.value)[stepIdx];
@@ -1012,11 +1040,16 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	driftBus.bus.connect(driftBus.send);
 	driftBus.send.disconnect();
 	driftBus.send.connect(reverbToneFilter);
-	driftBus.send.gain.value = s.drift?.pedals ?? 0.6;
-	watch(() => s.drift?.pedals ?? 0, (p) => driftBus.send.gain.setTargetAtTime(Math.max(0, Math.min(1, p)), audioCtx.currentTime, 0.01));
-	watch(() => [s.drift?.level ?? 0, s.drift?.muted ?? true], () => {
+	driftBus.send.gain.value = machineDry('drift') ? 0 : s.drift?.pedals ?? 0.6;
+	watch([() => s.drift?.pedals ?? 0, () => machineDry('drift')], ([p, d]) => {
+		const t = audioCtx.currentTime;
+		driftBus.send.gain.setTargetAtTime(d ? 0 : Math.max(0, Math.min(1, p as number)), t, 0.01);
+		driftBus.direct.gain.setTargetAtTime(d ? 0 : 1, t, 0.01);
+		driftBus.around.gain.setTargetAtTime(d ? 1 : 0, t, 0.01);
+	});
+	watch(() => [s.drift?.level ?? 0, machineHeard('drift')], () => {
 		const d = s.drift;
-		driftGate.gain.setTargetAtTime(d && !d.muted ? d.level : 0, audioCtx.currentTime, 0.02);
+		driftGate.gain.setTargetAtTime(d && machineHeard('drift') ? d.level : 0, audioCtx.currentTime, 0.02);
 	});
 	watch(() => s.drift?.cutoff ?? 1800, (hz) => driftFilter.frequency.setTargetAtTime(clampCutoff(hz), audioCtx.currentTime, FILTER_GLIDE_S));
 	watch(() => [s.drift?.spread ?? 0, s.drift?.drift ?? 0], () => {
@@ -1029,7 +1062,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	/** The pitches bar `bar` (since Play) holds: none while muted */
 	function driftTargets(bar: number): number[] {
 		const d = s.drift;
-		if (!d || d.muted) return [];
+		if (!d || !machineHeard('drift')) return [];
 		const hz = s.driftPlateHz?.value ?? [];
 		return heldInBar(d.chords, d.length, bar).flatMap((on, k) => (on && hz[k] ? [hz[k]] : []));
 	}
@@ -1063,7 +1096,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	}
 
 	// An edit while playing (a plate, the length, the key, the mute): the bar playing follows it now
-	watch(() => [s.drift?.chords, s.drift?.length, s.driftPlateHz?.value, s.drift?.muted], () => {
+	watch(() => [s.drift?.chords, s.drift?.length, s.driftPlateHz?.value, machineHeard('drift')], () => {
 		if (!isPlaying.value || driftBarCount < 0 || !s.drift) return;
 		driftBarNow.value = driftBarCount % Math.max(1, s.drift.length);
 		driftHold(audioCtx.currentTime + 0.01, driftTargets(driftBarCount));
@@ -1168,7 +1201,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			revForStep(stepIndex, startTime + (stepIndex % 2 === 1 ? stepDuration * swing.value : 0));
 
 			lanes.value.forEach(inst => {
-				if (!inst.muted && inst.steps[stepIndex]) {
+				if (machineHeard('rhythm') && inst.steps[stepIndex]) {
 					const vel = inst.velocities[stepIndex] ?? 1;
 					const chanVol = inst.channelVolume ?? 1;
 					const amp = Math.min(1, chanVol * vel);
@@ -1201,7 +1234,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			// The Bass machine: the note that starts on this step, if any (a tied or slid step
 			// is part of the note before it)
 			const bl = s.bass?.lane;
-			if (bl && !bl.muted && bl.steps[stepIndex]) {
+			if (bl && machineHeard('bass') && bl.steps[stepIndex]) {
 				const hit = bassPlan(bl, stepLength.value)[stepIndex];
 				if (hit && hit.vel > 0) {
 					const t = startTime + (stepIndex % 2 === 1 ? stepDuration * swing.value : 0);
@@ -1211,7 +1244,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 
 			// The Drums machine: each slot whose row has this step on
 			const dr = s.drums;
-			if (dr && !dr.muted) {
+			if (dr && machineHeard('drums')) {
 				const t = startTime + (stepIndex % 2 === 1 ? stepDuration * swing.value : 0);
 				dr.rows.forEach((row, slot) => {
 					if (dr.slots[slot]?.muted || !row.steps[stepIndex]) return;

@@ -7354,6 +7354,102 @@ test('the rail mixer: Pedals at none keeps a machine out of the reverb; machine 
 	expect(bassOns).toBe(4);
 });
 
+// FX and Solo per machine (the plan's item 12): two caps on each rail row
+test('FX and Solo: caps on each rail row; saved, one undo step each, File → New puts them back', async ({ page }) => {
+	await importBassMix(page, 'FX and Solo');
+	const fx = (name: string) => railRow(page, name).getByRole('switch', { name: `${name} FX` });
+	const solo = (name: string) => railRow(page, name).getByRole('switch', { name: `Solo ${name}` });
+	for (const name of ['Rhythm', 'Bass', 'Drums', 'Drift']) {
+		await expect(fx(name)).toHaveAttribute('aria-checked', 'true');
+		await expect(solo(name)).toHaveAttribute('aria-checked', 'false');
+	}
+	// The caps don't pick the row (as the LED and the knobs don't)
+	await fx('Bass').click();
+	await expect(fx('Bass')).toHaveAttribute('aria-checked', 'false');
+	await expect(page.getByRole('button', { name: 'Show Bass' })).toHaveAttribute('aria-pressed', 'false');
+	await page.waitForTimeout(SETTLED);
+	await solo('Drums').click();
+	await expect(solo('Drums')).toHaveAttribute('aria-checked', 'true');
+	// The others dim
+	await expect(railRow(page, 'Rhythm')).toHaveClass(/is-soloed-out/);
+	await expect(railRow(page, 'Drums')).not.toHaveClass(/is-soloed-out/);
+	await page.waitForTimeout(SETTLED);
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(saved.mixer.fx).toEqual({ rhythm: true, bass: false, drums: true, drift: true });
+	expect(saved.mixer.solo).toEqual({ rhythm: false, bass: false, drums: true, drift: false });
+	// One undo step each
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(solo('Drums')).toHaveAttribute('aria-checked', 'false');
+	await expect(fx('Bass')).toHaveAttribute('aria-checked', 'false');
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(fx('Bass')).toHaveAttribute('aria-checked', 'true');
+	// File → New: FX on, nothing soloed
+	await fx('Rhythm').click();
+	await solo('Bass').click();
+	await chooseFromFileMenu(page, 'New');
+	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
+	await expect(fx('Rhythm')).toHaveAttribute('aria-checked', 'true');
+	await expect(solo('Bass')).toHaveAttribute('aria-checked', 'false');
+	await expect(railRow(page, 'Rhythm')).not.toHaveClass(/is-soloed-out/);
+});
+
+test('FX off plays a machine dry, round every pedal; Solo leaves the others out, live, in the export and the MIDI file', async ({ page }) => {
+	await setTempo(page, 120);
+	// Rhythm (steps 1 and 9) and Bass (every beat) through a big reverb; the lo-fi pedal on too
+	const files = async (id: string, mixer: any) => {
+		await importBassMix(page, id, (d) => {
+			d.fx.tape = { enabled: true, age: 0.6, wobble: 0, mode: 'tape' };
+			d.mixer = { rhythm: { pedals: 1 }, ...mixer };
+		});
+		const zip = await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: true, machineStems: true, midi: true, oneShot: false, normalize: false });
+		const all = unzip(zip.bytes);
+		return (part: string) => all[Object.keys(all).find((k) => k.endsWith(part))!];
+	};
+	// FX on: Rhythm's stem rings into the reverb after its last hit (step 9 at 1 s; its 0.42 s
+	// decay is over by 1.5 s), and the lo-fi pedal's hiss is in it
+	const wet = await files('FX on', {});
+	expect(wavWindow(wet('_rhythm.wav'), 1.9, 2.4).peak).toBeGreaterThan(1e-3);
+	// FX off: Rhythm is dry, its stem silent after its last note; Bass still rings
+	const dryF = await files('FX off', { fx: { rhythm: false } });
+	expect(wavPeak(dryF('_rhythm.wav'))).toBeGreaterThan(0.02);
+	expect(wavWindow(dryF('_rhythm.wav'), 1.9, 2.4).peak).toBeLessThan(1e-4);
+	expect(wavWindow(dryF('_bass.wav'), 2.4, 2.9).peak).toBeGreaterThan(1e-3);
+	// The machine stems still add up to the mix (the lo-fi pedal bends the sum: nearly)
+	for (const ch of [0, 1]) {
+		const mix = wavSamples(dryF('_mix.wav'), ch).samples;
+		const [r, b] = ['_rhythm.wav', '_bass.wav'].map((p) => wavSamples(dryF(p), ch).samples);
+		let worst = 0;
+		for (let i = 0; i < mix.length; i++) worst = Math.max(worst, Math.abs(r[i] + b[i] - mix[i]));
+		expect(worst, `channel ${ch}`).toBeLessThan(0.05);
+	}
+
+	// Bass soloed: Rhythm is left out of the mix and the MIDI file; Bass's notes are there
+	const soloF = await files('Solo Bass', { solo: { bass: true } });
+	const midi = soloF('.mid');
+	let rhythmOns = 0, bassOns = 0;
+	for (let i = 0; i < midi.length - 2; i++) {
+		if (midi[i] === 0x90 && midi[i + 2] > 0) rhythmOns++;
+		if (midi[i] === 0x91 && midi[i + 1] === 33) bassOns++;
+	}
+	expect(rhythmOns).toBe(0);
+	expect(bassOns).toBe(4);
+	const mix = wavSamples(soloF('_mix.wav'), 0).samples, bassOnly = wavSamples(soloF('_bass.wav'), 0).samples;
+	let diff = 0;
+	for (let i = 0; i < mix.length; i++) diff = Math.max(diff, Math.abs(mix[i] - bassOnly[i]));
+	expect(diff).toBeLessThan(0.05);
+
+	// Live: Drums soloed (its rows empty), nothing is heard; unsoloed, Rhythm and Bass play
+	await importBassMix(page, 'Solo live', (d) => {
+		d.fx.tape = { ...d.fx.tape, enabled: false }; // its hiss plays while the sequencer does
+		d.mixer = { rhythm: { pedals: 1 }, solo: { drums: true } };
+	});
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	expect(await page.evaluate(() => (window as any).__swingOver(1200) as Promise<number>)).toBeLessThan(0.01);
+	await railRow(page, 'Drums').getByRole('switch', { name: 'Solo Drums' }).click();
+	expect(await page.evaluate(() => (window as any).__swingOver(1200) as Promise<number>)).toBeGreaterThan(0.05);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+});
+
 // The rail's mixer END
 
 // The Bass machine, part 2b START

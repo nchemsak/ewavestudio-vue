@@ -285,6 +285,7 @@ src/lib/random.ts        Seeded random numbers (export stems; tests)
 src/lib/machines/drums.ts  The Drums machine: its slots, kept sounds, rows, saving, Keep as drum
 src/lib/machines/drumPresets.ts  The Drums machine's kits and patterns, and their dice
 src/lib/machines/drumColours.ts  Each drum sound's colour on the pads' scale
+src/lib/machines/mix.ts  FX and Solo per machine: which machines are heard, which play dry
 src/lib/machines/drift.ts  The Drift machine: its settings (reactive), saving, a plate toggled
 src/lib/machines/driftPresets.ts  The Drift machine's sounds and progressions, and their dice
 src/lib/driftView.ts     What the Drift machine's swarm screen draws (pure)
@@ -1529,6 +1530,29 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   gains and Normalize's one gain, they add up to the mix, exactly while the overdrive and the
   lo-fi pedal are off (both bend the sum, not each machine; the dialog's hint says "nearly"
   then). The mix is rendered whenever they are.
+- **FX and Solo** (PR 130, the plan's item 12; option A of three mockups: B stacked the two as
+  thin caps in one column, C put S beside the LED and FX as a badge on the Pedals knob): two caps
+  on each row between Pedals and the steps (`.mr-fx`, `.mr-solo`, `role="switch"`, "Bass FX",
+  "Solo Bass"; the row's gaps 6 px, 8 before, so the steps are narrower: about 145 px at 1600,
+  46 at 1024). **FX** is down and lit while the machine goes through the pedals as its Pedals
+  says; up, it plays **dry, round every pedal, the lo-fi one too**: its bus goes straight to
+  `masterGain` (`around` in `machineBus()`, crossfaded in 10 ms; Rhythm's noise layer too, Drift's
+  reverb send shut), and its Pedals knob keeps its value. **S** (its letter amber while down):
+  while any machine is soloed only the soloed ones are heard, a muted one stays muted, and the
+  rows silenced dim (`.is-soloed-out`). `src/lib/machines/mix.ts` (unit-tested): `heard()` and
+  `dry()`, which the live engine (`machineHeard()`, `machineDry()`), the export
+  (`exportState`'s `pattern.active`, `bass`, `drumsExport()`, `driftExport()`, the chain's
+  patterns, and `dryMachines` in `scheduleStepSequencer.ts`: `dryAround`, `noiseAround`, gates of
+  the dry and noise parts straight to the master) and REV's hits (Pedals 0 while dry) read
+  instead of the mutes. Previews, MIDI notes and auditions follow the mute only, not a solo.
+  **Rhythm's mute now applies to the export** (its notes went into the audio and MIDI files even while muted until then;
+  the other machines' mutes always applied). Saved as `mixer.fx` and `mixer.solo` (`{ rhythm,
+  bass, drums, drift }`; a project from before: FX on, nothing soloed; File → New the same); not
+  a sound, so presets leave them; each click is an undo step. Not MIDI-learnable (switches), not
+  on the phone's pages (phone mode plays them as set). Browser tests: the caps, saved, undo,
+  File → New; an export with Rhythm dry (its stem silent after its last note while Bass rings,
+  the stems adding up), Bass soloed (Rhythm out of the mix and the MIDI file), live (a solo of an
+  empty machine is silence).
 - **Bass in the MIDI file** (`bassEvents()` in `src/lib/export/midi.ts`, unit-tested): on MIDI
   channel 2, from `bassPlan()`: each note as long as it's held (tied or slid into the next
   steps), a slide's new pitch a new note from the step it arrives on, velocity × 110, Accent
@@ -2703,9 +2727,6 @@ beat, the reverse-reverb swell (REV, PR 105, covers its use), Fit the window (it
 useful half of it), and REV on the sample (unclear what it was for); Google Play moved to Not
 now. Small dependency updates ride along with any PR (npm update within the current majors).
 
-12. **FX and Solo per machine**: on each rail row, an **FX** cap (off: the machine dry, round
-    every pedal, the lo-fi one too; the Pedals knob keeps its value, as Mute keeps Level) and
-    **Solo**. A mockup of the row.
 13. **Waves and noise per pattern** (Rhythm): each slot A–D keeps its pads' waves and noise
     switches, as it keeps its steps and pitches; a wave tile, Random and a pad's ⋮ menu change
     the slot showing; **a Sound preset sets all four**; older projects copy theirs into every
@@ -3012,6 +3033,7 @@ Done:
 | 127 | The pads (the plan's item 9): a lit pad dragged up or down sets its velocity (a readout while dragging), a sideways drag paints pads on or off, on Rhythm, Bass and Drums (the first move decides; Drums couldn't paint), and arrows up and down change a focused pad's velocity; the hover sliders and the Step Sequencer's ⋯ menu went: Clear Repeats is the Repeats brush's **×1**, Reset Pads a red **Reset** cap in the header; the pads, Drums' cells and the phone's are **silicone** (option A of three mockups, after a first round turned down): rubber pads on a lip, lit from inside as high as their velocity, sinking while held, the step numbers and note names printed, no black pills. "One height" moved to item 10. |
 | 128 | A steady right side (the plan's item 10): switching machines moves nothing. Over 640 px the Step Sequencer card is as tall on every machine (321 px, Drums'; it was 189 on Rhythm, 236 on Drift, about 320 on Bass and Drums), the pads centred under its header, so the rail beside it, its screens and everything under it stay put; from 1200 px Sound and Compose are as tall on every machine (763 px, Rhythm's Sound), the others' middle row (Bass's screen, the Drums slots' pictures, Drift's X/Y pad and swarm) taking the difference. A phone held upright keeps each machine's own height. |
 | 129 | A preview of Rhythm's hit (the plan's item 11; option A of three mockups): a chip between Keep as drum and its four caps draws the hit Keep would save (dry, mono, cut where it fades: what a Drums slot gets), in its pad's colour, redrawn as the sound changes, and plays it when clicked while stopped, as the Drums slots' pictures do; its name gives the note and length. The Sound title keeps its height. |
+| 130 | FX and Solo per machine (the plan's item 12; option A of three mockups): two caps on each rail row between Pedals and the steps. **FX** up plays the machine dry, round every pedal, the lo-fi one too (its Pedals keeps its value); **S** solos it (while any is soloed only the soloed are heard; the others' rows dim), live, in the export, its stems and the MIDI file (`src/lib/machines/mix.ts`). Saved as `mixer.fx` and `mixer.solo` (older projects: FX on, no solo), one undo step each, File → New puts them back. Rhythm's mute now applies to the export too. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

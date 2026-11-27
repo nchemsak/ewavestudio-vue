@@ -35,6 +35,7 @@ import { applyBassSound, bassSoundSnapshot, BASS_LEVEL_DEFAULT, resetBassSound, 
 import { BASS_MAX_HZ, BASS_MIN_HZ } from '../../audio/bass';
 import { applyDrums, drumsSnapshot, resetDrums, type Drums } from '../machines/drums';
 import { applyDrift, driftSnapshot, resetDrift, type Drift } from '../machines/drift';
+import { applyMix, mixSnapshot, resetMix, type MachineMix } from '../machines/mix';
 export type { Wave };
 
 // The synth lane, 'synth-voice' (the Rhythm machine's pattern as it's being edited). Saved as
@@ -124,8 +125,8 @@ export type ProjectState = {
 	// send) and chords (the project's, not a pattern slot's), reactive
 	drift: Drift;
 	// The rail's mixer (PR 116): Rhythm's Pedals, how much of it goes through the pedals 0..1
-	// (Bass's is its lane's `pedals`)
-	mixer: { rhythmPedals: Ref<number> };
+	// (Bass's is its lane's `pedals`); FX and Solo per machine (the plan's item 12, reactive)
+	mixer: { rhythmPedals: Ref<number>; mix: MachineMix };
 	melody: MelodyUi; // reactive
 	selectedWaveform: Ref<PadWave>;
 	// Resizes every lane's step arrays (and the noise mask) to the step count
@@ -410,8 +411,8 @@ export function buildSnapshot(st: ProjectState) {
 		// The Drift machine: its sound, mute, level, Pedals, length and chords
 		drift: driftSnapshot(st.drift),
 
-		// The rail's mixer: Rhythm's Pedals (Bass's is in `bass`)
-		mixer: { rhythm: { pedals: st.mixer.rhythmPedals.value } },
+		// The rail's mixer: Rhythm's Pedals (Bass's is in `bass`), and each machine's FX and Solo
+		mixer: { rhythm: { pedals: st.mixer.rhythmPedals.value }, ...mixSnapshot(st.mixer.mix) },
 
 		// melodyUi mirrors the Melody Maker panel, which reports every change through events
 		melody: {
@@ -744,6 +745,9 @@ export function applySnapshot(st: ProjectState, s: any) {
 	const rp = s.mixer?.rhythm?.pedals;
 	if (typeof rp === 'number' && Number.isFinite(rp)) st.mixer.rhythmPedals.value = Math.min(1, Math.max(0, rp));
 	else if (Array.isArray(s.instruments) && s.instruments.length) st.mixer.rhythmPedals.value = 1;
+	// FX and Solo (the plan's item 12): a project from before has every machine's FX on, no solo
+	if (s.mixer && (s.mixer.fx || s.mixer.solo)) applyMix(st.mixer.mix, s.mixer);
+	else if (Array.isArray(s.instruments) && s.instruments.length) resetMix(st.mixer.mix);
 
 	// Patterns A–D (PR 109): a project saved before them has its pattern in A, B–D empty. The
 	// current slot's pattern is the lane's (above), as it always was.
@@ -871,6 +875,7 @@ export function resetToFactoryDefaults(st: ProjectState) {
 	resetDrums(st.drums, stepLength.value);
 	resetDrift(st.drift);
 	st.mixer.rhythmPedals.value = 1;
+	resetMix(st.mixer.mix);
 
 	selectedWaveform.value = 'sine';
 }

@@ -76,6 +76,9 @@ export type StepSequencerState = {
 	drift?: { voice: DriftVoice; level: number; pedals: number; length: number; chords: boolean[][]; plateHz: number[]; loop?: boolean };
 	// The Rhythm machine's Pedals (missing: all of it through the pedals)
 	rhythmPedals?: number;
+	// The machines whose FX is off (the rail's FX cap, the plan's item 12): dry, round every
+	// pedal, the lo-fi one too (missing: none)
+	dryMachines?: Partial<Record<'rhythm' | 'bass' | 'drums' | 'drift', boolean>>;
 	// One machine only (a machine's stem, PR 116): the others' notes aren't played (missing: all)
 	machine?: 'rhythm' | 'bass' | 'drums' | 'drift';
 
@@ -272,6 +275,12 @@ export function scheduleStepSequencer(
 	const delayOut = partOut('delay');
 	const reverbOut = partOut('reverb');
 	const noiseOut = partOut('noise');
+	// A machine whose FX is off (dryMachines): its part goes round every pedal, the lo-fi one too,
+	// straight to the master as live; not into fullBus (the tape's saturation doesn't hear it, as
+	// live, where it skips preMaster)
+	const isDry = (id: 'rhythm' | 'bass' | 'drums' | 'drift') => !!state.dryMachines?.[id];
+	const dryAround = gate('dry', masterGain);
+	const noiseAround = gate('noise', masterGain);
 
 	// The tape pedal, last in the chain: everything goes through it, and its own noise is a
 	// part of its own. Its sways are fitted to the bars, so a loop repeats without a jump.
@@ -312,7 +321,7 @@ export function scheduleStepSequencer(
 	// A silent source into driveSum and the parts' buses keeps everything after them going.
 	const keepAlive = ctx.createConstantSource();
 	keepAlive.offset.value = 0;
-	for (const n of [driveSum, dryOut, delayOut, reverbOut, noiseOut]) keepAlive.connect(n);
+	for (const n of [driveSum, dryOut, delayOut, reverbOut, noiseOut, dryAround, noiseAround]) keepAlive.connect(n);
 	keepAlive.start(ctx.currentTime + offsetSeconds);
 
 	// CRUSH: shaper → tone → bit crusher → makeup (crusher.ts). The caller loads the crusher's
@@ -521,9 +530,10 @@ export function scheduleStepSequencer(
 	// the pedals (through the drive while it's on), the rest straight to the dry part
 	const driveIn = ctx.createGain();
 	if (driveEnabled) { driveIn.connect(driveDry); driveIn.connect(driveShaper); } else driveIn.connect(driveSum);
-	const machineBus = (pedals: number | undefined) => {
+	const machineBus = (pedals: number | undefined, dryOnly: boolean) => {
 		const p = clamp01(pedals ?? 1);
 		const bus = ctx.createGain();
+		if (dryOnly) { bus.connect(dryAround); return bus; }
 		const send = ctx.createGain();
 		const direct = ctx.createGain();
 		send.gain.value = p;
@@ -532,9 +542,9 @@ export function scheduleStepSequencer(
 		bus.connect(direct).connect(dryOut);
 		return bus;
 	};
-	const rhythmBus = machineBus(state.rhythmPedals);
-	const bassBus = machineBus(state.bass?.pedals);
-	const drumsBus = machineBus(state.drums?.pedals);
+	const rhythmBus = machineBus(state.rhythmPedals, isDry('rhythm'));
+	const bassBus = machineBus(state.bass?.pedals, isDry('bass'));
+	const drumsBus = machineBus(state.drums?.pedals, isDry('drums'));
 	const playRhythm = !state.machine || state.machine === 'rhythm';
 	const playBass = !state.machine || state.machine === 'bass';
 	const playDrums = !state.machine || state.machine === 'drums';
@@ -543,7 +553,7 @@ export function scheduleStepSequencer(
 	const noteWiring: NoteWiring = {
 		ctx,
 		toneOut: [rhythmBus],
-		noiseOut,
+		noiseOut: isDry('rhythm') ? noiseAround : noiseOut,
 		noiseBuffers,
 		sample: sampleBuffer(state.synth.sample ?? null),
 		lfo: lfoGainNode,
@@ -600,8 +610,11 @@ export function scheduleStepSequencer(
 		const send = ctx.createGain();
 		send.gain.value = clamp01(d.pedals);
 		filter.connect(level);
-		level.connect(dryOut);
-		level.connect(send).connect(reverbToneFilter);
+		if (isDry('drift')) level.connect(dryAround);
+		else {
+			level.connect(dryOut);
+			level.connect(send).connect(reverbToneFilter);
+		}
 		const driftRandom = seededRandom(6);
 		const attackS = d.voice.attack * barS, releaseS = d.voice.release * barS;
 		for (const run of driftRuns(d.chords, d.length, bars, !!d.loop)) {
@@ -625,9 +638,9 @@ export function scheduleStepSequencer(
 			const pat = patternForBar(state, bar);
 			const b = state.bass, d = state.drums;
 			const hits = pedalHitSteps({
-				rhythm: { steps: pat.active.slice(0, n).map(Boolean), velocities: pat.velocities, pedals: state.rhythmPedals },
-				bass: b ? { pattern: b.barPatterns?.length ? b.barPatterns[bar % b.barPatterns.length] : b.pattern, pedals: b.pedals } : undefined,
-				drums: d ? { rows: d.barRows?.length ? d.barRows[bar % d.barRows.length] : d.rows, slotMuted: d.slots.map((sl) => sl.muted), pedals: d.pedals } : undefined,
+				rhythm: { steps: pat.active.slice(0, n).map(Boolean), velocities: pat.velocities, pedals: isDry('rhythm') ? 0 : state.rhythmPedals },
+				bass: b ? { pattern: b.barPatterns?.length ? b.barPatterns[bar % b.barPatterns.length] : b.pattern, pedals: isDry('bass') ? 0 : b.pedals } : undefined,
+				drums: d ? { rows: d.barRows?.length ? d.barRows[bar % d.barRows.length] : d.rows, slotMuted: d.slots.map((sl) => sl.muted), pedals: isDry('drums') ? 0 : d.pedals } : undefined,
 			}, n);
 			const gaps = nextHitGaps(hits, stepDuration, swingNow);
 			const barStart = ctx.currentTime + offsetSeconds + bar * n * stepDuration;

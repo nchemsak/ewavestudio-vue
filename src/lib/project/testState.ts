@@ -8,6 +8,7 @@ import { ref, reactive, computed } from 'vue';
 import { createBass } from '../machines/bass';
 import { createDrums } from '../machines/drums';
 import { createDrift } from '../machines/drift';
+import { createMix } from '../machines/mix';
 import {
 	buildSnapshot,
 	resetToFactoryDefaults,
@@ -93,7 +94,7 @@ export function makeState(maxVoices = 4): ProjectState { // 4 on a computer, 3 o
 		},
 		drums: (() => { const d = createDrums(STEPS); d.level = 0.15; return d; })(),
 		drift: (() => { const d = createDrift(); d.level = 0.12; d.voices = 7; return d; })(),
-		mixer: { rhythmPedals: ref(0.2) },
+		mixer: { rhythmPedals: ref(0.2), mix: createMix() },
 		patterns: { slots: ref<Slots>(emptySlots()), current: ref(0), chain: ref<Chain>(emptyChain()), chainOn: ref(false) },
 		melody: reactive({
 			keyRoot: 'C', keyScale: 'major', rangePreset: 'wide', arpPattern: 'down', arpRate: '1/16',
@@ -170,6 +171,7 @@ export function changeEverything(st: ProjectState) {
 	const bl = st.bass.lane;
 	bl.muted = true; bl.level = 0.35; bl.pedals = 0.45;
 	st.mixer.rhythmPedals.value = 0.7;
+	st.mixer.mix.fx.drums = false; st.mixer.mix.solo.bass = true;
 	bl.steps = bl.steps.map((_, i) => i % 3 === 0);
 	bl.velocities = bl.velocities.map((_, i) => 0.4 + i / 50);
 	bl.pitches = bl.pitches.map((_, i) => 50 + i);
