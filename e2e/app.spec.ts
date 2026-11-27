@@ -1983,6 +1983,50 @@ test('the pitch envelope sweeps each note down from Amount, and short decays are
 	await expect(amount).toHaveAttribute('aria-valuenow', '-12');
 });
 
+// The plan's item 10: switching machines moves nothing. The Step Sequencer card is as tall on
+// every machine (Drums', the tallest), so the rail beside it, its screens and the sections under
+// it stay put; from 1200 px Sound and Compose are as tall on every machine too (Rhythm's)
+test('a steady right side: switching machines moves nothing', async ({ page }) => {
+	const boxes = () => page.evaluate(() => {
+		const r = (sel: string) => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return b.height ? [Math.round(b.top), Math.round(b.left), Math.round(b.width), Math.round(b.height)].join() : 'hidden'; };
+		const screens = [...document.querySelectorAll('.machine-rail .mr-screen')].map((e) => Math.round(e.getBoundingClientRect().height)).join();
+		return { steps: r('.ds-steps'), rail: r('.ds-rail'), screens, tabs: r('.ds-tabs'), sound: r('.ds-sound'), compose: r('.ds-compose'), page: document.documentElement.scrollHeight };
+	});
+	const show = async (name: string) => {
+		await page.getByRole('button', { name: `Show ${name}` }).click();
+		await expect(page.locator('.step-card .ds-which')).toHaveText(` · ${name}`);
+	};
+	for (const width of [1600, 1280, 1024, 820]) {
+		await page.setViewportSize({ width, height: 900 });
+		const at = `${width} px`;
+		await show('Rhythm');
+		const rhythm = await boxes();
+		// Wide: everything holds still. Tablets: the tab showing (Sound) is each machine's own
+		// size, but nothing above it moves
+		const steady = (b: any) => (width >= 1200 ? b : { steps: b.steps, rail: b.rail, screens: b.screens, tabs: b.tabs });
+		for (const name of ['Bass', 'Drums', 'Drift', 'Rhythm']) {
+			await show(name);
+			expect(steady(await boxes()), `${at}: ${name}`).toEqual(steady(rhythm));
+		}
+		// Rhythm's pads are centred in the card, under its header
+		const centred = await page.evaluate(() => {
+			const header = document.querySelector('.ds-steps .step-sequencer-subheader')!.getBoundingClientRect();
+			const grid = document.querySelector('.ds-steps .step-card__grid')!.getBoundingClientRect();
+			const card = document.querySelector('.ds-steps')!.getBoundingClientRect();
+			return [grid.top - header.bottom, card.bottom - grid.bottom];
+		});
+		expect(Math.abs(centred[0] - centred[1]), `${at}: Rhythm's pads centred`).toBeLessThanOrEqual(30);
+		expect(centred[0], `${at}: room above Rhythm's pads`).toBeGreaterThan(40);
+	}
+	// A phone held upright (one column, pads in two rows): each machine's own height
+	await page.setViewportSize({ width: 390, height: 900 });
+	await show('Rhythm');
+	const h = async () => Math.round((await page.locator('.ds-steps').boundingBox())!.height);
+	const upright = await h();
+	await show('Bass');
+	expect(await h()).toBeGreaterThan(upright + 100);
+});
+
 test('laid out like hardware: Sound in rows beside Compose, ending on one line; tabs on tablets', async ({ page }) => {
 	const rect = (sel: string) => page.locator(sel).first().evaluate((el) => {
 		const b = el.getBoundingClientRect();
