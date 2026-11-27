@@ -25,8 +25,8 @@
 
         <!-- A click on a row (its name or its steps) picks the machine the pads and the Sound section show -->
         <div class="mr-rows" role="list">
-            <div class="mr-heads" aria-hidden="true"><span></span><span></span><span></span><span>Level</span><span>Pedals</span><span>Steps</span></div>
-            <div v-for="m in rows" :key="m.id" class="mr-row" :class="{ 'is-chosen': m.id === chosen }" role="listitem"
+            <div class="mr-heads" aria-hidden="true"><span></span><span></span><span></span><span>Level</span><span>Pedals</span><span></span><span></span><span>Steps</span></div>
+            <div v-for="m in rows" :key="m.id" class="mr-row" :class="{ 'is-chosen': m.id === chosen, 'is-soloed-out': m.soloedOut }" role="listitem"
                 @click="onRowClick(m.id, $event)">
                 <button type="button" class="mr-led" :class="{ lit: !m.muted }" role="switch" :aria-checked="!m.muted"
                     :aria-label="`${m.name} on`" :title="m.muted ? `${m.name} is muted: click to hear it` : `Mute ${m.name}`"
@@ -68,6 +68,17 @@
                         :label="`${m.name} into the pedals`" hideLabel size="mini"
                         :value-text="`${Math.round(m.pedals * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
                 </div>
+                <!-- FX and Solo (the plan's item 12, option A of three mockups): FX down (lit) while
+                     the machine goes through the pedals as Pedals says; up, it plays dry, round every
+                     pedal. S down: only the soloed machines are heard -->
+                <button type="button" class="hw-cap hw-cap-sm hw-led-mini mr-fx" :class="{ 'hw-down': m.fx }" role="switch"
+                    :aria-checked="m.fx ? 'true' : 'false'" :aria-label="`${m.name} FX`"
+                    :title="m.fx ? `${m.name} goes through the pedals (as Pedals says): click to play it dry, round every pedal` : `${m.name} plays dry, round every pedal: click to put it back through them`"
+                    @click="emit('toggle-fx', m.id)">FX</button>
+                <button type="button" class="hw-cap hw-cap-sm mr-solo" :class="{ 'hw-down': m.soloed }" role="switch"
+                    :aria-checked="m.soloed ? 'true' : 'false'" :aria-label="`Solo ${m.name}`"
+                    :title="m.soloed ? `${m.name} is soloed: click to hear the others too` : m.soloedOut ? `Another machine is soloed: click to hear ${m.name} with it` : `Solo ${m.name}: hear it alone`"
+                    @click="emit('toggle-solo', m.id)">S</button>
                 <div class="mr-cells" aria-hidden="true" :class="{ 'mr-barcells': m.bars }"
                     :style="m.bars ? { gridTemplateColumns: `repeat(${m.bars.length}, minmax(0, 1fr))` } : undefined">
                     <!-- Drift: a cell per bar, its chord's name, the bar playing outlined -->
@@ -120,6 +131,8 @@ export type RailMachine = {
     id: string; name: string;
     steps: boolean[]; pitches: number[]; velocities: number[]; hueScale?: number;
     muted: boolean; level: number; pedals: number;
+    // FX (through the pedals) and Solo, and whether another machine's solo silences it (item 12)
+    fx?: boolean; soloed?: boolean; soloedOut?: boolean;
     // Drums (the plan's item 5): per step, each slot's colour where its row is on, else null
     stack?: (number | null)[][];
     // Drift (the plan's item 6): each bar's chord's name ('' for nothing held), and the bar playing
@@ -156,6 +169,8 @@ const emit = defineEmits<{
     (e: 'update:copyArmed', v: boolean): void;
     (e: 'chain-cell', index: number, back: boolean): void;
     (e: 'toggle-chain'): void;
+    (e: 'toggle-fx', id: string): void;
+    (e: 'toggle-solo', id: string): void;
 }>();
 
 function slotTitle(i: number) {
@@ -193,7 +208,7 @@ const rows = computed(() => props.machines.map((m) => ({
 
 // A click on the row's steps picks it too (the LED, the name and the knob do their own)
 function onRowClick(id: string, e: MouseEvent) {
-    if ((e.target as HTMLElement).closest('.mr-led, .mr-name, .mr-level')) return;
+    if ((e.target as HTMLElement).closest('.mr-led, .mr-name, .mr-level, .mr-fx, .mr-solo')) return;
     emit('choose', id);
 }
 
@@ -290,14 +305,48 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
     display: flex;
     flex-direction: column;
     gap: 3px; /* 5 until PR 122 (Drift's row) */
+    container-type: inline-size;
+}
+
+/* A narrow rail (rows under 310 px: beside the transport on a tablet, 720–1199 px): the meter
+   and the steps go on a second line, under the LED and name and under the knobs and caps, so the
+   steps keep a usable width (PR 130: with FX and S on one line they had none) */
+@container (max-width: 309px) {
+    .mr-rows .mr-row {
+        grid-template-columns: 14px minmax(0, 1fr) 28px 28px 22px 18px;
+        grid-template-areas: "led name level pedals fx solo" "meter meter steps steps steps steps";
+        row-gap: 3px;
+        gap: 3px 5px;
+        padding: 4px 6px;
+    }
+
+    .mr-rows .mr-heads {
+        grid-template-columns: 14px minmax(0, 1fr) 28px 28px 22px 18px;
+        gap: 5px;
+        padding: 0 6px;
+    }
+
+    .mr-rows .mr-heads span:nth-child(3),
+    .mr-rows .mr-heads span:last-child {
+        display: none;
+    }
+
+    .mr-row > .mr-led { grid-area: led; }
+    .mr-row > .mr-name { grid-area: name; }
+    .mr-row > .mr-meter { grid-area: meter; }
+    .mr-row > .mr-level:nth-child(4) { grid-area: level; }
+    .mr-row > .mr-level:nth-child(5) { grid-area: pedals; }
+    .mr-row > .mr-fx { grid-area: fx; }
+    .mr-row > .mr-solo { grid-area: solo; }
+    .mr-row > .mr-cells { grid-area: steps; height: 10px; }
 }
 
 .mr-row,
 .mr-heads {
     display: grid;
-    grid-template-columns: 14px 46px 30px 30px 30px minmax(0, 1fr);
+    grid-template-columns: 14px 46px 30px 30px 30px 24px 18px minmax(0, 1fr); /* FX and S since PR 130 */
     align-items: center;
-    gap: 8px;
+    gap: 6px; /* 8 until PR 130 */
     padding: 4px 8px;
     border-radius: 6px;
     background: var(--pt-inset, rgba(0, 0, 0, 0.3));
@@ -315,6 +364,25 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
 
 .mr-heads span:last-child {
     text-align: left;
+}
+
+/* FX and Solo (the plan's item 12): two caps between Pedals and the steps */
+.mr-fx,
+.mr-solo {
+    height: 18px;
+    padding: 0;
+    font: 700 9px Cousine, ui-monospace, monospace;
+}
+
+/* A soloed machine's S in amber, the solo colour (the rail's LEDs are mint) */
+.mr-solo.hw-down {
+    --cap-ink: #ffd166;
+}
+
+/* Silenced by another machine's solo: its name and steps dim */
+.mr-row.is-soloed-out .mr-name,
+.mr-row.is-soloed-out .mr-cells {
+    opacity: 0.35;
 }
 
 /* The meter: eight LEDs, green, the last two amber (PR 116; option L of the mockups) */

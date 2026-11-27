@@ -253,6 +253,7 @@
 				:active="viewSource.active" :machines="railMachines" :chosen="machine"
 				:currentStep="currentStep" :playing="isPlaying" @toggle-mute="onRailMute" @update:level="onRailLevel"
 				@update:pedals="(id: string, v: number) => { if (id === 'drift') drift.pedals = v; else if (id === 'drums') drums.pedals = v; else if (id === 'bass') bassLane.pedals = v; else rhythmPedals = v; }" :meter="machineLevel"
+				@toggle-fx="(id: MachineId) => { machineMix.fx[id] = !machineMix.fx[id]; }" @toggle-solo="(id: MachineId) => { machineMix.solo[id] = !machineMix.solo[id]; }"
 				@choose="(id: string) => { machine = id as any; }"
 				:slots="slotView" :currentSlot="currentSlot" :queuedSlot="queuedSlot" v-model:copyArmed="copyArmed"
 				@choose-slot="chooseSlot"
@@ -765,6 +766,7 @@ import DrumSound from './DrumSound.vue';
 import DriftPads from './DriftPads.vue';
 import DriftSound from './DriftSound.vue';
 import { createDrift, driftVoice, togglePlate, copyToNextBar, type Drift } from '../lib/machines/drift';
+import { anySolo, createMix, dry, heard, type MachineId } from '../lib/machines/mix';
 import { DRIFT_PROGRESSIONS, DRIFT_SOUNDS, driftProgressionKey, driftSoundKey, progressionChords, randomDriftProgression, randomDriftSound } from '../lib/machines/driftPresets';
 import type { DriftVoice } from '../audio/drift';
 import { chordLabel, driftHasNotes, heldInBar, plateHz as driftPlateHzOf, platePitchClasses, plateSemitones, plateSpelling, driftRootMidi } from '../audio/drift';
@@ -881,21 +883,33 @@ const machineMuted = computed(() => (driftChosen.value ? drift.muted : drumsChos
 const machineName = computed(() => ({ rhythm: 'Rhythm', bass: 'Bass', drums: 'Drums', drift: 'Drift' })[machine.value]);
 // The rail's mixer (PR 116): how much of Rhythm goes through the pedals (Bass's is bassLane.pedals)
 const rhythmPedals = ref(1);
+// FX and Solo per machine (the plan's item 12, src/lib/machines/mix.ts): the rail's two caps on
+// each row. FX off plays a machine dry, round every pedal; while any machine is soloed only the
+// soloed ones are heard, live and in the export (the MIDI file too), as a mute would.
+const machineMix = createMix();
+function machineIsMuted(id: MachineId) {
+	return id === 'drift' ? drift.muted : id === 'drums' ? drums.muted : id === 'bass' ? bassLane.muted : !!synthInstrument.value?.muted;
+}
+const isHeard = (id: MachineId) => heard(id, machineIsMuted(id), machineMix.solo);
 
 // The rail's rows (MachineRail.vue): Rhythm (the synth lane) and Bass
 const railMachines = computed(() => {
 	const r = synthInstrument.value;
 	return [
-		...(r ? [{ id: 'rhythm', name: 'Rhythm', steps: r.steps, pitches: r.pitches ?? [], velocities: r.velocities, muted: r.muted, level: r.channelVolume, pedals: rhythmPedals.value }] : []),
-		{ id: 'bass', name: 'Bass', steps: bassLane.steps, pitches: bassLane.pitches, velocities: bassLane.velocities, hueScale: 4, muted: bassLane.muted, level: bassLane.level, pedals: bassLane.pedals },
+		...(r ? [{ id: 'rhythm', name: 'Rhythm', steps: r.steps, pitches: r.pitches ?? [], velocities: r.velocities, muted: r.muted, level: r.channelVolume, pedals: rhythmPedals.value, ...mixOf('rhythm') }] : []),
+		{ id: 'bass', name: 'Bass', steps: bassLane.steps, pitches: bassLane.pitches, velocities: bassLane.velocities, hueScale: 4, muted: bassLane.muted, level: bassLane.level, pedals: bassLane.pedals, ...mixOf('bass') },
 		// Drums: its four rows stacked in each step, each in its sound's colour
-		{ id: 'drums', name: 'Drums', steps: [], pitches: [], velocities: [], muted: drums.muted, level: drums.level, pedals: drums.pedals,
+		{ id: 'drums', name: 'Drums', steps: [], pitches: [], velocities: [], muted: drums.muted, level: drums.level, pedals: drums.pedals, ...mixOf('drums'),
 			stack: Array.from({ length: stepLength.value }, (_, i) => drums.rows.map((r, k) => (r.steps[i] && !drums.slots[k]?.muted ? drumHues.value[k] : null))) },
 		// Drift: a cell per bar, its chord's name, the bar playing outlined
-		{ id: 'drift', name: 'Drift', steps: [], pitches: [], velocities: [], muted: drift.muted, level: drift.level, pedals: drift.pedals,
+		{ id: 'drift', name: 'Drift', steps: [], pitches: [], velocities: [], muted: drift.muted, level: drift.level, pedals: drift.pedals, ...mixOf('drift'),
 			bars: driftLabels.value, barNow: driftBarNow.value },
 	];
 });
+// A row's FX and Solo caps, and whether another machine's solo silences it
+function mixOf(id: MachineId) {
+	return { fx: !dry(id, machineMix), soloed: machineMix.solo[id], soloedOut: anySolo(machineMix.solo) && !machineMix.solo[id] };
+}
 function onRailMute(id: string) {
 	if (id === 'drift') drift.muted = !drift.muted;
 	else if (id === 'drums') drums.muted = !drums.muted;
@@ -1066,7 +1080,7 @@ function showKeptNote(text: string) {
 }
 // What the export plays: each slot's recording and settings, the rows (or one set per bar)
 function drumsExport(barRows?: DrumRow[][]) {
-	if (drums.muted) return undefined;
+	if (!isHeard('drums')) return undefined;
 	const rowsPlay = (rows: DrumRow[]) => rows.some((r, k) => !drums.slots[k]?.muted && r.steps.some(Boolean));
 	if (!(barRows ?? [drums.rows]).some(rowsPlay)) return undefined;
 	return {
@@ -1125,7 +1139,7 @@ function resetDriftPads() {
 }
 // For the export: unless it's muted or holds nothing
 function driftExport() {
-	if (drift.muted || !driftHasNotes(drift.chords, drift.length)) return undefined;
+	if (!isHeard('drift') || !driftHasNotes(drift.chords, drift.length)) return undefined;
 	return {
 		voice: driftVoice(drift), level: drift.level, pedals: drift.pedals, length: drift.length,
 		chords: drift.chords.map((r) => [...r]), plateHz: [...driftPlateHz.value],
@@ -2257,7 +2271,8 @@ const exportState = computed<StepSequencerState>(() => {
 		channelVolume: inst.channelVolume,
 
 		pattern: {
-			active: [...inst.steps],
+			// Rhythm while it's heard (not muted, nor silenced by another machine's solo)
+			active: isHeard('rhythm') ? [...inst.steps] : inst.steps.map(() => false),
 			velocities: [...inst.velocities],
 			pitches: [
 				...(inst.pitches ?? Array(stepsCount).fill(currentDefaultHz.value)),
@@ -2310,8 +2325,8 @@ const exportState = computed<StepSequencerState>(() => {
 			},
 		},
 
-		// The Bass machine, unless it's muted or has no step on
-		bass: bassLane.muted || !bassLane.steps.some(Boolean) ? undefined : {
+		// The Bass machine, unless it isn't heard (muted, or another's solo) or has no step on
+		bass: !isHeard('bass') || !bassLane.steps.some(Boolean) ? undefined : {
 			voice: bassVoice(bass),
 			level: bassLane.level,
 			pedals: bassLane.pedals,
@@ -2323,6 +2338,8 @@ const exportState = computed<StepSequencerState>(() => {
 		drift: driftExport(),
 		// The rail's mixer: how much of Rhythm goes through the pedals
 		rhythmPedals: rhythmPedals.value,
+		// The machines whose FX is off: dry, round every pedal
+		dryMachines: { ...Object.fromEntries((['rhythm', 'bass', 'drums', 'drift'] as const).map((id) => [id, dry(id, machineMix)])) },
 
 		sampleRate: audioCtx?.sampleRate || 48000,
 		// Long enough for Drift's Release (and the reverb after it)
@@ -2411,7 +2428,7 @@ const projectState: ProjectState = {
 	bass: { sound: bass, lane: bassLane },
 	drums,
 	drift,
-	mixer: { rhythmPedals },
+	mixer: { rhythmPedals, mix: machineMix },
 	patterns: { slots: patternSlots, current: currentSlot, chain, chainOn },
 	melody: melodyUi,
 	selectedWaveform,
@@ -2454,6 +2471,7 @@ const {
 	drift,
 	driftPlateHz,
 	rhythmPedals,
+	mix: machineMix,
 	delay: projectState.fx.delay,
 	drive: projectState.fx.drive,
 	reverb: projectState.fx.reverb,
@@ -2711,7 +2729,7 @@ const exportChain = computed(() => {
 		const t = rhythmOf(slotIdx === currentSlot.value ? slotFromLane(lane, laneHz()) : patternSlots.value[slotIdx])
 			?? emptyRhythm(n, laneHz());
 		return {
-			active: [...t.steps], velocities: [...t.velocities], pitches: [...t.pitches],
+			active: isHeard('rhythm') ? [...t.steps] : t.steps.map(() => false), velocities: [...t.velocities], pitches: [...t.pitches],
 			waveforms: Array.from({ length: n }, (_, i) => (lane as any).waveforms?.[i] ?? selectedWaveform.value),
 			ratchets: [...t.ratchets], repeatNotes: [...t.repeatNotes], repeatChord: repeatChord.value,
 		};
@@ -2751,7 +2769,7 @@ async function runExport(options: ExportOptions) {
 	try {
 		const chainNow = options.play === 'chain' ? exportChain.value : null;
 		// With the chain, Bass plays each cell's pattern too
-		const bassChain = chainNow && !bassLane.muted && chainNow.bassPatterns.some((p) => p.steps.some(Boolean))
+		const bassChain = chainNow && isHeard('bass') && chainNow.bassPatterns.some((p) => p.steps.some(Boolean))
 			? { voice: bassVoice(bass), level: bassLane.level, pedals: bassLane.pedals, pattern: chainNow.bassPatterns[0], barPatterns: chainNow.bassPatterns }
 			: undefined;
 		await loadDrumKit().then((k) => { drumKit.value = k; }).catch(() => { });
