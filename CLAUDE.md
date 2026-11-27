@@ -2521,6 +2521,15 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (120 px wide), centred, three across with the tape deck under them (PR 78; they were
   stretched); under 720 px still three across, about 110 px each (PR 90; one under another
   before, when each had its tall footswitch).
+  **A steady right side** (PR 128, the plan's item 10): over 640 px (`min-width: 640.02px`, as
+  Rhythm's pads wrap at `max-width: 640px`) `.ds-steps` is a flex column at least `--steps-h`
+  (321 px, Drums', the tallest) and its pads are centred under the header (`margin-block: auto`),
+  so switching machines doesn't move the rail, its screens or anything under the card; from
+  1200 px `.ds-sound` is at least `--sound-h` (763 px, Rhythm's three rows), so Sound and Compose
+  keep their size too (Bass's, Drums' and Drift's Sound grids are `auto 1fr auto`: the middle row
+  grows). Under 1200 px the tab showing is each machine's own height (nothing is beside it). A
+  machine whose pads grow past 321 px, or a Sound past 763, needs the number raised; a browser
+  test ("a steady right side") compares every machine at 1600, 1280, 1024 and 820 px.
   **The desktop view on a phone held upright** (PR 107; `pointer: coarse` under 720 px, Desktop
   View in phone mode's ☰ or "Use the desktop view instead"): the pads are two rows of 8 (under
   640 px for any pointer: `repeat(8, …)` and 5 px apart in `_drumSequencer.scss`, the
@@ -2683,11 +2692,6 @@ beat, the reverse-reverb swell (REV, PR 105, covers its use), Fit the window (it
 useful half of it), and REV on the sample (unclear what it was for); Google Play moved to Not
 now. Small dependency updates ride along with any PR (npm update within the current majors).
 
-10. **A steady right side**: whatever still moves when switching machines (the Step Sequencer
-    card, 189 px on Rhythm and about 320 on Bass and Drums, so the rail beside it, its scope and
-    spectrogram, and the Sound and Compose sections under it) stays the same size. Item 9's "one
-    height" moved here (PR 127): growing Rhythm's pads to Drums' height made the tall pads the
-    maintainer turned down; centring them in a fixed card is the other way.
 11. **A preview of Rhythm's hit**: a small clickable picture of the hit beside Keep as drum in
     Rhythm's Sound title (what Keep would save), playing it while stopped, as Bass's screen
     and the Drums slots' pictures do. A small mockup.
@@ -2998,6 +3002,7 @@ Done:
 | 125 | Fixes from the maintainer's list after PR 124 (whose plan it also records: the reverb, the pads, a steady layout, FX and Solo, waves per pattern, a PHONE switch): File → Open's list stays open for a mouse heading to it diagonally (it closed as the mouse crossed Save as…; `src/lib/menuAim.ts`); the Melody Maker's chosen key is filled in a deep green with a white letter (the mint ring hardly showed on a white key); its corner badge names **the note the pattern plays**, as written, bigger and without cents, or Drift's chord (`NoteBadge.vue`; the tuner it replaces listened, and unison, FM and the sweep led it astray); flat keys' note names fixed (E was missing from the list, so E read F and B had no name). Dependencies updated within their majors (Vite 7.3.8, Vue 3.5.46, Sass 1.108...). |
 | 126 | The reverb pedal, three knobs and REV (the plan's item 8): PRE went (a project's pre-delay no longer plays, and isn't saved again; 67 MIDI-learnable knobs), and REV moved off the ribbon into its corner beside TONE, as CRUSH and PING PONG; REV's **Next hit follows every machine's hits** through the pedals (Rhythm's steps, Bass's notes, Drums' hits, each while unmuted with Pedals above 0; `pedalHitSteps()` in `reverse.ts`, both engines), so with Rhythm empty a swell rises into the next drum or bass hit. |
 | 127 | The pads (the plan's item 9): a lit pad dragged up or down sets its velocity (a readout while dragging), a sideways drag paints pads on or off, on Rhythm, Bass and Drums (the first move decides; Drums couldn't paint), and arrows up and down change a focused pad's velocity; the hover sliders and the Step Sequencer's ⋯ menu went: Clear Repeats is the Repeats brush's **×1**, Reset Pads a red **Reset** cap in the header; the pads, Drums' cells and the phone's are **silicone** (option A of three mockups, after a first round turned down): rubber pads on a lip, lit from inside as high as their velocity, sinking while held, the step numbers and note names printed, no black pills. "One height" moved to item 10. |
+| 128 | A steady right side (the plan's item 10): switching machines moves nothing. Over 640 px the Step Sequencer card is as tall on every machine (321 px, Drums'; it was 189 on Rhythm, 236 on Drift, about 320 on Bass and Drums), the pads centred under its header, so the rail beside it, its screens and everything under it stay put; from 1200 px Sound and Compose are as tall on every machine (763 px, Rhythm's Sound), the others' middle row (Bass's screen, the Drums slots' pictures, Drift's X/Y pad and swarm) taking the difference. A phone held upright keeps each machine's own height. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

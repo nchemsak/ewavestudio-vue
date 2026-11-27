@@ -3460,6 +3460,24 @@ async function recordSample() {
 	grid-area: steps;
 }
 
+/* A steady right side (the plan's item 10): over 640 px, where every machine's pads are one
+   row, the Step Sequencer card is as tall whichever machine it shows (Drums', the tallest:
+   321 px), its pads centred in what's left under the header. Until then it was 189 px on
+   Rhythm, 236 on Drift and about 320 on Bass and Drums, so the rail beside it, its screens and
+   everything under it moved at each switch. Under 640 px the pads wrap into two rows and the
+   machines differ too much (366–522 px): there it stays each machine's own height. */
+@media (min-width: 640.02px) {
+	.ds-steps {
+		display: flex;
+		flex-direction: column;
+		min-height: var(--steps-h, 321px);
+	}
+
+	.ds-steps>.step-card__grid {
+		margin-block: auto;
+	}
+}
+
 .ds-rail {
 	grid-area: rail;
 	align-self: stretch;
@@ -3473,6 +3491,15 @@ async function recordSample() {
 .ds-compose {
 	grid-area: compose;
 	align-self: stretch;
+}
+
+/* From 1200 px, Sound and Compose are as tall whichever machine is shown: Rhythm's Sound (its
+   three rows, 763 px) is the tallest, so the others' middle row (Bass's screen, the Drums
+   slots, Drift's X/Y pad and swarm) takes the difference, and Compose never changes size */
+@media (min-width: 1200px) {
+	.ds-sound {
+		min-height: var(--sound-h, 763px);
+	}
 }
 
 .ds-tabs {
