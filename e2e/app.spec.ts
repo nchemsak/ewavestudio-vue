@@ -2833,6 +2833,76 @@ test('the tape pedal: its noise is a stem of its own and the stems still add up;
 	expect(wavWindow(shot, frames / rate - 0.2, frames / rate - 0.06).rms).toBeGreaterThan(1e-3);
 });
 
+test("the lo-fi pedal's PHONE switch: 300 Hz–3.4 kHz in mono, in the export, its stems still adding up; saved, undone", async ({ page }) => {
+	// The switch: beside TAPE | VINYL on the deck, greyed out while the pedal is off
+	const deck = page.locator('.ds-grid .tape-pedal.is-deck');
+	const phone = deck.getByRole('switch', { name: 'Phone line' });
+	await expect(phone).toHaveAttribute('aria-checked', 'false');
+	await expect(phone).toBeDisabled();
+	await page.getByRole('button', { name: 'Lo-fi pedal' }).first().click();
+	await expect(phone).toBeEnabled();
+	const vinyl = (await deck.getByRole('radio', { name: 'Vinyl' }).boundingBox())!;
+	const sw = (await phone.boundingBox())!;
+	const box = (await deck.boundingBox())!;
+	expect(sw.x).toBeGreaterThan(vinyl.x + vinyl.width - 1);
+	expect(sw.x + sw.width).toBeLessThanOrEqual(box.x + box.width);
+	await page.waitForTimeout(SETTLED);
+	await phone.click();
+	await expect(phone).toHaveAttribute('aria-checked', 'true');
+	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(saved.fx.tape.phone).toBe(true);
+	await page.locator('body').click({ position: { x: 5, y: 5 } });
+	await page.waitForTimeout(SETTLED);
+	await page.keyboard.press('Control+z');
+	await expect(phone).toHaveAttribute('aria-checked', 'false');
+
+	// The export: one hit, three unison voices spread wide (left and right differ), at A2
+	// (110 Hz, under the band) or A5 (880 Hz, in it)
+	await turnOnPads(page, [0]);
+	const exportWith = async (id: string, on: boolean, hz: number) => {
+		await importChanged(page, id, (d) => {
+			const lane = d.instruments.find((i: any) => i.name === 'synth-voice');
+			lane.steps = lane.steps.map((_: boolean, i: number) => i === 0);
+			lane.pitches = lane.pitches.map(() => hz);
+			lane.waveforms = lane.waveforms.map(() => 'sine');
+			d.selectedWaveform = 'sine';
+			d.synth.unison = { ...d.synth.unison, enabled: true, voices: 3, detuneCents: 12, stereoSpread: 100 };
+			d.fx.reverb = { ...d.fx.reverb, enabled: true, mix: 0.3 };
+			d.fx.tape = { enabled: true, age: 0.5, wobble: 0, mode: 'tape', phone: on };
+		});
+		return unzip((await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: true, midi: false, oneShot: false, normalize: false })).bytes);
+	};
+	const part = (files: Record<string, Buffer>, name: string) => files[Object.keys(files).find((f) => f.endsWith(`_${name}.wav`))!];
+	const level = (b: Buffer) => wavWindow(b, 0, 0.3).rms;
+	const sides = (b: Buffer) => {
+		const l = wavSamples(b, 0).samples, r = wavSamples(b, 1).samples;
+		let worst = 0;
+		for (let i = 0; i < l.length; i++) worst = Math.max(worst, Math.abs(l[i] - r[i]));
+		return worst;
+	};
+	const lowOff = await exportWith('phone-low-off', false, 110);
+	const lowOn = await exportWith('phone-low-on', true, 110);
+	const highOff = await exportWith('phone-high-off', false, 880);
+	const highOn = await exportWith('phone-high-on', true, 880);
+	// Under the band it's all but gone (about 35 dB down at 110 Hz); in it, about as loud
+	expect(level(part(lowOn, 'dry')) / level(part(lowOff, 'dry'))).toBeLessThan(0.1);
+	const kept = level(part(highOn, 'dry')) / level(part(highOff, 'dry'));
+	expect(kept).toBeGreaterThan(0.6);
+	expect(kept).toBeLessThan(1.3);
+	// Mono: the spread voices differ left and right without it, not with it
+	expect(sides(part(highOff, 'dry'))).toBeGreaterThan(0.01);
+	expect(sides(part(highOn, 'dry'))).toBeLessThan(1e-4);
+	expect(sides(part(highOn, 'mix'))).toBeLessThan(1e-4);
+	// Linear: the stems still add up to the mix, in both channels
+	for (const ch of [0, 1]) {
+		const mix = wavSamples(part(highOn, 'mix'), ch).samples;
+		const stems = ['dry', 'reverb', 'tape'].map((p) => wavSamples(part(highOn, p), ch).samples);
+		let worst = 0;
+		for (let i = 0; i < mix.length; i++) worst = Math.max(worst, Math.abs(stems.reduce((a, st) => a + st[i], 0) - mix[i]));
+		expect(worst, `channel ${ch}`).toBeLessThan(1e-3);
+	}
+});
+
 test("the reverb pedal: three knobs and REV in PRE's corner; a project saved with PRE plays without it, and the stems still add up", async ({ page }) => {
 	const pedal = page.locator('.ds-grid .reverb-pedal');
 	// DECAY, MIX and TONE, no PRE (PR 126)
@@ -2991,7 +3061,7 @@ test('the tape pedal: on the panel, saved, one undo step a change, reset by File
 	await expect(footswitch).toHaveAttribute('aria-pressed', 'false');
 	await expect(age).toHaveAttribute('aria-disabled', 'true');
 	await expect(mode('Vinyl')).toBeDisabled();
-	expect(await saved()).toEqual({ enabled: false, age: 0.4, wobble: 0.3, mode: 'tape' });
+	expect(await saved()).toEqual({ enabled: false, age: 0.4, wobble: 0.3, mode: 'tape', phone: false });
 	await page.waitForTimeout(SETTLED);
 
 	await footswitch.click();
@@ -3009,7 +3079,7 @@ test('the tape pedal: on the panel, saved, one undo step a change, reset by File
 	await page.keyboard.press('Home');
 	await expect(wobble).toHaveAttribute('aria-valuetext', '0%');
 	await page.waitForTimeout(SETTLED);
-	expect(await saved()).toEqual({ enabled: true, age: 1, wobble: 0, mode: 'vinyl' });
+	expect(await saved()).toEqual({ enabled: true, age: 1, wobble: 0, mode: 'vinyl', phone: false });
 
 	// The lever between the two words flips it
 	await tape.locator('.ms-slot').click();
@@ -4006,8 +4076,8 @@ test('hardware buttons: a push button sinks and springs back; a chosen option an
 	expect((await capState(play)).down).toBe(4);
 	await play.click();
 
-	// The pedals' CRUSH, PING PONG and REV switches are not caps (they stay as they were)
-	await expect(page.locator('.pedal-switch')).toHaveCount(3);
+	// The pedals' CRUSH, PING PONG, REV and PHONE switches are not caps (they stay as they were)
+	await expect(page.locator('.pedal-switch')).toHaveCount(4);
 	await expect(page.locator('.pedal-switch.hw-cap')).toHaveCount(0);
 });
 

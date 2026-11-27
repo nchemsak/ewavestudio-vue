@@ -1,7 +1,7 @@
 <template>
     <!-- The tape pedal, last in the chain (src/audio/tape.ts): AGE (saturation, a duller top,
-         hiss), WOBBLE (wow and flutter) and a TAPE | VINYL switch (what the noise is and how
-         the pitch sways). Two reels, or records, turn beside its name while it plays (the deck
+         hiss), WOBBLE (wow and flutter), a TAPE | VINYL switch (what the noise is and how
+         the pitch sways) and PHONE (the plan's item 14: 300 Hz–3.4 kHz in mono). Two reels, or records, turn beside its name while it plays (the deck
          has a window for them). -->
     <KnobGroup v-model="localEnabled" title="Lo-fi" :color="color" :showToggle="false" :showHeader="false">
         <div class="tape-pedal" :class="[`is-${layout}`, `mode-${localMode}`, { turning: playing && localEnabled }]">
@@ -27,6 +27,9 @@
                         :disabled="!localEnabled" @click="localMode = m">{{ m.toUpperCase() }}</button>
                     <span class="ms-slot" aria-hidden="true" @click="flipMode"><span class="ms-lever"></span></span>
                 </div>
+
+                <PedalSwitch v-model="localPhone" label="PHONE" aria-label="Phone line"
+                    title="Phone: only the band a telephone carries, 300 Hz–3.4 kHz, in mono" :disabled="!localEnabled" />
             </div>
 
             <div class="panel-seam" aria-hidden="true">
@@ -62,6 +65,7 @@
 import { ref, watch } from 'vue';
 import Knob from '../Knob.vue';
 import KnobGroup from '../KnobGroup.vue';
+import PedalSwitch from './PedalSwitch.vue';
 import { TAPE_DEFAULTS, TAPE_MODES, clampTapeMode, type TapeMode } from '../../audio/tape';
 
 const props = withDefaults(
@@ -70,11 +74,12 @@ const props = withDefaults(
         age?: number;      // 0..1
         wobble?: number;   // 0..1
         mode?: TapeMode;
+        phone?: boolean;   // PHONE (src/audio/tape.ts)
         playing?: boolean; // the reels turn while the sequencer plays
         layout?: 'pedal' | 'deck'; // a stomp box (the phone's FX page) or a low, wide deck (the desktop's Effects card)
         color?: string;
     }>(),
-    { age: TAPE_DEFAULTS.age, wobble: TAPE_DEFAULTS.wobble, mode: TAPE_DEFAULTS.mode, playing: false, layout: 'pedal', color: '#4DB6AC' }
+    { age: TAPE_DEFAULTS.age, wobble: TAPE_DEFAULTS.wobble, mode: TAPE_DEFAULTS.mode, phone: TAPE_DEFAULTS.phone, playing: false, layout: 'pedal', color: '#4DB6AC' }
 );
 
 const emit = defineEmits<{
@@ -82,6 +87,7 @@ const emit = defineEmits<{
     (e: 'update:age', v: number): void;
     (e: 'update:wobble', v: number): void;
     (e: 'update:mode', v: TapeMode): void;
+    (e: 'update:phone', v: boolean): void;
 }>();
 
 const MODE_NAMES: Record<TapeMode, string> = { tape: 'Tape', vinyl: 'Vinyl' };
@@ -94,6 +100,7 @@ const localEnabled = ref<boolean>(props.enabled);
 const localAge = ref<number>(props.age);
 const localWobble = ref<number>(props.wobble);
 const localMode = ref<TapeMode>(clampTapeMode(props.mode));
+const localPhone = ref<boolean>(!!props.phone);
 const activeKnob = ref<null | 'age' | 'wobble'>(null);
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -107,11 +114,13 @@ watch(localEnabled, (v) => { if (v !== props.enabled) emit('update:enabled', v);
 watch(localAge, (v) => { if (v !== props.age) emit('update:age', clamp01(v)); });
 watch(localWobble, (v) => { if (v !== props.wobble) emit('update:wobble', clamp01(v)); });
 watch(localMode, (v) => { if (v !== props.mode) emit('update:mode', v); });
+watch(localPhone, (v) => { if (v !== props.phone) emit('update:phone', v); });
 
 watch(() => props.enabled, (v) => { localEnabled.value = v; });
 watch(() => props.age, (v) => { if (typeof v === 'number') localAge.value = v; });
 watch(() => props.wobble, (v) => { if (typeof v === 'number') localWobble.value = v; });
 watch(() => props.mode, (v) => { localMode.value = clampTapeMode(v); });
+watch(() => props.phone, (v) => { localPhone.value = !!v; });
 </script>
 
 <style scoped>
@@ -136,7 +145,7 @@ watch(() => props.mode, (v) => { localMode.value = clampTapeMode(v); });
     grid-template-areas:
         'led    led'
         'age    wobble'
-        'mode   mode';
+        'mode   sw';
     align-items: center;
     justify-items: center;
 }
@@ -296,6 +305,39 @@ watch(() => props.mode, (v) => { localMode.value = clampTapeMode(v); });
     outline-offset: 1px;
     border-radius: 4px;
 }
+
+/* PHONE: in the corner beside TAPE | VINYL, as CRUSH sits beside the overdrive's TONE */
+.pedal-switch {
+    position: static;
+    grid-area: sw;
+    justify-self: center;
+    align-self: end;
+}
+
+.is-deck .pedal-switch {
+    align-self: center;
+    justify-self: start;
+}
+
+/* On the stomp box TAPE | VINYL shares its row with PHONE, so it stands upright: TAPE over
+   the lever over VINYL */
+.is-pedal .mode-switch {
+    grid-template-columns: auto;
+    justify-items: center;
+    row-gap: 3px;
+    width: auto;
+    padding: 6px 0 0;
+}
+
+.is-pedal .ms-tape,
+.is-pedal .ms-vinyl {
+    grid-column: 1;
+    justify-self: center;
+}
+
+.is-pedal .ms-tape { grid-row: 1; }
+.is-pedal .ms-slot { grid-column: 1; grid-row: 2; transform: rotate(90deg); margin: 4px 0; }
+.is-pedal .ms-vinyl { grid-row: 3; }
 
 /* The window: two reels and the tape between them, or a record under its arm */
 .panel-seam {
@@ -546,9 +588,9 @@ watch(() => props.mode, (v) => { localMode.value = clampTapeMode(v); });
     border-radius: 0;
     background: none;
     box-shadow: none;
-    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-columns: auto auto auto minmax(0, 1fr);
     grid-template-rows: auto;
-    grid-template-areas: 'age wobble mode';
+    grid-template-areas: 'age wobble mode sw';
     column-gap: 12px;
     justify-items: start;
 }
@@ -575,5 +617,27 @@ watch(() => props.mode, (v) => { localMode.value = clampTapeMode(v); });
     align-self: center;
     min-height: 0;
     padding: 0;
+}
+
+/* A narrow deck (a phone held upright: about 336 px) makes room for PHONE: a smaller window,
+   the knobs closer together */
+.tape-pedal.is-deck {
+    container-type: inline-size;
+}
+
+@container (max-width: 360px) {
+    .is-deck .panel-seam {
+        padding: 0 5px;
+    }
+
+    .is-deck .tape-window {
+        width: 72px;
+        padding: 0 6px;
+    }
+
+    .is-deck .panel-top {
+        column-gap: 7px;
+        padding-right: 6px;
+    }
 }
 </style>

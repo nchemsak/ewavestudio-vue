@@ -174,7 +174,7 @@
 						v-model:reverse="reverbReverse"
 						v-model:swell="reverbSwell" />
 					<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
-						v-model:mode="tapeMode" :playing="isPlaying" />
+						v-model:mode="tapeMode" v-model:phone="tapePhone" :playing="isPlaying" />
 				</div>
 			</template>
 			<template #key>
@@ -606,7 +606,7 @@
 								<!-- The tape pedal, last in the chain: a low deck under the three pedals
 								     (option C of three mockups; the phone's FX page has it as a pedal) -->
 								<TapeEffect v-model:enabled="tapeEnabled" v-model:age="tapeAge" v-model:wobble="tapeWobble"
-									v-model:mode="tapeMode" :playing="isPlaying" layout="deck" />
+									v-model:mode="tapeMode" v-model:phone="tapePhone" :playing="isPlaying" layout="deck" />
 							</div>
 						</SectionWrap>
 					</div>
@@ -2156,6 +2156,7 @@ const tapeEnabled = ref(false);
 const tapeAge = ref(TAPE_DEFAULTS.age);       // 0..1: saturation, a duller top, hiss
 const tapeWobble = ref(TAPE_DEFAULTS.wobble); // 0..1: wow and flutter
 const tapeMode = ref<TapeMode>(TAPE_DEFAULTS.mode); // 'tape' | 'vinyl'
+const tapePhone = ref(TAPE_DEFAULTS.phone); // PHONE: 300 Hz–3.4 kHz in mono (the plan's item 14)
 
 // Tape END
 
@@ -2322,6 +2323,7 @@ const exportState = computed<StepSequencerState>(() => {
 				age: tapeAge.value,
 				wobble: tapeWobble.value,
 				mode: tapeMode.value,
+				phone: tapePhone.value,
 			},
 		},
 
@@ -2422,7 +2424,7 @@ const projectState: ProjectState = {
 		},
 		drive: { enabled: driveEnabled, type: driveType, amount: driveAmount, tone: driveTone, mix: driveMix, crush: driveCrush },
 		reverb: { enabled: reverbEnabled, mix: reverbMix, decay: reverbDecay, tone: reverbTone, reverse: reverbReverse, swell: reverbSwell },
-		tape: { enabled: tapeEnabled, age: tapeAge, wobble: tapeWobble, mode: tapeMode },
+		tape: { enabled: tapeEnabled, age: tapeAge, wobble: tapeWobble, mode: tapeMode, phone: tapePhone },
 	},
 	instruments,
 	bass: { sound: bass, lane: bassLane },
