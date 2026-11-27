@@ -24,13 +24,17 @@
         </div>
 
         <!-- A click on a row (its name or its steps) picks the machine the pads and the Sound section show -->
-        <div class="mr-rows" role="list">
-            <div class="mr-heads" aria-hidden="true"><span></span><span></span><span></span><span>Level</span><span>Pedals</span><span>Steps</span></div>
-            <div v-for="m in rows" :key="m.id" class="mr-row" :class="{ 'is-chosen': m.id === chosen }" role="listitem"
+        <div class="mr-rows" role="list" :data-mock="mock || undefined">
+            <div class="mr-heads" aria-hidden="true"><span></span><span v-if="mock === 'c'"></span><span></span><span></span><span>Level</span><span>Pedals</span>
+                <span v-if="mock === 'a'">FX</span><span v-if="mock === 'a'">Solo</span><span v-if="mock === 'b'">FX·S</span><span>Steps</span></div>
+            <div v-for="m in rows" :key="m.id" class="mr-row" :class="{ 'is-chosen': m.id === chosen, 'mk-quiet': mockSolo && mockSolo !== m.id }" role="listitem"
                 @click="onRowClick(m.id, $event)">
                 <button type="button" class="mr-led" :class="{ lit: !m.muted }" role="switch" :aria-checked="!m.muted"
                     :aria-label="`${m.name} on`" :title="m.muted ? `${m.name} is muted: click to hear it` : `Mute ${m.name}`"
                     @click="emit('toggle-mute', m.id)"></button>
+                <!-- MOCKUP (item 12) C: Solo beside the LED -->
+                <button v-if="mock === 'c'" type="button" class="hw-cap hw-cap-sm mk-s" :class="{ 'hw-down': mockSolo === m.id }"
+                    :aria-pressed="mockSolo === m.id ? 'true' : 'false'" :aria-label="`Solo ${m.name}`" @click="mockSolo = mockSolo === m.id ? null : m.id">S</button>
                 <button type="button" class="mr-name" :aria-pressed="m.id === chosen ? 'true' : 'false'"
                     :aria-label="`Show ${m.name}`" :title="m.id === chosen ? `The pads and Sound show ${m.name}` : `Show ${m.name} on the pads and in Sound`"
                     @click="emit('choose', m.id)">{{ m.name }}</button>
@@ -67,6 +71,23 @@
                     <Knob v-else midi-id="bass.pedals" :modelValue="m.pedals" @update:modelValue="(v: number) => emit('update:pedals', m.id, v)"
                         :label="`${m.name} into the pedals`" hideLabel size="mini"
                         :value-text="`${Math.round(m.pedals * 100)}%`" :min="0" :max="1" :step="0.01" :useThemeArc="true" />
+                    <!-- MOCKUP (item 12) C: FX as a badge on the Pedals knob -->
+                    <button v-if="mock === 'c'" type="button" class="mk-fxdot" :class="{ on: mockFx[m.id] !== false }"
+                        :aria-pressed="mockFx[m.id] !== false ? 'true' : 'false'" :aria-label="`${m.name} FX`" @click.stop="mockFx[m.id] = mockFx[m.id] === false">FX</button>
+                </div>
+                <!-- MOCKUP (item 12) A: FX and Solo caps, a column each -->
+                <template v-if="mock === 'a'">
+                    <button type="button" class="hw-cap hw-cap-sm hw-led-mini mk-fx" :class="{ 'hw-down': mockFx[m.id] !== false }"
+                        :aria-pressed="mockFx[m.id] !== false ? 'true' : 'false'" :aria-label="`${m.name} FX`" @click="mockFx[m.id] = mockFx[m.id] === false">FX</button>
+                    <button type="button" class="hw-cap hw-cap-sm mk-s" :class="{ 'hw-down': mockSolo === m.id }"
+                        :aria-pressed="mockSolo === m.id ? 'true' : 'false'" :aria-label="`Solo ${m.name}`" @click="mockSolo = mockSolo === m.id ? null : m.id">S</button>
+                </template>
+                <!-- MOCKUP (item 12) B: FX over S, two thin caps in one column -->
+                <div v-if="mock === 'b'" class="mk-stack">
+                    <button type="button" class="hw-cap hw-cap-sm mk-thin" :class="{ 'hw-down': mockFx[m.id] !== false }"
+                        :aria-pressed="mockFx[m.id] !== false ? 'true' : 'false'" :aria-label="`${m.name} FX`" @click="mockFx[m.id] = mockFx[m.id] === false">FX</button>
+                    <button type="button" class="hw-cap hw-cap-sm mk-thin" :class="{ 'hw-down': mockSolo === m.id }"
+                        :aria-pressed="mockSolo === m.id ? 'true' : 'false'" :aria-label="`Solo ${m.name}`" @click="mockSolo = mockSolo === m.id ? null : m.id">S</button>
                 </div>
                 <div class="mr-cells" aria-hidden="true" :class="{ 'mr-barcells': m.bars }"
                     :style="m.bars ? { gridTemplateColumns: `repeat(${m.bars.length}, minmax(0, 1fr))` } : undefined">
@@ -182,6 +203,11 @@ function listen(on: boolean) {
 watch(() => props.copyArmed, (on) => listen(on));
 onBeforeUnmount(() => listen(false));
 
+// MOCKUP (item 12): which look of FX and Solo, from the URL (?mock=a|b|c), and their state here only
+const mock = (() => { try { const m = new URLSearchParams(location.search).get('mock'); return m && 'abc'.includes(m) ? m : ''; } catch { return ''; } })();
+const mockFx = ref<Record<string, boolean>>({});
+const mockSolo = ref<string | null>(null);
+
 // Each step: off, or its pad's colour (the note), brighter when louder (the velocity)
 const rows = computed(() => props.machines.map((m) => ({
     ...m,
@@ -193,7 +219,7 @@ const rows = computed(() => props.machines.map((m) => ({
 
 // A click on the row's steps picks it too (the LED, the name and the knob do their own)
 function onRowClick(id: string, e: MouseEvent) {
-    if ((e.target as HTMLElement).closest('.mr-led, .mr-name, .mr-level')) return;
+    if ((e.target as HTMLElement).closest('.mr-led, .mr-name, .mr-level, .hw-cap, .mk-fxdot')) return;
     emit('choose', id);
 }
 
@@ -316,6 +342,40 @@ onBeforeUnmount(() => stops.forEach((s) => s()));
 .mr-heads span:last-child {
     text-align: left;
 }
+
+/* MOCKUP (item 12): FX and Solo */
+.mr-rows[data-mock="a"] .mr-row, .mr-rows[data-mock="a"] .mr-heads {
+    grid-template-columns: 14px 46px 30px 30px 30px 24px 18px minmax(0, 1fr);
+    gap: 6px;
+}
+.mr-rows[data-mock="b"] .mr-row, .mr-rows[data-mock="b"] .mr-heads {
+    grid-template-columns: 14px 46px 30px 30px 30px 24px minmax(0, 1fr);
+    gap: 7px;
+}
+.mr-rows[data-mock="c"] .mr-row, .mr-rows[data-mock="c"] .mr-heads {
+    grid-template-columns: 14px 16px 46px 30px 30px 30px minmax(0, 1fr);
+    gap: 7px;
+}
+.mk-fx, .mk-s { height: 18px; padding: 0; font: 700 9px Cousine, ui-monospace, monospace; }
+.mk-stack { display: flex; flex-direction: column; gap: 2px; }
+.mk-thin { height: 12px; padding: 0; font: 700 7.5px/1 Cousine, ui-monospace, monospace; }
+.mk-s.hw-down, .mk-thin.hw-down + .mk-thin.hw-down { color: #ffd166; }
+.mr-level { position: relative; }
+.mk-fxdot {
+    position: absolute;
+    right: -6px;
+    bottom: -5px;
+    padding: 0 2px;
+    border: 0;
+    border-radius: 3px;
+    font: 700 7px/10px Cousine, ui-monospace, monospace;
+    background: #1b1426;
+    color: var(--pt-text-dim, #b9a8d8);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .5);
+    cursor: pointer;
+}
+.mk-fxdot.on { color: #10251a; background: var(--hw-led, #7dffb0); }
+.mr-row.mk-quiet .mr-cells, .mr-row.mk-quiet .mr-name { opacity: .35; }
 
 /* The meter: eight LEDs, green, the last two amber (PR 116; option L of the mockups) */
 .mr-meter {
