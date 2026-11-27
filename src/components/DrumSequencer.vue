@@ -433,20 +433,15 @@
 				<div class="ds-sound-head">
 					<h2 id="sound-title" class="ds-section-title">Sound<span class="ds-which"> · {{ machineName }}</span></h2>
 					<!-- Keep as drum (the plan's item 5): one hit of Rhythm's sound into a Drums slot -->
-					<div v-if="machine === 'rhythm'" class="keep-drum" :data-mock="mockHit || undefined" role="group" aria-label="Keep as drum">
-						<!-- MOCKUP (item 11): the hit Keep would save, three looks behind ?mock=a|b|c -->
-						<button v-if="mockHit === 'b' || mockHit === 'c'" type="button" class="keep-hit" :class="mockHit === 'b' ? 'keep-hit--lcd' : 'keep-hit--cap hw-cap hw-cap-sm'"
-							:style="{ '--h': keepHitHue }" :aria-label="keepHitLabel" :title="keepHitTitle" @click="auditionKeepHit()">
-							<span v-if="mockHit === 'c'" class="keep-hit__play" aria-hidden="true">▶</span>
-							<svg viewBox="0 0 200 60" preserveAspectRatio="none" aria-hidden="true"><path :d="keepHit?.path ?? 'M0 30 L200 30'" /></svg>
-							<span class="keep-hit__read" aria-hidden="true">{{ keepHit ? `${keepHit.name} · ${keepHit.length}` : '…' }}</span>
-						</button>
-						<span class="keep-drum__cap" aria-hidden="true">{{ keptNote || (mockHit === 'c' ? 'Keep in' : 'Keep as drum') }}</span>
-						<button v-if="mockHit === 'a'" type="button" class="keep-hit keep-hit--chip" :style="{ '--h': keepHitHue }"
-							:aria-label="keepHitLabel" :title="keepHitTitle" @click="auditionKeepHit()">
+					<div v-if="machine === 'rhythm'" class="keep-drum" role="group" aria-label="Keep as drum">
+						<span class="keep-drum__cap" aria-hidden="true">{{ keptNote || 'Keep as drum' }}</span>
+						<!-- The hit Keep would save (the plan's item 11, option A of three mockups): a chip like
+						     the Drums shelf's, which plays it while stopped, and an arrow to the slots -->
+						<button type="button" class="keep-hit" :style="{ '--h': keepHitHue }" :aria-label="keepHitLabel"
+							:title="keepHitTitle" @click="auditionKeepHit()">
 							<svg viewBox="0 0 200 60" preserveAspectRatio="none" aria-hidden="true"><path :d="keepHit?.path ?? 'M0 30 L200 30'" /></svg>
 						</button>
-						<span v-if="mockHit === 'a'" class="keep-hit__arrow" aria-hidden="true">→</span>
+						<span class="keep-hit__arrow" aria-hidden="true">→</span>
 						<button v-for="(n, k) in drumNames" :key="k" type="button" class="hw-cap hw-cap-sm keep-drum__slot"
 							:class="{ busy: keepingDrum === k }" :style="{ '--h': drumHues[k] }" :disabled="keepingDrum != null"
 							:aria-label="`Keep as drum in slot ${k + 1}`"
@@ -1030,9 +1025,9 @@ function dryState(st: any) {
 	return { ...st, fx: { ...st.fx, delay: { ...st.fx.delay, enabled: false }, reverb: { ...st.fx.reverb, enabled: false },
 		...(st.fx.tape ? { tape: { ...st.fx.tape, enabled: false } } : {}) } };
 }
-// MOCKUP (item 11): which look of the hit's picture, from the URL (?mock=a|b|c)
-const mockHit = (() => { try { const m = new URLSearchParams(location.search).get('mock'); return m && 'abc'.includes(m) ? m : ''; } catch { return ''; } })();
-// The hit Keep would save (rendered with the hit behind the Envelope card), its picture and length
+// The hit Keep would save (the plan's item 11): rendered with the hit behind the Envelope card,
+// dry, as hitToSound() makes it (mono, −1 dBFS, cut where it fades); its picture, note and length.
+// The chip in Rhythm's Sound title draws it and plays it, while stopped, as a Drums slot would
 const keepHit = shallowRef<{ sound: SampleData; path: string; name: string; length: string } | null>(null);
 const keepHitHue = computed(() => padHue(hitHz.value));
 const keepHitLabel = computed(() => (keepHit.value ? `Hear the hit Keep would save: ${keepHit.value.name}, ${keepHit.value.length}` : 'Hear the hit Keep would save'));
@@ -1051,7 +1046,9 @@ function keepHitPath(x: Float32Array, cols = 60) {
 	for (let c = cols - 1; c >= 0; c--) bottom += ` L${(c * w).toFixed(1)} ${(30 + h[c] * 27).toFixed(1)}`;
 	return `${top} L200 30${bottom} Z`;
 }
+let keepHitDirty = false;
 async function renderKeepHit(st: any, hz: number, wave: any, name: string) {
+	keepHitDirty = false;
 	const dry = dryState(st);
 	const sound = hitToSound(await renderHit(dry, hz, wave, hitSeconds(dry, wave, hz)), dry.sampleRate);
 	if (!sound) { keepHit.value = null; return; }
@@ -3330,7 +3327,8 @@ async function renderHitNow() {
 		const name = `${nearestNote(hz)} ${padWaveLabel(wave)}`;
 		hitPicture.value = { channels, sampleRate: state.sampleRate, hz, title: name };
 		hitText.value = `Hit: ${name}, ${formatLength((channels[0].length / state.sampleRate) * 1000)}, peak ${formatPeak(peakOf(channels))}`;
-		if (mockHit) await renderKeepHit(state, hz, wave, name);
+		if (machine.value === 'rhythm') await renderKeepHit(state, hz, wave, name);
+		else keepHitDirty = true;
 	} catch (err) {
 		console.warn('The hit could not be rendered:', err);
 	} finally {
@@ -3353,6 +3351,8 @@ watch(() => [synthInstrument.value ? exportState.value : null, selectedWaveform.
 });
 onBeforeUnmount(() => { if (hitTimer) clearTimeout(hitTimer); });
 watch(hitWanted, (wanted) => { if (wanted && hitDirty) renderHitNow(); });
+// The chip's hit is rendered only while Rhythm is shown: back on Rhythm, render it if the sound changed
+watch(machine, (m) => { if (m === 'rhythm' && keepHitDirty && hitWanted.value) renderHitNow(); });
 onMounted(() => { if (hitWanted.value) renderHitNow(); });
 
 // THE HIT END
@@ -3944,14 +3944,22 @@ async function recordSample() {
 	animation: keep-pulse .6s ease-in-out infinite alternate;
 }
 @keyframes keep-pulse { to { opacity: .45; } }
-/* MOCKUP (item 11): the hit Keep would save, three looks */
+/* The hit Keep would save (the plan's item 11): a chip like the Drums shelf's, in the screens'
+   colours, its hit in its pad's colour; 18 px tall, as the caps, so the head keeps its height */
 .keep-hit {
-	position: relative;
+	--sp-bg: #0c1118;
+	width: 58px;
+	height: 18px;
 	padding: 0;
 	border: 0;
+	border-radius: 5px;
+	background: var(--sp-bg);
+	box-shadow: inset 0 0 0 1px hsl(var(--h) 80% 60% / .45);
+	overflow: hidden;
 	cursor: pointer;
-	color: var(--pt-text-dim, #b9a8d8);
 }
+.theme-synthwave .keep-hit { --sp-bg: #2a0f52; }
+.theme-analog .keep-hit { --sp-bg: #160f05; }
 .keep-hit svg { display: block; width: 100%; height: 100%; }
 .keep-hit path {
 	fill: hsl(var(--h) 85% 62% / .5);
@@ -3960,64 +3968,7 @@ async function recordSample() {
 	vector-effect: non-scaling-stroke;
 }
 .keep-hit:hover path { fill: hsl(var(--h) 85% 66% / .75); }
-/* A: a chip like the Drums shelf's, before an arrow to the caps */
-.keep-hit--chip {
-	width: 58px;
-	height: 18px;
-	border-radius: 5px;
-	background: var(--sp-bg, #0b0718);
-	box-shadow: inset 0 0 0 1px hsl(var(--h) 80% 60% / .45);
-	overflow: hidden;
-}
 .keep-hit__arrow { font: 700 11px Cousine, ui-monospace, monospace; color: var(--pt-text-dim, #b9a8d8); margin: 0 2px; }
-.keep-hit__read { display: none; }
-/* B: a small screen with the hit and its note and length, before the caption */
-.keep-hit--lcd {
-	width: 176px;
-	height: 18px;
-	border-radius: 5px;
-	background: var(--sp-bg, #0b0718);
-	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), inset 0 2px 6px rgba(0, 0, 0, .5);
-	overflow: hidden;
-	margin-right: 8px;
-}
-.keep-hit--lcd svg { position: absolute; left: 4px; top: 2px; width: 52px; height: 14px; }
-.keep-hit--lcd .keep-hit__read {
-	display: block;
-	position: absolute;
-	left: 62px;
-	right: 6px;
-	text-align: right;
-	top: 50%;
-	transform: translateY(-50%);
-	font: 700 8.5px Cousine, ui-monospace, monospace;
-	letter-spacing: .06em;
-	text-transform: uppercase;
-	color: var(--sp-ink, #cfc4ff);
-	white-space: nowrap;
-}
-@media (max-width: 719.98px) {
-	.keep-hit--lcd { width: 64px; }
-	.keep-drum .keep-hit .keep-hit__read { display: none; }
-	.keep-hit--cap svg { width: 40px; }
-}
-/* C: a cap with ▶, the hit and its note and length, before "Keep in" and the caps */
-.keep-hit--cap {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	height: 18px;
-	padding: 0 7px 0 6px;
-	margin-right: 8px;
-}
-.keep-hit--cap svg { width: 46px; height: 14px; }
-.keep-hit__play { font-size: 8px; color: hsl(var(--h) 85% 72%); }
-.keep-hit--cap .keep-hit__read {
-	display: inline;
-	font: 700 9px Cousine, ui-monospace, monospace;
-	letter-spacing: .04em;
-	white-space: nowrap;
-}
 @media (prefers-reduced-motion: reduce) { .keep-drum__slot.busy { animation: none; opacity: .6; } }
 
 

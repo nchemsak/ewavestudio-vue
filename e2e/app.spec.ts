@@ -7603,6 +7603,45 @@ test('Keep as drum: a hit of Rhythm\'s sound on the shelf and in a slot, one und
 	expect(await page.evaluate(() => (window as any).__peakOver(300) as Promise<number>)).toBeGreaterThan(0.02);
 });
 
+// The plan's item 11: a chip beside Keep as drum draws the hit Keep would save, and plays it while
+// stopped. The head keeps its height; the chip follows the sound; it's Rhythm's only
+test('Keep as drum: the chip draws and plays the hit Keep would save', async ({ page }) => {
+	await page.waitForTimeout(SETTLED);
+	const chip = page.getByRole('button', { name: /^Hear the hit Keep would save: A3 Sine, \d+ ms$/ });
+	await expect(chip).toBeVisible();
+	expect(Math.round((await page.locator('.ds-sound-head').boundingBox())!.height)).toBeLessThanOrEqual(19);
+	const box = (await chip.boundingBox())!;
+	expect(box.height).toBeLessThanOrEqual(18);
+	// After the title, before the caps
+	expect(box.x).toBeGreaterThan((await page.locator('.keep-drum__cap').boundingBox())!.x);
+	expect(box.x + box.width).toBeLessThan((await page.getByRole('button', { name: 'Keep as drum in slot 1' }).boundingBox())!.x);
+	// It plays while stopped
+	await chip.click();
+	expect(await page.evaluate(() => (window as any).__peakOver(300) as Promise<number>)).toBeGreaterThan(0.02);
+	// Its length is the kept sound's
+	const ms = Number((await chip.getAttribute('aria-label'))!.match(/(\d+) ms$/)![1]);
+	await page.getByRole('button', { name: 'Keep as drum in slot 2' }).click();
+	await expect(page.getByRole('group', { name: 'Keep as drum' })).toContainText('Kept as Kept 1');
+	await page.waitForTimeout(SETTLED);
+	const kept = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data.drums.kept[0];
+	const samples = (kept.data.length * 3) / 4 / 2;
+	expect(Math.abs((samples / kept.sampleRate) * 1000 - ms)).toBeLessThanOrEqual(2);
+	// A new sound: a new picture
+	const before = await page.locator('.keep-hit path').getAttribute('d');
+	await page.getByRole('button', { name: 'Kick', exact: true }).click();
+	await expect(page.locator('.keep-hit path')).not.toHaveAttribute('d', before!);
+	await expect(page.getByRole('button', { name: /^Hear the hit Keep would save: A3 / })).toBeVisible();
+	// Silent while playing (the pads are empty, so anything heard would be the chip's)
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await page.waitForTimeout(300);
+	await page.locator('.keep-hit').click();
+	expect(await page.evaluate(() => (window as any).__swingOver(300) as Promise<number>)).toBeLessThan(0.01);
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	// Rhythm's only
+	await page.getByRole('button', { name: 'Show Bass' }).click();
+	await expect(page.locator('.keep-hit')).toHaveCount(0);
+});
+
 test('the Drums machine: a project from before it opens with the kit and empty rows', async ({ page }) => {
 	await importChanged(page, 'Before Drums', (d) => {
 		delete d.drums;
