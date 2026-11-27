@@ -3061,7 +3061,7 @@ test('the tape pedal: on the panel, saved, one undo step a change, reset by File
 	await expect(footswitch).toHaveAttribute('aria-pressed', 'false');
 	await expect(age).toHaveAttribute('aria-disabled', 'true');
 	await expect(mode('Vinyl')).toBeDisabled();
-	expect(await saved()).toEqual({ enabled: false, age: 0.4, wobble: 0.3, mode: 'tape' });
+	expect(await saved()).toEqual({ enabled: false, age: 0.4, wobble: 0.3, mode: 'tape', phone: false });
 	await page.waitForTimeout(SETTLED);
 
 	await footswitch.click();
@@ -3079,7 +3079,7 @@ test('the tape pedal: on the panel, saved, one undo step a change, reset by File
 	await page.keyboard.press('Home');
 	await expect(wobble).toHaveAttribute('aria-valuetext', '0%');
 	await page.waitForTimeout(SETTLED);
-	expect(await saved()).toEqual({ enabled: true, age: 1, wobble: 0, mode: 'vinyl' });
+	expect(await saved()).toEqual({ enabled: true, age: 1, wobble: 0, mode: 'vinyl', phone: false });
 
 	// The lever between the two words flips it
 	await tape.locator('.ms-slot').click();
@@ -4076,8 +4076,8 @@ test('hardware buttons: a push button sinks and springs back; a chosen option an
 	expect((await capState(play)).down).toBe(4);
 	await play.click();
 
-	// The pedals' CRUSH, PING PONG and REV switches are not caps (they stay as they were)
-	await expect(page.locator('.pedal-switch')).toHaveCount(3);
+	// The pedals' CRUSH, PING PONG, REV and PHONE switches are not caps (they stay as they were)
+	await expect(page.locator('.pedal-switch')).toHaveCount(4);
 	await expect(page.locator('.pedal-switch.hw-cap')).toHaveCount(0);
 });
 
