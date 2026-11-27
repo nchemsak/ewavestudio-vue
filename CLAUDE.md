@@ -13,7 +13,7 @@ steps, each slot one recorded hit: a frozen kit, or a sound of Rhythm's kept as 
 machine (held chords: six plates, the key's chord in thirds, a chord a bar for 4 or 8 bars, each
 note a slowly drifting swarm, an X/Y pad); amp envelope, pitch envelope (a drum-style sweep), filter with its own
 envelope, noise, FM,
-unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a lo-fi pedal (wear, wobble, tape or vinyl); Web MIDI note
+unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher switch), reverb and a lo-fi pedal (wear, wobble, tape or vinyl, a phone line); Web MIDI note
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
 arpeggio in a key and scale; a new key or scale moves the pattern with it); four patterns per
 project (A–D, with Copy) and a chain that plays them in order; a machine rail (a small scope and
@@ -769,7 +769,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### Effect switches
 - Two pedals have a mini toggle (`PedalSwitch.vue`, `role="switch"`, in the corner right of
-  the TONE knob; greyed out while its pedal is off, like the knobs). Saved as
+  the TONE knob; greyed out while its pedal is off, like the knobs); the reverb's REV and the
+  lo-fi pedal's PHONE (see "The tape pedal") are the same switch. Saved as
   `fx.drive.crush` and `fx.delay.pingPong` (default off; a project saved before them gets off,
   not the current value). Sound settings, so presets reset them (`resetSoundToFactoryDefaults`)
   and the Sounds dice turns them on sometimes (ping-pong in 40 % of rolls with the delay, crush
@@ -885,6 +886,23 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   flipping sign every sample, all its energy at half the sample rate (about 24 kHz), at a gain
   of 0.12 × age^1.5 (0.03), so only the rare pops could be heard (the maintainer heard hiss
   and no crackle). A unit test checks the ticks' energy is in the clicks' band.
+- **PHONE** (PR 132, the plan's item 14; a `PedalSwitch`, "Phone line"): the sound as a
+  telephone carries it, **300 Hz–3.4 kHz in mono** (`createPhoneBand()` in `tape.ts`, both
+  engines): the pedal's output summed to one channel (a GainNode with `channelCount` 1,
+  `explicit`: ½ left + ½ right) through a 4th-order Butterworth high-pass and low-pass (two
+  biquads at each edge, `PHONE_QS`; 24 dB an octave), crossfaded with the sound as it came
+  (5 ms live), after the wobble. The tape's hiss and crackle go through a band of their own (a
+  line carries them too). Linear, so the export's stems still add up (a browser test sums
+  them). No makeup gain: a kick loses most of itself, as on a phone. `phoneGainAt(hz)` is the
+  band's response (unit-tested). Saved as `fx.tape.phone` (older projects off); a sound
+  setting, so presets and File → New put it off; **not rolled by the Sounds dice** (every
+  seeded roll stays the sound it was). Not MIDI-learnable (a switch). Where it sits: on the
+  stomp box (the phone's FX page) two by two with TAPE | VINYL, which stands upright there
+  (`'mode sw'`, as the other pedals' `'tone sw'`); on the deck after TAPE | VINYL
+  (`'age wobble mode sw'`), the deck's window and gaps narrower under 360 px (a phone held
+  upright) so it fits. A browser test checks the switch (greyed out while off, beside VINYL,
+  saved, undone) and an export: 110 Hz all but gone, 880 Hz kept, left and right the same, the
+  stems adding up.
 - **Live** (`liveEngine.ts`, the `Tape` section): the switch crossfades between round the
   pedal and through it. The noise plays only while something does: while the sequencer plays,
   and for a note played by hand (MIDI, a preview) until 1 s after it ends; then it fades and is
@@ -2739,8 +2757,6 @@ beat, the reverse-reverb swell (REV, PR 105, covers its use), Fit the window (it
 useful half of it), and REV on the sample (unclear what it was for); Google Play moved to Not
 now. Small dependency updates ride along with any PR (npm update within the current majors).
 
-14. **A PHONE switch on the lo-fi pedal** (a band-pass about 300 Hz–3.4 kHz, mono; linear, so
-    the stems still add up), a mini switch like CRUSH.
 15. **Major-version upgrades** (Vite 8, Pinia 4, Vitest 5; Playwright too, see "Commands"), each as
     its own PR, last, or sooner if Vite 7 stops getting fixes or `npm audit` needs a new major.
     TypeScript 7 waits until `vue-tsc` supports it.
@@ -3043,6 +3059,7 @@ Done:
 | 129 | A preview of Rhythm's hit (the plan's item 11; option A of three mockups): a chip between Keep as drum and its four caps draws the hit Keep would save (dry, mono, cut where it fades: what a Drums slot gets), in its pad's colour, redrawn as the sound changes, and plays it when clicked while stopped, as the Drums slots' pictures do; its name gives the note and length. The Sound title keeps its height. |
 | 130 | FX and Solo per machine (the plan's item 12; option A of three mockups): two caps on each rail row between Pedals and the steps. **FX** up plays the machine dry, round every pedal, the lo-fi one too (its Pedals keeps its value); **S** solos it (while any is soloed only the soloed are heard; the others' rows dim), live, in the export, its stems and the MIDI file (`src/lib/machines/mix.ts`). Saved as `mixer.fx` and `mixer.solo` (older projects: FX on, no solo), one undo step each, File → New puts them back. Rhythm's mute now applies to the export too. |
 | 131 | Waves and noise per pattern (the plan's item 13): each pattern slot A–D keeps its pads' waves and which pads get noise, as it keeps its steps; a wave tile, Random, a pad's ⋮ menu, a recording and the Noise card's pad buttons change the slot showing, a slot never used opens on the main wave with noise everywhere, and a sound preset (or the Sounds dice) sets every slot's waves. The chain's export plays each bar's own waves and noise. A project saved before gives every slot its shared waves and noise. |
+| 132 | A PHONE switch on the lo-fi pedal (the plan's item 14): a mini switch, as CRUSH, that plays the pedal's sound as a telephone carries it, 300 Hz–3.4 kHz in mono (24 dB an octave at each edge, the hiss and crackle too), in both engines; linear, so the stems still add up. Saved as `fx.tape.phone` (older projects off), reset by presets and File → New, not in the Sounds dice. On the stomp box TAPE \| VINYL stands upright beside it; on the deck it follows TAPE \| VINYL, the deck tighter on a phone held upright so it fits. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

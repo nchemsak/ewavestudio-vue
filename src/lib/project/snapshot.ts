@@ -107,7 +107,7 @@ export type ProjectState = {
 			// REV (src/audio/reverb/reverse.ts): the reverb backwards, each swell SWELL long
 			reverse: Ref<boolean>; swell: Ref<string> };
 		// The tape pedal, last in the chain (src/audio/tape.ts): age and wobble 0..1
-		tape: { enabled: Ref<boolean>; age: Ref<number>; wobble: Ref<number>; mode: Ref<TapeMode> };
+		tape: { enabled: Ref<boolean>; age: Ref<number>; wobble: Ref<number>; mode: Ref<TapeMode>; phone: Ref<boolean> };
 	};
 	instruments: Ref<Instrument[]>;
 	// Patterns A–D (src/lib/patterns/slots.ts): the four slots and which one plays (0–3). The
@@ -217,6 +217,7 @@ function byName(st: ProjectState) {
 		tapeAge: fx.tape.age,
 		tapeWobble: fx.tape.wobble,
 		tapeMode: fx.tape.mode,
+		tapePhone: fx.tape.phone,
 		instruments: st.instruments,
 		patternSlots: st.patterns.slots,
 		currentSlot: st.patterns.current,
@@ -245,7 +246,7 @@ export function buildSnapshot(st: ProjectState) {
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbReverse, reverbSwell,
-		tapeEnabled, tapeAge, tapeWobble, tapeMode,
+		tapeEnabled, tapeAge, tapeWobble, tapeMode, tapePhone,
 		instruments, patternSlots, currentSlot, chain, chainOn, melodyUi, selectedWaveform,
 	} = byName(st);
 
@@ -366,6 +367,7 @@ export function buildSnapshot(st: ProjectState) {
 				age: tapeAge.value,
 				wobble: tapeWobble.value,
 				mode: tapeMode.value,
+				phone: tapePhone.value,
 			},
 
 		},
@@ -454,7 +456,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbReverse, reverbSwell,
-		tapeEnabled, tapeAge, tapeWobble, tapeMode,
+		tapeEnabled, tapeAge, tapeWobble, tapeMode, tapePhone,
 		instruments, patternSlots, currentSlot, chain, chainOn, melodyUi, selectedWaveform,
 	} = byName(st);
 
@@ -660,6 +662,7 @@ export function applySnapshot(st: ProjectState, s: any) {
 		tapeAge.value = knob(t?.age, TAPE_DEFAULTS.age);
 		tapeWobble.value = knob(t?.wobble, TAPE_DEFAULTS.wobble);
 		tapeMode.value = clampTapeMode(t?.mode);
+		tapePhone.value = t?.phone === true; // PHONE (the plan's item 14): older projects off
 	}
 
 	if (s.melody) {
@@ -912,7 +915,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 		delayEnabled, delaySync, delayDivision, delayTime, delayFeedback, delayMix, delayToneEnabled, delayToneHz, delayToneType, delayPingPong,
 		driveEnabled, driveType, driveAmount, driveTone, driveMix, driveCrush,
 		reverbEnabled, reverbMix, reverbDecay, reverbTone, reverbReverse, reverbSwell,
-		tapeEnabled, tapeAge, tapeWobble, tapeMode,
+		tapeEnabled, tapeAge, tapeWobble, tapeMode, tapePhone,
 	} = byName(st);
 
 	// The synth: the Rhythm machine's factory sound (src/lib/machines/rhythm.ts)
@@ -951,6 +954,7 @@ export function resetSoundToFactoryDefaults(st: ProjectState) {
 	tapeAge.value = TAPE_DEFAULTS.age;
 	tapeWobble.value = TAPE_DEFAULTS.wobble;
 	tapeMode.value = TAPE_DEFAULTS.mode;
+	tapePhone.value = TAPE_DEFAULTS.phone;
 }
 
 // Factory defaults END

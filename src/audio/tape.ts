@@ -10,9 +10,11 @@
 //   TAPE | VINYL  what the noise is (hiss, or a record's crackle and pops over a little
 //           surface noise) and how the pitch sways (a tape's slow wow, slower drift and fast
 //           flutter, or a record turning 33⅓ times a minute, a little off-centre and warped).
+//   PHONE   (the plan's item 14) the sound as a telephone carries it: only 300 Hz–3.4 kHz, in
+//           mono. Linear (filters and a sum), so the export's stems still add up.
 //
-//   input ─► sat ─► dull ─► wow ─► output            sidechain ─► shaper ─► sat.gain
-//   hiss ─► filters ─► hissGain ─┬► noise            sines ─► wow.delayTime
+//   input ─► sat ─► dull ─► wow ─► phone ─► output    sidechain ─► shaper ─► sat.gain
+//   hiss ─► filters ─► hissGain ─┬► phone ─► noise     sines ─► wow.delayTime
 //   crackle ─► crackleGain ──────┘
 //
 // The saturation is a gain, not a curve the sound goes through: `shaper` reads the level of
@@ -27,7 +29,7 @@ export const TAPE_MODES: readonly TapeMode[] = ['tape', 'vinyl'];
 export const clampTapeMode = (v: unknown): TapeMode => (v === 'vinyl' ? 'vinyl' : 'tape');
 
 // The pedal's starting values (off)
-export const TAPE_DEFAULTS = { age: 0.4, wobble: 0.3, mode: 'tape' as TapeMode };
+export const TAPE_DEFAULTS = { age: 0.4, wobble: 0.3, mode: 'tape' as TapeMode, phone: false };
 
 export const TAPE_CUTOFF_NEW = 20000; // Hz, AGE at 0
 export const TAPE_CUTOFF_OLD = 3200;  // Hz, AGE at 1
@@ -162,6 +164,59 @@ export function fillCrackle(data: Float32Array, sampleRate: number, random: () =
 	for (let i = 0; i < data.length; i++) data[i] = Math.max(-1, Math.min(1, data[i]));
 }
 
+// PHONE: the band a telephone carries, each edge a 4th-order Butterworth (24 dB an octave),
+// summed to mono. Its two Qs make the two biquads at each edge one maximally flat filter.
+export const PHONE_LOW_HZ = 300;
+export const PHONE_HIGH_HZ = 3400;
+export const PHONE_QS = [0.5412, 1.3066] as const;
+
+// How far the band lets `hz` through (0..1), as the four biquads do: for tests and drawing
+export function phoneGainAt(hz: number): number {
+	const order4 = (r: number) => 1 / Math.sqrt(1 + r ** 8); // a 4th-order Butterworth low-pass at ratio r
+	return order4(PHONE_LOW_HZ / hz) * order4(hz / PHONE_HIGH_HZ);
+}
+
+export type PhoneBand = {
+	input: GainNode;
+	output: GainNode;
+	// On: through the band, in mono; off: as it came. `smooth`: a 5 ms crossfade, not at once
+	set(on: boolean, smooth?: boolean): void;
+};
+
+export function createPhoneBand(ctx: BaseAudioContext): PhoneBand {
+	const input = ctx.createGain();
+	const output = ctx.createGain();
+	const wide = ctx.createGain();
+	const narrow = ctx.createGain();
+	narrow.gain.value = 0;
+	// One channel: the browser sums left and right into it (½ each), and the filters' mono
+	// output plays in both speakers
+	const mono = ctx.createGain();
+	mono.channelCount = 1;
+	mono.channelCountMode = 'explicit';
+	mono.channelInterpretation = 'speakers';
+	let at: AudioNode = input.connect(mono);
+	for (const [type, hz] of [['highpass', PHONE_LOW_HZ], ['lowpass', PHONE_HIGH_HZ]] as const) {
+		for (const q of PHONE_QS) {
+			const f = ctx.createBiquadFilter();
+			f.type = type;
+			f.frequency.value = hz;
+			f.Q.value = q;
+			at = at.connect(f);
+		}
+	}
+	at.connect(narrow).connect(output);
+	input.connect(wide).connect(output);
+	function set(on: boolean, smooth = false) {
+		const t = ctx.currentTime;
+		for (const [g, v] of [[wide, on ? 0 : 1], [narrow, on ? 1 : 0]] as const) {
+			if (smooth) g.gain.setTargetAtTime(v, t, 0.005);
+			else g.gain.setValueAtTime(v, t);
+		}
+	}
+	return { input, output, set };
+}
+
 // How long the noise buffers are (they loop; the two lengths share no beat or bar)
 export const HISS_SECONDS = 4;
 export const CRACKLE_SECONDS = 11;
@@ -173,6 +228,8 @@ export type Tape = {
 	noise: GainNode;     // the tape's own noise (hiss, crackle), to add after `output`
 	// Sets the knobs. `smooth`: glide there (a knob turned while playing), not at once
 	apply(s: TapeSettings, smooth?: boolean): void;
+	// PHONE on or off (`smooth`: a crossfade, while playing)
+	setPhone(on: boolean, smooth?: boolean): void;
 	// Starts the noise at `when`. With `stopAt` it ends there, fading for `fade` seconds after it
 	startNoise(random: () => number, when?: number, stopAt?: number, fade?: number): void;
 };
@@ -203,7 +260,14 @@ export function createTape(ctx: BaseAudioContext): Tape {
 		sines.push({ osc, depth });
 	}
 
-	input.connect(sat).connect(dull).connect(wow).connect(output);
+	// PHONE, on the sound and on the tape's own noise (a telephone line carries both)
+	const phone = createPhoneBand(ctx);
+	const noisePhone = createPhoneBand(ctx);
+	input.connect(sat).connect(dull).connect(wow).connect(phone.input);
+	phone.output.connect(output);
+	const noiseIn = ctx.createGain();
+	noiseIn.connect(noisePhone.input);
+	noisePhone.output.connect(noise);
 
 	// The noise: hiss through a band (a tape's hiss sits in the upper middle), crackle as it is
 	const hissHP = ctx.createBiquadFilter();
@@ -216,8 +280,8 @@ export function createTape(ctx: BaseAudioContext): Tape {
 	hissLP.Q.value = 0.5;
 	const hissGain = ctx.createGain();
 	const crackleGain = ctx.createGain();
-	hissHP.connect(hissLP).connect(hissGain).connect(noise);
-	crackleGain.connect(noise);
+	hissHP.connect(hissLP).connect(hissGain).connect(noiseIn);
+	crackleGain.connect(noiseIn);
 
 	function apply(s: TapeSettings, smooth = false) {
 		const t = ctx.currentTime;
@@ -257,5 +321,10 @@ export function createTape(ctx: BaseAudioContext): Tape {
 		}
 	}
 
-	return { input, sidechain, output, noise, apply, startNoise };
+	function setPhone(on: boolean, smooth = false) {
+		phone.set(on, smooth);
+		noisePhone.set(on, smooth);
+	}
+
+	return { input, sidechain, output, noise, apply, setPhone, startNoise };
 }

@@ -1,3 +1,4 @@
+import { phoneGainAt, PHONE_LOW_HZ, PHONE_HIGH_HZ, TAPE_DEFAULTS as PHONE_DEFAULTS } from './tape';
 import { describe, it, expect } from 'vitest';
 import {
 	tapeSettings, tapeMakeup, tapeSaturate, tapeGainCurve, wobbleDelayAt, wobblePitchAt, fillHiss, fillCrackle,
@@ -212,5 +213,22 @@ describe('the noise', () => {
 		const a = new Float32Array(100).fill(1);
 		fillCrackle(a, 48000, seededRandom(1));
 		expect(Math.max(...a)).toBe(0);
+	});
+});
+
+describe('PHONE (the plan\'s item 14)', () => {
+	it('lets the telephone band through and takes away what lies outside it', () => {
+		// The middle of the band is untouched; each edge is 3 dB down
+		expect(phoneGainAt(1000)).toBeGreaterThan(0.99);
+		expect(20 * Math.log10(phoneGainAt(PHONE_LOW_HZ))).toBeCloseTo(-3, 0);
+		expect(20 * Math.log10(phoneGainAt(PHONE_HIGH_HZ))).toBeCloseTo(-3, 0);
+		// 24 dB an octave outside: a kick's 60 Hz and a hat's 12 kHz are all but gone
+		expect(20 * Math.log10(phoneGainAt(150))).toBeLessThan(-23);
+		expect(20 * Math.log10(phoneGainAt(60))).toBeLessThan(-50);
+		expect(20 * Math.log10(phoneGainAt(12000))).toBeLessThan(-40);
+	});
+
+	it('is off by default', () => {
+		expect(PHONE_DEFAULTS.phone).toBe(false);
 	});
 });

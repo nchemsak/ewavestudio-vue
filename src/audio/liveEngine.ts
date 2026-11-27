@@ -102,7 +102,7 @@ export type LiveEngineSettings = {
 	drive: { enabled: R<boolean>; type: R<string>; amount: R<number>; tone: R<number>; mix: R<number>; crush: R<boolean> };
 	reverb: { enabled: R<boolean>; mix: R<number>; decay: R<number>; tone: R<number>; reverse: R<boolean>; swell: R<string> };
 	// The tape pedal, last in the chain (tape.ts): age and wobble 0..1
-	tape: { enabled: R<boolean>; age: R<number>; wobble: R<number>; mode: R<TapeMode> };
+	tape: { enabled: R<boolean>; age: R<number>; wobble: R<number>; mode: R<TapeMode>; phone: R<boolean> };
 	// Called just before a bar's first step is built (about 100 ms before it sounds), so a
 	// change waiting for the bar (DrumSequencer's BAR QUEUE) is applied in time for it
 	onBarStart?: () => void;
@@ -217,6 +217,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	applyTapeEnabled(true);
 	watch(s.tape.enabled, () => applyTapeEnabled());
 	watch([s.tape.age, s.tape.wobble, s.tape.mode], () => tape.apply(currentTape(), true));
+	// PHONE (the plan's item 14): crossfaded in 5 ms, so a ringing tail doesn't click
+	tape.setPhone(s.tape.phone.value);
+	watch(s.tape.phone, (on) => tape.setPhone(on, true));
 
 	// The noise from `from` on; with `until`, it goes a moment after that
 	function holdTapeNoise(from: number, until?: number) {

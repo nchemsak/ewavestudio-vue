@@ -3,6 +3,7 @@ import {
 	buildSnapshot,
 	applySnapshot,
 	resetToFactoryDefaults,
+	resetSoundToFactoryDefaults,
 } from './snapshot';
 import { STEPS, makeState, fresh, asSaved, changeEverything, leaves } from './testState';
 
@@ -39,7 +40,7 @@ describe('factory defaults (File → New)', () => {
 			},
 			drive: { enabled: false, type: 'overdrive', amount: 0.4, tone: 5000, mix: 0.5, crush: false },
 			reverb: { enabled: false, mix: 0.18, decay: 1.4, tone: 0.6, reverse: false, swell: 'next' },
-			tape: { enabled: false, age: 0.4, wobble: 0.3, mode: 'tape' },
+			tape: { enabled: false, age: 0.4, wobble: 0.3, mode: 'tape', phone: false },
 		});
 		expect(snap.melody).toEqual({
 			keyRoot: 'A', keyScale: 'naturalMinor', rangePreset: 'mid', arpPattern: 'up', arpRate: '1/16', arpOctaves: 1, arpTones: 'chord', arpSkip: false,
@@ -133,6 +134,22 @@ describe('saving and loading a project', () => {
 		expect([st.fx.tape.enabled.value, st.fx.tape.age.value, st.fx.tape.wobble.value, st.fx.tape.mode.value]).toEqual([true, 0.75, 1, 'vinyl']);
 		applySnapshot(st, { fx: { tape: { enabled: true, age: 'old', mode: 'reel' } } });
 		expect([st.fx.tape.age.value, st.fx.tape.wobble.value, st.fx.tape.mode.value]).toEqual([0.4, 0.3, 'tape']);
+	});
+
+	it('PHONE (the plan\'s item 14): off for a project saved before it, on only when saved as true', () => {
+		const st = fresh();
+		changeEverything(st);
+		expect(st.fx.tape.phone.value).toBe(true);
+		applySnapshot(st, { fx: { tape: { enabled: true, age: 0.5, wobble: 0.2, mode: 'tape' } } });
+		expect(st.fx.tape.phone.value).toBe(false);
+		applySnapshot(st, { fx: { tape: { enabled: true, phone: true } } });
+		expect(st.fx.tape.phone.value).toBe(true);
+		applySnapshot(st, { fx: { tape: { enabled: true, phone: 'yes' } } });
+		expect(st.fx.tape.phone.value).toBe(false);
+		// A sound setting: presets and File → New put it off
+		st.fx.tape.phone.value = true;
+		resetSoundToFactoryDefaults(st);
+		expect(st.fx.tape.phone.value).toBe(false);
 	});
 
 	it('PRE no longer plays: a project saved with it (PR 103–125) loads, its pre-delay left out', () => {

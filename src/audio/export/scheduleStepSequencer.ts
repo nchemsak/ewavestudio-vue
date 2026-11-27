@@ -117,6 +117,7 @@ export type StepSequencerState = {
 			age: number;      // 0..1
 			wobble: number;   // 0..1
 			mode: TapeMode;
+			phone?: boolean;  // PHONE: 300 Hz–3.4 kHz in mono (missing: off)
 		};
 	};
 
@@ -290,6 +291,7 @@ export function scheduleStepSequencer(
 	const tape = tapeState?.enabled ? createTape(ctx) : null;
 	if (tape && tapeState) {
 		tape.apply(tapeSettings(tapeState.age, tapeState.wobble, tapeState.mode, barsSeconds));
+		tape.setPhone(tapeState.phone === true);
 		partBus.connect(tape.input);
 		fullBus.connect(tape.sidechain);
 		tape.output.connect(masterGain);
