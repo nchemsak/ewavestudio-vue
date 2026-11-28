@@ -156,7 +156,7 @@
 					<!-- Drums (PR 121): the picked row's name, then its slot's Tune, Decay and Level -->
 					<!-- Drift: the X/Y pad in the knobs' place (the filter across, the spread up), as the
 						 Solar 42F's joystick; Attack and Release are on the Sound page -->
-					<div v-if="drift" class="pl-macros pl-xybox"><DriftXYPad class="pl-xy" :drift="ctx.drift" /></div>
+					<div v-if="drift" class="pl-macros pl-xybox"><DriftXYPad class="pl-xy" :drift="ctx.drift" :motionView="ctx.driftMotionView" /></div>
 					<div v-else-if="drums" class="pl-macros pl-dmacros" :style="{ '--h': ctx.drumHues[ctx.drumPick] }">
 						<div class="pl-macro pl-dpicked"><span class="pl-cap">Row</span><b>{{ ctx.drumNames[ctx.drumPick] }}</b></div>
 						<div class="pl-macro">

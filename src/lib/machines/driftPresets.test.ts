@@ -3,10 +3,14 @@ import { DRIFT_PROGRESSIONS, DRIFT_SOUNDS, driftProgressionKey, driftSoundKey, p
 import { DRIFT_RANGES, DRIFT_PLATES, type DriftVoice } from '../../audio/drift';
 import { applyDrift, createDrift, driftVoice } from './drift';
 import { seededRandom } from '../random';
+import { MOTION_RATES, MOTION_SHAPES } from '../../audio/driftMotion';
 
-const STEPS: Record<keyof DriftVoice, number> = { voices: 1, drift: 0.01, wave: 0.01, spread: 0.01, cutoff: 1, attack: 0.25, release: 0.25 };
+type NumKey = 'voices' | 'drift' | 'wave' | 'spread' | 'cutoff' | 'attack' | 'release' | 'motionDepth';
+const STEPS: Record<NumKey, number> = { voices: 1, drift: 0.01, wave: 0.01, spread: 0.01, cutoff: 1, attack: 0.25, release: 0.25, motionDepth: 0.01 };
 function inRangeOnSteps(v: DriftVoice) {
-	for (const k of Object.keys(STEPS) as (keyof DriftVoice)[]) {
+	expect(MOTION_SHAPES).toContain(v.motionShape);
+	expect(MOTION_RATES).toContain(v.motionRate);
+	for (const k of Object.keys(STEPS) as NumKey[]) {
 		const [lo, hi] = DRIFT_RANGES[k];
 		expect(v[k], k).toBeGreaterThanOrEqual(lo);
 		expect(v[k], k).toBeLessThanOrEqual(hi);
@@ -39,6 +43,39 @@ describe('Drift sounds', () => {
 			keys.add(driftSoundKey(v));
 		}
 		expect(keys.size).toBeGreaterThan(490);
+	});
+
+	it('the dice draws Motion last: about half the rolls move, every shape among them, the rest as before', () => {
+		const r = seededRandom(3);
+		const moving = new Set<string>();
+		let n = 0;
+		for (let i = 0; i < 500; i++) {
+			const v = randomDriftSound(r);
+			if (v.motionDepth > 0) {
+				n++;
+				moving.add(v.motionShape);
+				expect(v.motionDepth).toBeGreaterThanOrEqual(0.15);
+				expect(v.motionDepth).toBeLessThanOrEqual(0.5);
+			}
+		}
+		expect(n).toBeGreaterThan(200);
+		expect(n).toBeLessThan(300);
+		expect(moving.size).toBe(4);
+		// The first seven values are the ones drawn before Motion: the same as a roll from before it
+		const a = randomDriftSound(seededRandom(11));
+		const before = seededRandom(11);
+		const lo = 400, hi = 5000;
+		const firsts = [before(), before(), before(), before(), before(), before(), before()];
+		expect(a.cutoff).toBe(Math.round(lo * (hi / lo) ** firsts[4]));
+	});
+
+	it('Motion with Depth 0 doesn\'t count when matching a sound', () => {
+		const d = createDrift();
+		const base = driftSoundKey(driftVoice(d));
+		d.motionShape = 'swell'; d.motionRate = 16;
+		expect(driftSoundKey(driftVoice(d))).toBe(base);
+		d.motionDepth = 0.2;
+		expect(driftSoundKey(driftVoice(d))).not.toBe(base);
 	});
 });
 

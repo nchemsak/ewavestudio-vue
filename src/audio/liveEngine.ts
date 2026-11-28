@@ -28,7 +28,8 @@ import { DRUM_SLOTS, playDrumHit, type DrumSounding } from './drums';
 import { loadDrumKit, drumKitNow, soundBuffer } from './drumKit';
 import { slotData, type Drums } from '../lib/machines/drums';
 import { clampCutoff, createDriftFilter, FILTER_GLIDE_S, heldInBar, playDriftNote, type DriftSounding } from './drift';
-import { driftVoice, type Drift } from '../lib/machines/drift';
+import { driftMotion, driftVoice, type Drift } from '../lib/machines/drift';
+import { motionAt, motionParams, MOTION_POINTS_PER_STEP, padX, rampTo } from './driftMotion';
 import { lfoWaveAt } from './lfo';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
@@ -1071,9 +1072,10 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	}
 
 	/** From `time` on, the notes held are `pitches`: the others fade out, the new ones fade in */
-	function driftHold(time: number, pitches: number[], releaseS = (s.drift?.release ?? 1) * barSeconds()) {
+	function driftHold(time: number, pitches: number[], releaseS = (s.drift?.release ?? 1) * barSeconds()): number {
 		const d = s.drift;
-		if (!d) return;
+		if (!d) return 0;
+		let started = 0;
 		const want = new Map(pitches.map((hz) => [driftKey(hz), hz]));
 		for (const [k, n] of driftSounding) {
 			if (want.has(k)) continue;
@@ -1083,9 +1085,11 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const voice = driftVoice(d);
 		for (const [k, hz] of want) {
 			if (driftSounding.has(k)) continue;
-			driftSounding.set(k, playDriftNote(audioCtx, voice, { freq: hz, time, amp: 1, attackS: d.attack * barSeconds() }, driftFilter));
+			driftSounding.set(k, playDriftNote(audioCtx, voice, { freq: hz, time, amp: 1, attackS: d.attack * barSeconds() }, driftFilter, Math.random, driftSpreadMod));
+			started++;
 		}
 		if (want.size) lastNoteAt = performance.now();
+		return started;
 	}
 
 	// A bar line while playing (from schedule(), about 100 ms ahead)
@@ -1095,7 +1099,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		releaseDriftPreview(time);
 		driftBarCount = bar;
 		driftBarNow.value = bar % Math.max(1, d.length);
-		driftHold(time, driftTargets(bar));
+		// A bar that starts a note is a new chord: Motion's Swell closes the filter there
+		if (driftHold(time, driftTargets(bar)) > 0) motionChordBar = bar;
 	}
 
 	// An edit while playing (a plate, the length, the key, the mute): the bar playing follows it now
@@ -1113,7 +1118,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	/** Stop: every note fades out, over Release but 1.5 s at most */
 	function stopDrift() {
 		const t = audioCtx.currentTime;
-		driftHold(t, [], Math.min(1.5, (s.drift?.release ?? 1) * barSeconds()));
+		const fade = Math.min(1.5, (s.drift?.release ?? 1) * barSeconds());
+		driftHold(t, [], fade);
+		endMotion(fade);
 		driftBarCount = -1;
 		driftBarNow.value = -1;
 	}
@@ -1133,12 +1140,97 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const attack = Math.min(0.4, d.attack * barSeconds());
 		const hold = 1.2, release = Math.min(1.5, d.release * barSeconds());
 		driftPreviewNotes = pitches.map((freq) => {
-			const n = playDriftNote(audioCtx, voice, { freq, time: t, amp: 1, attackS: attack }, driftFilter);
+			const n = playDriftNote(audioCtx, voice, { freq, time: t, amp: 1, attackS: attack }, driftFilter, Math.random, driftSpreadMod);
 			n.release(t + attack + hold, release);
 			return n;
 		});
 		lastNoteAt = performance.now();
 		if (s.tape.enabled.value) holdTapeNoise(t, t + attack + hold + release);
+	}
+
+	// Drift's Motion (the plan's item 19, src/audio/driftMotion.ts): while playing, the X/Y pad's
+	// point moves by itself. Two points a step, scheduled with the steps (about 100 ms ahead, so
+	// a turn of the pad or the knobs is followed within that), joined by straight lines: the
+	// filter's offset on its detune (the knob stays on its frequency), the spread's on a signal
+	// every voice follows. From Play's bar 1, as the LFO; Swell from the last bar that started a
+	// note. Stop: back to the pad's point over the notes' fade. At rest it doesn't move.
+	const driftSpreadMod = audioCtx.createConstantSource();
+	driftSpreadMod.offset.value = 0;
+	driftSpreadMod.start();
+	let motionChordBar: number | null = null;
+	let motionFirst = true;
+	let motionIdle = true; // the last point moved nothing
+	// The points scheduled lately, for the pad's drawing (driftMotionNow())
+	let motionPoints: { t: number; x: number; y: number }[] = [];
+	let motionEnd = 0; // after Stop: when the dot is back at its point
+
+	function motionPoint(t: number, bars: number) {
+		const d = s.drift;
+		if (!d) return;
+		const base = { x: padX(d.cutoff), y: d.spread };
+		const at = motionAt(base, driftMotion(d), bars, motionChordBar == null ? null : bars - motionChordBar, d.attack);
+		const p = motionParams(base, at);
+		// At rest (Depth 0, or nothing to move) nothing is scheduled; the next move starts afresh
+		const still = p.cents === 0 && p.spread === 0;
+		if (still && motionIdle) { motionFirst = true; return; }
+		motionIdle = still;
+		rampTo(driftFilter.detune, t, p.cents, motionFirst);
+		rampTo(driftSpreadMod.offset, t, p.spread, motionFirst);
+		motionFirst = false;
+		motionPoints.push({ t, x: at.x, y: at.y });
+		if (motionPoints.length > 32) motionPoints.shift();
+	}
+
+	// A step's points (bars since Play: `bar`, the step `step` of `len`)
+	function motionStep(bar: number, step: number, len: number, time: number, stepS: number) {
+		for (let j = 0; j < MOTION_POINTS_PER_STEP; j++) {
+			const k = step + j / MOTION_POINTS_PER_STEP;
+			motionPoint(time + (j / MOTION_POINTS_PER_STEP) * stepS, bar + k / len);
+		}
+	}
+
+	function startMotion(t: number) {
+		// Still gliding home from the last Stop: from the pad's point now
+		const gliding = motionEnd > t;
+		for (const p of [driftFilter.detune, driftSpreadMod.offset]) {
+			p.cancelScheduledValues(t);
+			if (gliding) p.setValueAtTime(0, t);
+		}
+		motionChordBar = null;
+		motionFirst = true;
+		motionIdle = true;
+		motionPoints = [];
+		motionEnd = 0;
+	}
+
+	function endMotion(fade: number) {
+		const last = motionPoints.at(-1);
+		if (!last || motionIdle) return;
+		const t = Math.max(last.t, audioCtx.currentTime) + Math.max(0.05, fade);
+		driftFilter.detune.linearRampToValueAtTime(0, t);
+		driftSpreadMod.offset.linearRampToValueAtTime(0, t);
+		const d = s.drift;
+		motionPoints.push({ t, x: d ? padX(d.cutoff) : last.x, y: d ? d.spread : last.y });
+		motionEnd = t;
+		motionFirst = true;
+	}
+
+	/** Where Motion has the pad's dot now (pad units, 0..1 across and up), or null at rest */
+	function driftMotionNow(): { x: number; y: number } | null {
+		const pts = motionPoints;
+		if (!pts.length) return null;
+		const now = audioCtx.currentTime;
+		if (!isPlaying.value && now >= motionEnd) return null;
+		if (now <= pts[0].t) return { x: pts[0].x, y: pts[0].y };
+		for (let i = 1; i < pts.length; i++) {
+			const a = pts[i - 1], b = pts[i];
+			if (now <= b.t) {
+				const f = b.t > a.t ? (now - a.t) / (b.t - a.t) : 1;
+				return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+			}
+		}
+		const z = pts[pts.length - 1];
+		return { x: z.x, y: z.y };
 	}
 
 	// Drift voice END
@@ -1200,6 +1292,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 				driftBar(barCount, startTime);
 				barCount++;
 			}
+			// Drift's Motion: this step's points
+			motionStep(barCount - 1, stepIndex, stepLength.value, startTime, stepDuration);
 			// REV with Next hit: a hit on this step, any machine's, swells until the next one
 			revForStep(stepIndex, startTime + (stepIndex % 2 === 1 ? stepDuration * swing.value : 0));
 
@@ -1274,6 +1368,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			}
 			startLfoIfNeeded();
 			startTime = audioCtx.currentTime;
+			startMotion(startTime);
 			stepIndex = 0;
 			barCount = 0;
 			isPlaying.value = true;
@@ -1302,6 +1397,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		playDrumSound,
 		previewDriftBar,
 		driftBarNow,
+		driftMotionNow,
 		machineLevel,
 		startLfoIfNeeded,
 		lfoNow,

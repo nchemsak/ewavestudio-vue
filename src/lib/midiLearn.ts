@@ -90,6 +90,8 @@ export const MIDI_KNOBS: Record<string, string> = {
 	'drift.wave': 'Drift wave',
 	'drift.attack': 'Drift attack',
 	'drift.release': 'Drift release',
+	// Drift's Motion (the plan's item 19): its Depth (Rate and the shape are switches)
+	'drift.motionDepth': 'Drift motion depth',
 };
 
 export function ccKey(channel: number, controller: number): CcKey {

@@ -1305,7 +1305,9 @@ test('delay, drive and reverb are in the signal path', async ({ page }) => {
 	const reverbSwitch = page.locator('.fx .reverb-pedal .footswitch');
 	await reverbSwitch.click();
 	await expect(reverbSwitch).toHaveAttribute('aria-pressed', 'true');
-	expect(await tailSwing()).toBeGreaterThan(0.0003); // the reverb tail is quiet at the default mix
+	// the reverb tail is quiet at the default mix, and its impulse response is random on each page
+	// load: 0.0002–0.0012 measured (0.0003 until PR 137, which failed now and then, on main too)
+	expect(await tailSwing()).toBeGreaterThan(0.00015);
 	await reverbSwitch.click();
 	await expect(reverbSwitch).toHaveAttribute('aria-pressed', 'false');
 
@@ -5032,7 +5034,7 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 	await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
 	await openSettings(page);
 	await expect(learn).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(67); // Bass's eight since PR 115, the rail's Pedals since PR 116, Drums' 14 since PR 119, Drift's 9 since PR 122, less the reverb's PRE since PR 126
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(68); // Bass's eight since PR 115, the rail's Pedals since PR 116, Drums' 14 since PR 119, Drift's 9 since PR 122, less the reverb's PRE since PR 126, Drift's Motion depth since PR 137
 	await cutoff.click();
 	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
 	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');
@@ -8373,3 +8375,92 @@ test('every Drift sound is heard and stays under the limiter, on a four-note cho
 });
 
 // The Drift machine END
+
+test('Drift\'s Motion: its keys and Depth under the X/Y pad, saved, one undo step; the dot moves while playing; the export dialog fits a loop to its cycle', async ({ page }) => {
+	await page.getByRole('button', { name: 'Show Drift' }).click();
+	const motion = page.getByRole('group', { name: 'Drift motion' });
+	await expect(motion.getByRole('radio', { name: 'Circle' })).toHaveAttribute('aria-checked', 'true');
+	await expect(motion.getByRole('radio', { name: '4-bar cycle' })).toHaveAttribute('aria-checked', 'true');
+	await expect(page.getByRole('slider', { name: 'Motion depth' })).toHaveAttribute('aria-valuetext', 'Off');
+	// Nothing drawn while Depth is 0
+	await expect(page.locator('.ds-sound .df-xy-path')).toHaveCount(0);
+	await page.waitForTimeout(SETTLED);
+
+	await motion.getByRole('radio', { name: 'Sweep' }).click();
+	await motion.getByRole('radio', { name: '2-bar cycle' }).click();
+	await page.getByRole('slider', { name: 'Motion depth' }).focus();
+	for (let i = 0; i < 40; i++) await page.keyboard.press('ArrowUp');
+	await page.waitForTimeout(SETTLED);
+	await expect(page.getByRole('slider', { name: 'Motion depth' })).toHaveAttribute('aria-valuetext', '40%');
+	await expect(page.locator('.ds-sound .df-xy-path')).toHaveCount(1);
+	await expect(page.locator('.ds-sound .df-xy-lab.m')).toHaveText('SWEEP · 2 BARS');
+	const data = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(data.drift.sound).toMatchObject({ motionShape: 'sweep', motionRate: 2, motionDepth: 0.4 });
+	// The Depth turn is one undo step
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(page.getByRole('slider', { name: 'Motion depth' })).toHaveAttribute('aria-valuetext', 'Off');
+	await page.getByRole('button', { name: 'Redo', exact: true }).click();
+	await expect(page.getByRole('slider', { name: 'Motion depth' })).toHaveAttribute('aria-valuetext', '40%');
+
+	// Playing, the amber dot moves along the path; after Stop it goes home
+	await motion.getByRole('radio', { name: '1-bar cycle' }).click();
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	const dot = page.locator('.ds-sound .df-xy-mdot');
+	await expect(dot).toBeVisible();
+	const a = await dot.boundingBox();
+	await page.waitForTimeout(500);
+	const b = await dot.boundingBox();
+	expect(Math.abs(a!.x - b!.x)).toBeGreaterThan(3);
+	expect(Math.abs(a!.y - b!.y)).toBeLessThan(1); // Sweep: the filter only
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	await expect(dot).toHaveCount(0, { timeout: 5000 });
+
+	// The export dialog: a cycle of 8 bars wants an 8-bar loop (Drift must hold something to play)
+	await importDrift(page, 'Motion loop', [[0, 2]], (d) => { Object.assign(d.drift.sound, { motionShape: 'circle', motionRate: 8, motionDepth: 0.3 }); });
+	await chooseFromFileMenu(page, 'Export audio…');
+	const dialog = page.getByRole('dialog', { name: 'Export audio' });
+	await expect(dialog.getByRole('group', { name: 'Bars' }).getByRole('button', { name: '8', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await dialog.getByRole('group', { name: 'Bars' }).getByRole('button', { name: '4', exact: true }).click();
+	await expect(dialog.locator('.export-motion-note')).toContainText('Drift\'s Motion takes 8 bars a cycle');
+	await dialog.locator('.export-motion-note').getByRole('button', { name: 'Use 8 bars' }).click();
+	await expect(dialog.locator('.export-motion-note')).toHaveCount(0);
+	await dialog.getByRole('button', { name: 'Cancel' }).click();
+});
+
+test('Drift\'s Motion in the export: Sweep opens and closes the filter every cycle; Swell closes it at each new chord and opens it over Attack', async ({ page }) => {
+	await setTempo(page, 120); // a bar is 2 s
+	const chord = (d: any) => {
+		Object.assign(d.drift.sound, { attack: 0.25, release: 0.25, wave: 1, spread: 0.3, drift: 0, cutoff: 1200, motionDepth: 0 });
+		d.drift.pedals = 0;
+	};
+	const render = async () => (await exportAudio(page, { bars: 4, ending: 'Loop', mix: true, stems: false, machineStems: false, midi: false, oneShot: false, normalize: false })).bytes;
+	// One chord held for all four bars: without Motion as bright all through
+	await importDrift(page, 'Motion still', [[0, 2, 4], [0, 2, 4], [0, 2, 4], [0, 2, 4]], chord);
+	const still = await render();
+	// (Its brightness wavers a little as the voices beat: the ratio of a bar's second quarter to its fourth)
+	const ratio = (w: Buffer, bar: number) => wavBrightness(w, bar * 2 + 0.4, bar * 2 + 0.6) / wavBrightness(w, bar * 2 + 1.4, bar * 2 + 1.6);
+	// Sweep, a cycle a bar, full depth: brightest a quarter of the way through each bar, darkest three quarters
+	await importDrift(page, 'Motion sweep', [[0, 2, 4], [0, 2, 4], [0, 2, 4], [0, 2, 4]], (d) => {
+		chord(d);
+		Object.assign(d.drift.sound, { motionShape: 'sweep', motionRate: 1, motionDepth: 1 });
+	});
+	const sweep = await render();
+	for (const bar of [1, 2, 3]) expect(ratio(sweep, bar)).toBeGreaterThan(ratio(still, bar) * 2);
+	// About as loud as without it (it moves the filter, not the level, so somewhat)
+	expect(wavWindow(sweep, 2, 4).rms).toBeGreaterThan(wavWindow(still, 2, 4).rms * 0.4);
+	// Swell: a new chord each bar (Am, C), the filter shut at the bar line, open again over Attack
+	// (a bar): darker just after each bar line than at its end
+	await importDrift(page, 'Motion swell', [[0, 1, 2], [1, 2, 3], [0, 1, 2], [1, 2, 3]], (d) => {
+		chord(d);
+		Object.assign(d.drift.sound, { attack: 1, motionShape: 'swell', motionRate: 4, motionDepth: 1 });
+	});
+	const swell = await render();
+	// Against the same chords without it
+	await importDrift(page, 'Motion no swell', [[0, 1, 2], [1, 2, 3], [0, 1, 2], [1, 2, 3]], (d) => {
+		chord(d);
+		Object.assign(d.drift.sound, { attack: 1, motionDepth: 0 });
+	});
+	const plain = await render();
+	const opened = (w: Buffer, bar: number) => wavBrightness(w, bar * 2 + 1.7, bar * 2 + 1.95) / wavBrightness(w, bar * 2 + 0.1, bar * 2 + 0.35);
+	for (const bar of [1, 2, 3]) expect(opened(swell, bar)).toBeGreaterThan(opened(plain, bar) * 1.3);
+});

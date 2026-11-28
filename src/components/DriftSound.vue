@@ -9,7 +9,7 @@
 <template>
     <div class="drift-sound" :class="{ compact }">
         <div v-if="!compact" class="pt-card df-card df-xycard" style="grid-area: xy">
-            <DriftXYPad :drift="drift" />
+            <DriftXYPad :drift="drift" :motionView="motionView" />
             <div class="df-minis">
                 <span class="df-mini">
                     <Knob midi-id="drift.cutoff" v-model="drift.cutoff" label="Drift filter" :value-text="hzText(drift.cutoff)"
@@ -21,6 +21,32 @@
                         :min="0" :max="1" :step="0.01" size="mini" hideLabel :useThemeArc="true" />
                     <i>Spread</i>
                 </span>
+            </div>
+            <!-- Motion (the plan's item 19): the dot moving by itself. Depth 0 is off; Rate is a
+                 cycle's bars (not Swell's: it opens over Attack at each new chord) -->
+            <div class="df-motion" :class="{ 'is-off': drift.motionDepth <= 0 }" role="group" aria-label="Drift motion">
+                <div class="df-mhead">
+                    <span class="df-kcap">Motion</span>
+                    <span class="df-mini">
+                        <Knob midi-id="drift.motionDepth" v-model="drift.motionDepth" label="Motion depth"
+                            :value-text="drift.motionDepth > 0 ? pct(drift.motionDepth) : 'Off'"
+                            :min="0" :max="1" :step="0.01" size="mini" hideLabel :useThemeArc="true" />
+                        <i>{{ drift.motionDepth > 0 ? `Depth ${pct(drift.motionDepth)}` : 'Depth: off' }}</i>
+                    </span>
+                </div>
+                <div class="sp-keys" role="radiogroup" aria-label="Motion shape">
+                    <button v-for="sh in MOTION_SHAPES" :key="sh" type="button" class="sp-key" :class="{ on: drift.motionShape === sh }" role="radio"
+                        :aria-checked="drift.motionShape === sh" :title="SHAPE_TIPS[sh]" @click="drift.motionShape = sh">{{ MOTION_NAMES[sh] }}</button>
+                </div>
+                <div class="df-mrate" :class="{ 'is-swell': drift.motionShape === 'swell' }">
+                    <div class="sp-keys" role="radiogroup" aria-label="Motion rate, in bars">
+                        <button v-for="r in MOTION_RATES" :key="r" type="button" class="sp-key" :class="{ on: drift.motionRate === r }" role="radio"
+                            :aria-checked="drift.motionRate === r" :aria-label="`${r}-bar cycle`"
+                            :title="drift.motionShape === 'swell' ? 'Swell opens over Attack at each new chord: Rate is for the other shapes' : `A cycle every ${r} bar${r === 1 ? '' : 's'}`"
+                            @click="drift.motionRate = r">{{ r }}</button>
+                    </div>
+                    <span class="df-mcap">bars</span>
+                </div>
             </div>
         </div>
 
@@ -114,6 +140,8 @@ import { computed, useId } from 'vue';
 import Knob from './Knob.vue';
 import DriftXYPad from './DriftXYPad.vue';
 import { DRIFT_RANGES } from '../audio/drift';
+import { MOTION_NAMES, MOTION_RATES, MOTION_SHAPES, type MotionShape } from '../audio/driftMotion';
+import type { DriftMotionView } from '../composables/useDriftMotion';
 import type { Drift } from '../lib/machines/drift';
 import { envelopePath, fadeStops, swarmLines, VIEW_H, VIEW_W } from '../lib/driftView';
 
@@ -123,7 +151,15 @@ const props = defineProps<{
     bar: number;                          // the bar the plates edit
     chord: string;                        // its chord's name ('' for nothing)
     compact?: boolean;                    // phone mode's Sound page: no X/Y pad (it's on the Pads page), Filter and Spread knobs
+    motionView?: DriftMotionView | null;  // where Motion has the pad's dot now (only the pad reads it)
 }>();
+
+const SHAPE_TIPS: Record<MotionShape, string> = {
+    circle: 'Circle: the filter and the spread together, round the point you set',
+    sweep: 'Sweep: the filter up and back down, the spread as set',
+    wander: 'Wander: the filter and the spread, smoothly at random, the same path each cycle',
+    swell: 'Swell: the filter closes at each new chord and opens again over Attack',
+};
 const emit = defineEmits<{ (e: 'preview'): void }>();
 
 const CUT = DRIFT_RANGES.cutoff;
@@ -213,6 +249,44 @@ const stops = computed(() => fadeStops(props.drift));
     letter-spacing: .08em;
     text-transform: uppercase;
     color: var(--pt-text-dim, #b9a8d8);
+}
+
+/* Motion, under the X/Y pad's mini knobs */
+.df-motion {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding-top: 6px;
+    border-top: 1px solid color-mix(in oklab, var(--pt-text-dim, #b9a8d8) 20%, transparent);
+}
+
+.df-mhead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.df-mrate {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.df-mrate .sp-keys {
+    flex: 1;
+}
+
+.df-mcap {
+    font: 700 8px Cousine, ui-monospace, monospace;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--pt-text-dim, #b9a8d8);
+}
+
+/* Rate means nothing to Swell; Depth 0 moves nothing */
+.df-mrate.is-swell .sp-keys,
+.df-motion.is-off .sp-keys {
+    opacity: .5;
 }
 
 /* The swarm's screen */

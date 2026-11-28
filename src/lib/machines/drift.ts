@@ -10,9 +10,13 @@
 
 import { reactive } from 'vue';
 import { DRIFT_LENGTHS, DRIFT_MAX_BARS, DRIFT_PLATES, DRIFT_RANGES, type DriftVoice } from '../../audio/drift';
+import { clampRate, clampShape, type DriftMotion } from '../../audio/driftMotion';
 
 export type DriftSoundKey = keyof DriftVoice;
-export const DRIFT_SOUND_KEYS: readonly DriftSoundKey[] = ['voices', 'drift', 'wave', 'spread', 'cutoff', 'attack', 'release'];
+// The knobs' numbers (kept within DRIFT_RANGES on load); Motion's three are loaded on their own
+type DriftNumberKey = 'voices' | 'drift' | 'wave' | 'spread' | 'cutoff' | 'attack' | 'release';
+const DRIFT_NUMBER_KEYS: readonly DriftNumberKey[] = ['voices', 'drift', 'wave', 'spread', 'cutoff', 'attack', 'release'];
+export const DRIFT_SOUND_KEYS: readonly DriftSoundKey[] = [...DRIFT_NUMBER_KEYS, 'motionShape', 'motionRate', 'motionDepth'];
 
 export type Drift = DriftVoice & {
 	muted: boolean;
@@ -25,6 +29,7 @@ export type Drift = DriftVoice & {
 // The factory sound: a fresh page and File → New
 export const DRIFT_DEFAULTS: DriftVoice = {
 	voices: 5, drift: 0.4, wave: 0.5, spread: 0.6, cutoff: 1800, attack: 1, release: 1,
+	motionShape: 'circle', motionRate: 4, motionDepth: 0,
 };
 export const DRIFT_LEVEL_DEFAULT = 0.6;
 export const DRIFT_PEDALS_DEFAULT = 0.6;
@@ -55,12 +60,17 @@ export function resetDrift(d: Drift) {
 }
 
 export function resetDriftSound(d: Drift) {
-	for (const k of DRIFT_SOUND_KEYS) d[k] = DRIFT_DEFAULTS[k];
+	Object.assign(d, DRIFT_DEFAULTS);
 }
 
 /** The voice src/audio/drift.ts plays, from the settings now */
 export function driftVoice(d: Drift): DriftVoice {
 	return Object.fromEntries(DRIFT_SOUND_KEYS.map((k) => [k, d[k]])) as DriftVoice;
+}
+
+/** Motion's settings (src/audio/driftMotion.ts) */
+export function driftMotion(v: Pick<DriftVoice, 'motionShape' | 'motionRate' | 'motionDepth'>): DriftMotion {
+	return { shape: v.motionShape, rate: v.motionRate, depth: v.motionDepth };
 }
 
 export const clampLength = (x: unknown) => (DRIFT_LENGTHS as readonly number[]).includes(x as number) ? (x as number) : DRIFT_LENGTH_DEFAULT;
@@ -96,12 +106,20 @@ const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x
  * numbers kept within their ranges */
 export function applyDrift(d: Drift, s: any) {
 	if (!s || typeof s !== 'object') return;
-	const snd = s.sound && typeof s.sound === 'object' ? s.sound : {};
-	for (const k of DRIFT_SOUND_KEYS) {
+	const hasSound = !!s.sound && typeof s.sound === 'object';
+	const snd = hasSound ? s.sound : {};
+	for (const k of DRIFT_NUMBER_KEYS) {
 		const x = snd[k];
 		if (!num(x)) continue;
 		const [lo, hi] = DRIFT_RANGES[k];
 		d[k] = k === 'voices' ? Math.round(clamp(x, lo, hi)) : clamp(x, lo, hi);
+	}
+	// Motion (the plan's item 19): a sound saved before it has none (Depth 0, the factory's shape
+	// and Rate), whatever was set before it was opened
+	if (hasSound) {
+		d.motionShape = clampShape(snd.motionShape ?? DRIFT_DEFAULTS.motionShape);
+		d.motionRate = clampRate(snd.motionRate ?? DRIFT_DEFAULTS.motionRate);
+		d.motionDepth = num(snd.motionDepth) ? clamp(snd.motionDepth, 0, 1) : DRIFT_DEFAULTS.motionDepth;
 	}
 	if (typeof s.muted === 'boolean') d.muted = s.muted;
 	if (num(s.level)) d.level = clamp(s.level, 0, 1);
