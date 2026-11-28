@@ -131,7 +131,7 @@
             </div>
             <!-- Pulse (the plan's item 20): a gate on the level (1/4, 1/8, 1/16), or Duck at the Drums
                  machine's slot 1 hits, and how far the level drops. Not on the phone yet -->
-            <div v-if="!compact" class="df-kgroup df-pulse" :class="{ 'is-off': drift.pulseMode === 'off' }" role="group" aria-label="Drift pulse">
+            <div v-if="!compact" class="df-kgroup df-pulse" :class="{ 'df-poff': drift.pulseMode === 'off' }" role="group" aria-label="Drift pulse">
                 <span class="df-kcap">Pulse</span>
                 <div class="df-prow">
                     <div class="sp-keys" role="radiogroup" aria-label="Pulse">
@@ -326,7 +326,7 @@ const stops = computed(() => fadeStops(props.drift));
     flex: 1;
 }
 
-.df-pulse.is-off .df-pdepth {
+.df-pulse.df-poff .df-pdepth {
     opacity: .5;
 }
 

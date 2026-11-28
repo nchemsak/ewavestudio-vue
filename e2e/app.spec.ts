@@ -8464,3 +8464,81 @@ test('Drift\'s Motion in the export: Sweep opens and closes the filter every cyc
 	const opened = (w: Buffer, bar: number) => wavBrightness(w, bar * 2 + 1.7, bar * 2 + 1.95) / wavBrightness(w, bar * 2 + 0.1, bar * 2 + 0.35);
 	for (const bar of [1, 2, 3]) expect(opened(swell, bar)).toBeGreaterThan(opened(plain, bar) * 1.3);
 });
+
+test('Drift\'s Pulse: its keys and Depth in the knob card, saved, one undo step each', async ({ page }) => {
+	await page.getByRole('button', { name: 'Show Drift' }).click();
+	const pulse = page.getByRole('group', { name: 'Drift pulse' });
+	await expect(pulse.getByRole('radio')).toHaveText(['Off', '1/4', '1/8', '1/16', 'Duck']);
+	await expect(pulse.getByRole('radio', { name: /^Pulse off/ })).toHaveAttribute('aria-checked', 'true');
+	await expect(page.getByRole('slider', { name: 'Pulse depth' })).toHaveAttribute('aria-disabled', 'true');
+	await page.waitForTimeout(SETTLED);
+	await pulse.getByRole('radio', { name: /a gate every 1\/8/ }).click();
+	await page.waitForTimeout(SETTLED);
+	await page.getByRole('slider', { name: 'Pulse depth' }).focus();
+	for (let i = 0; i < 10; i++) await page.keyboard.press('ArrowUp');
+	await page.waitForTimeout(SETTLED);
+	const data = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(data.drift.sound).toMatchObject({ pulseMode: '1/8', pulseDepth: 0.8 });
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(page.getByRole('slider', { name: 'Pulse depth' })).toHaveAttribute('aria-valuetext', '70%');
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(pulse.getByRole('radio', { name: /^Pulse off/ })).toHaveAttribute('aria-checked', 'true');
+});
+
+test('Drift\'s Pulse in the export: a 1/8 gate, and Duck at every hit of Drums\' slot 1, muted or not; the stems still add up', async ({ page }) => {
+	await setTempo(page, 120); // a step is 0.125 s
+	const chord = (d: any) => {
+		Object.assign(d.drift.sound, { attack: 0.25, release: 0.25, wave: 0.5, spread: 0, drift: 0, cutoff: 3000 });
+		d.drift.pedals = 0;
+	};
+	const held = [[0, 2, 4], [0, 2, 4], [0, 2, 4], [0, 2, 4]];
+	const render = async (machineStems = false) => exportAudio(page, { bars: 4, ending: 'Loop', mix: true, stems: false, machineStems, midi: false, oneShot: false, normalize: false });
+	// A 1/8 gate at full Depth: each 1/8 sounds for its first half, then nothing
+	await importDrift(page, 'Pulse gate', held, (d) => { chord(d); Object.assign(d.drift.sound, { pulseMode: '1/8', pulseDepth: 1 }); });
+	const gate = (await render()).bytes;
+	for (let k = 8; k < 16; k++) {
+		const t = k * 0.25;
+		const open = wavWindow(gate, t + 0.02, t + 0.11).rms, shut = wavWindow(gate, t + 0.14, t + 0.24).rms;
+		expect(open).toBeGreaterThan(0.02);
+		expect(shut).toBeLessThan(open * 0.02);
+	}
+	// Duck at Depth 0.8 on Drums' slot 1, four on the floor, with Drums muted (a ghost kick):
+	// the mix is Drift alone, low just after each beat and back up before the next
+	await importDrift(page, 'Pulse duck', held, (d) => {
+		chord(d);
+		Object.assign(d.drift.sound, { pulseMode: 'duck', pulseDepth: 0.8 });
+		d.drums.lane.rows = [[0, 4, 8, 12], [], [], []].map((on) => ({ steps: Array.from({ length: 16 }, (_, i) => on.includes(i)), velocities: Array(16).fill(1) }));
+		d.drums.muted = true;
+	});
+	const duck = await render(true);
+	const files = unzip(duck.bytes);
+	const f = (part: string) => files[Object.keys(files).find((k) => k.endsWith(`_${part}.wav`))!];
+	const mix = f('mix');
+	for (let beat = 4; beat < 16; beat++) {
+		const t = beat * 0.5;
+		const dipped = wavWindow(mix, t + 0.01, t + 0.04).rms, back = wavWindow(mix, t + 0.4, t + 0.48).rms;
+		expect(dipped).toBeLessThan(back * 0.45);
+		expect(back).toBeGreaterThan(0.02);
+	}
+	// The machine stems still add up to the mix (Drift's is all of it)
+	const d = wavSamples(f('drift')).samples, m = wavSamples(mix).samples;
+	let worst = 0;
+	for (let i = 0; i < m.length; i++) worst = Math.max(worst, Math.abs(d[i] - m[i]));
+	expect(worst).toBeLessThan(1e-3);
+});
+
+test('Drift\'s Pulse live: a 1/4 gate at full Depth opens and shuts while playing', async ({ page }) => {
+	await setTempo(page, 60); // a beat is 1 s: half open, half shut
+	await importDrift(page, 'Pulse live', [[0, 2, 4], [0, 2, 4], [0, 2, 4], [0, 2, 4]], (d) => {
+		Object.assign(d.drift.sound, { attack: 0.25, release: 0.25, pulseMode: '1/4', pulseDepth: 1 });
+		d.drift.pedals = 0;
+	});
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await page.waitForTimeout(1500);
+	// Read the level every 50 ms for 2 s: loud stretches and silent ones
+	const levels: number[] = [];
+	for (let i = 0; i < 40; i++) levels.push(await page.evaluate(() => (window as any).__swingOver(40) as Promise<number>));
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	expect(Math.max(...levels)).toBeGreaterThan(0.05);
+	expect(levels.filter((l) => l < 0.005).length).toBeGreaterThan(8);
+});
