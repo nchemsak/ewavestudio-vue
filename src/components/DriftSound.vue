@@ -41,7 +41,7 @@
                 <div class="df-mrate" :class="{ 'is-swell': drift.motionShape === 'swell' }">
                     <div class="sp-keys" role="radiogroup" aria-label="Motion rate, in bars">
                         <button v-for="r in MOTION_RATES" :key="r" type="button" class="sp-key" :class="{ on: drift.motionRate === r }" role="radio"
-                            :aria-checked="drift.motionRate === r" :aria-label="`${r} bar${r === 1 ? '' : 's'}`"
+                            :aria-checked="drift.motionRate === r" :aria-label="`${r}-bar cycle`"
                             :title="drift.motionShape === 'swell' ? 'Swell opens over Attack at each new chord: Rate is for the other shapes' : `A cycle every ${r} bar${r === 1 ? '' : 's'}`"
                             @click="drift.motionRate = r">{{ r }}</button>
                     </div>

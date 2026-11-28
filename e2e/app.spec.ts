@@ -1305,7 +1305,9 @@ test('delay, drive and reverb are in the signal path', async ({ page }) => {
 	const reverbSwitch = page.locator('.fx .reverb-pedal .footswitch');
 	await reverbSwitch.click();
 	await expect(reverbSwitch).toHaveAttribute('aria-pressed', 'true');
-	expect(await tailSwing()).toBeGreaterThan(0.0003); // the reverb tail is quiet at the default mix
+	// the reverb tail is quiet at the default mix, and its impulse response is random on each page
+	// load: 0.0002–0.0012 measured (0.0003 until PR 137, which failed now and then, on main too)
+	expect(await tailSwing()).toBeGreaterThan(0.00015);
 	await reverbSwitch.click();
 	await expect(reverbSwitch).toHaveAttribute('aria-pressed', 'false');
 
@@ -8378,14 +8380,14 @@ test('Drift\'s Motion: its keys and Depth under the X/Y pad, saved, one undo ste
 	await page.getByRole('button', { name: 'Show Drift' }).click();
 	const motion = page.getByRole('group', { name: 'Drift motion' });
 	await expect(motion.getByRole('radio', { name: 'Circle' })).toHaveAttribute('aria-checked', 'true');
-	await expect(motion.getByRole('radio', { name: '4 bars' })).toHaveAttribute('aria-checked', 'true');
+	await expect(motion.getByRole('radio', { name: '4-bar cycle' })).toHaveAttribute('aria-checked', 'true');
 	await expect(page.getByRole('slider', { name: 'Motion depth' })).toHaveAttribute('aria-valuetext', 'Off');
 	// Nothing drawn while Depth is 0
 	await expect(page.locator('.ds-sound .df-xy-path')).toHaveCount(0);
 	await page.waitForTimeout(SETTLED);
 
 	await motion.getByRole('radio', { name: 'Sweep' }).click();
-	await motion.getByRole('radio', { name: '2 bars' }).click();
+	await motion.getByRole('radio', { name: '2-bar cycle' }).click();
 	await page.getByRole('slider', { name: 'Motion depth' }).focus();
 	for (let i = 0; i < 40; i++) await page.keyboard.press('ArrowUp');
 	await page.waitForTimeout(SETTLED);
@@ -8401,7 +8403,7 @@ test('Drift\'s Motion: its keys and Depth under the X/Y pad, saved, one undo ste
 	await expect(page.getByRole('slider', { name: 'Motion depth' })).toHaveAttribute('aria-valuetext', '40%');
 
 	// Playing, the amber dot moves along the path; after Stop it goes home
-	await page.getByRole('radio', { name: '1 bar', exact: true }).click();
+	await motion.getByRole('radio', { name: '1-bar cycle' }).click();
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
 	const dot = page.locator('.ds-sound .df-xy-mdot');
 	await expect(dot).toBeVisible();
