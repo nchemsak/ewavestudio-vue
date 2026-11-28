@@ -54,6 +54,11 @@
 					The LFO's cycle takes {{ lfoBars }} bars, so a {{ bars }}-bar loop won't repeat smoothly{{ lfoFit && !playChain ? '.' : ': With tail, or the LFO\'s RETRIG, avoids that.' }}
 					<button v-if="lfoFit && !playChain" type="button" class="pt-btn pt-btn-sm" @click="o.bars = lfoFit">Use {{ lfoFit }} bars</button>
 				</p>
+				<!-- Drift's Motion (the plan's item 19): a cycle longer than the loop, or one that doesn't fit it -->
+				<p v-if="motionUneven" class="export-note export-motion-note">
+					Drift's Motion takes {{ motionBars }} bars a cycle, so a {{ bars }}-bar loop won't repeat smoothly{{ motionFit && !playChain ? '.' : ': With tail avoids that.' }}
+					<button v-if="motionFit && !playChain" type="button" class="pt-btn pt-btn-sm" @click="o.bars = motionFit">Use {{ motionFit }} bars</button>
+				</p>
 				<!-- Drift's chords take longer than the loop, or don't fit it -->
 				<p v-if="driftUneven" class="export-note export-drift-note">
 					Drift's chords take {{ driftBars }} bars, so a {{ bars }}-bar loop won't repeat them all{{ !playChain ? '.' : ': With tail avoids the jump.' }}
@@ -139,6 +144,8 @@ const props = defineProps<{
 	machinesOn?: string[];
 	// Bars Drift's chords take (4 or 8) while it plays, else 0
 	driftBars?: number;
+	// Bars a cycle of Drift's Motion takes while it plays and moves (motionLoopBars), else 0
+	motionBars?: number;
 	// Whether the overdrive or the lo-fi pedal is on: they bend the sum, so the machine stems
 	// then add up to the mix only nearly
 	bending?: boolean;
@@ -159,8 +166,9 @@ watch(() => props.open, async (isOpen) => {
 	if (!props.chain) o.play = 'pattern';
 	// A loop starts out at least as long as the LFO's cycle, when one of the lengths fits it
 	if (!playChain.value && lfoUneven.value && lfoFit.value && lfoFit.value > o.bars) o.bars = lfoFit.value;
-	// And at least as long as Drift's chords
+	// And at least as long as Drift's chords, and its Motion's cycle
 	if (!playChain.value && driftUneven.value && driftBars.value > o.bars) o.bars = driftBars.value as any;
+	if (!playChain.value && motionUneven.value && motionFit.value && motionFit.value > o.bars) o.bars = motionFit.value;
 	await nextTick();
 	panel.value?.focus();
 }, { immediate: true });
@@ -211,6 +219,11 @@ const machineStemsText = computed(() => {
 // A loop shorter than Drift's chords, or not a whole number of them
 const driftBars = computed(() => props.driftBars ?? 0);
 const driftUneven = computed(() => o.ending === 'loop' && driftBars.value > 1 && bars.value % driftBars.value !== 0);
+
+// Drift's Motion, as the LFO: a loop of whole cycles (none fits a 16-bar cycle)
+const motionBars = computed(() => props.motionBars ?? 0);
+const motionUneven = computed(() => o.ending === 'loop' && motionBars.value > 1 && bars.value % motionBars.value !== 0);
+const motionFit = computed(() => EXPORT_BARS.find((b) => b % motionBars.value === 0) ?? null);
 
 const fileCount = computed(() => props.simple ? 1 :
 	(o.mix ? 1 : 0) + (o.stems ? stems.value.length : 0) + (o.machineStems ? machineStems.value.length : 0)

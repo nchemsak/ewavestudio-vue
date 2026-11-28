@@ -455,7 +455,7 @@
 				<!-- The Drift machine's: the X/Y pad, the swarm's screen, its knobs. Kept mounted (v-show) so
 					 MIDI learn sees its knobs -->
 				<DriftSound v-show="driftChosen" :drift="drift" :notes="driftNotes" :bar="driftPick" :chord="driftLabels[driftPick] ?? ''"
-					@preview="previewDrift()" />
+					:motionView="driftMotionView" @preview="previewDrift()" />
 				<DrumSound v-show="drumsChosen" :drums="drums" :kit="drumKit" :picked="drumPick" :playing="isPlaying"
 					@preview="previewDrum" @preview-sound="previewDrumSound" />
 				<!-- The Bass machine's: wave tiles and Sub, its screen, its knobs; the pedals stay (the Effects card) -->
@@ -670,7 +670,7 @@
 		<ShareNotice :playing="isPlaying" @play="onSharePlay" />
 		<!-- File → Export audio… (src/audio/export/exportFiles.ts makes the files) -->
 		<ExportDialog :open="exportOpen" :options="exportOptions" :notes="oneShotNotes" :bpm="tempo"
-			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :chain="exportChain?.letters ?? null" :slotName="SLOT_NAMES[currentSlot]" :bassOn="!!exportState.bass" :machinesOn="exportMachines" :driftBars="exportState.drift ? drift.length : 0" :bending="driveEnabled || tapeEnabled" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
+			:effectsOn="exportEffectsOn" :lfoBars="exportLfoBars" :chain="exportChain?.letters ?? null" :slotName="SLOT_NAMES[currentSlot]" :bassOn="!!exportState.bass" :machinesOn="exportMachines" :driftBars="exportState.drift ? drift.length : 0" :motionBars="exportState.drift ? motionLoopBars(driftMotion(drift)) : 0" :bending="driveEnabled || tapeEnabled" :busy="isExporting" :progress="exportProgress" :simple="phoneActive"
 			@export="runExport" @close="exportOpen = false" />
 		<PadSettingsPopover :key="padSettings.name ? `${padSettings.name}-${padSettings.index}` : 'pad-popover'"
 			v-model:open="padPopover.open" v-model:hz="currentPadHz" v-model:wave="currentPadWave" :hasSample="!!sample"
@@ -756,6 +756,7 @@ import { useLiveEngine } from '../audio/liveEngine';
 import { createRhythm, rhythmVoice } from '../lib/machines/rhythm';
 import { bassVoice, createBass, createBassLane } from '../lib/machines/bass';
 import { useLfoVisual } from '../composables/useLfoVisual';
+import { useDriftMotion } from '../composables/useDriftMotion';
 import { usePlayhead } from '../composables/usePlayhead';
 import PresetButtons from './PresetButtons.vue';
 import { BASS_PATTERNS, BASS_SOUNDS, bassPatternFrom, bassPatternKey, bassSoundKey, bassSoundOf, randomBassPattern, randomBassSound, type BassStep } from '../lib/machines/bassPresets';
@@ -765,7 +766,8 @@ import DrumPads from './DrumPads.vue';
 import DrumSound from './DrumSound.vue';
 import DriftPads from './DriftPads.vue';
 import DriftSound from './DriftSound.vue';
-import { createDrift, driftVoice, togglePlate, copyToNextBar, type Drift } from '../lib/machines/drift';
+import { motionLoopBars } from '../audio/driftMotion';
+import { createDrift, driftMotion, driftVoice, togglePlate, copyToNextBar, type Drift } from '../lib/machines/drift';
 import { anySolo, createMix, dry, heard, type MachineId } from '../lib/machines/mix';
 import { DRIFT_PROGRESSIONS, DRIFT_SOUNDS, driftProgressionKey, driftSoundKey, progressionChords, randomDriftProgression, randomDriftSound } from '../lib/machines/driftPresets';
 import type { DriftVoice } from '../audio/drift';
@@ -2459,6 +2461,7 @@ const {
 	playDrumSound,
 	previewDriftBar,
 	driftBarNow,
+	driftMotionNow,
 	machineLevel,
 	startLfoIfNeeded,
 	togglePlay,
@@ -2523,6 +2526,10 @@ const lfoView: LfoView = reactive({
 		? lfoLevelAt(volume.value, lfoDepth.value, lfoPos.value) : null)),
 	levelRange: computed(() => (lfoAt('amp') ? lfoLevelRange(volume.value, lfoDepth.value) : null)),
 });
+
+// Drift's Motion (the plan's item 19): where it has the X/Y pad's dot now, for the pad (and the
+// phone's) only; like lfoView, never read its fields here
+const driftMotionView = useDriftMotion({ now: driftMotionNow, active: computed(() => isPlaying.value && drift.motionDepth > 0) });
 
 // The installed app opens the main site in the browser (the logo's link)
 const pwa = usePwa();
@@ -3240,6 +3247,8 @@ const SCALE_LABELS: Record<string, string> = {
 
 const phoneCtx = reactive({
 	inst: synthInstrument,
+	// Drift's Motion on the X/Y pad (the plan's item 19; its controls come to the phone with item 24)
+	driftMotionView,
 	// The machine the phone shows (PR 118; the top bar's RHY | BASS | DRUM, PR 121), and its lane
 	// (Drums': its picked row, as Pattern Tools has it, for Humanize)
 	machine,

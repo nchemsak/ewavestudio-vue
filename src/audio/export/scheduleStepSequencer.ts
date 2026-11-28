@@ -21,6 +21,7 @@ import { bassNotesForBar, playBassNote, type BassPattern, type BassSounding, typ
 import { DRUM_SLOTS, drumHitsForBar, playDrumHit, type DrumRow, type DrumSounding } from "../drums";
 import { soundBuffer } from "../drumKit";
 import { createDriftFilter, driftRuns, playDriftNote, type DriftVoice } from "../drift";
+import { motionAt, motionOn, motionParams, MOTION_POINTS_PER_STEP, padX, rampTo, type DriftMotion } from "../driftMotion";
 import { seededRandom } from "../../lib/random";
 
 export type StepPattern = {
@@ -621,13 +622,42 @@ export function scheduleStepSequencer(
 		}
 		const driftRandom = seededRandom(6);
 		const attackS = d.voice.attack * barS, releaseS = d.voice.release * barS;
-		for (const run of driftRuns(d.chords, d.length, bars, !!d.loop)) {
+		// Motion (the plan's item 19), as live: two points a step from bar 1, through the tail too;
+		// Swell at each bar that starts a note (a loop's bars come round in the tail)
+		const spreadMod = ctx.createConstantSource();
+		spreadMod.offset.value = 0;
+		spreadMod.start(t0);
+		const runs = driftRuns(d.chords, d.length, bars, !!d.loop);
+		const motion: DriftMotion = { shape: d.voice.motionShape, rate: d.voice.motionRate, depth: d.voice.motionDepth ?? 0 };
+		if (motionOn(motion)) {
+			const chordBars = new Set(runs.filter((r) => !r.carriedIn).map((r) => r.start));
+			const base = { x: padX(d.voice.cutoff), y: d.voice.spread };
+			const total = Math.ceil((bars * barS + state.tailSeconds) / barS);
+			let chordBar: number | null = null;
+			let first = true;
+			for (let b = 0; b < total; b++) {
+				if (b < bars ? chordBars.has(b) : !!d.loop && chordBars.has(b % bars)) chordBar = b;
+				for (let i = 0; i < state.stepsCount; i++) {
+					for (let j = 0; j < MOTION_POINTS_PER_STEP; j++) {
+						const k = i + j / MOTION_POINTS_PER_STEP;
+						const pos = b + k / state.stepsCount;
+						const at = motionAt(base, motion, pos, chordBar == null ? null : pos - chordBar, d.voice.attack);
+						const p = motionParams(base, at);
+						const t = t0 + b * barS + k * stepDuration;
+						rampTo(filter.detune, t, p.cents, first);
+						rampTo(spreadMod.offset, t, p.spread, first);
+						first = false;
+					}
+				}
+			}
+		}
+		for (const run of runs) {
 			const note = playDriftNote(ctx, d.voice, {
 				freq: d.plateHz[run.plate] ?? 220,
 				time: t0 + run.start * barS,
 				amp: 1,
 				attackS: run.carriedIn ? LOOP_SEAM_S : attackS,
-			}, filter, driftRandom);
+			}, filter, driftRandom, spreadMod);
 			note.release(t0 + run.end * barS, run.carriedOut ? LOOP_SEAM_S : releaseS);
 		}
 	}

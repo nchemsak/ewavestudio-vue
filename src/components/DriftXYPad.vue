@@ -11,7 +11,15 @@
         <span class="df-xy-glow" :style="dotStyle"></span>
         <span class="df-xy-cross v" :style="{ left: dotStyle.left }"></span>
         <span class="df-xy-cross h" :style="{ bottom: dotStyle.bottom }"></span>
+        <!-- Motion (the plan's item 19): its path, faint, whenever it moves something, and where it
+             has the dot now, while playing, in the LFO's amber (as the LFO's marks: the dot you drag
+             stays where you put it) -->
+        <svg v-if="motionLine" class="df-xy-path" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path :d="motionLine" />
+        </svg>
         <span class="df-xy-dot" :style="dotStyle"></span>
+        <span v-if="motionDot" class="df-xy-mdot" :style="motionDot"></span>
+        <span v-if="motionText" class="df-xy-lab m">{{ motionText }}</span>
         <span class="df-xy-lab x">FILTER {{ hzText(drift.cutoff).toUpperCase() }} →</span>
         <span class="df-xy-lab y">SPREAD {{ pct(drift.spread) }} →</span>
     </div>
@@ -20,9 +28,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { DRIFT_RANGES } from '../audio/drift';
-import type { Drift } from '../lib/machines/drift';
+import { MOTION_NAMES, motionPath, padX } from '../audio/driftMotion';
+import { driftMotion, type Drift } from '../lib/machines/drift';
+import type { DriftMotionView } from '../composables/useDriftMotion';
 
-const props = defineProps<{ drift: Drift }>();
+const props = defineProps<{ drift: Drift; motionView?: DriftMotionView | null }>();
 const CUT = DRIFT_RANGES.cutoff;
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const hzText = (hz: number) => (hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${Math.round(hz)} Hz`);
@@ -33,6 +43,22 @@ const dotStyle = computed(() => ({
     left: `${(logPos(props.drift.cutoff) * 100).toFixed(2)}%`,
     bottom: `${(props.drift.spread * 100).toFixed(2)}%`,
 }));
+// Motion: its path (a cycle, or Swell's line from closed to open) and the dot it moves
+const motionLine = computed(() => {
+    const pts = motionPath({ x: padX(props.drift.cutoff), y: props.drift.spread }, driftMotion(props.drift));
+    return pts.length ? pts.map((p, i) => `${i ? 'L' : 'M'}${(p.x * 100).toFixed(2)} ${(100 - p.y * 100).toFixed(2)}`).join('') : '';
+});
+const motionDot = computed(() => {
+    const v = props.motionView;
+    if (!v || v.x == null || v.y == null || props.drift.motionDepth <= 0) return null;
+    return { left: `${(v.x * 100).toFixed(2)}%`, bottom: `${(v.y * 100).toFixed(2)}%` };
+});
+const motionText = computed(() => {
+    const d = props.drift;
+    if (d.motionDepth <= 0) return '';
+    const name = MOTION_NAMES[d.motionShape].toUpperCase();
+    return d.motionShape === 'swell' ? `${name} · OVER ATTACK` : `${name} · ${d.motionRate} BAR${d.motionRate === 1 ? '' : 'S'}`;
+});
 const xyEl = ref<HTMLElement | null>(null);
 const dragging = ref(false);
 function xySet(e: PointerEvent) {
@@ -147,6 +173,41 @@ function xyUp() {
     left: 6px;
     transform-origin: 0 0;
     transform: rotate(-90deg) translate(-50%, 0);
+}
+
+/* Motion: its path and the dot it moves, in the LFO's amber */
+.df-xy-path {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.df-xy-path path {
+    fill: none;
+    stroke: var(--lfo-mod, #ffb347);
+    stroke-width: 1.2;
+    stroke-dasharray: 3 3;
+    opacity: .6;
+    vector-effect: non-scaling-stroke;
+}
+
+.df-xy-mdot {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    margin: 0 0 -5px -5px;
+    border-radius: 50%;
+    background: var(--lfo-mod, #ffb347);
+    box-shadow: 0 0 8px var(--lfo-mod, #ffb347);
+    pointer-events: none;
+}
+
+.df-xy-lab.m {
+    top: 4px;
+    left: 6px;
+    color: var(--lfo-mod, #ffb347);
 }
 
 /* A finger on it (phone mode): the dot a little bigger, so it shows round the fingertip */
