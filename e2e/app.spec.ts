@@ -8542,3 +8542,45 @@ test('Drift\'s Pulse live: a 1/4 gate at full Depth opens and shuts while playin
 	expect(Math.max(...levels)).toBeGreaterThan(0.05);
 	expect(levels.filter((l) => l < 0.005).length).toBeGreaterThan(8);
 });
+
+test('Drift\'s Octave and Voicing: keys beside In bars, saved, one undo step; the export (audio and MIDI) plays the chord as voiced', async ({ page }) => {
+	await page.getByRole('button', { name: 'Show Drift' }).click();
+	const chord = page.getByRole('group', { name: 'Drift chord' });
+	await expect(chord.getByRole('radiogroup', { name: 'Drift octave' }).getByRole('radio')).toHaveText(['−1', '0', '+1']);
+	await expect(chord.getByRole('radiogroup', { name: 'Drift voicing' }).getByRole('radio')).toHaveText(['Close', 'Open', 'Low']);
+	await expect(chord.getByRole('radio', { name: 'Close' })).toHaveAttribute('aria-checked', 'true');
+	await page.waitForTimeout(SETTLED);
+	await chord.getByRole('radio', { name: 'Octave up' }).click();
+	await page.waitForTimeout(SETTLED);
+	await chord.getByRole('radio', { name: 'Low root' }).click();
+	await page.waitForTimeout(SETTLED);
+	const data = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(data.drift.sound).toMatchObject({ octave: 1, voicing: 'lowroot' });
+	await page.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(chord.getByRole('radio', { name: 'Close' })).toHaveAttribute('aria-checked', 'true');
+	await expect(chord.getByRole('radio', { name: 'Octave up' })).toHaveAttribute('aria-checked', 'true');
+
+	// The MIDI file (channel 3) has the notes as voiced: A minor's A C E is A3 C4 E4 (57 60 64)
+	const notesOf = async (id: string, sound: any) => {
+		await importDrift(page, id, [[0, 1, 2]], (d) => { Object.assign(d.drift.sound, { attack: 0.25, release: 0.25 }, sound); d.drift.pedals = 0; });
+		const zip = await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: false, machineStems: false, midi: true, oneShot: false, normalize: false });
+		const files = unzip(zip.bytes);
+		const midi = files[Object.keys(files).find((k) => k.endsWith('.mid'))!];
+		const on: number[] = [];
+		for (let i = 0; i < midi.length - 2; i++) if (midi[i] === 0x92 && midi[i + 2] > 0 && midi[i + 1] < 128) on.push(midi[i + 1]);
+		return { notes: [...new Set(on)].sort((a, b) => a - b), mix: files[Object.keys(files).find((k) => k.endsWith('_mix.wav'))!] };
+	};
+	expect((await notesOf('Voicing close', { octave: 0, voicing: 'close' })).notes).toEqual([57, 60, 64]);
+	expect((await notesOf('Voicing open', { octave: 0, voicing: 'open' })).notes).toEqual([57, 64, 72]); // C up an octave
+	expect((await notesOf('Voicing low root', { octave: 0, voicing: 'lowroot' })).notes).toEqual([45, 57, 60, 64]); // A2 under it
+	expect((await notesOf('Voicing down', { octave: -1, voicing: 'close' })).notes).toEqual([45, 48, 52]);
+
+	// The audio: A alone, an octave up, sounds at 440 Hz (the swarm a few cents either way)
+	await importDrift(page, 'Octave up audio', [[0]], (d) => {
+		Object.assign(d.drift.sound, { attack: 0.25, release: 0.25, wave: 0, spread: 0, drift: 0, octave: 1 });
+		d.drift.pedals = 0;
+	});
+	const one = await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: false, machineStems: false, midi: false, oneShot: false, normalize: false });
+	expect(wavPitchHz(one.bytes, 0.8, 1.6)).toBeGreaterThan(428);
+	expect(wavPitchHz(one.bytes, 0.8, 1.6)).toBeLessThan(452);
+});

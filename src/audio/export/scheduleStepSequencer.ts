@@ -20,7 +20,7 @@ import { sampleBuffer, type SampleData } from "../sample";
 import { bassNotesForBar, playBassNote, type BassPattern, type BassSounding, type BassVoice } from "../bass";
 import { DRUM_SLOTS, drumHitsForBar, playDrumHit, type DrumRow, type DrumSounding } from "../drums";
 import { soundBuffer } from "../drumKit";
-import { createDriftFilter, driftRuns, playDriftNote, type DriftVoice } from "../drift";
+import { createDriftFilter, driftNoteRuns, playDriftNote, type DriftVoice } from "../drift";
 import { motionAt, motionOn, motionParams, MOTION_POINTS_PER_STEP, padX, rampTo, type DriftMotion } from "../driftMotion";
 import { applyPulse, duckHits, pulseOn, pulseStepEvents, releasePulse } from "../driftPulse";
 import { seededRandom } from "../../lib/random";
@@ -651,7 +651,8 @@ export function scheduleStepSequencer(
 		const spreadMod = ctx.createConstantSource();
 		spreadMod.offset.value = 0;
 		spreadMod.start(t0);
-		const runs = driftRuns(d.chords, d.length, bars, !!d.loop);
+		// Voiced (Octave and Voicing, the plan's item 21): runs of pitches, as live keeps its notes
+		const runs = driftNoteRuns(d.chords, d.length, bars, !!d.loop, d.plateHz, d.voice.voicing, d.voice.octave);
 		const motion: DriftMotion = { shape: d.voice.motionShape, rate: d.voice.motionRate, depth: d.voice.motionDepth ?? 0 };
 		if (motionOn(motion)) {
 			const chordBars = new Set(runs.filter((r) => !r.carriedIn).map((r) => r.start));
@@ -677,7 +678,7 @@ export function scheduleStepSequencer(
 		}
 		for (const run of runs) {
 			const note = playDriftNote(ctx, d.voice, {
-				freq: d.plateHz[run.plate] ?? 220,
+				freq: run.hz,
 				time: t0 + run.start * barS,
 				amp: 1,
 				attackS: run.carriedIn ? LOOP_SEAM_S : attackS,

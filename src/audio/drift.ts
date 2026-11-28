@@ -38,11 +38,22 @@ export type DriftVoice = {
 	// Pulse (the plan's item 20, src/audio/driftPulse.ts): a gate on the level, or Duck
 	pulseMode: PulseMode;
 	pulseDepth: number;  // 0..1: how far the level drops
+	// Octave and Voicing (the plan's item 21): where the chord sits, and how it's spread
+	octave: number;      // −1, 0 or +1
+	voicing: DriftVoicing;
 };
+
+// Voicing: Close (the plates as they are, stacked in thirds), Open (every other note of the
+// chord, from the lowest, an octave up) or Low root (the chord's root doubled an octave down)
+export const DRIFT_VOICINGS = ['close', 'open', 'lowroot'] as const;
+export type DriftVoicing = typeof DRIFT_VOICINGS[number];
+export const VOICING_NAMES: Record<DriftVoicing, string> = { close: 'Close', open: 'Open', lowroot: 'Low root' };
+export const clampVoicing = (x: unknown): DriftVoicing => ((DRIFT_VOICINGS as readonly unknown[]).includes(x) ? (x as DriftVoicing) : 'close');
+export const clampOctave = (x: unknown): number => (typeof x === 'number' && Number.isFinite(x) ? Math.max(-1, Math.min(1, Math.round(x))) : 0);
 
 export const DRIFT_RANGES = {
 	voices: [3, 7], drift: [0, 1], wave: [0, 1], spread: [0, 1], cutoff: [150, 8000], attack: [0.25, 4], release: [0.25, 4],
-	motionRate: [1, 16], motionDepth: [0, 1], pulseDepth: [0, 1],
+	motionRate: [1, 16], motionDepth: [0, 1], pulseDepth: [0, 1], octave: [-1, 1],
 } as const;
 
 // The swarm: its widest detune (cents either side, at full Spread), its wander (cents at full
@@ -142,6 +153,38 @@ export function chordLabel(held: number[], names: readonly string[]): string {
 	return pcs.map((p) => names[p]).join('·');
 }
 
+/** The chord's root as chordLabel() names it (a pitch class), or the lowest note's when no
+ * shape fits; null for nothing held */
+export function chordRootPc(held: number[]): number | null {
+	const pcs = [...new Set(held.map((p) => mod(p, 12)))];
+	if (!pcs.length) return null;
+	for (const root of pcs) {
+		const rel = pcs.map((p) => mod(p - root, 12)).sort((a, b) => a - b);
+		if (SHAPES.some((s) => s.set.length === rel.length && s.set.every((x, i) => x === rel[i]))) return root;
+	}
+	return pcs[0];
+}
+
+/**
+ * The pitches (Hz, lowest first) a bar holds, voiced: `held` the bar's plates, `hz` each
+ * plate's pitch. Open puts every other note, from the lowest, an octave up; Low root adds the
+ * chord's root an octave under its lowest one; Octave moves them all.
+ */
+export function voicedBar(held: boolean[], hz: number[], voicing: DriftVoicing, octave: number): number[] {
+	const notes = held.flatMap((on, k) => (on && hz[k] ? [hz[k]] : [])).sort((a, b) => a - b);
+	if (!notes.length) return [];
+	let out = notes;
+	if (voicing === 'open') out = notes.map((f, i) => (i % 2 ? f * 2 : f));
+	else if (voicing === 'lowroot') {
+		const pcOf = (f: number) => mod(Math.round(12 * Math.log2(f / 440) + 69), 12);
+		const root = chordRootPc(notes.map(pcOf));
+		const r = notes.find((f) => pcOf(f) === root) ?? notes[0];
+		out = [r / 2, ...notes];
+	}
+	const k = 2 ** clampOctave(octave);
+	return out.map((f) => f * k).sort((a, b) => a - b);
+}
+
 // The plates END
 
 // The bars START
@@ -183,6 +226,33 @@ export function driftRuns(chords: boolean[][], length: number, bars: number, loo
 				carriedIn: loop && start === 0 && held(bars - 1)[k],
 				carriedOut: loop && b === bars && held(0)[k],
 			});
+		}
+	}
+	return runs;
+}
+
+/** A held pitch's run of bars (the voiced notes', `driftNoteRuns()`): as DriftRun, by pitch */
+export type DriftNoteRun = Omit<DriftRun, 'plate'> & { hz: number };
+
+/**
+ * Every note `bars` bars play, voiced (voicedBar()), as runs: a pitch held through several bars
+ * in a row is one note, as live, where notes are kept by pitch. `loop`: as driftRuns().
+ */
+export function driftNoteRuns(chords: boolean[][], length: number, bars: number, loop: boolean,
+	hz: number[], voicing: DriftVoicing = 'close', octave = 0): DriftNoteRun[] {
+	const key = (f: number) => f.toFixed(2);
+	const sets = Array.from({ length: bars }, (_, b) => new Map(voicedBar(heldInBar(chords, length, b), hz, voicing, octave).map((f) => [key(f), f])));
+	const has = (b: number, k: string) => sets[mod(b, bars)].has(k);
+	const keys = new Map<string, number>();
+	for (const s of sets) for (const [k, f] of s) keys.set(k, f);
+	const runs: DriftNoteRun[] = [];
+	for (const [k, f] of [...keys].sort((a, b) => a[1] - b[1])) {
+		let b = 0;
+		while (b < bars) {
+			if (!has(b, k)) { b++; continue; }
+			const start = b;
+			while (b < bars && has(b, k)) b++;
+			runs.push({ hz: f, start, end: b, carriedIn: loop && start === 0 && has(bars - 1, k), carriedOut: loop && b === bars && has(0, k) });
 		}
 	}
 	return runs;

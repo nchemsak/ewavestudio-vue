@@ -9,7 +9,7 @@
 import { clampRatchet, ratchetPitches, stepSpan } from '../../audio/ratchet';
 import { bassPlan, type BassPattern } from '../../audio/bass';
 import type { DrumRow } from '../../audio/drums';
-import { driftRuns } from '../../audio/drift';
+import { driftNoteRuns, type DriftVoicing } from '../../audio/drift';
 
 export const PPQ = 480;              // ticks per quarter note
 export const STEP_TICKS = PPQ / 4;   // a 16th, one step
@@ -40,7 +40,7 @@ export type MidiPattern = {
 	drums?: { rows: DrumRow[]; barRows?: DrumRow[][]; muted?: boolean[]; notes?: number[] };
 	// The Drift machine (the plan's item 6), on MIDI channel 3: each plate held through a run of
 	// bars one note, from its first bar's start to its last bar's end (driftRuns), velocity 90
-	drift?: { chords: boolean[][]; length: number; plateHz: number[] };
+	drift?: { chords: boolean[][]; length: number; plateHz: number[]; voicing?: DriftVoicing; octave?: number };
 };
 
 // MIDI channel 2 (0-based 1): Bass; channel 10 (9): Drums
@@ -144,8 +144,8 @@ function driftEvents(p: MidiPattern, bars: number): Event[] {
 	const d = p.drift!;
 	const barTicks = p.stepsCount * STEP_TICKS;
 	const out: Event[] = [];
-	for (const run of driftRuns(d.chords, d.length, bars, false)) {
-		const note = midiNoteOf(d.plateHz[run.plate] ?? 220);
+	for (const run of driftNoteRuns(d.chords, d.length, bars, false, d.plateHz, d.voicing, d.octave)) {
+		const note = midiNoteOf(run.hz);
 		out.push({ tick: run.start * barTicks, order: 2, bytes: [0x90 | DRIFT_CHANNEL, note, 90] });
 		out.push({ tick: run.end * barTicks - 1, order: 1, bytes: [0x80 | DRIFT_CHANNEL, note, 0] });
 	}

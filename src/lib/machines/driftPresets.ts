@@ -10,7 +10,7 @@
 // a third up (C), [2,3,4] a fifth up (Em), [3,4,5] a seventh up (G). Neighbouring triads share
 // two notes, so a progression of them moves smoothly (the notes they share carry on).
 
-import { DRIFT_MAX_BARS, DRIFT_PLATES, DRIFT_RANGES, type DriftVoice } from '../../audio/drift';
+import { DRIFT_MAX_BARS, DRIFT_PLATES, DRIFT_RANGES, type DriftVoice, type DriftVoicing } from '../../audio/drift';
 import { MOTION_RATES, MOTION_SHAPES, type MotionShape } from '../../audio/driftMotion';
 import { PULSE_MODES } from '../../audio/driftPulse';
 
@@ -20,8 +20,8 @@ export type DriftSoundPreset = { id: string; label: string; description: string;
 type M = [MotionShape, number, number];
 const NONE: M = ['circle', 4, 0];
 const s = (voices: number, drift: number, wave: number, spread: number, cutoff: number, attack: number, release: number,
-	[motionShape, motionRate, motionDepth]: M = NONE): DriftVoice =>
-	({ voices, drift, wave, spread, cutoff, attack, release, motionShape, motionRate, motionDepth, pulseMode: 'off', pulseDepth: 0.7 });
+	[motionShape, motionRate, motionDepth]: M = NONE, octave = 0, voicing: DriftVoicing = 'close'): DriftVoice =>
+	({ voices, drift, wave, spread, cutoff, attack, release, motionShape, motionRate, motionDepth, pulseMode: 'off', pulseDepth: 0.7, octave, voicing });
 
 export const DRIFT_SOUNDS: readonly DriftSoundPreset[] = [
 	{ id: 'strings', label: 'Strings', description: 'Strings: a bright, wide string section, swelling in over a bar, the filter opening with each new chord.',
@@ -46,8 +46,10 @@ export function driftSoundKey(v: DriftVoice): string {
 	// Pulse likewise: Off, or Depth 0, whatever the rest
 	const pulseDepth = Math.round((v.pulseDepth ?? 0) * 100);
 	const pulse = (v.pulseMode ?? 'off') !== 'off' && pulseDepth > 0 ? ['pulse', v.pulseMode, pulseDepth] : [];
+	// Octave and Voicing: only when not the plain ones (so a sound from before still matches)
+	const voiced = (v.octave ?? 0) !== 0 || (v.voicing ?? 'close') !== 'close' ? ['voiced', v.octave ?? 0, v.voicing ?? 'close'] : [];
 	return JSON.stringify([Math.round(v.voices), Math.round(v.drift * 100), Math.round(v.wave * 100), Math.round(v.spread * 100),
-		Math.round(v.cutoff), Math.round(v.attack * 4), Math.round(v.release * 4), ...motion, ...pulse]);
+		Math.round(v.cutoff), Math.round(v.attack * 4), Math.round(v.release * 4), ...motion, ...pulse, ...voiced]);
 }
 
 // A progression: its length (4 or 8 bars) and each bar's plates
@@ -112,7 +114,11 @@ export function randomDriftSound(r: () => number = Math.random): DriftVoice {
 	const p = r() < 0.25
 		? { pulseMode: pick(r, PULSE_MODES.slice(1)), pulseDepth: round2(between(r, 0.4, 0.9, 0.01)) }
 		: { pulseMode: 'off' as const, pulseDepth: 0.7 };
-	return { ...v, ...m, ...p };
+	// Octave and Voicing, drawn after Pulse (the plan's item 21): an octave down or up in a fifth
+	// of the rolls each way; Open in a third, Low root in a sixth
+	const o = r(), w = r();
+	const voiced = { octave: o < 0.2 ? -1 : o > 0.8 ? 1 : 0, voicing: (w < 1 / 3 ? 'open' : w < 0.5 ? 'lowroot' : 'close') as DriftVoicing };
+	return { ...v, ...m, ...p, ...voiced };
 }
 
 const TRIADS = [I, III, V, VII];
