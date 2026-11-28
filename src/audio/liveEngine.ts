@@ -1159,6 +1159,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	driftSpreadMod.start();
 	let motionChordBar: number | null = null;
 	let motionFirst = true;
+	let motionIdle = true; // the last point moved nothing
 	// The points scheduled lately, for the pad's drawing (driftMotionNow())
 	let motionPoints: { t: number; x: number; y: number }[] = [];
 	let motionEnd = 0; // after Stop: when the dot is back at its point
@@ -1169,6 +1170,10 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const base = { x: padX(d.cutoff), y: d.spread };
 		const at = motionAt(base, driftMotion(d), bars, motionChordBar == null ? null : bars - motionChordBar, d.attack);
 		const p = motionParams(base, at);
+		// At rest (Depth 0, or nothing to move) nothing is scheduled; the next move starts afresh
+		const still = p.cents === 0 && p.spread === 0;
+		if (still && motionIdle) { motionFirst = true; return; }
+		motionIdle = still;
 		rampTo(driftFilter.detune, t, p.cents, motionFirst);
 		rampTo(driftSpreadMod.offset, t, p.spread, motionFirst);
 		motionFirst = false;
@@ -1185,16 +1190,22 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	}
 
 	function startMotion(t: number) {
-		for (const p of [driftFilter.detune, driftSpreadMod.offset]) p.cancelScheduledValues(t);
+		// Still gliding home from the last Stop: from the pad's point now
+		const gliding = motionEnd > t;
+		for (const p of [driftFilter.detune, driftSpreadMod.offset]) {
+			p.cancelScheduledValues(t);
+			if (gliding) p.setValueAtTime(0, t);
+		}
 		motionChordBar = null;
 		motionFirst = true;
+		motionIdle = true;
 		motionPoints = [];
 		motionEnd = 0;
 	}
 
 	function endMotion(fade: number) {
 		const last = motionPoints.at(-1);
-		if (!last) return;
+		if (!last || motionIdle) return;
 		const t = Math.max(last.t, audioCtx.currentTime) + Math.max(0.05, fade);
 		driftFilter.detune.linearRampToValueAtTime(0, t);
 		driftSpreadMod.offset.linearRampToValueAtTime(0, t);
