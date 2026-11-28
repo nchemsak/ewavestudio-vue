@@ -294,7 +294,12 @@ export function playDriftNote(ctx: BaseAudioContext, voice: DriftVoice, note: Dr
 			const v = attack > 0 ? peak * Math.min(1, (from - t) / attack) : peak;
 			const r = Math.max(0.005, seconds);
 			env.gain.cancelScheduledValues(from);
-			env.gain.setValueAtTime(v, from);
+			// Carry the fade-in's line on to `from`, then fade out from there. Cancelling removes
+			// the fade-in's end too when it isn't before `from` (a 1-bar Attack ends on the bar
+			// line), and a step to `v` at `from` would leave the level at the fade-in's start, 0,
+			// until then: silence up to the bar line, its whole run in an export (until PR 133)
+			if (from > t) env.gain.linearRampToValueAtTime(v, from);
+			else env.gain.setValueAtTime(v, from);
 			env.gain.linearRampToValueAtTime(0, from + r);
 			for (const p of parts) {
 				p.osc.stop(from + r + 0.05);

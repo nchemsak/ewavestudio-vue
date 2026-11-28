@@ -8117,6 +8117,38 @@ test('the Drift machine plays: held notes carry over the bar line, fade out over
 	expect(await page.evaluate(() => (window as any).__peakOver(800) as Promise<number>)).toBeGreaterThan(0.02);
 });
 
+test('PR 133: a Drift note whose fade-in lasts its whole bar is heard all through it, with no gap at the bar line, in the export and live', async ({ page }) => {
+	await setTempo(page, 120); // a bar is 2 s
+	// A in bars 1 and 3, G in bars 2 and 4 (no note shared), each fading in over its whole bar
+	// (Attack 1 bar, the factory's) and out over the next (Release 1 bar). Until PR 133 the
+	// release erased the fade-in when it ended on the bar line, so the note was silent until
+	// then: its whole bar in an export, about 0.1 s before each bar line live. No reverb send; a
+	// soft wave, the voices together
+	await importDrift(page, 'Drift gap', [[0], [3], [0], [3]], (d) => {
+		Object.assign(d.drift.sound, { attack: 1, release: 1, wave: 0, spread: 0, drift: 0 });
+		d.drift.pedals = 0;
+	});
+	const wav = (await exportAudio(page, { bars: 4, ending: 'With tail', mix: true, stems: false, machineStems: false, midi: false, oneShot: false, normalize: false })).bytes;
+	// A rises through bar 1, halfway up at its middle
+	const mid = wavWindow(wav, 0.9, 1.1).rms, end = wavWindow(wav, 1.85, 1.98).rms;
+	expect(end).toBeGreaterThan(0.02);
+	expect(mid).toBeGreaterThan(end * 0.35);
+	expect(mid).toBeLessThan(end * 0.65);
+	// Over the bar line A fades out from there while G rises: no gap, and G is heard in bar 2
+	expect(wavWindow(wav, 2, 2.1).rms).toBeGreaterThan(end * 0.8);
+	expect(wavWindow(wav, 2.9, 3.1).rms).toBeGreaterThan(end * 0.5);
+	expect(wavWindow(wav, 3.85, 3.98).rms).toBeGreaterThan(end * 0.8);
+
+	// Live: from the middle of bar 2 to the middle of bar 4 (two bar lines) the level never drops
+	await page.getByRole('button', { name: 'Play', exact: true }).click();
+	await page.waitForTimeout(2600);
+	const peaks = (await page.evaluate(() => (window as any).__channelPeaksOver(4200) as Promise<number[][]>)).map((lr) => Math.max(...lr));
+	await page.getByRole('button', { name: 'Stop', exact: true }).click();
+	const loudest = Math.max(...peaks);
+	expect(loudest).toBeGreaterThan(0.05);
+	expect(Math.min(...peaks)).toBeGreaterThan(loudest * 0.3);
+});
+
 test('the Drift machine: a project from before it opens with nothing held, and the export dialog fits a loop to its bars', async ({ page }) => {
 	await importChanged(page, 'Before Drift', (d) => { delete d.drift; });
 	await page.getByRole('button', { name: 'Show Drift' }).click();

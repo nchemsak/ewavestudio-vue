@@ -78,7 +78,7 @@ Checks (GitHub runs the same ones on every PR and before every deploy, see
   `@playwright/test` stays at 1.63 for now (PR 125 updated the rest within their majors): 1.65
   wants Chromium 159, and Claude's cloud sessions have only 1.63's browser (Chromium 153) and
   can't download another, so they couldn't run the browser tests. The Checks install whatever
-  the lockfile's version wants. Move it with the major upgrades (the plan's item 15).
+  the lockfile's version wants. Move it with the major upgrades (the plan's item 26).
 - **No linter yet.** Current ESLint and typescript-eslint releases depend on `minimatch` 10,
   which has a moderate advisory (GHSA-g3hv-75wg-m249) that only `minimatch` 11 fixes. Adding
   them now would make `npm install` report 14 vulnerabilities. Add ESLint once they move to
@@ -1410,6 +1410,20 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   (Filter, 150–8000 Hz, Q 0.8; a turn glides, 0.12 s), then the machine's level and mute.
   Spread and Drift follow a turn on the notes already sounding (`update()`); Voices and Wave
   apply to the next notes.
+- **A note let go before its fade-in has finished** fades out from where the fade-in had got to
+  (`release()` carries the fade-in's line on to the release point, PR 133). Until then the
+  release cancelled the fade-in's end along with what came after it, which removes it whenever
+  it isn't before the release point (a 1-bar Attack, the factory's, ends exactly on the bar
+  line, or a rounding error past it), and its step to the level left the gain at the fade-in's
+  start, 0, until then: live the note fell silent for the last 0.1 s or so before the bar line
+  (the engine plans that far ahead), with a click at each end; in an export, planned before
+  rendering, for its whole run, joining only at the bar line. So only notes that end at a bar
+  line with an Attack of a bar or more (the factory sound, Strings, Haze, Tide) and changed with
+  the chord gapped, and only now and then, which is why it seemed random. A browser test plays A
+  and G a bar each, Attack and Release 1 bar: the export rises through bar 1, and live the level
+  never dips at a bar line (it fell to 0.006 of 0.164 before the fix). The fades are still
+  linear, so a chord change where every note changes dips about 3 dB halfway; listen before
+  changing their curve.
 - **Straight to the reverb**: Drift's bus goes all to `preMaster` (the dry part) and its
   **Pedals** (the rail's second knob, "Drift into the reverb", default 60 %) into the reverb's
   send (its tone filter), skipping the overdrive and the delay; the reverb pedal's on/off and
@@ -1438,7 +1452,10 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   each its plates as dashes (lowest at the bottom) and its chord's name. A click on a bar picks
   the bar the plates edit (`driftPick`, not saved); a click on a plate holds it there or lets it
   go (one undo step). The bar playing is lighter. Under 640 px the plates are 3 × 2 and the bars
-  4 a row. The header's Reset lets go of every plate in every bar.
+  4 a row. The header's Reset lets go of every plate in every bar. No line of text under the
+  bars since PR 133 ("The plates edit bar 1 · a chord a bar, from Play, round the chain · a note
+  two bars share carries on" confused more than it told; the picked bar is outlined, and each
+  plate's title names its bar).
 - **The Sound section** (`DriftSound.vue`, `data-drift` on `.ds-sound`, kept mounted for MIDI
   learn): the **X/Y pad** (the filter across, on a log scale, the spread up; a drag is one undo
   step) with a mini knob for each under it (Filter, Spread); the **swarm's screen**
@@ -1512,8 +1529,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   notes, the swarm), `machines/drift.test.ts`, `driftView.test.ts`, the snapshot round trip.
   Browser tests: the plates and bars (names, the rail, 8 bars, undo, saved, not a slot's, a new
   key, File → New); the export (the fade in, a note carried over the bar line, Release, the
-  pitch, its stem, MIDI channel 3, a seamless loop starting at full level), live (plays, muted
-  from the rail, Stop fades it, the screen plays the chord); the reverb send (no echoes, the
+  pitch, its stem, MIDI channel 3, a seamless loop starting at full level, a note whose fade-in
+  lasts its bar heard all through it), live (plays, muted from the rail, Stop fades it, the screen
+  plays the chord, no dip at a bar line); the reverb send (no echoes, the
   stems adding up); a project from before; the dialog fitting a loop to its bars.
 
 ### The rail's mixer
@@ -2757,7 +2775,96 @@ beat, the reverse-reverb swell (REV, PR 105, covers its use), Fit the window (it
 useful half of it), and REV on the sample (unclear what it was for); Google Play moved to Not
 now. Small dependency updates ride along with any PR (npm update within the current majors).
 
-15. **Major-version upgrades** (Vite 8, Pinia 4, Vitest 5; Playwright too, see "Commands"), each as
+**The maintainer's brainstorm after PR 132** (agreed in PR 133's chat: Claude's review of six
+ideas, the maintainer's answers taken in). Bugs first (Drift's gap, the phone's top bar), small
+polish, then the sounds (the drum kit, the Synth machine's name and presets), Drift's new
+controls, then the phone's pages, all before the major upgrades. Claude can't hear, so each
+sound item starts with an **audition page** (two or three candidates per sound, rendered on the
+branch for the maintainer to pick by ear, as mockups are for the look); each phone item starts
+with mockups at 568 × 320, 683 × 331 (a Pixel XL held sideways with the navigation buttons),
+731 × 331 (the same with gesture navigation) and 844 × 390. Strum (a new chord's notes entering
+one after another) went to the Maybes: with Drift's slow fade-ins it would sound much like
+Attack. Its first item, 15 (Drift's gap at the bar line, and the line of text under its bars),
+was PR 133.
+
+16. **Two small fixes: the pads' wave icon, and the phone's top bar.** The wave icon is a sibling
+    of the pad (`.wave-badge` in `SynthStepGrid.vue`, pinned to the bottom of `.padTESTwrap`,
+    over the lip), so it sits low and doesn't sink with a press: move it (and the ×3 repeat
+    badge) inside the pad, 8–10 px higher, printed on the rubber in its wave's colour with no
+    pill, sinking with the pad (Rhythm's and Bass's pads). Phone mode's top bar overflows from
+    about 720 to 834 px wide (the tabs' full names come back at 720 px): at 731 px Undo, Redo
+    and ☰ are off the screen (96 px past it); at 640 and 720 px, 5 px. Fit it at every width
+    from 568 to 915 px, and the browser test checks more widths than 568 and 844.
+17. **Drum sounds and kits.** New kit sounds made by recipes of their own in
+    `scripts/render-drum-kit.mjs`, not through the Rhythm voice (whose only filter is a
+    low-pass, which is why its Hat is a higher, shorter Metal; the script then no longer needs
+    the Kick and Snare presets, which item 18 replaces): a closed and an open hat (six square
+    oscillators at odd ratios through a band-pass and a high-pass, as the 808's), a deep sub
+    kick with a long tail (what Boom fakes by slowing the Kick down), a rim, a low tom, a
+    shaker, and for **slot 3's new default something melodic or strange, not a clap or an open
+    hat** (the maintainer's call): candidates such as a tuned tom, a wood block, a conga, a
+    zap (a fast falling pitch) or a metallic ping. The defaults become Kick · Snare · (that) ·
+    the new Hat. **Saved projects keep their sounds**: a slot names its recording (`kit:metal`,
+    `kit:hat`), so the old recordings stay in the kit under their names (still in each slot's
+    ◂ ▸ list, the old Hat renamed on screen if two would read "Hat"; `KIT_IDS` keeps its order,
+    new ones after) and only a fresh page, File → New and the Kit button get the new ones.
+    Kits: **Kit** the new defaults; **Deep, Tin and Boom** keep their kicks' and snares'
+    settings, their slots 3 and 4 the new sounds (the maintainer's call); **Tight and Click**
+    are replaced by two kits with deep kicks, **Sub** (the sub kick, a clap, closed and open
+    hats: trap, half-time) and **Dub** (a round deep kick, rim, shaker, low tom: dub techno,
+    house); names by ear. The Drums dice draws from every sound; the MIDI file gives each sound
+    its General MIDI note (clap 39, open hat 46...) instead of each slot's; each sound gets its
+    colour (`drumColours.ts`). The kit's chunk grows from about 90 kB to 300–400 kB (kicks and
+    toms could be kept at 24 kHz); it still loads after the page opens.
+18. **"Rhythm" becomes "Synth", and two new sounds.** On screen only: the rail's row, the Step
+    Sequencer's header, the phone's key (SYN), the notes that name it, MIDI learn's names
+    ("Synth level"), and the stem's file name (`_synth.wav`). Saved names stay (`rhythm` in
+    `mixer` and the slots' tracks, `synth.*` and the MIDI ids, which already say synth).
+    "Melody" was turned down: it clashes with the Melody Maker, and Bass is melodic too. The
+    machine stays the DFAM-style percussion voice. The Sound presets **Kick and Snare** are
+    replaced (the Drums machine has them now) by two melodic, struck sounds, picked by ear from
+    about four candidates (Mallet, Keys: an FM electric piano, Stab, Chip...). About 36 browser
+    tests use the Kick preset and need another way to the sound they measure.
+19. **Drift: Motion.** The X/Y pad's dot moves by itself (drawn moving, as the LFO's marks):
+    a Rate in bars (1, 2, 4, 8, 16), a Depth, and a shape: Circle (Filter and Spread together),
+    Sweep (Filter only), Wander (smooth random) and **Swell** (the filter closes at each new
+    chord and opens again over Attack). From Play's bar 1, as the LFO; a seamless loop export
+    gets the LFO's "Use N bars" note; both engines; part of a Drift sound (presets, the dice,
+    drawn last); Depth MIDI-learnable.
+20. **Drift: Pulse.** Rhythm for the held chords: a gate on Drift's level, Off, 1/4, 1/8, 1/16
+    (a "trance gate"), or **Duck**, a dip at every hit of the Drums machine's slot 1 (the
+    pumping of sidechain compression, but planned from the hits the app already knows, not a
+    compressor listening: on time, the same live and exported, Drift's stem still adding up),
+    with a Depth. Both engines.
+21. **Drift: Octave and Voicing.** Octave −1 / 0 / +1, and Voicing: Close (as now), Open (every
+    other note an octave up) or Low root (the chord's root doubled an octave down). Both
+    engines; saved with Drift's sound.
+22. **Phone: ☰ on the left, and a new menu.** The drawer opens from the left, so its button
+    goes to the top bar's left end (the scope and the tiny pads move right). The menu is the
+    desktop's File dropdown inside a drawer, a menu in a menu, cut off at 331 px tall; instead
+    one flat list of big rows (Save, Save as…, New, Open, Share link…, Export audio…, Export
+    and Import file, Theme, Desktop View, Reset…), **Open as a page inside the drawer** with a
+    ← back (each project with its date, and delete), two columns held sideways so nothing
+    scrolls. A mockup also tries the tabs as a **vertical rail** down the left edge with ☰ on
+    top (newer Material guidance prefers a rail to a drawer), which frees the top bar.
+23. **Phone: the Pads page, bigger controls and a channel strip.** The right-hand column's
+    controls are small (683 × 331: the Sound and Pattern arrows 19 × 30 px, Tempo, Swing and
+    Octave − / + 28 × 27, Shift and Reverse 22 × 27; a finger wants about 44–48 px); the pads
+    (45 × 128) can give up some width. And on every machine, in the same place, an on/off LED
+    and its Level (maybe its meter), so a machine can be turned down or off without hunting
+    through pages; in the top bar instead if the rail (item 22) frees it.
+24. **Phone: pages that follow the machine, and the Key page's keyboard.** The Mod tab shows
+    Rhythm's LFO and Noise whatever machine is shown (the desktop hides them for the others): a
+    tab with nothing for the machine shown is greyed out, not hidden (the tabs never move), and
+    swipes skip it; switching machines on it goes to Sound. Mod: Rhythm's LFO and Noise, Drift's
+    Motion (item 19), greyed out on Bass and Drums; Key greyed out on Drums. The Key page's
+    white keys are about 46 × 59 px, nearly square: without the Melody note's three lines on the
+    phone they can be about 120 px tall.
+25. **Phone: the Sound page.** Envelope, Pitch and Filter leave much empty space while FM,
+    Unison and the Sample strip are tiny. Mockups: Envelope, Pitch and Filter as the desktop's
+    touch screens (PR 107 made them safe for a finger), or bigger knobs under smaller titles,
+    with FM, Unison and the Sample strip at full size.
+26. **Major-version upgrades** (Vite 8, Pinia 4, Vitest 5; Playwright too, see "Commands"), each as
     its own PR, last, or sooner if Vite 7 stops getting fixes or `npm audit` needs a new major.
     TypeScript 7 waits until `vue-tsc` supports it.
 
@@ -2797,6 +2904,8 @@ Maybe (the maintainer's answer in the review, or earlier; ask before starting on
 - **A wave that talks** ("Voice"): the saw through three vowel filters, a mini knob sweeping
   A-E-I-O-U, an LFO target.
 - **Orbit:** the row of notes repeats every 5, 6 or 7 steps while the rhythm stays at 16.
+- **Strum** (Drift; after PR 132): a new chord's notes enter one after another, low to high,
+  over up to a beat. With Drift's slow fade-ins it would sound much like Attack.
 - **Tilt and shake** on the phone: tilt to sweep Tone, shake to roll the dice.
 - **Octave arrows at the edges** (the maintainer isn't sure). `octaveShiftAllSkip()` moves each
   pad on its own and skips those that would leave 100–2000 Hz, so a pattern near an edge gets
@@ -3060,6 +3169,7 @@ Done:
 | 130 | FX and Solo per machine (the plan's item 12; option A of three mockups): two caps on each rail row between Pedals and the steps. **FX** up plays the machine dry, round every pedal, the lo-fi one too (its Pedals keeps its value); **S** solos it (while any is soloed only the soloed are heard; the others' rows dim), live, in the export, its stems and the MIDI file (`src/lib/machines/mix.ts`). Saved as `mixer.fx` and `mixer.solo` (older projects: FX on, no solo), one undo step each, File → New puts them back. Rhythm's mute now applies to the export too. |
 | 131 | Waves and noise per pattern (the plan's item 13): each pattern slot A–D keeps its pads' waves and which pads get noise, as it keeps its steps; a wave tile, Random, a pad's ⋮ menu, a recording and the Noise card's pad buttons change the slot showing, a slot never used opens on the main wave with noise everywhere, and a sound preset (or the Sounds dice) sets every slot's waves. The chain's export plays each bar's own waves and noise. A project saved before gives every slot its shared waves and noise. |
 | 132 | A PHONE switch on the lo-fi pedal (the plan's item 14): a mini switch, as CRUSH, that plays the pedal's sound as a telephone carries it, 300 Hz–3.4 kHz in mono (24 dB an octave at each edge, the hiss and crackle too), in both engines; linear, so the stems still add up. Saved as `fx.tape.phone` (older projects off), reset by presets and File → New, not in the Sounds dice. On the stomp box TAPE \| VINYL stands upright beside it; on the deck it follows TAPE \| VINYL, the deck tighter on a phone held upright so it fits. |
+| 133 | Drift's gap at the bar line (the plan's item 15, the first of the maintainer's brainstorm after PR 132, whose plan it also records: two small fixes, the drum sounds and kits, "Synth" and two new sounds, Drift's Motion, Pulse and Octave and Voicing, then four phone items, before the major upgrades): a Drift note let go before its fade-in had finished fell silent until the bar line, about 0.1 s live (with a click) and its whole bar in an export, whenever its Attack lasted its run (the factory's 1 bar, Strings, Haze, Tide) and rounding went one way, so it came and went; it now fades out from where its fade-in had got to (`release()` in `src/audio/drift.ts`). The line of text under Drift's bars is gone. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

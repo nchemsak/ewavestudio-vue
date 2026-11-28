@@ -4,7 +4,9 @@
      the chord it holds. A click on a bar picks the bar the plates edit; a click on a plate holds
      it in that bar or lets it go (one undo step). While stopped, either plays the picked bar's
      chord. While playing, the bar playing is lit. Each bar shows its plates as dashes, lowest at
-     the bottom, and its chord's name. -->
+     the bottom, and its chord's name. No line of text under the bars since PR 133 ("The plates
+     edit bar 1 · a chord a bar..." confused more than it told: the picked bar is outlined, and
+     each plate's title names its bar). -->
 <template>
     <div class="drift-pads">
         <div class="dr-plates" role="group" :aria-label="`Plates, bar ${picked + 1}`">
@@ -36,7 +38,6 @@
                 </button>
             </div>
         </div>
-        <p class="dr-hint">The plates edit bar {{ picked + 1 }}<span class="dr-hint-more"> · a chord a bar, from Play, round the chain · a note two bars share carries on</span></p>
     </div>
 </template>
 
@@ -243,13 +244,6 @@ const emit = defineEmits<{
     min-width: 0;
 }
 
-.dr-hint {
-    margin: 0;
-    font: 400 9px Cousine, ui-monospace, monospace;
-    color: var(--pt-text-dim, #b9a8d8);
-    letter-spacing: .04em;
-}
-
 /* 8 bars on a narrow card: two rows of 4 */
 @container (max-width: 700px) {
     .dr-bars[style*="--n: 8"] {
@@ -274,10 +268,6 @@ const emit = defineEmits<{
 
     .dr-bars {
         grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-
-    .dr-hint-more {
-        display: none;
     }
 }
 </style>
