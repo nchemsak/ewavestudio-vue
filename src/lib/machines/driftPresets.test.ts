@@ -4,12 +4,14 @@ import { DRIFT_RANGES, DRIFT_PLATES, type DriftVoice } from '../../audio/drift';
 import { applyDrift, createDrift, driftVoice } from './drift';
 import { seededRandom } from '../random';
 import { MOTION_RATES, MOTION_SHAPES } from '../../audio/driftMotion';
+import { PULSE_MODES } from '../../audio/driftPulse';
 
-type NumKey = 'voices' | 'drift' | 'wave' | 'spread' | 'cutoff' | 'attack' | 'release' | 'motionDepth';
-const STEPS: Record<NumKey, number> = { voices: 1, drift: 0.01, wave: 0.01, spread: 0.01, cutoff: 1, attack: 0.25, release: 0.25, motionDepth: 0.01 };
+type NumKey = 'voices' | 'drift' | 'wave' | 'spread' | 'cutoff' | 'attack' | 'release' | 'motionDepth' | 'pulseDepth';
+const STEPS: Record<NumKey, number> = { voices: 1, drift: 0.01, wave: 0.01, spread: 0.01, cutoff: 1, attack: 0.25, release: 0.25, motionDepth: 0.01, pulseDepth: 0.01 };
 function inRangeOnSteps(v: DriftVoice) {
 	expect(MOTION_SHAPES).toContain(v.motionShape);
 	expect(MOTION_RATES).toContain(v.motionRate);
+	expect(PULSE_MODES).toContain(v.pulseMode);
 	for (const k of Object.keys(STEPS) as NumKey[]) {
 		const [lo, hi] = DRIFT_RANGES[k];
 		expect(v[k], k).toBeGreaterThanOrEqual(lo);
@@ -67,6 +69,28 @@ describe('Drift sounds', () => {
 		const lo = 400, hi = 5000;
 		const firsts = [before(), before(), before(), before(), before(), before(), before()];
 		expect(a.cutoff).toBe(Math.round(lo * (hi / lo) ** firsts[4]));
+	});
+
+	it('the dice draws Pulse after Motion: about a quarter of the rolls pulse, every mode among them', () => {
+		const r = seededRandom(5);
+		const modes = new Set<string>();
+		let n = 0;
+		for (let i = 0; i < 800; i++) {
+			const v = randomDriftSound(r);
+			if (v.pulseMode !== 'off') { n++; modes.add(v.pulseMode); expect(v.pulseDepth).toBeGreaterThanOrEqual(0.4); }
+		}
+		expect(n).toBeGreaterThan(140);
+		expect(n).toBeLessThan(260);
+		expect(modes.size).toBe(4);
+	});
+
+	it('Pulse Off doesn\'t count when matching a sound, whatever its Depth', () => {
+		const d = createDrift();
+		const base = driftSoundKey(driftVoice(d));
+		d.pulseDepth = 0.2;
+		expect(driftSoundKey(driftVoice(d))).toBe(base);
+		d.pulseMode = 'duck';
+		expect(driftSoundKey(driftVoice(d))).not.toBe(base);
 	});
 
 	it('Motion with Depth 0 doesn\'t count when matching a sound', () => {

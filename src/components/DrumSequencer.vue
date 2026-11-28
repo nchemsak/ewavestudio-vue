@@ -1141,12 +1141,14 @@ function resetDriftPads() {
 	stepsAdvanced.open = false;
 	drift.chords = drift.chords.map((r) => r.map(() => false));
 }
-// For the export: unless it's muted or holds nothing
-function driftExport() {
+// For the export: unless it's muted or holds nothing. `barRows`: the Drums rows of each bar
+// (the chain's); Pulse's Duck follows slot 1's (the plan's item 20)
+function driftExport(barRows?: DrumRow[][]) {
 	if (!isHeard('drift') || !driftHasNotes(drift.chords, drift.length)) return undefined;
 	return {
 		voice: driftVoice(drift), level: drift.level, pedals: drift.pedals, length: drift.length,
 		chords: drift.chords.map((r) => [...r]), plateHz: [...driftPlateHz.value],
+		duck: (barRows ?? [drums.rows]).map((rows) => ({ steps: [...rows[0].steps], velocities: [...rows[0].velocities] })),
 	};
 }
 // Drift's sounds and progressions (the plan's item 6, part 2; src/lib/machines/driftPresets.ts):
@@ -2787,7 +2789,8 @@ async function runExport(options: ExportOptions) {
 		await loadDrumKit().then((k) => { drumKit.value = k; }).catch(() => { });
 		const files = await buildExportFiles({ ...exportState.value, barPatterns: chainNow?.patterns,
 			bass: chainNow ? bassChain : exportState.value.bass,
-			drums: chainNow ? drumsExport(chainNow.drumRows) : drumsExport() }, options, {
+			drums: chainNow ? drumsExport(chainNow.drumRows) : drumsExport(),
+			drift: chainNow ? driftExport(chainNow.drumRows) : exportState.value.drift }, options, {
 			project: project.name || 'Untitled',
 			key: keyLabel(melodyUi.keyRoot, melodyUi.keyScale),
 			oneShotWave: selectedWaveform.value,

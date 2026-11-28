@@ -30,6 +30,7 @@ import { slotData, type Drums } from '../lib/machines/drums';
 import { clampCutoff, createDriftFilter, FILTER_GLIDE_S, heldInBar, playDriftNote, type DriftSounding } from './drift';
 import { driftMotion, driftVoice, type Drift } from '../lib/machines/drift';
 import { motionAt, motionParams, MOTION_POINTS_PER_STEP, padX, rampTo } from './driftMotion';
+import { applyPulse, duckHits, pulseStepEvents, releasePulse } from './driftPulse';
 import { lfoWaveAt } from './lfo';
 import { createTicker } from './ticker';
 import { generateReverbIR } from './reverb/generateIr';
@@ -537,10 +538,12 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	const driftFilter = createDriftFilter(audioCtx, s.drift?.cutoff ?? 1800);
 	const driftGate = audioCtx.createGain();
 	driftGate.gain.value = s.drift && machineHeard('drift') ? s.drift.level : 0;
-	driftFilter.connect(driftGate);
+	// Pulse (the plan's item 20, driftPulse.ts): a gain after the level, moved step by step
+	const driftPulse = audioCtx.createGain();
+	driftFilter.connect(driftGate).connect(driftPulse);
 	const driftBus = machineBus(() => 0, () => machineDry('drift'));
 	driftBus.direct.gain.value = machineDry('drift') ? 0 : 1;
-	driftGate.connect(driftBus.bus);
+	driftPulse.connect(driftBus.bus);
 
 	/** A machine's level now, its peak over the last ~10 ms (0..1 and over) */
 	function machineLevel(id: 'rhythm' | 'bass' | 'drums' | 'drift'): number {
@@ -1121,6 +1124,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		const fade = Math.min(1.5, (s.drift?.release ?? 1) * barSeconds());
 		driftHold(t, [], fade);
 		endMotion(fade);
+		resetPulse(t);
 		driftBarCount = -1;
 		driftBarNow.value = -1;
 	}
@@ -1233,6 +1237,31 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		return { x: z.x, y: z.y };
 	}
 
+	// Drift's Pulse (the plan's item 20, src/audio/driftPulse.ts): a gate on Drift's level, or
+	// Duck at the Drums machine's slot 1 hits, its events added with each step as it's built,
+	// as the notes are; Off (or Depth 0) back to full. Stop: back to full at once (the notes
+	// are fading anyway). At rest it's at full, so previews are whole.
+	let pulseLast = { t: 0, v: 1 };
+	function pulseStep(step: number, len: number, time: number, stepS: number) {
+		const d = s.drift;
+		if (!d) return;
+		const dr = s.drums;
+		// Slot 1's steps, heard or not: a muted kick still pumps the pad (a "ghost kick")
+		const hits = d.pulseMode === 'duck' && dr ? duckHits(dr.rows[0], false, len) : undefined;
+		const events = pulseStepEvents(d.pulseMode, d.pulseDepth, step, len, stepS, swing.value, hits);
+		if (events.length) pulseLast = applyPulse(driftPulse.gain, time, events, pulseLast);
+		else if (d.pulseMode === 'off' || d.pulseDepth <= 0) pulseLast = releasePulse(driftPulse.gain, time, pulseLast);
+	}
+	function resetPulse(t: number) {
+		const g = driftPulse.gain;
+		if (pulseLast.v === 1 && pulseLast.t <= t) { g.cancelScheduledValues(t); g.setValueAtTime(1, t); pulseLast = { t, v: 1 }; return; }
+		// From where a gate or dip has it now, back up in 10 ms (no click)
+		if (typeof g.cancelAndHoldAtTime === 'function') g.cancelAndHoldAtTime(t);
+		else { g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); }
+		g.linearRampToValueAtTime(1, t + 0.01);
+		pulseLast = { t: t + 0.01, v: 1 };
+	}
+
 	// Drift voice END
 
 	// Sequencer clock START
@@ -1292,8 +1321,9 @@ export function useLiveEngine(s: LiveEngineSettings) {
 				driftBar(barCount, startTime);
 				barCount++;
 			}
-			// Drift's Motion: this step's points
+			// Drift's Motion: this step's points; its Pulse: this step's gate or dip
 			motionStep(barCount - 1, stepIndex, stepLength.value, startTime, stepDuration);
+			pulseStep(stepIndex, stepLength.value, startTime, stepDuration);
 			// REV with Next hit: a hit on this step, any machine's, swells until the next one
 			revForStep(stepIndex, startTime + (stepIndex % 2 === 1 ? stepDuration * swing.value : 0));
 
@@ -1369,6 +1399,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 			startLfoIfNeeded();
 			startTime = audioCtx.currentTime;
 			startMotion(startTime);
+			resetPulse(startTime);
 			stepIndex = 0;
 			barCount = 0;
 			isPlaying.value = true;

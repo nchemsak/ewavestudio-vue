@@ -22,6 +22,7 @@ import { DRUM_SLOTS, drumHitsForBar, playDrumHit, type DrumRow, type DrumSoundin
 import { soundBuffer } from "../drumKit";
 import { createDriftFilter, driftRuns, playDriftNote, type DriftVoice } from "../drift";
 import { motionAt, motionOn, motionParams, MOTION_POINTS_PER_STEP, padX, rampTo, type DriftMotion } from "../driftMotion";
+import { applyPulse, duckHits, pulseOn, pulseStepEvents, releasePulse } from "../driftPulse";
 import { seededRandom } from "../../lib/random";
 
 export type StepPattern = {
@@ -76,7 +77,10 @@ export type StepSequencerState = {
 	// send), and chords (a bar's plates, repeating every `length` bars, counted from the first
 	// bar across the chain), each plate's pitch. `loop`: the bars repeat (a seamless loop), so a
 	// plate held at the end and at the start carries on round. Not in a one-shot.
-	drift?: { voice: DriftVoice; level: number; pedals: number; length: number; chords: boolean[][]; plateHz: number[]; loop?: boolean };
+	// `duck`: the Drums machine's slot 1 row, one per bar (bar b plays duck[b % length]; Pulse's
+	// Duck follows it, heard or not)
+	drift?: { voice: DriftVoice; level: number; pedals: number; length: number; chords: boolean[][]; plateHz: number[]; loop?: boolean;
+		duck?: DrumRow[] };
 	// The Rhythm machine's Pedals (missing: all of it through the pedals)
 	rhythmPedals?: number;
 	// The machines whose FX is off (the rail's FX cap, the plan's item 12): dry, round every
@@ -614,11 +618,31 @@ export function scheduleStepSequencer(
 		level.gain.value = clamp01(d.level);
 		const send = ctx.createGain();
 		send.gain.value = clamp01(d.pedals);
-		filter.connect(level);
-		if (isDry('drift')) level.connect(dryAround);
+		// Pulse (the plan's item 20), after the level, as live
+		const pulse = ctx.createGain();
+		filter.connect(level).connect(pulse);
+		if (isDry('drift')) pulse.connect(dryAround);
 		else {
-			level.connect(dryOut);
-			level.connect(send).connect(reverbToneFilter);
+			pulse.connect(dryOut);
+			pulse.connect(send).connect(reverbToneFilter);
+		}
+		// Each bar's steps, as live; a seamless loop's go on through the tail (its bars come
+		// round again), With tail's stop at the end, back to full
+		const pulseMode = d.voice.pulseMode ?? 'off', pulseDepth = d.voice.pulseDepth ?? 0;
+		if (pulseOn(pulseMode, pulseDepth)) {
+			const n = state.stepsCount, swingNow = clamp01(state.swing);
+			const total = d.loop ? Math.ceil((bars * barS + state.tailSeconds) / barS) : bars;
+			let last = { t: -1, v: 1 };
+			pulse.gain.setValueAtTime(1, t0);
+			for (let b = 0; b < total; b++) {
+				const duck = d.duck?.length ? d.duck[(b % bars) % d.duck.length] : undefined;
+				const hits = pulseMode === 'duck' ? duckHits(duck, false, n) : undefined;
+				for (let i = 0; i < n; i++) {
+					last = applyPulse(pulse.gain, t0 + b * barS + i * stepDuration,
+						pulseStepEvents(pulseMode, pulseDepth, i, n, stepDuration, swingNow, hits), last);
+				}
+			}
+			if (!d.loop) releasePulse(pulse.gain, t0 + bars * barS, last);
 		}
 		const driftRandom = seededRandom(6);
 		const attackS = d.voice.attack * barS, releaseS = d.voice.release * barS;

@@ -92,6 +92,8 @@ export const MIDI_KNOBS: Record<string, string> = {
 	'drift.release': 'Drift release',
 	// Drift's Motion (the plan's item 19): its Depth (Rate and the shape are switches)
 	'drift.motionDepth': 'Drift motion depth',
+	// Drift's Pulse (the plan's item 20): its Depth (the gate's division is a switch)
+	'drift.pulseDepth': 'Drift pulse depth',
 };
 
 export function ccKey(channel: number, controller: number): CcKey {

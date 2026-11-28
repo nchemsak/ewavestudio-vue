@@ -5034,7 +5034,7 @@ test("MIDI learn: a controller knob turns the knob it's linked to, along its ran
 	await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
 	await openSettings(page);
 	await expect(learn).toHaveAttribute('aria-pressed', 'true');
-	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(68); // Bass's eight since PR 115, the rail's Pedals since PR 116, Drums' 14 since PR 119, Drift's 9 since PR 122, less the reverb's PRE since PR 126, Drift's Motion depth since PR 137
+	await expect(page.locator('.knob-wrapper.midi-learnable')).toHaveCount(69); // Bass's eight since PR 115, the rail's Pedals since PR 116, Drums' 14 since PR 119, Drift's 9 since PR 122, less the reverb's PRE since PR 126, Drift's Motion depth since PR 137, its Pulse depth since PR 138
 	await cutoff.click();
 	await expect(cutoff).toHaveClass(/\bmidi-armed\b/);
 	await expect(bar).toContainText('Cutoff: turn a knob on your controller.');
