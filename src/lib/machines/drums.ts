@@ -11,7 +11,7 @@
 // edited, as the synth lane is Rhythm's.
 
 import { reactive } from 'vue';
-import { DRUM_RANGES, DRUM_SLOTS, KIT_IDS, KIT_NAMES, type DrumRow, type KitId } from '../../audio/drums';
+import { DRUM_RANGES, DRUM_SLOTS, FACTORY_KIT, KIT_IDS, KIT_NAMES, type DrumRow, type KitId } from '../../audio/drums';
 import { encodeSample, sampleFrom, type SampleData } from '../../audio/sample';
 
 export type DrumSlot = { sound: string; tune: number; decay: number; level: number; muted: boolean };
@@ -32,14 +32,14 @@ export const DRUMS_LEVEL_DEFAULT = 0.6;
 export const DRUM_SLOT_DEFAULTS: readonly DrumSlot[] = [
 	{ sound: 'kit:kick', tune: 0, decay: 1, level: 0.9, muted: false },
 	{ sound: 'kit:snare', tune: 0, decay: 1, level: 0.7, muted: false },
-	{ sound: 'kit:metal', tune: 0, decay: 1, level: 0.5, muted: false },
-	{ sound: 'kit:hat', tune: 0, decay: 1, level: 0.5, muted: false },
+	{ sound: 'kit:tom', tune: 0, decay: 1, level: 0.6, muted: false },
+	{ sound: 'kit:closed', tune: 0, decay: 1, level: 0.5, muted: false },
 ];
 
 export const kitRef = (id: KitId) => `kit:${id}`;
 // The kit sound a slot falls back to: its own position's (a kept sound deleted, or left out of
 // a share link)
-export const slotKitRef = (slot: number) => kitRef(KIT_IDS[slot] ?? 'kick');
+export const slotKitRef = (slot: number) => kitRef(FACTORY_KIT[slot] ?? 'kick');
 
 export function emptyRows(n: number): DrumRow[] {
 	return Array.from({ length: DRUM_SLOTS }, () => ({ steps: Array(n).fill(false), velocities: Array(n).fill(1) }));

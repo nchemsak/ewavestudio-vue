@@ -67,7 +67,8 @@ export type StepSequencerState = {
 	// the machine's level and Pedals, and its rows, or one set per bar with the chain (as
 	// barPatterns). Not in a one-shot.
 	drums?: {
-		slots: { data: SampleData | null; tune: number; decay: number; level: number; muted: boolean }[];
+		// `note`: its sound's General MIDI note, for the MIDI file (drumNote())
+		slots: { data: SampleData | null; tune: number; decay: number; level: number; muted: boolean; note?: number }[];
 		level: number; pedals?: number; rows: DrumRow[]; barRows?: DrumRow[][];
 	};
 	// The Drift machine (src/audio/drift.ts; missing: none): its voice, level, Pedals (its reverb

@@ -201,7 +201,7 @@ export async function buildExportFiles(
 				pitches: state.pattern.pitches, ratchets: state.pattern.ratchets,
 				repeatNotes: state.pattern.repeatNotes, repeatChord: state.pattern.repeatChord, name: meta.project,
 				bass: state.bass && { pattern: state.bass.pattern, barPatterns: state.bass.barPatterns },
-				drums: state.drums && { rows: state.drums.rows, barRows: state.drums.barRows, muted: state.drums.slots.map((sl) => sl.muted) },
+				drums: state.drums && { rows: state.drums.rows, barRows: state.drums.barRows, muted: state.drums.slots.map((sl) => sl.muted), notes: state.drums.slots.map((sl) => sl.note) },
 				drift: state.drift && { chords: state.drift.chords, length: state.drift.length, plateHz: state.drift.plateHz },
 			}),
 		});

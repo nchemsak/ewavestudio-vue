@@ -8,10 +8,10 @@ import { decodeSample } from '../../audio/sample';
 const sound = (n = 1) => ({ data: 'AAAAAA'.repeat(n), sampleRate: 44100 });
 
 describe('the Drums machine', () => {
-	it('starts with the kit in its slots: Kick, Snare, Metal, Hat; empty rows', () => {
+	it('starts with the kit in its slots: Kick, Snare, Tom, Hat (PR 135; Metal and the old Hat before); empty rows', () => {
 		const d = createDrums(16);
-		expect(d.slots.map((s) => s.sound)).toEqual(['kit:kick', 'kit:snare', 'kit:metal', 'kit:hat']);
-		expect(d.slots.map((_, k) => soundName(slotSound(d, k), d.kept))).toEqual(['Kick', 'Snare', 'Metal', 'Hat']);
+		expect(d.slots.map((s) => s.sound)).toEqual(['kit:kick', 'kit:snare', 'kit:tom', 'kit:closed']);
+		expect(d.slots.map((_, k) => soundName(slotSound(d, k), d.kept))).toEqual(['Kick', 'Snare', 'Tom', 'Hat']);
 		expect(d.rows).toHaveLength(4);
 		expect(d.rows.every((r) => r.steps.length === 16 && !r.steps.some(Boolean))).toBe(true);
 		expect(d.kept).toEqual([]);
@@ -20,7 +20,13 @@ describe('the Drums machine', () => {
 	it('a slot steps through the kit, then the kept sounds, round the ends', () => {
 		const d = createDrums(16);
 		keepSound(d, 3, sound());
-		expect(soundsOffered(d.kept)).toEqual(['kit:kick', 'kit:snare', 'kit:metal', 'kit:hat', 'kept:1']);
+		const offered = soundsOffered(d.kept);
+		expect(offered).toHaveLength(16);
+		expect(offered.slice(0, 2)).toEqual(['kit:kick', 'kit:sub']);
+		// The first kit's Metal and Hat are still offered (saved projects play them), last
+		expect(offered.slice(-3)).toEqual(['kit:metal', 'kit:hat', 'kept:1']);
+		expect(soundName('kit:hat', d.kept)).toBe('Tin hat');
+		expect(soundName('kit:closed', d.kept)).toBe('Hat');
 		expect(stepSound('kit:hat', d.kept, 1)).toBe('kept:1');
 		expect(stepSound('kept:1', d.kept, 1)).toBe('kit:kick');
 		expect(stepSound('kit:kick', d.kept, -1)).toBe('kept:1');
@@ -46,15 +52,18 @@ describe('the Drums machine', () => {
 		keepSound(d, 2, sound());
 		deleteKept(d, 'kept:1');
 		expect(d.kept).toEqual([]);
-		expect(d.slots[2].sound).toBe('kit:metal');
+		expect(d.slots[2].sound).toBe('kit:tom');
 	});
 
 	it('a slot whose sound is missing (a share link leaves kept sounds out) plays its kit sound', () => {
 		const d = createDrums(16);
 		d.slots[3] = { ...d.slots[3], sound: 'kept:7' };
-		expect(slotSound(d, 3)).toBe('kit:hat');
-		const kit = { kick: sound(1), snare: sound(2), metal: sound(3), hat: sound(4) };
-		expect(slotData(d, 3, kit)).toBe(kit.hat);
+		expect(slotSound(d, 3)).toBe('kit:closed');
+		const kit = { kick: sound(1), snare: sound(2), tom: sound(3), closed: sound(4) } as any;
+		expect(slotData(d, 3, kit)).toBe(kit.closed);
+		// A saved project's old Metal and Hat stay theirs
+		d.slots[2] = { ...d.slots[2], sound: 'kit:metal' };
+		expect(slotSound(d, 2)).toBe('kit:metal');
 		expect(slotData(d, 0, null)).toBeNull(); // the kit not loaded yet
 	});
 

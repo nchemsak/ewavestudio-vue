@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { barFrames, foldLoop, trimTail, peakOf, normalizeGain, applyGain, subtract, fadeOut, NORMALIZE_PEAK } from './audio';
-import { patternToMidi, midiNoteOf, notesInRange, midiToHz, PPQ, STEP_TICKS } from './midi';
+import { patternToMidi, midiNoteOf, notesInRange, midiToHz, PPQ, STEP_TICKS, drumNote } from './midi';
 import { zipFiles, crc32 } from './zip';
 import { safeName, keyLabel, exportNames } from './names';
 import { seededRandom } from '../random';
@@ -158,13 +158,16 @@ describe('the MIDI file', () => {
 		expect(m.notes.filter((n) => n.channel === 0)).toHaveLength(1);
 	});
 
-	it('Drums on channel 10: General MIDI notes per slot, a 16th long, swung, muted slots left out, a row per bar with the chain', () => {
+	it('Drums on channel 10: General MIDI notes per sound (by place for a kept one), a 16th long, swung, muted slots left out, a row per bar with the chain', () => {
 		const row = (on: number[], v = 1) => ({ steps: steps(on), velocities: Array(16).fill(v) });
 		const rows = [row([0, 8]), row([4, 12], 0.5), row([2]), row([1, 3])];
 		const m = readMidi(patternToMidi({ ...base, active: steps([]), swing: 0.5, drums: { rows, muted: [false, false, false, true] } }));
 		const drums = m.notes.filter((n) => n.channel === 9).map((n) => [n.on, n.off - n.on + 1, n.note, n.velocity]);
 		const T = STEP_TICKS;
-		expect(drums).toEqual([[0, T, 36, 127], [2 * T, T, 56, 127], [4 * T, T, 38, 64], [8 * T, T, 36, 127], [12 * T, T, 38, 64]]);
+		expect(drums).toEqual([[0, T, 36, 127], [2 * T, T, 45, 127], [4 * T, T, 38, 64], [8 * T, T, 36, 127], [12 * T, T, 38, 64]]);
+		// Each slot's own sound's note: a sub kick 35, a clap 39, a wood block 76
+		const m3 = readMidi(patternToMidi({ ...base, active: steps([]), drums: { rows, notes: [drumNote('kit:sub', 0), drumNote('kit:clap', 1), drumNote('kit:wood', 2), drumNote('kept:1', 3)] } }));
+		expect(m3.notes.filter((n) => n.channel === 9).map((n) => [n.on / T, n.note])).toEqual([[0, 35], [1, 42], [2, 76], [3, 42], [4, 39], [8, 35], [12, 39]]);
 		// The chain: bar 2 plays the second set of rows
 		const m2 = readMidi(patternToMidi({ ...base, active: steps([]), bars: 2, drums: { rows, barRows: [[row([0]), row([]), row([]), row([])], [row([]), row([]), row([]), row([15])]] } }));
 		expect(m2.notes.filter((n) => n.channel === 9).map((n) => [n.on / T, n.note])).toEqual([[0, 36], [31, 42]]);

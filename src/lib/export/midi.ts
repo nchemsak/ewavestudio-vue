@@ -33,10 +33,11 @@ export type MidiPattern = {
 	// slid into the next steps), a slide's new pitch a new note where it arrives, Accent at
 	// velocity 127; with the chain, a pattern per bar as above
 	bass?: { pattern: BassPattern; barPatterns?: BassPattern[] };
-	// The Drums machine (the plan's item 5), on MIDI channel 10, the General MIDI drums: slot 1
-	// Kick 36, 2 Snare 38, 3 Cowbell 56 (Metal), 4 Closed hi-hat 42 (DRUM_NOTES), a 16th long;
-	// muted slots left out; with the chain, rows per bar as above
-	drums?: { rows: DrumRow[]; barRows?: DrumRow[][]; muted?: boolean[] };
+	// The Drums machine (the plan's item 5), on MIDI channel 10, the General MIDI drums: each
+	// slot's note is its sound's (`notes`, from drumNote(); since PR 135), or by its place
+	// (DRUM_NOTES: Kick 36, Snare 38, Low tom 45, Closed hi-hat 42), a 16th long; muted slots
+	// left out; with the chain, rows per bar as above
+	drums?: { rows: DrumRow[]; barRows?: DrumRow[][]; muted?: boolean[]; notes?: number[] };
 	// The Drift machine (the plan's item 6), on MIDI channel 3: each plate held through a run of
 	// bars one note, from its first bar's start to its last bar's end (driftRuns), velocity 90
 	drift?: { chords: boolean[][]; length: number; plateHz: number[] };
@@ -47,7 +48,16 @@ const BASS_CHANNEL = 1;
 const DRUMS_CHANNEL = 9;
 // MIDI channel 3 (0-based 2): Drift
 const DRIFT_CHANNEL = 2;
-export const DRUM_NOTES = [36, 38, 56, 42];
+// A slot's note by its place (a kept sound's), and each kit sound's General MIDI note
+export const DRUM_NOTES = [36, 38, 45, 42];
+const KIT_GM_NOTES: Record<string, number> = {
+	kick: 36, sub: 35, subclick: 36, round: 35, snare: 38, clap: 39, rim: 37,
+	tom: 45, conga: 64, wood: 76, shaker: 82, closed: 42, open: 46, metal: 56, hat: 42,
+};
+/** The General MIDI drum note for a slot's sound ('kit:tom'…), else its place's */
+export function drumNote(ref: string, slot: number): number {
+	return (ref.startsWith('kit:') ? KIT_GM_NOTES[ref.slice(4)] : undefined) ?? DRUM_NOTES[slot] ?? 36;
+}
 
 export type MidiBarPattern = Pick<MidiPattern, 'active' | 'velocities' | 'pitches' | 'ratchets' | 'repeatNotes'>;
 
@@ -120,7 +130,7 @@ function drumsEvents(p: MidiPattern, bars: number, swing: number): Event[] {
 				const vel = Math.max(0, Math.min(1, row.velocities[step] ?? 1));
 				if (!row.steps[step] || vel <= 0) continue;
 				const on = Math.round((bar * n + step) * STEP_TICKS + (step % 2 === 1 ? swing * STEP_TICKS : 0));
-				const note = DRUM_NOTES[slot] ?? 36;
+				const note = p.drums!.notes?.[slot] ?? DRUM_NOTES[slot] ?? 36;
 				out.push({ tick: on, order: 2, bytes: [0x90 | DRUMS_CHANNEL, note, Math.max(1, Math.min(127, Math.round(vel * 127)))] });
 				out.push({ tick: on + STEP_TICKS - 1, order: 1, bytes: [0x80 | DRUMS_CHANNEL, note, 0] });
 			}
