@@ -11,31 +11,39 @@
 // two notes, so a progression of them moves smoothly (the notes they share carry on).
 
 import { DRIFT_MAX_BARS, DRIFT_PLATES, DRIFT_RANGES, type DriftVoice } from '../../audio/drift';
+import { MOTION_RATES, MOTION_SHAPES, type MotionShape } from '../../audio/driftMotion';
 
 export type DriftSoundPreset = { id: string; label: string; description: string; sound: DriftVoice };
 
-const s = (voices: number, drift: number, wave: number, spread: number, cutoff: number, attack: number, release: number): DriftVoice =>
-	({ voices, drift, wave, spread, cutoff, attack, release });
+// Motion (the plan's item 19): [shape, Rate, Depth]; none, Depth 0
+type M = [MotionShape, number, number];
+const NONE: M = ['circle', 4, 0];
+const s = (voices: number, drift: number, wave: number, spread: number, cutoff: number, attack: number, release: number,
+	[motionShape, motionRate, motionDepth]: M = NONE): DriftVoice =>
+	({ voices, drift, wave, spread, cutoff, attack, release, motionShape, motionRate, motionDepth });
 
 export const DRIFT_SOUNDS: readonly DriftSoundPreset[] = [
-	{ id: 'strings', label: 'Strings', description: 'Strings: a bright, wide string section, swelling in over a bar.',
-		sound: s(6, 0.35, 0.85, 0.7, 2600, 1, 1) },
-	{ id: 'haze', label: 'Haze', description: 'Haze: every voice wandering, as wide as it goes, slow to come and go.',
-		sound: s(7, 0.8, 0.4, 1, 1100, 2, 2) },
+	{ id: 'strings', label: 'Strings', description: 'Strings: a bright, wide string section, swelling in over a bar, the filter opening with each new chord.',
+		sound: s(6, 0.35, 0.85, 0.7, 2600, 1, 1, ['swell', 4, 0.5]) },
+	{ id: 'haze', label: 'Haze', description: 'Haze: every voice wandering, as wide as it goes, slow to come and go, the filter wandering too.',
+		sound: s(7, 0.8, 0.4, 1, 1100, 2, 2, ['wander', 8, 0.3]) },
 	{ id: 'choir', label: 'Choir', description: 'Choir: soft, round voices close together, like an "oo".',
 		sound: s(5, 0.25, 0.2, 0.5, 1500, 0.75, 1.25) },
 	{ id: 'glass', label: 'Glass', description: 'Glass: three pure voices, quick in and ringing out, open at the top.',
 		sound: s(3, 0.1, 0.05, 0.35, 6000, 0.25, 2) },
-	{ id: 'tide', label: 'Tide', description: 'Tide: dark and wide, three bars to rise and three to fall.',
-		sound: s(6, 0.6, 0.6, 0.9, 700, 3, 3) },
-	{ id: 'dust', label: 'Dust', description: 'Dust: a narrow, worn, out-of-tune pad behind a dark filter.',
-		sound: s(4, 1, 0.7, 0.25, 450, 0.5, 0.75) },
+	{ id: 'tide', label: 'Tide', description: 'Tide: dark and wide, three bars to rise and three to fall, the filter sweeping up and back every 8 bars.',
+		sound: s(6, 0.6, 0.6, 0.9, 700, 3, 3, ['sweep', 8, 0.4]) },
+	{ id: 'dust', label: 'Dust', description: 'Dust: a narrow, worn, out-of-tune pad behind a dark filter that circles slowly.',
+		sound: s(4, 1, 0.7, 0.25, 450, 0.5, 0.75, ['circle', 4, 0.25]) },
 ];
 
-/** A key to compare a sound by (rounded as the knobs step) */
+/** A key to compare a sound by (rounded as the knobs step). With Depth 0 Motion's shape and
+ * Rate change nothing, so they don't count. */
 export function driftSoundKey(v: DriftVoice): string {
+	const depth = Math.round((v.motionDepth ?? 0) * 100);
+	const motion = depth > 0 ? [v.motionShape, v.motionRate, depth] : [];
 	return JSON.stringify([Math.round(v.voices), Math.round(v.drift * 100), Math.round(v.wave * 100), Math.round(v.spread * 100),
-		Math.round(v.cutoff), Math.round(v.attack * 4), Math.round(v.release * 4)]);
+		Math.round(v.cutoff), Math.round(v.attack * 4), Math.round(v.release * 4), ...motion]);
 }
 
 // A progression: its length (4 or 8 bars) and each bar's plates
@@ -78,10 +86,12 @@ const between = (r: () => number, lo: number, hi: number, step: number) => Math.
 const round2 = (x: number) => Math.round(x * 100) / 100;
 
 /** A random sound: every setting within a range that keeps it a pad (never silent, never a
- * buzz with no room), on the knobs' steps */
+ * buzz with no room), on the knobs' steps. Motion is drawn last (so every roll from before it
+ * is the same sound otherwise): in half the rolls, any shape, a Rate of 2–16 bars, Depth
+ * 0.15–0.5 */
 export function randomDriftSound(r: () => number = Math.random): DriftVoice {
 	const [lo, hi] = [400, 5000];
-	return {
+	const v = {
 		voices: Math.round(between(r, DRIFT_RANGES.voices[0], DRIFT_RANGES.voices[1], 1)),
 		drift: round2(between(r, 0.1, 0.9, 0.01)),
 		wave: round2(between(r, 0, 1, 0.01)),
@@ -89,6 +99,13 @@ export function randomDriftSound(r: () => number = Math.random): DriftVoice {
 		cutoff: Math.round(lo * (hi / lo) ** r()),
 		attack: between(r, 0.25, 3, 0.25),
 		release: between(r, 0.5, 3, 0.25),
+	};
+	if (r() < 0.5) return { ...v, motionShape: NONE[0], motionRate: NONE[1], motionDepth: 0 };
+	return {
+		...v,
+		motionShape: pick(r, MOTION_SHAPES),
+		motionRate: pick(r, MOTION_RATES.slice(1)),
+		motionDepth: round2(between(r, 0.15, 0.5, 0.01)),
 	};
 }
 

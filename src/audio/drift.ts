@@ -14,6 +14,7 @@
 // are unit-tested.
 
 import { NOTE_TO_SEMITONE, SCALES, type KeyScale } from '../lib/melody/theory';
+import type { MotionShape } from './driftMotion';
 
 export const DRIFT_PLATES = 6;
 export const DRIFT_MAX_BARS = 8;
@@ -29,10 +30,15 @@ export type DriftVoice = {
 	cutoff: number;   // Hz, the machine's low-pass
 	attack: number;   // bars to fade in
 	release: number;  // bars to fade out
+	// Motion (the plan's item 19, src/audio/driftMotion.ts): the X/Y pad's dot moving by itself
+	motionShape: MotionShape;
+	motionRate: number;  // bars a cycle: 1, 2, 4, 8 or 16 (not Swell's)
+	motionDepth: number; // 0..1, 0: off
 };
 
 export const DRIFT_RANGES = {
 	voices: [3, 7], drift: [0, 1], wave: [0, 1], spread: [0, 1], cutoff: [150, 8000], attack: [0.25, 4], release: [0.25, 4],
+	motionRate: [1, 16], motionDepth: [0, 1],
 } as const;
 
 // The swarm: its widest detune (cents either side, at full Spread), its wander (cents at full
@@ -243,8 +249,11 @@ export type DriftSounding = {
 	released: boolean;
 };
 
-/** One held note, a swarm of `voices` oscillators, into `out`; `random` places each voice's wander */
-export function playDriftNote(ctx: BaseAudioContext, voice: DriftVoice, note: DriftNote, out: AudioNode, random: () => number = Math.random): DriftSounding {
+/** One held note, a swarm of `voices` oscillators, into `out`; `random` places each voice's wander.
+ * `spreadMod`: a signal added to Spread (Motion's, src/audio/driftMotion.ts), which every voice
+ * follows: its detune and pan move with it as with the knob. */
+export function playDriftNote(ctx: BaseAudioContext, voice: DriftVoice, note: DriftNote, out: AudioNode, random: () => number = Math.random,
+	spreadMod?: AudioNode): DriftSounding {
 	const t = note.time;
 	const n = Math.round(Math.max(DRIFT_RANGES.voices[0], Math.min(DRIFT_RANGES.voices[1], voice.voices)));
 	const env = ctx.createGain();
@@ -259,7 +268,7 @@ export function playDriftNote(ctx: BaseAudioContext, voice: DriftVoice, note: Dr
 	env.connect(out);
 	const wave = periodicWave(ctx, voice.wave);
 	const layout = swarmLayout(n, voice.spread);
-	const parts = layout.map((l) => {
+	const parts = layout.map((l, li) => {
 		const osc = ctx.createOscillator();
 		osc.setPeriodicWave(wave);
 		osc.frequency.value = note.freq;
@@ -275,9 +284,20 @@ export function playDriftNote(ctx: BaseAudioContext, voice: DriftVoice, note: Dr
 		g.gain.value = 1 / Math.sqrt(n);
 		wander.connect(depth).connect(osc.detune);
 		osc.connect(g).connect(pan).connect(env);
+		// Motion's spread: this voice's share of it, in cents and in pan (as swarmLayout's)
+		let mods: GainNode[] = [];
+		if (spreadMod) {
+			const unit = swarmLayout(n, 1)[li];
+			const toCents = ctx.createGain(), toPan = ctx.createGain();
+			toCents.gain.value = unit.cents;
+			toPan.gain.value = unit.pan;
+			spreadMod.connect(toCents).connect(osc.detune);
+			spreadMod.connect(toPan).connect(pan.pan);
+			mods = [toCents, toPan];
+		}
 		osc.start(t);
 		wander.start(t);
-		return { osc, wander, depth, pan };
+		return { osc, wander, depth, pan, mods };
 	});
 	// Every other voice wanders the other way first, so the swarm spreads out from the start
 	parts.forEach((p, i) => { if (i % 2) p.depth.gain.value *= -1; });
@@ -305,7 +325,11 @@ export function playDriftNote(ctx: BaseAudioContext, voice: DriftVoice, note: Dr
 				p.osc.stop(from + r + 0.05);
 				p.wander.stop(from + r + 0.05);
 			}
-			parts[0].osc.onended = () => { try { env.disconnect(); } catch { /* gone */ } };
+			// The spread's signal lives on: let go of this note's taps on it, so the note can go
+			parts[0].osc.onended = () => {
+				try { env.disconnect(); } catch { /* gone */ }
+				if (spreadMod) for (const p of parts) for (const m of p.mods) { try { spreadMod.disconnect(m); } catch { /* gone */ } }
+			};
 		},
 		update(v, at: number) {
 			const lay = swarmLayout(n, v.spread);
