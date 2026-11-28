@@ -4321,6 +4321,30 @@ test("the Repeats brush shows it's picked (a frame, a tag, its own cursor), and 
 	await expect(pads(page).nth(0)).toHaveAttribute('aria-pressed', 'false');
 });
 
+// PR 134 (the plan's item 16): the pad's wave icon and its ×3 badge are printed on the pad, inside
+// it, above its lip, so they sink with a press (the icon was a pill pinned under it, over the lip)
+test('PR 134: the wave icon and the repeats badge are on the pad, above its lip, and sink with a press', async ({ page }) => {
+	await pads(page).nth(2).click();
+	await page.getByRole('button', { name: 'Repeats brush ×3' }).click();
+	await pads(page).nth(2).click();
+	await page.keyboard.press('Escape');
+	await expect(pads(page).locator('.wave-badge')).toHaveCount(16);
+	await expect(pads(page).nth(2).locator('.ratchet-badge')).toHaveText('×3');
+	const icon = pads(page).nth(2).locator('.wave-badge');
+	const pad = (await pads(page).nth(2).boundingBox())!, at = (await icon.boundingBox())!;
+	// Inside the pad, clear of its bottom edge (the lip is under the pad)
+	expect(at.y + at.height).toBeLessThanOrEqual(pad.y + pad.height - 6);
+	expect(at.y).toBeGreaterThan(pad.y + pad.height / 2);
+	// Held down, the pad sinks 4 px and the icon and the badge with it
+	const badge = (await pads(page).nth(2).locator('.ratchet-badge').boundingBox())!;
+	await page.mouse.move(pad.x + pad.width / 2, pad.y + 20);
+	await page.mouse.down();
+	await page.waitForTimeout(250);
+	expect((await icon.boundingBox())!.y - at.y).toBeCloseTo(4, 0);
+	expect((await pads(page).nth(2).locator('.ratchet-badge').boundingBox())!.y - badge.y).toBeCloseTo(4, 0);
+	await page.mouse.up();
+});
+
 // The pads (PR 127, the plan's item 9): a drag up or down for velocity, sideways to paint
 test('the pads: a lit pad dragged up or down sets its velocity, a sideways drag paints, arrows too; no sliders, no ⋯ menu, Reset in the header', async ({ page }) => {
 	const lane = async () => JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data
@@ -6381,6 +6405,29 @@ test.describe('Phone mode', () => {
 			const page_ = page.locator(`section[aria-label="${tab === 'Pads' ? 'Play' : tab}"]`);
 			expect(await page_.evaluate((el) => el.scrollHeight <= el.clientHeight + 1), tab).toBe(true);
 		}
+	});
+
+	// PR 134 (the plan's item 16): the top bar ran off the screen from 720 to 834 px wide (a Pixel
+	// XL held sideways is 731 with gesture navigation), hiding Undo, Redo and ☰. The tabs take the
+	// room that's left and show their first letters when it's too narrow for their names
+	test('PR 134: the top bar fits at every width from 568 to 915 px, ☰ on the screen', async ({ page }) => {
+		for (const width of [568, 600, 620, 640, 667, 683, 700, 720, 731, 760, 800, 834, 844, 915]) {
+			await page.setViewportSize({ width, height: width < 700 ? 320 : 390 });
+			for (const m of ['Rhythm', 'Drift']) {
+				await page.locator('.pl-machines').getByRole('radio', { name: m }).click();
+				const bar = page.locator('.pl-top'), tabs = page.locator('.pl-tabs');
+				expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `top bar at ${width}`).toBe(true);
+				expect(await tabs.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `tabs at ${width}`).toBe(true);
+				const menu = (await bar.getByRole('button', { name: 'Menu' }).boundingBox())!;
+				expect(menu.x + menu.width, `☰ at ${width}`).toBeLessThanOrEqual(width);
+			}
+		}
+		// The full names where there's room, the first letters where there isn't
+		await page.setViewportSize({ width: 844, height: 390 });
+		await expect(page.locator('.pl-tab .pl-tl').first()).toBeVisible();
+		await page.setViewportSize({ width: 731, height: 331 });
+		await expect(page.locator('.pl-tab .pl-tl').first()).toBeHidden();
+		await expect(page.locator('.pl-tab .pl-ts').first()).toBeVisible();
 	});
 
 	test('PR 88: the Pads page rotates and reverses the pattern', async ({ page }) => {

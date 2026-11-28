@@ -720,6 +720,13 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   The step numbers are printed on the panel (each beat's brighter) and the note names under the
   pads, no longer in black pills; the ⋮ is a small dark cap, dimmed until its pad is hovered
   (always lit on a touch screen). No size changed.
+- **The wave icon is printed on the pad** (PR 134, the plan's item 16): the pad's wave
+  (`.wave-badge`) and its ×3 badge are inside the pad (`.padTEST`), so they sink with a press; the
+  icon sits 9 px above the pad's bottom edge in its wave's colour, pressed into the rubber (a dark
+  shadow under, a faint light over), no pill. Until then both were siblings of the pad in
+  `.padTESTwrap`, the icon a dark pill pinned at the wrapper's bottom, over the lip, which stayed
+  put while the pad sank. A browser test checks they're inside the pad, above its lip, and move
+  4 px with a press.
 
 ### Pad settings (the ⋮ popover)
 - `PadSettingsPopover.vue`, opened by a pad's ⋮ (`openPadSettings()` in `DrumSequencer.vue`):
@@ -1256,8 +1263,9 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   before, which comes after). The phone's pages too since PR 118 (below).
 - **On the phone** (PR 118, part 3, which finishes item 4; option P of the mockups): a
   **RHY | BASS** switch in phone mode's top bar (`.pl-machines`, a radiogroup "Machine",
-  before the tabs; it sets `machine`, as the rail's rows do). The tabs read P S M F K under
-  720 px (`.pl-ts`; named Pads, Sound... as before), so the bar still fits at 568 px. While
+  before the tabs; it sets `machine`, as the rail's rows do). The tabs read P S M F K when
+  there's no room for their names (`.pl-ts`; named Pads, Sound... as before; under 720 px until
+  PR 134, see "Phone mode"), so the bar still fits at 568 px. While
   Bass is chosen (`phoneCtx.lane` is Bass's lane, `PhoneLayout`'s `lane`):
   - **Pads**: Bass's pads, the tiny pads too, an **ACC** badge on an accented step and a mark
     in the corner for what it does to the next step, **⤳** (slides into it) or **═** (tied
@@ -2026,8 +2034,16 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
     outlined in the accent; a horizontal swipe of 70 px moves between them too, not from a
     knob, slider or the pads), **Play / Stop** (on every page, PR 48), Undo, Redo (PR 72) and
     ☰. It fits on one line from 568 px (the first iPhone SE) up (Play's word hidden under
-    600 px; under 720 px the scope is 48 px wide and the tabs tighter: those rules came before
-    the ones they change until PR 73, so they never applied).
+    640 px; under 720 px the scope is 48 px wide; those rules came before the ones they change
+    until PR 73, so they never applied). **The tabs take the room the bar has left** (PR 134,
+    the plan's item 16: `.pl-tabs` is `flex: 1` and a container, its tabs share it) and read
+    P S M F K when it's under 270 px (a container query; the full names need 266), whatever the
+    screen's width; full names from about 790 px. Until then the names came back at 720 px,
+    where they didn't fit: from 720 to 834 px wide the bar ran off the screen, Undo, Redo and ☰
+    with it (at 731 px, a Pixel XL held sideways with gesture navigation, ☰ was 96 px past the
+    edge), and 600–640 px were a few px over too (the tighter machine keys and scope apply under
+    640 now, 600 before). A browser test checks the bar, the tabs and ☰ at fourteen widths from
+    568 to 915 px, on Rhythm and on Drift.
   - **RHY | BASS | DRUM | DRIFT** (PR 118, DRUM since PR 121, DRIFT since PR 124) in the top bar picks the machine the
     Pads, Sound and Key pages show (see "The Bass machine" and "The Drums machine", On the
     phone).
@@ -2784,17 +2800,9 @@ branch for the maintainer to pick by ear, as mockups are for the look); each pho
 with mockups at 568 × 320, 683 × 331 (a Pixel XL held sideways with the navigation buttons),
 731 × 331 (the same with gesture navigation) and 844 × 390. Strum (a new chord's notes entering
 one after another) went to the Maybes: with Drift's slow fade-ins it would sound much like
-Attack. Its first item, 15 (Drift's gap at the bar line, and the line of text under its bars),
-was PR 133.
+Attack. Its first items were 15 (Drift's gap at the bar line, and the line of text under its
+bars), PR 133, and 16 (the pads' wave icon on the pad, and the phone's top bar fitting), PR 134.
 
-16. **Two small fixes: the pads' wave icon, and the phone's top bar.** The wave icon is a sibling
-    of the pad (`.wave-badge` in `SynthStepGrid.vue`, pinned to the bottom of `.padTESTwrap`,
-    over the lip), so it sits low and doesn't sink with a press: move it (and the ×3 repeat
-    badge) inside the pad, 8–10 px higher, printed on the rubber in its wave's colour with no
-    pill, sinking with the pad (Rhythm's and Bass's pads). Phone mode's top bar overflows from
-    about 720 to 834 px wide (the tabs' full names come back at 720 px): at 731 px Undo, Redo
-    and ☰ are off the screen (96 px past it); at 640 and 720 px, 5 px. Fit it at every width
-    from 568 to 915 px, and the browser test checks more widths than 568 and 844.
 17. **Drum sounds and kits.** New kit sounds made by recipes of their own in
     `scripts/render-drum-kit.mjs`, not through the Rhythm voice (whose only filter is a
     low-pass, which is why its Hat is a higher, shorter Metal; the script then no longer needs
@@ -3170,6 +3178,7 @@ Done:
 | 131 | Waves and noise per pattern (the plan's item 13): each pattern slot A–D keeps its pads' waves and which pads get noise, as it keeps its steps; a wave tile, Random, a pad's ⋮ menu, a recording and the Noise card's pad buttons change the slot showing, a slot never used opens on the main wave with noise everywhere, and a sound preset (or the Sounds dice) sets every slot's waves. The chain's export plays each bar's own waves and noise. A project saved before gives every slot its shared waves and noise. |
 | 132 | A PHONE switch on the lo-fi pedal (the plan's item 14): a mini switch, as CRUSH, that plays the pedal's sound as a telephone carries it, 300 Hz–3.4 kHz in mono (24 dB an octave at each edge, the hiss and crackle too), in both engines; linear, so the stems still add up. Saved as `fx.tape.phone` (older projects off), reset by presets and File → New, not in the Sounds dice. On the stomp box TAPE \| VINYL stands upright beside it; on the deck it follows TAPE \| VINYL, the deck tighter on a phone held upright so it fits. |
 | 133 | Drift's gap at the bar line (the plan's item 15, the first of the maintainer's brainstorm after PR 132, whose plan it also records: two small fixes, the drum sounds and kits, "Synth" and two new sounds, Drift's Motion, Pulse and Octave and Voicing, then four phone items, before the major upgrades): a Drift note let go before its fade-in had finished fell silent until the bar line, about 0.1 s live (with a click) and its whole bar in an export, whenever its Attack lasted its run (the factory's 1 bar, Strings, Haze, Tide) and rounding went one way, so it came and went; it now fades out from where its fade-in had got to (`release()` in `src/audio/drift.ts`). The line of text under Drift's bars is gone. |
+| 134 | Two small fixes (the plan's item 16): the pads' wave icon (and their ×3 badge) is printed on the pad, inside it, 9 px above its lip, in its wave's colour with no pill, so it sinks with a press (it was a dark pill pinned under the pad, over its lip, which stayed put); and phone mode's top bar fits at every width: the tabs take the room left and read P S M F K when it's too narrow for their names (a container query), so from 720 to 834 px wide, where the bar ran off the screen with Undo, Redo and ☰ (a Pixel XL held sideways is 731), it now fits. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

@@ -52,18 +52,20 @@
 
                             <div class="pepper" />
                         </div>
-                    </div>
+                        <!-- A ratchet: the step plays this many quick hits; with the Repeats brush, the
+                             pad under the mouse shows what a click would give it -->
+                        <div v-if="brushPreview(index) !== null" class="ratchet-badge is-preview" aria-hidden="true">
+                            ×{{ brushPreview(index) }}</div>
+                        <div v-else-if="ratchetFor(index) > 1" class="ratchet-badge" :class="{ 'is-off': !active }"
+                            aria-hidden="true">×{{ ratchetFor(index) }}{{ notesArrow(index) }}</div>
 
-                    <!-- A ratchet: the step plays this many quick hits; with the Repeats brush, the
-                         pad under the mouse shows what a click would give it -->
-                    <div v-if="brushPreview(index) !== null" class="ratchet-badge is-preview" aria-hidden="true">
-                        ×{{ brushPreview(index) }}</div>
-                    <div v-else-if="ratchetFor(index) > 1" class="ratchet-badge" :class="{ 'is-off': !active }"
-                        aria-hidden="true">×{{ ratchetFor(index) }}{{ notesArrow(index) }}</div>
+                        <!-- Its wave, printed on the rubber (inside the pad since PR 134, so it sinks with a
+                             press) -->
+                        <div class="wave-badge" :class="{ 'is-off': !active }" :data-wave="waveFor(index)"
+                            aria-hidden="true">
+                            <WaveIcon :wave="waveFor(index)" />
+                        </div>
 
-                    <div class="wave-badge" :class="{ 'is-off': !active }" :data-wave="waveFor(index)"
-                        :title="waveFor(index)">
-                        <WaveIcon :wave="waveFor(index)" />
                     </div>
 
                     <!-- The LFO bending this note's pitch (LFO target Pitch) -->
@@ -435,37 +437,32 @@ const nearestNote = props.nearestNote;
     outline-offset: 2px;
 }
 
+/* The pad's wave, printed on the rubber (PR 134): inside the pad, so it sinks with a press, and
+   above the lip (it was a dark pill pinned under the pad, over its lip, which didn't move) */
 .wave-badge {
-    --wb-pad-x: 3px;
-    --wb-pad-y: 2px;
-    --wb-radius: 6px;
     position: absolute;
-    bottom: 3px;
+    bottom: 9px;
     left: 50%;
     transform: translateX(-50%);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: var(--wb-pad-y) var(--wb-pad-x);
-    border-radius: var(--wb-radius);
-    background: linear-gradient(145deg, rgba(0, 0, 0, .55), rgba(0, 0, 0, .35));
+    display: block;
     color: #fff;
-    line-height: 1;
+    line-height: 0;
     pointer-events: none;
     user-select: none;
-    opacity: .95;
-    z-index: 2;
+    opacity: .9;
+    z-index: 3;
+    /* Ink pressed into the rubber: dark under, a faint light over */
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .6)) drop-shadow(0 -1px 0 rgba(255, 255, 255, .08));
 }
 
 .wave-badge :deep(.wave-ico) {
-    width: 11px;
-    height: 11px;
+    width: 13px;
+    height: 13px;
     display: block;
 }
 
 .wave-badge.is-off {
-    opacity: .55;
+    opacity: .5;
 }
 
 .wave-badge[data-wave="sine"] {
@@ -500,7 +497,8 @@ const nearestNote = props.nearestNote;
     color: #e6c6ff;
 }
 
-/* A ratchet's hit count, at the top of the pad (the wave badge is at the bottom) */
+/* A ratchet's hit count, at the top of the pad (the wave badge is at the bottom); inside the pad,
+   so it sinks with a press */
 .ratchet-badge {
     position: absolute;
     top: 3px;
