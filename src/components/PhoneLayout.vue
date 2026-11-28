@@ -25,7 +25,6 @@
 					:class="{ on: page === p.id }" :aria-selected="page === p.id" :aria-label="p.label" @click="page = p.id"><span
 						class="pl-tl">{{ p.label }}</span><span class="pl-ts" aria-hidden="true">{{ p.label[0] }}</span></button>
 			</div>
-			<span class="pl-grow"></span>
 			<!-- Play / Stop, on every page -->
 			<button type="button" class="pl-go" :class="{ playing: ctx.isPlaying }" :aria-label="ctx.isPlaying ? 'Stop' : 'Play'"
 				:aria-pressed="ctx.isPlaying" @click="ctx.togglePlay()">
@@ -702,13 +701,17 @@ function hzText(hz: number) {
 	display: none;
 }
 
-@media (max-width: 719.98px) {
+@container pl-tabs (max-width: 269.98px) {
 	.pl-tl {
 		display: none;
 	}
 
 	.pl-ts {
 		display: inline;
+	}
+
+	.pl-tab {
+		padding: 7px 4px;
 	}
 }
 
@@ -734,17 +737,16 @@ function hzText(hz: number) {
 }
 
 /* The machine keys: no LEDs under 900 px, so four fit (PR 121 took them off under 600 for
-   three; Drift, part 3, made it four); under 600 tighter keys and a narrower scope */
+   three; Drift, part 3, made it four); under 640 (600 until PR 134) tighter keys and a narrower
+   scope */
 @media (max-width: 899.98px) {
 	.pl-mled { display: none; }
 	.pl-mkey { padding: 0 6px; }
 }
 
-@media (max-width: 599.98px) {
+@media (max-width: 639.98px) {
 	.pl-mkey { padding: 0 3px; letter-spacing: 0; }
 	.pl-top .pl-scope { width: 32px; }
-	/* The spacer's gap: there's no room left over to push Play right */
-	.pl-top .pl-grow { display: none; }
 }
 
 /* Drift's Bars 4 | 8 and Copy */
@@ -1038,8 +1040,16 @@ function hzText(hz: number) {
 	color: var(--nac-scope-trace, hsl(var(--pt-accent) 85% 68%));
 }
 
+/* The tabs take the room the bar has left (PR 134: they were as wide as their names, and from 720
+   to 834 px wide, where the full names came back, the bar ran off the screen with Undo, Redo and
+   ☰). A container, so they switch to their first letters when that room is too narrow for the
+   full names, whatever the screen's width */
 .pl-tabs {
+	flex: 1 1 auto;
+	min-width: 0;
+	container: pl-tabs / inline-size;
 	display: flex;
+	justify-content: space-between;
 	gap: 3px;
 	padding: 3px;
 	border-radius: 11px;
@@ -1057,7 +1067,8 @@ function hzText(hz: number) {
 	letter-spacing: .08em;
 	text-transform: uppercase;
 	padding: 7px 12px;
-	min-width: 58px;
+	flex: 1 1 auto;
+	min-width: 0;
 	border-radius: 8px;
 }
 
@@ -1100,6 +1111,7 @@ function hzText(hz: number) {
 	box-shadow: 0 0 0 2px hsl(var(--pt-accent) 90% 70% / .6), 0 0 14px hsl(var(--pt-accent) 90% 60% / .7);
 }
 
+/* A spacer (the hold sheets' captions) */
 .pl-grow {
 	flex: 1;
 	min-width: 0;
@@ -1629,18 +1641,16 @@ function hzText(hz: number) {
 	.pl-scope {
 		width: 48px;
 	}
+}
 
-	.pl-tab {
-		padding: 7px 8px;
-		min-width: 0;
+/* Play's word: under 640 px (600 until PR 134, which left the tabs 36 px short at 604) */
+@media (max-width: 639.98px) {
+	.pl-go span {
+		display: none;
 	}
 }
 
 @media (max-width: 600px) {
-	.pl-go span {
-		display: none;
-	}
-
 	.pl-arr {
 		display: none;
 	}
