@@ -1587,6 +1587,28 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   gate (each 1/8 sounding for its first half, silent after, at full Depth), Duck from a muted
   Drums machine's four on the floor (low just after each beat, back by the next, the machine
   stems adding up); live, a 1/4 gate opening and shutting.
+- **Octave and Voicing** (PR 139, the plan's item 21; `voicedBar()` and `driftNoteRuns()` in
+  `src/audio/drift.ts`, unit-tested): where the chord sits and how it's spread, both engines.
+  **Octave** −1, 0 or +1 moves every note. **Voicing**: **Close** (the plates as they stack, as
+  before), **Open** (every other note of the chord, from the lowest, an octave up) or **Low root**
+  (the chord's root, as `chordLabel()` names it (`chordRootPc()`; the lowest note when no shape
+  fits), doubled an octave under it). A bar's notes are its plates voiced: live, `driftTargets()`
+  and the previews, kept by pitch as ever, so a note two bars share still carries on (Low root's
+  doubled root too); the export and the MIDI file's channel 3 go by **runs of pitches**
+  (`driftNoteRuns()`, which with Close gives exactly `driftRuns()`'s notes), no longer of plates;
+  a seamless loop carries a pitch round its end as before. The chord names stay the plates'. A
+  change while playing applies to the bar playing at once. The swarm's screen draws the notes as
+  voiced. **The controls**: a "Chord" group beside In bars in Drift's knob card (In bars and it
+  share the row two thirds to one, so Attack and Release stay under Voices and Drift): keys
+  **−1 0 +1** ("Drift octave") over **Close Open Low** ("Drift voicing"; Low is "Low root"). The
+  card is the size it was at every width. Not on the phone's Sound page yet. Not MIDI-learnable
+  (switches). Saved in `drift.sound` as `octave` and `voicing` (a sound saved before: 0 and
+  Close). Part of a Drift sound: the six presets are 0 and Close; the dice draws them after Pulse
+  (an octave down or up in a fifth of the rolls each way, Open in a third, Low root in a sixth);
+  0 and Close don't count when a sound is matched, so a sound from before still lights its
+  preset. Browser tests: the keys, saved, one undo step each; exports whose MIDI notes are A3 C4
+  E4 voiced (Open: A3 E4 C5; Low root: A2 under them; −1: an octave down), and A alone an octave
+  up sounding at 440 Hz.
 - **Pattern Tools** are dimmed on Drift (a note says why). **The Melody Maker stays live** (its
   key and scale move the plates), with only Generate dimmed.
 - **The rail**: a Drift row (its screens may shrink to 26 px and its gaps are 3 and 5 px, so it's
@@ -1604,7 +1626,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   unit-tested): while Drift is shown the transport's boxes are **Drift sounds** (Strings, Haze,
   Choir, Glass, Tide, Dust, and a dice "Random drift sound") and **Progressions** (Hold, Rise,
   Fall, Sway, Wander, Circle, and "Random progression"). A sound sets Drift's sound only (Voices,
-  Drift, Wave, Spread, Filter, Attack, Release, and Motion since PR 137, Pulse since PR 138; never its level, Pedals, mute or bars); a
+  Drift, Wave, Spread, Filter, Attack, Release, and Motion since PR 137, Pulse since PR 138, Octave and Voicing since PR 139; never its level, Pedals, mute or bars); a
   progression its bars only (Wander and Circle are 8 bars, the rest 4; the bars after its length
   emptied) and picks bar 1. Progressions are written as plates (`progressionChords()`), so they
   play in any key and scale: three plates in a row are a triad, `[0,1,2]` the key's own chord,
@@ -2928,11 +2950,8 @@ one after another) went to the Maybes: with Drift's slow fade-ins it would sound
 Attack. Its first items were 15 (Drift's gap at the bar line, and the line of text under its
 bars), PR 133, 16 (the pads' wave icon on the pad, and the phone's top bar fitting), PR 134,
 17 (the drum sounds and kits), PR 135, 18 ("Synth", and Keys and Pizz), PR 136, 19 (Drift's
-Motion), PR 137, and 20 (Drift's Pulse), PR 138.
+Motion), PR 137, 20 (Drift's Pulse), PR 138, and 21 (Drift's Octave and Voicing), PR 139.
 
-21. **Drift: Octave and Voicing.** Octave −1 / 0 / +1, and Voicing: Close (as now), Open (every
-    other note an octave up) or Low root (the chord's root doubled an octave down). Both
-    engines; saved with Drift's sound.
 22. **Phone: ☰ on the left, and a new menu.** The drawer opens from the left, so its button
     goes to the top bar's left end (the scope and the tiny pads move right). The menu is the
     desktop's File dropdown inside a drawer, a menu in a menu, cut off at 331 px tall; instead
@@ -3269,6 +3288,7 @@ Done:
 | 136 | "Synth", and two new sounds (the plan's item 18): the Rhythm machine reads **Synth** on screen (the rail, the headers, its switches' names, the phone's **SYN**, MIDI learn's names, the `_synth.wav` stem; the code, the saved names and the MIDI ids stay `rhythm` and `synth.*`); the Sound presets **Kick and Snare** became **Keys** (an FM electric piano) and **Pizz** (a plucked string), picked by ear from five candidates on an audition page (Mallet third, then Stab and Chip). |
 | 137 | Drift's Motion (the plan's item 19): the X/Y pad's dot moves by itself while playing, a shape (Circle: the filter and the spread together; Sweep: the filter; Wander: both, smoothly at random; Swell: the filter shut at each new chord, open again over Attack), a Rate of 1–16 bars and a Depth (0: off), from Play's bar 1 as the LFO; both engines follow the same points (the filter's detune, a spread signal every voice follows), so exports match; drawn on the pad in the LFO's amber (its path, and the dot while playing); the keys and Depth (MIDI-learnable, 68 knobs) under the pad's mini knobs; saved with Drift's sound (older projects: off); Strings, Haze, Tide and Dust move, the dice draws it last; the Export dialog fits a loop to its cycle. The phone's controls come with item 24. |
 | 138 | Drift's Pulse (the plan's item 20): rhythm for the held chords, a gain after Drift's level that both engines move step by step: a gate (1/4, 1/8, 1/16, open for the first half of each, swing included) or **Duck**, a dip at every hit of the Drums machine's slot 1, heard or muted (a ghost kick), back up by the next hit, planned from the hits so it's on time and the same live and exported; a Depth (MIDI-learnable, 69 knobs). Its keys and Depth are a row at the bottom of Drift's knob card; saved with Drift's sound (older projects: Off); the dice draws it last. The stems still add up. |
+| 139 | Drift's Octave and Voicing (the plan's item 21): Octave −1 / 0 / +1 moves the chord; Voicing Close (as the plates stack, as before), Open (every other note an octave up) or Low root (the chord's root doubled an octave down); both engines, the previews and the MIDI file, by runs of pitches so a shared note still carries on; keys in a "Chord" group beside In bars; saved with Drift's sound (older projects: 0, Close), drawn last by the dice. |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

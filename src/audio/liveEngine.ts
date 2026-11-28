@@ -27,7 +27,7 @@ import { bassNoteFromHit, bassPlan, playBassNote, type BassNote, type BassSoundi
 import { DRUM_SLOTS, playDrumHit, type DrumSounding } from './drums';
 import { loadDrumKit, drumKitNow, soundBuffer } from './drumKit';
 import { slotData, type Drums } from '../lib/machines/drums';
-import { clampCutoff, createDriftFilter, FILTER_GLIDE_S, heldInBar, playDriftNote, type DriftSounding } from './drift';
+import { clampCutoff, createDriftFilter, FILTER_GLIDE_S, heldInBar, playDriftNote, voicedBar, type DriftSounding } from './drift';
 import { driftMotion, driftVoice, type Drift } from '../lib/machines/drift';
 import { motionAt, motionParams, MOTION_POINTS_PER_STEP, padX, rampTo } from './driftMotion';
 import { applyPulse, duckHits, pulseStepEvents, releasePulse } from './driftPulse';
@@ -1070,8 +1070,8 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	function driftTargets(bar: number): number[] {
 		const d = s.drift;
 		if (!d || !machineHeard('drift')) return [];
-		const hz = s.driftPlateHz?.value ?? [];
-		return heldInBar(d.chords, d.length, bar).flatMap((on, k) => (on && hz[k] ? [hz[k]] : []));
+		// Voiced (the plan's item 21): Octave and Voicing move or add notes, kept by pitch as ever
+		return voicedBar(heldInBar(d.chords, d.length, bar), s.driftPlateHz?.value ?? [], d.voicing, d.octave);
 	}
 
 	/** From `time` on, the notes held are `pitches`: the others fade out, the new ones fade in */
@@ -1107,7 +1107,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 	}
 
 	// An edit while playing (a plate, the length, the key, the mute): the bar playing follows it now
-	watch(() => [s.drift?.chords, s.drift?.length, s.driftPlateHz?.value, machineHeard('drift')], () => {
+	watch(() => [s.drift?.chords, s.drift?.length, s.driftPlateHz?.value, machineHeard('drift'), s.drift?.voicing, s.drift?.octave], () => {
 		if (!isPlaying.value || driftBarCount < 0 || !s.drift) return;
 		driftBarNow.value = driftBarCount % Math.max(1, s.drift.length);
 		driftHold(audioCtx.currentTime + 0.01, driftTargets(driftBarCount));
@@ -1137,8 +1137,7 @@ export function useLiveEngine(s: LiveEngineSettings) {
 		if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
 		const t = audioCtx.currentTime + 0.01;
 		releaseDriftPreview(t);
-		const hz = s.driftPlateHz?.value ?? [];
-		const pitches = heldInBar(d.chords, d.length, bar).flatMap((on, k) => (on && hz[k] ? [hz[k]] : []));
+		const pitches = voicedBar(heldInBar(d.chords, d.length, bar), s.driftPlateHz?.value ?? [], d.voicing, d.octave);
 		if (!pitches.length || d.muted) return;
 		const voice = driftVoice(d);
 		const attack = Math.min(0.4, d.attack * barSeconds());

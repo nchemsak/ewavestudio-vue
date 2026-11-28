@@ -771,7 +771,7 @@ import { createDrift, driftMotion, driftVoice, togglePlate, copyToNextBar, type 
 import { anySolo, createMix, dry, heard, type MachineId } from '../lib/machines/mix';
 import { DRIFT_PROGRESSIONS, DRIFT_SOUNDS, driftProgressionKey, driftSoundKey, progressionChords, randomDriftProgression, randomDriftSound } from '../lib/machines/driftPresets';
 import type { DriftVoice } from '../audio/drift';
-import { chordLabel, driftHasNotes, heldInBar, plateHz as driftPlateHzOf, platePitchClasses, plateSemitones, plateSpelling, driftRootMidi } from '../audio/drift';
+import { chordLabel, driftHasNotes, heldInBar, voicedBar, plateHz as driftPlateHzOf, platePitchClasses, plateSemitones, plateSpelling, driftRootMidi } from '../audio/drift';
 import { createDrums, hitToSound, keepSound, slotData, slotSound, soundName, type Drums } from '../lib/machines/drums';
 import { soundHue } from '../lib/machines/drumColours';
 import { DRUM_KITS, DRUM_PATTERNS, drumKitKey, drumRowsFrom, drumRowsKey, kitSlots, randomDrumKit, randomDrumPattern } from '../lib/machines/drumPresets';
@@ -1120,8 +1120,9 @@ const driftLabels = computed(() => {
 		chordLabel(heldInBar(drift.chords, drift.length, b).flatMap((on, k) => (on ? [pcs[k]] : [])), driftNames.value));
 });
 // The notes of the bar the plates edit (the swarm's screen)
-const driftNotes = computed(() => heldInBar(drift.chords, drift.length, driftPick.value)
-	.flatMap((on, k) => (on ? [{ hz: driftPlateHz.value[k], hue: driftPlates.value[k].hue }] : [])));
+// The picked bar's notes as they sound, voiced (Octave and Voicing, the plan's item 21)
+const driftNotes = computed(() => voicedBar(heldInBar(drift.chords, drift.length, driftPick.value), driftPlateHz.value, drift.voicing, drift.octave)
+	.map((hz) => ({ hz, hue: padHue(hz * 2) })));
 // A shorter length keeps the picked bar inside it
 watch(() => drift.length, (n) => { if (driftPick.value >= n) driftPick.value = 0; });
 function toggleDriftPlate(bar: number, plate: number) {

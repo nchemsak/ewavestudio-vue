@@ -114,18 +114,36 @@
                     </div>
                 </div>
             </div>
-            <div class="df-kgroup" role="group" aria-label="Drift fades, in bars">
-                <span class="df-kcap">In bars</span>
-                <div class="df-kgrid two">
-                    <div class="df-kcell">
-                        <Knob midi-id="drift.attack" v-model="drift.attack" label="Attack" :value-text="barsText(drift.attack)"
-                            :min="0.25" :max="4" :step="0.25" :detents="[1, 2]" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
-                        <span class="df-kval">{{ barsText(drift.attack) }}</span>
+            <!-- In bars beside Chord (the plan's item 21: Octave and Voicing, where the chord sits
+                 and how it's spread; not on the phone yet) -->
+            <div class="df-krow" :class="{ compact }">
+                <div class="df-kgroup" role="group" aria-label="Drift fades, in bars">
+                    <span class="df-kcap">In bars</span>
+                    <div class="df-kgrid two">
+                        <div class="df-kcell">
+                            <Knob midi-id="drift.attack" v-model="drift.attack" label="Attack" :value-text="barsText(drift.attack)"
+                                :min="0.25" :max="4" :step="0.25" :detents="[1, 2]" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
+                            <span class="df-kval">{{ barsText(drift.attack) }}</span>
+                        </div>
+                        <div class="df-kcell">
+                            <Knob midi-id="drift.release" v-model="drift.release" label="Release" :value-text="barsText(drift.release)"
+                                :min="0.25" :max="4" :step="0.25" :detents="[1, 2]" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
+                            <span class="df-kval">{{ barsText(drift.release) }}</span>
+                        </div>
                     </div>
-                    <div class="df-kcell">
-                        <Knob midi-id="drift.release" v-model="drift.release" label="Release" :value-text="barsText(drift.release)"
-                            :min="0.25" :max="4" :step="0.25" :detents="[1, 2]" :size="compact ? 'small' : 'medium'" :useThemeArc="true" />
-                        <span class="df-kval">{{ barsText(drift.release) }}</span>
+                </div>
+                <div v-if="!compact" class="df-kgroup df-chord" role="group" aria-label="Drift chord">
+                    <span class="df-kcap">Chord</span>
+                    <div class="sp-keys" role="radiogroup" aria-label="Drift octave">
+                        <button v-for="o in [-1, 0, 1]" :key="o" type="button" class="sp-key" :class="{ on: drift.octave === o }" role="radio"
+                            :aria-checked="drift.octave === o" :aria-label="o === 0 ? 'Octave as the plates' : `Octave ${o > 0 ? 'up' : 'down'}`"
+                            :title="o === 0 ? 'The chord where the plates are' : `The chord an octave ${o > 0 ? 'up' : 'down'}`"
+                            @click="drift.octave = o">{{ o > 0 ? '+1' : o < 0 ? '−1' : '0' }}</button>
+                    </div>
+                    <div class="sp-keys" role="radiogroup" aria-label="Drift voicing">
+                        <button v-for="v in DRIFT_VOICINGS" :key="v" type="button" class="sp-key" :class="{ on: drift.voicing === v }" role="radio"
+                            :aria-checked="drift.voicing === v" :aria-label="VOICING_NAMES[v]" :title="VOICING_TIPS[v]"
+                            @click="drift.voicing = v">{{ v === 'lowroot' ? 'Low' : VOICING_NAMES[v] }}</button>
                     </div>
                 </div>
             </div>
@@ -156,7 +174,7 @@
 import { computed, useId } from 'vue';
 import Knob from './Knob.vue';
 import DriftXYPad from './DriftXYPad.vue';
-import { DRIFT_RANGES } from '../audio/drift';
+import { DRIFT_RANGES, DRIFT_VOICINGS, VOICING_NAMES, type DriftVoicing } from '../audio/drift';
 import { MOTION_NAMES, MOTION_RATES, MOTION_SHAPES, type MotionShape } from '../audio/driftMotion';
 import { PULSE_MODES, PULSE_NAMES, type PulseMode } from '../audio/driftPulse';
 import type { DriftMotionView } from '../composables/useDriftMotion';
@@ -171,6 +189,12 @@ const props = defineProps<{
     compact?: boolean;                    // phone mode's Sound page: no X/Y pad (it's on the Pads page), Filter and Spread knobs
     motionView?: DriftMotionView | null;  // where Motion has the pad's dot now (only the pad reads it)
 }>();
+
+const VOICING_TIPS: Record<DriftVoicing, string> = {
+    close: 'Close: the chord as the plates stack it, in thirds',
+    open: 'Open: every other note of the chord, from the lowest, an octave up: wider, airier',
+    lowroot: 'Low root: the chord\'s root doubled an octave under it: fuller, a bass under the pad',
+};
 
 const PULSE_TIPS: Record<PulseMode, string> = {
     off: 'Pulse off: the chords held as they are',
@@ -313,6 +337,27 @@ const stops = computed(() => fadeStops(props.drift));
 .df-mrate.is-swell .sp-keys,
 .df-motion.is-off .sp-keys {
     opacity: .5;
+}
+
+/* In bars beside Chord: two thirds and a third, so Attack and Release stay under Voices and Drift */
+.df-krow:not(.compact) {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 4px;
+    align-items: start;
+}
+
+.df-krow:not(.compact) .df-kgrid.two {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.df-krow.compact {
+    display: contents;
+}
+
+.df-chord {
+    gap: 6px;
+    align-self: center;
 }
 
 /* Pulse, the knob card's last row */

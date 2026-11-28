@@ -189,6 +189,7 @@ export function changeEverything(st: ProjectState) {
 	df.voices = 3; df.drift = 0.9; df.wave = 0.1; df.spread = 0.2; df.cutoff = 600; df.attack = 2.5; df.release = 0.5;
 	df.motionShape = 'wander'; df.motionRate = 16; df.motionDepth = 0.35;
 	df.pulseMode = '1/8'; df.pulseDepth = 0.45;
+	df.octave = -1; df.voicing = 'lowroot';
 	df.muted = true; df.level = 0.4; df.pedals = 0.25; df.length = 8;
 	df.chords = df.chords.map((r, b) => r.map((_, k) => (b + k) % 2 === 0));
 	// Patterns A–D: C is playing (the lane above), B holds another pattern
