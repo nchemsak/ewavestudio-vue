@@ -7526,7 +7526,7 @@ test('the rail mixer: Pedals at none keeps a machine out of the reverb; machine 
 	// The machine stems add up to the mix, sample for sample
 	for (const ch of [0, 1]) {
 		const mix = wavSamples(f('mix'), ch).samples;
-		const [r, b] = ['rhythm', 'bass'].map((p) => wavSamples(f(p), ch).samples);
+		const [r, b] = ['synth', 'bass'].map((p) => wavSamples(f(p), ch).samples);
 		let worst = 0;
 		for (let i = 0; i < mix.length; i++) worst = Math.max(worst, Math.abs(r[i] + b[i] - mix[i]));
 		expect(worst, `channel ${ch}`).toBeLessThan(1e-3);
