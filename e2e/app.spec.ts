@@ -8261,7 +8261,7 @@ test('the Drift machine: a project from before it opens with nothing held, and t
 	await expect(dialog.getByText("Drift's chords take 4 bars")).toBeVisible();
 	await dialog.getByRole('button', { name: 'Use 4 bars' }).click();
 	await expect(dialog.getByText("Drift's chords take 4 bars")).toBeHidden();
-	await expect(dialog.getByText(/rhythm and drift: they add up/)).toBeVisible();
+	await expect(dialog.getByText(/synth and drift: they add up/)).toBeVisible();
 });
 
 test('the Drift machine goes straight to the reverb: its Pedals is its send, the delay never hears it, and the effects stems still add up', async ({ page }) => {
