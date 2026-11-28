@@ -27,8 +27,9 @@ describe('share links', () => {
         applySnapshot(other, data);
         const back: any = buildSnapshot(other);
         delete back.ui;
-        // A Drums slot that played a kept sound plays its own kit sound there (slot 4: Hat)
-        rest.drums.slots[3].sound = 'kit:hat';
+        // A Drums slot that played a kept sound plays its own kit sound there (slot 4: the Hat,
+        // 'kit:closed' since PR 135)
+        rest.drums.slots[3].sound = 'kit:closed';
         expect(back).toEqual(rest);
     });
 

@@ -4417,7 +4417,7 @@ test('the pads: a lit pad dragged up or down sets its velocity, a sideways drag 
 	await page.mouse.up();
 	for (const i of [2, 3, 4, 5, 6]) await expect(step('Snare', i)).toHaveAttribute('aria-pressed', 'true');
 	for (const i of [1, 7]) await expect(step('Snare', i)).toHaveAttribute('aria-pressed', 'false');
-	for (const i of [2, 6]) await expect(step('Metal', i)).toHaveAttribute('aria-pressed', 'false');
+	for (const i of [2, 6]) await expect(step('Tom', i)).toHaveAttribute('aria-pressed', 'false');
 	// Arrows set a lit step's velocity
 	await step('Snare', 3).focus();
 	await page.keyboard.press('Shift+ArrowDown');
@@ -6677,15 +6677,19 @@ test.describe('Phone mode', () => {
 		const play = page.locator('.pl-play');
 		const row = (n: string) => play.getByRole('group', { name: `${n} steps` });
 		const cell = (n: string, i: number) => play.getByRole('button', { name: `${n}, step ${i}`, exact: true });
-		for (const n of ['Kick', 'Snare', 'Metal', 'Hat']) await expect(row(n).locator('.pl-dcell')).toHaveCount(16);
+		for (const n of ['Kick', 'Snare', 'Tom', 'Hat']) await expect(row(n).locator('.pl-dcell')).toHaveCount(16);
 		await expect(page.locator('.pl-pad')).toHaveCount(0);
 		// A drum has no note: the octave arrows are greyed out
 		await expect(play.getByRole('button', { name: 'Octave up' })).toBeDisabled();
 
 		// The steppers are Drums' kits and patterns
 		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText('Kit');
+		// Sub (PR 135), then Deep, whose rows keep the factory sounds' names
 		await page.getByRole('button', { name: 'Next sound' }).click();
-		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText('Tight');
+		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText('Sub');
+		await expect(row('Sub').locator('.pl-dcell')).toHaveCount(16);
+		await page.getByRole('button', { name: 'Next sound' }).click();
+		await expect(page.getByRole('button', { name: 'All sounds' })).toContainText('Deep');
 		await page.getByRole('button', { name: 'Next pattern' }).click();
 		await expect(page.getByRole('button', { name: 'All patterns' })).toContainText('Four');
 		await expect(row('Kick').locator('.pl-dcell[aria-pressed="true"]')).toHaveCount(4);
@@ -6727,8 +6731,8 @@ test.describe('Phone mode', () => {
 		await page.getByRole('button', { name: 'Humanize' }).click();
 		await page.getByRole('dialog', { name: 'Humanize' }).getByRole('button', { name: 'Ramp' }).click();
 		// The row's LED mutes its slot
-		await play.getByRole('switch', { name: 'Metal on' }).click();
-		await expect(play.getByRole('switch', { name: 'Metal on' })).toHaveAttribute('aria-checked', 'false');
+		await play.getByRole('switch', { name: 'Tom on' }).click();
+		await expect(play.getByRole('switch', { name: 'Tom on' })).toHaveAttribute('aria-checked', 'false');
 
 		// Sound: the four slot cards, and a Mix group with Level, Pedals and the meter
 		await page.getByRole('tab', { name: 'Sound' }).click();
@@ -6767,12 +6771,12 @@ test.describe('Phone mode', () => {
 			expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `top bar at ${size.width}`).toBe(true);
 		}
 
-		// Saved: the Tight kit with Snare tuned up, Metal muted; Four with the taps and the paint;
+		// Saved: the Deep kit with Snare tuned up, Tom muted; Four with the taps and the paint;
 		// Snare's velocities Ramp's, Kick's untouched
 		const data = await saved();
 		expect(data.drums.slots[1].tune).toBe(12);
 		expect(data.drums.slots[2].muted).toBe(true);
-		expect(data.drums.slots[0].tune).toBe(2); // Tight's kick
+		expect(data.drums.slots[0].tune).toBe(-5); // Deep's kick
 		const on = (k: number) => data.drums.lane.rows[k].steps.map((x: boolean, i: number) => (x ? i : -1)).filter((i: number) => i >= 0);
 		expect(on(0)).toEqual([0, 1, 4, 5, 6, 7, 8, 12]);
 		expect(on(1)).toEqual([2, 4, 12]);
@@ -7728,7 +7732,7 @@ async function importDrums(page: Page, id: string, on: number[][], change: (d: a
 test('the Drums machine: four rows on the pads; steps, velocity by dragging, mutes, the picked row for Pattern Tools; saved, one undo step each', async ({ page }) => {
 	await page.getByRole('button', { name: 'Show Drums' }).click();
 	await expect(page.locator('.step-card .ds-which')).toHaveText(' · Drums');
-	for (const n of ['Kick', 'Snare', 'Metal', 'Hat']) await expect(page.getByRole('group', { name: `${n} steps` }).getByRole('button', { name: /, step / })).toHaveCount(16);
+	for (const n of ['Kick', 'Snare', 'Tom', 'Hat']) await expect(page.getByRole('group', { name: `${n} steps` }).getByRole('button', { name: /, step / })).toHaveCount(16);
 	await expect(page.getByRole('group', { name: 'Repeats brush' })).toHaveCount(0);
 	// The preset boxes are Drums' kits and patterns (the item's part 2)
 	await expect(page.getByRole('group', { name: 'Sound presets' })).toHaveCount(0);
@@ -7786,7 +7790,7 @@ test('the Drums machine: four rows on the pads; steps, velocity by dragging, mut
 
 	const data = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
 	expect(data.drums.muted).toBe(true);
-	expect(data.drums.slots[3]).toMatchObject({ sound: 'kit:hat', muted: true, tune: 2 });
+	expect(data.drums.slots[3]).toMatchObject({ sound: 'kit:closed', muted: true, tune: 2 });
 	expect(data.drums.lane.rows[0].steps.map((s: boolean, i: number) => (s ? i : -1)).filter((i: number) => i >= 0)).toEqual([0, 8]);
 	expect(data.drums.lane.rows[0].velocities[8]).toBeCloseTo(0.5, 1);
 	// Pattern A's Drums track is the rows
@@ -7848,6 +7852,49 @@ test('the Drums machine plays: the kit at its steps in the export, its stem and 
 	expect(await page.evaluate(() => (window as any).__peakOver(200) as Promise<number>)).toBeGreaterThan(0.02);
 });
 
+// PR 135 (the plan's item 17): the kit's new sounds (recipes of their own, picked by ear), Tom
+// and Hat in the factory slots, Sub and Dub in Tight's and Click's places; a project saved with
+// the first kit keeps its Metal and old Hat, which still play and export
+test('PR 135: the new kit sounds, Tom and Hat in a fresh kit, the Sub and Dub kits; a project with the first kit\'s Metal and Hat keeps them', async ({ page }) => {
+	await page.getByRole('button', { name: 'Show Drums' }).click();
+	await expect(page.getByRole('button', { name: 'Hear slot 3: Tom' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Hear slot 4: Hat' })).toBeVisible();
+	const kits = page.getByRole('group', { name: 'Drum kits' });
+	await expect(kits.getByRole('button', { name: /^(Kit|Sub|Deep|Tin|Boom|Dub)$/ })).toHaveCount(6);
+	await expect(kits.getByRole('button', { name: /^(Tight|Click)$/ })).toHaveCount(0);
+	await kits.getByRole('button', { name: 'Sub', exact: true }).click();
+	for (const [k, n] of [[1, 'Sub'], [2, 'Clap'], [3, 'Open hat'], [4, 'Hat']]) await expect(page.getByRole('button', { name: `Hear slot ${k}: ${n}` })).toBeVisible();
+	await kits.getByRole('button', { name: 'Dub', exact: true }).click();
+	for (const [k, n] of [[1, 'Round'], [2, 'Rim'], [3, 'Tom'], [4, 'Shaker']]) await expect(page.getByRole('button', { name: `Hear slot ${k}: ${n}` })).toBeVisible();
+	// Every new sound on the shelf is heard
+	for (const n of ['Sub', 'Sub click', 'Round', 'Clap', 'Rim', 'Tom', 'Conga', 'Wood', 'Shaker', 'Hat', 'Open hat']) {
+		await page.waitForTimeout(250);
+		await page.getByRole('button', { name: `Hear ${n}`, exact: true }).click();
+		expect(await page.evaluate(() => (window as any).__peakOver(200) as Promise<number>), n).toBeGreaterThan(0.02);
+	}
+
+	// A project saved with the first kit: its slots name 'kit:metal' and 'kit:hat', which stay
+	await setTempo(page, 120);
+	await importDrums(page, 'First kit', [[], [], [0], [4]], (d) => {
+		d.drums.slots[2].sound = 'kit:metal';
+		d.drums.slots[3].sound = 'kit:hat';
+	});
+	await page.getByRole('button', { name: 'Show Drums' }).click();
+	await expect(page.getByRole('button', { name: 'Hear slot 3: Metal' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Hear slot 4: Tin hat' })).toBeVisible();
+	const zip = await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: false, machineStems: false, midi: true, oneShot: false, normalize: false });
+	const files = unzip(zip.bytes);
+	const mix = files[Object.keys(files).find((k) => k.endsWith('_mix.wav'))!];
+	expect(wavWindow(mix, 0, 0.05).peak).toBeGreaterThan(0.05); // the Metal on step 1
+	expect(wavWindow(mix, 0.5, 0.55).peak).toBeGreaterThan(0.05); // the old Hat on step 5
+	// The MIDI file: the Metal as a cowbell (56), the old Hat as a closed hi-hat (42)
+	const midi = files[Object.keys(files).find((k) => k.endsWith('.mid'))!];
+	const ons = (note: number) => { let c = 0; for (let i = 0; i < midi.length - 2; i++) if (midi[i] === 0x99 && midi[i + 1] === note && midi[i + 2] > 0) c++; return c; };
+	expect([ons(56), ons(42)]).toEqual([1, 1]);
+	const data = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
+	expect(data.drums.slots.slice(2).map((sl: any) => sl.sound)).toEqual(['kit:metal', 'kit:hat']);
+});
+
 test('Keep as drum: a hit of Rhythm\'s sound on the shelf and in a slot, one undo step; deleted; saved. Bass\'s screen plays its note', async ({ page }) => {
 	await page.waitForTimeout(SETTLED);
 	await page.getByRole('button', { name: 'Keep as drum in slot 4' }).click();
@@ -7873,9 +7920,9 @@ test('Keep as drum: a hit of Rhythm\'s sound on the shelf and in a slot, one und
 	await page.getByRole('button', { name: 'Delete Kept 1' }).click();
 	await expect(page.getByRole('button', { name: 'Hear slot 4: Hat' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Hear Kept 1' })).toHaveCount(0);
-	// A slot's ◂ ▸ steps through the sounds
+	// A slot's ◂ ▸ steps through the sounds: after the Kick the other kicks (PR 135)
 	await page.getByRole('button', { name: 'Slot 1: next sound' }).click();
-	await expect(page.getByRole('button', { name: 'Hear slot 1: Snare' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Hear slot 1: Sub' })).toBeVisible();
 
 	// Bass's screen: a click plays the note it draws
 	await page.getByRole('button', { name: 'Show Bass' }).click();
@@ -7948,13 +7995,13 @@ test('Drum kits and Drum patterns: the transport\'s boxes while Drums is shown; 
 	await page.waitForTimeout(SETTLED);
 
 	// A kit: the slots' Tune, Decay and Level; a slot's mute kept
-	await page.getByRole('switch', { name: 'Metal on' }).first().click();
+	await page.getByRole('switch', { name: 'Tom on' }).first().click();
 	const deep = kits.getByRole('button', { name: 'Deep', exact: true });
 	await deep.click();
 	await expect(deep).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.getByRole('slider', { name: 'Kick tune' })).toHaveAttribute('aria-valuenow', '-5');
-	await expect(page.getByRole('slider', { name: 'Metal tune' })).toHaveAttribute('aria-valuenow', '-7');
-	await expect(page.getByRole('switch', { name: 'Metal on' }).first()).toHaveAttribute('aria-checked', 'false');
+	await expect(page.getByRole('slider', { name: 'Tom tune' })).toHaveAttribute('aria-valuenow', '-5');
+	await expect(page.getByRole('switch', { name: 'Tom on' }).first()).toHaveAttribute('aria-checked', 'false');
 	await page.waitForTimeout(SETTLED);
 
 	// A pattern: the rows, the kit untouched

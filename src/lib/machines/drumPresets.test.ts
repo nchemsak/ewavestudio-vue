@@ -3,7 +3,7 @@ import {
 	DRUM_KITS, DRUM_PATTERNS, drumKitKey, drumRowsFrom, drumRowsKey, kitSlots, randomDrumKit, randomDrumPattern,
 } from './drumPresets';
 import { createDrums } from './drums';
-import { DRUM_RANGES, KIT_IDS } from '../../audio/drums';
+import { DRUM_RANGES, FACTORY_KIT, KIT_IDS } from '../../audio/drums';
 import { seededRandom } from '../random';
 
 describe('the Drums machine\'s kits', () => {
@@ -65,14 +65,19 @@ describe('the Drums machine\'s patterns', () => {
 });
 
 describe('the Drums machine\'s dice', () => {
-	it('500 random kits: values on the knobs\' steps, within their ranges, mostly each slot\'s own sound, varied', () => {
+	it('500 random kits: values on the knobs\' steps, within their ranges, each slot\'s own sound about half the time, else one of its kind, varied', () => {
 		const r = seededRandom(7);
 		const keys = new Set<string>();
 		let own = 0;
+		const seen = new Set<string>();
 		for (let i = 0; i < 500; i++) {
 			const kit = randomDrumKit(r);
 			kit.forEach((s, k) => {
-				if (s.sound === KIT_IDS[k]) own++;
+				if (s.sound === FACTORY_KIT[k]) own++;
+				seen.add(s.sound);
+				// Never the old Metal or Tin hat, and a kick only in slot 1
+				expect(['metal', 'hat']).not.toContain(s.sound);
+				expect(['kick', 'sub', 'subclick', 'round'].includes(s.sound)).toBe(k === 0);
 				expect(Number.isInteger(s.tune)).toBe(true);
 				expect(s.tune).toBeGreaterThanOrEqual(-12);
 				expect(s.tune).toBeLessThanOrEqual(12);
@@ -84,7 +89,10 @@ describe('the Drums machine\'s dice', () => {
 			});
 			keys.add(drumKitKey(kitSlots({ id: '', label: '', description: '', slots: kit }, createDrums(16).slots)));
 		}
-		expect(own / 2000).toBeGreaterThan(0.75);
+		expect(own / 2000).toBeGreaterThan(0.5);
+		expect(own / 2000).toBeLessThan(0.75);
+		// Every new sound turns up
+		for (const id of KIT_IDS) if (id !== 'metal' && id !== 'hat') expect(seen).toContain(id);
 		expect(keys.size).toBeGreaterThan(450);
 	});
 

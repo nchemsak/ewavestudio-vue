@@ -9,11 +9,30 @@
 // What a bar plays is worked out here too (`drumHitsForBar()`, pure, unit-tested), so both
 // engines read a pattern the same way.
 
-// The slots, and their sounds' names in the kit (kitSound(): the slot's sound when nothing else)
+// The slots, and the kit's sounds: their ids (saved in projects as 'kit:<id>', so never renamed)
+// in the order a slot's ◂ ▸ steps through them, and their names. Kick, Snare, Metal and Hat were
+// the first kit (PR 119); the others came with PR 135 (the plan's item 17), and the factory
+// slots moved to the Tom and the new Hat (`closed`), so the old Hat reads "Tin hat" now. Saved
+// projects keep whatever their slots name.
 export const DRUM_SLOTS = 4;
-export const KIT_IDS = ['kick', 'snare', 'metal', 'hat'] as const;
+export const KIT_IDS = [
+	'kick', 'sub', 'subclick', 'round',
+	'snare', 'clap', 'rim',
+	'tom', 'conga', 'wood', 'shaker',
+	'closed', 'open',
+	'metal', 'hat',
+] as const;
 export type KitId = (typeof KIT_IDS)[number];
-export const KIT_NAMES: Record<KitId, string> = { kick: 'Kick', snare: 'Snare', metal: 'Metal', hat: 'Hat' };
+export const KIT_NAMES: Record<KitId, string> = {
+	kick: 'Kick', sub: 'Sub', subclick: 'Sub click', round: 'Round',
+	snare: 'Snare', clap: 'Clap', rim: 'Rim',
+	tom: 'Tom', conga: 'Conga', wood: 'Wood', shaker: 'Shaker',
+	closed: 'Hat', open: 'Open hat',
+	metal: 'Metal', hat: 'Tin hat',
+};
+// The kit sound each slot starts with (a fresh page, File → New, the Kit button) and falls back
+// to (a kept sound deleted, or left out of a share link)
+export const FACTORY_KIT: readonly KitId[] = ['kick', 'snare', 'tom', 'closed'];
 
 export const DRUM_RANGES = { tune: [-12, 12], decay: [0.05, 1], level: [0, 1] } as const;
 

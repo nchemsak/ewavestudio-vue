@@ -781,7 +781,7 @@ import ShareNotice from './ShareNotice.vue';
 import { buildExportFiles, renderHit, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from '../audio/export/exportFiles';
 import { hitSeconds, formatLength, formatPeak, type HitPicture } from './hitView';
 import { peakOf } from '../lib/export/audio';
-import { midiNoteOf, midiToHz, notesInRange } from '../lib/export/midi';
+import { drumNote, midiNoteOf, midiToHz, notesInRange } from '../lib/export/midi';
 import { exportNames, keyLabel } from '../lib/export/names';
 import { zipFiles } from '../lib/export/zip';
 import { PRESETS } from '../lib/presets/library';
@@ -1084,7 +1084,7 @@ function drumsExport(barRows?: DrumRow[][]) {
 	const rowsPlay = (rows: DrumRow[]) => rows.some((r, k) => !drums.slots[k]?.muted && r.steps.some(Boolean));
 	if (!(barRows ?? [drums.rows]).some(rowsPlay)) return undefined;
 	return {
-		slots: drums.slots.map((sl, k) => ({ data: slotData(drums, k, drumKit.value), tune: sl.tune, decay: sl.decay, level: sl.level, muted: sl.muted })),
+		slots: drums.slots.map((sl, k) => ({ data: slotData(drums, k, drumKit.value), tune: sl.tune, decay: sl.decay, level: sl.level, muted: sl.muted, note: drumNote(slotSound(drums, k), k) })),
 		level: drums.level, pedals: drums.pedals,
 		rows: (barRows?.[0] ?? drums.rows).map((r) => ({ steps: [...r.steps], velocities: [...r.velocities] })),
 		barRows,

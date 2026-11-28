@@ -343,7 +343,8 @@ public/images/           Background textures/GIFs referenced from SCSS via ../im
                          (circleWave.gif and retroSpeaker.gif only from the unbuilt _sequencer.scss)
 public/manifest.json, public/icons/  The web app manifest and its icons (the sun from
                          src/assets/eWaveLogo1.png: 192, 512, maskable 512, iPhone 180)
-scripts/render-drum-kit.mjs  Renders the Drums kit through the app (run by hand; see "The Drums machine")
+scripts/render-drum-kit.mjs  Renders the Drums kit (run by hand; see "The Drums machine")
+scripts/drum-recipes.js  The recipes of the kit's sounds since PR 135, played in Chromium by it
 .github/workflows/deploy-studio2.yml  Builds `main` and uploads it to /studio2/ (see Deploy)
 .github/workflows/checks.yml  Type check, unit tests and browser tests (every PR, every deploy)
 src/**/*.test.ts         Unit tests (Vitest; vitest.config.js)
@@ -1293,14 +1294,33 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   **Level**, per slot; each slot one hit at a time (a new hit on a slot cuts its last, 5 ms).
   Through the machine's bus as the others (the rail's Level, Pedals and meter). No pitch, so no
   key: the key and scale don't move Drums, and MIDI notes play Rhythm while Drums is shown.
-- **The kit** (`drumKit.ts`, `drumKitData.ts`): **Kick, Snare, Metal, Hat**, frozen: the Rhythm
-  presets Kick (on A2), Snare (D3) and Metal (A4) and Metal on E6 with a 60 ms Decay (the Hat),
-  rendered once by the app itself, dry (reverb off; the Kick keeps its drive), as one-shots,
-  summed to mono, at −1 dBFS, cut 46 dB under their peak (`scripts/render-drum-kit.mjs`, run by
-  hand against `vite preview`; its output is generated, don't edit it). 16-bit PCM in base64,
-  as the microphone's sample, about 90 kB in a chunk of its own (`import('./drumKitData')`),
-  loaded a moment after the page opens; a kit hit before then is silent. Frozen, so a saved
-  project's drums don't change when a preset or the synth does.
+- **The kit** (`drumKit.ts`, `drumKitData.ts`; `KIT_IDS`, `KIT_NAMES` and `FACTORY_KIT` in
+  `drums.ts`): fifteen recordings, frozen, so a saved project's drums don't change when a preset
+  or the synth does. **The first four** (PR 119): Kick, Snare, Metal and the old Hat (**"Tin hat"**
+  on screen since PR 135), the Rhythm presets Kick (on A2), Snare (D3) and Metal (A4) and Metal
+  on E6 with a 60 ms Decay, rendered once by the app itself, dry. **Eleven more** (PR 135, the
+  plan's item 17): **Sub** (a sine falling from 160 to 48 Hz, gently saturated, ringing a second,
+  an 808 kick), **Sub click** (deeper, 44 Hz, with a click on top), **Round** (52 Hz, half a
+  second), **Clap** (three quick bursts of noise and a tail), **Rim**, **Tom** (a sine falling
+  from 190 to 125 Hz with a soft stick noise), **Conga**, **Wood** (a wood block), **Shaker**,
+  **Hat** (filtered noise, 55 ms) and **Open hat** (filtered noise, about half a second), made
+  by recipes of their own (`scripts/drum-recipes.js`: a few Web Audio nodes each, not the Rhythm
+  voice, whose only filter is a low-pass, which is why the old Hat was a higher, shorter Metal).
+  The maintainer picked them by ear from an audition page of candidates (the hats: noise, over
+  the 808's six square waves; slot 3: the Tom, over a zap, a water drop, an FM ping and a
+  cowbell). Each cut 46 dB under its peak, at −1 dBFS, 16-bit PCM in base64, as the
+  microphone's sample; the kicks, Tom and Conga at 22.05 kHz (nothing above 11 kHz), the rest at
+  44.1. `scripts/render-drum-kit.mjs` (run by hand, no server: it renders the recipes in an
+  OfflineAudioContext in Chromium) copies the first four from the current `drumKitData.ts` as
+  they are and writes the file (generated: don't edit it). 377 kB in a chunk of its own
+  (`import('./drumKitData')`; 90 kB before PR 135), loaded a moment after the page opens; a kit
+  hit before then is silent. **The factory slots** (a fresh page, File → New, the Kit button, and
+  what a slot falls back to when its kept sound is gone) are **Kick, Snare, Tom, Hat** (`FACTORY_KIT`;
+  Kick, Snare, Metal and the old Hat until PR 135). **A saved project keeps its sounds**: a slot
+  names its recording (`'kit:metal'`, `'kit:hat'`), and the first four are still in the kit, so
+  a project saved before PR 135 plays and exports as it did. Ids are saved: never rename one, and
+  add a changed sound under a new id. A slot's ◂ ▸ steps through the kicks, the snare, clap and
+  rim, the tom and percussion, the hats, then Metal and Tin hat, then the kept sounds.
 - **Keep as drum** (the maintainer's call: only on Rhythm's side, not a button per slot): caps
   **1 2 3 4** at the right of Rhythm's Sound title (`.keep-drum`, each underlined in its slot's
   colour): a click renders one hit of Rhythm's sound as it is now (`renderHit()`, the hit behind
@@ -1322,7 +1342,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - **The pads** (`DrumPads.vue`): a row per slot, its LED (mutes the slot), its name and where it
   came from (Kit, Kept; a click **picks the row**, outlined), then its 16 steps in the sound's
   colour (`drumColours.ts`: the kit's from where each sits on the pads' blue-to-red scale, a
-  kept one's from its number). A click turns a step on or off; **a lit step dragged up or down
+  kept one's from its number; the new sounds' since PR 135, the kicks blue, the tom and percussion
+  between, the hats red). A click turns a step on or off; **a lit step dragged up or down
   sets its velocity** (60 px the whole range), its fill showing it. Two rows of 8 under 640 px.
   A drag sideways paints the row it started in (PR 127); arrows up and down on a focused lit step
   set its velocity. The header's Reset empties every row; no Repeats brush.
@@ -1330,7 +1351,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   across (its colour along the top, its LED, ◂ name ▸ stepping through the kit's four then the
   kept ones, **a picture of its hit, which plays it when clicked while stopped** (the
   maintainer's ask), Tune, Decay and Level, each MIDI-learnable: `drums.1.tune`…), then the
-  **Sounds shelf** beside the pedals: the kit's four and the kept sounds (up to 8, `KEPT_MAX`;
+  **Sounds shelf** beside the pedals: the kit's fifteen (4 × 4, PR 135; four until then) and the
+  kept sounds (up to 8, `KEPT_MAX`, which still fit: the Sound section stays 763 px;
   a ninth drops the oldest that no slot plays), a click to hear one, ✕ to delete a kept one (a
   slot playing it goes back to its own kit sound). A lit sound is in a slot.
 - **Pattern Tools** (the maintainer's call): Step Fills and Humanize work on the **picked row**
@@ -1338,16 +1360,22 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   **every row**; the octave arrows are greyed out (`noOctave`). **The Melody Maker is dimmed**
   (inert) with a note: "The Melody Maker works on Rhythm and Bass: pick one in the rail."
 - **Drum kits and Drum patterns** (PR 120, part 2; `src/lib/machines/drumPresets.ts`,
-  unit-tested): while Drums is shown the transport's boxes are **Drum kits** (Kit, Tight, Deep,
-  Tin, Boom, Click, and a dice "Random kit") and **Drum patterns** (Four, Backbeat, Halftime,
+  unit-tested): while Drums is shown the transport's boxes are **Drum kits** (Kit, Sub, Deep,
+  Tin, Boom, Dub, and a dice "Random kit") and **Drum patterns** (Four, Backbeat, Halftime,
   Breaks, Electro, Gallop, and "Random drum pattern"). A kit sets the four slots' sounds (the
   frozen kit's only), Tune, Decay and Level, never the slots' mutes, the kept sounds or the
   rows (`kitSlots()`); **Kit** is the factory kit, so a fresh page lights it. A pattern sets the
   four rows only (`drumRowsFrom()`: per row its hits, a step and a velocity). One undo step
   each; a button is lit while the slots or rows are exactly the preset's (`drumKitKey()`,
-  `drumRowsKey()`, compared live, as Bass's). The dice: a kit (each slot its own sound 80 % of
-  the time, else another of the kit's, Tune within a fifth, the kick a little lower, Decay
-  25–100 %, Level kept heard; on the knobs' steps) and a beat (a kick idea always on step 1,
+  `drumRowsKey()`, compared live, as Bass's). **Since PR 135**: Kit is Kick, Snare, Tom and Hat;
+  **Sub** (in Tight's place: Sub, Clap, Open hat, Hat) and **Dub** (in Click's: Round, Rim, a low
+  Tom, Shaker) are new; Deep keeps its kick and snare and has a deep Tom and the Hat; Tin a Wood
+  block and the Hat, tuned up; Boom a low Conga and the Hat (their Metal and old Hat went, the
+  maintainer's call). The dice: a kit (each slot its factory sound half the time, else one of its
+  kind, `DICE_POOLS`: kicks; snare, clap, rim; tom, conga, wood, rim, open hat; hat, open hat,
+  shaker; never Metal or Tin hat (80 % its own of the first four until PR 135); Tune within a
+  fifth, the kick a little lower, Decay 25–100 %, Level kept heard; on the knobs' steps) and a
+  beat (a kick idea always on step 1,
   the snare on 2 and 4 or on 3 for half-time with the odd ghost note, the hat in eighths,
   sixteenths or off-beats accented on the beat, the metal now and then on an off-beat).
   Analytics `drums_kit_select`, `drums_kit_random`, `drums_pattern_select`,
@@ -1361,8 +1389,11 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   same. **Share links leave the kept sounds out** (too big), so their slots play their kit
   sounds there.
 - **Export**: in the mix; the machine stems' `_drums.wav`; the chain (each cell's rows); the MIDI
-  file's **channel 10** (General MIDI drums: slot 1 Kick 36, 2 Snare 38, 3 Cowbell 56, 4 Closed
-  hi-hat 42; `DRUM_NOTES` in `midi.ts`), muted slots left out. Not in the one-shot.
+  file's **channel 10** (General MIDI drums), each slot's note its sound's since PR 135
+  (`drumNote()` in `midi.ts`: Kick and Sub click 36, Sub and Round 35, Snare 38, Clap 39, Rim 37,
+  Tom 45, Conga 64, Wood 76, Shaker 82, Hat 42, Open hat 46, Metal 56, Tin hat 42), a kept
+  sound's by its slot (`DRUM_NOTES`: 36, 38, 45, 42; until PR 135 every slot's, with Cowbell 56
+  third), muted slots left out. Not in the one-shot.
 - **The rail**: a Drums row, its four rows stacked in each step (`stack` on `RailMachine`), its
   Level and Pedals (`drums.level`, `drums.pedals`: MIDI learn's 59 knobs) and meter.
 - **On the phone** (PR 121, part 3, which finishes item 5; option D1 of the mockups, with D2's
@@ -2801,36 +2832,17 @@ with mockups at 568 × 320, 683 × 331 (a Pixel XL held sideways with the naviga
 731 × 331 (the same with gesture navigation) and 844 × 390. Strum (a new chord's notes entering
 one after another) went to the Maybes: with Drift's slow fade-ins it would sound much like
 Attack. Its first items were 15 (Drift's gap at the bar line, and the line of text under its
-bars), PR 133, and 16 (the pads' wave icon on the pad, and the phone's top bar fitting), PR 134.
+bars), PR 133, 16 (the pads' wave icon on the pad, and the phone's top bar fitting), PR 134,
+and 17 (the drum sounds and kits), PR 135.
 
-17. **Drum sounds and kits.** New kit sounds made by recipes of their own in
-    `scripts/render-drum-kit.mjs`, not through the Rhythm voice (whose only filter is a
-    low-pass, which is why its Hat is a higher, shorter Metal; the script then no longer needs
-    the Kick and Snare presets, which item 18 replaces): a closed and an open hat (six square
-    oscillators at odd ratios through a band-pass and a high-pass, as the 808's), a deep sub
-    kick with a long tail (what Boom fakes by slowing the Kick down), a rim, a low tom, a
-    shaker, and for **slot 3's new default something melodic or strange, not a clap or an open
-    hat** (the maintainer's call): candidates such as a tuned tom, a wood block, a conga, a
-    zap (a fast falling pitch) or a metallic ping. The defaults become Kick · Snare · (that) ·
-    the new Hat. **Saved projects keep their sounds**: a slot names its recording (`kit:metal`,
-    `kit:hat`), so the old recordings stay in the kit under their names (still in each slot's
-    ◂ ▸ list, the old Hat renamed on screen if two would read "Hat"; `KIT_IDS` keeps its order,
-    new ones after) and only a fresh page, File → New and the Kit button get the new ones.
-    Kits: **Kit** the new defaults; **Deep, Tin and Boom** keep their kicks' and snares'
-    settings, their slots 3 and 4 the new sounds (the maintainer's call); **Tight and Click**
-    are replaced by two kits with deep kicks, **Sub** (the sub kick, a clap, closed and open
-    hats: trap, half-time) and **Dub** (a round deep kick, rim, shaker, low tom: dub techno,
-    house); names by ear. The Drums dice draws from every sound; the MIDI file gives each sound
-    its General MIDI note (clap 39, open hat 46...) instead of each slot's; each sound gets its
-    colour (`drumColours.ts`). The kit's chunk grows from about 90 kB to 300–400 kB (kicks and
-    toms could be kept at 24 kHz); it still loads after the page opens.
 18. **"Rhythm" becomes "Synth", and two new sounds.** On screen only: the rail's row, the Step
     Sequencer's header, the phone's key (SYN), the notes that name it, MIDI learn's names
     ("Synth level"), and the stem's file name (`_synth.wav`). Saved names stay (`rhythm` in
     `mixer` and the slots' tracks, `synth.*` and the MIDI ids, which already say synth).
     "Melody" was turned down: it clashes with the Melody Maker, and Bass is melodic too. The
     machine stays the DFAM-style percussion voice. The Sound presets **Kick and Snare** are
-    replaced (the Drums machine has them now) by two melodic, struck sounds, picked by ear from
+    replaced (the Drums machine has them now; since PR 135 the kit's render no longer needs
+    them, as it copies the first four sounds) by two melodic, struck sounds, picked by ear from
     about four candidates (Mallet, Keys: an FM electric piano, Stab, Chip...). About 36 browser
     tests use the Kick preset and need another way to the sound they measure.
 19. **Drift: Motion.** The X/Y pad's dot moves by itself (drawn moving, as the LFO's marks):
@@ -3179,6 +3191,7 @@ Done:
 | 132 | A PHONE switch on the lo-fi pedal (the plan's item 14): a mini switch, as CRUSH, that plays the pedal's sound as a telephone carries it, 300 Hz–3.4 kHz in mono (24 dB an octave at each edge, the hiss and crackle too), in both engines; linear, so the stems still add up. Saved as `fx.tape.phone` (older projects off), reset by presets and File → New, not in the Sounds dice. On the stomp box TAPE \| VINYL stands upright beside it; on the deck it follows TAPE \| VINYL, the deck tighter on a phone held upright so it fits. |
 | 133 | Drift's gap at the bar line (the plan's item 15, the first of the maintainer's brainstorm after PR 132, whose plan it also records: two small fixes, the drum sounds and kits, "Synth" and two new sounds, Drift's Motion, Pulse and Octave and Voicing, then four phone items, before the major upgrades): a Drift note let go before its fade-in had finished fell silent until the bar line, about 0.1 s live (with a click) and its whole bar in an export, whenever its Attack lasted its run (the factory's 1 bar, Strings, Haze, Tide) and rounding went one way, so it came and went; it now fades out from where its fade-in had got to (`release()` in `src/audio/drift.ts`). The line of text under Drift's bars is gone. |
 | 134 | Two small fixes (the plan's item 16): the pads' wave icon (and their ×3 badge) is printed on the pad, inside it, 9 px above its lip, in its wave's colour with no pill, so it sinks with a press (it was a dark pill pinned under the pad, over its lip, which stayed put); and phone mode's top bar fits at every width: the tabs take the room left and read P S M F K when it's too narrow for their names (a container query), so from 720 to 834 px wide, where the bar ran off the screen with Undo, Redo and ☰ (a Pixel XL held sideways is 731), it now fits. |
+| 135 | Drum sounds and kits (the plan's item 17): eleven new kit sounds made by recipes of their own (`scripts/drum-recipes.js`, rendered in Chromium by `scripts/render-drum-kit.mjs`) and picked by ear from an audition page: Sub, Sub click and Round kicks, Clap, Rim, Tom, Conga, Wood, Shaker, a new Hat and an Open hat (noise, not the old Metal pitched up); a fresh kit is Kick, Snare, Tom and Hat; Sub and Dub replace Tight and Click, and Deep, Tin and Boom use the new sounds (a deep Tom, a Wood block, a low Conga); saved projects keep their Metal and old Hat ("Tin hat" now), which stay in the kit; the dice draws each slot's kind of sound; the MIDI file gives each sound its General MIDI note. The kit's download is 377 kB (90 before). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on
