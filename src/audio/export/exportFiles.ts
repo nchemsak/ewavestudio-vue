@@ -145,7 +145,8 @@ export async function buildExportFiles(
 	if (o.mix || o.stems || o.machineStems) jobs.push({ name: 'mix', part: 'mix' });
 	if (o.stems) for (const p of STEM_PARTS) { jobs.push({ name: p, part: p }); stemNames.add(p); }
 	if (o.machineStems) {
-		jobs.push({ name: 'rhythm', part: 'mix', machine: 'rhythm' });
+		// The Rhythm machine's stem is `_synth.wav` since PR 136 (the machine's on-screen name)
+		jobs.push({ name: 'synth', part: 'mix', machine: 'rhythm' });
 		if (state.bass) jobs.push({ name: 'bass', part: 'mix', machine: 'bass' });
 		if (state.drums) jobs.push({ name: 'drums', part: 'mix', machine: 'drums' });
 		if (state.drift) jobs.push({ name: 'drift', part: 'mix', machine: 'drift' });
@@ -185,7 +186,7 @@ export async function buildExportFiles(
 	const gains = mixed ? limiterGains(mixed.channels, sr) : null;
 	const audio = shaped
 		.map((a) => (gains ? { ...a, channels: applyGains(a.channels, gains) } : a))
-		.filter(({ part, channels }) => (part === 'mix' ? o.mix : part === 'dry' || part === 'rhythm' || peakOf(channels) > SILENT_PEAK));
+		.filter(({ part, channels }) => (part === 'mix' ? o.mix : part === 'dry' || part === 'synth' || peakOf(channels) > SILENT_PEAK));
 	const gain = o.normalize ? normalizeGain(peakOf(...audio.map((a) => a.channels))) : 1;
 	const files: ExportFile[] = audio.map((a) => ({
 		name: names.wav(a.part), data: wav(applyGain(a.channels, gain), sr), type: 'audio/wav',

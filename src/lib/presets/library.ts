@@ -119,4 +119,86 @@ export const PRESETS: readonly SynthPreset[] = [
 			reverb: { enabled: true, mix: 0.3, decay: 2.4, tone: 0.5 },
 		},
 	},
+	// AUDITION CANDIDATES (the plan's item 18): two of these replace Kick and Snare
+	{
+		// A struck wooden bar: the Hollow wave (odd harmonics, like a marimba's bar) with a tiny
+		// knock of pitch at the start, ringing half a second
+		id: 'mallet',
+		label: 'Mallet',
+		description: 'Mallet: a struck wooden bar, round and woody, with a small room.',
+		wave: 'hollow',
+		synth: {
+			envelope: { attackMs: 1, decayMs: 550 },
+			filter: { cutoff: 3500, resonance: 1 },
+			pitchEnv: { semitones: 5, decayMs: 12, mode: 'up' },
+		},
+		fx: {
+			reverb: { enabled: true, mix: 0.18, decay: 1.2, tone: 0.5 },
+		},
+	},
+	{
+		// An electric piano from FM: a sine modulated at the same pitch (Lock), bright as it's
+		// struck, mellowing as it rings; softer steps are darker
+		id: 'keys',
+		label: 'Keys',
+		description: 'Keys: an FM electric piano, bright as it is struck, mellowing as it rings.',
+		wave: 'sine',
+		synth: {
+			envelope: { attackMs: 2, decayMs: 900 },
+			filter: { cutoff: 4500, envAmount: 1.5, envDecayMs: 250 },
+			fm: { enabled: true, ratio: 1, index: 3 },
+			velocity: { cutoff: VELOCITY_SWITCH_AMOUNT },
+		},
+		fx: {
+			reverb: { enabled: true, mix: 0.2, decay: 1.6, tone: 0.5 },
+		},
+	},
+	{
+		// Three detuned saws, the filter snapping open on each hit and closing in a fifth of a
+		// second: a house or dub chord stab
+		id: 'stab',
+		label: 'Stab',
+		description: 'Stab: three detuned saws, the filter snapping open on each hit, in a wide room.',
+		wave: 'sawtooth',
+		synth: {
+			envelope: { attackMs: 1, decayMs: 350 },
+			filter: { cutoff: 900, resonance: 3, envAmount: 3, envDecayMs: 200 },
+			unison: { enabled: true, voices: 3, detuneCents: 15, stereoSpread: 100 },
+		},
+		fx: {
+			reverb: { enabled: true, mix: 0.25, decay: 1.6, tone: 0.6 },
+		},
+	},
+	{
+		// A video game's square: a thin pulse with an octave blip at the start and a
+		// sixteenth-note echo
+		id: 'chip',
+		label: 'Chip',
+		description: 'Chip: a thin pulse with an octave blip at the start, like an old game console.',
+		wave: 'pulse',
+		synth: {
+			envelope: { attackMs: 1, decayMs: 180 },
+			filter: { cutoff: 8000 },
+			pitchEnv: { semitones: 12, decayMs: 8, mode: 'up' },
+			pulse: { width: 25 },
+		},
+		fx: {
+			delay: { enabled: true, division: '1/16', mix: 0.2 },
+		},
+	},
+	{
+		// A plucked string: a triangle whose filter opens for a moment and shuts, short and dry
+		id: 'pizz',
+		label: 'Pizz',
+		description: 'Pizz: a plucked string, short and soft, a pizzicato.',
+		wave: 'triangle',
+		synth: {
+			envelope: { attackMs: 1, decayMs: 260 },
+			filter: { cutoff: 1500, resonance: 1.5, envAmount: 2, envDecayMs: 90 },
+			pitchEnv: { semitones: 2, decayMs: 15, mode: 'up' },
+		},
+		fx: {
+			reverb: { enabled: true, mix: 0.22, decay: 1.4, tone: 0.5 },
+		},
+	},
 ];

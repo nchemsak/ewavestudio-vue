@@ -180,7 +180,7 @@
 			<template #key>
 				<!-- Drums (PR 121): dimmed with a note, as on the desktop -->
 				<div class="module melody pl-melody" :class="{ 'is-off': drumsChosen, 'drift-key': driftChosen }">
-					<p v-if="drumsChosen" class="melody-off-note">The Melody Maker works on Rhythm and Bass: pick RHY or BASS.</p>
+					<p v-if="drumsChosen" class="melody-off-note">The Melody Maker works on Synth and Bass: pick SYN or BASS.</p>
 					<SectionWrap id="pl-melody" title="Melody Maker" :modelValue="true" :inert="drumsChosen || undefined">
 						<!-- What Generate makes; Generate is the card's last line (PR 82) -->
 						<template #tools>
@@ -632,7 +632,7 @@
 				<!-- Drift: its plates are the key's chord, so the keyboard and Scale stay live (they move
 					 the plates); Generate, which writes steps, is dimmed -->
 				<div class="module melody" :class="{ 'is-off': drumsChosen, 'drift-key': driftChosen }">
-					<p v-if="drumsChosen" class="melody-off-note">The Melody Maker works on Rhythm and Bass: pick one in the rail.</p>
+					<p v-if="drumsChosen" class="melody-off-note">The Melody Maker works on Synth and Bass: pick one in the rail.</p>
 					<!-- Its options are on the card since PR 68 (no ⋯ menu) -->
 					<SectionWrap id="melody" title="Melody Maker" v-model="collapsibleState['melody']" :inert="drumsChosen || undefined">
 							<!-- What Generate makes; Generate is the card's last line (PR 82) -->
@@ -880,7 +880,9 @@ const bassChosen = computed(() => machine.value === 'bass');
 const drumsChosen = computed(() => machine.value === 'drums');
 const driftChosen = computed(() => machine.value === 'drift');
 const machineMuted = computed(() => (driftChosen.value ? drift.muted : drumsChosen.value ? drums.muted : bassChosen.value ? bassLane.muted : !!synthInstrument.value?.muted));
-const machineName = computed(() => ({ rhythm: 'Rhythm', bass: 'Bass', drums: 'Drums', drift: 'Drift' })[machine.value]);
+// The machines' names on screen: the Rhythm machine reads "Synth" since PR 136 (the plan's item
+// 18; its saved and code name stays `rhythm`)
+const machineName = computed(() => ({ rhythm: 'Synth', bass: 'Bass', drums: 'Drums', drift: 'Drift' })[machine.value]);
 // The rail's mixer (PR 116): how much of Rhythm goes through the pedals (Bass's is bassLane.pedals)
 const rhythmPedals = ref(1);
 // FX and Solo per machine (the plan's item 12, src/lib/machines/mix.ts): the rail's two caps on
@@ -896,7 +898,7 @@ const isHeard = (id: MachineId) => heard(id, machineIsMuted(id), machineMix.solo
 const railMachines = computed(() => {
 	const r = synthInstrument.value;
 	return [
-		...(r ? [{ id: 'rhythm', name: 'Rhythm', steps: r.steps, pitches: r.pitches ?? [], velocities: r.velocities, muted: r.muted, level: r.channelVolume, pedals: rhythmPedals.value, ...mixOf('rhythm') }] : []),
+		...(r ? [{ id: 'rhythm', name: 'Synth', steps: r.steps, pitches: r.pitches ?? [], velocities: r.velocities, muted: r.muted, level: r.channelVolume, pedals: rhythmPedals.value, ...mixOf('rhythm') }] : []),
 		{ id: 'bass', name: 'Bass', steps: bassLane.steps, pitches: bassLane.pitches, velocities: bassLane.velocities, hueScale: 4, muted: bassLane.muted, level: bassLane.level, pedals: bassLane.pedals, ...mixOf('bass') },
 		// Drums: its four rows stacked in each step, each in its sound's colour
 		{ id: 'drums', name: 'Drums', steps: [], pitches: [], velocities: [], muted: drums.muted, level: drums.level, pedals: drums.pedals, ...mixOf('drums'),
