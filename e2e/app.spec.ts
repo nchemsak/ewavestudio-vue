@@ -2781,10 +2781,12 @@ test('the tape pedal: its noise is a stem of its own and the stems still add up;
 	await name.fill('Tape');
 	await name.press('Enter');
 	await turnOnPads(page, [0, 4, 8, 12]);
-	// Noise and reverb (Snare) and the delay: every stem has sound. Not the overdrive: its
-	// curve turns silence into a small steady offset, which Chrome renders differently from
-	// one render to the next (on main too), so with it on the stems miss the mix by that much
-	await soundsBox(page).getByRole('button', { name: 'Snare', exact: true }).click();
+	// Reverb (Pizz; the Snare preset until PR 136), noise and the delay: every stem has sound.
+	// Not the overdrive: its curve turns silence into a small steady offset, which Chrome
+	// renders differently from one render to the next (on main too), so with it on the stems
+	// miss the mix by that much
+	await soundsBox(page).getByRole('button', { name: 'Pizz', exact: true }).click();
+	await page.getByRole('button', { name: 'Toggle noise' }).click();
 	await page.locator('.fx .footswitch').nth(0).click();
 
 	const stemsOf = async (id: string, mode: string, ending: 'Loop' | 'With tail') => {
@@ -3101,7 +3103,7 @@ test('the tape pedal: on the panel, saved, one undo step a change, reset by File
 	await expect(footswitch).toHaveAttribute('aria-pressed', 'true');
 
 	// A sound preset starts from the factory sound: the pedal goes off
-	await soundsBox(page).getByRole('button', { name: 'Kick', exact: true }).click();
+	await soundsBox(page).getByRole('button', { name: 'Keys', exact: true }).click();
 	await expect(footswitch).toHaveAttribute('aria-pressed', 'false');
 	// And File → New
 	await footswitch.click();
@@ -4094,9 +4096,9 @@ test('the dice rolls a new sound, keeps the pattern, lights no preset, and undo 
 
 	await page.waitForTimeout(SETTLED);
 	await turnOnPads(page, [0, 4, 9]);
-	await soundsBox(page).getByRole('button', { name: 'Kick', exact: true }).click();
+	await soundsBox(page).getByRole('button', { name: 'Keys', exact: true }).click();
 	await page.waitForTimeout(SETTLED);
-	await expect(lit).toHaveText(['Kick']);
+	await expect(lit).toHaveText(['Keys']);
 	const kick = await projectData();
 
 	// Three rolls: three new sounds, each on every pad, the pattern untouched, nothing lit
@@ -4115,7 +4117,7 @@ test('the dice rolls a new sound, keeps the pattern, lights no preset, and undo 
 	// Each roll is one undo step
 	await page.locator('body').click({ position: { x: 5, y: 5 } });
 	for (let i = 0; i < 3; i++) await page.keyboard.press('Control+z');
-	await expect(lit).toHaveText(['Kick']);
+	await expect(lit).toHaveText(['Keys']);
 	expect(sound(await projectData())).toBe(sound(kick));
 });
 
@@ -4610,7 +4612,7 @@ test('PR 85: the waves Random picks from are saved with the project; File → Ne
 	await expect.poll(included).toBe(6);
 
 	// A sound preset sets the whole sound: every wave again
-	await page.getByRole('button', { name: 'Kick', exact: true }).click();
+	await page.getByRole('button', { name: 'Keys', exact: true }).click();
 	await expect.poll(included).toBe(8);
 });
 
@@ -4903,9 +4905,10 @@ test('Export audio: effects stems add up to the mix; a MIDI file and a one-shot 
 	await name.fill('Stems');
 	await name.press('Enter');
 	await turnOnPads(page, [0, 4, 8, 12]);
-	// Noise and reverb (Snare), the delay, and random pitch sweeps: every stem has sound, and
-	// each is rendered with the same random numbers as the mix
-	await soundsBox(page).getByRole('button', { name: 'Snare', exact: true }).click();
+	// Reverb (Pizz; the Snare preset until PR 136), noise, the delay, and random pitch sweeps:
+	// every stem has sound, and each is rendered with the same random numbers as the mix
+	await soundsBox(page).getByRole('button', { name: 'Pizz', exact: true }).click();
+	await page.getByRole('button', { name: 'Toggle noise' }).click();
 	await page.locator('.fx .footswitch').first().click();
 	await page.getByRole('button', { name: 'Random sweep', exact: true }).click();
 
@@ -7644,9 +7647,9 @@ test('FX off plays a machine dry, round every pedal; Solo leaves the others out,
 // The Bass machine, part 2b START
 
 test('Bass sounds and patterns: the transport\'s boxes are Bass\'s while Bass is shown; lit, the dice, one undo step', async ({ page }) => {
-	await expect(page.getByRole('button', { name: 'Kick', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Keys', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Show Bass' }).click();
-	await expect(page.getByRole('button', { name: 'Kick', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Keys', exact: true })).toHaveCount(0);
 	await expect(page.getByText('Bass sounds')).toBeVisible();
 	await page.waitForTimeout(SETTLED);
 
@@ -7680,7 +7683,7 @@ test('Bass sounds and patterns: the transport\'s boxes are Bass\'s while Bass is
 
 	// Back to Rhythm: its boxes
 	await page.getByRole('button', { name: 'Show Synth' }).click();
-	await expect(page.getByRole('button', { name: 'Kick', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Keys', exact: true })).toBeVisible();
 });
 
 test('Pattern Tools and Generate edit the machine shown: Bass\'s steps, its notes in its range', async ({ page }) => {
@@ -7956,7 +7959,7 @@ test('Keep as drum: the chip draws and plays the hit Keep would save', async ({ 
 	expect(Math.abs((samples / kept.sampleRate) * 1000 - ms)).toBeLessThanOrEqual(2);
 	// A new sound: a new picture
 	const before = await page.locator('.keep-hit path').getAttribute('d');
-	await page.getByRole('button', { name: 'Kick', exact: true }).click();
+	await page.getByRole('button', { name: 'Keys', exact: true }).click();
 	await expect(page.locator('.keep-hit path')).not.toHaveAttribute('d', before!);
 	await expect(page.getByRole('button', { name: /^Hear the hit Keep would save: A3 / })).toBeVisible();
 	// Silent while playing (the pads are empty, so anything heard would be the chip's)

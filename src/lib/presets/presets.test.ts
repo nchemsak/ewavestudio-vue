@@ -121,7 +121,7 @@ const soundLeaves = (snap: any) => {
 
 describe('the preset library', () => {
 	it('has six presets with short, distinct names and known waves', () => {
-		expect(PRESETS.map(p => p.label)).toEqual(['Kick', 'Snare', 'Metal', 'Pluck', 'Acid', 'Bell']);
+		expect(PRESETS.map(p => p.label)).toEqual(['Keys', 'Pizz', 'Metal', 'Pluck', 'Acid', 'Bell']);
 		expect(new Set(PRESETS.map(p => p.id)).size).toBe(PRESETS.length);
 		for (const p of PRESETS) {
 			expect(p.label.length).toBeLessThanOrEqual(5);
