@@ -1,7 +1,10 @@
 // src/lib/presets/library.ts
 // The built-in presets (see presets.ts for what a preset sets and how it's applied). Each one
 // lists only what it changes from the factory sound, and uses a different part of the synth,
-// so together they show what it can do. The comments say what to listen for.
+// so together they show what it can do. The comments say what to listen for. Keys and Pizz
+// replaced Kick and Snare in PR 136 (the plan's item 18, picked by ear from five candidates:
+// Mallet, a struck wooden bar, came third): the Drums machine plays drums now, and the Synth
+// machine's box offers melodic, struck sounds.
 //
 // Factory sound, for reference: Envelope attack 20 ms, decay 400 ms; Filter 5000 Hz,
 // resonance 0.5, no envelope; Pitch envelope off (0 semitones); no noise, unison, FM, LFO
@@ -20,35 +23,35 @@ import { VELOCITY_SWITCH_AMOUNT } from '../../audio/velocity';
 
 export const PRESETS: readonly SynthPreset[] = [
 	{
-		// A sine that drops two octaves fast: a kick on low pads (Octave ↓), a tom or a zap
-		// higher up. Drive thickens it.
-		id: 'kick',
-		label: 'Kick',
-		description: 'Kick: a sine that drops two octaves in a flash, with a little drive. Deepest on low pads.',
+		// An electric piano from FM: a sine modulated at the same pitch (Lock), bright as it's
+		// struck, mellowing as it rings; softer steps are darker
+		id: 'keys',
+		label: 'Keys',
+		description: 'Keys: an FM electric piano, bright as it is struck, mellowing as it rings.',
 		wave: 'sine',
 		synth: {
-			envelope: { attackMs: 1, decayMs: 320 },
-			pitchEnv: { semitones: 24, decayMs: 45, mode: 'up' },
+			envelope: { attackMs: 2, decayMs: 900 },
+			filter: { cutoff: 4500, envAmount: 1.5, envDecayMs: 250 },
+			fm: { enabled: true, ratio: 1, index: 3 },
+			velocity: { cutoff: VELOCITY_SWITCH_AMOUNT },
 		},
 		fx: {
-			drive: { enabled: true, amount: 0.25, tone: 2500, mix: 0.3 },
+			reverb: { enabled: true, mix: 0.2, decay: 1.6, tone: 0.5 },
 		},
 	},
 	{
-		// A short triangle body with a quick pitch drop, and a burst of noise for the snares.
-		// The noise skips the effects, so the reverb is on the body only.
-		id: 'snare',
-		label: 'Snare',
-		description: 'Snare: a short triangle body with a snap of noise and a small room.',
+		// A plucked string: a triangle whose filter opens for a moment and shuts, short and dry
+		id: 'pizz',
+		label: 'Pizz',
+		description: 'Pizz: a plucked string, short and soft, a pizzicato.',
 		wave: 'triangle',
 		synth: {
-			envelope: { attackMs: 1, decayMs: 200 },
-			filter: { cutoff: 7000 },
-			pitchEnv: { semitones: 12, decayMs: 30, mode: 'up' },
-			noise: { enabled: true, amount: 0.55, color: 0.6, attackBurst: true, burstMs: 140 },
+			envelope: { attackMs: 1, decayMs: 260 },
+			filter: { cutoff: 1500, resonance: 1.5, envAmount: 2, envDecayMs: 90 },
+			pitchEnv: { semitones: 2, decayMs: 15, mode: 'up' },
 		},
 		fx: {
-			reverb: { enabled: true, mix: 0.15, decay: 0.8, tone: 0.6 },
+			reverb: { enabled: true, mix: 0.22, decay: 1.4, tone: 0.5 },
 		},
 	},
 	{

@@ -17,7 +17,7 @@ unison and LFO; delay (with a ping-pong switch), overdrive (with a bit-crusher s
 input, and MIDI learn (a controller's knobs turn the app's); a melody maker (random notes or an
 arpeggio in a key and scale; a new key or scale moves the pattern with it); four patterns per
 project (A–D, with Copy) and a chain that plays them in order; a machine rail (a small scope and
-spectrogram, and a row per machine: Rhythm, Bass and Drums), the live spectrum behind the Filter card's
+spectrogram, and a row per machine: Synth (the Rhythm machine), Bass, Drums and Drift), the live spectrum behind the Filter card's
 curve, one hit of the sound behind the Envelope card's, and the note playing in the Melody Maker; six built-in sounds that set the sound (not the pattern) and six built-in patterns
 that set the pattern (not the sound), each with a dice for a random one; audio export (seamless N-bar loops, effects stems, a MIDI file and a one-shot); projects
 saved in IndexedDB with JSON import and export, and share links (the project in the URL); undo/redo; it installs as an app that
@@ -1161,6 +1161,16 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
   same), its name, its **level** (a mini knob, `synth.volume` "Rhythm level", MIDI-learnable
   again: the lane's `channelVolume`, hidden since PR 92, default 0.5) and a tiny row of its 16
   steps in their pads' colours (brighter when louder), the playing one outlined.
+- **"Synth" on screen** (PR 136, the plan's item 18): the Rhythm machine's row, the Step
+  Sequencer's and Sound's headers ("· Synth"), its switches' names ("Synth on", "Show Synth",
+  "Solo Synth", "Synth FX", "Synth level"), the phone's machine key (**SYN**, RHY before), the
+  Drums machine's notes ("Kept from Synth") and MIDI learn's names ("Synth level", "Synth into
+  the pedals") say Synth, and its machine stem is `_synth.wav` (`_rhythm.wav` before). "Rhythm"
+  beside "Drums" read as two drum tracks; "Melody" was turned down (it clashes with the Melody
+  Maker, and Bass is melodic too). Only on screen: the code, the saved names (`rhythm` in
+  `mixer` and the slots' tracks, `synth.*`) and the MIDI ids (`synth.volume`, `synth.pedals`)
+  stay, so saved projects and MIDI links are untouched. It's still the DFAM-style percussion
+  voice. This guide still calls it Rhythm.
 - **Rhythm** (the synth lane) and **Bass** (PR 115, see "The Bass machine"). A click on a row
   (its name, `Show Bass`, `aria-pressed`, or its steps) picks the machine the pads and the
   Sound section show (`machine` in `DrumSequencer.vue`, not saved, Rhythm on a fresh page);
@@ -2206,8 +2216,8 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 
 ### Sounds and Patterns
 - Two boxes side by side in the transport card (`PresetButtons.vue`, used twice), each six
-  buttons three across with a dice in its top-right corner: **Sound presets** (Kick, Snare,
-  Metal / Pluck, Acid, Bell; the presets below) and **Pattern presets** (Tresillo, Halftime,
+  buttons three across with a dice in its top-right corner: **Sound presets** (Keys, Pizz,
+  Metal / Pluck, Acid, Bell; the presets below; Kick and Snare until PR 136) and **Pattern presets** (Tresillo, Halftime,
   Gallop / Rolls, Bassline, Breaks). Their captions were "Sounds" and "Patterns" until PR 51,
   which didn't say they were presets. From 1200 px they sit between Swing and Play without making the card
   taller; narrower, they share a row of their own under the knobs; on phones one is under the
@@ -2243,6 +2253,15 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Analytics: `pattern_select` with the pattern's id; `pattern_random` for a roll of the dice.
 
 ### Presets (the Sounds box)
+- **Keys and Pizz** (PR 136, the plan's item 18) replaced **Kick and Snare** (the Drums machine
+  plays drums now): Keys, an FM electric piano (a sine modulated at its own pitch, Lock, index 3,
+  Decay 900 ms, the filter's envelope +1.5 octaves, VEL on, a small reverb), and Pizz, a plucked
+  string (a triangle, the filter opening 2 octaves and shutting in 90 ms, a 2-semitone knock,
+  Decay 260 ms, a reverb). Picked by ear from five candidates on an audition page (each the
+  same two-bar melody exported by the app): Mallet (a struck wooden bar on the Hollow wave)
+  came third, then Stab and Chip. Peaks of that melody: Keys 0.37, Pizz 0.28, in the others'
+  range (Pluck 0.16, Bell 0.36). A project with the Kick or Snare sound keeps it (a preset only
+  sets settings); only the buttons went.
 - A preset sets the sound only: the synth and effect settings, the main wave and every pad's
   wave (as clicking a wave tile does), in every pattern slot (PR 131). Never the pattern (steps, velocities, pitches, the noise
   mask), the key and octave, tempo, swing, volume or Melody Maker.
@@ -2256,7 +2275,7 @@ e2e/app.spec.ts          Browser tests (Playwright; playwright.config.ts)
 - Its values must stay within the knobs' ranges (a unit test checks) and survive the panels
   unrounded (a browser test checks each preset lands exactly and stays lit). The delay's
   feedback has no knob, so presets leave it at 0.3. The drive saturates to near full scale,
-  so its mix sets the level: keep it low (Kick 0.3, Acid 0.35), or that preset is much louder
+  so its mix sets the level: keep it low (Acid 0.35; the Kick preset's 0.3), or that preset is much louder
   than the others. WAV exports of pads 1, 5, 9, 13 peak between about 0.2 (Pluck) and 0.5
   (Acid).
 - A click is one undo step (the undo history records it like any change). The button of the
@@ -2833,18 +2852,8 @@ with mockups at 568 × 320, 683 × 331 (a Pixel XL held sideways with the naviga
 one after another) went to the Maybes: with Drift's slow fade-ins it would sound much like
 Attack. Its first items were 15 (Drift's gap at the bar line, and the line of text under its
 bars), PR 133, 16 (the pads' wave icon on the pad, and the phone's top bar fitting), PR 134,
-and 17 (the drum sounds and kits), PR 135.
+17 (the drum sounds and kits), PR 135, and 18 ("Synth", and Keys and Pizz), PR 136.
 
-18. **"Rhythm" becomes "Synth", and two new sounds.** On screen only: the rail's row, the Step
-    Sequencer's header, the phone's key (SYN), the notes that name it, MIDI learn's names
-    ("Synth level"), and the stem's file name (`_synth.wav`). Saved names stay (`rhythm` in
-    `mixer` and the slots' tracks, `synth.*` and the MIDI ids, which already say synth).
-    "Melody" was turned down: it clashes with the Melody Maker, and Bass is melodic too. The
-    machine stays the DFAM-style percussion voice. The Sound presets **Kick and Snare** are
-    replaced (the Drums machine has them now; since PR 135 the kit's render no longer needs
-    them, as it copies the first four sounds) by two melodic, struck sounds, picked by ear from
-    about four candidates (Mallet, Keys: an FM electric piano, Stab, Chip...). About 36 browser
-    tests use the Kick preset and need another way to the sound they measure.
 19. **Drift: Motion.** The X/Y pad's dot moves by itself (drawn moving, as the LFO's marks):
     a Rate in bars (1, 2, 4, 8, 16), a Depth, and a shape: Circle (Filter and Spread together),
     Sweep (Filter only), Wander (smooth random) and **Swell** (the filter closes at each new
@@ -3192,6 +3201,7 @@ Done:
 | 133 | Drift's gap at the bar line (the plan's item 15, the first of the maintainer's brainstorm after PR 132, whose plan it also records: two small fixes, the drum sounds and kits, "Synth" and two new sounds, Drift's Motion, Pulse and Octave and Voicing, then four phone items, before the major upgrades): a Drift note let go before its fade-in had finished fell silent until the bar line, about 0.1 s live (with a click) and its whole bar in an export, whenever its Attack lasted its run (the factory's 1 bar, Strings, Haze, Tide) and rounding went one way, so it came and went; it now fades out from where its fade-in had got to (`release()` in `src/audio/drift.ts`). The line of text under Drift's bars is gone. |
 | 134 | Two small fixes (the plan's item 16): the pads' wave icon (and their ×3 badge) is printed on the pad, inside it, 9 px above its lip, in its wave's colour with no pill, so it sinks with a press (it was a dark pill pinned under the pad, over its lip, which stayed put); and phone mode's top bar fits at every width: the tabs take the room left and read P S M F K when it's too narrow for their names (a container query), so from 720 to 834 px wide, where the bar ran off the screen with Undo, Redo and ☰ (a Pixel XL held sideways is 731), it now fits. |
 | 135 | Drum sounds and kits (the plan's item 17): eleven new kit sounds made by recipes of their own (`scripts/drum-recipes.js`, rendered in Chromium by `scripts/render-drum-kit.mjs`) and picked by ear from an audition page: Sub, Sub click and Round kicks, Clap, Rim, Tom, Conga, Wood, Shaker, a new Hat and an Open hat (noise, not the old Metal pitched up); a fresh kit is Kick, Snare, Tom and Hat; Sub and Dub replace Tight and Click, and Deep, Tin and Boom use the new sounds (a deep Tom, a Wood block, a low Conga); saved projects keep their Metal and old Hat ("Tin hat" now), which stay in the kit; the dice draws each slot's kind of sound; the MIDI file gives each sound its General MIDI note. The kit's download is 377 kB (90 before). |
+| 136 | "Synth", and two new sounds (the plan's item 18): the Rhythm machine reads **Synth** on screen (the rail, the headers, its switches' names, the phone's **SYN**, MIDI learn's names, the `_synth.wav` stem; the code, the saved names and the MIDI ids stay `rhythm` and `synth.*`); the Sound presets **Kick and Snare** became **Keys** (an FM electric piano) and **Pizz** (a plucked string), picked by ear from five candidates on an audition page (Mallet third, then Stab and Chip). |
 
 ## Testing a PR
 Pushing a branch or opening a PR changes nothing on the website. GitHub runs the Checks on

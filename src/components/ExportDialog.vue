@@ -201,11 +201,11 @@ const stemsText = computed(() => {
 // The machine stems (PR 116): each machine on its own, through the pedals, and the lo-fi
 // pedal's noise as a file of its own (unless the effects stems have it already)
 const others = computed(() => props.machinesOn ?? (props.bassOn ? ['bass'] : []));
-const machineStems = computed(() => ['rhythm', ...others.value,
+const machineStems = computed(() => ['synth', ...others.value,
 	...(props.effectsOn.tape && !o.stems ? ['tape'] : [])]);
 const machineStemsText = computed(() => {
 	const sum = props.bending ? 'they add up to the mix nearly (the overdrive and lo-fi pedal bend the sum)' : 'they add up to the mix';
-	return others.value.length ? `${list(machineStems.value)}: ${sum}` : 'rhythm only: the other machines are muted or have nothing on';
+	return others.value.length ? `${list(machineStems.value)}: ${sum}` : 'synth only: the other machines are muted or have nothing on';
 });
 
 // A loop shorter than Drift's chords, or not a whole number of them

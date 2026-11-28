@@ -65,7 +65,7 @@
                 </div>
             </div>
             <div class="ds-group">
-                <span class="ds-cap">Kept from Rhythm <small>{{ drums.kept.length }} of {{ KEPT_MAX }}</small></span>
+                <span class="ds-cap">Kept from Synth <small>{{ drums.kept.length }} of {{ KEPT_MAX }}</small></span>
                 <div class="ds-chips">
                     <span v-for="c in keptChips" :key="c.ref" class="ds-chipwrap">
                         <button type="button" class="ds-chip" :class="{ used: c.used }" :style="{ '--h': c.hue }"
@@ -75,7 +75,7 @@
                             :title="c.used ? `Delete ${c.name} (its slot goes back to the kit's sound)` : `Delete ${c.name}`"
                             @click="deleteKept(drums, c.ref)">✕</button>
                     </span>
-                    <p v-if="!drums.kept.length" class="ds-empty">None yet. On Rhythm's Sound, <b>Keep as drum</b> puts a hit of Rhythm's sound here and in a slot.</p>
+                    <p v-if="!drums.kept.length" class="ds-empty">None yet. On Synth's Sound, <b>Keep as drum</b> puts a hit of Synth's sound here and in a slot.</p>
                 </div>
             </div>
         </div>

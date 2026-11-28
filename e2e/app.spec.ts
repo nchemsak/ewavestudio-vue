@@ -230,7 +230,7 @@ test('loads as version 2 with the synth lane and the machine rail', async ({ pag
 	await expect(page).toHaveTitle('Ephemeral Wave Synth 2');
 	await expect(rail(page)).toBeVisible();
 	await expect(rail(page).locator('.mr-row')).toHaveCount(4); // Rhythm, Bass (PR 115), Drums (PR 119) and Drift (PR 122)
-	await expect(rail(page).locator('.mr-name')).toHaveText(['Rhythm', 'Bass', 'Drums', 'Drift']);
+	await expect(rail(page).locator('.mr-name')).toHaveText(['Synth', 'Bass', 'Drums', 'Drift']);
 	await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
 });
 
@@ -321,7 +321,7 @@ test('the machine rail: its screens draw while something plays, and Rhythm mutes
 	// The LED mutes Rhythm: no more notes (counted by their filters' sweeps: one per note; a bar
 	// at 120 BPM has four)
 	const notes = () => page.evaluate(() => ((window as any).__filterDetuneCalls ?? []).filter((c: any) => c[0] === 'set').length as number);
-	const led = rail(page).getByRole('switch', { name: 'Rhythm on' });
+	const led = rail(page).getByRole('switch', { name: 'Synth on' });
 	await expect(led).toHaveAttribute('aria-checked', 'true');
 	await led.click();
 	await expect(led).toHaveAttribute('aria-checked', 'false');
@@ -335,7 +335,7 @@ test('the machine rail: its screens draw while something plays, and Rhythm mutes
 	await page.getByRole('button', { name: 'Stop', exact: true }).click();
 
 	// Its level is the lane's volume (hidden since PR 92), saved with the project, and MIDI-learnable
-	const level = rail(page).getByRole('slider', { name: 'Rhythm level' });
+	const level = rail(page).getByRole('slider', { name: 'Synth level' });
 	await expect(level).toHaveAttribute('aria-valuetext', '50%');
 	await level.focus();
 	await page.keyboard.press('Shift+ArrowUp');
@@ -1999,12 +1999,12 @@ test('a steady right side: switching machines moves nothing', async ({ page }) =
 	for (const width of [1600, 1280, 1024, 820]) {
 		await page.setViewportSize({ width, height: 900 });
 		const at = `${width} px`;
-		await show('Rhythm');
+		await show('Synth');
 		const rhythm = await boxes();
 		// Wide: everything holds still. Tablets: the tab showing (Sound) is each machine's own
 		// size, but nothing above it moves
 		const steady = (b: any) => (width >= 1200 ? b : { steps: b.steps, rail: b.rail, screens: b.screens, tabs: b.tabs });
-		for (const name of ['Bass', 'Drums', 'Drift', 'Rhythm']) {
+		for (const name of ['Bass', 'Drums', 'Drift', 'Synth']) {
 			await show(name);
 			expect(steady(await boxes()), `${at}: ${name}`).toEqual(steady(rhythm));
 		}
@@ -2020,7 +2020,7 @@ test('a steady right side: switching machines moves nothing', async ({ page }) =
 	}
 	// A phone held upright (one column, pads in two rows): each machine's own height
 	await page.setViewportSize({ width: 390, height: 900 });
-	await show('Rhythm');
+	await show('Synth');
 	const h = async () => Math.round((await page.locator('.ds-steps').boundingBox())!.height);
 	const upright = await h();
 	await show('Bass');
@@ -2781,10 +2781,12 @@ test('the tape pedal: its noise is a stem of its own and the stems still add up;
 	await name.fill('Tape');
 	await name.press('Enter');
 	await turnOnPads(page, [0, 4, 8, 12]);
-	// Noise and reverb (Snare) and the delay: every stem has sound. Not the overdrive: its
-	// curve turns silence into a small steady offset, which Chrome renders differently from
-	// one render to the next (on main too), so with it on the stems miss the mix by that much
-	await soundsBox(page).getByRole('button', { name: 'Snare', exact: true }).click();
+	// Reverb (Pizz; the Snare preset until PR 136), noise and the delay: every stem has sound.
+	// Not the overdrive: its curve turns silence into a small steady offset, which Chrome
+	// renders differently from one render to the next (on main too), so with it on the stems
+	// miss the mix by that much
+	await soundsBox(page).getByRole('button', { name: 'Pizz', exact: true }).click();
+	await page.getByRole('button', { name: 'Toggle noise' }).click();
 	await page.locator('.fx .footswitch').nth(0).click();
 
 	const stemsOf = async (id: string, mode: string, ending: 'Loop' | 'With tail') => {
@@ -3101,7 +3103,7 @@ test('the tape pedal: on the panel, saved, one undo step a change, reset by File
 	await expect(footswitch).toHaveAttribute('aria-pressed', 'true');
 
 	// A sound preset starts from the factory sound: the pedal goes off
-	await soundsBox(page).getByRole('button', { name: 'Kick', exact: true }).click();
+	await soundsBox(page).getByRole('button', { name: 'Keys', exact: true }).click();
 	await expect(footswitch).toHaveAttribute('aria-pressed', 'false');
 	// And File → New
 	await footswitch.click();
@@ -4094,9 +4096,9 @@ test('the dice rolls a new sound, keeps the pattern, lights no preset, and undo 
 
 	await page.waitForTimeout(SETTLED);
 	await turnOnPads(page, [0, 4, 9]);
-	await soundsBox(page).getByRole('button', { name: 'Kick', exact: true }).click();
+	await soundsBox(page).getByRole('button', { name: 'Keys', exact: true }).click();
 	await page.waitForTimeout(SETTLED);
-	await expect(lit).toHaveText(['Kick']);
+	await expect(lit).toHaveText(['Keys']);
 	const kick = await projectData();
 
 	// Three rolls: three new sounds, each on every pad, the pattern untouched, nothing lit
@@ -4115,7 +4117,7 @@ test('the dice rolls a new sound, keeps the pattern, lights no preset, and undo 
 	// Each roll is one undo step
 	await page.locator('body').click({ position: { x: 5, y: 5 } });
 	for (let i = 0; i < 3; i++) await page.keyboard.press('Control+z');
-	await expect(lit).toHaveText(['Kick']);
+	await expect(lit).toHaveText(['Keys']);
 	expect(sound(await projectData())).toBe(sound(kick));
 });
 
@@ -4266,7 +4268,7 @@ test("a step's Repeats play quick hits within the step, live and in WAV exports"
 	await setRepeats(4, '×4');
 	expect(JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data
 		.instruments.find((l: any) => l.name === 'synth-voice').ratchets[4]).toBe(4);
-	await page.getByRole('button', { name: "Reset Rhythm's pads" }).click();
+	await page.getByRole('button', { name: "Reset Synth's pads" }).click();
 	await expect(page.locator('.ratchet-badge')).toHaveCount(0);
 });
 
@@ -4398,7 +4400,7 @@ test('the pads: a lit pad dragged up or down sets its velocity, a sideways drag 
 	expect((await lane()).velocities[4]).toBe(0.75);
 
 	// Reset in the header: the machine shown's pads, one undo step
-	await page.getByRole('button', { name: "Reset Rhythm's pads" }).click();
+	await page.getByRole('button', { name: "Reset Synth's pads" }).click();
 	expect((await lane()).steps.every((x: boolean) => !x)).toBe(true);
 	await page.waitForTimeout(SETTLED);
 	await page.getByRole('button', { name: 'Undo' }).click();
@@ -4610,7 +4612,7 @@ test('PR 85: the waves Random picks from are saved with the project; File → Ne
 	await expect.poll(included).toBe(6);
 
 	// A sound preset sets the whole sound: every wave again
-	await page.getByRole('button', { name: 'Kick', exact: true }).click();
+	await page.getByRole('button', { name: 'Keys', exact: true }).click();
 	await expect.poll(included).toBe(8);
 });
 
@@ -4903,9 +4905,10 @@ test('Export audio: effects stems add up to the mix; a MIDI file and a one-shot 
 	await name.fill('Stems');
 	await name.press('Enter');
 	await turnOnPads(page, [0, 4, 8, 12]);
-	// Noise and reverb (Snare), the delay, and random pitch sweeps: every stem has sound, and
-	// each is rendered with the same random numbers as the mix
-	await soundsBox(page).getByRole('button', { name: 'Snare', exact: true }).click();
+	// Reverb (Pizz; the Snare preset until PR 136), noise, the delay, and random pitch sweeps:
+	// every stem has sound, and each is rendered with the same random numbers as the mix
+	await soundsBox(page).getByRole('button', { name: 'Pizz', exact: true }).click();
+	await page.getByRole('button', { name: 'Toggle noise' }).click();
 	await page.locator('.fx .footswitch').first().click();
 	await page.getByRole('button', { name: 'Random sweep', exact: true }).click();
 
@@ -6413,7 +6416,7 @@ test.describe('Phone mode', () => {
 	test('PR 134: the top bar fits at every width from 568 to 915 px, ☰ on the screen', async ({ page }) => {
 		for (const width of [568, 600, 620, 640, 667, 683, 700, 720, 731, 760, 800, 834, 844, 915]) {
 			await page.setViewportSize({ width, height: width < 700 ? 320 : 390 });
-			for (const m of ['Rhythm', 'Drift']) {
+			for (const m of ['Synth', 'Drift']) {
 				await page.locator('.pl-machines').getByRole('radio', { name: m }).click();
 				const bar = page.locator('.pl-top'), tabs = page.locator('.pl-tabs');
 				expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `top bar at ${width}`).toBe(true);
@@ -6584,7 +6587,7 @@ test.describe('Phone mode', () => {
 			return JSON.parse(readFileSync((await download.path())!).toString('utf8')).data;
 		};
 		const machine = page.getByRole('radiogroup', { name: 'Machine' });
-		await expect(machine.getByRole('radio', { name: 'Rhythm' })).toHaveAttribute('aria-checked', 'true');
+		await expect(machine.getByRole('radio', { name: 'Synth' })).toHaveAttribute('aria-checked', 'true');
 		// A Rhythm step, so the Bass pads are seen to be Bass's own
 		await phonePads(page).nth(0).click();
 		await machine.getByRole('radio', { name: 'Bass' }).click();
@@ -6749,7 +6752,7 @@ test.describe('Phone mode', () => {
 		await page.getByRole('button', { name: 'Stop', exact: true }).click();
 		// Key: the Melody Maker dimmed, with the note
 		await page.getByRole('tab', { name: 'Key' }).click();
-		await expect(page.locator('section[aria-label="Key"]').getByText('The Melody Maker works on Rhythm and Bass')).toBeVisible();
+		await expect(page.locator('section[aria-label="Key"]').getByText('The Melody Maker works on Synth and Bass')).toBeVisible();
 
 		// A small phone: eight steps at a time, 1–8 | 9–16; the machine keys without LEDs; nothing scrolls
 		await page.setViewportSize({ width: 568, height: 320 });
@@ -7361,7 +7364,7 @@ test('the Bass machine: its rail row shows it on the pads and in Sound, with Acc
 	await turnOnPads(page, [0, 1, 4]);
 	// Rhythm's pads stayed as they were; the rail's Bass row shows the steps
 	await expect(railRow(page, 'Bass').locator('.mr-cells i.on')).toHaveCount(3);
-	await expect(railRow(page, 'Rhythm').locator('.mr-cells i.on')).toHaveCount(0);
+	await expect(railRow(page, 'Synth').locator('.mr-cells i.on')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Accent on step 1', exact: true }).click();
 	await page.getByRole('button', { name: 'Slide on step 1', exact: true }).click();
 	await expect(page.locator('.bp-link.slide')).toHaveCount(1);
@@ -7389,7 +7392,7 @@ test('the Bass machine: its rail row shows it on the pads and in Sound, with Acc
 	await expect(page.getByRole('button', { name: 'Tie on step 1', exact: true })).toHaveAttribute('aria-pressed', 'false');
 
 	// Back to Rhythm: its pads and Sound section
-	await page.getByRole('button', { name: 'Show Rhythm' }).click();
+	await page.getByRole('button', { name: 'Show Synth' }).click();
 	await expect(page.getByRole('radiogroup', { name: 'Bass wave' })).toBeHidden();
 	await expect(page.getByRole('radiogroup', { name: 'Waveforms' })).toBeVisible();
 	await expect(page.locator('.pad-row .padTEST.selected')).toHaveCount(0);
@@ -7489,7 +7492,7 @@ test('the rail mixer: each machine has a meter that lights while it plays, and P
 	await expect(meter('Bass')).toHaveAttribute('aria-valuenow', '0');
 	await page.getByRole('button', { name: 'Play', exact: true }).click();
 	await expect.poll(async () => Number(await meter('Bass').getAttribute('aria-valuenow')), { timeout: 3000 }).toBeGreaterThan(2);
-	await expect.poll(async () => Number(await meter('Rhythm').getAttribute('aria-valuenow')), { timeout: 3000 }).toBeGreaterThan(0);
+	await expect.poll(async () => Number(await meter('Synth').getAttribute('aria-valuenow')), { timeout: 3000 }).toBeGreaterThan(0);
 	// Muted, its meter goes dark
 	await railRow(page, 'Bass').getByRole('switch', { name: 'Bass on' }).click();
 	await expect.poll(async () => Number(await meter('Bass').getAttribute('aria-valuenow')), { timeout: 4000 }).toBe(0);
@@ -7519,11 +7522,11 @@ test('the rail mixer: Pedals at none keeps a machine out of the reverb; machine 
 	const files = unzip(zip.bytes);
 	const f = (part: string) => files[Object.keys(files).find((k) => k.endsWith(`_${part}.wav`))!];
 	expect(Object.keys(files).filter((k) => k.endsWith('.wav')).map((k) => k.split('_').at(-1)).sort())
-		.toEqual(['bass.wav', 'dry.wav', 'mix.wav', 'reverb.wav', 'rhythm.wav']);
+		.toEqual(['bass.wav', 'dry.wav', 'mix.wav', 'reverb.wav', 'synth.wav']);
 	// The machine stems add up to the mix, sample for sample
 	for (const ch of [0, 1]) {
 		const mix = wavSamples(f('mix'), ch).samples;
-		const [r, b] = ['rhythm', 'bass'].map((p) => wavSamples(f(p), ch).samples);
+		const [r, b] = ['synth', 'bass'].map((p) => wavSamples(f(p), ch).samples);
 		let worst = 0;
 		for (let i = 0; i < mix.length; i++) worst = Math.max(worst, Math.abs(r[i] + b[i] - mix[i]));
 		expect(worst, `channel ${ch}`).toBeLessThan(1e-3);
@@ -7533,7 +7536,7 @@ test('the rail mixer: Pedals at none keeps a machine out of the reverb; machine 
 	// Bass's stem has no reverb: it's dry after its last note (step 13 starts at 1.5 s, a 0.3 s decay)
 	expect(wavWindow(f('bass'), 2.4, 2.9).peak).toBeLessThan(1e-4);
 	// ...while Rhythm's rings into the reverb after its last hit
-	expect(wavWindow(f('rhythm'), 1.9, 2.4).peak).toBeGreaterThan(1e-3);
+	expect(wavWindow(f('synth'), 1.9, 2.4).peak).toBeGreaterThan(1e-3);
 
 	// The MIDI file has Bass's four notes on channel 2
 	const midi = files[Object.keys(files).find((k) => k.endsWith('.mid'))!];
@@ -7548,7 +7551,7 @@ test('FX and Solo: caps on each rail row; saved, one undo step each, File → Ne
 	await page.waitForTimeout(SETTLED); // a new project's first moments are its starting point, not an undo step
 	const fx = (name: string) => railRow(page, name).getByRole('switch', { name: `${name} FX` });
 	const solo = (name: string) => railRow(page, name).getByRole('switch', { name: `Solo ${name}` });
-	for (const name of ['Rhythm', 'Bass', 'Drums', 'Drift']) {
+	for (const name of ['Synth', 'Bass', 'Drums', 'Drift']) {
 		await expect(fx(name)).toHaveAttribute('aria-checked', 'true');
 		await expect(solo(name)).toHaveAttribute('aria-checked', 'false');
 	}
@@ -7560,7 +7563,7 @@ test('FX and Solo: caps on each rail row; saved, one undo step each, File → Ne
 	await solo('Drums').click();
 	await expect(solo('Drums')).toHaveAttribute('aria-checked', 'true');
 	// The others dim
-	await expect(railRow(page, 'Rhythm')).toHaveClass(/is-soloed-out/);
+	await expect(railRow(page, 'Synth')).toHaveClass(/is-soloed-out/);
 	await expect(railRow(page, 'Drums')).not.toHaveClass(/is-soloed-out/);
 	await page.waitForTimeout(SETTLED);
 	const saved = JSON.parse((await downloadFromFileMenu(page, 'Export file')).toString('utf8')).data;
@@ -7573,13 +7576,13 @@ test('FX and Solo: caps on each rail row; saved, one undo step each, File → Ne
 	await page.getByRole('button', { name: 'Undo', exact: true }).click();
 	await expect(fx('Bass')).toHaveAttribute('aria-checked', 'true');
 	// File → New: FX on, nothing soloed
-	await fx('Rhythm').click();
+	await fx('Synth').click();
 	await solo('Bass').click();
 	await chooseFromFileMenu(page, 'New');
 	await expect(page.getByRole('menuitem', { name: 'New' })).toBeHidden();
-	await expect(fx('Rhythm')).toHaveAttribute('aria-checked', 'true');
+	await expect(fx('Synth')).toHaveAttribute('aria-checked', 'true');
 	await expect(solo('Bass')).toHaveAttribute('aria-checked', 'false');
-	await expect(railRow(page, 'Rhythm')).not.toHaveClass(/is-soloed-out/);
+	await expect(railRow(page, 'Synth')).not.toHaveClass(/is-soloed-out/);
 });
 
 test('FX off plays a machine dry, round every pedal; Solo leaves the others out, live, in the export and the MIDI file', async ({ page }) => {
@@ -7597,16 +7600,16 @@ test('FX off plays a machine dry, round every pedal; Solo leaves the others out,
 	// FX on: Rhythm's stem rings into the reverb after its last hit (step 9 at 1 s; its 0.42 s
 	// decay is over by 1.5 s), and the lo-fi pedal's hiss is in it
 	const wet = await files('FX on', {});
-	expect(wavWindow(wet('_rhythm.wav'), 1.9, 2.4).peak).toBeGreaterThan(1e-3);
+	expect(wavWindow(wet('_synth.wav'), 1.9, 2.4).peak).toBeGreaterThan(1e-3);
 	// FX off: Rhythm is dry, its stem silent after its last note; Bass still rings
 	const dryF = await files('FX off', { fx: { rhythm: false } });
-	expect(wavPeak(dryF('_rhythm.wav'))).toBeGreaterThan(0.02);
-	expect(wavWindow(dryF('_rhythm.wav'), 1.9, 2.4).peak).toBeLessThan(1e-4);
+	expect(wavPeak(dryF('_synth.wav'))).toBeGreaterThan(0.02);
+	expect(wavWindow(dryF('_synth.wav'), 1.9, 2.4).peak).toBeLessThan(1e-4);
 	expect(wavWindow(dryF('_bass.wav'), 2.4, 2.9).peak).toBeGreaterThan(1e-3);
 	// The machine stems still add up to the mix (the lo-fi pedal bends the sum: nearly)
 	for (const ch of [0, 1]) {
 		const mix = wavSamples(dryF('_mix.wav'), ch).samples;
-		const [r, b] = ['_rhythm.wav', '_bass.wav'].map((p) => wavSamples(dryF(p), ch).samples);
+		const [r, b] = ['_synth.wav', '_bass.wav'].map((p) => wavSamples(dryF(p), ch).samples);
 		let worst = 0;
 		for (let i = 0; i < mix.length; i++) worst = Math.max(worst, Math.abs(r[i] + b[i] - mix[i]));
 		expect(worst, `channel ${ch}`).toBeLessThan(0.05);
@@ -7644,9 +7647,9 @@ test('FX off plays a machine dry, round every pedal; Solo leaves the others out,
 // The Bass machine, part 2b START
 
 test('Bass sounds and patterns: the transport\'s boxes are Bass\'s while Bass is shown; lit, the dice, one undo step', async ({ page }) => {
-	await expect(page.getByRole('button', { name: 'Kick', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Keys', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Show Bass' }).click();
-	await expect(page.getByRole('button', { name: 'Kick', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Keys', exact: true })).toHaveCount(0);
 	await expect(page.getByText('Bass sounds')).toBeVisible();
 	await page.waitForTimeout(SETTLED);
 
@@ -7659,7 +7662,7 @@ test('Bass sounds and patterns: the transport\'s boxes are Bass\'s while Bass is
 	await expect(squelch).toHaveAttribute('aria-pressed', 'true');
 	await expect(railRow(page, 'Bass').locator('.mr-cells i.on')).toHaveCount(13);
 	// Rhythm's pattern stayed empty
-	await expect(railRow(page, 'Rhythm').locator('.mr-cells i.on')).toHaveCount(0);
+	await expect(railRow(page, 'Synth').locator('.mr-cells i.on')).toHaveCount(0);
 	await page.waitForTimeout(SETTLED);
 	// A knob turned: unlit
 	const cutoff = page.getByRole('slider', { name: 'Cutoff', exact: true }).first();
@@ -7679,8 +7682,8 @@ test('Bass sounds and patterns: the transport\'s boxes are Bass\'s while Bass is
 	await expect(acid).toHaveAttribute('aria-pressed', 'false');
 
 	// Back to Rhythm: its boxes
-	await page.getByRole('button', { name: 'Show Rhythm' }).click();
-	await expect(page.getByRole('button', { name: 'Kick', exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Show Synth' }).click();
+	await expect(page.getByRole('button', { name: 'Keys', exact: true })).toBeVisible();
 });
 
 test('Pattern Tools and Generate edit the machine shown: Bass\'s steps, its notes in its range', async ({ page }) => {
@@ -7738,7 +7741,7 @@ test('the Drums machine: four rows on the pads; steps, velocity by dragging, mut
 	await expect(page.getByRole('group', { name: 'Sound presets' })).toHaveCount(0);
 	await expect(page.getByRole('group', { name: 'Drum kits' })).toBeVisible();
 	// The Melody Maker has nothing to do here; Pattern Tools' octave arrows neither
-	await expect(page.getByText('The Melody Maker works on Rhythm and Bass')).toBeVisible();
+	await expect(page.getByText('The Melody Maker works on Synth and Bass')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Octave up' }).first()).toBeDisabled();
 	await page.waitForTimeout(SETTLED);
 
@@ -7815,7 +7818,7 @@ test('the Drums machine plays: the kit at its steps in the export, its stem and 
 	const zip = await exportAudio(page, { bars: 1, ending: 'With tail', mix: true, stems: false, machineStems: true, midi: true, oneShot: false, normalize: false });
 	const files = unzip(zip.bytes);
 	const f = (part: string) => files[Object.keys(files).find((k) => k.endsWith(`_${part}.wav`))!];
-	expect(Object.keys(files).filter((k) => k.endsWith('.wav')).map((k) => k.split('_').at(-1)).sort()).toEqual(['drums.wav', 'mix.wav', 'rhythm.wav']);
+	expect(Object.keys(files).filter((k) => k.endsWith('.wav')).map((k) => k.split('_').at(-1)).sort()).toEqual(['drums.wav', 'mix.wav', 'synth.wav']);
 	const mix = f('mix');
 	// The kick on step 1, the snare on step 5 (0.5 s), the kick again on step 9 (1 s); quiet between
 	expect(wavWindow(mix, 0, 0.05).peak).toBeGreaterThan(0.2);
@@ -7956,7 +7959,7 @@ test('Keep as drum: the chip draws and plays the hit Keep would save', async ({ 
 	expect(Math.abs((samples / kept.sampleRate) * 1000 - ms)).toBeLessThanOrEqual(2);
 	// A new sound: a new picture
 	const before = await page.locator('.keep-hit path').getAttribute('d');
-	await page.getByRole('button', { name: 'Kick', exact: true }).click();
+	await page.getByRole('button', { name: 'Keys', exact: true }).click();
 	await expect(page.locator('.keep-hit path')).not.toHaveAttribute('d', before!);
 	await expect(page.getByRole('button', { name: /^Hear the hit Keep would save: A3 / })).toBeVisible();
 	// Silent while playing (the pads are empty, so anything heard would be the chip's)
@@ -8014,7 +8017,7 @@ test('Drum kits and Drum patterns: the transport\'s boxes while Drums is shown; 
 	await expect(on('Hat')).toHaveCount(10);
 	await expect(deep).toHaveAttribute('aria-pressed', 'true');
 	// Rhythm's pattern stayed empty
-	await expect(railRow(page, 'Rhythm').locator('.mr-cells i.on')).toHaveCount(0);
+	await expect(railRow(page, 'Synth').locator('.mr-cells i.on')).toHaveCount(0);
 	await page.waitForTimeout(SETTLED);
 
 	// A step changed: unlit; Undo lights it again
@@ -8037,7 +8040,7 @@ test('Drum kits and Drum patterns: the transport\'s boxes while Drums is shown; 
 	await expect(patterns.locator('[aria-pressed="true"]')).toHaveCount(0);
 
 	// Back to Rhythm: its boxes
-	await page.getByRole('button', { name: 'Show Rhythm' }).click();
+	await page.getByRole('button', { name: 'Show Synth' }).click();
 	await expect(page.getByRole('group', { name: 'Sound presets' })).toBeVisible();
 });
 
@@ -8154,7 +8157,7 @@ test('the Drift machine plays: held notes carry over the bar line, fade out over
 	const zip = await exportAudio(page, { bars: 4, ending: 'With tail', mix: true, stems: false, machineStems: true, midi: true, oneShot: false, normalize: false });
 	const files = unzip(zip.bytes);
 	const f = (part: string) => files[Object.keys(files).find((k) => k.endsWith(`_${part}.wav`))!];
-	expect(Object.keys(files).filter((k) => k.endsWith('.wav')).map((k) => k.split('_').at(-1)).sort()).toEqual(['drift.wav', 'mix.wav', 'rhythm.wav']);
+	expect(Object.keys(files).filter((k) => k.endsWith('.wav')).map((k) => k.split('_').at(-1)).sort()).toEqual(['drift.wav', 'mix.wav', 'synth.wav']);
 	const mix = f('mix');
 	// It fades in over the first 0.5 s, then holds
 	expect(wavWindow(mix, 0, 0.05).rms).toBeLessThan(wavWindow(mix, 1, 1.5).rms * 0.3);
@@ -8258,7 +8261,7 @@ test('the Drift machine: a project from before it opens with nothing held, and t
 	await expect(dialog.getByText("Drift's chords take 4 bars")).toBeVisible();
 	await dialog.getByRole('button', { name: 'Use 4 bars' }).click();
 	await expect(dialog.getByText("Drift's chords take 4 bars")).toBeHidden();
-	await expect(dialog.getByText(/rhythm and drift: they add up/)).toBeVisible();
+	await expect(dialog.getByText(/synth and drift: they add up/)).toBeVisible();
 });
 
 test('the Drift machine goes straight to the reverb: its Pedals is its send, the delay never hears it, and the effects stems still add up', async ({ page }) => {
@@ -8318,7 +8321,7 @@ test('Drift sounds and Progressions: the transport\'s boxes while Drift is shown
 	await expect(page.getByRole('slider', { name: 'Drift filter' })).toHaveAttribute('aria-valuenow', '6000');
 	await expect(progs.getByRole('button', { name: 'Wander', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	// Rhythm's sound wasn't touched: no Rhythm preset lit, its pads still off
-	await expect(railRow(page, 'Rhythm').locator('.mr-cells i.on')).toHaveCount(0);
+	await expect(railRow(page, 'Synth').locator('.mr-cells i.on')).toHaveCount(0);
 	await page.waitForTimeout(SETTLED);
 
 	// A knob turned: unlit; Undo lights it again (one step)

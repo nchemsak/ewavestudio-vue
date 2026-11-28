@@ -383,7 +383,7 @@ const shownSteps = computed(() => {
 provide('noMidiLearn', true);
 
 const MACHINES = [
-	{ id: 'rhythm', name: 'Rhythm', short: 'RHY' },
+	{ id: 'rhythm', name: 'Synth', short: 'SYN' }, // "Rhythm" and RHY until PR 136
 	{ id: 'bass', name: 'Bass', short: 'BASS' },
 	{ id: 'drums', name: 'Drums', short: 'DRUM' },
 	{ id: 'drift', name: 'Drift', short: 'DRIFT' },
