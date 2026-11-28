@@ -15,6 +15,7 @@
 
 import { NOTE_TO_SEMITONE, SCALES, type KeyScale } from '../lib/melody/theory';
 import type { MotionShape } from './driftMotion';
+import type { PulseMode } from './driftPulse';
 
 export const DRIFT_PLATES = 6;
 export const DRIFT_MAX_BARS = 8;
@@ -34,11 +35,14 @@ export type DriftVoice = {
 	motionShape: MotionShape;
 	motionRate: number;  // bars a cycle: 1, 2, 4, 8 or 16 (not Swell's)
 	motionDepth: number; // 0..1, 0: off
+	// Pulse (the plan's item 20, src/audio/driftPulse.ts): a gate on the level, or Duck
+	pulseMode: PulseMode;
+	pulseDepth: number;  // 0..1: how far the level drops
 };
 
 export const DRIFT_RANGES = {
 	voices: [3, 7], drift: [0, 1], wave: [0, 1], spread: [0, 1], cutoff: [150, 8000], attack: [0.25, 4], release: [0.25, 4],
-	motionRate: [1, 16], motionDepth: [0, 1],
+	motionRate: [1, 16], motionDepth: [0, 1], pulseDepth: [0, 1],
 } as const;
 
 // The swarm: its widest detune (cents either side, at full Spread), its wander (cents at full

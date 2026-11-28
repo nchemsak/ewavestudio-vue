@@ -129,6 +129,23 @@
                     </div>
                 </div>
             </div>
+            <!-- Pulse (the plan's item 20): a gate on the level (1/4, 1/8, 1/16), or Duck at the Drums
+                 machine's slot 1 hits, and how far the level drops. Not on the phone yet -->
+            <div v-if="!compact" class="df-kgroup df-pulse" :class="{ 'df-poff': drift.pulseMode === 'off' }" role="group" aria-label="Drift pulse">
+                <span class="df-kcap">Pulse</span>
+                <div class="df-prow">
+                    <div class="sp-keys" role="radiogroup" aria-label="Pulse">
+                        <button v-for="m in PULSE_MODES" :key="m" type="button" class="sp-key" :class="{ on: drift.pulseMode === m }" role="radio"
+                            :aria-checked="drift.pulseMode === m" :aria-label="PULSE_TIPS[m]" :title="PULSE_TIPS[m]"
+                            @click="drift.pulseMode = m">{{ PULSE_NAMES[m] }}</button>
+                    </div>
+                    <span class="df-mini df-pdepth">
+                        <Knob midi-id="drift.pulseDepth" v-model="drift.pulseDepth" label="Pulse depth" :value-text="pct(drift.pulseDepth)"
+                            :min="0" :max="1" :step="0.01" size="mini" hideLabel :useThemeArc="true" :disabled="drift.pulseMode === 'off'" />
+                        <i>Depth {{ pct(drift.pulseDepth) }}</i>
+                    </span>
+                </div>
+            </div>
             <!-- The phone's Mix group (Level, the reverb send, the meter) -->
             <slot name="mix" />
         </div>
@@ -141,6 +158,7 @@ import Knob from './Knob.vue';
 import DriftXYPad from './DriftXYPad.vue';
 import { DRIFT_RANGES } from '../audio/drift';
 import { MOTION_NAMES, MOTION_RATES, MOTION_SHAPES, type MotionShape } from '../audio/driftMotion';
+import { PULSE_MODES, PULSE_NAMES, type PulseMode } from '../audio/driftPulse';
 import type { DriftMotionView } from '../composables/useDriftMotion';
 import type { Drift } from '../lib/machines/drift';
 import { envelopePath, fadeStops, swarmLines, VIEW_H, VIEW_W } from '../lib/driftView';
@@ -153,6 +171,14 @@ const props = defineProps<{
     compact?: boolean;                    // phone mode's Sound page: no X/Y pad (it's on the Pads page), Filter and Spread knobs
     motionView?: DriftMotionView | null;  // where Motion has the pad's dot now (only the pad reads it)
 }>();
+
+const PULSE_TIPS: Record<PulseMode, string> = {
+    off: 'Pulse off: the chords held as they are',
+    '1/4': 'Pulse: a gate every beat, open for its first half',
+    '1/8': 'Pulse: a gate every 1/8, open for its first half',
+    '1/16': 'Pulse: a gate every step, open for its first half',
+    duck: 'Pulse: Duck, a dip at every hit of the Drums machine\'s slot 1 (heard or muted), back up by the next',
+};
 
 const SHAPE_TIPS: Record<MotionShape, string> = {
     circle: 'Circle: the filter and the spread together, round the point you set',
@@ -286,6 +312,21 @@ const stops = computed(() => fadeStops(props.drift));
 /* Rate means nothing to Swell; Depth 0 moves nothing */
 .df-mrate.is-swell .sp-keys,
 .df-motion.is-off .sp-keys {
+    opacity: .5;
+}
+
+/* Pulse, the knob card's last row */
+.df-prow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.df-prow .sp-keys {
+    flex: 1;
+}
+
+.df-pulse.df-poff .df-pdepth {
     opacity: .5;
 }
 

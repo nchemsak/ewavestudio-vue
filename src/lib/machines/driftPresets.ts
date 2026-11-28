@@ -12,6 +12,7 @@
 
 import { DRIFT_MAX_BARS, DRIFT_PLATES, DRIFT_RANGES, type DriftVoice } from '../../audio/drift';
 import { MOTION_RATES, MOTION_SHAPES, type MotionShape } from '../../audio/driftMotion';
+import { PULSE_MODES } from '../../audio/driftPulse';
 
 export type DriftSoundPreset = { id: string; label: string; description: string; sound: DriftVoice };
 
@@ -20,7 +21,7 @@ type M = [MotionShape, number, number];
 const NONE: M = ['circle', 4, 0];
 const s = (voices: number, drift: number, wave: number, spread: number, cutoff: number, attack: number, release: number,
 	[motionShape, motionRate, motionDepth]: M = NONE): DriftVoice =>
-	({ voices, drift, wave, spread, cutoff, attack, release, motionShape, motionRate, motionDepth });
+	({ voices, drift, wave, spread, cutoff, attack, release, motionShape, motionRate, motionDepth, pulseMode: 'off', pulseDepth: 0.7 });
 
 export const DRIFT_SOUNDS: readonly DriftSoundPreset[] = [
 	{ id: 'strings', label: 'Strings', description: 'Strings: a bright, wide string section, swelling in over a bar, the filter opening with each new chord.',
@@ -42,8 +43,11 @@ export const DRIFT_SOUNDS: readonly DriftSoundPreset[] = [
 export function driftSoundKey(v: DriftVoice): string {
 	const depth = Math.round((v.motionDepth ?? 0) * 100);
 	const motion = depth > 0 ? [v.motionShape, v.motionRate, depth] : [];
+	// Pulse likewise: Off, or Depth 0, whatever the rest
+	const pulseDepth = Math.round((v.pulseDepth ?? 0) * 100);
+	const pulse = (v.pulseMode ?? 'off') !== 'off' && pulseDepth > 0 ? ['pulse', v.pulseMode, pulseDepth] : [];
 	return JSON.stringify([Math.round(v.voices), Math.round(v.drift * 100), Math.round(v.wave * 100), Math.round(v.spread * 100),
-		Math.round(v.cutoff), Math.round(v.attack * 4), Math.round(v.release * 4), ...motion]);
+		Math.round(v.cutoff), Math.round(v.attack * 4), Math.round(v.release * 4), ...motion, ...pulse]);
 }
 
 // A progression: its length (4 or 8 bars) and each bar's plates
@@ -100,13 +104,15 @@ export function randomDriftSound(r: () => number = Math.random): DriftVoice {
 		attack: between(r, 0.25, 3, 0.25),
 		release: between(r, 0.5, 3, 0.25),
 	};
-	if (r() < 0.5) return { ...v, motionShape: NONE[0], motionRate: NONE[1], motionDepth: 0 };
-	return {
-		...v,
-		motionShape: pick(r, MOTION_SHAPES),
-		motionRate: pick(r, MOTION_RATES.slice(1)),
-		motionDepth: round2(between(r, 0.15, 0.5, 0.01)),
-	};
+	const m = r() < 0.5
+		? { motionShape: NONE[0], motionRate: NONE[1], motionDepth: 0 }
+		: { motionShape: pick(r, MOTION_SHAPES), motionRate: pick(r, MOTION_RATES.slice(1)), motionDepth: round2(between(r, 0.15, 0.5, 0.01)) };
+	// Pulse, drawn after Motion (the plan's item 20): in a quarter of the rolls, a gate or Duck,
+	// Depth 0.4–0.9 (so every roll from before it is the same sound otherwise)
+	const p = r() < 0.25
+		? { pulseMode: pick(r, PULSE_MODES.slice(1)), pulseDepth: round2(between(r, 0.4, 0.9, 0.01)) }
+		: { pulseMode: 'off' as const, pulseDepth: 0.7 };
+	return { ...v, ...m, ...p };
 }
 
 const TRIADS = [I, III, V, VII];

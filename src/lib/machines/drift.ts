@@ -11,12 +11,13 @@
 import { reactive } from 'vue';
 import { DRIFT_LENGTHS, DRIFT_MAX_BARS, DRIFT_PLATES, DRIFT_RANGES, type DriftVoice } from '../../audio/drift';
 import { clampRate, clampShape, type DriftMotion } from '../../audio/driftMotion';
+import { clampPulseMode } from '../../audio/driftPulse';
 
 export type DriftSoundKey = keyof DriftVoice;
 // The knobs' numbers (kept within DRIFT_RANGES on load); Motion's three are loaded on their own
 type DriftNumberKey = 'voices' | 'drift' | 'wave' | 'spread' | 'cutoff' | 'attack' | 'release';
 const DRIFT_NUMBER_KEYS: readonly DriftNumberKey[] = ['voices', 'drift', 'wave', 'spread', 'cutoff', 'attack', 'release'];
-export const DRIFT_SOUND_KEYS: readonly DriftSoundKey[] = [...DRIFT_NUMBER_KEYS, 'motionShape', 'motionRate', 'motionDepth'];
+export const DRIFT_SOUND_KEYS: readonly DriftSoundKey[] = [...DRIFT_NUMBER_KEYS, 'motionShape', 'motionRate', 'motionDepth', 'pulseMode', 'pulseDepth'];
 
 export type Drift = DriftVoice & {
 	muted: boolean;
@@ -30,6 +31,7 @@ export type Drift = DriftVoice & {
 export const DRIFT_DEFAULTS: DriftVoice = {
 	voices: 5, drift: 0.4, wave: 0.5, spread: 0.6, cutoff: 1800, attack: 1, release: 1,
 	motionShape: 'circle', motionRate: 4, motionDepth: 0,
+	pulseMode: 'off', pulseDepth: 0.7,
 };
 export const DRIFT_LEVEL_DEFAULT = 0.6;
 export const DRIFT_PEDALS_DEFAULT = 0.6;
@@ -120,6 +122,9 @@ export function applyDrift(d: Drift, s: any) {
 		d.motionShape = clampShape(snd.motionShape ?? DRIFT_DEFAULTS.motionShape);
 		d.motionRate = clampRate(snd.motionRate ?? DRIFT_DEFAULTS.motionRate);
 		d.motionDepth = num(snd.motionDepth) ? clamp(snd.motionDepth, 0, 1) : DRIFT_DEFAULTS.motionDepth;
+		// Pulse (the plan's item 20): likewise, a sound saved before it has none
+		d.pulseMode = clampPulseMode(snd.pulseMode ?? DRIFT_DEFAULTS.pulseMode);
+		d.pulseDepth = num(snd.pulseDepth) ? clamp(snd.pulseDepth, 0, 1) : DRIFT_DEFAULTS.pulseDepth;
 	}
 	if (typeof s.muted === 'boolean') d.muted = s.muted;
 	if (num(s.level)) d.level = clamp(s.level, 0, 1);
