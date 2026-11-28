@@ -4417,7 +4417,7 @@ test('the pads: a lit pad dragged up or down sets its velocity, a sideways drag 
 	await page.mouse.up();
 	for (const i of [2, 3, 4, 5, 6]) await expect(step('Snare', i)).toHaveAttribute('aria-pressed', 'true');
 	for (const i of [1, 7]) await expect(step('Snare', i)).toHaveAttribute('aria-pressed', 'false');
-	for (const i of [2, 6]) await expect(step('Metal', i)).toHaveAttribute('aria-pressed', 'false');
+	for (const i of [2, 6]) await expect(step('Tom', i)).toHaveAttribute('aria-pressed', 'false');
 	// Arrows set a lit step's velocity
 	await step('Snare', 3).focus();
 	await page.keyboard.press('Shift+ArrowDown');
